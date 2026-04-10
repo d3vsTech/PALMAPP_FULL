@@ -1,0 +1,419 @@
+Actúa como un Senior Product Designer + UX/UI Lead experto en sistemas web B2B (dashboards y apps operativas). Crea en Figma un diseño completo y moderno para el sistema web “AGRO CAMPO – gestión” (AgroCampo) para la Finca Puerto Arturo. Debes entregar: (1) UI Kit / Design System, (2) Component library con variantes, (3) Todas las pantallas en alta fidelidad, (4) Prototipo navegable con overlays (modales), y (5) Versiones responsive clave.
+
+IDIOMA: Español (microcopy y labels en español).
+
+PLATAFORMAS Y BREAKPOINTS (mínimo):
+- Desktop: 1440px (principal)
+- Tablet: 768px (para Operaciones y formularios de campo)
+- Mobile: 375px (para consultas rápidas: métricas y planillas)
+
+REQUERIMIENTOS UX/UI:
+- Estética moderna tipo producto SaaS (limpio, profesional, datos claros).
+- Tema visual alineado a agro/campo: paleta con verdes + neutros + acento cálido (sin verse “rústico”; más “premium operativo”).
+- Accesibilidad WCAG AA: contraste suficiente, focus visible, labels claros, errores con ayuda contextual.
+- UI orientada a productividad: tablas fáciles de leer, filtros potentes, estados con badges, acciones claras.
+- Componentes con estados: default/hover/pressed/focus/disabled/error/success.
+- Diseñar “empty states”, “loading/skeletons”, “no results”, “error state”.
+
+CONTEXTO DE NEGOCIO (dominio):
+Sistema de gestión agrícola enfocado en:
+- Métricas (producción, productividad, comparativos históricos, promedios por lote, precios cosecha).
+- Gestión de Plantación (Predio → Lote → Sublote → Palmas).
+- Colaboradores (listado, cuadrillas, contratos).
+- Nómina (quincenal) y Liquidaciones (prestaciones sociales y liquidación final).
+- Operaciones (Labores diarias / planillas y Remisiones / viajes a extractora).
+- Maestros (catálogos base: semillas, insumos, cargos, labores, conceptos nómina, tablas legales).
+- Configuración (precios cosecha, labores fijas, escala abonada, promedios; historial de configuraciones).
+  
+ROLES (RBAC) Y ALCANCE VISUAL (navegación por rol):
+1) Dueño:
+   - Acceso: Dashboard/Métricas (solo VER). No edita datos operativos.
+2) Administrador:
+   - Acceso: Todo (ver/crear/editar según módulo).
+   - Puede gestionar: Plantación, Colaboradores, Nómina, Liquidaciones, Operaciones, Maestros, Configuración.
+3) Jefe de campo:
+   - Acceso: Dashboard/Métricas (VER) + Operaciones (editar/ver) + Remisiones (editar/ver).
+   - No accede a Maestros/Configuración avanzada ni Nómina completa (a menos que se especifique como “solo ver”).
+4) (Opcional por requerimientos): Colaborador
+   - Si aparece como rol, crea un “stub” mínimo (perfil y desprendibles personales). Si no, ignóralo.
+
+INFORMACIÓN ARQUITECTURA (SITEMAP):
+- Auth
+  - Login
+  - Recuperar contraseña
+  - (Opcional) Reset contraseña
+- App (Shell)
+  - Dashboard / Home (según rol)
+  - Métricas
+    - Productividad colaboradores
+    - Precios / Productividad cosecha
+    - Promedios por lote
+    - Estadísticas generales
+    - Comparativos históricos
+  - (Admin) Mi Plantación
+    - Predios (lista + crear/eliminar)
+    - Predio detalle (lotes)
+    - Lote detalle (sublotes y palmas)
+  - (Admin) Colaboradores
+    - Listado general
+    - Cuadrillas
+    - Contratos
+  - (Admin) Nómina
+    - Períodos
+    - Detalle de nómina (por período)
+    - Desprendible por empleado
+  - (Admin) Liquidaciones
+    - Cesantías
+    - Intereses cesantías
+    - Prima servicios
+    - Vacaciones
+    - Liquidación final
+  - (Admin/Jefe) Operaciones
+    - Labores diarias (planillas)
+    - Remisiones (viajes / despachos)
+  - (Admin) Maestros (catálogos)
+    - Semillas
+    - Insumos
+    - Cargos
+    - Labores
+    - Conceptos nómina
+    - Tablas legales
+  - (Admin) Configuración
+    - Panel de configuración (4 tabs)
+    - Historial de configuraciones
+- Estados globales:
+  - 403 Sin permisos
+  - 404 No encontrado
+  - Empty / Loading
+
+ESTRUCTURA EN FIGMA (PAGES):
+- 00 — Foundations (tokens, colores, tipografía, grid, iconografía)
+- 01 — Components (component sets + variantes)
+- 02 — Auth
+- 03 — App Shell + Dashboard/Métricas
+- 04 — Mi Plantación
+- 05 — Colaboradores
+- 06 — Nómina
+- 07 — Liquidaciones
+- 08 — Operaciones (Planillas)
+- 09 — Remisiones
+- 10 — Maestros
+- 11 — Configuración
+- 99 — Prototype (flujo principal y enlaces)
+
+DISEÑO DEL APP SHELL (GLOBAL):
+- Desktop:
+  - Sidebar izquierda con logo “AGRO CAMPO – gestión”, navegación por módulos (items con íconos).
+  - Topbar con: breadcrumb, título de página, selector de predio/lote (si aplica), buscador (opcional), avatar/menú usuario, “Cerrar sesión”.
+  - Área de contenido con container 12 columnas, cards y tablas.
+- Tablet/Mobile:
+  - Sidebar colapsada a “hamburger”.
+  - Topbar fija con breadcrumb simplificado.
+  - Tab bars y filtros en bottom sheet o drawer.
+
+COMPONENTES OBLIGATORIOS (crear como componentes):
+- Navigation: Sidebar (expanded/collapsed), Topbar, Breadcrumb, Tabs (con iconos opcionales), Pagination
+- Buttons: Primary/Secondary/Tertiary/Ghost/Danger + tamaños (sm/md/lg) + icon button
+- Form fields: Input, Password input, Textarea, Select, Multi-select, Checkbox, Radio, Toggle, Date picker, Time picker, Search field
+- Feedback: Toast, Alert, Inline error, Success banner, Empty state, Loading skeleton
+- Data display: Table (con sticky header), Card, KPI card, Badge/Status chip, Avatar/Initials
+- Modals: modal base + confirm modal + side panel drawer
+- Charts placeholders: line chart, bar chart, stacked bar, donut (no necesitas data real, pero sí el layout)
+- Stepper/Status timeline (para remisiones)
+
+CONVENCIONES VISUALES:
+- Estados con chips:
+  - Nómina: BORRADOR / CERRADA
+  - Planilla: BORRADOR / APROBADO
+  - Remisión: BORRADOR → EN CAMINO → EN PLANTA → FINALIZADO / EN DISPUTA
+  - Palma/Sublote/Colaborador: Activo / Inactivo
+- Tablas con acciones en última columna (Editar, Ver, Eliminar, Activar/Desactivar) usando icon buttons + menú kebab cuando aplique.
+
+CONTENIDO Y DATOS DE MUESTRA (usa placeholders realistas):
+- Predios: “Puerto Arturo”, “La Vega”
+- Lotes: “Lote 1 – Norte”, “Lote 2 – Sur”
+- Semillas: “Elaeis Guineensis”, “Híbrido OxG”
+- Colaboradores: nombres colombianos ficticios, cédulas ficticias
+- Valores: COP ($), kg, gajos, hectáreas. Fechas: dd/mm/yyyy.
+
+--------------------------------------------
+PANTALLAS A CREAR (ALTA FIDELIDAD)
+--------------------------------------------
+
+A) AUTH
+1) Login (Desktop + Mobile)
+- Layout split:
+  - Izquierda: branding, logo, frase corta (“Gestión operativa y nómina de tu plantación”).
+  - Derecha: card/form con Email + Contraseña + botón “Iniciar sesión”.
+  - Link “¿Olvidaste tu contraseña?”
+  - (Crea 2 variantes):
+    V1 con selector de rol (Dueño / Administrador / Jefe de campo) arriba del form.
+    V2 sin selector de rol (texto: “Tu rol se asigna automáticamente al iniciar sesión”).
+- Considera “mostrar/ocultar contraseña”, validación de errores, estado loading.
+
+2) Recuperar contraseña
+- Campo email + botón “Enviar enlace”.
+- Mensaje confirmación (“Si el correo existe…”) + volver a login.
+
+3) (Opcional) Reset contraseña
+- Nueva contraseña + confirmar + requisitos (mínimo, etc.) + éxito.
+
+B) DASHBOARD / HOME POR ROL
+Crea un “Dashboard principal” reutilizable con variación por rol:
+- Header: saludo + filtros (rango fechas, predio, lote) + exportar (PDF/Excel) si aplica.
+- Sección KPIs (cards): Producción total, kg total, gajos total, promedio kg/gajo, productividad promedio por colaborador, lluvia acumulada (si se usa).
+- Sección charts:
+  - Línea: producción por día/semana/quincena
+  - Barras: top colaboradores
+  - Comparativo: año vs año (mini chart)
+- Sección “Accesos rápidos” (cards) a métricas: Productividad colaboradores, Precios cosecha, Promedios lote, Estadísticas, Comparativos históricos.
+
+4) Home Dueño (VER)
+- Accesos: Productividad colaboradores, Productividad/Precios de cosecha, Promedios lotes, Estadísticas generales, Comparativos históricos.
+
+5) Home Administrador (VER)
+- Igual a Dueño + botón visible “Gestionar” que lleva a módulos (Plantación/Colaboradores/Nómina/Operaciones).
+
+6) Home Jefe de campo (VER)
+- Muestra: Productividad colaboradores, Promedios lotes, Estadísticas generales, Comparativos históricos.
+- CTA rápido: “Ir a Operaciones de hoy”.
+
+C) MÉTRICAS (PÁGINAS DEDICADAS)
+7) Productividad de colaboradores
+- Filtros (barra superior): rango fechas, predio/lote, cuadrilla (si aplica), cargo, buscador colaborador.
+- Tabla ranking: colaborador, gajos, kg, jornales, rendimiento, tendencia.
+- Chart barras + mini perfil al seleccionar colaborador (drawer lateral con detalle).
+
+8) Precios / Productividad de cosecha
+- Tabla por lote: precio $/kg (o $/gajo si aplica), producción, total estimado.
+- Chart line/bar: evolución precios vs producción.
+- Botón exportar.
+
+9) Promedios por lote
+- Tabla: lote, año, kg promedio por gajo, tendencia, notas.
+- Chart comparativo por lote.
+
+10) Estadísticas generales
+- Dashboard analítico: producción total, productividad por labor, lluvias (si se registra), distribución por lote.
+- Filtros + export.
+
+11) Comparativos históricos
+- Selector año (Año actual vs anterior), lote/predio.
+- Gráfica comparativa (YoY) + tabla resumen.
+
+D) (ADMIN) MI PLANTACIÓN
+12) Mi Plantación — Predios (vista principal)
+- Botón primario “Crear nuevo predio”.
+- Cada predio como contenedor/accordion:
+  - Header predio: nombre, total lotes, hectáreas (badges).
+  - Acciones: Editar nombre, Eliminar (con confirm modal).
+  - Dentro: grid de tarjetas de lotes con: nombre, año siembra, variedad, semillas (chips), total palmas, hectáreas.
+  - CTA dentro del predio: “Agregar lote aquí”.
+
+13) Modal “Crear/Editar Predio”
+- Nombre, notas (opcional). Guardar/Cancelar.
+
+14) Modal “Crear/Editar Lote”
+- Campos: Predio (dropdown), Nombre, Año siembra, Variedad (texto), Semillas (multi-select checkboxes desde catálogo), Hectáreas.
+- Guardar/Cancelar.
+
+15) Lote detalle (al hacer clic en un lote)
+- Breadcrumb: Mi Plantación > [Predio] > [Lote]
+- Header: nombre lote, predio, hectáreas, fecha siembra, total palmas.
+- Botón “Agregar estructura” (crea sublote).
+- Sección sublotes: cards/grid por sublote con: nombre, #palmas, estado, acciones (Ver palmas, Eliminar sublote).
+- Sección visual: “Palmas por sublote” en grid numerado (cuadrículas).
+- Empty state si no hay sublotes.
+
+16) Pantalla Sublotes y Palmas (dentro de lote)
+- Breadcrumb: Mi Plantación > [Predio] > [Lote] > Sublotes
+- Botones: “Nuevo sublote”, “Registrar palmas”.
+- Grid tarjetas sublotes (2–3 columnas):
+  - Nombre, #palmas grande, estado Activo/Inactivo, botón “Ver palmas”.
+- Al seleccionar un sublote: tabla de palmas:
+  - Código, descripción, estado, acción editar.
+- Modales:
+  a) “Nuevo sublote”: nombre, cantidad palmas, toggle estado.
+  b) “Registrar palmas”: select sublote destino, número de palmas, toggle estado.
+  c) “Editar palma”: código (readonly o editable según criterio), descripción, estado.
+
+E) (ADMIN) COLABORADORES
+17) Colaboradores — Layout con tabs: Listado general / Cuadrillas / Contratos
+
+18) Listado general
+- Buscador por nombre o documento.
+- Grid de tarjetas empleado:
+  - Avatar iniciales, nombre completo, documento, cargo/rol, modalidad de pago (Jornal/Producción), estado Activo/Inactivo.
+  - Acciones: Editar (abre ficha completa), Activar/Desactivar.
+- Ficha técnica (modal o drawer) con 5 secciones (usa stepper o tabs internas):
+  1) Identificación: nombres, apellidos, cédula
+  2) Contratación: cargo, modalidad pago (Jornal/Producción), salario base
+  3) Seguridad Social: EPS, ARL, Fondo pensión
+  4) Dotación: tallas camisa, pantalón, calzado
+  5) Bancario: banco, tipo cuenta, número cuenta
+- Validaciones y estados.
+
+19) Cuadrillas
+- Cards de cuadrilla con lista de integrantes (máximo 5 visibles + “+N”).
+- CTA “Nueva cuadrilla”.
+- Modal crear/editar: nombre + selección de trabajadores activos (lista con toggles).
+
+20) Contratos
+- Tabla: Empleado, Documento, Fecha ingreso, Fecha egreso, Estado (Vigente/Terminado), Acciones.
+- Modal crear/editar contrato: selector empleado + fechas + estado.
+
+F) (ADMIN) NÓMINA
+21) Nómina — Períodos (grid de tarjetas)
+- Tarjeta: “Enero 2026 – Primera quincena”
+- Estado chip: BORRADOR / CERRADA
+- Totales: devengado total, deducciones total, neto total.
+- Botón “Nueva nómina” (modal: año, mes, quincena).
+- Empty state + helper text.
+
+22) Detalle de nómina (por período)
+- Header: período, estado, acciones:
+  - “Calcular todo” (primario)
+  - “Cerrar nómina” (danger/confirm irreversible)
+  - Exportar PDF/Excel
+- Tabla empleados:
+  - Nombre, Tipo salario (FIJO/VARIABLE), Salario base, Jornales, Cosechas, Devengado, Deducciones, Neto, Estado, Acción “Ver desprendible”.
+- Usa filas con resumen y opción expandir para ver breakdown rápido.
+
+23) Desprendible (detalle por empleado)
+- Layout tipo documento imprimible (A4 preview) + panel lateral de acciones:
+  - Devengados: salario base + jornales + cosechas + bonificaciones
+  - Deducciones: salud, pensión, ARL, fondo solidaridad, libranzas
+  - Tabla jornales: fecha, labor, valor
+  - Tabla cosechas: cosecha, valor
+  - Resumen final: Total Devengado – Total Deducciones = Neto a pagar
+- Botón “Imprimir” + “Descargar PDF”.
+
+G) (ADMIN) LIQUIDACIONES — Prestaciones Sociales
+24) Liquidaciones (5 tabs):
+- Cesantías
+- Intereses cesantías
+- Prima de servicios
+- Vacaciones
+- Liquidación final
+
+25) Cesantías (simulador)
+- Selector empleado + rango fechas / días trabajados
+- Muestra fórmula visible: (Salario x Días trabajados) / 360
+- Resultado destacado + botón exportar.
+
+26) Intereses cesantías
+- Similar: Cesantías x 12% x (Días / 360)
+
+27) Prima de servicios
+- (Salario x Días trabajados en semestre) / 360
+
+28) Vacaciones
+- Tabla saldos por empleado: días generados, tomados, pagados, disponibles.
+- CTA “Registrar vacaciones” (modal: empleado, fechas, días hábiles, observaciones).
+- Estados solicitud: PENDIENTE → APROBADA → PAGADA / CANCELADA (chips + timeline).
+- Vista detalle solicitud.
+
+29) Liquidación final
+- CTA “Nueva liquidación final” (modal: empleado, fecha retiro, motivo).
+- Vista detalle documento: lista conceptos con fórmula aplicada (cesantías, intereses, prima, vacaciones, indemnización si aplica).
+- Totales al final + exportar/print.
+
+H) (ADMIN/Jefe) OPERACIONES
+30) Operaciones — Labores diarias (listado)
+- Lista/tabla de planillas por fecha con estado BORRADOR/APROBADO.
+- Filtros: fecha, predio/lote, estado.
+- CTA “Nueva planilla del día”.
+
+31) Planilla diaria (crear/editar)
+- Header: fecha, estado, acciones Guardar / Aprobar planilla.
+- 4 secciones (ideal: tabs horizontales o accordions):
+  1) Cosecha:
+     - Tabla editable: colaborador (máx 3 por fila), lotes (checkboxes), sublotes, gajos reportados, gajos volqueta
+     - Botón “Agregar fila”
+  2) Jornales:
+     - Tabla editable: colaborador(s), labor (select: Plateo, Poda, Fertilización…), valor total
+  3) Viajes:
+     - Tabla editable: # viaje, gajos, lote, secuencia, fecha, 3 colaboradores
+  4) Auxiliar:
+     - Tabla editable: nombre, labor, lugar, total, horas extra
+- Campos globales (panel lateral o bloque superior):
+  - Lluvia: Nada/Ligera/Moderada/Fuerte
+  - Inicio de labores (hora)
+  - Observaciones (textarea)
+  - Ausentes (multi-select colaboradores)
+- Botón “Aprobar planilla” con confirm modal (cierra el día).
+
+I) (ADMIN/Jefe) REMISIONES
+32) Remisiones (listado)
+- Tarjetas por remisión: ID, fecha, placa, lotes origen, gajos estimados, peso, estado.
+- Estado como badge + color.
+- CTA “Nueva remisión”.
+- Filtros: estado, fecha, lote, placa.
+
+33) Remisión (detalle)
+- Header: ID, estado, acciones (editar, cambiar estado, exportar).
+- Datos: placa vehículo, conductor, lotes origen, gajos enviados/estimados, peso (kg).
+- Timeline de estado: BORRADOR → EN CAMINO → EN PLANTA → FINALIZADO / EN DISPUTA
+- Sección “Observaciones / novedades” (log).
+- Confirm dialogs al cambiar a FINALIZADO o EN DISPUTA.
+
+J) (ADMIN) MAESTROS (CATÁLOGOS)
+34) Maestros (layout con tabs: Semillas, Insumos, Cargos, Labores, Conceptos nómina, Tablas legales)
+Cada tab:
+- Tabla con columnas específicas + buscador + CTA “Nuevo”.
+- Modal nuevo/editar con validaciones.
+
+35) Semillas
+- Campos: Tipo (Africana/Híbrido/Compacta…), Nombre.
+
+36) Insumos
+- Campos: Nombre, Unidad de medida (KILOGRAMO/LITRO/GALON/UNIDAD).
+
+37) Cargos
+- Campos: Nombre, Tipo salario (FIJO/VARIABLE), Salario base.
+
+38) Labores
+- Campos: Tipo de pago (JORNAL_FIJO/POR_PALMA), Valor base, Unidad (PALMAS/JORNAL).
+
+39) Conceptos Nómina
+- Tabla con: Código, Tipo, Operación (+/-), Cálculo (PORCENTAJE/VALOR_FIJO/FORMULA), Valor referencia, Base cálculo, Aplica a (FIJO/VARIABLE/AMBOS), Obligatorio (sí/no).
+
+40) Tablas Legales
+- Concepto vinculado, % empleado, % empresa, Vigencia desde/hasta.
+
+K) (ADMIN) CONFIGURACIÓN
+41) Configuración (2 secciones principales)
+- 2.7.1 Panel de configuración (tabs):
+  a) Precio Cosecha: tabla por lote y año con precio por kg (editable + guardar)
+  b) Labores Fijas: precios fijos por labor (valor por palma o por jornal)
+  c) Escala Abonada: selector insumo + tabla rangos (gramos min, gramos max, precio por palma)
+  d) Promedios: historial promedios por lote y año (kg promedio por gajo)
+- 2.7.2 Historial de configuraciones:
+  - Tabla: fecha, usuario, tipo config, cambio (antes/después), notas.
+
+L) PANTALLAS DE SISTEMA
+42) 403 Sin permisos (con CTA volver a inicio)
+43) 404 No encontrado
+44) Loading global + Empty states (como ejemplos reutilizables)
+
+--------------------------------------------
+PROTOTIPO (NAVEGACIÓN)
+--------------------------------------------
+Crea conexiones de prototipo (click) para:
+- Login → Dashboard según rol (3 rutas)
+- Dashboard → Métricas
+- Admin: Dashboard → Mi Plantación → Lote → Sublotes/Palmas (modales como overlays)
+- Admin: Colaboradores → Editar ficha (modal/drawer)
+- Admin: Nómina → Períodos → Detalle → Desprendible
+- Admin/Jefe: Operaciones → Planilla → Aprobar
+- Admin/Jefe: Remisiones → Detalle → Cambiar estado
+- Admin: Maestros → Nuevo/Editar (modales)
+- Admin: Configuración → Panel → Historial
+
+ENTREGABLE FINAL:
+- Un archivo Figma ordenado por páginas, con Auto Layout en todo, componentes reutilizables, estilos de texto/color definidos, y pantallas listas para handoff a desarrollo.
+- Nombres de frames claros (ej: “02-Auth / Login / Desktop”, “06-Nómina / Períodos / Desktop”).
+- Incluye notas breves en cada módulo (sticky notes) sobre intención UX (opcional).
+
+NO INVENTES FUNCIONALIDADES FUERA DE LO INDICADO.
+Si falta algún detalle (por ejemplo columnas exactas en una tabla), crea una solución razonable con placeholders, manteniendo consistencia con el dominio AgroCampo.

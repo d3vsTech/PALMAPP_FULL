@@ -1,0 +1,465 @@
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --font-size: 16px;
+  
+  /* PALMAPP - Paleta Agrícola Profesional */
+  /* Fondo blanco limpio */
+  --background: #F8F9FA;
+  --foreground: #212529;
+  
+  /* Cards con blanco puro */
+  --card: #FFFFFF;
+  --card-foreground: #212529;
+  --popover: #FFFFFF;
+  --popover-foreground: #212529;
+  
+  /* Verde Primario - Verde Bosque Profundo (Profesional) */
+  --primary: #1E5631;
+  --primary-foreground: #FFFFFF;
+  
+  /* Verde Secundario - Verde Vibrante (Acento positivo) */
+  --secondary: #F8F9FA;
+  --secondary-foreground: #212529;
+  --accent: #A4C639;
+  --accent-foreground: #FFFFFF;
+  
+  /* Terracota/Tierra - Para advertencias y atención */
+  --warning: #C19A6B;
+  --warning-foreground: #FFFFFF;
+  
+  /* Estados adicionales */
+  --success: #A4C639;
+  --success-foreground: #FFFFFF;
+  --destructive: #DC3545;
+  --destructive-foreground: #FFFFFF;
+  --info: #0D6EFD;
+  --info-foreground: #FFFFFF;
+  
+  /* Muted y borders */
+  --muted: #E9ECEF;
+  --muted-foreground: #6C757D;
+  --border: #DEE2E6;
+  --input: #DEE2E6;
+  --input-background: #FFFFFF;
+  --switch-background: #DEE2E6;
+  --ring: #1E5631;
+  
+  /* Charts con paleta agrícola */
+  --chart-1: #1E5631;
+  --chart-2: #A4C639;
+  --chart-3: #C19A6B;
+  --chart-4: #6C757D;
+  --chart-5: #28A745;
+  
+  /* Border radius generoso para estilo moderno */
+  --radius: 1rem;
+  
+  /* Sidebar limpia y profesional */
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #212529;
+  --sidebar-primary: #1E5631;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #F8F9FA;
+  --sidebar-accent-foreground: #212529;
+  --sidebar-border: #DEE2E6;
+  --sidebar-ring: #1E5631;
+  
+  /* Tipografía - Pesos generosos */
+  --font-weight-medium: 600;
+  --font-weight-normal: 400;
+  --font-weight-bold: 700;
+}
+
+.dark {
+  /* Mantenemos dark mode para otras secciones si es necesario */
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+  --card: #141414;
+  --card-foreground: #fafafa;
+  --popover: #141414;
+  --popover-foreground: #fafafa;
+  
+  --primary: #22c55e;
+  --primary-foreground: #0a0a0a;
+  --secondary: #1f1f1f;
+  --secondary-foreground: #fafafa;
+  --muted: #1f1f1f;
+  --muted-foreground: #a1a1aa;
+  --accent: #fb923c;
+  --accent-foreground: #0a0a0a;
+  --destructive: #f87171;
+  --destructive-foreground: #0a0a0a;
+  
+  --success: #22c55e;
+  --success-foreground: #0a0a0a;
+  --warning: #fbbf24;
+  --warning-foreground: #0a0a0a;
+  --info: #60a5fa;
+  --info-foreground: #0a0a0a;
+  
+  --border: #27272a;
+  --input: #27272a;
+  --input-background: #141414;
+  --switch-background: #27272a;
+  --ring: #22c55e;
+  
+  --chart-1: #22c55e;
+  --chart-2: #a3e635;
+  --chart-3: #fb923c;
+  --chart-4: #60a5fa;
+  --chart-5: #facc15;
+  
+  --sidebar: #0f0f0f;
+  --sidebar-foreground: #fafafa;
+  --sidebar-primary: #22c55e;
+  --sidebar-primary-foreground: #0a0a0a;
+  --sidebar-accent: #1f1f1f;
+  --sidebar-accent-foreground: #fafafa;
+  --sidebar-border: #27272a;
+  --sidebar-ring: #22c55e;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  
+  /* Border radius - esquinas muy redondeadas (16px base) */
+  --radius-sm: 0.75rem;
+  --radius-md: 1rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.5rem;
+  
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  }
+
+  /**
+  * Tipografía clara y legible para usuarios no-tecnológicos
+  * Sistema de jerarquía visual mejorado con 5 niveles
+  */
+
+  html {
+    font-size: var(--font-size);
+  }
+
+  /* Nivel 1: Títulos principales de página */
+  h1 {
+    font-size: 2.25rem; /* 36px */
+    font-weight: var(--font-weight-bold);
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    color: var(--primary);
+  }
+
+  /* Nivel 2: Títulos de sección */
+  h2 {
+    font-size: 1.75rem; /* 28px */
+    font-weight: var(--font-weight-bold);
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    color: var(--primary);
+  }
+
+  /* Nivel 3: Subtítulos importantes */
+  h3 {
+    font-size: 1.375rem; /* 22px */
+    font-weight: var(--font-weight-medium);
+    line-height: 1.3;
+    color: var(--primary);
+  }
+
+  /* Nivel 4: Subtítulos de tarjetas */
+  h4 {
+    font-size: 1.125rem; /* 18px */
+    font-weight: var(--font-weight-medium);
+    line-height: 1.4;
+    color: var(--primary);
+  }
+
+  /* Nivel 5: Títulos pequeños */
+  h5 {
+    font-size: 1rem; /* 16px */
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+    color: var(--primary);
+  }
+
+  /* Texto normal */
+  p {
+    font-size: 0.9375rem; /* 15px */
+    font-weight: var(--font-weight-normal);
+    line-height: 1.6;
+    color: var(--foreground);
+  }
+
+  /* Texto secundario/descriptivo */
+  .text-secondary {
+    font-size: 0.875rem; /* 14px */
+    font-weight: var(--font-weight-normal);
+    line-height: 1.5;
+    color: var(--muted-foreground);
+  }
+
+  /* Texto pequeño */
+  small, .text-small {
+    font-size: 0.8125rem; /* 13px */
+    font-weight: var(--font-weight-normal);
+    line-height: 1.4;
+    color: var(--muted-foreground);
+  }
+
+  /* Labels con mejor contraste */
+  label {
+    font-size: 0.875rem; /* 14px */
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+    color: var(--foreground);
+  }
+
+  /* Botones */
+  button {
+    font-size: 0.9375rem; /* 15px */
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  /* Inputs */
+  input, textarea, select {
+    font-size: 0.9375rem; /* 15px */
+    font-weight: var(--font-weight-normal);
+    line-height: 1.5;
+  }
+
+  /* Clases de utilidad para jerarquía */
+  .text-display {
+    font-size: 3rem; /* 48px - Para números grandes en KPIs */
+    font-weight: var(--font-weight-bold);
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+
+  .text-lead {
+    font-size: 1.125rem; /* 18px - Para texto introductorio */
+    font-weight: var(--font-weight-normal);
+    line-height: 1.6;
+    color: var(--muted-foreground);
+  }
+}
+
+/* Componentes Modernos con Glassmorphism Sutil */
+@layer components {
+  /* Cards con sombras suaves pero definidas */
+  .card-palmapp {
+    @apply bg-card border border-border rounded-2xl shadow-sm hover:shadow-md transition-all duration-300;
+  }
+  
+  /* Glassmorphism muy sutil para paneles fijos */
+  .glass-subtle {
+    @apply bg-card border border-border;
+  }
+  
+  .glass-panel {
+    @apply bg-card/90 backdrop-blur-md border border-border;
+  }
+  
+  /* Efecto de elevación al hover */
+  .card-hover-lift {
+    @apply hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300;
+  }
+  
+  /* Animaciones de Accordion - IMPORTANTE */
+  .animate-accordion-down {
+    animation: accordion-down 0.2s ease-out;
+  }
+  
+  .animate-accordion-up {
+    animation: accordion-up 0.2s ease-out;
+  }
+  
+  /* Micro-interacciones para botones */
+  @keyframes button-press {
+    0% { transform: scale(1); }
+    50% { transform: scale(0.97); }
+    100% { transform: scale(1); }
+  }
+  
+  .btn-press-effect:active {
+    animation: button-press 150ms ease-out;
+  }
+  
+  /* Iconos con línea gruesa y esquinas redondeadas - se aplica via lucide-react */
+  .icon-palmapp {
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  
+  /* Grid pattern sutil para fondos (opcional) */
+  .grid-pattern-subtle {
+    background-image: 
+      linear-gradient(to right, rgba(30, 86, 49, 0.03) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(30, 86, 49, 0.03) 1px, transparent 1px);
+    background-size: 60px 60px;
+  }
+  
+  /* Estados de badge/tag claros */
+  .badge-success {
+    @apply bg-success/10 text-success border border-success/20 px-3 py-1 rounded-full text-sm font-medium;
+  }
+  
+  .badge-warning {
+    @apply bg-warning/10 text-warning border border-warning/20 px-3 py-1 rounded-full text-sm font-medium;
+  }
+  
+  .badge-info {
+    @apply bg-info/10 text-info border border-info/20 px-3 py-1 rounded-full text-sm font-medium;
+  }
+  
+  /* Separadores sutiles */
+  .divider-subtle {
+    @apply border-t border-border/50;
+  }
+  
+  /* Tooltip style */
+  .tooltip-palmapp {
+    @apply bg-foreground text-background px-3 py-1.5 rounded-lg text-sm font-medium shadow-lg;
+  }
+  
+  /* Custom Scrollbar - Diseño moderno y limpio */
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(30, 86, 49, 0.2) transparent;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 10px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(30, 86, 49, 0.2);
+    border-radius: 10px;
+    transition: background 0.2s ease;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(30, 86, 49, 0.35);
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb:active {
+    background: rgba(30, 86, 49, 0.5);
+  }
+  
+  /* Ocultar scrollbar pero mantener funcionalidad */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Transiciones de página suaves */
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slide-out-left {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+}
+
+@keyframes accordion-down {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-accordion-content-height);
+  }
+}
+
+@keyframes accordion-up {
+  from {
+    height: var(--radix-accordion-content-height);
+  }
+  to {
+    height: 0;
+  }
+}
+
+.page-transition-enter {
+  animation: slide-in-right 300ms ease-out;
+}
+
+.page-transition-exit {
+  animation: slide-out-left 300ms ease-out;
+}

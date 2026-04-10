@@ -1,0 +1,172 @@
+import { createBrowserRouter, Navigate } from 'react-router';
+import Root from './Root';
+
+// Auth
+import Login from './pages/auth/Login';
+import RecuperarPassword from './pages/auth/RecuperarPassword';
+import RestablecerPassword from './pages/auth/RestablecerPassword';
+import SeleccionarFinca from './pages/auth/SeleccionarFinca';
+
+// Dashboard
+import Dashboard from './pages/dashboard/Dashboard';
+import DashboardDueno from './pages/dashboard/DashboardDueno';
+import DashboardAdministrador from './pages/dashboard/DashboardAdministrador';
+import DashboardOtrosRoles from './pages/dashboard/DashboardOtrosRoles';
+
+// Agente IA
+import AgenteIA from './pages/agente-ia/AgenteIA';
+
+// Métricas
+import ProductividadColaboradores from './pages/metricas/ProductividadColaboradores';
+import PreciosCosecha from './pages/metricas/PreciosCosecha';
+import PromediosLote from './pages/metricas/PromediosLote';
+import EstadisticasGenerales from './pages/metricas/EstadisticasGenerales';
+import ComparativosHistoricos from './pages/metricas/ComparativosHistoricos';
+
+// Plantación
+import MiPlantacion from './pages/plantacion/MiPlantacion';
+import CrearEditarPredio from './pages/plantacion/CrearEditarPredio';
+import NuevoPredioWizard from './pages/plantacion/NuevoPredioWizard';
+import CrearEditarLote from './pages/plantacion/CrearEditarLote';
+import LoteDetalle from './pages/plantacion/LoteDetalle';
+import CrearSublote from './pages/plantacion/CrearSublote';
+import CrearLinea from './pages/plantacion/CrearLinea';
+import CrearPalmas from './pages/plantacion/CrearPalmas';
+
+// Colaboradores
+import Colaboradores from './pages/colaboradores/Colaboradores';
+import ColaboradorDetail from './pages/colaboradores/ColaboradorDetail';
+import NuevoColaboradorWizard from './pages/colaboradores/NuevoColaboradorWizard';
+
+// Nómina
+import Nomina from './pages/nomina/Nomina';
+import NominaDetalle from './pages/nomina/NominaDetalle';
+
+// Liquidaciones
+import Liquidaciones from './pages/liquidaciones/Liquidaciones';
+
+// Operaciones
+import Operaciones from './pages/operaciones/Operaciones';
+import PlanillaDiaria from './pages/operaciones/PlanillaDiaria';
+
+// Viajes
+import Viajes from './pages/viajes/Viajes';
+import DetalleViaje from './pages/viajes/DetalleViaje';
+import NuevoEditarViaje from './pages/viajes/NuevoEditarViaje';
+
+// Usuarios
+import Usuarios from './pages/usuarios/Usuarios';
+import UsuarioDetalle from './pages/usuarios/UsuarioDetalle';
+import UsuarioNuevoEditar from './pages/usuarios/UsuarioNuevoEditar';
+import UsuarioPermisos from './pages/usuarios/UsuarioPermisos';
+
+// Configuración
+import Configuracion from './pages/configuracion/Configuracion';
+
+import MiPerfil from './pages/perfil/MiPerfil';
+import ProtectedRoute from './components/common/ProtectedRoute';
+import SinAcceso from './pages/errors/SinAcceso';
+
+// Errores
+import NotFound from './pages/errors/NotFound';
+import SinPermisos from './pages/errors/SinPermisos';
+
+// Super Admin
+import SuperAdminLogin from './pages/super-admin/SuperAdminLogin';
+import SuperAdminLayout from './pages/super-admin/SuperAdminLayout';
+import SuperAdminDashboard from './pages/super-admin/SuperAdminDashboard';
+import Fincas from './pages/super-admin/Fincas';
+import UsuariosFinca from './pages/super-admin/UsuariosFinca';
+import Actividad from './pages/super-admin/Actividad';
+import Diagnosticos from './pages/super-admin/Diagnosticos';
+import RecuperarPasswordSuperAdmin from './pages/super-admin/RecuperarPassword';
+import RestablecerPasswordSuperAdmin from './pages/super-admin/RestablecerPassword';
+
+export const router = createBrowserRouter([
+  // ─── Auth finca ───────────────────────────────────────────────────────────
+  { path: '/login',                element: <Login /> },
+  { path: '/recuperar-password',   element: <RecuperarPassword /> },
+  { path: '/restablecer-password', element: <RestablecerPassword /> },
+  { path: '/seleccionar-finca',    element: <SeleccionarFinca /> },
+  { path: '/sin-permisos',          element: <SinAcceso /> },
+
+  // ─── Super Admin ──────────────────────────────────────────────────────────
+  { path: '/super-admin/login',                element: <SuperAdminLogin /> },
+  { path: '/super-admin/recuperar-password',   element: <RecuperarPasswordSuperAdmin /> },
+  { path: '/super-admin/restablecer-password', element: <RestablecerPasswordSuperAdmin /> },
+  {
+    path: '/super-admin',
+    element: <SuperAdminLayout />,
+    children: [
+      { index: true,                          element: <Navigate to="/super-admin/dashboard" replace /> },
+      { path: 'dashboard',                    Component: SuperAdminDashboard },
+      { path: 'fincas',                       Component: Fincas },
+      { path: 'fincas/:tenantId/usuarios',    Component: UsuariosFinca },
+      { path: 'actividad',                    Component: Actividad },
+      { path: 'diagnosticos',                 Component: Diagnosticos },
+    ],
+  },
+
+  // ─── App finca ────────────────────────────────────────────────────────────
+  {
+    path: '/',
+    element: <Root />,
+    children: [
+      { index: true, element: <ProtectedRoute permiso="dashboard.ver"><Dashboard /></ProtectedRoute> },
+
+      { path: 'agente-ia', Component: AgenteIA },
+
+      { path: 'dashboard/dueno',         Component: DashboardDueno },
+      { path: 'dashboard/administrador', Component: DashboardAdministrador },
+      { path: 'dashboard/otros',         Component: DashboardOtrosRoles },
+
+      { path: 'metricas/productividad-colaboradores', Component: ProductividadColaboradores },
+      { path: 'metricas/precios-cosecha',             Component: PreciosCosecha },
+      { path: 'metricas/promedios-lote',              Component: PromediosLote },
+      { path: 'metricas/estadisticas-generales',      Component: EstadisticasGenerales },
+      { path: 'metricas/comparativos-historicos',     Component: ComparativosHistoricos },
+
+      { path: 'plantacion',               element: <ProtectedRoute permiso="lotes.ver"><MiPlantacion /></ProtectedRoute> },
+      { path: 'plantacion/predio/nuevo',  Component: NuevoPredioWizard },
+      { path: 'plantacion/lote/nuevo',    Component: CrearEditarLote },
+      { path: 'plantacion/lote/:id',      Component: LoteDetalle },
+      { path: 'plantacion/sublote/nuevo', Component: CrearSublote },
+      { path: 'plantacion/linea/nuevo',   Component: CrearLinea },
+      { path: 'plantacion/palmas/nuevo',  Component: CrearPalmas },
+
+      { path: 'colaboradores',            element: <ProtectedRoute permiso="colaboradores.ver"><Colaboradores /></ProtectedRoute> },
+      { path: 'colaboradores/nuevo',      Component: NuevoColaboradorWizard },
+      { path: 'colaboradores/editar/:id', Component: NuevoColaboradorWizard },
+      { path: 'colaboradores/:id',        Component: ColaboradorDetail },
+
+      { path: 'nomina',     element: <ProtectedRoute permiso="nomina.ver"><Nomina /></ProtectedRoute> },
+      { path: 'nomina/:id', Component: NominaDetalle },
+
+      { path: 'liquidaciones', Component: Liquidaciones },
+
+      { path: 'operaciones',                element: <ProtectedRoute permiso="operaciones.ver"><Operaciones /></ProtectedRoute> },
+      { path: 'operaciones/planilla/:id',   Component: PlanillaDiaria },
+      { path: 'operaciones/planilla/nueva', Component: PlanillaDiaria },
+
+      { path: 'viajes',            element: <ProtectedRoute permiso="remisiones.ver"><Viajes /></ProtectedRoute> },
+      { path: 'viajes/nuevo',      Component: NuevoEditarViaje },
+      { path: 'viajes/editar/:id', Component: NuevoEditarViaje },
+      { path: 'viajes/:id',        Component: DetalleViaje },
+      { path: 'remisiones',        Component: Viajes },
+      { path: 'remisiones/:id',    Component: DetalleViaje },
+
+      { path: 'usuarios',              element: <ProtectedRoute permiso="usuarios.ver"><Usuarios /></ProtectedRoute> },
+      { path: 'usuarios/nuevo',        element: <ProtectedRoute permiso="usuarios.crear"><UsuarioNuevoEditar /></ProtectedRoute> },
+      { path: 'usuarios/editar/:id',   element: <ProtectedRoute permiso="usuarios.editar"><UsuarioNuevoEditar /></ProtectedRoute> },
+      { path: 'usuarios/permisos/:id', element: <ProtectedRoute permiso="usuarios.editar_permisos"><UsuarioPermisos /></ProtectedRoute> },
+      { path: 'usuarios/:id',          Component: UsuarioDetalle },
+
+      { path: 'perfil',         Component: MiPerfil },
+      { path: 'configuracion', element: <ProtectedRoute permiso="configuracion.editar"><Configuracion /></ProtectedRoute> },
+      { path: 'maestros', element: <Navigate to="/configuracion" replace /> },
+
+      { path: '403', Component: SinPermisos },
+      { path: '*',   Component: NotFound },
+    ],
+  },
+]);
