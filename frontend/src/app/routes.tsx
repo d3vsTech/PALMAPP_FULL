@@ -87,6 +87,10 @@ export const router = createBrowserRouter([
   { path: '/login',                element: <Login /> },
   { path: '/recuperar-password',   element: <RecuperarPassword /> },
   { path: '/restablecer-password', element: <RestablecerPassword /> },
+  { path: '/reset-password',                    element: <RestablecerPassword /> },
+  { path: '/recuperar-password/reset-password', element: <RestablecerPassword /> },
+  { path: '/reset-password',                    element: <RestablecerPassword /> },
+  { path: '/recuperar-password/reset-password', element: <RestablecerPassword /> },
   { path: '/seleccionar-finca',    element: <SeleccionarFinca /> },
   { path: '/sin-permisos',          element: <SinAcceso /> },
 

@@ -19,7 +19,9 @@ import {
   Leaf,
   Calendar,
 } from 'lucide-react';
-import { prediosApi, lotesApi, sublotesApi, palmasApi, getDepartamentos, getMunicipios } from '../../../api/plantacion';
+import { prediosApi, lotesApi, sublotesApi, palmasApi } from '../../../api/plantacion';
+import { fetchConToken } from '../../../api/request';
+import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'sonner';
 
 // Tipos
@@ -73,6 +75,7 @@ export default function NuevoPredioWizard() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const editId = searchParams.get('edit');
+  const { token } = useAuth();
   const [etapaActual, setEtapaActual] = useState(1);
 
   // Estado del Predio
@@ -171,14 +174,32 @@ export default function NuevoPredioWizard() {
 
   // Cargar departamentos al montar
   useEffect(() => {
-    getDepartamentos().then(r => setDepartamentos(r.data ?? [])).catch(() => {});
-  }, []);
+    const cargarDepartamentos = async () => {
+      try {
+        const respuesta = await fetchConToken('/api/v1/auth/departamentos', token);
+        const data = await respuesta.json();
+        setDepartamentos(data.data ?? []);
+      } catch (err) {
+        toast.error('Error al cargar departamentos');
+      }
+    };
+    cargarDepartamentos();
+  }, [token]);
 
   // Cargar municipios cuando cambia el departamento
   useEffect(() => {
     if (!deptoSel) { setMunicipios([]); setMunSel(''); return; }
-    getMunicipios(deptoSel).then(r => setMunicipios(r.data ?? [])).catch(() => {});
-  }, [deptoSel]);
+    const cargarMunicipios = async () => {
+      try {
+        const respuesta = await fetchConToken(`/api/v1/auth/departamentos/${deptoSel}/municipios`, token);
+        const data = await respuesta.json();
+        setMunicipios(data.data ?? []);
+      } catch (err) {
+        toast.error('Error al cargar municipios');
+      }
+    };
+    cargarMunicipios();
+  }, [deptoSel, token]);
 
   // Sincronizar ubicacion con departamento + municipio seleccionados
   useEffect(() => {
@@ -333,25 +354,30 @@ export default function NuevoPredioWizard() {
         if (!nuevoPredioId) throw new Error('No se recibió el ID del predio creado');
         // Crear lotes
         for (const lote of lotes) {
-          const loteRes = await lotesApi.crear({
+          const loteBody: any = {
             predio_id: nuevoPredioId,
             nombre: lote.nombre,
-            fecha_siembra: lote.fechaSiembra || undefined,
-            hectareas_sembradas: lote.hectareasSembradas || undefined,
-          });
+          };
+          if (lote.fechaSiembra) loteBody.fecha_siembra = lote.fechaSiembra;
+          if (lote.hectareasSembradas > 0) loteBody.hectareas_sembradas = lote.hectareasSembradas;
+
+          const loteRes = await lotesApi.crear(loteBody);
           const nuevoLoteId = loteRes.data?.id ?? (loteRes as any)?.id;
+          if (!nuevoLoteId) throw new Error(`No se recibió el ID del lote "${lote.nombre}"`);
+
           // Crear sublotes del lote
           const sublotesDelLote = sublotes.filter(s => s.loteId === lote.id);
           for (const sublote of sublotesDelLote) {
             const palmasDelSublote = palmas.filter(p => p.subloteId === sublote.id);
-            await sublotesApi.crear({
+            const subloteBody: any = {
               lote_id: nuevoLoteId,
               nombre: sublote.nombre,
-              cantidad_palmas: palmasDelSublote.length || undefined,
-            });
+            };
+            if (palmasDelSublote.length > 0) subloteBody.cantidad_palmas = palmasDelSublote.length;
+            await sublotesApi.crear(subloteBody);
           }
         }
-        toast.success('Plantación creada correctamente');
+        toast.success(`Plantación creada: ${lotes.length} lote(s), ${sublotes.length} sublote(s)`);
       }
       navigate('/plantacion');
     } catch (err) {

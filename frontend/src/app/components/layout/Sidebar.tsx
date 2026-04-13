@@ -23,6 +23,7 @@ interface NavItem {
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   roles: UserRole[];
+  permiso?: string;
 }
 
 const navItems: NavItem[] = [
@@ -31,42 +32,49 @@ const navItems: NavItem[] = [
     href: '/',
     icon: Home,
     roles: ['dueño', 'administrador', 'jefe_campo'],
+    permiso: 'dashboard.ver',
   },
   {
     label: 'Mi Plantación',
     href: '/plantacion',
     icon: Sprout,
-    roles: ['administrador'],
+    roles: ['dueño', 'administrador', 'jefe_campo'],
+    permiso: 'lotes.ver',
   },
   {
     label: 'Colaboradores',
     href: '/colaboradores',
     icon: Users,
-    roles: ['administrador'],
+    roles: ['dueño', 'administrador', 'jefe_campo'],
+    permiso: 'colaboradores.ver',
   },
   {
     label: 'Gestión de Usuarios',
     href: '/usuarios',
     icon: UserCog,
     roles: ['administrador'],
+    permiso: 'usuarios.ver',
   },
   {
     label: 'Nómina',
     href: '/nomina',
     icon: DollarSign,
-    roles: ['administrador'],
+    roles: ['dueño', 'administrador', 'jefe_campo'],
+    permiso: 'nomina.ver',
   },
   {
     label: 'Operaciones',
     href: '/operaciones',
     icon: Clipboard,
-    roles: ['administrador', 'jefe_campo'],
+    roles: ['dueño', 'administrador', 'jefe_campo'],
+    permiso: 'operaciones.ver',
   },
   {
     label: 'Viajes',
     href: '/viajes',
     icon: Truck,
-    roles: ['administrador', 'jefe_campo'],
+    roles: ['dueño', 'administrador', 'jefe_campo'],
+    permiso: 'remisiones.ver',
   },
   {
     label: 'Agente IA',
@@ -78,18 +86,26 @@ const navItems: NavItem[] = [
     label: 'Configuración',
     href: '/configuracion',
     icon: Settings,
-    roles: ['administrador'],
+    roles: ['dueño', 'administrador', 'jefe_campo'],
+    permiso: 'configuracion.editar',
   },
 ];
 
 export default function Sidebar() {
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, hasPermiso } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const filteredItems = navItems.filter(item =>
-    user?.rol && item.roles.includes(user.rol as UserRole)
-  );
+  const esAdmin = user?.is_super_admin || user?.rol === 'administrador';
+
+  const filteredItems = navItems.filter(item => {
+    // Admins ven todo
+    if (esAdmin) return true;
+    // Usuarios normales: mostrar si tiene el permiso del item
+    if (item.permiso) return hasPermiso(item.permiso);
+    // Items sin permiso (Agente IA): mostrar a todos los autenticados
+    return true;
+  });
 
   const NavContent = () => (
     <div className="flex h-full flex-col bg-card glass-subtle border-r border-border">
