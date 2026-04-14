@@ -730,6 +730,8 @@ DELETE /sublotes/{id}
 
 ## 4. Palmas
 
+> **Relación con líneas:** Las palmas pueden asignarse opcionalmente a una línea del sublote mediante `linea_id`. Si el sublote tiene líneas configuradas, es obligatorio especificar la línea al crear palmas. Si el sublote no tiene líneas, el flujo es el mismo de siempre (solo `sublote_id` + `cantidad_palmas`).
+
 ### 4.1 Listar palmas
 
 ```
@@ -738,13 +740,15 @@ GET /palmas
 
 **Query params:**
 
-| Param       | Tipo    | Requerido | Descripción                            |
-|-------------|---------|-----------|----------------------------------------|
-| `sublote_id`| integer | No        | Filtra por sublote                     |
-| `search`    | string  | No        | Busca por código (parcial)             |
-| `estado`    | boolean | No        | Filtra por estado (`true` / `false`)   |
-| `per_page`  | integer | No        | Registros por página (default: 50)     |
-| `page`      | integer | No        | Número de página                       |
+| Param       | Tipo    | Requerido | Descripción                                    |
+|-------------|---------|-----------|------------------------------------------------|
+| `sublote_id`| integer | No        | Filtra por sublote                             |
+| `linea_id`  | integer | No        | Filtra por línea                               |
+| `sin_linea` | flag    | No        | Si está presente, muestra solo palmas sin línea asignada |
+| `search`    | string  | No        | Busca por código (parcial)                     |
+| `estado`    | boolean | No        | Filtra por estado (`true` / `false`)           |
+| `per_page`  | integer | No        | Registros por página (default: 50)             |
+| `page`      | integer | No        | Número de página                               |
 
 **Permiso:** `palmas.ver`
 
@@ -756,6 +760,7 @@ GET /palmas
       "id": 1,
       "tenant_id": 1,
       "sublote_id": 1,
+      "linea_id": 1,
       "codigo": "Sublote A1-001",
       "descripcion": null,
       "estado": true,
@@ -764,12 +769,18 @@ GET /palmas
       "sublote": {
         "id": 1,
         "nombre": "Sublote A1"
+      },
+      "linea": {
+        "id": 1,
+        "numero": 1
       }
     }
   ],
   "meta": { ... }
 }
 ```
+
+> **Nota:** `linea` será `null` si la palma no tiene línea asignada.
 
 ---
 
@@ -788,6 +799,7 @@ GET /palmas/{id}
     "id": 1,
     "tenant_id": 1,
     "sublote_id": 1,
+    "linea_id": 1,
     "codigo": "Sublote A1-001",
     "descripcion": null,
     "estado": true,
@@ -799,6 +811,10 @@ GET /palmas/{id}
         "id": 1,
         "nombre": "Lote A"
       }
+    },
+    "linea": {
+      "id": 1,
+      "numero": 1
     }
   }
 }
@@ -820,13 +836,24 @@ POST /palmas
 |------------------|---------|-----------|-----------------------------------------------------|
 | `sublote_id`     | integer | **Sí**    | ID del sublote (debe existir)                       |
 | `cantidad_palmas`| integer | **Sí**    | Cantidad de palmas a crear (1-9999)                 |
+| `linea_id`       | integer | Condicional | ID de la línea. **Obligatorio si el sublote tiene líneas.** Debe pertenecer al mismo sublote |
 
 > **Comportamiento:**
 > - Los códigos se generan automáticamente siguiendo el formato `{nombre_sublote}-{contador}`.
-> - El contador es secuencial dentro del sublote y nunca se repite (usa el máximo existente + 1).
-> - Se actualiza automáticamente `cantidad_palmas` del sublote.
+> - El contador es secuencial dentro del sublote (global, no por línea) y nunca se repite.
+> - Se actualiza automáticamente `cantidad_palmas` del sublote y de la línea (si aplica).
+> - Si el sublote tiene líneas y no se envía `linea_id`, se retorna error 422.
 
-**Ejemplo:**
+**Ejemplo (sublote con líneas):**
+```json
+{
+  "sublote_id": 1,
+  "cantidad_palmas": 5,
+  "linea_id": 3
+}
+```
+
+**Ejemplo (sublote sin líneas):**
 ```json
 {
   "sublote_id": 1,
@@ -842,18 +869,23 @@ POST /palmas
     {
       "id": 121,
       "sublote_id": 1,
+      "linea_id": 3,
       "codigo": "Sublote A1-121",
       "descripcion": null,
-      "estado": true
-    },
-    {
-      "id": 122,
-      "sublote_id": 1,
-      "codigo": "Sublote A1-122",
-      "descripcion": null,
-      "estado": true
+      "estado": true,
+      "linea": { "id": 3, "numero": 3 }
     }
   ]
+}
+```
+
+**Respuesta 422 (sublote tiene líneas pero no se envió `linea_id`):**
+```json
+{
+  "message": "Error de validación",
+  "errors": {
+    "linea_id": ["El sublote tiene líneas configuradas. Debe especificar la línea."]
+  }
 }
 ```
 
@@ -869,16 +901,19 @@ PUT /palmas/{id}
 
 **Body:**
 
-| Campo        | Tipo    | Requerido | Descripción                  |
-|--------------|---------|-----------|------------------------------|
-| `descripcion`| string  | No        | Máximo 255 caracteres        |
-| `estado`     | boolean | No        | Activar/desactivar palma     |
+| Campo        | Tipo    | Requerido | Descripción                                              |
+|--------------|---------|-----------|----------------------------------------------------------|
+| `descripcion`| string  | No        | Máximo 255 caracteres                                    |
+| `estado`     | boolean | No        | Activar/desactivar palma                                 |
+| `linea_id`   | integer | No        | Reasignar a otra línea (debe pertenecer al mismo sublote). Enviar `null` para desasignar |
+
+> **Comportamiento de `linea_id`:** Al cambiar la línea de una palma, se sincronizan automáticamente los contadores `cantidad_palmas` de la línea anterior y la nueva.
 
 **Ejemplo:**
 ```json
 {
   "descripcion": "Palma enferma - requiere tratamiento",
-  "estado": false
+  "linea_id": 2
 }
 ```
 
@@ -908,7 +943,7 @@ DELETE /palmas/masivo
 
 > **Comportamiento:**
 > - Se eliminan todas las palmas indicadas.
-> - Se actualiza automáticamente `cantidad_palmas` de los sublotes afectados.
+> - Se actualiza automáticamente `cantidad_palmas` de los sublotes y líneas afectados.
 
 **Ejemplo:**
 ```json
@@ -926,9 +961,9 @@ DELETE /palmas/masivo
 
 ---
 
-## 5. Líneas (metadata opcional)
+## 5. Líneas
 
-> **Importante:** Las líneas son **metadata informativa** por sublote. **No tienen relación con palmas** — las palmas siguen colgando solo del sublote, y crear/eliminar líneas no afecta a las palmas existentes. Su uso es **completamente opcional**: el wizard de creación de plantación puede saltarse este paso y nada se rompe.
+> **Relación con palmas:** Las líneas son una agrupación organizacional opcional dentro del sublote. Cuando un sublote tiene líneas, las palmas se asignan a una línea específica (`linea_id`). Al eliminar una línea, las palmas asignadas quedan sin línea (`linea_id = null`) pero **no se eliminan**. La respuesta incluye `palmas_count` (cantidad real de palmas asignadas a la línea).
 
 ### 5.1 Listar líneas
 
@@ -958,6 +993,7 @@ GET /lineas
       "sublote_id": 1,
       "numero": 1,
       "cantidad_palmas": 30,
+      "palmas_count": 28,
       "estado": true,
       "created_at": "2026-04-08T...",
       "updated_at": "2026-04-08T...",
@@ -1072,7 +1108,7 @@ DELETE /lineas/{id}
 
 **Permiso:** `lineas.eliminar`
 
-> **Importante:** Eliminar una línea **no afecta a las palmas** del sublote. Las palmas son entidades independientes que cuelgan solo del sublote.
+> **Importante:** Eliminar una línea **desasocia** las palmas asignadas (`linea_id → null`). Las palmas **no se eliminan** — quedan en el sublote sin línea asignada.
 
 **Respuesta 200:**
 ```json
