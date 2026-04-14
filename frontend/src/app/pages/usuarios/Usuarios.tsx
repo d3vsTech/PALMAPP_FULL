@@ -2,7 +2,16 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { requestConToken } from '../../../api/request';
-import ConfirmDialog from '../../components/common/ConfirmDialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../../components/ui/alert-dialog';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -106,11 +115,24 @@ export default function Usuarios() {
 
   return (
     <div className="space-y-8">
-      <ConfirmDialog
-        open={confirmDialog.open} onClose={closeConfirm}
-        onConfirm={confirmDialog.onConfirm} title={confirmDialog.title}
-        description={confirmDialog.description} variant={confirmDialog.variant}
-      />
+      {/* Confirm Dialog */}
+      <AlertDialog open={confirmDialog.open} onOpenChange={(open) => !open && closeConfirm()}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmDialog.title}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmDialog.description}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={closeConfirm}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { confirmDialog.onConfirm(); closeConfirm(); }}
+              className={confirmDialog.variant === 'danger' ? 'bg-destructive hover:bg-destructive/90' : ''}
+            >
+              {confirmDialog.variant === 'danger' ? 'Eliminar' : 'Confirmar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Header */}
       <div className="flex items-center justify-between">

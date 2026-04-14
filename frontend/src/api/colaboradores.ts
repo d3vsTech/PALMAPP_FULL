@@ -1,104 +1,67 @@
 /**
  * API — Colaboradores
- * Empleados de la finca: creación, contratos, estado laboral.
+ * Base: /api/v1/tenant/colaboradores
  */
+import { requestConToken } from './request';
 
-import { apiClient, PaginatedResponse } from './client';
+function tkn() { return localStorage.getItem('palmapp_token'); }
 
-const T = true;
-
-function toQuery(params?: Record<string, unknown>): string {
-  if (!params) return '';
-  const q = new URLSearchParams();
-  Object.entries(params).forEach(([k, v]) => {
-    if (v !== undefined && v !== null && v !== '') q.append(k, String(v));
-  });
-  const s = q.toString();
-  return s ? `?${s}` : '';
+async function get<T>(path: string, params?: Record<string, unknown>): Promise<T> {
+  const q = params ? '?' + new URLSearchParams(
+    Object.fromEntries(Object.entries(params).filter(([,v]) => v !== undefined && v !== null && v !== '').map(([k,v]) => [k, String(v)]))
+  ).toString() : '';
+  return requestConToken<T>(`/api/v1/tenant/colaboradores${path}${q}`, { method: 'GET' }, tkn());
 }
-
-export interface Colaborador {
-  id: number;
-  nombre: string;
-  apellido: string;
-  cedula: string;
-  telefono?: string;
-  correo?: string;
-  cargo_id?: number;
-  cargo?: { id: number; nombre: string };
-  estado: boolean;
-  fecha_ingreso?: string;
-  tipo_contrato?: string;
-  salario_base?: number;
+async function post<T>(path: string, body: unknown): Promise<T> {
+  return requestConToken<T>(`/api/v1/tenant/colaboradores${path}`, { method: 'POST', body: JSON.stringify(body) }, tkn());
 }
-
-export interface ColaboradorPayload {
-  nombre: string;
-  apellido: string;
-  cedula: string;
-  telefono?: string;
-  correo?: string;
-  cargo_id?: number;
-  fecha_ingreso?: string;
-  tipo_contrato?: string;
-  salario_base?: number;
+async function put<T>(path: string, body: unknown): Promise<T> {
+  return requestConToken<T>(`/api/v1/tenant/colaboradores${path}`, { method: 'PUT', body: JSON.stringify(body) }, tkn());
 }
-
-export interface Contrato {
-  id: number;
-  colaborador_id: number;
-  tipo: string;
-  fecha_inicio: string;
-  fecha_fin?: string;
-  salario: number;
-  estado: boolean;
+async function del<T>(path: string): Promise<T> {
+  return requestConToken<T>(`/api/v1/tenant/colaboradores${path}`, { method: 'DELETE' }, tkn());
 }
 
 export const colaboradoresApi = {
-  getColaboradores: (params?: {
-    search?: string;
-    estado?: boolean;
-    per_page?: number;
-    page?: number;
-  }) =>
-    apiClient.get<PaginatedResponse<Colaborador>>(
-      `/v1/tenant/colaboradores${toQuery(params)}`, T
+  listar: (p?: {
+    search?: string; cargo?: string; modalidad_pago?: string;
+    predio_id?: number; estado?: boolean; per_page?: number; page?: number;
+  }) => get<{ data: any[]; meta: any }>('', p as any),
+
+  ver: (id: number) => get<{ data: any }>(`/${id}`),
+
+  crear: (b: Record<string, unknown>) =>
+    post<{ message: string; data: any }>('', b),
+
+  editar: (id: number, b: Record<string, unknown>) =>
+    put<{ message: string; data: any }>(`/${id}`, b),
+
+  eliminar: (id: number) => del<{ message: string }>(`/${id}`),
+
+  toggle: (id: number) =>
+    requestConToken<{ message: string; data: any }>(
+      `/api/v1/tenant/colaboradores/${id}/toggle`, { method: 'PATCH' }, tkn()
     ),
 
-  getColaborador: (id: number) =>
-    apiClient.get<{ data: Colaborador }>(`/v1/tenant/colaboradores/${id}`, T),
+  // ─── Documentos ────────────────────────────────────────────────────────────
+  getCategorias: () => get<{ data: Record<string, any> }>('/documento-categorias'),
 
-  createColaborador: (payload: ColaboradorPayload) =>
-    apiClient.post<{ data: Colaborador; message: string }>(
-      '/v1/tenant/colaboradores', payload, T
+  getDocumentos: (id: number, categoria?: string) =>
+    get<{ data: any[] }>(`/${id}/documentos`, categoria ? { categoria } : undefined),
+
+  subirDocumento: (id: number, formData: FormData) =>
+    requestConToken<{ message: string; data: any }>(
+      `/api/v1/tenant/colaboradores/${id}/documentos`,
+      { method: 'POST', body: formData },
+      tkn()
     ),
 
-  updateColaborador: (id: number, payload: Partial<ColaboradorPayload>) =>
-    apiClient.put<{ data: Colaborador; message: string }>(
-      `/v1/tenant/colaboradores/${id}`, payload, T
+  eliminarDocumento: (id: number, docId: number) =>
+    requestConToken<{ message: string }>(
+      `/api/v1/tenant/colaboradores/${id}/documentos/${docId}`,
+      { method: 'DELETE' }, tkn()
     ),
 
-  toggleColaborador: (id: number) =>
-    apiClient.patch<{ message: string }>(
-      `/v1/tenant/colaboradores/${id}/toggle`, undefined, T
-    ),
-
-  deleteColaborador: (id: number) =>
-    apiClient.delete<{ message: string }>(`/v1/tenant/colaboradores/${id}`, T),
-
-  // ─── Contratos ─────────────────────────────────────────────────────────────
-  getContratos: (colaboradorId: number) =>
-    apiClient.get<{ data: Contrato[] }>(
-      `/v1/tenant/colaboradores/${colaboradorId}/contratos`, T
-    ),
-
-  createContrato: (colaboradorId: number, payload: Omit<Contrato, 'id' | 'colaborador_id'>) =>
-    apiClient.post<{ data: Contrato }>(
-      `/v1/tenant/colaboradores/${colaboradorId}/contratos`, payload, T
-    ),
-
-  updateContrato: (colaboradorId: number, contratoId: number, payload: Partial<Contrato>) =>
-    apiClient.put<{ data: Contrato }>(
-      `/v1/tenant/colaboradores/${colaboradorId}/contratos/${contratoId}`, payload, T
-    ),
+  descargarDocumento: (id: number, docId: number) =>
+    `/api/v1/tenant/colaboradores/${id}/documentos/${docId}/descargar`,
 };

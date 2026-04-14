@@ -52,6 +52,16 @@ import PlanillaDiaria from './pages/operaciones/PlanillaDiaria';
 // Viajes
 import Viajes from './pages/viajes/Viajes';
 import DetalleViaje from './pages/viajes/DetalleViaje';
+
+// Market
+import Market from './pages/market/Market';
+import Proveedores from './pages/market/Proveedores';
+import ProveedorDetalle from './pages/market/ProveedorDetalle';
+import ProductoDetalle from './pages/market/ProductoDetalle';
+import Carrito from './pages/market/Carrito';
+import Checkout from './pages/market/Checkout';
+import Pedidos from './pages/market/Pedidos';
+import PedidoDetalle from './pages/market/PedidoDetalle';
 import NuevoEditarViaje from './pages/viajes/NuevoEditarViaje';
 
 // Usuarios
@@ -144,13 +154,13 @@ export const router = createBrowserRouter([
       { path: 'colaboradores/:id',        Component: ColaboradorDetail },
 
       { path: 'nomina',     element: <ProtectedRoute permiso="nomina.ver"><Nomina /></ProtectedRoute> },
-      { path: 'nomina/:id', Component: NominaDetalle },
+      { path: 'nomina/:id',       Component: NominaDetalle },
 
       { path: 'liquidaciones', Component: Liquidaciones },
 
       { path: 'operaciones',                element: <ProtectedRoute permiso="operaciones.ver"><Operaciones /></ProtectedRoute> },
       { path: 'operaciones/planilla/:id',   Component: PlanillaDiaria },
-      { path: 'operaciones/planilla/nueva', Component: PlanillaDiaria },
+      { path: 'operaciones/planilla/nueva',   Component: PlanillaDiaria },
 
       { path: 'viajes',            element: <ProtectedRoute permiso="remisiones.ver"><Viajes /></ProtectedRoute> },
       { path: 'viajes/nuevo',      Component: NuevoEditarViaje },
@@ -158,6 +168,15 @@ export const router = createBrowserRouter([
       { path: 'viajes/:id',        Component: DetalleViaje },
       { path: 'remisiones',        Component: Viajes },
       { path: 'remisiones/:id',    Component: DetalleViaje },
+
+      { path: 'market',                  Component: Market },
+      { path: 'market/proveedores',      Component: Proveedores },
+      { path: 'market/proveedores/:id',  Component: ProveedorDetalle },
+      { path: 'market/productos/:id',    Component: ProductoDetalle },
+      { path: 'market/carrito',          Component: Carrito },
+      { path: 'market/checkout',         Component: Checkout },
+      { path: 'market/pedidos',          Component: Pedidos },
+      { path: 'market/pedidos/:id',      Component: PedidoDetalle },
 
       { path: 'usuarios',              element: <ProtectedRoute permiso="usuarios.ver"><Usuarios /></ProtectedRoute> },
       { path: 'usuarios/nuevo',        element: <ProtectedRoute permiso="usuarios.crear"><UsuarioNuevoEditar /></ProtectedRoute> },

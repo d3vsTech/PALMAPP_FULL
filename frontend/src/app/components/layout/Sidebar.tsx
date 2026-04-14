@@ -6,12 +6,14 @@ import { Button } from '../ui/AppButton';
 import { PalmappLogo } from '../common/PalmappLogo';
 import {
   Home,
+  ShoppingCart,
   Sprout,
   Users,
   DollarSign,
   Clipboard,
   Truck,
   Settings,
+  ShoppingBag,
   Menu,
   X,
   UserCog,
@@ -80,6 +82,12 @@ const navItems: NavItem[] = [
     label: 'Agente IA',
     href: '/agente-ia',
     icon: Sparkles,
+    roles: ['dueño', 'administrador', 'jefe_campo'],
+  },
+  {
+    label: 'Market',
+    href: '/market',
+    icon: ShoppingBag,
     roles: ['dueño', 'administrador', 'jefe_campo'],
   },
   {
