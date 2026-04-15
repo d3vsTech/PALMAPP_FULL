@@ -160,6 +160,7 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
     Route::delete('lineas/{linea}', [LineaController::class, 'destroy'])->middleware('check.permission:lineas.eliminar');
 
     // ── Palmas ──
+    Route::get('palmas/batch/{batchId}', [PalmaController::class, 'batchStatus'])->middleware('check.permission:palmas.ver');
     Route::delete('palmas/masivo', [PalmaController::class, 'destroyMasivo'])->middleware('check.permission:palmas.eliminar');
     Route::get('palmas', [PalmaController::class, 'index'])->middleware('check.permission:palmas.ver');
     Route::get('palmas/{palma}', [PalmaController::class, 'show'])->middleware('check.permission:palmas.ver');
