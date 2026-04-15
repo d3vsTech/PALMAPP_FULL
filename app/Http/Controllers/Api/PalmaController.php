@@ -10,8 +10,10 @@ use App\Models\Linea;
 use App\Models\Palma;
 use App\Models\Sublote;
 use App\Services\AuditoriaService;
+use App\Services\PalmaCreationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -19,6 +21,7 @@ class PalmaController extends Controller
 {
     public function __construct(
         protected AuditoriaService $auditoria,
+        protected PalmaCreationService $palmaService,
     ) {}
 
     /**
@@ -120,42 +123,40 @@ class PalmaController extends Controller
                 }
             }
 
+            $cantidadPalmas = (int) $request->cantidad_palmas;
+
+            // Camino ASYNC: cantidad > umbral → despachar job en cola
+            if ($cantidadPalmas > PalmaCreationService::SYNC_THRESHOLD) {
+                $batchId = $this->palmaService->createAsync(
+                    sublote:  $sublote,
+                    cantidad: $cantidadPalmas,
+                    lineaId:  $linea?->id,
+                    tenantId: $sublote->tenant_id,
+                    userId:   $request->user()->id,
+                );
+
+                $this->auditoria->registrar(
+                    request: $request,
+                    accion: 'CREAR',
+                    modulo: 'PALMAS',
+                    observaciones: "Se encoló la creación de {$cantidadPalmas} palma(s) en sublote '{$sublote->nombre}'"
+                        . ($linea ? " línea {$linea->numero}" : '') . " (batch: {$batchId})",
+                );
+
+                return response()->json([
+                    'message'    => "Solicitud aceptada. {$cantidadPalmas} palma(s) se crearán en segundo plano.",
+                    'async'      => true,
+                    'batch_id'   => $batchId,
+                    'sublote_id' => $sublote->id,
+                    'linea_id'   => $linea?->id,
+                    'cantidad'   => $cantidadPalmas,
+                ], 202);
+            }
+
+            // Camino SYNC: cantidad <= umbral → insertar dentro de la transacción
             DB::beginTransaction();
 
-            // Obtener el máximo contador existente en el sublote
-            $maxContador = (int) Palma::where('sublote_id', $sublote->id)
-                ->selectRaw("MAX(CAST(SUBSTRING(codigo FROM '-([0-9]+)$') AS INTEGER)) as max_num")
-                ->value('max_num');
-
-            $palmas = [];
-            $now = now();
-            $tenantId = $sublote->tenant_id;
-            $cantidadPalmas = $request->cantidad_palmas;
-
-            for ($i = 1; $i <= $cantidadPalmas; $i++) {
-                $maxContador++;
-                $codigo = $sublote->nombre . '-' . str_pad($maxContador, 3, '0', STR_PAD_LEFT);
-                $palmas[] = [
-                    'tenant_id'   => $tenantId,
-                    'sublote_id'  => $sublote->id,
-                    'linea_id'    => $linea?->id,
-                    'codigo'      => $codigo,
-                    'descripcion' => null,
-                    'estado'      => true,
-                    'created_at'  => $now,
-                    'updated_at'  => $now,
-                ];
-            }
-
-            Palma::insert($palmas);
-
-            // Actualizar contador del sublote
-            $sublote->update(['cantidad_palmas' => $sublote->palmas()->count()]);
-
-            // Sincronizar contador de la línea
-            if ($linea) {
-                $linea->update(['cantidad_palmas' => $linea->palmas()->count()]);
-            }
+            $this->palmaService->createSync($sublote, $cantidadPalmas, $linea?->id);
 
             DB::commit();
 
@@ -167,15 +168,12 @@ class PalmaController extends Controller
                     . ($linea ? " línea {$linea->numero}" : ''),
             );
 
-            $palmasCreadas = Palma::where('sublote_id', $sublote->id)
-                ->with('linea:id,numero')
-                ->orderBy('codigo', 'desc')
-                ->take($cantidadPalmas)
-                ->get();
-
             return response()->json([
-                'message' => "{$cantidadPalmas} palma(s) creada(s) correctamente",
-                'data'    => $palmasCreadas,
+                'message'        => "{$cantidadPalmas} palma(s) creada(s) correctamente",
+                'async'          => false,
+                'cantidad_creada' => $cantidadPalmas,
+                'sublote_id'     => $sublote->id,
+                'linea_id'       => $linea?->id,
             ], 201);
         } catch (\Throwable $e) {
             DB::rollBack();
@@ -186,6 +184,39 @@ class PalmaController extends Controller
                 'error'   => $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * GET /api/v1/tenant/palmas/batch/{batchId}
+     * Consulta el estado de un batch de creación de palmas.
+     */
+    public function batchStatus(string $batchId): JsonResponse
+    {
+        $batch = Bus::findBatch($batchId);
+
+        if (!$batch) {
+            return response()->json([
+                'message' => 'Batch no encontrado',
+                'code'    => 'BATCH_NOT_FOUND',
+            ], 404);
+        }
+
+        return response()->json([
+            'data' => [
+                'id'            => $batch->id,
+                'name'          => $batch->name,
+                'total_jobs'    => $batch->totalJobs,
+                'pending_jobs'  => $batch->pendingJobs,
+                'failed_jobs'   => $batch->failedJobs,
+                'processed_jobs' => $batch->processedJobs(),
+                'progress'      => $batch->progress(),
+                'finished'      => $batch->finished(),
+                'cancelled'     => $batch->cancelled(),
+                'has_failures'  => $batch->hasFailures(),
+                'created_at'    => $batch->createdAt,
+                'finished_at'   => $batch->finishedAt,
+            ],
+        ]);
     }
 
     /**

@@ -148,7 +148,7 @@ El sistema usa JWT (JSON Web Tokens) en lugar de sesiones. No hay cookies ni est
 
 ## 5. Estructura de la Base de Datos
 
-### 5.1 Resumen: 38 tablas organizadas en 11 migraciones
+### 5.1 Resumen: 40 tablas organizadas en 13 migraciones
 
 **Migración 1 — Tenants:** `tenants` (core multi-tenant)
 
@@ -173,6 +173,8 @@ El sistema usa JWT (JSON Web Tokens) en lugar de sesiones. No hay cookies ni est
 **Migración 12 — Refactoring Colaboradores:** Separa `nombres`→`primer_nombre`+`segundo_nombre` y `apellidos`→`primer_apellido`+`segundo_apellido`. Desacopla cargo del modelo relacional: quita `cargo_id` FK de `empleados` y agrega campos directos `cargo` (string), `salario_base` (decimal) y `modalidad_pago` (FIJO/PRODUCCION). Agrega `predio_id` (FK nullable a `predios`). Hace `fecha_expedicion_documento` obligatorio. Quita `modalidad_id` y `cargo_id` de `empleado_contratos`. Reestructura categorías de documentos.
 
 **Migración 11 — Ausencias (1 tabla nueva + alter nomina_empleado):** Crea `ausencias` (registros de incapacidades, licencias, permisos y faltas reportados desde la operación diaria; `operacion_id` NOT NULL, rango `fecha_inicio`/`fecha_fin`, flujo PENDIENTE → APROBADA → LIQUIDADA, soporte offline con `sync_uuid`/`sync_estado`). Agrega a `nomina_empleado` las columnas `dias_ausencia_descontados`, `total_ausencias_descuento` y `total_ausencias_remunerado` para reflejar el efecto de las ausencias en la liquidación.
+
+**Migración 13 — Chat del Agente IA (2 tablas nuevas):** Crea `agro_chat_sessions` (conversaciones del usuario con el agente IA: `user_id` + `tenant_id` con `ON DELETE CASCADE`, `titulo`, `created_at`/`updated_at` como `TIMESTAMPTZ`) y `agro_chat_messages` (mensajes individuales: `session_id` FK cascade a sessions, `user_id`, `tenant_id`, `role` `user|assistant|system|tool`, `content` texto, `tool_calls` JSONB para auditar qué consultas SQL hizo el agente, `tokens_in`/`tokens_out` opcionales para telemetría, `created_at` TIMESTAMPTZ). Índices: `(user_id, tenant_id, updated_at)` en sesiones; `(session_id, created_at)` y `(user_id, created_at)` en mensajes. Usadas por un agente IA externo que se conecta a la BD: **solo escribe** en estas dos tablas (4 operaciones: crear sesión, insertar mensaje, tocar `updated_at` de la sesión, eliminar sesión con cascada) y **solo lee** el resto del esquema Laravel (users, tenants, predios, lotes, palmas, etc.).
 
 ### 5.2 Convención de índices
 
@@ -405,6 +407,23 @@ Modelo: Ausencia.
 Registra todas las acciones del sistema: login, logout, crear, editar, eliminar. Cada registro guarda: tenant_id, user_id, acción, módulo, observaciones, IP, user agent, y snapshots JSON de datos anteriores y nuevos (para poder ver exactamente qué cambió).
 
 Modelo: Auditoria.
+
+### 6.12 Chat del Agente IA
+
+Un agente de IA externo se conecta directamente a la base de datos PostgreSQL para asistir a los usuarios con consultas sobre su finca. Puede leer todo el esquema Laravel (empleados, predios, lotes, palmas, jornales, nómina, etc.) y persiste las conversaciones en dos tablas propias con prefijo `agro_`:
+
+- **`agro_chat_sessions`** — cada sesión es una conversación del usuario con el agente. Lleva `user_id` y `tenant_id` (ambos con `ON DELETE CASCADE`), `titulo` opcional y `created_at`/`updated_at` en `TIMESTAMPTZ`.
+- **`agro_chat_messages`** — mensajes individuales dentro de una sesión. Columnas clave: `role` (`user` | `assistant` | `system` | `tool`), `content` (texto), `tool_calls` (JSONB con las consultas SQL que ejecutó el agente, útil para auditoría), y telemetría opcional `tokens_in`/`tokens_out`.
+
+**Operaciones de escritura del agente (las únicas 4):**
+1. Crear sesión: `INSERT INTO agro_chat_sessions (user_id, tenant_id, titulo) VALUES (...)`
+2. Insertar mensaje (tanto del usuario como de la respuesta del AI): `INSERT INTO agro_chat_messages (...)`
+3. Tras cada mensaje: `UPDATE agro_chat_sessions SET updated_at = NOW() WHERE id = ?`
+4. Borrar sesión: `DELETE FROM agro_chat_sessions WHERE id = ? AND user_id = ?` (la cascada elimina los mensajes).
+
+**Opcional (si se habilita más adelante):** renombrar sesión (`UPDATE agro_chat_sessions SET titulo = ?`). No hay tabla propia de login audit: el agente puede reutilizar la tabla `auditorias` de Laravel.
+
+**Aislamiento multi-tenant:** aunque estas tablas son usadas por un servicio externo (no por los controllers Laravel) y por tanto **no** pasan por `BelongsToTenant`, el agente debe siempre incluir `tenant_id` y `user_id` en sus inserts y filtrar por ambos campos en sus queries para evitar fugas de información entre fincas.
 
 ### 6.11 Bot de Integraciones (consumo externo de la API)
 
@@ -756,6 +775,7 @@ POST            /api/v1/tenant/bot/test             → Endpoint de prueba del b
 - Constantes de categorías de documentos: `App\Constants\DocumentoCategoria`
 - Modelos de contratos y documentos del empleado: EmpleadoContrato, EmpleadoDocumento
 - **Modelo de Ausencias** (`Ausencia`): tabla `ausencias` reportada desde la operación diaria con `operacion_id` NOT NULL, rango `fecha_inicio`/`fecha_fin`, flujo PENDIENTE → APROBADA → LIQUIDADA, soporte offline (`sync_uuid`/`sync_estado`). Reutiliza permisos `operaciones.*` (no se crearon permisos `ausencias.*`). `nomina_empleado` extendida con `dias_ausencia_descontados`, `total_ausencias_descuento`, `total_ausencias_remunerado` para reflejar el efecto en nómina.
+- **Chat del Agente IA (solo tablas):** Migración `2026_04_15_000001_create_agro_chat_tables.php` crea `agro_chat_sessions` y `agro_chat_messages` con FKs cascade a `users` y `tenants`, `tool_calls` JSONB para auditar consultas SQL del agente y `TIMESTAMPTZ` en las fechas. Las tablas existen listas para que un agente IA externo persista conversaciones (4 operaciones de escritura, el resto del esquema es solo lectura). Aún no hay controllers ni modelos Eloquent — el agente se conecta directamente a PostgreSQL.
 - **Bot de integraciones externas:**
   - `BotUserSeeder` provisiona un único usuario `bot@d3vs.tech` como super_admin desacoplado de tenants (cero provisionamiento por finca, válido para tenants futuros)
   - `BotTestController` con endpoint `POST /api/v1/tenant/bot/test` que escribe `BOT_TEST consumido` en `storage/logs/laravel.log`
