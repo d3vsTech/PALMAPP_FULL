@@ -641,6 +641,9 @@ POST /sublotes
 > - Si se envía `cantidad_palmas > 0`, se crean automáticamente los registros de Palma.
 > - Los códigos siguen el formato: `{nombre_sublote}-{contador_3_digitos}`.
 >   - Ejemplo: `Sublote A1-001`, `Sublote A1-002`, ...
+> - **Creación en 2 caminos (sync / async)** — el backend decide automáticamente:
+>   - `cantidad_palmas <= 5000` → **sync** (se crean dentro de la misma request, respuesta 201 estándar).
+>   - `cantidad_palmas > 5000`  → **async** (el sublote se crea inmediatamente, las palmas se encolan en un Job y se crean en segundo plano). La respuesta incluye `palmas_async: true` y `batch_id`. Consulta el endpoint **[4.6 Estado de batch de palmas](#46-estado-de-batch-de-palmas-async)** para conocer el progreso.
 
 **Ejemplo:**
 ```json
@@ -651,7 +654,7 @@ POST /sublotes
 }
 ```
 
-**Respuesta 201:**
+**Respuesta 201 (sync, `cantidad_palmas <= 5000`):**
 ```json
 {
   "message": "Sublote creado correctamente",
@@ -668,6 +671,25 @@ POST /sublotes
   }
 }
 ```
+
+**Respuesta 201 (async, `cantidad_palmas > 5000`):**
+```json
+{
+  "message": "Sublote creado. 20000 palma(s) se crearán en segundo plano.",
+  "data": {
+    "id": 1,
+    "lote_id": 1,
+    "nombre": "Sublote A1",
+    "cantidad_palmas": 20000,
+    "estado": true,
+    "lote": { "id": 1, "nombre": "Lote A" }
+  },
+  "palmas_async": true,
+  "batch_id": "9b8e2f34-1a0c-4f6d-9b2e-8e1b2a3c4d5e"
+}
+```
+
+> **IMPORTANTE (frontend):** Cuando `palmas_async === true`, las palmas **aún no existen** en la base al retornar la respuesta. Usa `batch_id` para hacer polling a `GET /palmas/batch/{batchId}` y refrescar el listado de palmas sólo cuando `finished === true`.
 
 ---
 
@@ -690,7 +712,10 @@ PUT /sublotes/{id}
 
 > **Comportamiento de `cantidad_palmas`:**
 > - Si el nuevo valor es **mayor** que el actual: se crean palmas adicionales (continuando el contador secuencial).
-> - Si el nuevo valor es **menor** que el actual: se eliminan las palmas con los códigos más altos.
+>   - Si la **diferencia a crear** es `> 5000`, la creación se hace **async** (Job en cola) — la respuesta incluye `palmas_async: true` y `batch_id`.
+>   - Si es `<= 5000`, se crean de forma **sync**.
+> - Si el nuevo valor es **menor** que el actual: se eliminan las palmas con los códigos más altos (siempre sync).
+> - **Concurrencia:** Si ya hay un batch de creación de palmas en curso para este sublote, la petición se rechaza con **409 Conflict**. Espere a que finalice (consultar `GET /palmas/batch/{batchId}`) antes de reintentar.
 
 **Ejemplo (agregar palmas):**
 ```json
@@ -699,11 +724,29 @@ PUT /sublotes/{id}
 }
 ```
 
-**Respuesta 200:**
+**Respuesta 200 (sync):**
 ```json
 {
   "message": "Sublote actualizado correctamente",
   "data": { ... }
+}
+```
+
+**Respuesta 200 (async, diferencia a crear > 5000):**
+```json
+{
+  "message": "Sublote actualizado. 8000 palma(s) adicional(es) se crearán en segundo plano.",
+  "data": { ... },
+  "palmas_async": true,
+  "batch_id": "9b8e2f34-1a0c-4f6d-9b2e-8e1b2a3c4d5e"
+}
+```
+
+**Respuesta 409 (batch en curso):**
+```json
+{
+  "message": "Hay un proceso de creación de palmas en curso para este sublote. Espere a que finalice.",
+  "code": "BATCH_EN_CURSO"
 }
 ```
 
@@ -835,7 +878,7 @@ POST /palmas
 | Campo            | Tipo    | Requerido | Descripción                                         |
 |------------------|---------|-----------|-----------------------------------------------------|
 | `sublote_id`     | integer | **Sí**    | ID del sublote (debe existir)                       |
-| `cantidad_palmas`| integer | **Sí**    | Cantidad de palmas a crear (1-9999)                 |
+| `cantidad_palmas`| integer | **Sí**    | Cantidad de palmas a crear (1-99999)                |
 | `linea_id`       | integer | Condicional | ID de la línea. **Obligatorio si el sublote tiene líneas.** Debe pertenecer al mismo sublote |
 
 > **Comportamiento:**
@@ -843,6 +886,12 @@ POST /palmas
 > - El contador es secuencial dentro del sublote (global, no por línea) y nunca se repite.
 > - Se actualiza automáticamente `cantidad_palmas` del sublote y de la línea (si aplica).
 > - Si el sublote tiene líneas y no se envía `linea_id`, se retorna error 422.
+>
+> **Creación en 2 caminos (sync / async)** — el backend decide automáticamente según `cantidad_palmas`:
+> - `<= 5000` → **sync**. Respuesta `201 Created` con `async: false`. Las palmas ya existen al retornar.
+> - `> 5000`  → **async**. Respuesta `202 Accepted` con `async: true` y `batch_id`. Las palmas se crean en segundo plano (ver [4.6](#46-estado-de-batch-de-palmas-async) para polling del estado).
+>
+> **Concurrencia:** No se permite encolar dos batches simultáneos para el mismo sublote (garantizado por `ShouldBeUnique`). Si un job idéntico ya está en la cola, el segundo dispatch se descarta silenciosamente.
 
 **Ejemplo (sublote con líneas):**
 ```json
@@ -861,23 +910,32 @@ POST /palmas
 }
 ```
 
-**Respuesta 201:**
+**Respuesta 201 (sync, `cantidad_palmas <= 5000`):**
 ```json
 {
   "message": "5 palma(s) creada(s) correctamente",
-  "data": [
-    {
-      "id": 121,
-      "sublote_id": 1,
-      "linea_id": 3,
-      "codigo": "Sublote A1-121",
-      "descripcion": null,
-      "estado": true,
-      "linea": { "id": 3, "numero": 3 }
-    }
-  ]
+  "async": false,
+  "cantidad_creada": 5,
+  "sublote_id": 1,
+  "linea_id": 3
 }
 ```
+
+> **Nota (breaking change):** La respuesta sync ya **NO incluye** el listado `data` con las palmas recién creadas (antes se retornaba el array completo). El frontend debe refrescar la lista llamando a `GET /palmas?sublote_id=X` después de un 201. Este cambio evita cargar en memoria hasta 99.999 registros en la respuesta.
+
+**Respuesta 202 (async, `cantidad_palmas > 5000`):**
+```json
+{
+  "message": "Solicitud aceptada. 20000 palma(s) se crearán en segundo plano.",
+  "async": true,
+  "batch_id": "9b8e2f34-1a0c-4f6d-9b2e-8e1b2a3c4d5e",
+  "sublote_id": 1,
+  "linea_id": null,
+  "cantidad": 20000
+}
+```
+
+> **Frontend:** Cuando el status HTTP sea `202` o `async === true`, hacer polling a `GET /palmas/batch/{batch_id}` (ver sección 4.6). Recargar el listado de palmas sólo cuando `finished === true`.
 
 **Respuesta 422 (sublote tiene líneas pero no se envió `linea_id`):**
 ```json
@@ -958,6 +1016,94 @@ DELETE /palmas/masivo
   "message": "4 palma(s) eliminada(s) correctamente"
 }
 ```
+
+---
+
+### 4.6 Estado de batch de palmas (async)
+
+```
+GET /palmas/batch/{batchId}
+```
+
+**Permiso:** `palmas.ver`
+
+Consulta el estado de un batch (`batch_id`) devuelto por:
+- `POST /palmas` cuando la respuesta es `202` (`cantidad_palmas > 5000`)
+- `POST /sublotes` cuando la respuesta trae `palmas_async: true`
+- `PUT  /sublotes/{id}` cuando la respuesta trae `palmas_async: true`
+
+**Path params:**
+
+| Param     | Tipo   | Descripción                                      |
+|-----------|--------|--------------------------------------------------|
+| `batchId` | string | UUID del batch devuelto por el endpoint original |
+
+**Respuesta 200 (en progreso):**
+```json
+{
+  "data": {
+    "id": "9b8e2f34-1a0c-4f6d-9b2e-8e1b2a3c4d5e",
+    "name": "crear-palmas-sublote-42",
+    "total_jobs": 1,
+    "pending_jobs": 1,
+    "failed_jobs": 0,
+    "processed_jobs": 0,
+    "progress": 0,
+    "finished": false,
+    "cancelled": false,
+    "has_failures": false,
+    "created_at": 1744713600,
+    "finished_at": null
+  }
+}
+```
+
+**Respuesta 200 (finalizado OK):**
+```json
+{
+  "data": {
+    "id": "9b8e2f34-1a0c-4f6d-9b2e-8e1b2a3c4d5e",
+    "name": "crear-palmas-sublote-42",
+    "total_jobs": 1,
+    "pending_jobs": 0,
+    "failed_jobs": 0,
+    "processed_jobs": 1,
+    "progress": 100,
+    "finished": true,
+    "cancelled": false,
+    "has_failures": false,
+    "created_at": 1744713600,
+    "finished_at": 1744713618
+  }
+}
+```
+
+**Respuesta 200 (con fallas):**
+```json
+{
+  "data": {
+    "id": "9b8e2f34-...",
+    "progress": 100,
+    "finished": true,
+    "has_failures": true,
+    "failed_jobs": 1,
+    "...": "..."
+  }
+}
+```
+
+**Respuesta 404 (batch no encontrado):**
+```json
+{
+  "message": "Batch no encontrado",
+  "code": "BATCH_NOT_FOUND"
+}
+```
+
+> **Campos clave para el frontend:**
+> - `finished: boolean` → indica si el job terminó (con éxito o fallo). Detener el polling cuando sea `true`.
+> - `has_failures: boolean` → si es `true` y `finished: true`, el job falló. La transacción de BD hizo rollback (no hay palmas parciales). Se puede reintentar la petición original.
+> - `progress: 0-100` → porcentaje aproximado (útil para barras de progreso).
 
 ---
 
@@ -1207,3 +1353,139 @@ Esto devuelve la jerarquía completa con totales (`lotes`, `sublotes`, `palmas`)
 - Las **líneas no afectan a las palmas**. Saltar el paso 4 no rompe nada en el paso 5.
 - Eliminar líneas posteriormente tampoco afecta a las palmas existentes.
 - El cálculo de `palmas` en el resumen usa siempre el campo cacheado `sublotes.cantidad_palmas`, que se mantiene sincronizado por los endpoints de sublotes y palmas.
+
+---
+
+## 6. Creación masiva de palmas (Bulk) — Guía para el frontend
+
+> Esta sección documenta el comportamiento **sync/async** introducido para soportar hasta **99.999 palmas** por petición sin bloquear la BD ni hacer timeout el request HTTP.
+
+### 6.1 Qué cambió (breaking changes)
+
+| Cambio | Antes | Ahora |
+|--------|-------|-------|
+| Máximo `cantidad_palmas` en `POST /palmas` | `9.999` | **`99.999`** |
+| Respuesta sync de `POST /palmas` | `{ message, data: [...palmas] }` | `{ message, async: false, cantidad_creada, sublote_id, linea_id }` — **ya NO devuelve el array `data`** |
+| Respuesta async de `POST /palmas` | — (no existía) | **Nuevo:** status `202` + `{ async: true, batch_id, ... }` |
+| `POST /sublotes` y `PUT /sublotes/{id}` | Siempre sync | Puede ser sync o async (si la creación de palmas asociada supera 5.000) |
+| Editar sublote mientras hay batch activo | Se ejecutaba | **409 Conflict** con `code: BATCH_EN_CURSO` |
+
+### 6.2 Umbrales y reglas
+
+| Regla | Valor |
+|-------|-------|
+| Umbral sync/async | **5.000 palmas** |
+| `cantidad_palmas` máximo por petición | 99.999 |
+| Tamaño de chunk interno | 1.000 (transparente para el frontend) |
+| Timeout de Job (backend) | 300 s (5 min) |
+| Reintentos de Job | 1 (no reintenta para evitar duplicados) |
+
+### 6.3 Flujo recomendado en el frontend
+
+1. **Enviar request** (`POST /palmas`, `POST /sublotes` o `PUT /sublotes/{id}`) tal como antes.
+2. **Inspeccionar la respuesta**:
+   - Si el status es `201` y `async === false` (o el campo `palmas_async` está ausente) → flujo sync, el servidor ya creó todo. **Recargar listado** con `GET /palmas?sublote_id=X`.
+   - Si el status es `202` o la respuesta trae `async === true` / `palmas_async === true` → flujo async. Guardar `batch_id` y comenzar polling.
+3. **Polling del batch** (sólo si async):
+   ```
+   GET /palmas/batch/{batch_id}
+   ```
+   - **Intervalo recomendado:** cada **3 segundos**.
+   - **Timeout recomendado:** 10 min (backend mata el job a los 5 min, deja un buffer).
+   - **Condición de salida:** `finished === true`.
+   - **Si `has_failures === true`:** mostrar error al usuario y ofrecer reintentar.
+   - **Si `finished === true` y sin fallos:** recargar listado de palmas y/o resumen.
+4. **UX sugerida durante polling:**
+   - Mostrar barra de progreso con `progress` (0–100).
+   - Bloquear el botón "Guardar" del sublote (por el 409 en update).
+   - Deshabilitar el wizard paso 5 hasta que `finished === true`.
+
+### 6.4 Pseudocódigo (TypeScript)
+
+```ts
+type BatchResponse = {
+  data: {
+    id: string;
+    progress: number;          // 0-100
+    finished: boolean;
+    has_failures: boolean;
+    total_jobs: number;
+    processed_jobs: number;
+  };
+};
+
+async function crearPalmas(subloteId: number, cantidad: number, lineaId?: number) {
+  const res = await api.post('/palmas', {
+    sublote_id: subloteId,
+    cantidad_palmas: cantidad,
+    linea_id: lineaId ?? null,
+  });
+
+  // Camino sync (201)
+  if (res.status === 201 && !res.data.async) {
+    await recargarPalmas(subloteId);
+    return { ok: true };
+  }
+
+  // Camino async (202)
+  if (res.status === 202 && res.data.async) {
+    const batchId: string = res.data.batch_id;
+    const result = await esperarBatch(batchId);
+
+    if (result.has_failures) {
+      return { ok: false, error: 'El proceso falló. Intente de nuevo.' };
+    }
+
+    await recargarPalmas(subloteId);
+    return { ok: true };
+  }
+
+  return { ok: false, error: 'Respuesta inesperada del servidor' };
+}
+
+async function esperarBatch(batchId: string): Promise<BatchResponse['data']> {
+  const DELAY = 3000;       // 3 s
+  const TIMEOUT = 600_000;  // 10 min
+  const start = Date.now();
+
+  while (true) {
+    const { data } = await api.get<BatchResponse>(`/palmas/batch/${batchId}`);
+
+    if (data.data.finished) return data.data;
+    if (Date.now() - start > TIMEOUT) {
+      throw new Error('Timeout esperando el batch');
+    }
+
+    await new Promise(r => setTimeout(r, DELAY));
+  }
+}
+```
+
+### 6.5 Manejo de errores específicos
+
+| Status | Situación | Acción del frontend |
+|--------|-----------|---------------------|
+| `202`  | Request aceptado, procesándose async | Iniciar polling con `batch_id` |
+| `404`  | `GET /palmas/batch/{id}` con batch inexistente o muy antiguo | Informar al usuario que el batch expiró y recargar palmas para ver el estado real |
+| `409`  | `PUT /sublotes/{id}` mientras un batch del mismo sublote está activo | Mostrar `"Hay palmas creándose, espere unos segundos"` y reintentar tras `finished === true` |
+| `422`  | Validación (`cantidad_palmas` fuera de rango, sublote inválido, línea inválida) | Mostrar los errores de `errors` |
+| `500`  | Error inesperado en servidor | Mostrar error genérico, registrar en monitoreo |
+
+### 6.6 Consideraciones operativas (para devops / backend)
+
+El camino async requiere un **Queue Worker** corriendo en el servidor:
+
+```bash
+# Desarrollo local
+php artisan queue:work --tries=1 --timeout=300
+
+# Producción (Linux) — recomendado vía Supervisor o systemd
+php artisan queue:work database --sleep=3 --tries=1 --timeout=300 --max-jobs=1000
+```
+
+- **Driver de cola:** `database` (ver [config/queue.php](../config/queue.php)). No requiere Redis ni otro servicio.
+- **Tabla de batches:** `job_batches` (ya migrada en [0001_01_01_000002_create_jobs_table.php](../database/migrations/0001_01_01_000002_create_jobs_table.php)).
+- **Después de cada deploy:** ejecutar `php artisan queue:restart` para que el worker recargue el código nuevo.
+- **Si NO hay worker corriendo:** los requests async devuelven `202` correctamente pero las palmas nunca se crearán (los jobs quedan pendientes en `jobs`). El polling nunca retornará `finished: true`.
+
+> Si el entorno no tiene worker configurado, **el frontend no debería enviar `cantidad_palmas > 5.000`** hasta que devops haya puesto el worker en producción.
