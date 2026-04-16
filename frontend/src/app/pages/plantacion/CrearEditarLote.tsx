@@ -1,344 +1,182 @@
+/**
+ * CrearEditarLote.tsx
+ * §2.0 GET /lotes/semillas              — id, tipo, nombre
+ * §2.2 GET /lotes/{id}                  — cargar para editar: semillas[]{id}
+ * §2.3 POST /lotes                      — predio_id*, nombre*, fecha_siembra?, hectareas_sembradas?, semillas_ids?
+ * §2.4 PUT  /lotes/{id}                 — mismos + estado?; semillas_ids reemplaza todas
+ */
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams, Link } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../../components/ui/select';
-import { Checkbox } from '../../components/ui/checkbox';
-import { Sprout, ArrowLeft, Save, AlertCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, Save, Sprout, Calendar, Leaf, Loader2 } from 'lucide-react';
 import { lotesApi } from '../../../api/plantacion';
 import { toast } from 'sonner';
-import { predios, lotes, semillas } from '../../lib/mockData';
-import { MapPin, Calendar, Leaf } from 'lucide-react';
 
 export default function CrearEditarLote() {
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const loteId = searchParams.get('id');
-  const predioIdParam = searchParams.get('predioId');
-  const isEditing = !!loteId;
+  const navigate       = useNavigate();
+  const [sp]           = useSearchParams();
+  const loteId         = sp.get('id');
+  const predioIdParam  = sp.get('predio_id') ?? sp.get('predioId');
+  const isEditing      = !!loteId;
 
-  const [nombre, setNombre] = useState('');
-  const [predioId, setPredioId] = useState('');
-  const [fechaSiembra, setFechaSiembra] = useState('');
-  const [variedad, setVariedad] = useState('');
-  const [semillasSeleccionadas, setSemillasSeleccionadas] = useState<string[]>([]);
-  const [hectareas, setHectareas] = useState('');
+  const [loading, setLoading]       = useState(false);
+  const [nombre, setNombre]         = useState('');
+  const [fechaSiembra, setFecha]    = useState('');
+  const [hectareas, setHectareas]   = useState('');
+  const [semillasList, setSemillas] = useState<{ id: number; tipo: string; nombre: string }[]>([]);
+  const [semillasIds, setSemillasIds] = useState<number[]>([]);  // §2.3 semillas_ids
 
+  // §2.0 Cargar catálogo de semillas
   useEffect(() => {
-    if (isEditing) {
-      const lote = lotes.find((l) => l.id === loteId);
-      if (lote) {
-        setNombre(lote.nombre);
-        setPredioId(lote.predioId);
-        setFechaSiembra(lote.fechaSiembra || `${lote.anoSiembra}-01-01`);
-        setVariedad(lote.variedad);
-        setSemillasSeleccionadas(lote.semillas);
-        setHectareas(lote.hectareas.toString());
-      }
-    } else {
-      setPredioId(predioIdParam || '');
-    }
-  }, [loteId, predioIdParam, isEditing]);
+    lotesApi.semillas().then(r => setSemillas(r.data ?? [])).catch(() => {});
+  }, []);
 
-  const handleSemillaChange = (semilla: string, checked: boolean) => {
-    if (checked) {
-      setSemillasSeleccionadas([...semillasSeleccionadas, semilla]);
-    } else {
-      setSemillasSeleccionadas(semillasSeleccionadas.filter((s) => s !== semilla));
-    }
-  };
+  // §2.2 Cargar lote existente para editar
+  useEffect(() => {
+    if (!loteId) return;
+    lotesApi.ver(Number(loteId)).then(res => {
+      const d = res.data;
+      setNombre(d.nombre ?? '');
+      setFecha(d.fecha_siembra ?? '');
+      setHectareas(d.hectareas_sembradas != null ? String(Number(d.hectareas_sembradas)) : '');
+      // §2.2 semillas[] viene como objetos {id, tipo, nombre}
+      setSemillasIds((d.semillas ?? []).map((s: any) => Number(s.id)));
+    }).catch(() => toast.error('Error al cargar datos del lote'));
+  }, [loteId]);
 
-  // Calcular hectáreas disponibles del predio
-  const calcularHectareasDisponibles = (predioSeleccionadoId: string): number => {
-    const predio = predios.find((p) => p.id === predioSeleccionadoId);
-    if (!predio) return 0;
-
-    // Sumar hectáreas de los lotes existentes del predio (excepto el que se está editando)
-    const hectareasUsadas = lotes
-      .filter((l) => l.predioId === predioSeleccionadoId && l.id !== loteId)
-      .reduce((sum, l) => sum + l.hectareas, 0);
-
-    return predio.hectareas - hectareasUsadas;
-  };
+  const toggleSemilla = (id: number, checked: boolean) =>
+    setSemillasIds(prev => checked ? [...prev, id] : prev.filter(x => x !== id));
 
   const handleSave = async () => {
-    if (!nombre.trim()) {
-      setError('El nombre del lote es obligatorio');
-      return;
-    }
+    if (!nombre.trim()) { toast.error('El nombre del lote es obligatorio'); return; }
     setLoading(true);
-    setError('');
     try {
-      const body: any = { nombre: nombre.trim() };
-      if (isEditing) {
+      if (isEditing && loteId) {
+        // §2.4 PUT — semillas_ids reemplaza todas ([] elimina todas)
+        const body: any = { nombre: nombre.trim() };
         if (fechaSiembra) body.fecha_siembra = fechaSiembra;
-        if (hectareas) body.hectareas_sembradas = Number(hectareas);
+        if (hectareas)    body.hectareas_sembradas = Number(hectareas);
+        body.semillas_ids = semillasIds;   // siempre enviar al editar
         const res = await lotesApi.editar(Number(loteId), body);
-        toast.success(res.message ?? 'Lote actualizado correctamente');
+        toast.success(res.message ?? 'Lote actualizado');
       } else {
-        if (!predioId) { setError('ID de predio requerido'); setLoading(false); return; }
-        body.predio_id = Number(predioId);
+        // §2.3 POST
+        if (!predioIdParam) { toast.error('Predio no especificado'); return; }
+        const body: any = { predio_id: Number(predioIdParam), nombre: nombre.trim() };
         if (fechaSiembra) body.fecha_siembra = fechaSiembra;
-        if (hectareas) body.hectareas_sembradas = Number(hectareas);
+        if (hectareas)    body.hectareas_sembradas = Number(hectareas);
+        if (semillasIds.length > 0) body.semillas_ids = semillasIds;
         const res = await lotesApi.crear(body);
-        toast.success(res.message ?? 'Lote creado correctamente');
+        toast.success(res.message ?? 'Lote creado');
       }
       navigate('/plantacion');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al guardar el lote');
-    } finally {
-      setLoading(false);
-    }
+      toast.error(err instanceof Error ? err.message : 'Error al guardar');
+    } finally { setLoading(false); }
   };
-
-  const handleCancel = () => {
-    navigate('/plantacion');
-  };
-
-  const hectareasDisponibles = predioId ? calcularHectareasDisponibles(predioId) : 0;
 
   return (
-    <div className="space-y-8 max-w-7xl">
-      {/* Header */}
-      <div className="flex items-center gap-6">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleCancel}
-          className="h-12 w-12 rounded-xl hover:bg-muted border border-border/50"
-        >
+    <div className="space-y-8 max-w-2xl mx-auto">
+      <div className="flex items-center gap-4">
+        <Button variant="ghost" size="icon" onClick={() => navigate('/plantacion')}
+          className="h-12 w-12 rounded-xl border border-border/50 hover:bg-muted">
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="flex items-center gap-4">
-          <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-success/20 to-success/10 flex items-center justify-center border border-success/30 shadow-lg">
-            <Sprout className="h-8 w-8 text-success" />
+          <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/30">
+            <Sprout className="h-8 w-8 text-primary" />
           </div>
           <div>
-            <h1 className="text-4xl font-bold text-foreground">
-              {isEditing ? 'Editar Lote' : 'Crear Nuevo Lote'}
-            </h1>
+            <h1 className="text-4xl font-bold">{isEditing ? 'Editar Lote' : 'Nuevo Lote'}</h1>
             <p className="text-muted-foreground mt-1">
-              {isEditing
-                ? 'Modifica la información del lote existente'
-                : 'Crea un lote dentro de un predio. Después podrás agregar sublotes, líneas y palmas.'}
+              {isEditing ? 'Modifica los datos del lote' : 'Crea un nuevo lote dentro del predio'}
             </p>
           </div>
         </div>
       </div>
 
-      {/* Formulario Horizontal */}
-      <Card className="border-border/50 shadow-xl">
-        <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
+      <Card className="border-border shadow-xl">
+        <CardHeader>
           <CardTitle className="text-2xl">Información del Lote</CardTitle>
-          <CardDescription>
-            Los campos marcados con <span className="text-destructive font-semibold">*</span> son obligatorios
-          </CardDescription>
+          <CardDescription>* = obligatorio</CardDescription>
         </CardHeader>
-        <CardContent className="p-8">
-          <div className="space-y-8">
-            {/* Fila 1: Predio (Full width) */}
-            <div className="space-y-3">
-              <Label htmlFor="predio" className="text-base font-semibold flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-primary" />
-                Predio <span className="text-destructive">*</span>
-              </Label>
-              <Select value={predioId} onValueChange={setPredioId}>
-                <SelectTrigger id="predio" className="h-12 text-base">
-                  <SelectValue placeholder="Selecciona un predio" />
-                </SelectTrigger>
-                <SelectContent>
-                  {predios.map((predio) => (
-                    <SelectItem key={predio.id} value={predio.id}>
-                      {predio.nombre} ({predio.hectareas} hectáreas totales)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {predioId && (
-                <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary/5 border border-primary/20">
-                  <AlertCircle className="h-4 w-4 text-primary flex-shrink-0" />
-                  <span className="text-sm text-muted-foreground">
-                    Hectáreas disponibles: <strong className="text-primary font-bold">{hectareasDisponibles.toFixed(2)} hectáreas</strong>
-                  </span>
-                </div>
-              )}
-            </div>
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <Label className="text-base font-semibold">
+              Nombre <span className="text-destructive">*</span>
+            </Label>
+            <Input placeholder="Ej: Lote A, Lote Norte" maxLength={100}
+              value={nombre} onChange={e => setNombre(e.target.value)} className="h-12" autoFocus />
+          </div>
 
-            {/* Fila 2: Nombre del Lote (Full width) */}
-            <div className="space-y-3">
-              <Label htmlFor="nombre" className="text-base font-semibold flex items-center gap-2">
-                <Sprout className="h-4 w-4 text-success" />
-                Nombre del Lote <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="nombre"
-                placeholder="Ej: Lote 1 - Norte"
-                value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-                className="h-12 text-base"
-              />
-            </div>
-
-            {/* Fila 3: Fecha de Siembra + Hectáreas (2 columnas) */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <div className="space-y-3">
-                <Label htmlFor="fechaSiembra" className="text-base font-semibold flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-accent" />
-                  Fecha de Siembra <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="fechaSiembra"
-                  type="date"
-                  value={fechaSiembra}
-                  onChange={(e) => setFechaSiembra(e.target.value)}
-                  max={new Date().toISOString().split('T')[0]}
-                  className="h-12 text-base"
-                />
-              </div>
-
-              <div className="space-y-3">
-                <Label htmlFor="hectareas" className="text-base font-semibold flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-primary" />
-                  Hectáreas Sembradas <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="hectareas"
-                  type="number"
-                  step="0.01"
-                  placeholder="45.5"
-                  min="0"
-                  max={hectareasDisponibles}
-                  value={hectareas}
-                  onChange={(e) => setHectareas(e.target.value)}
-                  className="h-12 text-base"
-                />
-                {predioId && parseFloat(hectareas) > 0 && (
-                  <div
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium ${
-                      parseFloat(hectareas) > hectareasDisponibles
-                        ? 'bg-destructive/10 text-destructive border border-destructive/20'
-                        : 'bg-success/10 text-success border border-success/20'
-                    }`}
-                  >
-                    {parseFloat(hectareas) > hectareasDisponibles
-                      ? '⚠️ Excede las hectáreas disponibles'
-                      : `✓ Quedarán ${(hectareasDisponibles - parseFloat(hectareas)).toFixed(2)} hectáreas disponibles`}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Fila 4: Variedad (Full width) */}
-            <div className="space-y-3">
-              <Label htmlFor="variedad" className="text-base font-semibold flex items-center gap-2">
-                <Leaf className="h-4 w-4 text-success" />
-                Variedad <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="variedad"
-                placeholder="Ej: Elaeis Guineensis"
-                value={variedad}
-                onChange={(e) => setVariedad(e.target.value)}
-                className="h-12 text-base"
-              />
-            </div>
-
-            {/* Fila 5: Semillas */}
-            <div className="space-y-3">
+          <div className="grid gap-6 md:grid-cols-2">
+            <div className="space-y-2">
               <Label className="text-base font-semibold flex items-center gap-2">
-                <Sprout className="h-4 w-4 text-success" />
-                Semillas <span className="text-destructive">*</span>
+                <Calendar className="h-4 w-4" /> Fecha de Siembra
               </Label>
-              <p className="text-sm text-muted-foreground">
-                Selecciona una o más semillas del catálogo
-              </p>
-
-              {semillas.length > 0 ? (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-6 border rounded-xl bg-gradient-to-br from-muted/20 to-muted/5">
-                    {semillas.map((semilla) => (
-                      <div
-                        key={semilla.id}
-                        className={`flex items-center space-x-3 p-4 rounded-lg border-2 transition-all cursor-pointer hover:shadow-md ${
-                          semillasSeleccionadas.includes(semilla.nombre)
-                            ? 'bg-success/10 border-success/50 shadow-sm'
-                            : 'bg-background border-border/50 hover:border-border'
-                        }`}
-                        onClick={() =>
-                          handleSemillaChange(
-                            semilla.nombre,
-                            !semillasSeleccionadas.includes(semilla.nombre)
-                          )
-                        }
-                      >
-                        <Checkbox
-                          id={`semilla-${semilla.id}`}
-                          checked={semillasSeleccionadas.includes(semilla.nombre)}
-                          onCheckedChange={(checked) =>
-                            handleSemillaChange(semilla.nombre, checked as boolean)
-                          }
-                        />
-                        <label
-                          htmlFor={`semilla-${semilla.id}`}
-                          className="text-sm font-medium leading-none cursor-pointer flex-1"
-                        >
-                          {semilla.nombre}
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                  {semillasSeleccionadas.length > 0 && (
-                    <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-success/10 border border-success/20">
-                      <span className="text-sm font-medium text-success">
-                        ✓ {semillasSeleccionadas.length} semilla{semillasSeleccionadas.length !== 1 ? 's' : ''} seleccionada{semillasSeleccionadas.length !== 1 ? 's' : ''}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="border-2 border-dashed rounded-xl p-8 text-center bg-muted/10">
-                  <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-                  <p className="text-base font-semibold text-muted-foreground mb-2">
-                    No hay semillas en el catálogo
-                  </p>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Debes crear semillas primero en Configuración → Maestros
-                  </p>
-                  <Link to="/configuracion?tab=maestros">
-                    <Button variant="outline" className="gap-2">
-                      <Sprout className="h-4 w-4" />
-                      Ir a Maestros
-                    </Button>
-                  </Link>
-                </div>
-              )}
+              {/* §2.3 formato YYYY-MM-DD, no futura */}
+              <Input type="date" value={fechaSiembra}
+                max={new Date().toISOString().split('T')[0]}
+                onChange={e => setFecha(e.target.value)} className="h-12" />
+              <p className="text-xs text-muted-foreground">No puede ser fecha futura</p>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-base font-semibold">Hectáreas Sembradas</Label>
+              {/* §2.3 no puede superar hectáreas disponibles del predio */}
+              <Input type="number" min="0" step="0.01" placeholder="Ej: 25.5"
+                value={hectareas} onChange={e => setHectareas(e.target.value)} className="h-12" />
             </div>
           </div>
 
-          {/* Botones de acción */}
-          <div className="flex justify-between items-center gap-4 pt-8 mt-8 border-t">
-            <Button 
-              variant="outline" 
-              onClick={handleCancel}
-              className="h-12 px-6 text-base"
-            >
+          {/* §2.3 semillas_ids — array de IDs */}
+          <div className="space-y-3">
+            <Label className="text-base font-semibold flex items-center gap-2">
+              <Leaf className="h-4 w-4 text-success" /> Semillas Asociadas
+            </Label>
+            {semillasList.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No hay semillas activas</p>
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {semillasList.map(s => (
+                  <label key={s.id}
+                    className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/30 cursor-pointer transition-colors">
+                    <input type="checkbox"
+                      checked={semillasIds.includes(Number(s.id))}
+                      onChange={e => toggleSemilla(Number(s.id), e.target.checked)}
+                      className="h-4 w-4 rounded accent-primary" />
+                    <div>
+                      <p className="text-sm font-medium">{s.nombre}</p>
+                      <p className="text-xs text-muted-foreground">{s.tipo}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )}
+            {semillasIds.length > 0 && (
+              <p className="text-xs text-success font-medium">
+                ✓ {semillasIds.length} semilla{semillasIds.length !== 1 ? 's' : ''} seleccionada{semillasIds.length !== 1 ? 's' : ''}
+              </p>
+            )}
+            {isEditing && (
+              <p className="text-xs text-muted-foreground">
+                Al guardar, las semillas seleccionadas reemplazan las anteriores. Sin seleccionar = eliminar todas.
+              </p>
+            )}
+          </div>
+
+          <div className="flex gap-4 pt-4">
+            <Button variant="outline" disabled={loading}
+              onClick={() => navigate('/plantacion')} className="flex-1 h-12">
               Cancelar
             </Button>
-            <Button
-              onClick={handleSave}
-              className="h-12 px-8 text-base gap-2 bg-success hover:bg-success/90 text-primary hover:text-primary shadow-lg shadow-success/20"
-              disabled={semillas.length === 0}
-            >
-              <Save className="h-5 w-5" />
-              {isEditing ? 'Guardar Cambios' : 'Crear Lote'}
+            <Button onClick={handleSave} disabled={loading}
+              className="flex-1 h-12 bg-success hover:bg-success/90 text-primary shadow-lg shadow-success/20">
+              {loading
+                ? <><Loader2 className="h-5 w-5 mr-2 animate-spin" />Guardando...</>
+                : <><Save className="h-5 w-5 mr-2" />{isEditing ? 'Guardar Cambios' : 'Crear Lote'}</>}
             </Button>
           </div>
         </CardContent>

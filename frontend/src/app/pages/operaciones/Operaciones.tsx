@@ -2,14 +2,15 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
+import { Input } from '../../components/ui/input';
+import { Label } from '../../components/ui/label';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../../components/ui/table';
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../../components/ui/select';
 import { Plus, Eye, FileText, CheckCircle, Clock } from 'lucide-react';
 import StatusBadge from '../../components/common/StatusBadge';
 
@@ -23,8 +24,56 @@ const planillasData = [
 export default function Operaciones() {
   const navigate = useNavigate();
 
-  const totalBorradores = planillasData.filter(p => p.estado === 'BORRADOR').length;
-  const totalAprobadas = planillasData.filter(p => p.estado === 'APROBADO').length;
+  // Filtro de período para KPIs
+  const [periodoKPI, setPeriodoKPI] = useState<'semanal' | 'quincenal' | 'mensual' | 'personalizado'>('mensual');
+  const [fechaInicioKPI, setFechaInicioKPI] = useState('');
+  const [fechaFinKPI, setFechaFinKPI] = useState('');
+
+  // Función para obtener rango de fechas según el período
+  const obtenerRangoFechas = () => {
+    const hoy = new Date();
+    let inicio: Date;
+    let fin: Date = hoy;
+
+    switch (periodoKPI) {
+      case 'semanal':
+        inicio = new Date(hoy);
+        inicio.setDate(hoy.getDate() - 7);
+        break;
+      case 'quincenal':
+        inicio = new Date(hoy);
+        inicio.setDate(hoy.getDate() - 15);
+        break;
+      case 'mensual':
+        inicio = new Date(hoy);
+        inicio.setMonth(hoy.getMonth() - 1);
+        break;
+      case 'personalizado':
+        if (fechaInicioKPI && fechaFinKPI) {
+          inicio = new Date(fechaInicioKPI);
+          fin = new Date(fechaFinKPI);
+        } else {
+          inicio = new Date(hoy);
+          inicio.setMonth(hoy.getMonth() - 1);
+        }
+        break;
+      default:
+        inicio = new Date(hoy);
+        inicio.setMonth(hoy.getMonth() - 1);
+    }
+
+    return { inicio, fin };
+  };
+
+  // Filtrar planillas según período para KPIs
+  const { inicio, fin } = obtenerRangoFechas();
+  const planillasFiltradas = planillasData.filter((planilla) => {
+    const fechaPlanilla = new Date(planilla.fecha);
+    return fechaPlanilla >= inicio && fechaPlanilla <= fin;
+  });
+
+  const totalBorradores = planillasFiltradas.filter(p => p.estado === 'BORRADOR').length;
+  const totalAprobadas = planillasFiltradas.filter(p => p.estado === 'APROBADO').length;
 
   return (
     <div className="space-y-8">
@@ -47,7 +96,41 @@ export default function Operaciones() {
 
       {/* KPIs - mismo estilo que Mi Plantación */}
       <div>
-        <h2 className="text-2xl font-bold text-foreground mb-4">Indicadores Principales</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-bold text-foreground">Indicadores Principales</h2>
+          <div className="flex items-center gap-3">
+            <Label className="text-sm font-medium">Período:</Label>
+            <Select value={periodoKPI} onValueChange={(value: any) => setPeriodoKPI(value)}>
+              <SelectTrigger className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="semanal">Semanal</SelectItem>
+                <SelectItem value="quincenal">Quincenal</SelectItem>
+                <SelectItem value="mensual">Mensual</SelectItem>
+                <SelectItem value="personalizado">Personalizado</SelectItem>
+              </SelectContent>
+            </Select>
+            {periodoKPI === 'personalizado' && (
+              <>
+                <Input
+                  type="date"
+                  value={fechaInicioKPI}
+                  onChange={(e) => setFechaInicioKPI(e.target.value)}
+                  className="w-40"
+                  placeholder="Fecha inicio"
+                />
+                <Input
+                  type="date"
+                  value={fechaFinKPI}
+                  onChange={(e) => setFechaFinKPI(e.target.value)}
+                  className="w-40"
+                  placeholder="Fecha fin"
+                />
+              </>
+            )}
+          </div>
+        </div>
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           <Card className="glass-subtle border-border hover:shadow-lg transition-all duration-300">
             <CardContent className="p-6">
@@ -60,11 +143,8 @@ export default function Operaciones() {
                   </div>
                   <div className="inline-flex items-center gap-1 mt-3 px-2.5 py-1 rounded-full text-xs font-medium border text-amber-600 bg-amber-50 border-amber-200 dark:text-amber-500 dark:bg-amber-950/30 dark:border-amber-900/30">
                     <Clock className="h-4 w-4" />
-                    <span>Por aprobar</span>
+                    <span>Pendientes</span>
                   </div>
-                </div>
-                <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center shadow-lg">
-                  <Clock className="h-6 w-6 text-white" />
                 </div>
               </div>
             </CardContent>
@@ -84,9 +164,6 @@ export default function Operaciones() {
                     <span>Cerradas</span>
                   </div>
                 </div>
-                <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg">
-                  <CheckCircle className="h-6 w-6 text-white" />
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -97,16 +174,13 @@ export default function Operaciones() {
                 <div className="flex-1">
                   <p className="text-sm font-medium text-muted-foreground mb-2">Total Planillas</p>
                   <div className="flex items-baseline gap-2">
-                    <p className="text-3xl font-bold text-foreground">{planillasData.length}</p>
+                    <p className="text-3xl font-bold text-foreground">{planillasFiltradas.length}</p>
                     <span className="text-sm text-muted-foreground">registros</span>
                   </div>
                   <div className="inline-flex items-center gap-1 mt-3 px-2.5 py-1 rounded-full text-xs font-medium border text-primary bg-primary/10 border-primary/20">
                     <FileText className="h-4 w-4" />
-                    <span>Este mes</span>
+                    <span>Período seleccionado</span>
                   </div>
-                </div>
-                <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg">
-                  <FileText className="h-6 w-6 text-white" />
                 </div>
               </div>
             </CardContent>
@@ -121,9 +195,9 @@ export default function Operaciones() {
           <p className="text-muted-foreground">Registro de operaciones diarias por fecha</p>
         </div>
 
-        <Card className="glass-subtle border-border">
-          <CardContent className="pt-6">{planillasData.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
+        {planillasData.length === 0 ? (
+          <Card className="border-border">
+            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
               <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
                 <FileText className="h-8 w-8 text-muted-foreground" />
               </div>
@@ -135,57 +209,76 @@ export default function Operaciones() {
                 <Plus className="mr-2 h-4 w-4" />
                 Crear Primera Planilla
               </Button>
-            </div>
-          ) : (
-            <div className="rounded-lg border overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/50">
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead className="text-center">Colaboradores</TableHead>
-                    <TableHead className="text-right">Total Jornales</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {planillasData.map((planilla) => (
-                    <TableRow key={planilla.id} className="hover:bg-muted/50 transition-colors">
-                      <TableCell className="font-medium">
-                        {new Date(planilla.fecha).toLocaleDateString('es-CO', {
-                          weekday: 'short',
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric'
-                        })}
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={planilla.estado} />
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <span className="inline-flex items-center justify-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
-                          {planilla.totalColaboradores}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right font-semibold text-success">
-                        ${planilla.totalJornales.toLocaleString('es-CO')}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" asChild>
-                          <Link to={`/operaciones/planilla/${planilla.id}`}>
-                            <Eye className="mr-2 h-4 w-4" />
-                            Ver Detalle
-                          </Link>
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="border-border">
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30">
+                      <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Fecha</th>
+                      <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Estado</th>
+                      <th className="text-center p-4 font-semibold text-sm text-muted-foreground">Colaboradores</th>
+                      <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Total Jornales</th>
+                      <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {planillasData.map((planilla, index) => (
+                      <tr
+                        key={planilla.id}
+                        className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors ${
+                          index % 2 === 0 ? 'bg-background' : 'bg-muted/5'
+                        }`}
+                      >
+                        <td className="p-4">
+                          <span className="text-sm font-medium text-foreground">
+                            {new Date(planilla.fecha).toLocaleDateString('es-CO', {
+                              weekday: 'short',
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric'
+                            })}
+                          </span>
+                        </td>
+                        <td className="p-4">
+                          <StatusBadge status={planilla.estado} />
+                        </td>
+                        <td className="p-4 text-center">
+                          <span className="inline-flex items-center justify-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+                            {planilla.totalColaboradores}
+                          </span>
+                        </td>
+                        <td className="p-4 text-right">
+                          <span className="font-semibold text-success">
+                            ${planilla.totalJornales.toLocaleString('es-CO')}
+                          </span>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex gap-2 justify-end">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              asChild
+                              className="hover:bg-primary/10 hover:text-primary hover:border-primary"
+                              title="Visualizar"
+                            >
+                              <Link to={`/operaciones/planilla/${planilla.id}`}>
+                                <Eye className="h-4 w-4" />
+                              </Link>
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

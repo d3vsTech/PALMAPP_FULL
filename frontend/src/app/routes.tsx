@@ -47,11 +47,14 @@ import Liquidaciones from './pages/liquidaciones/Liquidaciones';
 
 // Operaciones
 import Operaciones from './pages/operaciones/Operaciones';
-import PlanillaDiaria from './pages/operaciones/PlanillaDiaria';
+import NuevaPlanillaWizard from './pages/operaciones/NuevaPlanillaWizard';
+import VerPlanilla from './pages/operaciones/VerPlanilla';
 
 // Viajes
 import Viajes from './pages/viajes/Viajes';
 import DetalleViaje from './pages/viajes/DetalleViaje';
+import NuevoViajeWizard from './pages/viajes/NuevoViajeWizard';
+import ConteoCosecha from './pages/viajes/ConteoCosecha';
 
 // Market
 import Market from './pages/market/Market';
@@ -62,7 +65,6 @@ import Carrito from './pages/market/Carrito';
 import Checkout from './pages/market/Checkout';
 import Pedidos from './pages/market/Pedidos';
 import PedidoDetalle from './pages/market/PedidoDetalle';
-import NuevoEditarViaje from './pages/viajes/NuevoEditarViaje';
 
 // Usuarios
 import Usuarios from './pages/usuarios/Usuarios';
@@ -158,13 +160,13 @@ export const router = createBrowserRouter([
 
       { path: 'liquidaciones', Component: Liquidaciones },
 
-      { path: 'operaciones',                element: <ProtectedRoute permiso="operaciones.ver"><Operaciones /></ProtectedRoute> },
-      { path: 'operaciones/planilla/:id',   Component: PlanillaDiaria },
-      { path: 'operaciones/planilla/nueva',   Component: PlanillaDiaria },
+      { path: 'operaciones',                  element: <ProtectedRoute permiso="operaciones.ver"><Operaciones /></ProtectedRoute> },
+      { path: 'operaciones/planilla/nueva',   Component: NuevaPlanillaWizard },
+      { path: 'operaciones/planilla/:id',     Component: VerPlanilla },
 
       { path: 'viajes',            element: <ProtectedRoute permiso="remisiones.ver"><Viajes /></ProtectedRoute> },
-      { path: 'viajes/nuevo',      Component: NuevoEditarViaje },
-      { path: 'viajes/editar/:id', Component: NuevoEditarViaje },
+      { path: 'viajes/nuevo',      Component: NuevoViajeWizard },
+      { path: 'viajes/:id/conteo', Component: ConteoCosecha },
       { path: 'viajes/:id',        Component: DetalleViaje },
       { path: 'remisiones',        Component: Viajes },
       { path: 'remisiones/:id',    Component: DetalleViaje },
