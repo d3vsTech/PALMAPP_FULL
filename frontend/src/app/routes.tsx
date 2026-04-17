@@ -162,6 +162,7 @@ export const router = createBrowserRouter([
 
       { path: 'operaciones',                  element: <ProtectedRoute permiso="operaciones.ver"><Operaciones /></ProtectedRoute> },
       { path: 'operaciones/planilla/nueva',   Component: NuevaPlanillaWizard },
+      { path: 'operaciones/planilla/editar/:id', Component: NuevaPlanillaWizard },
       { path: 'operaciones/planilla/:id',     Component: VerPlanilla },
 
       { path: 'viajes',            element: <ProtectedRoute permiso="remisiones.ver"><Viajes /></ProtectedRoute> },

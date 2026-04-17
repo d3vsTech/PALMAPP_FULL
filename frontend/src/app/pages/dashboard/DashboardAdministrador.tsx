@@ -60,7 +60,7 @@ const colaboradoresTopData = productividadColaboradores.slice(0, 8).map(c => ({
   nombre: c.colaborador,
   kg: c.kg,
   gajos: c.gajos,
-  promedio: c.promedio,
+  promedio: c.rendimiento,
 }));
 
 const preciosCosechaData = [

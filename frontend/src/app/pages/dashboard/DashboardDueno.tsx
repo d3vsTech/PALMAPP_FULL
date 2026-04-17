@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/AppCard';
-import { Button } from '../../components/ui/AppButton';
-import { Input } from '../../components/ui/AppInput';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/Input';
 import KPICard from '../../components/common/KPICard';
 import {
   BarChart,
@@ -126,7 +126,7 @@ const calcularDatosPorFechas = (fechaInicio: string, fechaFin: string) => {
     nombre: c.colaborador,
     kg: Math.round(c.kg * factorEscala * (0.9 + Math.random() * 0.2)),
     gajos: Math.round(c.gajos * factorEscala * (0.9 + Math.random() * 0.2)),
-    promedio: Number((c.promedio * (0.95 + Math.random() * 0.1)).toFixed(2)),
+    promedio: Number((c.rendimiento * (0.95 + Math.random() * 0.1)).toFixed(2)),
   }));
   
   // Calcular datos de lotes (varían con el periodo)

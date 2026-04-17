@@ -1,46 +1,33 @@
 import { LucideIcon } from 'lucide-react';
-import { Card } from './Card';
+import { Card } from './card';
 import { cn } from '../lib/utils';
 
 interface MetricCardProps {
   title: string;
   value: string | number;
-  icon: LucideIcon;
-  trend?: {
-    value: number;
-    isPositive: boolean;
-  };
-  subtitle?: string;
+  icon?: LucideIcon;
+  trend?: 'up' | 'down' | 'neutral';
   className?: string;
 }
 
-export function MetricCard({ title, value, icon: Icon, trend, subtitle, className }: MetricCardProps) {
+export function MetricCard({ title, value, icon: Icon, trend, className }: MetricCardProps) {
   return (
     <Card className={cn('p-6', className)}>
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <p className="metric-label mb-2">{title}</p>
-          <p className="metric-value mb-1">{value}</p>
-          {subtitle && (
-            <p className="text-sm text-muted-foreground">{subtitle}</p>
-          )}
-          {trend && (
-            <div className="flex items-center gap-1 mt-2">
-              <span
-                className={cn(
-                  'text-sm font-medium',
-                  trend.isPositive ? 'text-success' : 'text-destructive'
-                )}
-              >
-                {trend.isPositive ? '↑' : '↓'} {Math.abs(trend.value)}%
-              </span>
-              <span className="text-xs text-muted-foreground">vs mes anterior</span>
-            </div>
-          )}
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm text-muted-foreground mb-1">{title}</p>
+          <p className="text-2xl font-bold">{value}</p>
         </div>
-        <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0">
-          <Icon className="w-6 h-6 text-primary icon-palmapp" />
-        </div>
+        {Icon && (
+          <div className={cn(
+            'h-10 w-10 rounded-lg flex items-center justify-center',
+            trend === 'up' && 'bg-success/10 text-success',
+            trend === 'down' && 'bg-destructive/10 text-destructive',
+            (!trend || trend === 'neutral') && 'bg-muted text-muted-foreground',
+          )}>
+            <Icon className="h-5 w-5" />
+          </div>
+        )}
       </div>
     </Card>
   );

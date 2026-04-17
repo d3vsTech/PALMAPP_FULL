@@ -384,22 +384,24 @@ export default function Usuarios() {
       `¿Seguro que deseas ${accion} a ${usuario.name}?`,
       accion === 'desactivar' ? 'warning' : 'success' as any,
       async () => {
-        const result = await requestConToken<{ message?: string }>(
-          `/api/v1/admin/users/${usuario.id}/toggle`,
-          { method: 'PATCH' },
-          token,
-        );
-        toast.success(result.message ?? 'Estado del usuario actualizado');
-
-      await Promise.all([loadStats(), loadUsuarios()]);
-    } catch (error) {
-      console.error(error);
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : 'No se pudo cambiar el estado del usuario',
-      );
-    }
+        try {
+          const result = await requestConToken<{ message?: string }>(
+            `/api/v1/admin/users/${usuario.id}/toggle`,
+            { method: 'PATCH' },
+            token,
+          );
+          toast.success(result.message ?? 'Estado del usuario actualizado');
+          await Promise.all([loadStats(), loadUsuarios()]);
+        } catch (error) {
+          console.error(error);
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : 'No se pudo cambiar el estado del usuario',
+          );
+        }
+      },
+    );
   };
 
   const totalInactivos = Math.max(0, stats.total - stats.activos);
