@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
@@ -32,8 +32,7 @@ import {
   CheckCircle,
   X,
 } from 'lucide-react';
-import { colaboradores, lotes as lotesData } from '../../lib/mockData';
-import { operacionesApi, Planilla } from '../../../api/operaciones';
+import { operacionesApi, selectsApi, Planilla } from '../../../api/operaciones';
 
 // Tipos de fertilizantes
 const fertilizantes = [
@@ -118,77 +117,143 @@ export default function VerPlanilla() {
   const { id } = useParams();
   const [etapaActual, setEtapaActual] = useState(1);
   const [modoEdicion, setModoEdicion] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
 
-  // Información General - CON DATOS DE EJEMPLO
-  const [fecha, setFecha] = useState('2026-03-09');
-  const [elaboradoPor, setElaboradoPor] = useState('Juan Pérez');
-  const [huboLluvia, setHuboLluvia] = useState<'si' | 'no' | ''>('si');
-  const [lluvia, setLluvia] = useState('20');
-  const [inicioLabores, setInicioLabores] = useState('06:00');
+  // Datos de colaboradores y lotes desde API
+  const [colaboradores, setColaboradores] = useState<Array<{id: string; nombres: string; apellidos: string}>>([]);
+  const [lotesData, setLotesData] = useState<Array<{id: string; nombre: string}>>([]);
+
+  // Información General - DATOS DE LA API (se cargan en useEffect)
+  const [fecha, setFecha] = useState('');
+  const [elaboradoPor, setElaboradoPor] = useState('');
+  const [huboLluvia, setHuboLluvia] = useState<'si' | 'no' | ''>('');
+  const [lluvia, setLluvia] = useState('');
+  const [inicioLabores, setInicioLabores] = useState('');
   
   // Observaciones y Ausentes (Final)
-  const [observaciones, setObservaciones] = useState('Día productivo sin novedades');
-  const [ausentes, setAusentes] = useState('Carlos Rodríguez - Incapacidad médica');
+  const [observaciones, setObservaciones] = useState('');
+  const [ausentes, setAusentes] = useState('');
   
-  // Estados de trabajos con datos de ejemplo
-  const [trabajosCosecha, setTrabajosCosecha] = useState<TrabajoCosecha[]>([
-    {
-      id: 'cosecha-1',
-      colaboradores: ['1', '2'],
-      lotes: ['lote-1'],
-      sublotes: 'A1, A2'
-    }
-  ]);
-  const [trabajosPlateo, setTrabajosPlateo] = useState<TrabajoPlateo[]>([
-    {
-      id: 'plateo-1',
-      colaboradores: ['3'],
-      lotes: ['lote-1'],
-      sublotes: 'B1, B2',
-      numeroPalmas: 120
-    }
-  ]);
-  const [trabajosPoda, setTrabajosPoda] = useState<TrabajoPoda[]>([
-    {
-      id: 'poda-1',
-      colaboradores: ['4'],
-      lotes: ['lote-2'],
-      sublotes: 'C1',
-      numeroPalmas: 80
-    }
-  ]);
-  const [trabajosFertilizacion, setTrabajosFertilizacion] = useState<TrabajoFertilizacion[]>([
-    {
-      id: 'fertilizacion-1',
-      colaboradores: ['5'],
-      lotes: ['lote-1'],
-      sublotes: 'A1',
-      palmas: 100,
-      tipoFertilizante: 'NPK 15-15-15',
-      cantidadGramos: 250
-    }
-  ]);
-  const [trabajosSanidad, setTrabajosSanidad] = useState<TrabajoSanidad[]>([
-    {
-      id: 'sanidad-1',
-      colaboradores: ['6'],
-      lotes: ['lote-2'],
-      sublotes: 'D1',
-      trabajoRealizado: 'Control de plagas y fumigación'
-    }
-  ]);
-  const [trabajosAuxiliares, setTrabajosAuxiliares] = useState<TrabajoAuxiliar[]>([
-    {
-      id: 'auxiliar-1',
-      nombre: 'Pedro López',
-      labor: 'Mantenimiento de vías',
-      lugar: 'Vía principal',
-      total: 86666,
-      horasExtra: 2,
-      tipoJornada: 'FIJO'
-    }
-  ]);
+  // Estados de trabajos - se cargan desde API
+  const [trabajosCosecha, setTrabajosCosecha] = useState<TrabajoCosecha[]>([]);
+  const [trabajosPlateo, setTrabajosPlateo] = useState<TrabajoPlateo[]>([]);
+  const [trabajosPoda, setTrabajosPoda] = useState<TrabajoPoda[]>([]);
+  const [trabajosFertilizacion, setTrabajosFertilizacion] = useState<TrabajoFertilizacion[]>([]);
+  const [trabajosSanidad, setTrabajosSanidad] = useState<TrabajoSanidad[]>([]);
+  const [trabajosAuxiliares, setTrabajosAuxiliares] = useState<TrabajoAuxiliar[]>([]);
 
+  // ── Cargar planilla desde API ──────────────────────────────────────────────
+  const cargarPlanilla = useCallback(async () => {
+    if (!id) return;
+    setLoading(true);
+    setErrorCarga(null);
+    try {
+      const [planRes, colRes, lotRes] = await Promise.all([
+        operacionesApi.ver(Number(id)),
+        selectsApi.colaboradores(),
+        selectsApi.lotes(),
+      ]);
+      const p = planRes.data;
+
+      // Campos generales
+      setFecha(p.fecha || '');
+      setElaboradoPor(p.creado_por_rel?.name || '');
+      setHuboLluvia(p.hubo_lluvia ? 'si' : 'no');
+      setLluvia(p.cantidad_lluvia ? String(p.cantidad_lluvia) : '');
+      setInicioLabores(p.hora_inicio ? p.hora_inicio.slice(0, 5) : '');
+      setObservaciones(p.observaciones || '');
+
+      // Colaboradores y lotes para displays
+      setColaboradores((colRes.data || []).map((c: any) => ({
+        id: String(c.id),
+        nombres: c.primer_nombre ?? c.nombres ?? '',
+        apellidos: c.primer_apellido ?? c.apellidos ?? '',
+      })));
+      setLotesData((lotRes.data || []).map((l: any) => ({ id: String(l.id), nombre: l.nombre })));
+
+      // Mapear cosechas de API → estado local
+      setTrabajosCosecha(
+        (p.cosechas || []).map((c: any) => ({
+          id: String(c.id),
+          colaboradores: (c.cuadrilla || []).map((q: any) => String(q.empleado_id)),
+          lotes: c.lote_id ? [String(c.lote_id)] : [],
+          sublotes: c.sublote?.nombre || '',
+        }))
+      );
+
+      // Mapear jornales por tipo
+      const jornales = p.jornales || [];
+      setTrabajosPlateo(
+        jornales.filter((j: any) => j.tipo === 'PLATEO').map((j: any) => ({
+          id: String(j.id),
+          colaboradores: [String(j.empleado_id)],
+          lotes: j.lote_id ? [String(j.lote_id)] : [],
+          sublotes: j.sublote?.nombre || '',
+          numeroPalmas: j.cantidad_palmas || 0,
+        }))
+      );
+      setTrabajosPoda(
+        jornales.filter((j: any) => j.tipo === 'PODA').map((j: any) => ({
+          id: String(j.id),
+          colaboradores: [String(j.empleado_id)],
+          lotes: j.lote_id ? [String(j.lote_id)] : [],
+          sublotes: j.sublote?.nombre || '',
+          numeroPalmas: j.cantidad_palmas || 0,
+        }))
+      );
+      setTrabajosFertilizacion(
+        jornales.filter((j: any) => j.tipo === 'FERTILIZACION').map((j: any) => ({
+          id: String(j.id),
+          colaboradores: [String(j.empleado_id)],
+          lotes: j.lote_id ? [String(j.lote_id)] : [],
+          sublotes: j.sublote?.nombre || '',
+          palmas: j.cantidad_palmas || 0,
+          tipoFertilizante: j.insumo?.nombre || '',
+          cantidadGramos: j.gramos_por_palma || 0,
+        }))
+      );
+      setTrabajosSanidad(
+        jornales.filter((j: any) => j.tipo === 'SANIDAD').map((j: any) => ({
+          id: String(j.id),
+          colaboradores: [String(j.empleado_id)],
+          lotes: j.lote_id ? [String(j.lote_id)] : [],
+          sublotes: j.sublote?.nombre || '',
+          trabajoRealizado: j.descripcion || '',
+        }))
+      );
+      setTrabajosAuxiliares(
+        jornales.filter((j: any) => j.categoria === 'FINCA').map((j: any) => ({
+          id: String(j.id),
+          nombre: j.empleado ? `${j.empleado.primer_nombre} ${j.empleado.primer_apellido}`.trim() : '',
+          labor: j.labor?.nombre || '',
+          lugar: j.ubicacion || '',
+          total: parseFloat(j.valor_total || '0'),
+          horasExtra: 0,
+          tipoJornada: 'FIJO' as const,
+        }))
+      );
+
+      // Ausencias como texto descriptivo
+      const ausenciasTexto = (p.ausencias || [])
+        .map((a: any) => {
+          const emp = a.empleado ? `${a.empleado.primer_nombre} ${a.empleado.primer_apellido}`.trim() : '';
+          const mot = a.motivo_ausencia?.nombre || a.motivo || '';
+          return `${emp} - ${mot}`;
+        })
+        .join(', ');
+      setAusentes(ausenciasTexto);
+
+    } catch (err: any) {
+      setErrorCarga(err?.message ?? 'Error al cargar la planilla');
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => { cargarPlanilla(); }, [cargarPlanilla]);
+
+  // ────────────────────────────────────────────────────────────────────────────
   const irAEtapa = (numero: number) => {
     setEtapaActual(numero);
   };
@@ -209,14 +274,31 @@ export default function VerPlanilla() {
     setModoEdicion(true);
   };
 
-  const guardarCambios = () => {
-    console.log('Guardando cambios...');
-    setModoEdicion(false);
+  const guardarCambios = async () => {
+    if (!id) return;
+    try {
+      await operacionesApi.editar(Number(id), {
+        fecha: fecha || undefined,
+        hora_inicio: inicioLabores || undefined,
+        hubo_lluvia: huboLluvia === 'si',
+        cantidad_lluvia: huboLluvia === 'si' && lluvia ? parseFloat(lluvia) : null,
+        observaciones: observaciones || null,
+      });
+      setModoEdicion(false);
+      await cargarPlanilla();
+    } catch (err: any) {
+      alert(err?.message ?? 'Error al guardar cambios');
+    }
   };
 
-  const aprobarPlanilla = () => {
-    console.log('Aprobando planilla...');
-    navigate('/operaciones');
+  const aprobarPlanilla = async () => {
+    if (!id) return;
+    try {
+      await operacionesApi.aprobar(Number(id));
+      navigate('/operaciones');
+    } catch (err: any) {
+      alert(err?.message ?? 'Error al aprobar planilla');
+    }
   };
 
   // Funciones para agregar trabajos

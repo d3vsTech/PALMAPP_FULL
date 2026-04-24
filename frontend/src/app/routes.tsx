@@ -55,6 +55,8 @@ import Viajes from './pages/viajes/Viajes';
 import DetalleViaje from './pages/viajes/DetalleViaje';
 import NuevoViajeWizard from './pages/viajes/NuevoViajeWizard';
 import ConteoCosecha from './pages/viajes/ConteoCosecha';
+import ConteoCosechaWizard from './pages/viajes/ConteoCosechaWizard';
+import NuevoEditarViaje from './pages/viajes/NuevoEditarViaje';
 
 // Market
 import Market from './pages/market/Market';
@@ -165,10 +167,12 @@ export const router = createBrowserRouter([
       { path: 'operaciones/planilla/editar/:id', Component: NuevaPlanillaWizard },
       { path: 'operaciones/planilla/:id',     Component: VerPlanilla },
 
-      { path: 'viajes',            element: <ProtectedRoute permiso="remisiones.ver"><Viajes /></ProtectedRoute> },
-      { path: 'viajes/nuevo',      Component: NuevoViajeWizard },
-      { path: 'viajes/:id/conteo', Component: ConteoCosecha },
-      { path: 'viajes/:id',        Component: DetalleViaje },
+      { path: 'viajes',                    element: <ProtectedRoute permiso="remisiones.ver"><Viajes /></ProtectedRoute> },
+      { path: 'viajes/nuevo',              Component: NuevoEditarViaje },
+      { path: 'viajes/editar/:id',         Component: NuevoEditarViaje },
+      { path: 'viajes/:id/conteo',         Component: ConteoCosecha },
+      { path: 'viajes/:id/conteo-wizard',  Component: ConteoCosechaWizard },
+      { path: 'viajes/:id',                Component: DetalleViaje },
       { path: 'remisiones',        Component: Viajes },
       { path: 'remisiones/:id',    Component: DetalleViaje },
 

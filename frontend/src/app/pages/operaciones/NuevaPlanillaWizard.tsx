@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
@@ -31,7 +31,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { colaboradores, lotes as lotesData, sublotes } from '../../lib/mockData';
+import { operacionesApi, cosechasApi, jornalesApi, horasExtraApi, ausenciasApi, selectsApi } from '../../../api/operaciones';
 
 // Tipos de fertilizantes
 const fertilizantes = [
@@ -163,6 +163,61 @@ export default function NuevaPlanillaWizard() {
   const navigate = useNavigate();
   const [etapaActual, setEtapaActual] = useState(1);
 
+  // ── Estado para planilla ID y loading ─────────────────────────────────────
+  const [planillaId, setPlanillaId] = useState<number | null>(null);
+  const [guardando, setGuardando] = useState(false);
+
+  // ── Datos API (mismo shape que mockData para compatibilidad con JSX) ───────
+  const [colaboradores, setColaboradores] = useState<Array<{id: string; nombres: string; apellidos: string}>>([]);
+  const [lotesData, setLotesData] = useState<Array<{id: string; nombre: string}>>([]);
+  const [sublotes, setSublotes] = useState<Array<{id: string; nombre: string; loteId: string}>>([]);
+
+  // Mapas ID por nombre para save (tiposHoraExtra y motivos son estáticos en JSX pero necesitan ID)
+  const [insumosMap, setInsumosMap] = useState<Map<string, number>>(new Map());
+  const [laboresMap, setLaboresMap] = useState<Map<string, number>>(new Map());
+  const [motivosMap, setMotivosMap] = useState<Map<string, number>>(new Map());
+  const [tiposHoraExtraMap, setTiposHoraExtraMap] = useState<Map<string, number>>(new Map());
+
+  // ── Carga inicial de selects desde API ────────────────────────────────────
+  useEffect(() => {
+    (async () => {
+      try {
+        const [colRes, lotRes, inRes, labRes, motRes, tipoRes] = await Promise.all([
+          selectsApi.colaboradores(),
+          selectsApi.lotes(),
+          selectsApi.insumos(),
+          selectsApi.labores(),
+          selectsApi.motivosAusencia(),
+          selectsApi.tiposHoraExtra(),
+        ]);
+        setColaboradores(
+          (colRes.data || []).map((c: any) => ({
+            id: String(c.id),
+            nombres: c.primer_nombre ?? c.nombres ?? '',
+            apellidos: c.primer_apellido ?? c.apellidos ?? '',
+          }))
+        );
+        const lotes = (lotRes.data || []).map((l: any) => ({ id: String(l.id), nombre: l.nombre }));
+        setLotesData(lotes);
+        // Cargar sublotes en paralelo por cada lote
+        const subPromises = lotes.map(async (l) => {
+          try {
+            const sr = await selectsApi.sublotes({ lote_id: Number(l.id) });
+            return (sr.data || []).map((s: any) => ({ id: String(s.id), nombre: s.nombre, loteId: l.id }));
+          } catch { return []; }
+        });
+        const allSubs = (await Promise.all(subPromises)).flat();
+        setSublotes(allSubs);
+        setInsumosMap(new Map((inRes.data || []).map((i: any) => [i.nombre, i.id] as [string, number])));
+        setLaboresMap(new Map((labRes.data || []).map((l: any) => [l.nombre, l.id] as [string, number])));
+        setMotivosMap(new Map((motRes.data || []).map((m: any) => [m.nombre, m.id] as [string, number])));
+        setTiposHoraExtraMap(new Map((tipoRes.data || []).map((t: any) => [t.nombre, t.id] as [string, number])));
+      } catch (e) {
+        console.warn('Error cargando selects:', e);
+      }
+    })();
+  }, []);
+
   // Información General
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
   const [elaboradoPor, setElaboradoPor] = useState('');
@@ -210,9 +265,190 @@ export default function NuevaPlanillaWizard() {
     }
   };
 
-  const guardarTodo = () => {
-    console.log('Guardando planilla...');
-    navigate('/operaciones');
+  const guardarTodo = async () => {
+    setGuardando(true);
+    try {
+      // Paso 1: Crear planilla
+      const planRes = await operacionesApi.crear({
+        fecha,
+        hora_inicio: inicioLabores || undefined,
+        hubo_lluvia: huboLluvia === 'si',
+        cantidad_lluvia: huboLluvia === 'si' && lluvia ? parseFloat(lluvia) : null,
+        observaciones: observaciones || null,
+      });
+      const pid = planRes.data.id;
+      setPlanillaId(pid);
+
+      // Paso 2: Cosechas
+      for (const t of trabajosCosecha) {
+        if (!t.lote || t.colaboradores.length === 0) continue;
+        try {
+          await cosechasApi.crear(pid, {
+            lote_id: parseInt(t.lote),
+            sublote_id: t.sublote ? parseInt(t.sublote) : undefined,
+            gajos_reportados: t.gajosRecogidos || 0,
+            peso_confirmado: t.kilos || null,
+            cuadrilla: t.colaboradores.map(cid => ({ empleado_id: parseInt(cid) })),
+          });
+        } catch (e) { console.warn('cosecha skip', e); }
+      }
+
+      // Plateo
+      for (const t of trabajosPlateo) {
+        for (const cid of t.colaboradores) {
+          try {
+            await jornalesApi.crear(pid, {
+              categoria: 'PALMA', tipo: 'PLATEO',
+              empleado_id: parseInt(cid),
+              lote_id: t.lote ? parseInt(t.lote) : null,
+              sublote_id: t.sublote ? parseInt(t.sublote) : null,
+              cantidad_palmas: t.numeroPalmas || 0,
+            });
+          } catch (e) { console.warn('plateo skip', e); }
+        }
+      }
+
+      // Poda
+      for (const t of trabajosPoda) {
+        for (const cid of t.colaboradores) {
+          try {
+            await jornalesApi.crear(pid, {
+              categoria: 'PALMA', tipo: 'PODA',
+              empleado_id: parseInt(cid),
+              lote_id: t.lote ? parseInt(t.lote) : null,
+              sublote_id: t.sublote ? parseInt(t.sublote) : null,
+              cantidad_palmas: t.numeroPalmas || 0,
+            });
+          } catch (e) { console.warn('poda skip', e); }
+        }
+      }
+
+      // Fertilización
+      for (const t of trabajosFertilizacion) {
+        const insumoId = insumosMap.get(t.tipoFertilizante);
+        for (const cid of t.colaboradores) {
+          try {
+            if (insumoId) {
+              await jornalesApi.crear(pid, {
+                categoria: 'PALMA', tipo: 'FERTILIZACION',
+                empleado_id: parseInt(cid),
+                lote_id: t.lote ? parseInt(t.lote) : null,
+                sublote_id: t.sublote ? parseInt(t.sublote) : null,
+                cantidad_palmas: t.palmas || 0,
+                insumo_id: insumoId,
+                gramos_por_palma: t.cantidadGramos || 0,
+              });
+            }
+          } catch (e) { console.warn('fert skip', e); }
+        }
+      }
+
+      // Sanidad
+      for (const t of trabajosSanidad) {
+        for (const cid of t.colaboradores) {
+          try {
+            await jornalesApi.crear(pid, {
+              categoria: 'PALMA', tipo: 'SANIDAD',
+              empleado_id: parseInt(cid),
+              lote_id: t.lote ? parseInt(t.lote) : null,
+              sublote_id: t.sublote ? parseInt(t.sublote) : null,
+              descripcion: t.trabajoRealizado || 'Trabajo de sanidad',
+            });
+          } catch (e) { console.warn('sanidad skip', e); }
+        }
+      }
+
+      // Otros
+      for (const t of trabajosOtros) {
+        for (const cid of t.colaboradores) {
+          try {
+            await jornalesApi.crear(pid, {
+              categoria: 'PALMA', tipo: 'OTROS',
+              empleado_id: parseInt(cid),
+              lote_id: t.lote ? parseInt(t.lote) : null,
+              sublote_id: t.sublote ? parseInt(t.sublote) : null,
+              nombre_trabajo: t.nombre || 'Otros',
+              descripcion: t.laborRealizada || 'Trabajo realizado',
+            });
+          } catch (e) { console.warn('otros skip', e); }
+        }
+      }
+
+      // Paso 3: Labores de Finca (best-effort: match colaborador por nombre)
+      for (const t of trabajosAuxiliares) {
+        if (!t.labor) continue;
+        const laborKey = t.labor === 'Otro' ? (t.otraLabor || '') : t.labor;
+        const laborId = laboresMap.get(laborKey) ?? laboresMap.get(t.labor);
+        if (!laborId) continue;
+        const nombreNorm = (t.nombre || '').toLowerCase().trim();
+        const colab = nombreNorm
+          ? colaboradores.find(c =>
+              `${c.nombres} ${c.apellidos}`.toLowerCase().includes(nombreNorm) ||
+              nombreNorm.includes(c.nombres.toLowerCase()))
+          : null;
+        if (!colab) continue;
+        try {
+          await jornalesApi.crear(pid, {
+            categoria: 'FINCA',
+            labor_id: laborId,
+            empleado_id: parseInt(colab.id),
+            ubicacion: t.lugar || undefined,
+          });
+        } catch (e) { console.warn('finca skip', e); }
+      }
+
+      // Paso 4: Horas extras
+      for (const h of horasExtras) {
+        if (!h.colaboradorId || !h.tipoHora || !h.numeroHoras) continue;
+        // Buscar por nombre exacto o parcial
+        let tipoId = tiposHoraExtraMap.get(h.tipoHora);
+        if (!tipoId) {
+          // Intento de match parcial
+          for (const [nombre, id] of tiposHoraExtraMap.entries()) {
+            if (nombre.toLowerCase().includes(h.tipoHora.toLowerCase())) {
+              tipoId = id; break;
+            }
+          }
+        }
+        if (!tipoId) continue;
+        try {
+          await horasExtraApi.crear(pid, {
+            empleado_id: parseInt(h.colaboradorId),
+            tipo_hora_extra_id: tipoId,
+            cantidad_horas: h.numeroHoras,
+            observacion: h.observacion || undefined,
+          });
+        } catch (e) { console.warn('hora extra skip', e); }
+      }
+
+      // Paso 5: Ausencias
+      for (const a of ausentes) {
+        if (!a.colaboradorId) continue;
+        let motivoId = motivosMap.get(a.motivo);
+        if (!motivoId) {
+          for (const [nombre, id] of motivosMap.entries()) {
+            if (nombre.toLowerCase().includes(a.motivo.toLowerCase())) {
+              motivoId = id; break;
+            }
+          }
+        }
+        if (!motivoId) continue;
+        try {
+          await ausenciasApi.crear(pid, {
+            empleado_id: parseInt(a.colaboradorId),
+            motivo_ausencia_id: motivoId,
+            motivo: a.otroMotivo || a.motivo || '',
+          });
+        } catch (e) { console.warn('ausencia skip', e); }
+      }
+
+      navigate('/operaciones');
+    } catch (err: any) {
+      console.error('Error guardando planilla:', err);
+      alert(err?.message ?? 'Error al guardar la planilla. Intente de nuevo.');
+    } finally {
+      setGuardando(false);
+    }
   };
 
   // Funciones para agregar trabajos

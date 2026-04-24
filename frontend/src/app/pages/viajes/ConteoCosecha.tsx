@@ -4,6 +4,7 @@ import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
+import { Badge } from '../../components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -12,403 +13,753 @@ import {
   SelectValue,
 } from '../../components/ui/select';
 import {
-  ArrowLeft, Check, Truck, Leaf, Plus, Trash2, X, Loader2,
-  Calendar, MapPin, Clock, FileText,
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  Truck,
+  Leaf,
+  Plus,
+  Trash2,
+  X,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   viajesApi,
-  parseFechaAPI,
-  type Viaje,
-  type ViajeDetalle,
+  type Viaje as ViajeApi,
   type OperacionDisponible,
   type CosechaLibre,
 } from '../../../api/viajes';
-import { toast } from 'sonner';
+import { selectsApi } from '../../../api/operaciones';
 
-interface CosechaEditable {
-  detalleId: number;
-  cosechaId: number;
-  loteNombre: string;
-  subloteNombre: string;
-  gajosReportados: number;
-  cuadrillaCount: number;
+const ETAPAS = [
+  { numero: 1, nombre: 'Info. Viaje' },
+  { numero: 2, nombre: 'Cosecha' },
+];
+
+interface CosechaConteo {
+  id: string;
+  planillaId: string;
+  cuadrillaReconteo: string;
+  colaboradores: string[];
+  lote: string;
+  sublote: string;
   gajos: number;
+  reconteoGajos: number;
   pesoKg: number;
-  aprobado: boolean;
 }
 
-function cosechaDesdeDetalle(d: ViajeDetalle): CosechaEditable {
-  return {
-    detalleId: d?.id ?? 0,
-    cosechaId: d?.cosecha_id ?? 0,
-    loteNombre: d?.cosecha?.lote?.nombre ?? '—',
-    subloteNombre: d?.cosecha?.sublote?.nombre ?? '—',
-    gajosReportados: d?.cosecha?.gajos_reportados ?? 0,
-    cuadrillaCount: d?.cosecha?.cuadrilla_count ?? 0,
-    gajos: d?.cosecha?.gajos_reconteo ?? 0,
-    pesoKg: parseFloat(d?.cosecha?.peso_confirmado ?? '0') || 0,
-    aprobado: Boolean(d?.reconteo_aprobado),
-  };
-}
 
 export default function ConteoCosecha() {
   const navigate = useNavigate();
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
 
-  const [viaje, setViaje] = useState<Viaje | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [errorCarga, setErrorCarga] = useState<string | null>(null);
-  const [cosechas, setCosechas] = useState<CosechaEditable[]>([]);
-  const [finalizando, setFinalizando] = useState(false);
+  // ── Estado API ────────────────────────────────────────────────────────────
+  const [viajeApi, setViajeApi]          = useState<ViajeApi | null>(null);
+  const [loading, setLoading]           = useState(true);
+  const [cosechas, setCosechas]         = useState<CosechaConteo[]>([]);
+  const [cosechaEnEdicion, setCosechaEnEdicion] = useState<CosechaConteo | null>(null);
 
-  const [modalOpen, setModalOpen] = useState(false);
-  const [operaciones, setOperaciones] = useState<OperacionDisponible[]>([]);
-  const [operacionId, setOperacionId] = useState<string>('');
-  const [cosechasLibres, setCosechasLibres] = useState<CosechaLibre[]>([]);
-  const [cargandoOps, setCargandoOps] = useState(false);
+  // Estado para agregar cosecha desde operaciones disponibles
+  const [modalOpen,        setModalOpen]        = useState(false);
+  const [operaciones,      setOperaciones]      = useState<OperacionDisponible[]>([]);
+  const [operacionId,      setOperacionId]      = useState('');
+  const [cosechasLibres,   setCosechasLibres]   = useState<CosechaLibre[]>([]);
+  const [cargandoOps,      setCargandoOps]      = useState(false);
   const [cargandoCosechas, setCargandoCosechas] = useState(false);
-  const [agregando, setAgregando] = useState(false);
+  const cuadrillas: Array<{id: string; nombre: string}> = []; // API loads cosechas directly from detalles
+  const [agregando,        setAgregando]        = useState(false);
+  const [procesando,       setProcesando]       = useState(false);
 
+  // ── Selects para display ─────────────────────────────────────────────────
+  const [colaboradores, setColaboradores] = useState<Array<{id: string; nombres: string; apellidos: string}>>([]);
+  const [lotesData,     setLotesData]     = useState<Array<{id: string; nombre: string}>>([]);
+  const [sublotes,      setSublotes]      = useState<Array<{id: string; nombre: string; loteId: string}>>([]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [colRes, lotRes] = await Promise.all([selectsApi.colaboradores(), selectsApi.lotes()]);
+        setColaboradores((colRes.data ?? []).map((x: any) => ({
+          id: String(x.id), nombres: x.primer_nombre ?? x.nombres ?? '', apellidos: x.primer_apellido ?? x.apellidos ?? '',
+        })));
+        const lotes = (lotRes.data ?? []).map((l: any) => ({ id: String(l.id), nombre: l.nombre }));
+        setLotesData(lotes);
+        const subs = (await Promise.all(lotes.map(async l => {
+          try { const sr = await selectsApi.sublotes({ lote_id: Number(l.id) });
+            return (sr.data ?? []).map((s: any) => ({ id: String(s.id), nombre: s.nombre, loteId: l.id }));
+          } catch { return []; }
+        }))).flat();
+        setSublotes(subs);
+      } catch {}
+    })();
+  }, []);
+
+  // planillasMock = operaciones disponibles (ya cargadas)
+  const planillasMock = operaciones.map(o => ({ id: String(o.id), nombre: `Planilla ${o.fecha}` }));
+
+  const [etapaActual, setEtapaActual] = useState(1);
+
+  // Helper: extrae string de un campo que puede ser objeto o string
+  function extractStr(val: unknown): string {
+    if (val == null) return '';
+    if (typeof val === 'string') return val;
+    if (typeof val === 'number') return String(val);
+    if (typeof val === 'object') {
+      const o = val as Record<string, unknown>;
+      return String(o.razon_social ?? o.nombre ?? o.name ?? '');
+    }
+    return String(val);
+  }
+
+  // Alias de display: convierte ViajeApi a campos camelCase para el JSX
+  const rv = viajeApi as any;
+  const viaje = viajeApi ? {
+    id:            String(rv.id ?? ''),
+    remisionId:    String(rv.remision ?? rv.id ?? ''),
+    fecha:         String(rv.fecha_viaje ?? ''),
+    placaVehiculo: String(rv.placa_vehiculo ?? ''),
+    conductor:     String(rv.nombre_conductor ?? ''),
+    transportador: extractStr(rv.empresa ?? rv.empresa_transportadora),
+    extractora:    extractStr(rv.extractora),
+    horaSalida:    String(rv.hora_salida ?? '').slice(0, 5),
+    estado:        String(rv.estado ?? ''),
+  } : null;
+
+  // Cargar viaje
   const cargarViaje = useCallback(async () => {
     if (!id) return;
     setLoading(true);
-    setErrorCarga(null);
     try {
       const res = await viajesApi.ver(Number(id));
-      if (!res?.data) throw new Error('El servidor no devolvió datos del viaje');
-      setViaje(res.data);
-      const detalles = Array.isArray(res.data.detalles) ? res.data.detalles : [];
-      setCosechas(detalles.map(cosechaDesdeDetalle));
-    } catch (err) {
-      console.error('[ConteoCosecha] Error al cargar viaje:', err);
-      setErrorCarga(err instanceof Error ? err.message : 'Error desconocido');
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
+      setViajeApi(res.data);
+      setCosechas((res.data.detalles ?? []).map(d => ({
+        id: String(d.id),
+        planillaId: String(d.cosecha_id ?? ''),
+        cuadrillaReconteo: '',
+        colaboradores: (d.cosecha as any)?.cuadrilla?.map((q: any) => String(q.empleado_id)) ?? [],
+        lote: String(d.cosecha?.lote?.id ?? ''),
+        sublote: String(d.cosecha?.sublote?.id ?? ''),
+        gajos: d.cosecha?.gajos_reportados ?? 0,
+        reconteoGajos: d.cosecha?.gajos_reconteo ?? 0,
+        pesoKg: parseFloat(String(d.cosecha?.peso_confirmado ?? '0')),
+        detalleId: d.id,
+        reconteoAprobado: d.reconteo_aprobado,
+      })));
+    } catch { navigate('/viajes'); }
+    finally { setLoading(false); }
+  }, [id, navigate]);
 
   useEffect(() => { cargarViaje(); }, [cargarViaje]);
 
-  const abrirModalAgregar = async () => {
-    setModalOpen(true);
-    setOperacionId('');
-    setCosechasLibres([]);
-    setCargandoOps(true);
-    try {
-      const res = await viajesApi.operacionesDisponibles();
-      setOperaciones(res.data ?? []);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error al cargar operaciones');
-    } finally {
-      setCargandoOps(false);
-    }
-  };
-
+  // Cargar operaciones disponibles para el modal
   useEffect(() => {
-    if (!modalOpen || !operacionId) { setCosechasLibres([]); return; }
+    if (!modalOpen) return;
+    setCargandoOps(true);
+    viajesApi.operacionesDisponibles()
+      .then(r => setOperaciones(r.data ?? []))
+      .catch(() => {})
+      .finally(() => setCargandoOps(false));
+  }, [modalOpen]);
+
+  // Cargar cosechas libres cuando cambia la operación seleccionada
+  useEffect(() => {
+    if (!operacionId) { setCosechasLibres([]); return; }
     setCargandoCosechas(true);
-    viajesApi
-      .cosechasLibresDeOperacion(Number(operacionId))
-      .then((r) => setCosechasLibres(r.data ?? []))
-      .catch((err) => toast.error(err instanceof Error ? err.message : 'Error al cargar cosechas'))
+    viajesApi.cosechasLibresDeOperacion(Number(operacionId))
+      .then(r => setCosechasLibres(r.data ?? []))
+      .catch(() => {})
       .finally(() => setCargandoCosechas(false));
-  }, [modalOpen, operacionId]);
+  }, [operacionId]);
 
   const agregarCosechaAlViaje = async (cosechaId: number) => {
-    if (!viaje) return;
+    if (!viajeApi || agregando) return;
     setAgregando(true);
     try {
-      await viajesApi.agregarDetalle(viaje.id, cosechaId);
-      toast.success('Cosecha agregada al viaje');
-      setCosechasLibres((prev) => prev.filter((c) => c.id !== cosechaId));
+      await viajesApi.agregarDetalle(viajeApi.id, cosechaId);
+      setModalOpen(false);
+      setOperacionId('');
+      setCosechasLibres([]);
       await cargarViaje();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error al agregar cosecha');
-    } finally {
-      setAgregando(false);
-    }
+      toast.success('Cosecha agregada al viaje');
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Error al agregar cosecha');
+    } finally { setAgregando(false); }
   };
 
-  const quitarCosecha = async (detalleId: number) => {
-    if (!viaje) return;
-    if (!window.confirm('¿Quitar esta cosecha del viaje?')) return;
-    try {
-      await viajesApi.eliminarDetalle(viaje.id, detalleId);
-      setCosechas((prev) => prev.filter((c) => c.detalleId !== detalleId));
-      toast.success('Cosecha quitada');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error al quitar cosecha');
-    }
-  };
-
-  const actualizarGajos = (detalleId: number, gajos: number) =>
-    setCosechas((prev) => prev.map((c) => (c.detalleId === detalleId ? { ...c, gajos } : c)));
-
-  const actualizarPeso = (detalleId: number, pesoKg: number) =>
-    setCosechas((prev) => prev.map((c) => (c.detalleId === detalleId ? { ...c, pesoKg } : c)));
-
-  const finalizarConteo = async () => {
-    if (!viaje) return;
-    if (cosechas.length === 0) { toast.error('Debes agregar al menos una cosecha'); return; }
-    const sinGajos = cosechas.filter((c) => !c.aprobado && (!c.gajos || c.gajos <= 0));
-    if (sinGajos.length > 0) { toast.error('Todas las cosechas deben tener gajos de reconteo'); return; }
-
-    setFinalizando(true);
-    try {
-      for (const c of cosechas) {
-        if (c.aprobado) continue;
-        await viajesApi.hidratarReconteo(viaje.id, c.detalleId, {
-          gajos_reconteo: c.gajos,
-          peso_confirmado: c.pesoKg > 0 ? c.pesoKg : null,
-        });
-        await viajesApi.aprobarReconteo(viaje.id, c.detalleId);
-      }
-      toast.success('Conteo finalizado. Viaje despachado.');
-      navigate('/viajes');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error al finalizar el conteo');
-    } finally {
-      setFinalizando(false);
-    }
-  };
-
-  if (loading) return (
-    <div className="flex items-center justify-center py-16 text-muted-foreground gap-3">
-      <Loader2 className="w-5 h-5 animate-spin" /> Cargando viaje...
-    </div>
-  );
-
-  if (!viaje) return (
-    <div className="max-w-3xl mx-auto">
-      <Button variant="ghost" size="sm" onClick={() => navigate('/viajes')} className="mb-4 gap-2">
-        <ArrowLeft className="h-4 w-4" /> Volver a Viajes
-      </Button>
-      <Card className="border-destructive/30 bg-destructive/5">
-        <CardContent className="p-6">
-          <h2 className="text-lg font-semibold text-destructive mb-2">No se pudo cargar el viaje</h2>
-          <p className="text-sm text-muted-foreground mb-4">{errorCarga ?? 'El servidor no devolvió datos para este viaje.'}</p>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => cargarViaje()}>Reintentar</Button>
-            <Button variant="outline" size="sm" onClick={() => navigate('/viajes')}>Volver al listado</Button>
-          </div>
-          <p className="text-xs text-muted-foreground mt-4">ID del viaje: <code className="bg-muted px-1 rounded">{id}</code></p>
-        </CardContent>
-      </Card>
-    </div>
-  );
-
-  if (viaje.estado !== 'CREADO') {
-    return (
-      <div className="max-w-3xl mx-auto">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/viajes')} className="mb-4 gap-2">
-          <ArrowLeft className="h-4 w-4" /> Volver a Viajes
-        </Button>
-        <Card className="border-amber-300 bg-amber-50 dark:bg-amber-950/30">
-          <CardContent className="p-6">
-            <h2 className="text-lg font-semibold text-amber-900 dark:text-amber-400 mb-2">El viaje ya fue despachado</h2>
-            <p className="text-sm text-muted-foreground mb-4">
-              Este viaje está en estado <strong>{viaje.estado}</strong> y ya no puede editarse.
-            </p>
-            <Button onClick={() => navigate(`/viajes/${viaje.id}`)}>Ir al detalle</Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
+  if (loading) {
+    return <div className="flex items-center justify-center h-64 text-muted-foreground">Cargando...</div>;
   }
 
-  const fechaViaje = parseFechaAPI(viaje.fecha_viaje);
-  const puedeFinalizar = cosechas.length > 0 && cosechas.every((c) => c.aprobado || c.gajos > 0);
+  if (!viaje) return null;
+
+  const siguienteEtapa = () => {
+    if (etapaActual < ETAPAS.length) {
+      setEtapaActual(etapaActual + 1);
+    }
+  };
+
+  const etapaAnterior = () => {
+    if (etapaActual > 1) {
+      setEtapaActual(etapaActual - 1);
+    }
+  };
+
+  const irAEtapa = (numero: number) => {
+    setEtapaActual(numero);
+  };
+
+  const agregarCosecha = () => {
+    setCosechaEnEdicion({
+      id: `cosecha-${Date.now()}`,
+      planillaId: '',
+      cuadrillaReconteo: '',
+      colaboradores: [],
+      lote: '',
+      sublote: '',
+      gajos: 0,
+      reconteoGajos: 0,
+      pesoKg: 0
+    });
+  };
+
+  const guardarCosecha = async () => {
+    if (!cosechaEnEdicion || !viajeApi) return;
+    const detalleId = (cosechaEnEdicion as any).detalleId;
+    if (!detalleId) {
+      // Cosecha local (aún no en API) — solo actualizar state
+      setCosechas([cosechaEnEdicion, ...cosechas]);
+      setCosechaEnEdicion(null);
+      return;
+    }
+    setProcesando(true);
+    try {
+      await viajesApi.hidratarReconteo(viajeApi.id, detalleId, {
+        gajos_reconteo: cosechaEnEdicion.reconteoGajos || cosechaEnEdicion.gajos,
+        peso_confirmado: cosechaEnEdicion.pesoKg || undefined,
+      });
+      toast.success('Reconteo guardado');
+      await cargarViaje();
+      setCosechaEnEdicion(null);
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Error al guardar reconteo');
+    } finally { setProcesando(false); }
+  };
+
+  const cancelarCosecha = () => {
+    setCosechaEnEdicion(null);
+  };
+
+  const eliminarCosecha = (id: string) => {
+    setCosechas(cosechas.filter(c => c.id !== id));
+  };
+
+  const handleCuadrillaChange = (cuadrillaId: string) => {
+    if (!cosechaEnEdicion) return;
+    // Con API, la cuadrilla viene de los detalles del viaje ya cargados
+    setCosechaEnEdicion({ ...cosechaEnEdicion, cuadrillaReconteo: cuadrillaId });
+  };
+
+  const finalizarConteo = async () => {
+    if (!viajeApi) return;
+    setProcesando(true);
+    try {
+      for (const cosecha of cosechas) {
+        const detalleId = (cosecha as any).detalleId;
+        if (detalleId && !(cosecha as any).reconteoAprobado) {
+          const res = await viajesApi.aprobarReconteo(viajeApi.id, detalleId);
+          if (res.data.auto_despachado) {
+            toast.success('Conteo finalizado — viaje en camino');
+            navigate('/viajes');
+            return;
+          }
+        }
+      }
+      toast.success('Conteo finalizado');
+      navigate('/viajes');
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Error al finalizar conteo');
+    } finally { setProcesando(false); }
+  };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <Button variant="ghost" size="sm" onClick={() => navigate('/viajes')} className="mb-4 gap-2">
-          <ArrowLeft className="h-4 w-4" /> Volver a Viajes
+    <div className="container mx-auto py-8 px-4 max-w-7xl">
+      {/* Header */}
+      <div className="mb-8">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate('/viajes')}
+          className="mb-4 gap-2"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Volver a Viajes
         </Button>
-        <div className="flex items-start justify-between mb-2">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">Conteo de Cosecha</h1>
-            <p className="text-muted-foreground mt-1">Registra las cosechas del viaje y aprueba el reconteo</p>
-          </div>
-          <div className="text-right">
-            <p className="text-sm text-muted-foreground">Remisión</p>
-            <p className="text-xl font-bold text-primary">{viaje.remision}</p>
-          </div>
-        </div>
+        <h1>Conteo de Cosecha</h1>
+        <p className="text-muted-foreground mt-1">
+          Registra las cosechas del viaje
+        </p>
       </div>
 
-      {/* Info del viaje */}
-      <Card className="glass-subtle border-border">
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-              <Truck className="h-6 w-6 text-primary" />
-            </div>
-            <div><CardTitle>Información del Viaje</CardTitle><p className="text-sm text-muted-foreground">Datos generales</p></div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            <div>
-              <div className="flex items-center gap-2 text-muted-foreground mb-1"><Calendar className="h-4 w-4" /><span className="text-xs">Fecha</span></div>
-              <p className="text-sm font-medium">{fechaViaje ? fechaViaje.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'}</p>
-            </div>
-            <div>
-              <div className="flex items-center gap-2 text-muted-foreground mb-1"><Clock className="h-4 w-4" /><span className="text-xs">Hora salida</span></div>
-              <p className="text-sm font-medium">{(viaje.hora_salida ?? '').substring(0, 5) || '—'}</p>
-            </div>
-            <div>
-              <div className="flex items-center gap-2 text-muted-foreground mb-1"><Truck className="h-4 w-4" /><span className="text-xs">Vehículo / Conductor</span></div>
-              <p className="text-sm font-medium">{viaje.placa_vehiculo}</p>
-              <p className="text-xs text-muted-foreground">{viaje.nombre_conductor}</p>
-            </div>
-            <div>
-              <div className="flex items-center gap-2 text-muted-foreground mb-1"><MapPin className="h-4 w-4" /><span className="text-xs">Extractora</span></div>
-              <p className="text-sm font-medium">{viaje.extractora?.razon_social ?? '—'}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Columna izquierda: Wizard (2/3) */}
+        <div className="lg:col-span-2 space-y-8">
 
-      {/* Cosechas */}
-      <Card className="glass-subtle border-border">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-12 w-12 rounded-xl bg-success/10 flex items-center justify-center"><Leaf className="h-6 w-6 text-success" /></div>
-              <div>
-                <CardTitle>Cosechas del Viaje</CardTitle>
-                <p className="text-sm text-muted-foreground">{cosechas.length === 0 ? 'Agrega cosechas al viaje' : `${cosechas.length} cosecha(s)`}</p>
-              </div>
-            </div>
-            <Button onClick={abrirModalAgregar} className="gap-2"><Plus className="h-4 w-4" /> Agregar Cosecha</Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {cosechas.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted"><Leaf className="h-8 w-8 text-muted-foreground" /></div>
-              <h3 className="mb-2 text-lg font-semibold">Sin cosechas agregadas</h3>
-              <p className="mb-4 text-sm text-muted-foreground">Selecciona una operación aprobada y agrega sus cosechas</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {cosechas.map((c) => (
-                <div key={c.detalleId} className={`p-4 rounded-lg border transition-colors ${c.aprobado ? 'bg-success/5 border-success/30' : 'bg-muted/20 border-border'}`}>
-                  <div className="flex items-start justify-between gap-4 mb-3">
-                    <div>
-                      <p className="font-semibold text-foreground">{c.loteNombre} · {c.subloteNombre}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Gajos reportados: <strong>{c.gajosReportados.toLocaleString()}</strong> · Cuadrilla: <strong>{c.cuadrillaCount}</strong>
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {c.aprobado ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border text-success bg-success/10 border-success/30">
-                          <Check className="h-3.5 w-3.5" /> Aprobado
-                        </span>
-                      ) : (
-                        <Button size="sm" variant="ghost" className="hover:bg-destructive/10 hover:text-destructive"
-                          onClick={() => quitarCosecha(c.detalleId)} title="Quitar del viaje">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+          {/* Stepper horizontal */}
+          <Card className="border-border">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                {ETAPAS.map((etapa, index) => {
+                  const estaCompleta = etapaActual > etapa.numero;
+                  const estaActiva = etapaActual === etapa.numero;
+
+                  return (
+                    <div key={etapa.numero} className="flex items-center" style={{ flex: index < ETAPAS.length - 1 ? 1 : 'none' }}>
+                      {/* Círculo de etapa */}
+                      <button
+                        onClick={() => irAEtapa(etapa.numero)}
+                        className={`flex flex-col items-center gap-2 ${
+                          estaActiva || estaCompleta ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
+                        }`}
+                        disabled={!estaActiva && !estaCompleta}
+                      >
+                        <div
+                          className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition-all ${
+                            estaCompleta
+                              ? 'bg-primary border-primary text-white'
+                              : estaActiva
+                              ? 'bg-primary/10 border-primary text-primary'
+                              : 'bg-muted border-border text-muted-foreground'
+                          }`}
+                        >
+                          {estaCompleta ? (
+                            <Check className="h-5 w-5" />
+                          ) : (
+                            <span className="font-bold">{etapa.numero}</span>
+                          )}
+                        </div>
+                        <div className="text-center">
+                          <div
+                            className={`text-sm font-semibold whitespace-nowrap ${
+                              estaActiva || estaCompleta ? 'text-foreground' : 'text-muted-foreground'
+                            }`}
+                          >
+                            {etapa.nombre}
+                          </div>
+                        </div>
+                      </button>
+
+                      {/* Línea conectora */}
+                      {index < ETAPAS.length - 1 && (
+                        <div className="flex-1 h-0.5 mx-3 bg-border relative min-w-[20px]">
+                          <div
+                            className={`absolute inset-0 bg-primary transition-all ${
+                              estaCompleta ? 'w-full' : 'w-0'
+                            }`}
+                          />
+                        </div>
                       )}
                     </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Contenido de las etapas */}
+          <div className="space-y-6">
+            {/* ETAPA 1: INFORMACIÓN DEL VIAJE */}
+            {etapaActual === 1 && (
+              <Card className="border-border">
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                      <Truck className="h-6 w-6 text-primary" />
+                    </div>
+                    <div>
+                      <CardTitle>Información del Viaje</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        Datos del viaje registrado
+                      </p>
+                    </div>
                   </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
                   <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Gajos reconteo *</Label>
-                      <Input type="number" min="0" value={c.gajos || ''} onChange={(e) => actualizarGajos(c.detalleId, parseInt(e.target.value) || 0)}
-                        disabled={c.aprobado} placeholder="Ingresa los gajos contados" />
+                    <div className="space-y-2">
+                      <Label>Fecha del Viaje</Label>
+                      <Input value={new Date(viaje.fecha).toLocaleDateString('es-CO')} disabled />
                     </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Peso confirmado (kg) — opcional</Label>
-                      <Input type="number" min="0" step="0.01" value={c.pesoKg || ''} onChange={(e) => actualizarPeso(c.detalleId, parseFloat(e.target.value) || 0)}
-                        disabled={c.aprobado} placeholder="Ej: 4120.50" />
+                    <div className="space-y-2">
+                      <Label>Placa del Vehículo</Label>
+                      <Input value={viaje.placaVehiculo} disabled />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Conductor</Label>
+                      <Input value={viaje.conductor} disabled />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Transportador</Label>
+                      <Input value={viaje.transportador} disabled />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Extractora Destino</Label>
+                      <Input value={viaje.extractora} disabled />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Hora de Salida</Label>
+                      <Input value={viaje.horaSalida} disabled />
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                </CardContent>
+              </Card>
+            )}
 
-      <div className="flex justify-end gap-3">
-        <Button variant="outline" onClick={() => navigate('/viajes')} disabled={finalizando}>Cancelar</Button>
-        <Button onClick={finalizarConteo} disabled={!puedeFinalizar || finalizando} className="gap-2 bg-success hover:bg-success/90">
-          {finalizando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-          {finalizando ? 'Finalizando...' : 'Finalizar y Despachar'}
-        </Button>
-      </div>
-
-      {/* Modal Agregar Cosecha */}
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <Card className="w-full max-w-2xl max-h-[90vh] flex flex-col">
-            <CardHeader className="flex-shrink-0">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Agregar Cosecha al Viaje</CardTitle>
-                  <p className="text-sm text-muted-foreground mt-1">Selecciona una operación aprobada</p>
+            {/* ETAPA 2: COSECHA */}
+            {etapaActual === 2 && (
+              <div className="space-y-4">
+                <div className="flex justify-end">
+                  <Button onClick={agregarCosecha} className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    Agregar Cosecha
+                  </Button>
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => setModalOpen(false)}><X className="h-5 w-5" /></Button>
-              </div>
-            </CardHeader>
-            <CardContent className="flex-1 overflow-y-auto space-y-4">
-              <div className="space-y-2">
-                <Label>Operación aprobada *</Label>
-                <Select value={operacionId} onValueChange={setOperacionId}>
-                  <SelectTrigger><SelectValue placeholder={cargandoOps ? 'Cargando...' : 'Seleccionar operación...'} /></SelectTrigger>
-                  <SelectContent>
-                    {operaciones.length === 0 && !cargandoOps && (
-                      <div className="px-3 py-2 text-sm text-muted-foreground">No hay operaciones con cosechas libres</div>
-                    )}
-                    {operaciones.map((op) => {
-                      const f = parseFechaAPI(op.fecha);
-                      return (
-                        <SelectItem key={op.id} value={String(op.id)}>
-                          {f ? f.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' }) : op.fecha} · {op.cosechas_disponibles_count} cosechas
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-              </div>
-              {operacionId && (
-                <div className="space-y-2">
-                  <Label>Cosechas disponibles</Label>
-                  {cargandoCosechas ? (
-                    <div className="flex items-center justify-center py-6 text-muted-foreground gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Cargando...</div>
-                  ) : cosechasLibres.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-8 text-center border border-dashed rounded-lg">
-                      <FileText className="h-8 w-8 text-muted-foreground mb-2" />
-                      <p className="text-sm text-muted-foreground">No hay cosechas libres en esta operación</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {cosechasLibres.map((c) => (
-                        <div key={c.id} className="flex items-center justify-between p-3 bg-muted/20 rounded-lg border border-border">
-                          <div>
-                            <p className="text-sm font-medium">{c.lote?.nombre ?? '—'} · {c.sublote?.nombre ?? '—'}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">Gajos: {c.gajos_reportados.toLocaleString()} · Cuadrilla: {c.cuadrilla_count ?? 0}</p>
+
+                {/* Formulario de edición */}
+                {cosechaEnEdicion && (
+                  <Card className="border-primary/50 shadow-lg">
+                    <CardHeader>
+                      <div className="flex items-center gap-3">
+                        <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                          <Leaf className="h-6 w-6 text-primary" />
+                        </div>
+                        <div>
+                          <CardTitle>Cosecha</CardTitle>
+                          <p className="text-sm text-muted-foreground">
+                            Registra las cosechas del viaje
+                          </p>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2 md:col-span-2">
+                          <Label>Planilla / Cosecha</Label>
+                          <Select
+                            value={cosechaEnEdicion.planillaId}
+                            onValueChange={(value) => {
+                              setCosechaEnEdicion({ ...cosechaEnEdicion, planillaId: value });
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccionar planilla..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {planillasMock.map((planilla) => (
+                                <SelectItem key={planilla.id} value={planilla.id}>
+                                  {planilla.nombre}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2 md:col-span-2">
+                          <Label>Cuadrilla Reconteo</Label>
+                          <Select
+                            value={cosechaEnEdicion.cuadrillaReconteo}
+                            onValueChange={handleCuadrillaChange}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccionar cuadrilla..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {cuadrillas.map((cuadrilla) => (
+                                <SelectItem key={cuadrilla.id} value={cuadrilla.id}>
+                                  {cuadrilla.nombre}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2 md:col-span-2">
+                          <Label>Colaboradores</Label>
+                          <div className="flex flex-wrap gap-2">
+                            {cosechaEnEdicion.colaboradores.length === 0 ? (
+                              <p className="text-sm text-muted-foreground">No hay colaboradores</p>
+                            ) : (
+                              cosechaEnEdicion.colaboradores.map((colId) => {
+                                const col = colaboradores.find(c => c.id === colId);
+                                return col ? (
+                                  <Badge key={colId} variant="outline" className="text-xs">
+                                    {col.nombres} {col.apellidos}
+                                  </Badge>
+                                ) : null;
+                              })
+                            )}
                           </div>
-                          <Button size="sm" onClick={() => agregarCosechaAlViaje(c.id)} disabled={agregando} className="gap-1.5">
-                            {agregando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Agregar
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Lote</Label>
+                          <Input
+                            value={lotesData.find(l => l.id === cosechaEnEdicion.lote)?.nombre || 'Sin lote'}
+                            disabled
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Sublote</Label>
+                          <Input
+                            value={sublotes.find(s => s.id === cosechaEnEdicion.sublote)?.nombre || 'Sin sublote'}
+                            disabled
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Número de Gajos</Label>
+                          <Input
+                            type="number"
+                            value={cosechaEnEdicion.gajos || ''}
+                            disabled
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Reconteo de Gajos</Label>
+                          <Input
+                            type="number"
+                            placeholder="0"
+                            value={cosechaEnEdicion.reconteoGajos || ''}
+                            onChange={(e) => {
+                              setCosechaEnEdicion({
+                                ...cosechaEnEdicion,
+                                reconteoGajos: parseInt(e.target.value) || 0
+                              });
+                            }}
+                          />
+                        </div>
+
+                        <div className="space-y-2 md:col-span-2">
+                          <Label>Peso en kg (opcional)</Label>
+                          <Input
+                            type="number"
+                            placeholder="0"
+                            value={cosechaEnEdicion.pesoKg || ''}
+                            onChange={(e) => {
+                              setCosechaEnEdicion({
+                                ...cosechaEnEdicion,
+                                pesoKg: parseInt(e.target.value) || 0
+                              });
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-end gap-2 pt-4">
+                        <Button variant="outline" onClick={cancelarCosecha}>
+                          Cancelar
+                        </Button>
+                        <Button onClick={guardarCosecha} className="gap-2">
+                          <Check className="h-4 w-4" />
+                          Guardar
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Lista de cosechas guardadas */}
+                {cosechas.map((cosecha) => {
+                  const planilla = planillasMock.find(p => p.id === cosecha.planillaId);
+                  const cuadrilla = cuadrillas.find(c => c.id === cosecha.cuadrillaReconteo);
+                  const lote = lotesData.find(l => l.id === cosecha.lote);
+                  const sublote = sublotes.find(s => s.id === cosecha.sublote);
+
+                  return (
+                    <Card key={cosecha.id} className="border-border hover:border-primary/30 transition-colors">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between gap-4">
+                          {/* Icon + Planilla */}
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-lg bg-success/10 flex items-center justify-center shrink-0">
+                              <Leaf className="h-5 w-5 text-success" />
+                            </div>
+                            <div>
+                              <h4 className="font-semibold text-sm">{planilla?.nombre || 'Sin planilla'}</h4>
+                              <p className="text-xs text-muted-foreground">{cuadrilla?.nombre || 'Sin cuadrilla'}</p>
+                            </div>
+                          </div>
+
+                          {/* Lote/Sublote */}
+                          <div className="text-center shrink-0">
+                            <p className="text-xs text-muted-foreground">Lote</p>
+                            <p className="font-semibold text-sm">{lote?.nombre || 'N/A'}</p>
+                            <p className="text-xs text-muted-foreground">{sublote?.nombre || 'N/A'}</p>
+                          </div>
+
+                          {/* Gajos */}
+                          <div className="text-center shrink-0">
+                            <p className="text-xs text-muted-foreground">Gajos</p>
+                            <p className="font-bold text-lg">{cosecha.gajos}</p>
+                          </div>
+
+                          {/* Reconteo */}
+                          <div className="text-center shrink-0">
+                            <p className="text-xs text-muted-foreground">Reconteo</p>
+                            <p className="font-bold text-lg text-primary">{cosecha.reconteoGajos}</p>
+                          </div>
+
+                          {/* Peso */}
+                          {cosecha.pesoKg > 0 && (
+                            <div className="text-center shrink-0">
+                              <p className="text-xs text-muted-foreground">Peso</p>
+                              <p className="font-semibold text-sm">{cosecha.pesoKg} kg</p>
+                            </div>
+                          )}
+
+                          {/* Botón eliminar */}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => eliminarCosecha(cosecha.id)}
+                            className="text-destructive hover:text-destructive shrink-0"
+                          >
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
-                      ))}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+
+                {cosechas.length === 0 && !cosechaEnEdicion && (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <Leaf className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                    <p>No hay cosechas registradas</p>
+                    <p className="text-sm">Haz clic en "Agregar Cosecha" para crear una</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Botones de navegación */}
+            <div className="flex items-center justify-between pt-4">
+              <Button
+                variant="outline"
+                onClick={etapaAnterior}
+                disabled={etapaActual === 1}
+                className="gap-2"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Anterior
+              </Button>
+
+              <div className="flex gap-2">
+                {etapaActual < ETAPAS.length ? (
+                  <Button
+                    onClick={siguienteEtapa}
+                    className="gap-2"
+                  >
+                    Siguiente
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={finalizarConteo}
+                    className="gap-2 bg-success hover:bg-success/90"
+                  >
+                    <Check className="h-4 w-4" />
+                    Finalizar Conteo
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Columna derecha: Panel de resumen (1/3) - sticky */}
+        <div className="lg:col-span-1">
+          <div className="sticky top-8">
+            <Card className="border-border">
+              <CardHeader className="border-b border-border">
+                <CardTitle className="flex items-center gap-2">
+                  <Truck className="h-5 w-5 text-primary" />
+                  Resumen
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6 space-y-6">
+                {/* Progreso general */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Progreso</span>
+                    <span className="font-semibold">{etapaActual} de {ETAPAS.length}</span>
+                  </div>
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary transition-all duration-300"
+                      style={{ width: `${(etapaActual / ETAPAS.length) * 100}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="h-px bg-border" />
+
+                {/* Información del viaje */}
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+                    Información del Viaje
+                  </h4>
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Placa</span>
+                      <span className="font-semibold text-sm">{viaje.placaVehiculo}</span>
                     </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Conductor</span>
+                      <span className="font-semibold text-sm">{viaje.conductor}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Extractora</span>
+                      <span className="font-semibold text-sm truncate ml-2 max-w-[120px]" title={viaje.extractora}>
+                        {viaje.extractora}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="h-px bg-border" />
+
+                {/* Resumen de cosechas */}
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+                    Cosechas
+                  </h4>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Registradas</span>
+                    <span className="font-semibold text-sm">{cosechas.length}</span>
+                  </div>
+                  {cosechas.length > 0 && (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm">Total Gajos</span>
+                        <span className="font-semibold text-sm text-primary">
+                          {cosechas.reduce((sum, c) => sum + c.gajos, 0)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm">Total Peso (kg)</span>
+                        <span className="font-semibold text-sm text-success">
+                          {cosechas.reduce((sum, c) => sum + c.pesoKg, 0)}
+                        </span>
+                      </div>
+                    </>
                   )}
                 </div>
-              )}
-            </CardContent>
-            <div className="flex-shrink-0 border-t p-4 flex justify-end">
-              <Button variant="outline" onClick={() => setModalOpen(false)}>Cerrar</Button>
-            </div>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
