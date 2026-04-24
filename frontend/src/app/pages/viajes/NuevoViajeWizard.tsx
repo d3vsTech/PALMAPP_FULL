@@ -22,20 +22,9 @@ import {
 } from '../../../api/viajes';
 import { toast } from 'sonner';
 
-/**
- * Nuevo Viaje — §4.1 del API doc
- *
- * Flujo de 3 selects encadenados:
- *   1. Al montar: GET /empresas-transportadoras/select + GET /extractoras/select (en paralelo)
- *   2. Al elegir empresa: GET /empresas-transportadoras/{id}/transportadores
- *   3. Al elegir conductor: auto-fill placa (disabled)
- *   4. Submit: POST /viajes con { fecha_viaje, hora_salida, transportador_id, extractora_id, es_homogeneo: true }
- *      El backend snapshoteá empresa_transportadora_id, placa_vehiculo y nombre_conductor automáticamente.
- */
 export default function NuevoViajeWizard() {
   const navigate = useNavigate();
 
-  // ── Form state ────────────────────────────────────────────────────
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
   const [horaSalida, setHoraSalida] = useState('');
   const [empresaId, setEmpresaId] = useState<string>('');
@@ -43,7 +32,6 @@ export default function NuevoViajeWizard() {
   const [extractoraId, setExtractoraId] = useState<string>('');
   const [observaciones, setObservaciones] = useState<string>('');
 
-  // ── Data state ────────────────────────────────────────────────────
   const [empresas, setEmpresas] = useState<EmpresaTransportadoraSelect[]>([]);
   const [transportadores, setTransportadores] = useState<TransportadorSelect[]>([]);
   const [extractoras, setExtractoras] = useState<ExtractoraSelect[]>([]);
@@ -51,7 +39,6 @@ export default function NuevoViajeWizard() {
   const [loadingTransp, setLoadingTransp] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
-  // ── 1) Cargar empresas + extractoras al montar (paralelo) ────────
   useEffect(() => {
     (async () => {
       try {
@@ -69,33 +56,21 @@ export default function NuevoViajeWizard() {
     })();
   }, []);
 
-  // ── 2) Al cambiar empresa, cargar sus transportadores ─────────────
   useEffect(() => {
-    if (!empresaId) {
-      setTransportadores([]);
-      setTransportadorId('');
-      return;
-    }
+    if (!empresaId) { setTransportadores([]); setTransportadorId(''); return; }
     setLoadingTransp(true);
     setTransportadorId('');
     empresasTransportadorasApi
       .transportadoresDe(Number(empresaId))
       .then((r) => setTransportadores(r.data ?? []))
-      .catch((err) =>
-        toast.error(err instanceof Error ? err.message : 'Error al cargar conductores'),
-      )
+      .catch((err) => toast.error(err instanceof Error ? err.message : 'Error al cargar conductores'))
       .finally(() => setLoadingTransp(false));
   }, [empresaId]);
 
-  // ── 3) Derivados: auto-fill placa desde transportador ─────────────
   const transportadorSel = transportadores.find((t) => String(t.id) === transportadorId);
   const placaVehiculo = transportadorSel?.placa_vehiculo ?? '';
+  const puedeGuardar = Boolean(fecha && horaSalida && empresaId && transportadorId && extractoraId);
 
-  const puedeGuardar = Boolean(
-    fecha && horaSalida && empresaId && transportadorId && extractoraId,
-  );
-
-  // ── 4) Submit — POST /viajes ──────────────────────────────────────
   const guardarViaje = async () => {
     if (!puedeGuardar) return;
     setGuardando(true);
@@ -119,27 +94,18 @@ export default function NuevoViajeWizard() {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate('/viajes')}
-              className="rounded-xl"
-            >
+            <Button variant="ghost" size="icon" onClick={() => navigate('/viajes')} className="rounded-xl">
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <h1 className="text-4xl font-bold text-foreground">Nuevo Viaje</h1>
           </div>
-          <p className="text-muted-foreground ml-14">
-            Registra un nuevo despacho de fruto
-          </p>
+          <p className="text-muted-foreground ml-14">Registra un nuevo despacho de fruto</p>
         </div>
       </div>
 
-      {/* Formulario */}
       <div className="max-w-5xl mx-auto">
         <Card className="border-border">
           <CardHeader>
@@ -160,112 +126,50 @@ export default function NuevoViajeWizard() {
               </div>
             ) : (
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {/* Fecha */}
                 <div className="space-y-2">
                   <Label htmlFor="fecha">Fecha del Viaje *</Label>
-                  <Input
-                    id="fecha"
-                    type="date"
-                    value={fecha}
-                    onChange={(e) => setFecha(e.target.value)}
-                  />
+                  <Input id="fecha" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
                 </div>
-
-                {/* Transportador (empresa) */}
                 <div className="space-y-2">
                   <Label htmlFor="empresa">Transportador *</Label>
                   <Select value={empresaId} onValueChange={setEmpresaId}>
-                    <SelectTrigger id="empresa">
-                      <SelectValue placeholder="Seleccionar transportador..." />
-                    </SelectTrigger>
+                    <SelectTrigger id="empresa"><SelectValue placeholder="Seleccionar transportador..." /></SelectTrigger>
                     <SelectContent>
-                      {empresas.map((e) => (
-                        <SelectItem key={e.id} value={String(e.id)}>
-                          {e.razon_social}
-                        </SelectItem>
-                      ))}
+                      {empresas.map((e) => (<SelectItem key={e.id} value={String(e.id)}>{e.razon_social}</SelectItem>))}
                     </SelectContent>
                   </Select>
                 </div>
-
-                {/* Conductor */}
                 <div className="space-y-2">
                   <Label htmlFor="conductor">Conductor *</Label>
-                  <Select
-                    value={transportadorId}
-                    onValueChange={setTransportadorId}
-                    disabled={!empresaId || loadingTransp}
-                  >
+                  <Select value={transportadorId} onValueChange={setTransportadorId} disabled={!empresaId || loadingTransp}>
                     <SelectTrigger id="conductor">
-                      <SelectValue
-                        placeholder={
-                          !empresaId
-                            ? 'Selecciona un transportador primero'
-                            : loadingTransp
-                              ? 'Cargando...'
-                              : 'Seleccionar conductor...'
-                        }
-                      />
+                      <SelectValue placeholder={!empresaId ? 'Selecciona transportador primero' : loadingTransp ? 'Cargando...' : 'Seleccionar conductor...'} />
                     </SelectTrigger>
                     <SelectContent>
-                      {transportadores.map((t) => (
-                        <SelectItem key={t.id} value={String(t.id)}>
-                          {t.nombres} {t.apellidos}
-                        </SelectItem>
-                      ))}
+                      {transportadores.map((t) => (<SelectItem key={t.id} value={String(t.id)}>{t.nombres} {t.apellidos}</SelectItem>))}
                     </SelectContent>
                   </Select>
                 </div>
-
-                {/* Placa (auto-fill) */}
                 <div className="space-y-2">
                   <Label htmlFor="placa">Placa del Vehículo *</Label>
-                  <Input
-                    id="placa"
-                    placeholder="Selecciona un conductor"
-                    value={placaVehiculo}
-                    disabled
-                    className="bg-muted"
-                  />
+                  <Input id="placa" placeholder="Selecciona un conductor" value={placaVehiculo} disabled className="bg-muted" />
                 </div>
-
-                {/* Extractora */}
                 <div className="space-y-2">
                   <Label htmlFor="extractora">Extractora Destino *</Label>
                   <Select value={extractoraId} onValueChange={setExtractoraId}>
-                    <SelectTrigger id="extractora">
-                      <SelectValue placeholder="Seleccionar extractora..." />
-                    </SelectTrigger>
+                    <SelectTrigger id="extractora"><SelectValue placeholder="Seleccionar extractora..." /></SelectTrigger>
                     <SelectContent>
-                      {extractoras.map((e) => (
-                        <SelectItem key={e.id} value={String(e.id)}>
-                          {e.razon_social}
-                        </SelectItem>
-                      ))}
+                      {extractoras.map((e) => (<SelectItem key={e.id} value={String(e.id)}>{e.razon_social}</SelectItem>))}
                     </SelectContent>
                   </Select>
                 </div>
-
-                {/* Hora */}
                 <div className="space-y-2">
                   <Label htmlFor="hora">Hora de Salida *</Label>
-                  <Input
-                    id="hora"
-                    type="time"
-                    value={horaSalida}
-                    onChange={(e) => setHoraSalida(e.target.value)}
-                  />
+                  <Input id="hora" type="time" value={horaSalida} onChange={(e) => setHoraSalida(e.target.value)} />
                 </div>
-
-                {/* Observaciones */}
                 <div className="space-y-2 md:col-span-2 lg:col-span-3">
                   <Label htmlFor="observaciones">Observaciones</Label>
-                  <Input
-                    id="observaciones"
-                    placeholder="Opcional..."
-                    value={observaciones}
-                    onChange={(e) => setObservaciones(e.target.value)}
-                  />
+                  <Input id="observaciones" placeholder="Opcional..." value={observaciones} onChange={(e) => setObservaciones(e.target.value)} />
                 </div>
               </div>
             )}
@@ -273,19 +177,10 @@ export default function NuevoViajeWizard() {
         </Card>
 
         <div className="flex justify-end gap-3 mt-6">
-          <Button
-            variant="outline"
-            onClick={() => navigate('/viajes')}
-            className="gap-2"
-            disabled={guardando}
-          >
+          <Button variant="outline" onClick={() => navigate('/viajes')} className="gap-2" disabled={guardando}>
             <ArrowLeft className="h-4 w-4" /> Cancelar
           </Button>
-          <Button
-            onClick={guardarViaje}
-            disabled={!puedeGuardar || guardando}
-            className="gap-2 bg-success hover:bg-success/90"
-          >
+          <Button onClick={guardarViaje} disabled={!puedeGuardar || guardando} className="gap-2 bg-success hover:bg-success/90">
             {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
             {guardando ? 'Creando...' : 'Crear Viaje'}
           </Button>

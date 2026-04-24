@@ -25,7 +25,6 @@ import {
 } from '../../../api/viajes';
 import { toast } from 'sonner';
 
-// ─── Mapeos de display ──────────────────────────────────────────────
 const LABEL_ESTADO: Record<EstadoViajeApi, string> = {
   CREADO: 'Creado',
   EN_CAMINO: 'En Camino',
@@ -42,7 +41,6 @@ function mapPeriodoToAPI(periodo: string): 'SEMANAL' | 'MENSUAL' | 'ANUAL' | 'CU
   return 'MENSUAL';
 }
 
-// ─── Badge helpers ──────────────────────────────────────────────────
 function EstadoBadge({ estado }: { estado: EstadoViajeApi }) {
   switch (estado) {
     case 'CREADO':
@@ -72,16 +70,13 @@ function EstadoBadge({ estado }: { estado: EstadoViajeApi }) {
   }
 }
 
-// ─── Componente principal ──────────────────────────────────────────
 export default function Viajes() {
   const navigate = useNavigate();
 
-  // KPIs: período
   const [periodoKPI, setPeriodoKPI] = useState<'semanal' | 'quincenal' | 'mensual' | 'personalizado'>('mensual');
   const [fechaInicioKPI, setFechaInicioKPI] = useState('');
   const [fechaFinKPI, setFechaFinKPI] = useState('');
 
-  // Filtros de listado
   const [filtros, setFiltros] = useState({
     remision: '',
     fecha: '',
@@ -93,86 +88,65 @@ export default function Viajes() {
   const setFiltro = (campo: keyof typeof filtros, valor: string) =>
     setFiltros((prev) => ({ ...prev, [campo]: valor as any }));
 
-  // Data state
   const [viajes, setViajes] = useState<Viaje[]>([]);
   const [indicadores, setIndicadores] = useState<IndicadoresViajes | null>(null);
   const [loadingViajes, setLoadingViajes] = useState(true);
   const [loadingIndic, setLoadingIndic] = useState(true);
 
-  // ── Cargar indicadores según período ──────────────────────────
   useEffect(() => {
     (async () => {
       setLoadingIndic(true);
       try {
         let params: any = {};
         if (periodoKPI === 'personalizado') {
-          if (!fechaInicioKPI || !fechaFinKPI) {
-            setLoadingIndic(false);
-            return;
-          }
+          if (!fechaInicioKPI || !fechaFinKPI) { setLoadingIndic(false); return; }
           params = { periodo: 'CUSTOM', desde: fechaInicioKPI, hasta: fechaFinKPI };
         } else if (periodoKPI === 'quincenal') {
           const hoy = new Date();
           const ini = new Date(hoy);
           ini.setDate(hoy.getDate() - 15);
-          params = {
-            periodo: 'CUSTOM',
-            desde: ini.toISOString().split('T')[0],
-            hasta: hoy.toISOString().split('T')[0],
-          };
+          params = { periodo: 'CUSTOM', desde: ini.toISOString().split('T')[0], hasta: hoy.toISOString().split('T')[0] };
         } else {
           params = { periodo: mapPeriodoToAPI(periodoKPI) };
         }
         const res = await viajesApi.indicadores(params);
         setIndicadores(res.data);
-      } catch {
-        setIndicadores(null);
-      } finally {
-        setLoadingIndic(false);
-      }
+      } catch { setIndicadores(null); }
+      finally { setLoadingIndic(false); }
     })();
   }, [periodoKPI, fechaInicioKPI, fechaFinKPI]);
 
-  // ── Cargar viajes ──────────────────────────────────────────────
   const cargarViajes = async () => {
     setLoadingViajes(true);
     try {
       const params: any = { per_page: 100 };
-      if (filtros.remision)  params.remision  = filtros.remision;
-      if (filtros.fecha)     params.fecha     = filtros.fecha;
-      if (filtros.estado)    params.estado    = filtros.estado;
-      if (filtros.vehiculo)  params.vehiculo  = filtros.vehiculo;
+      if (filtros.remision) params.remision = filtros.remision;
+      if (filtros.fecha) params.fecha = filtros.fecha;
+      if (filtros.estado) params.estado = filtros.estado;
+      if (filtros.vehiculo) params.vehiculo = filtros.vehiculo;
       if (filtros.conductor) params.conductor = filtros.conductor;
       const res = await viajesApi.listar(params);
       setViajes(res.data ?? []);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al cargar viajes');
-    } finally {
-      setLoadingViajes(false);
-    }
+    } finally { setLoadingViajes(false); }
   };
 
   useEffect(() => {
     const t = setTimeout(cargarViajes, 300);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtros.remision, filtros.fecha, filtros.estado, filtros.vehiculo, filtros.conductor]);
 
-  // Filtro de extractora en cliente (el API no lo tiene por nombre)
   const viajesFiltrados = useMemo(
-    () =>
-      viajes.filter((v) =>
-        (v.extractora?.razon_social ?? '')
-          .toLowerCase()
-          .includes(filtros.extractora.toLowerCase()),
-      ),
+    () => viajes.filter((v) =>
+      (v.extractora?.razon_social ?? '').toLowerCase().includes(filtros.extractora.toLowerCase())
+    ),
     [viajes, filtros.extractora],
   );
 
-  // ── Eliminar viaje ──────────────────────────────────────────────
   const eliminarViaje = async (viajeId: number, event: React.MouseEvent) => {
     event.stopPropagation();
-    if (!window.confirm('¿Estás seguro de que deseas eliminar este viaje? Esta acción no se puede deshacer.')) return;
+    if (!window.confirm('¿Estás seguro de que deseas eliminar este viaje?')) return;
     try {
       await viajesApi.eliminar(viajeId);
       toast.success('Viaje eliminado exitosamente');
@@ -182,29 +156,22 @@ export default function Viajes() {
     }
   };
 
-  // ── KPIs derivados ─────────────────────────────────────────────
-  const totalViajes    = indicadores?.total_viajes    ?? viajes.length;
-  const viajesEnCamino = indicadores?.en_camino       ?? viajes.filter((v) => v.estado === 'EN_CAMINO').length;
-  const viajesFinaliz  = indicadores?.finalizados     ?? viajes.filter((v) => v.estado === 'FINALIZADO').length;
-  const pesoTotal      = indicadores?.kilogramos_totales
+  const totalViajes = indicadores?.total_viajes ?? viajes.length;
+  const viajesEnCamino = indicadores?.en_camino ?? viajes.filter((v) => v.estado === 'EN_CAMINO').length;
+  const viajesFinaliz = indicadores?.finalizados ?? viajes.filter((v) => v.estado === 'FINALIZADO').length;
+  const pesoTotal = indicadores?.kilogramos_totales
     ? parseFloat(indicadores.kilogramos_totales)
     : viajes.reduce((s, v) => s + (parseFloat(String(v.peso_viaje ?? 0)) || 0), 0);
-  const gajosTotal     = indicadores?.gajos_totales   ?? viajes.reduce((s, v) => s + (v.cantidad_gajos_total ?? 0), 0);
+  const gajosTotal = indicadores?.gajos_totales ?? viajes.reduce((s, v) => s + (v.cantidad_gajos_total ?? 0), 0);
 
   return (
     <div className="space-y-8">
-      {/* Header */}
       <div className="flex items-start justify-between mb-8">
         <div>
           <h1 className="text-4xl font-bold text-foreground">Viajes</h1>
-          <p className="text-muted-foreground mt-2">
-            Gestión de despachos de fruto hacia la extractora
-          </p>
+          <p className="text-muted-foreground mt-2">Gestión de despachos de fruto hacia la extractora</p>
         </div>
-        <Button
-          onClick={() => navigate('/viajes/nuevo')}
-          className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20"
-        >
+        <Button onClick={() => navigate('/viajes/nuevo')} className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20">
           <Plus className="h-5 w-5" /> Nuevo Viaje
         </Button>
       </div>
@@ -233,7 +200,6 @@ export default function Viajes() {
             {loadingIndic && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
           </div>
         </div>
-
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           <Card className="glass-subtle border-border hover:shadow-lg transition-all duration-300">
             <CardContent className="p-6">
@@ -292,7 +258,6 @@ export default function Viajes() {
           <h2 className="text-2xl font-bold mb-2">Viajes Registrados</h2>
           <p className="text-muted-foreground">Despachos de fruto hacia extractoras</p>
         </div>
-
         <Card className="glass-subtle border-border">
           <CardContent className="pt-6">
             {loadingViajes ? (
@@ -307,9 +272,7 @@ export default function Viajes() {
                 </div>
                 <h3 className="mb-2 text-lg font-semibold">No hay viajes registrados</h3>
                 <p className="mb-4 text-sm text-muted-foreground">Comienza creando tu primer viaje de despacho</p>
-                <Button onClick={() => navigate('/viajes/nuevo')}>
-                  <Plus className="mr-2 h-4 w-4" /> Crear Primer Viaje
-                </Button>
+                <Button onClick={() => navigate('/viajes/nuevo')}><Plus className="mr-2 h-4 w-4" /> Crear Primer Viaje</Button>
               </div>
             ) : (
               <div className="space-y-4">
@@ -319,19 +282,16 @@ export default function Viajes() {
                     <label className="text-xs font-medium text-muted-foreground">Remisión</label>
                     <div className="relative">
                       <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input placeholder="REM-2026-001" value={filtros.remision}
-                        onChange={(e) => setFiltro('remision', e.target.value)} className="pl-8 h-9" />
+                      <Input placeholder="REM-2026-001" value={filtros.remision} onChange={(e) => setFiltro('remision', e.target.value)} className="pl-8 h-9" />
                     </div>
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-muted-foreground">Fecha</label>
-                    <Input type="date" value={filtros.fecha}
-                      onChange={(e) => setFiltro('fecha', e.target.value)} className="h-9" />
+                    <Input type="date" value={filtros.fecha} onChange={(e) => setFiltro('fecha', e.target.value)} className="h-9" />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-muted-foreground">Estado</label>
-                    <select value={filtros.estado}
-                      onChange={(e) => setFiltro('estado', e.target.value)}
+                    <select value={filtros.estado} onChange={(e) => setFiltro('estado', e.target.value)}
                       className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                       <option value="">Todos</option>
                       <option value="CREADO">Creado</option>
@@ -344,24 +304,21 @@ export default function Viajes() {
                     <label className="text-xs font-medium text-muted-foreground">Vehículo</label>
                     <div className="relative">
                       <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input placeholder="ABC-123" value={filtros.vehiculo}
-                        onChange={(e) => setFiltro('vehiculo', e.target.value)} className="pl-8 h-9" />
+                      <Input placeholder="ABC-123" value={filtros.vehiculo} onChange={(e) => setFiltro('vehiculo', e.target.value)} className="pl-8 h-9" />
                     </div>
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-muted-foreground">Conductor</label>
                     <div className="relative">
                       <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input placeholder="Nombre" value={filtros.conductor}
-                        onChange={(e) => setFiltro('conductor', e.target.value)} className="pl-8 h-9" />
+                      <Input placeholder="Nombre" value={filtros.conductor} onChange={(e) => setFiltro('conductor', e.target.value)} className="pl-8 h-9" />
                     </div>
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-muted-foreground">Extractora</label>
                     <div className="relative">
                       <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input placeholder="Extractora" value={filtros.extractora}
-                        onChange={(e) => setFiltro('extractora', e.target.value)} className="pl-8 h-9" />
+                      <Input placeholder="Extractora" value={filtros.extractora} onChange={(e) => setFiltro('extractora', e.target.value)} className="pl-8 h-9" />
                     </div>
                   </div>
                 </div>
@@ -383,26 +340,19 @@ export default function Viajes() {
                     </thead>
                     <tbody>
                       {viajesFiltrados.length === 0 ? (
-                        <tr>
-                          <td colSpan={8} className="text-center py-12">
-                            <div className="flex flex-col items-center gap-2">
-                              <Search className="h-8 w-8 text-muted-foreground" />
-                              <p className="text-sm text-muted-foreground">No se encontraron viajes con los filtros aplicados</p>
-                            </div>
-                          </td>
-                        </tr>
+                        <tr><td colSpan={8} className="text-center py-12">
+                          <div className="flex flex-col items-center gap-2">
+                            <Search className="h-8 w-8 text-muted-foreground" />
+                            <p className="text-sm text-muted-foreground">No se encontraron viajes con los filtros aplicados</p>
+                          </div>
+                        </td></tr>
                       ) : (
                         viajesFiltrados.map((v, index) => {
                           const fecha = parseFechaAPI(v.fecha_viaje);
                           const peso = v.peso_viaje ? parseFloat(String(v.peso_viaje)) : null;
                           return (
-                            <tr key={v.id}
-                              className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors ${
-                                index % 2 === 0 ? 'bg-background' : 'bg-muted/5'
-                              }`}>
-                              <td className="p-4">
-                                <span className="text-sm font-medium text-foreground">{v.remision}</span>
-                              </td>
+                            <tr key={v.id} className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors ${index % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}>
+                              <td className="p-4"><span className="text-sm font-medium text-foreground">{v.remision}</span></td>
                               <td className="p-4">
                                 <div className="flex flex-col">
                                   <span className="text-sm font-medium text-foreground">
@@ -423,9 +373,7 @@ export default function Viajes() {
                               <td className="p-4">
                                 <div className="flex items-center gap-1.5">
                                   <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-                                  <span className="text-sm font-medium text-foreground">
-                                    {v.extractora?.razon_social ?? '—'}
-                                  </span>
+                                  <span className="text-sm font-medium text-foreground">{v.extractora?.razon_social ?? '—'}</span>
                                 </div>
                               </td>
                               <td className="p-4 text-center">
@@ -434,8 +382,7 @@ export default function Viajes() {
                                 </span>
                               </td>
                               <td className="p-4 text-right">
-                                {peso
-                                  ? <span className="text-sm font-semibold text-success">{peso.toLocaleString()}</span>
+                                {peso ? <span className="text-sm font-semibold text-success">{peso.toLocaleString()}</span>
                                   : <span className="text-xs text-muted-foreground">-</span>}
                               </td>
                               <td className="p-4">
@@ -444,26 +391,22 @@ export default function Viajes() {
                                     <>
                                       <Button size="sm" variant="outline"
                                         onClick={() => navigate(`/viajes/${v.id}/conteo`)}
-                                        className="hover:bg-success/10 hover:text-success hover:border-success"
-                                        title="Conteo de Cosecha">
+                                        className="hover:bg-success/10 hover:text-success hover:border-success" title="Conteo de Cosecha">
                                         <Calculator className="h-4 w-4" />
                                       </Button>
                                       <Button size="sm" variant="outline" asChild
-                                        className="hover:bg-primary/10 hover:text-primary hover:border-primary"
-                                        title="Editar">
+                                        className="hover:bg-primary/10 hover:text-primary hover:border-primary" title="Editar">
                                         <Link to={`/viajes/${v.id}`}><Edit className="h-4 w-4" /></Link>
                                       </Button>
                                       <Button size="sm" variant="outline"
                                         onClick={(e) => eliminarViaje(v.id, e)}
-                                        className="hover:bg-destructive/10 hover:text-destructive hover:border-destructive"
-                                        title="Eliminar">
+                                        className="hover:bg-destructive/10 hover:text-destructive hover:border-destructive" title="Eliminar">
                                         <Trash2 className="h-4 w-4" />
                                       </Button>
                                     </>
                                   ) : (
                                     <Button size="sm" variant="outline" asChild
-                                      className="hover:bg-primary/10 hover:text-primary hover:border-primary"
-                                      title="Visualizar">
+                                      className="hover:bg-primary/10 hover:text-primary hover:border-primary" title="Visualizar">
                                       <Link to={`/viajes/${v.id}`}><Eye className="h-4 w-4" /></Link>
                                     </Button>
                                   )}
@@ -476,20 +419,10 @@ export default function Viajes() {
                     </tbody>
                   </table>
                 </div>
-
                 {viajesFiltrados.length > 0 && (
                   <div className="flex items-center justify-between text-sm text-muted-foreground px-2">
-                    <p>
-                      Mostrando <span className="font-medium text-foreground">{viajesFiltrados.length}</span> de{' '}
-                      <span className="font-medium text-foreground">{viajes.length}</span> viajes
-                    </p>
-                    <p>
-                      Total: <span className="font-semibold text-success">
-                        {viajesFiltrados
-                          .reduce((s, v) => s + (parseFloat(String(v.peso_viaje ?? 0)) || 0), 0)
-                          .toLocaleString()} kg
-                      </span>
-                    </p>
+                    <p>Mostrando <span className="font-medium text-foreground">{viajesFiltrados.length}</span> de <span className="font-medium text-foreground">{viajes.length}</span> viajes</p>
+                    <p>Total: <span className="font-semibold text-success">{viajesFiltrados.reduce((s, v) => s + (parseFloat(String(v.peso_viaje ?? 0)) || 0), 0).toLocaleString()} kg</span></p>
                   </div>
                 )}
               </div>

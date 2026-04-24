@@ -197,7 +197,7 @@ export default function NuevoColaboradorWizard() {
         lugarExpedicion: d.lugar_expedicion ?? '',
         cargo: d.cargo ?? '',
         predioAsignado: d.predio?.id ? String(d.predio.id) : '',
-        modalidadPago: d.modalidad_pago ?? 'FIJO',
+        modalidadPago: (d.modalidad_pago === 'PRODUCCION' ? 'VARIABLE' : d.modalidad_pago) ?? 'FIJO',
         salarioBase: parseFloat(d.salario_base ?? '0'),
         fechaContratacion: d.fecha_ingreso ?? '',
         fechaFinalizacion: d.fecha_retiro ?? '',
@@ -242,7 +242,7 @@ export default function NuevoColaboradorWizard() {
     switch (etapa) {
       case 1: return !!formData.primerNombre.trim() && !!formData.primerApellido.trim();
       case 2: return !!formData.numeroDocumento.trim() && !!formData.fechaExpedicion && !!formData.fechaNacimiento;
-      case 3: return !!formData.cargo.trim() && formData.salarioBase > 0 && !!formData.fechaContratacion;
+      case 3: return !!formData.cargo.trim() && (formData.modalidadPago === 'VARIABLE' || formData.salarioBase > 0) && !!formData.fechaContratacion;
       default: return true;
     }
   };
@@ -324,7 +324,7 @@ export default function NuevoColaboradorWizard() {
       if (!formData.fechaNacimiento)        { toast.error('La fecha de nacimiento es obligatoria'); setEtapaActual(2); return; }
       if (!formData.fechaExpedicion)        { toast.error('La fecha de expedición es obligatoria'); setEtapaActual(2); return; }
       if (!formData.cargo.trim())           { toast.error('El cargo es obligatorio');           setEtapaActual(3); return; }
-      if (formData.salarioBase <= 0)        { toast.error('El salario base debe ser mayor a 0'); setEtapaActual(3); return; }
+      if (formData.modalidadPago === 'FIJO' && formData.salarioBase <= 0) { toast.error('El salario base debe ser mayor a 0 para modalidad Fijo'); setEtapaActual(3); return; }
       if (!formData.fechaContratacion)      { toast.error('La fecha de ingreso es obligatoria'); setEtapaActual(3); return; }
     }
 
@@ -341,8 +341,8 @@ export default function NuevoColaboradorWizard() {
       body.fecha_nacimiento           = formData.fechaNacimiento;
       body.fecha_expedicion_documento = formData.fechaExpedicion;
       body.cargo                      = formData.cargo.trim();
-      body.salario_base               = formData.salarioBase;
-      body.modalidad_pago             = formData.modalidadPago;
+      body.salario_base               = formData.modalidadPago === 'VARIABLE' ? 0 : formData.salarioBase;
+      body.modalidad_pago             = formData.modalidadPago === 'VARIABLE' ? 'PRODUCCION' : formData.modalidadPago;
       body.fecha_ingreso              = formData.fechaContratacion;
     } else {
       // En edición enviar solo los que tienen valor
@@ -354,7 +354,7 @@ export default function NuevoColaboradorWizard() {
       if (formData.fechaExpedicion)        body.fecha_expedicion_documento = formData.fechaExpedicion;
       if (formData.cargo.trim())           body.cargo                      = formData.cargo.trim();
       if (formData.salarioBase > 0)        body.salario_base               = formData.salarioBase;
-      if (formData.modalidadPago)          body.modalidad_pago             = formData.modalidadPago;
+      if (formData.modalidadPago)          body.modalidad_pago             = formData.modalidadPago === 'VARIABLE' ? 'PRODUCCION' : formData.modalidadPago;
       if (formData.fechaContratacion)      body.fecha_ingreso              = formData.fechaContratacion;
       body.estado = formData.estado;
     }
@@ -577,8 +577,24 @@ export default function NuevoColaboradorWizard() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Salario Base <span className="text-destructive">*</span></Label>
-                  <Input type="number" placeholder="1300000" value={formData.salarioBase || ''} onChange={e => handleInputChange('salarioBase', parseFloat(e.target.value) || 0)} />
+                  <Label>Salario Base {formData.modalidadPago === 'FIJO' && <span className="text-destructive">*</span>}</Label>
+                  {formData.modalidadPago === 'VARIABLE' ? (
+                    <Input type="number" placeholder="Opcional para variable" value={formData.salarioBase || ''} onChange={e => handleInputChange('salarioBase', parseFloat(e.target.value) || 0)} />
+                  ) : (
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">$</span>
+                      <Input
+                        type="text"
+                        placeholder="1.300.000"
+                        className="pl-7"
+                        value={formData.salarioBase > 0 ? formData.salarioBase.toLocaleString('es-CO') : ''}
+                        onChange={e => {
+                          const raw = e.target.value.replace(/[^0-9]/g, '');
+                          handleInputChange('salarioBase', parseInt(raw) || 0);
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
                 {isEditMode && (
                   <div className="flex items-center justify-between p-4 border border-border rounded-lg">
