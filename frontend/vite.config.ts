@@ -18,9 +18,15 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // Redirigir llamadas /api al backend durante desarrollo
+      // Backend principal de Laravel (tenant, colaboradores, viajes, etc.)
       '/api': {
         target: process.env.VITE_API_URL ?? 'http://agro-campo.test',
+        changeOrigin: true,
+        secure: false,
+      },
+      // Backend del Agente IA (FastAPI en otra máquina)
+      '/agro-agente': {
+        target: process.env.VITE_AGRO_AGENTE_TARGET ?? 'http://31.97.7.50',
         changeOrigin: true,
         secure: false,
       },

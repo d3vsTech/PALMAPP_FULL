@@ -1,11 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { Textarea } from '../../components/ui/textarea';
-import { Badge } from '../../components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -13,124 +11,110 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../components/ui/select';
+import { ArrowLeft, Check, Truck, Loader2 } from 'lucide-react';
 import {
-  ArrowLeft,
-  ArrowRight,
-  Check,
-  Truck,
-  MapPin,
-  Package,
-  Trees,
-} from 'lucide-react';
+  empresasTransportadorasApi,
+  extractorasApi,
+  viajesApi,
+  type EmpresaTransportadoraSelect,
+  type TransportadorSelect,
+  type ExtractoraSelect,
+} from '../../../api/viajes';
+import { toast } from 'sonner';
 
-// Etapas del wizard
-const ETAPAS = [
-  { numero: 1, nombre: 'General' }
-];
-
-interface Lote {
-  id: string;
-  nombre: string;
-}
-
-interface Transportador {
-  id: string;
-  nombre: string;
-  conductor: string;
-  placaVehiculo: string;
-}
-
-const lotesMock: Lote[] = [
-  { id: 'l1', nombre: 'Lote 1 - Norte' },
-  { id: 'l2', nombre: 'Lote 2 - Sur' },
-  { id: 'l3', nombre: 'Lote 3 - Este' },
-  { id: 'l4', nombre: 'Lote 4 - Oeste' },
-];
-
-const transportadoresMock: Transportador[] = [
-  { id: 't1', nombre: 'Transportes del Valle', conductor: 'Carlos Rodríguez', placaVehiculo: 'ABC-123' },
-  { id: 't2', nombre: 'Transportes Rápidos', conductor: 'Juan Pérez', placaVehiculo: 'XYZ-789' },
-  { id: 't3', nombre: 'Logística Express', conductor: 'Miguel Ángel', placaVehiculo: 'DEF-456' },
-  { id: 't4', nombre: 'Carga Segura', conductor: 'Pedro López', placaVehiculo: 'GHI-321' },
-];
-
-const extractorasMock = [
-  'Extractora San Miguel',
-  'Extractora Santa Rosa',
-  'Extractora La Palma',
-];
-
+/**
+ * Nuevo Viaje — §4.1 del API doc
+ *
+ * Flujo de 3 selects encadenados:
+ *   1. Al montar: GET /empresas-transportadoras/select + GET /extractoras/select (en paralelo)
+ *   2. Al elegir empresa: GET /empresas-transportadoras/{id}/transportadores
+ *   3. Al elegir conductor: auto-fill placa (disabled)
+ *   4. Submit: POST /viajes con { fecha_viaje, hora_salida, transportador_id, extractora_id, es_homogeneo: true }
+ *      El backend snapshoteá empresa_transportadora_id, placa_vehiculo y nombre_conductor automáticamente.
+ */
 export default function NuevoViajeWizard() {
   const navigate = useNavigate();
-  const [etapaActual, setEtapaActual] = useState(1);
 
-  const [formData, setFormData] = useState({
-    fecha: new Date().toISOString().split('T')[0],
-    placaVehiculo: '',
-    conductor: '',
-    transportador: '',
-    extractora: '',
-    horaSalida: '',
-    lotesSeleccionados: [] as string[],
-    gajosEstimados: '',
-    peso: '',
-    observaciones: '',
-  });
+  // ── Form state ────────────────────────────────────────────────────
+  const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
+  const [horaSalida, setHoraSalida] = useState('');
+  const [empresaId, setEmpresaId] = useState<string>('');
+  const [transportadorId, setTransportadorId] = useState<string>('');
+  const [extractoraId, setExtractoraId] = useState<string>('');
+  const [observaciones, setObservaciones] = useState<string>('');
 
-  const handleInputChange = (field: string, value: string | string[]) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
+  // ── Data state ────────────────────────────────────────────────────
+  const [empresas, setEmpresas] = useState<EmpresaTransportadoraSelect[]>([]);
+  const [transportadores, setTransportadores] = useState<TransportadorSelect[]>([]);
+  const [extractoras, setExtractoras] = useState<ExtractoraSelect[]>([]);
+  const [loadingInit, setLoadingInit] = useState(true);
+  const [loadingTransp, setLoadingTransp] = useState(false);
+  const [guardando, setGuardando] = useState(false);
 
-  const handleTransportadorChange = (transportadorId: string) => {
-    const transportador = transportadoresMock.find(t => t.id === transportadorId);
-    if (transportador) {
-      setFormData(prev => ({
-        ...prev,
-        transportador: transportadorId,
-        conductor: transportador.conductor,
-        placaVehiculo: transportador.placaVehiculo
-      }));
+  // ── 1) Cargar empresas + extractoras al montar (paralelo) ────────
+  useEffect(() => {
+    (async () => {
+      try {
+        const [empRes, extRes] = await Promise.all([
+          empresasTransportadorasApi.select(),
+          extractorasApi.select(),
+        ]);
+        setEmpresas(empRes.data ?? []);
+        setExtractoras(extRes.data ?? []);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Error al cargar datos');
+      } finally {
+        setLoadingInit(false);
+      }
+    })();
+  }, []);
+
+  // ── 2) Al cambiar empresa, cargar sus transportadores ─────────────
+  useEffect(() => {
+    if (!empresaId) {
+      setTransportadores([]);
+      setTransportadorId('');
+      return;
     }
-  };
+    setLoadingTransp(true);
+    setTransportadorId('');
+    empresasTransportadorasApi
+      .transportadoresDe(Number(empresaId))
+      .then((r) => setTransportadores(r.data ?? []))
+      .catch((err) =>
+        toast.error(err instanceof Error ? err.message : 'Error al cargar conductores'),
+      )
+      .finally(() => setLoadingTransp(false));
+  }, [empresaId]);
 
-  const toggleLote = (loteId: string) => {
-    setFormData(prev => ({
-      ...prev,
-      lotesSeleccionados: prev.lotesSeleccionados.includes(loteId)
-        ? prev.lotesSeleccionados.filter(id => id !== loteId)
-        : [...prev.lotesSeleccionados, loteId]
-    }));
-  };
+  // ── 3) Derivados: auto-fill placa desde transportador ─────────────
+  const transportadorSel = transportadores.find((t) => String(t.id) === transportadorId);
+  const placaVehiculo = transportadorSel?.placa_vehiculo ?? '';
 
-  const getLoteNombre = (loteId: string) => {
-    return lotesMock.find(l => l.id === loteId)?.nombre || loteId;
-  };
+  const puedeGuardar = Boolean(
+    fecha && horaSalida && empresaId && transportadorId && extractoraId,
+  );
 
-  // Navegación
-  const siguienteEtapa = () => {
-    if (etapaActual < ETAPAS.length) {
-      setEtapaActual(etapaActual + 1);
+  // ── 4) Submit — POST /viajes ──────────────────────────────────────
+  const guardarViaje = async () => {
+    if (!puedeGuardar) return;
+    setGuardando(true);
+    try {
+      const res = await viajesApi.crear({
+        fecha_viaje: fecha,
+        hora_salida: horaSalida,
+        transportador_id: Number(transportadorId),
+        extractora_id: Number(extractoraId),
+        observaciones: observaciones.trim() || null,
+        es_homogeneo: true,
+      });
+      toast.success(`Viaje creado: ${res.data.remision}`);
+      navigate('/viajes');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al crear el viaje');
+    } finally {
+      setGuardando(false);
     }
-  };
-
-  const etapaAnterior = () => {
-    if (etapaActual > 1) {
-      setEtapaActual(etapaActual - 1);
-    }
-  };
-
-  const irAEtapa = (numero: number) => {
-    setEtapaActual(numero);
-  };
-
-  // Validación
-  const puedeGuardar = formData.fecha !== '' && formData.placaVehiculo.trim() !== '' &&
-                       formData.conductor.trim() !== '' && formData.transportador.trim() !== '' &&
-                       formData.extractora !== '' && formData.horaSalida !== '';
-
-  const guardarViaje = () => {
-    console.log('Guardar viaje:', formData);
-    navigate('/viajes');
   };
 
   return (
@@ -165,115 +149,145 @@ export default function NuevoViajeWizard() {
               </div>
               <div>
                 <CardTitle>Información General</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Datos básicos del viaje
-                </p>
+                <p className="text-sm text-muted-foreground">Datos básicos del viaje</p>
               </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              <div className="space-y-2">
-                <Label htmlFor="fecha">Fecha del Viaje *</Label>
-                <Input
-                  id="fecha"
-                  type="date"
-                  value={formData.fecha}
-                  onChange={(e) => handleInputChange('fecha', e.target.value)}
-                />
+            {loadingInit ? (
+              <div className="flex items-center justify-center py-12 text-muted-foreground gap-3">
+                <Loader2 className="w-5 h-5 animate-spin" /> Cargando datos...
               </div>
+            ) : (
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {/* Fecha */}
+                <div className="space-y-2">
+                  <Label htmlFor="fecha">Fecha del Viaje *</Label>
+                  <Input
+                    id="fecha"
+                    type="date"
+                    value={fecha}
+                    onChange={(e) => setFecha(e.target.value)}
+                  />
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="transportador">Transportador *</Label>
-                <Select
-                  value={formData.transportador}
-                  onValueChange={handleTransportadorChange}
-                >
-                  <SelectTrigger id="transportador">
-                    <SelectValue placeholder="Seleccionar transportador..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {transportadoresMock.map((transportador) => (
-                      <SelectItem key={transportador.id} value={transportador.id}>
-                        {transportador.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                {/* Transportador (empresa) */}
+                <div className="space-y-2">
+                  <Label htmlFor="empresa">Transportador *</Label>
+                  <Select value={empresaId} onValueChange={setEmpresaId}>
+                    <SelectTrigger id="empresa">
+                      <SelectValue placeholder="Seleccionar transportador..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {empresas.map((e) => (
+                        <SelectItem key={e.id} value={String(e.id)}>
+                          {e.razon_social}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="conductor">Conductor *</Label>
-                <Input
-                  id="conductor"
-                  placeholder="Selecciona un transportador primero"
-                  value={formData.conductor}
-                  disabled
-                  className="bg-muted"
-                />
-              </div>
+                {/* Conductor */}
+                <div className="space-y-2">
+                  <Label htmlFor="conductor">Conductor *</Label>
+                  <Select
+                    value={transportadorId}
+                    onValueChange={setTransportadorId}
+                    disabled={!empresaId || loadingTransp}
+                  >
+                    <SelectTrigger id="conductor">
+                      <SelectValue
+                        placeholder={
+                          !empresaId
+                            ? 'Selecciona un transportador primero'
+                            : loadingTransp
+                              ? 'Cargando...'
+                              : 'Seleccionar conductor...'
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {transportadores.map((t) => (
+                        <SelectItem key={t.id} value={String(t.id)}>
+                          {t.nombres} {t.apellidos}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="placaVehiculo">Placa del Vehículo *</Label>
-                <Input
-                  id="placaVehiculo"
-                  placeholder="Selecciona un transportador primero"
-                  value={formData.placaVehiculo}
-                  disabled
-                  className="bg-muted"
-                />
-              </div>
+                {/* Placa (auto-fill) */}
+                <div className="space-y-2">
+                  <Label htmlFor="placa">Placa del Vehículo *</Label>
+                  <Input
+                    id="placa"
+                    placeholder="Selecciona un conductor"
+                    value={placaVehiculo}
+                    disabled
+                    className="bg-muted"
+                  />
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="extractora">Extractora Destino *</Label>
-                <Select
-                  value={formData.extractora}
-                  onValueChange={(value) => handleInputChange('extractora', value)}
-                >
-                  <SelectTrigger id="extractora">
-                    <SelectValue placeholder="Seleccionar extractora..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {extractorasMock.map((extractora) => (
-                      <SelectItem key={extractora} value={extractora}>
-                        {extractora}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                {/* Extractora */}
+                <div className="space-y-2">
+                  <Label htmlFor="extractora">Extractora Destino *</Label>
+                  <Select value={extractoraId} onValueChange={setExtractoraId}>
+                    <SelectTrigger id="extractora">
+                      <SelectValue placeholder="Seleccionar extractora..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {extractoras.map((e) => (
+                        <SelectItem key={e.id} value={String(e.id)}>
+                          {e.razon_social}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="horaSalida">Hora de Salida *</Label>
-                <Input
-                  id="horaSalida"
-                  type="time"
-                  value={formData.horaSalida}
-                  onChange={(e) => handleInputChange('horaSalida', e.target.value)}
-                />
+                {/* Hora */}
+                <div className="space-y-2">
+                  <Label htmlFor="hora">Hora de Salida *</Label>
+                  <Input
+                    id="hora"
+                    type="time"
+                    value={horaSalida}
+                    onChange={(e) => setHoraSalida(e.target.value)}
+                  />
+                </div>
+
+                {/* Observaciones */}
+                <div className="space-y-2 md:col-span-2 lg:col-span-3">
+                  <Label htmlFor="observaciones">Observaciones</Label>
+                  <Input
+                    id="observaciones"
+                    placeholder="Opcional..."
+                    value={observaciones}
+                    onChange={(e) => setObservaciones(e.target.value)}
+                  />
+                </div>
               </div>
-            </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* Botones de acción */}
         <div className="flex justify-end gap-3 mt-6">
           <Button
             variant="outline"
             onClick={() => navigate('/viajes')}
             className="gap-2"
+            disabled={guardando}
           >
-            <ArrowLeft className="h-4 w-4" />
-            Cancelar
+            <ArrowLeft className="h-4 w-4" /> Cancelar
           </Button>
-
           <Button
             onClick={guardarViaje}
-            disabled={!puedeGuardar}
+            disabled={!puedeGuardar || guardando}
             className="gap-2 bg-success hover:bg-success/90"
           >
-            <Check className="h-4 w-4" />
-            Crear Viaje
+            {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            {guardando ? 'Creando...' : 'Crear Viaje'}
           </Button>
         </div>
       </div>

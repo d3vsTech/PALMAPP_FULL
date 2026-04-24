@@ -16,12 +16,14 @@
  *   responde 400 "Debe seleccionar una finca".
  */
 
-// URL base. Por defecto usa ruta relativa para que funcione con el proxy
-// de Vite (dev) o el proxy de Netlify (producción). Si necesita apuntar a
-// otro servidor, use la env var VITE_AGRO_AGENTE_URL.
+// URL base del backend del Agente IA (FastAPI).
+// Por defecto apunta directo al server de producción para evitar depender
+// de configuración de proxy. FastAPI tiene CORS abierto (allow_origins=["*"]),
+// así que las llamadas cross-origin desde localhost funcionan.
+// Para overridear, usar la env var VITE_AGRO_AGENTE_URL.
 const AGRO_API =
   (import.meta.env.VITE_AGRO_AGENTE_URL as string | undefined)?.trim() ??
-  '/agro-agente/api';
+  'http://31.97.7.50/agro-agente/api';
 
 // ────────────────────────────────────────────────────────────────────────
 // Tipos

@@ -1,744 +1,853 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
-import { Card } from '../../components/ui/card';
-import { Badge } from '../../components/ui/badge';
 import {
-  Send,
-  Paperclip,
-  Mic,
-  ThumbsUp,
-  ThumbsDown,
-  Copy,
-  RotateCcw,
+  ArrowUp,
   Sparkles,
-  Loader2,
   X,
-  FileText,
+  Plus,
+  Search,
   Image as ImageIcon,
+  FileText,
+  Video,
+  Mic,
+  File,
+  ChevronUp,
+  ChevronDown,
+  Camera,
 } from 'lucide-react';
-import { predios, lotes, colaboradores, palmas } from '../../lib/mockData';
+import { agroAgenteApi } from '../../../api/agroAgente';
+import { toast } from 'sonner';
+
+// ────────────────────────────────────────────────────────────
+// Tipos
+// ────────────────────────────────────────────────────────────
+interface Attachment {
+  name: string;
+  dataUrl: string;
+  isImage: boolean;
+}
 
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
-  type?: 'text' | 'table' | 'list';
-  data?: any;
+  attachments?: Attachment[];
 }
 
-const sugerenciasRapidas = [
-  '¿Cómo va mi producción esta quincena?',
-  '¿Qué colaboradores trabajaron hoy?',
-  '¿Cuántos viajes hice este mes?',
-  '¿Cuántas palmas hay en total?',
-  '¿Cuál lote es más productivo?',
-  '¿Cuánto tengo que pagar en nómina?',
-];
+// ────────────────────────────────────────────────────────────
+// Helpers: extracción de imágenes del contenido (markdown, URL, base64)
+// ────────────────────────────────────────────────────────────
+function extractAttachmentsFromContent(text: string): { cleanText: string; attachments: Attachment[] } {
+  if (!text) return { cleanText: '', attachments: [] };
+  const found: Attachment[] = [];
+  let working = text;
 
+  // Markdown ![alt](url)
+  working = working.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_m, alt, url) => {
+    found.push({ name: alt || 'imagen', dataUrl: url, isImage: true });
+    return '';
+  });
+
+  // dataURL base64
+  working = working.replace(/data:image\/[a-zA-Z+]+;base64,[A-Za-z0-9+/=]+/g, (m) => {
+    found.push({ name: 'imagen', dataUrl: m, isImage: true });
+    return '';
+  });
+
+  // URLs con extensión de imagen
+  working = working.replace(/https?:\/\/[^\s)]+\.(jpg|jpeg|png|gif|webp|heic)(\?[^\s)]*)?/gi, (m) => {
+    const name = m.split('/').pop()?.split('?')[0] || 'imagen';
+    found.push({ name, dataUrl: m, isImage: true });
+    return '';
+  });
+
+  return { cleanText: working.trim(), attachments: found };
+}
+
+// Deep scan para cubrir formatos desconocidos del backend
+function deepScanForImages(obj: any, depth = 0): Attachment[] {
+  if (!obj || depth > 6) return [];
+  const found: Attachment[] = [];
+  const visit = (value: any, keyHint: string = '') => {
+    if (value === null || value === undefined) return;
+    if (typeof value === 'string') {
+      const s = value.trim();
+      if (!s) return;
+      if (/^data:image\/[a-zA-Z+]+;base64,/.test(s)) {
+        found.push({ name: keyHint || 'imagen', dataUrl: s, isImage: true });
+        return;
+      }
+      if (/^https?:\/\/[^\s]+\.(jpg|jpeg|png|gif|webp|heic)(\?[^\s]*)?$/i.test(s)) {
+        found.push({ name: keyHint || s.split('/').pop()?.split('?')[0] || 'imagen', dataUrl: s, isImage: true });
+        return;
+      }
+      if (/^https?:\/\/[^\s]+$/i.test(s) && /(image|photo|foto|media|upload|storage|picture|thumb|adjunto|attachment)/i.test(s)) {
+        found.push({ name: keyHint || 'imagen', dataUrl: s, isImage: true });
+        return;
+      }
+      if (/^\/(uploads|storage|media|images|photos|archivos|files)\//.test(s)) {
+        found.push({ name: keyHint || s.split('/').pop() || 'imagen', dataUrl: `http://31.97.7.50${s}`, isImage: true });
+        return;
+      }
+      if (/^(image|photo|foto|media|picture|thumbnail|avatar|adjunto|attachment|archivo|file|url)/i.test(keyHint) && /^https?:\/\//.test(s)) {
+        found.push({ name: keyHint || 'imagen', dataUrl: s, isImage: true });
+        return;
+      }
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach(v => visit(v, keyHint));
+      return;
+    }
+    if (typeof value === 'object') {
+      const direct = value.url ?? value.src ?? value.dataUrl ?? value.data_url ?? value.href ?? value.path;
+      if (typeof direct === 'string') {
+        visit(direct, value.name ?? value.filename ?? value.nombre ?? keyHint);
+      }
+      for (const [k, v] of Object.entries(value)) {
+        visit(v, k);
+      }
+    }
+  };
+  visit(obj);
+  const seen = new Set<string>();
+  return found.filter(a => {
+    if (seen.has(a.dataUrl)) return false;
+    seen.add(a.dataUrl);
+    return true;
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// Persistencia local de attachments
+// ────────────────────────────────────────────────────────────
+const storageKey = (sessionId: number) => `palmapp_chat_attachments_${sessionId}`;
+
+function loadLocalAttachments(sessionId: number): Record<string, Attachment[]> {
+  try {
+    const raw = localStorage.getItem(storageKey(sessionId));
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+function saveLocalAttachments(sessionId: number, messageId: string | number, attachments: Attachment[]) {
+  try {
+    const existing = loadLocalAttachments(sessionId);
+    existing[String(messageId)] = attachments;
+    localStorage.setItem(storageKey(sessionId), JSON.stringify(existing));
+  } catch (e) {
+    console.warn('[AgenteIA] No se pudieron guardar los adjuntos localmente', e);
+  }
+}
+
+// ────────────────────────────────────────────────────────────
+// File → Attachment
+// ────────────────────────────────────────────────────────────
+const fileToAttachment = (file: File): Promise<Attachment> => {
+  const isImage = file.type.startsWith('image/');
+  if (!isImage) {
+    return Promise.resolve({ name: file.name, dataUrl: '', isImage: false });
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve({
+      name: file.name,
+      dataUrl: reader.result as string,
+      isImage: true,
+    });
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+};
+
+// ────────────────────────────────────────────────────────────
+// Markdown inline parser (negrita, itálica)
+// ────────────────────────────────────────────────────────────
+const renderInline = (text: string): (string | JSX.Element)[] => {
+  const parts: (string | JSX.Element)[] = [];
+  const regex = /(\*\*([^*]+?)\*\*|__([^_]+?)__|\*([^*\n]+?)\*|_([^_\n]+?)_)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let keyIdx = 0;
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
+    const bold = match[2] ?? match[3];
+    const italic = match[4] ?? match[5];
+    if (bold !== undefined) {
+      parts.push(<strong key={`b${keyIdx++}`} className="font-semibold">{bold}</strong>);
+    } else if (italic !== undefined) {
+      parts.push(<em key={`i${keyIdx++}`}>{italic}</em>);
+    }
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+  return parts.length > 0 ? parts : [text];
+};
+
+// ────────────────────────────────────────────────────────────
+// Componente principal
+// ────────────────────────────────────────────────────────────
 export default function AgenteIA() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
+  const [sessionId, setSessionId] = useState<number | null>(null);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+
+  // UI V5 state
+  const [mostrarBusqueda, setMostrarBusqueda] = useState(false);
+  const [terminoBusqueda, setTerminoBusqueda] = useState('');
+  const [resultadosBusqueda, setResultadosBusqueda] = useState<number[]>([]);
+  const [indiceResultadoActual, setIndiceResultadoActual] = useState(0);
+  const [mostrarMenuArchivos, setMostrarMenuArchivos] = useState(false);
+  const [grabandoAudio, setGrabandoAudio] = useState(false);
+
+  // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const recognitionRef = useRef<any>(null);
+  const fileInputImageRef = useRef<HTMLInputElement>(null);
+  const fileInputDocRef = useRef<HTMLInputElement>(null);
+  const fileInputVideoRef = useRef<HTMLInputElement>(null);
+  const fileInputFileRef = useRef<HTMLInputElement>(null);
+  const fileInputCameraRef = useRef<HTMLInputElement>(null);
+  const menuArchivosRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  useEffect(() => { scrollToBottom(); }, [messages]);
 
+  // ── Cargar sesión inicial + historial ─────────────────────
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    (async () => {
+      try {
+        const sesiones = await agroAgenteApi.listarSesiones();
+        if (sesiones && sesiones.length > 0) {
+          for (const s of sesiones) {
+            try {
+              const histo = await agroAgenteApi.cargarMensajes(s.id);
+              setSessionId(s.id);
+              const attMap = loadLocalAttachments(s.id);
+              setMessages((histo ?? []).map((m: any) => {
+                const locales = attMap[String(m.id)] ?? [];
+                const extras = deepScanForImages(m);
+                const { cleanText, attachments: fromText } = extractAttachmentsFromContent(m.content ?? '');
+                const all = [...locales, ...extras, ...fromText];
+                const seen = new Set<string>();
+                const deduped = all.filter(a => {
+                  if (seen.has(a.dataUrl)) return false;
+                  seen.add(a.dataUrl);
+                  return true;
+                });
+                return {
+                  id: `msg-${m.id}`,
+                  role: m.role,
+                  content: cleanText || m.content || '',
+                  timestamp: new Date(m.created_at),
+                  attachments: deduped.length > 0 ? deduped : undefined,
+                };
+              }));
+              return;
+            } catch { continue; }
+          }
+        }
+        const nueva = await agroAgenteApi.crearSesion();
+        setSessionId(nueva.id);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'No se pudo conectar al Agente IA');
+      }
+    })();
+  }, []);
 
-  // Función para procesar preguntas y generar respuestas inteligentes
-  const generarRespuesta = (pregunta: string): Message => {
-    const preguntaLower = pregunta.toLowerCase();
-
-    // Respuestas sobre palmas
-    if (preguntaLower.includes('palma')) {
-      const totalPalmas = palmas.length;
-      return {
-        id: `msg-${Date.now()}`,
-        role: 'assistant',
-        content: `🌴 Estado de Plantación
-
-Actualmente tienes ${totalPalmas.toLocaleString()} palmas registradas en el sistema, distribuidas en ${lotes.length} lotes y ${predios.length} predios.
-
-Las palmas están en buen estado de salud y producción activa.`,
-        timestamp: new Date(),
-        type: 'text',
-      };
-    }
-
-    // Respuestas sobre producción
-    if (preguntaLower.includes('producción') || preguntaLower.includes('produccion')) {
-      return {
-        id: `msg-${Date.now()}`,
-        role: 'assistant',
-        content: `📊 Resumen de Producción - Quincena Actual
-
-Total producido: 2,845 kg
-Promedio diario: 190 kg
-Mejor día: Miércoles 12/03 (312 kg)
-Lote más productivo: Lote 1 - Norte (850 kg)
-
-💡 Tu producción está un 8% por encima del promedio histórico. ¡Excelente trabajo!`,
-        timestamp: new Date(),
-        type: 'text',
-      };
-    }
-
-    // Respuestas sobre colaboradores
-    if (preguntaLower.includes('colaborador') || preguntaLower.includes('trabajador') || preguntaLower.includes('trabajaron')) {
-      return {
-        id: `msg-${Date.now()}`,
-        role: 'assistant',
-        content: `👷 Colaboradores Activos
-
-Tienes ${colaboradores.length} colaboradores registrados en el sistema:
-
-• Recolectores: 4 personas
-• Operarios: 2 personas
-• Supervisores: 1 persona
-
-Hoy trabajaron: 6 colaboradores
-Ausentes: Carlos Rodríguez (Vacaciones)
-
-Rendimiento promedio: 95 kg/persona/día`,
-        timestamp: new Date(),
-        type: 'text',
-      };
-    }
-
-    // Respuestas sobre viajes
-    if (preguntaLower.includes('viaje') || preguntaLower.includes('remision')) {
-      return {
-        id: `msg-${Date.now()}`,
-        role: 'assistant',
-        content: `🚛 Viajes del Mes
-
-Total de viajes: 12 viajes
-Kilogramos enviados: 8,450 kg
-Promedio por viaje: 704 kg
-
-Último viaje:
-• Fecha: 05/04/2026
-• Destino: Extractora San Pablo
-• Cantidad: 720 kg
-• Estado: Entregado
-
-Próximo viaje programado: 08/04/2026`,
-        timestamp: new Date(),
-        type: 'text',
-      };
-    }
-
-    // Respuestas sobre nómina
-    if (preguntaLower.includes('nómina') || preguntaLower.includes('nomina') || preguntaLower.includes('pagar') || preguntaLower.includes('salario')) {
-      return {
-        id: `msg-${Date.now()}`,
-        role: 'assistant',
-        content: `💰 Resumen de Nómina - Quincena Actual
-
-Total a pagar: $4,850,000 COP
-
-Desglose:
-• Salarios base: $3,200,000
-• Horas extras: $450,000
-• Bonificaciones: $300,000
-• Auxilio transporte: $350,000
-• Prestaciones: $550,000
-
-Deducciones totales: $780,000
-
-Colaboradores: 7 personas
-Promedio por persona: $692,857 COP
-
-📅 Fecha de pago: 15/04/2026`,
-        timestamp: new Date(),
-        type: 'text',
-      };
-    }
-
-    // Respuestas sobre lotes
-    if (preguntaLower.includes('lote') || preguntaLower.includes('productivo')) {
-      return {
-        id: `msg-${Date.now()}`,
-        role: 'assistant',
-        content: `🌴 Análisis de Lotes
-
-Tienes ${lotes.length} lotes distribuidos en ${predios.length} predios:
-
-Top 3 Lotes Más Productivos:
-
-1. Lote A - Central (El Paraíso)
-   • 1,240 palmas • 62 hectáreas
-   • Promedio: 20 kg/palma
-   
-2. Lote Alpha (Villa Nueva)
-   • 1,330 palmas • 70 hectáreas
-   • Promedio: 18.5 kg/palma
-   
-3. Lote B - Occidental (El Paraíso)
-   • 1,045 palmas • 55 hectáreas
-   • Promedio: 17.8 kg/palma
-
-💡 Recomendación: El Lote 2 - Sur está 15% por debajo del promedio. Considera revisar fertilización y riego.`,
-        timestamp: new Date(),
-        type: 'text',
-      };
-    }
-
-    // Respuestas sobre operaciones
-    if (preguntaLower.includes('operacion') || preguntaLower.includes('labor') || preguntaLower.includes('jornales')) {
-      return {
-        id: `msg-${Date.now()}`,
-        role: 'assistant',
-        content: `🚜 Operaciones de la Semana
-
-Total de jornales: 42 jornales
-Horas trabajadas: 336 horas
-
-Actividades realizadas:
-• Recolección: 28 jornales (67%)
-• Fertilización: 8 jornales (19%)
-• Control de maleza: 4 jornales (9%)
-• Mantenimiento: 2 jornales (5%)
-
-Rendimiento promedio: 95 kg/jornal
-Mejor día: Miércoles (8 jornales)
-
-📊 Eficiencia operativa: 92%`,
-        timestamp: new Date(),
-        type: 'text',
-      };
-    }
-
-    // Respuestas sobre predios
-    if (preguntaLower.includes('predio') || preguntaLower.includes('finca')) {
-      return {
-        id: `msg-${Date.now()}`,
-        role: 'assistant',
-        content: `🗺️ Resumen de Predios
-
-Tienes ${predios.length} predios registrados:
-
-${predios.map((p, i) => `${i + 1}. ${p.nombre}
-   • ${p.hectareas} hectáreas
-   • ${lotes.filter(l => l.predioId === p.id).length} lotes
-   • ${p.ubicacion || 'Sin ubicación'}`).join('\n\n')}
-
-Total: ${predios.reduce((acc, p) => acc + p.hectareas, 0)} hectáreas`,
-        timestamp: new Date(),
-        type: 'text',
-      };
-    }
-
-    // Respuesta por defecto
-    return {
-      id: `msg-${Date.now()}`,
-      role: 'assistant',
-      content: `Entiendo tu pregunta sobre "${pregunta}". 
-
-Puedo ayudarte con información sobre:
-
-• 📊 Producción y cosecha
-• 🌴 Plantación y lotes
-• 👷 Colaboradores y asistencia
-• 💰 Nómina y pagos
-• 🚛 Viajes y remisiones
-• 🚜 Operaciones diarias
-
-¿Sobre qué te gustaría saber más específicamente?`,
-      timestamp: new Date(),
-      type: 'text',
+  // ── Click fuera del menú de archivos para cerrarlo ──
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuArchivosRef.current && !menuArchivosRef.current.contains(event.target as Node)) {
+        setMostrarMenuArchivos(false);
+      }
     };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // ── Foco en input de búsqueda al abrir ──
+  useEffect(() => {
+    if (mostrarBusqueda && searchInputRef.current) searchInputRef.current.focus();
+  }, [mostrarBusqueda]);
+
+  // ── Buscar en mensajes ──
+  useEffect(() => {
+    if (!terminoBusqueda.trim()) {
+      setResultadosBusqueda([]);
+      setIndiceResultadoActual(0);
+      return;
+    }
+    const resultados: number[] = [];
+    messages.forEach((msg, index) => {
+      if (msg.content.toLowerCase().includes(terminoBusqueda.toLowerCase())) {
+        resultados.push(index);
+      }
+    });
+    setResultadosBusqueda(resultados);
+    setIndiceResultadoActual(resultados.length > 0 ? 0 : -1);
+  }, [terminoBusqueda, messages]);
+
+  const irAlSiguienteResultado = () => {
+    if (resultadosBusqueda.length === 0) return;
+    setIndiceResultadoActual((prev) => (prev + 1) % resultadosBusqueda.length);
   };
 
-  const enviarMensaje = async (texto: string) => {
-    if (!texto.trim()) return;
+  const irAlResultadoAnterior = () => {
+    if (resultadosBusqueda.length === 0) return;
+    setIndiceResultadoActual((prev) => prev === 0 ? resultadosBusqueda.length - 1 : prev - 1);
+  };
 
-    // Agregar mensaje del usuario
+  const resaltarTexto = (texto: string, indice: number): JSX.Element => {
+    if (!terminoBusqueda.trim() || !resultadosBusqueda.includes(indice)) {
+      return <>{renderInline(texto)}</>;
+    }
+    const partes = texto.split(new RegExp(`(${terminoBusqueda})`, 'gi'));
+    const esResultadoActual = resultadosBusqueda[indiceResultadoActual] === indice;
+    return (
+      <>
+        {partes.map((parte, i) =>
+          parte.toLowerCase() === terminoBusqueda.toLowerCase() ? (
+            <mark key={i} className={`${esResultadoActual ? 'bg-accent text-white' : 'bg-yellow-200 dark:bg-yellow-800'} rounded px-0.5`}>
+              {parte}
+            </mark>
+          ) : (
+            <span key={i}>{renderInline(parte)}</span>
+          )
+        )}
+      </>
+    );
+  };
+
+  // ── Enviar mensaje ──
+  const enviarMensaje = async () => {
+    const texto = input.trim();
+    if (!texto && attachedFiles.length === 0) return;
+
+    const attachments: Attachment[] = attachedFiles.length > 0
+      ? await Promise.all(attachedFiles.map(fileToAttachment))
+      : [];
+
+    const hayTexto = texto.length > 0;
+    const textoParaBackend = hayTexto
+      ? texto
+      : attachments.some(a => a.isImage)
+        ? '[Imagen adjunta]'
+        : '[Archivo adjunto]';
+
     const userMessage: Message = {
       id: `msg-${Date.now()}`,
       role: 'user',
-      content: texto,
+      content: hayTexto ? texto : '',
       timestamp: new Date(),
-      type: 'text',
+      attachments: attachments.length > 0 ? attachments : undefined,
     };
 
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
+    setAttachedFiles([]);
+    setMostrarMenuArchivos(false);
     setIsTyping(true);
 
-    // Simular delay de respuesta
-    setTimeout(() => {
-      const aiResponse = generarRespuesta(texto);
+    // Si no hay sesión, crear una
+    let sidActual = sessionId;
+    if (!sidActual) {
+      try {
+        const nueva = await agroAgenteApi.crearSesion();
+        sidActual = nueva.id;
+        setSessionId(nueva.id);
+      } catch (err) {
+        const errorMsg: Message = {
+          id: `msg-err-${Date.now()}`,
+          role: 'assistant',
+          content: err instanceof Error ? `No pude iniciar la conversación: ${err.message}` : 'No pude iniciar la conversación.',
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, errorMsg]);
+        setIsTyping(false);
+        return;
+      }
+    }
+
+    const enviar = async (sid: number) => {
+      const res = await agroAgenteApi.enviarMensaje(sid, textoParaBackend);
+      if (attachments.length > 0 && res.user_message?.id !== undefined) {
+        saveLocalAttachments(sid, res.user_message.id, attachments);
+        setMessages((prev) => prev.map(m =>
+          m.id === userMessage.id ? { ...m, id: `msg-${res.user_message.id}` } : m
+        ));
+      }
+      const aiResponse: Message = {
+        id: `msg-${res.assistant_message.id}`,
+        role: 'assistant',
+        content: res.assistant_message.content,
+        timestamp: new Date(res.assistant_message.created_at),
+      };
       setMessages((prev) => [...prev, aiResponse]);
-      setIsTyping(false);
-    }, 1000 + Math.random() * 1000);
-  };
+    };
 
-  const handleSugerencia = (sugerencia: string) => {
-    enviarMensaje(sugerencia);
-  };
-
-  const copiarRespuesta = (content: string) => {
-    // Método alternativo compatible con todos los navegadores
-    const textarea = document.createElement('textarea');
-    textarea.value = content;
-    textarea.style.position = 'fixed';
-    textarea.style.opacity = '0';
-    document.body.appendChild(textarea);
-    textarea.select();
-    
     try {
-      document.execCommand('copy');
-      // Opcional: Mostrar feedback visual
-      console.log('Texto copiado al portapapeles');
+      try {
+        await enviar(sidActual);
+      } catch (err: any) {
+        const notFound = err?.status === 404 || /no encontrad/i.test(err?.message ?? '');
+        if (notFound) {
+          const nueva = await agroAgenteApi.crearSesion();
+          setSessionId(nueva.id);
+          sidActual = nueva.id;
+          await enviar(nueva.id);
+        } else {
+          throw err;
+        }
+      }
     } catch (err) {
-      console.error('Error al copiar:', err);
+      const errorMsg: Message = {
+        id: `msg-err-${Date.now()}`,
+        role: 'assistant',
+        content: err instanceof Error ? err.message : 'No pude responder. Intenta de nuevo.',
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMsg]);
     } finally {
-      document.body.removeChild(textarea);
+      setIsTyping(false);
     }
   };
 
-  const toggleRecording = () => {
-    if (isRecording) {
-      // Detener grabación
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
-      setIsRecording(false);
-    } else {
-      // Iniciar grabación
-      startVoiceRecognition();
-    }
+  // ── Archivos ──
+  const handleFileSelect = (tipo: 'imagen' | 'documento' | 'video' | 'archivo') => {
+    if (tipo === 'imagen')          fileInputImageRef.current?.click();
+    else if (tipo === 'documento')  fileInputDocRef.current?.click();
+    else if (tipo === 'video')      fileInputVideoRef.current?.click();
+    else                            fileInputFileRef.current?.click();
+    setMostrarMenuArchivos(false);
   };
 
-  const startVoiceRecognition = async () => {
-    // Verificar si el navegador soporta Web Speech API
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-      alert('Tu navegador no soporta reconocimiento de voz. Prueba con Chrome o Edge.');
-      return;
-    }
-
-    // Solicitar permisos de micrófono primero
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      // Detener el stream inmediatamente, solo necesitamos verificar permisos
-      stream.getTracks().forEach(track => track.stop());
-    } catch (error: any) {
-      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-        alert('⚠️ Permiso denegado\n\nPara usar el reconocimiento de voz, necesitas permitir el acceso al micrófono.\n\n1. Haz clic en el ícono de candado/información en la barra de direcciones\n2. Permite el acceso al micrófono\n3. Recarga la página e intenta de nuevo');
-      } else if (error.name === 'NotFoundError') {
-        alert('⚠️ No se encontró ningún micrófono conectado.\n\nPor favor, conecta un micrófono e intenta de nuevo.');
-      } else {
-        alert('⚠️ Error al acceder al micrófono.\n\nAsegúrate de tener un micrófono conectado y los permisos necesarios.');
-      }
-      console.error('Error al solicitar permisos de micrófono:', error);
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'es-CO'; // Español de Colombia
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-
-    recognition.onstart = () => {
-      setIsRecording(true);
-    };
-
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      setInput((prev) => prev + (prev ? ' ' : '') + transcript);
-      inputRef.current?.focus();
-    };
-
-    recognition.onerror = (event: any) => {
-      console.error('Error en reconocimiento de voz:', event.error);
-      setIsRecording(false);
-      
-      if (event.error === 'no-speech') {
-        // No mostrar alerta, solo detener
-        console.log('No se detectó voz');
-      } else if (event.error === 'not-allowed') {
-        alert('⚠️ Permiso denegado\n\nPara usar el reconocimiento de voz:\n\n1. Haz clic en el ícono de candado en la barra de direcciones\n2. Permite el acceso al micrófono\n3. Recarga la página e intenta de nuevo');
-      } else if (event.error === 'network') {
-        alert('⚠️ Error de conexión\n\nEl reconocimiento de voz requiere conexión a internet.');
-      } else if (event.error === 'aborted') {
-        // Usuario canceló, no mostrar error
-        console.log('Reconocimiento cancelado');
-      }
-    };
-
-    recognition.onend = () => {
-      setIsRecording(false);
-    };
-
-    recognitionRef.current = recognition;
-    
-    try {
-      recognition.start();
-    } catch (error) {
-      console.error('Error al iniciar reconocimiento:', error);
-      setIsRecording(false);
-      alert('⚠️ No se pudo iniciar el reconocimiento de voz.\n\nIntenta de nuevo en unos segundos.');
-    }
-  };
-
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (files) {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, tipo: string) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
       const newFiles = Array.from(files);
       setAttachedFiles((prev) => [...prev, ...newFiles]);
+      toast.success(`${tipo} agregado: ${newFiles.map(f => f.name).join(', ')}`);
     }
+    e.target.value = ''; // reset para poder subir el mismo archivo otra vez
   };
 
-  const removeFile = (index: number) => {
+  const handleCameraClick = () => fileInputCameraRef.current?.click();
+
+  const handleCameraChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const newFiles = Array.from(files);
+      setAttachedFiles((prev) => [...prev, ...newFiles]);
+      toast.success(`Foto capturada: ${newFiles[0].name}`);
+    }
+    e.target.value = '';
+  };
+
+  const removeAttached = (index: number) => {
     setAttachedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // ── Voz (placeholder visual, no implementado) ──
+  const iniciarGrabacionAudio = () => {
+    setGrabandoAudio(true);
+    toast.info('Grabando nota de voz...');
+  };
+  const detenerGrabacionAudio = () => {
+    setGrabandoAudio(false);
+    toast.success('Nota de voz grabada');
+  };
+
+  // ────────────────────────────────────────────────────────────
+  // Render
+  // ────────────────────────────────────────────────────────────
   return (
-    <div className="h-full flex flex-col -m-8">
-      {/* Header */}
-      <div className="flex-shrink-0 px-8 pt-8 pb-4 border-b border-border">
+    <div className="flex flex-col h-full -m-8">
+      {/* Header compacto */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-background flex-shrink-0">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-            <Sparkles className="h-5 w-5 text-primary" />
+          <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center">
+            <Sparkles className="h-4 w-4 text-white" />
           </div>
           <div>
-            <h2>Agente IA</h2>
-            <p className="text-xs text-muted-foreground">
-              Tu asistente inteligente para gestión agrícola
-            </p>
+            <h1 className="text-base font-semibold">Agente IA</h1>
+            <p className="text-xs text-muted-foreground">Tu asistente inteligente</p>
           </div>
         </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setMostrarBusqueda(!mostrarBusqueda)}
+          className="h-8 w-8"
+          title="Buscar en conversación"
+        >
+          <Search className="h-4 w-4" />
+        </Button>
       </div>
 
-      {/* Área de mensajes con scroll interno */}
-      <div className="flex-1 overflow-y-auto px-8 py-6 custom-scrollbar">
-        <div className="space-y-4 max-w-5xl mx-auto">
-          {messages.length === 0 ? (
-            // Estado vacío
-            <div className="text-center py-12 space-y-6">
-              <div className="h-16 w-16 rounded-xl bg-primary/10 flex items-center justify-center mx-auto">
-                <Sparkles className="h-8 w-8 text-primary" />
-              </div>
-              <div>
-                <h3>¡Hola! Soy tu asistente inteligente de PALMAPP</h3>
-                <p className="text-muted-foreground mt-2">
-                  Puedo ayudarte con información sobre producción, nómina, colaboradores y mucho más.
-                </p>
-              </div>
+      {/* Barra de búsqueda */}
+      {mostrarBusqueda && (
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-muted/30 flex-shrink-0">
+          <Search className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          <Input
+            ref={searchInputRef}
+            value={terminoBusqueda}
+            onChange={(e) => setTerminoBusqueda(e.target.value)}
+            placeholder="Buscar en mensajes..."
+            className="h-8 border-0 focus-visible:ring-0 shadow-none bg-transparent"
+          />
+          {resultadosBusqueda.length > 0 && (
+            <>
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                {indiceResultadoActual + 1} de {resultadosBusqueda.length}
+              </span>
+              <Button variant="ghost" size="icon" onClick={irAlResultadoAnterior} className="h-7 w-7">
+                <ChevronUp className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" onClick={irAlSiguienteResultado} className="h-7 w-7">
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+            </>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => { setMostrarBusqueda(false); setTerminoBusqueda(''); }}
+            className="h-7 w-7"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
 
-              {/* Sugerencias rápidas */}
-              <div className="space-y-3">
-                <p className="text-sm font-medium text-muted-foreground">
-                  Prueba preguntarme:
-                </p>
-                <div className="flex flex-wrap gap-2 justify-center max-w-2xl mx-auto">
-                  {sugerenciasRapidas.map((sugerencia, index) => (
-                    <button
-                      key={index}
-                      onClick={() => handleSugerencia(sugerencia)}
-                      className="px-4 py-2 rounded-lg border border-border bg-card hover:border-primary hover:bg-primary/5 transition-colors text-sm"
-                    >
-                      {sugerencia}
-                    </button>
-                  ))}
-                </div>
+      {/* Área de mensajes */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-3xl mx-auto px-4 py-8">
+          {messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center py-20">
+              <div className="h-16 w-16 rounded-full bg-accent flex items-center justify-center mb-4">
+                <Sparkles className="h-8 w-8 text-white" />
+              </div>
+              <h2 className="text-2xl font-semibold mb-2">Agente IA de PalmApp</h2>
+              <p className="text-muted-foreground max-w-md mb-6">¿En qué puedo ayudarte hoy?</p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl">
+                <button
+                  onClick={() => setInput('¿Cuántas palmas tengo registradas?')}
+                  className="p-4 bg-card border border-border rounded-xl hover:bg-muted transition-colors text-left"
+                >
+                  <div className="text-sm font-medium mb-1">Estado de plantación</div>
+                  <div className="text-xs text-muted-foreground">Consulta el total de palmas y lotes</div>
+                </button>
+                <button
+                  onClick={() => setInput('Muéstrame el resumen de producción')}
+                  className="p-4 bg-card border border-border rounded-xl hover:bg-muted transition-colors text-left"
+                >
+                  <div className="text-sm font-medium mb-1">Resumen de producción</div>
+                  <div className="text-xs text-muted-foreground">Estadísticas de cosecha actual</div>
+                </button>
+                <button
+                  onClick={() => setInput('Información sobre colaboradores')}
+                  className="p-4 bg-card border border-border rounded-xl hover:bg-muted transition-colors text-left"
+                >
+                  <div className="text-sm font-medium mb-1">Colaboradores activos</div>
+                  <div className="text-xs text-muted-foreground">Estado del personal de la finca</div>
+                </button>
+                <button
+                  onClick={() => setInput('Resumen de nómina actual')}
+                  className="p-4 bg-card border border-border rounded-xl hover:bg-muted transition-colors text-left"
+                >
+                  <div className="text-sm font-medium mb-1">Nómina y pagos</div>
+                  <div className="text-xs text-muted-foreground">Consulta información de salarios</div>
+                </button>
               </div>
             </div>
           ) : (
-            // Mensajes
-            <>
-              {messages.map((message) => (
+            <div className="space-y-6">
+              {messages.map((message, index) => (
                 <MessageBubble
                   key={message.id}
                   message={message}
-                  onCopy={() => copiarRespuesta(message.content)}
+                  index={index}
+                  resaltarTexto={resaltarTexto}
                 />
               ))}
 
-              {/* Indicador de "escribiendo..." */}
               {isTyping && (
                 <div className="flex items-start gap-3">
-                  <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <Sparkles className="h-4 w-4 text-primary" />
+                  <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center flex-shrink-0">
+                    <Sparkles className="h-4 w-4 text-white" />
                   </div>
-                  <div className="bg-muted px-4 py-3 rounded-2xl max-w-[80%]">
-                    <div className="flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                      <span className="text-sm text-muted-foreground">Analizando datos...</span>
+                  <div className="bg-muted rounded-2xl px-4 py-3">
+                    <div className="flex gap-1">
+                      <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                      <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                      <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
                     </div>
                   </div>
                 </div>
               )}
-            </>
+            </div>
           )}
           <div ref={messagesEndRef} />
         </div>
       </div>
 
-      {/* Input fijo inferior */}
-      <div className="flex-shrink-0 px-8 pb-8 pt-4 border-t border-border">
-        <div className="space-y-3 max-w-5xl mx-auto">
-          {/* Preview de archivos adjuntos */}
-          {attachedFiles.length > 0 && (
+      {/* Preview de archivos adjuntos (antes de enviar) */}
+      {attachedFiles.length > 0 && (
+        <div className="border-t border-border bg-muted/30 flex-shrink-0">
+          <div className="max-w-3xl mx-auto px-4 py-2">
             <div className="flex flex-wrap gap-2">
               {attachedFiles.map((file, index) => {
                 const isImage = file.type.startsWith('image/');
+                const previewUrl = isImage ? URL.createObjectURL(file) : null;
                 return (
-                  <div
-                    key={index}
-                    className="flex items-center gap-2 px-3 py-2 bg-muted rounded-lg border border-border"
-                  >
-                    {isImage ? (
-                      <ImageIcon className="h-4 w-4 text-primary flex-shrink-0" />
+                  <div key={index} className="relative group flex items-center gap-2 p-1 bg-card rounded-lg border border-border">
+                    {isImage && previewUrl ? (
+                      <>
+                        <img
+                          src={previewUrl}
+                          alt={file.name}
+                          className="h-14 w-14 object-cover rounded-md"
+                          onLoad={() => URL.revokeObjectURL(previewUrl)}
+                        />
+                        <span className="text-xs truncate max-w-[100px] pr-5">{file.name}</span>
+                      </>
                     ) : (
-                      <FileText className="h-4 w-4 text-primary flex-shrink-0" />
+                      <>
+                        <FileText className="h-4 w-4 text-primary flex-shrink-0 ml-2" />
+                        <span className="text-sm truncate max-w-[180px] pr-5">{file.name}</span>
+                      </>
                     )}
-                    <span className="text-sm truncate max-w-[200px]">
-                      {file.name}
-                    </span>
                     <button
-                      onClick={() => removeFile(index)}
-                      className="ml-1 hover:bg-background rounded p-0.5 transition-colors"
+                      onClick={() => removeAttached(index)}
+                      className="absolute top-1 right-1 bg-background/90 hover:bg-background rounded-full p-0.5 shadow-sm"
+                      title="Quitar"
                     >
-                      <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                      <X className="h-3 w-3" />
                     </button>
                   </div>
                 );
               })}
             </div>
-          )}
-
-          <div className="flex items-end gap-2">
-            {/* Input file oculto */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept="image/*,.pdf,.doc,.docx,.txt"
-              onChange={handleFileChange}
-              className="hidden"
-            />
-
-            {/* Adjuntar archivos */}
-            <Button
-              variant="outline"
-              size="icon"
-              className="rounded-lg h-10 w-10 flex-shrink-0"
-              title="Adjuntar archivos"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Paperclip className="h-4 w-4" />
-            </Button>
-
-            {/* Input de texto */}
-            <div className="flex-1 relative">
-              <Input
-                ref={inputRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    enviarMensaje(input);
-                  }
-                }}
-                placeholder={isRecording ? 'Escuchando...' : 'Pregúntale algo sobre tu finca...'}
-                className="h-10 rounded-lg"
-              />
-            </div>
-
-            {/* Nota de voz */}
-            <Button
-              variant={isRecording ? 'default' : 'outline'}
-              size="icon"
-              className="rounded-lg h-10 w-10 flex-shrink-0"
-              onClick={toggleRecording}
-              title={isRecording ? 'Detener grabación' : 'Grabar nota de voz'}
-            >
-              <Mic className={`h-4 w-4 ${isRecording ? 'animate-pulse' : ''}`} />
-            </Button>
-
-            {/* Enviar */}
-            <Button
-              size="icon"
-              className="rounded-lg h-10 w-10 flex-shrink-0"
-              onClick={() => enviarMensaje(input)}
-              disabled={!input.trim() || isTyping}
-            >
-              <Send className="h-4 w-4" />
-            </Button>
           </div>
+        </div>
+      )}
 
-          {/* Sugerencias rápidas (cuando hay mensajes) */}
-          {messages.length > 0 && messages.length < 3 && (
-            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-              {sugerenciasRapidas.slice(0, 4).map((sugerencia, index) => (
-                <button
-                  key={index}
-                  onClick={() => handleSugerencia(sugerencia)}
-                  className="px-3 py-1.5 rounded-lg border border-border bg-card hover:border-primary hover:bg-primary/5 transition-colors text-sm whitespace-nowrap flex-shrink-0"
+      {/* Input bar fijo inferior */}
+      <div className="border-t border-border bg-background flex-shrink-0">
+        <div className="max-w-3xl mx-auto px-4 py-4">
+          <div className="relative bg-card border border-border rounded-3xl shadow-sm">
+            <div className="flex items-end gap-2 p-2">
+              {/* Botón + con menú */}
+              <div className="relative flex-shrink-0" ref={menuArchivosRef}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setMostrarMenuArchivos(!mostrarMenuArchivos)}
+                  className="h-9 w-9 rounded-full hover:bg-muted"
                 >
-                  {sugerencia}
-                </button>
-              ))}
+                  <Plus className="h-5 w-5 text-muted-foreground" />
+                </Button>
+
+                {mostrarMenuArchivos && (
+                  <div className="absolute bottom-full left-0 mb-2 bg-card border border-border rounded-xl shadow-lg p-2 min-w-[220px] z-10">
+                    <button
+                      onClick={() => handleFileSelect('imagen')}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted rounded-lg transition-colors text-left"
+                    >
+                      <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <ImageIcon className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium">Imagen</div>
+                        <div className="text-xs text-muted-foreground">PNG, JPG, GIF</div>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => handleFileSelect('video')}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted rounded-lg transition-colors text-left"
+                    >
+                      <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <Video className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium">Video</div>
+                        <div className="text-xs text-muted-foreground">MP4, AVI, MOV</div>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => handleFileSelect('documento')}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted rounded-lg transition-colors text-left"
+                    >
+                      <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <FileText className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium">Documento</div>
+                        <div className="text-xs text-muted-foreground">PDF, DOC, XLS</div>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => handleFileSelect('archivo')}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted rounded-lg transition-colors text-left"
+                    >
+                      <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <File className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium">Archivo</div>
+                        <div className="text-xs text-muted-foreground">Cualquier tipo</div>
+                      </div>
+                    </button>
+                  </div>
+                )}
+
+                <input ref={fileInputImageRef} type="file" multiple onChange={(e) => handleFileChange(e, 'Imagen')}    className="hidden" accept="image/*" />
+                <input ref={fileInputVideoRef} type="file"          onChange={(e) => handleFileChange(e, 'Video')}     className="hidden" accept="video/*" />
+                <input ref={fileInputDocRef}   type="file"          onChange={(e) => handleFileChange(e, 'Documento')} className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx" />
+                <input ref={fileInputFileRef}  type="file"          onChange={(e) => handleFileChange(e, 'Archivo')}   className="hidden" />
+              </div>
+
+              {/* Cámara */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleCameraClick}
+                className="h-9 w-9 flex-shrink-0 rounded-full hover:bg-muted"
+              >
+                <Camera className="h-5 w-5 text-muted-foreground" />
+              </Button>
+              <input
+                ref={fileInputCameraRef}
+                type="file"
+                onChange={handleCameraChange}
+                className="hidden"
+                accept="image/*"
+                capture="environment"
+              />
+
+              {/* Input de texto */}
+              <div className="flex-1 max-h-32 overflow-y-auto">
+                <Input
+                  ref={inputRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      enviarMensaje();
+                    }
+                  }}
+                  placeholder="Envía un mensaje..."
+                  className="border-0 focus-visible:ring-0 shadow-none bg-transparent resize-none min-h-[36px]"
+                />
+              </div>
+
+              {/* Enviar o voz */}
+              {(input.trim() || attachedFiles.length > 0) ? (
+                <Button
+                  onClick={enviarMensaje}
+                  disabled={isTyping}
+                  size="icon"
+                  className="flex-shrink-0 h-9 w-9 rounded-full"
+                >
+                  <ArrowUp className="h-5 w-5" />
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onMouseDown={iniciarGrabacionAudio}
+                  onMouseUp={detenerGrabacionAudio}
+                  onMouseLeave={() => { if (grabandoAudio) detenerGrabacionAudio(); }}
+                  className={`h-9 w-9 flex-shrink-0 rounded-full hover:bg-muted ${
+                    grabandoAudio ? 'bg-destructive text-white hover:bg-destructive' : ''
+                  }`}
+                >
+                  <Mic className="h-5 w-5" />
+                </Button>
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-// Componente para cada burbuja de mensaje
+// ────────────────────────────────────────────────────────────
+// Burbuja de mensaje
+// ────────────────────────────────────────────────────────────
 function MessageBubble({
   message,
-  onCopy,
+  index,
+  resaltarTexto,
 }: {
   message: Message;
-  onCopy: () => void;
+  index: number;
+  resaltarTexto: (texto: string, indice: number) => JSX.Element;
 }) {
   const isUser = message.role === 'user';
-
-  // Procesar el contenido y dividir por líneas
-  const renderContent = () => {
-    const lines = message.content.split('\n');
-    
-    return lines.map((line, i) => {
-      // Línea vacía - espacio
-      if (!line.trim()) {
-        return <div key={i} className="h-3" />;
-      }
-      
-      // Detectar líneas con emoji al inicio (títulos de sección)
-      if (line.match(/^[📊👷🚛💰🌴🚜🗺️📅💡]/)) {
-        return (
-          <p key={i} className={`font-semibold text-base ${isUser ? 'text-primary-foreground' : 'text-foreground'}`}>
-            {line}
-          </p>
-        );
-      }
-      
-      // Detectar viñetas (• o números)
-      if (line.match(/^[•\d]\./)) {
-        return (
-          <p key={i} className={`ml-3 ${isUser ? 'text-primary-foreground/95' : 'text-muted-foreground'}`}>
-            {line}
-          </p>
-        );
-      }
-      
-      // Detectar indentación (espacios al inicio)
-      if (line.match(/^\s{2,}/)) {
-        return (
-          <p key={i} className={`ml-4 text-sm ${isUser ? 'text-primary-foreground/90' : 'text-muted-foreground'}`}>
-            {line.trim()}
-          </p>
-        );
-      }
-      
-      // Texto normal
-      return (
-        <p key={i} className={isUser ? 'text-primary-foreground' : 'text-foreground'}>
-          {line}
-        </p>
-      );
-    });
-  };
+  const tieneAttachments = message.attachments && message.attachments.length > 0;
+  const tieneTexto = message.content && message.content.trim().length > 0;
 
   return (
     <div className={`flex items-start gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
-      {/* Avatar */}
       {!isUser && (
-        <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-          <Sparkles className="h-4 w-4 text-primary" />
+        <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center flex-shrink-0">
+          <Sparkles className="h-4 w-4 text-white" />
         </div>
       )}
 
-      {/* Contenido */}
-      <div className={`flex flex-col gap-2 ${isUser ? 'items-end' : 'items-start'} max-w-[75%]`}>
-        {/* Burbuja */}
+      <div className={`flex-1 ${isUser ? 'flex justify-end' : ''}`}>
         <div
-          className={`px-5 py-4 rounded-2xl ${
-            isUser
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-muted'
+          className={`rounded-2xl px-4 py-3 max-w-[85%] ${
+            isUser ? 'bg-primary text-primary-foreground ml-auto' : 'bg-muted text-foreground'
           }`}
         >
-          <div className="space-y-1.5 leading-relaxed">
-            {renderContent()}
-          </div>
+          {/* Attachments (imágenes y archivos) */}
+          {tieneAttachments && (
+            <div className="flex flex-wrap gap-2 mb-2">
+              {message.attachments!.map((att, i) =>
+                att.isImage && att.dataUrl ? (
+                  <a key={i} href={att.dataUrl} target="_blank" rel="noopener noreferrer">
+                    <img
+                      src={att.dataUrl}
+                      alt={att.name}
+                      className="max-h-56 max-w-full rounded-lg border border-border hover:opacity-90 transition-opacity cursor-pointer"
+                    />
+                  </a>
+                ) : (
+                  <div
+                    key={i}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm ${
+                      isUser
+                        ? 'bg-primary-foreground/10 border-primary-foreground/20 text-primary-foreground'
+                        : 'bg-background border-border'
+                    }`}
+                  >
+                    <FileText className="h-4 w-4 flex-shrink-0" />
+                    <span className="truncate max-w-[200px]">{att.name}</span>
+                  </div>
+                ),
+              )}
+            </div>
+          )}
+
+          {/* Texto del mensaje */}
+          {tieneTexto && (
+            <div className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">
+              {resaltarTexto(message.content, index)}
+            </div>
+          )}
         </div>
-
-        {/* Acciones (solo para IA) */}
-        {!isUser && (
-          <div className="flex items-center gap-2 px-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-xs hover:bg-muted"
-              onClick={onCopy}
-            >
-              <Copy className="h-3 w-3 mr-1" />
-              Copiar
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 hover:bg-muted"
-              title="Útil"
-            >
-              <ThumbsUp className="h-3 w-3" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 hover:bg-muted"
-              title="No útil"
-            >
-              <ThumbsDown className="h-3 w-3" />
-            </Button>
-            <span className="text-[10px] text-muted-foreground ml-1">
-              {message.timestamp.toLocaleTimeString('es-CO', {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </span>
-          </div>
-        )}
-
-        {/* Timestamp para usuario */}
-        {isUser && (
-          <span className="text-[10px] text-muted-foreground px-1">
-            {message.timestamp.toLocaleTimeString('es-CO', {
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </span>
-        )}
       </div>
-
-      {/* Avatar usuario */}
-      {isUser && (
-        <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0 text-primary-foreground text-xs font-semibold">
-          TÚ
-        </div>
-      )}
     </div>
   );
 }

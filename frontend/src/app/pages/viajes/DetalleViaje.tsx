@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
@@ -6,940 +6,417 @@ import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Badge } from '../../components/ui/badge';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../../components/ui/select';
-import {
-  ArrowLeft,
-  ArrowRight,
-  Check,
-  Truck,
-  Leaf,
-  Plus,
-  Trash2,
-  X,
-  CheckCircle,
-  Clock,
-  FileText,
-  Upload,
+  ArrowLeft, Truck, MapPin, Package, Scale, Calendar, Clock,
+  Loader2, Check, Calculator, Leaf, FileText, CheckCircle,
 } from 'lucide-react';
-import { colaboradores, lotes as lotesData, sublotes } from '../../lib/mockData';
+import {
+  viajesApi,
+  parseFechaAPI,
+  type Viaje,
+  type EstadoViajeApi,
+} from '../../../api/viajes';
 import { toast } from 'sonner';
 
-export type EstadoViaje = 'Creado' | 'En Camino' | 'En Planta' | 'Finalizado';
+/**
+ * DetalleViaje — pantalla que ve el viaje en cualquier estado
+ *
+ * - CREADO: redirige a /viajes/:id/conteo (no edita aquí)
+ * - EN_CAMINO: permite registrar "Llegada a Planta" (peso_viaje)
+ * - EN_PLANTA: permite "Finalizar Viaje"
+ * - FINALIZADO: solo lectura
+ */
 
-const ETAPAS = [
-  { numero: 1, nombre: 'Info. Viaje' },
-  { numero: 2, nombre: 'Cosecha' },
-  { numero: 3, nombre: 'Soporte Extractora' },
-];
-
-interface Viaje {
-  id: string;
-  remisionId: string;
-  fecha: string;
-  placaVehiculo: string;
-  conductor: string;
-  transportador: string;
-  extractora: string;
-  horaSalida: string;
-  estado: EstadoViaje;
-  fechaCreacion: string;
-  fechaEnCamino?: string;
-  fechaEnPlanta?: string;
-  fechaFinalizado?: string;
+function EstadoBadgeLarge({ estado }: { estado: EstadoViajeApi }) {
+  const cfg: Record<EstadoViajeApi, { label: string; icon: any; cls: string }> = {
+    CREADO:     { label: 'Creado',      icon: FileText,    cls: 'bg-muted text-muted-foreground border-muted' },
+    EN_CAMINO:  { label: 'En Camino',   icon: Truck,       cls: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30' },
+    EN_PLANTA:  { label: 'En Planta',   icon: MapPin,      cls: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30' },
+    FINALIZADO: { label: 'Finalizado',  icon: CheckCircle, cls: 'bg-success/10 text-success border-success/30' },
+  };
+  const { label, icon: Icon, cls } = cfg[estado];
+  return (
+    <Badge variant="outline" className={`${cls} px-3 py-1 text-sm`}>
+      <Icon className="h-4 w-4 mr-1.5" /> {label}
+    </Badge>
+  );
 }
-
-interface CosechaConteo {
-  id: string;
-  planillaId: string;
-  colaboradores: string[];
-  lote: string;
-  sublote: string;
-  gajos: number;
-  pesoKg: number;
-}
-
-// Mock de planillas del día
-const planillasMock = [
-  { id: 'p1', fecha: '2026-04-14', nombre: 'Planilla 14/04/2026' },
-  { id: 'p2', fecha: '2026-04-13', nombre: 'Planilla 13/04/2026' },
-  { id: 'p3', fecha: '2026-04-12', nombre: 'Planilla 12/04/2026' },
-];
-
-// Mock data
-const viajesMock: Viaje[] = [
-  {
-    id: 'v1',
-    remisionId: 'REM-2026-001',
-    fecha: '2026-03-09',
-    placaVehiculo: 'ABC-123',
-    conductor: 'Carlos Rodríguez',
-    transportador: 'Transportes del Valle',
-    extractora: 'Extractora San Miguel',
-    horaSalida: '06:00',
-    estado: 'En Camino',
-    fechaCreacion: '2026-03-09T05:30:00',
-    fechaEnCamino: '2026-03-09T06:00:00',
-  },
-  {
-    id: 'v2',
-    remisionId: 'REM-2026-002',
-    fecha: '2026-03-09',
-    placaVehiculo: 'XYZ-789',
-    conductor: 'Juan Pérez',
-    transportador: 'Transportes Rápidos',
-    extractora: 'Extractora Santa Rosa',
-    horaSalida: '07:30',
-    estado: 'Creado',
-    fechaCreacion: '2026-03-09T07:00:00',
-  },
-  {
-    id: 'v3',
-    remisionId: 'REM-2026-003',
-    fecha: '2026-03-08',
-    placaVehiculo: 'DEF-456',
-    conductor: 'Miguel Ángel',
-    transportador: 'Transportes del Valle',
-    extractora: 'Extractora San Miguel',
-    horaSalida: '05:30',
-    estado: 'Finalizado',
-    fechaCreacion: '2026-03-08T05:00:00',
-    fechaEnCamino: '2026-03-08T05:30:00',
-    fechaEnPlanta: '2026-03-08T08:15:00',
-    fechaFinalizado: '2026-03-08T10:30:00',
-  },
-  {
-    id: 'v4',
-    remisionId: 'REM-2026-004',
-    fecha: '2026-03-08',
-    placaVehiculo: 'GHI-321',
-    conductor: 'Pedro López',
-    transportador: 'Transportes Rápidos',
-    extractora: 'Extractora Santa Rosa',
-    horaSalida: '06:30',
-    estado: 'En Planta',
-    fechaCreacion: '2026-03-08T06:00:00',
-    fechaEnCamino: '2026-03-08T06:30:00',
-    fechaEnPlanta: '2026-03-08T09:45:00',
-  },
-  {
-    id: 'v5',
-    remisionId: 'REM-2026-005',
-    fecha: '2026-03-07',
-    placaVehiculo: 'JKL-654',
-    conductor: 'Roberto Sánchez',
-    transportador: 'Transportes del Valle',
-    extractora: 'Extractora San Miguel',
-    horaSalida: '05:45',
-    estado: 'Finalizado',
-    fechaCreacion: '2026-03-07T05:15:00',
-    fechaEnCamino: '2026-03-07T05:45:00',
-    fechaEnPlanta: '2026-03-07T08:30:00',
-    fechaFinalizado: '2026-03-07T11:00:00',
-  },
-  {
-    id: 'v6',
-    remisionId: 'REM-2026-006',
-    fecha: '2026-03-06',
-    placaVehiculo: 'MNO-987',
-    conductor: 'Luis García',
-    transportador: 'Transportes Rápidos',
-    extractora: 'Extractora Santa Rosa',
-    horaSalida: '06:30',
-    estado: 'Finalizado',
-    fechaCreacion: '2026-03-06T06:00:00',
-    fechaEnCamino: '2026-03-06T06:30:00',
-    fechaEnPlanta: '2026-03-06T09:15:00',
-    fechaFinalizado: '2026-03-06T11:00:00',
-  },
-];
-
-// Mock data de cosechas
-const cosechasMock: CosechaConteo[] = [
-  {
-    id: 'c1',
-    planillaId: 'p1',
-    colaboradores: ['col1', 'col2'],
-    lote: 'l1',
-    sublote: 'sl1-1',
-    gajos: 450,
-    pesoKg: 6500,
-  },
-  {
-    id: 'c2',
-    planillaId: 'p1',
-    colaboradores: ['col3', 'col4'],
-    lote: 'l2',
-    sublote: 'sl2-1',
-    gajos: 400,
-    pesoKg: 6000,
-  },
-];
 
 export default function DetalleViaje() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const viaje = viajesMock.find(v => v.id === id);
 
-  const [cosechas, setCosechas] = useState<CosechaConteo[]>(cosechasMock);
-  const [archivoSoporte, setArchivoSoporte] = useState<File | null>(null);
+  const [viaje, setViaje] = useState<Viaje | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
 
-  // Establecer estado y etapa inicial basados en el viaje
-  const estadoInicial = viaje?.estado || 'Creado';
-  const etapaInicial = estadoInicial === 'En Planta' ? 3 : 1;
+  // Modales de transición
+  const [modalLlegada, setModalLlegada] = useState(false);
+  const [pesoLlegada, setPesoLlegada] = useState<string>('');
+  const [procesando, setProcesando] = useState(false);
 
-  const [estadoActual, setEstadoActual] = useState<EstadoViaje>(estadoInicial);
-  const [etapaActual, setEtapaActual] = useState(etapaInicial);
+  const cargarViaje = useCallback(async () => {
+    if (!id) return;
+    setLoading(true);
+    setErrorCarga(null);
+    try {
+      const res = await viajesApi.ver(Number(id));
+      if (!res?.data) throw new Error('El servidor no devolvió datos del viaje');
+      setViaje(res.data);
+    } catch (err) {
+      console.error('[DetalleViaje] Error al cargar:', err);
+      setErrorCarga(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
 
+  useEffect(() => { cargarViaje(); }, [cargarViaje]);
+
+  // Si es CREADO, redirigir al conteo
   useEffect(() => {
-    if (!viaje) {
-      navigate('/viajes');
-    } else {
-      // Actualizar estado y etapa cuando cambia el viaje
-      setEstadoActual(viaje.estado);
-      setEtapaActual(viaje.estado === 'En Planta' ? 3 : 1);
+    if (viaje && viaje.estado === 'CREADO') {
+      navigate(`/viajes/${viaje.id}/conteo`, { replace: true });
     }
   }, [viaje, navigate]);
 
-  // Determinar etapas disponibles según el estado
-  const etapasDisponibles = estadoActual === 'En Camino'
-    ? ETAPAS.filter(e => e.numero <= 2)
-    : estadoActual === 'En Planta'
-    ? [ETAPAS[2]] // Solo el paso 3
-    : estadoActual === 'Finalizado'
-    ? ETAPAS // Todos los pasos para viajes finalizados
-    : ETAPAS.filter(e => e.numero <= 2);
-
-  if (!viaje) {
-    return null;
-  }
-
-  const siguienteEtapa = () => {
-    if (etapaActual < etapasDisponibles.length) {
-      setEtapaActual(etapaActual + 1);
-    }
-  };
-
-  const etapaAnterior = () => {
-    if (etapaActual > 1) {
-      setEtapaActual(etapaActual - 1);
-    }
-  };
-
-  const irAEtapa = (numero: number) => {
-    setEtapaActual(numero);
-  };
-
-  const agregarCosecha = () => {
-    setCosechas([...cosechas, {
-      id: `cosecha-${Date.now()}`,
-      planillaId: '',
-      colaboradores: [],
-      lote: '',
-      sublote: '',
-      gajos: 0,
-      pesoKg: 0
-    }]);
-  };
-
-  const eliminarCosecha = (id: string) => {
-    setCosechas(cosechas.filter(c => c.id !== id));
-  };
-
-  const agregarColaboradorACosecha = (cosechaId: string, colaboradorId: string) => {
-    setCosechas(cosechas.map(c => {
-      if (c.id === cosechaId && !c.colaboradores.includes(colaboradorId)) {
-        return { ...c, colaboradores: [...c.colaboradores, colaboradorId] };
-      }
-      return c;
-    }));
-  };
-
-  const eliminarColaboradorDeCosecha = (cosechaId: string, colaboradorId: string) => {
-    setCosechas(cosechas.map(c => {
-      if (c.id === cosechaId) {
-        return { ...c, colaboradores: c.colaboradores.filter(id => id !== colaboradorId) };
-      }
-      return c;
-    }));
-  };
-
-  const aprobarCosecha = () => {
-    console.log('Aprobar cosecha:', { viaje, cosechas });
-    // En un sistema real, aquí se haría una llamada a la API para actualizar el estado
-    toast.success('Cosecha aprobada exitosamente', {
-      description: 'El viaje ahora está en planta.',
-    });
-    navigate('/viajes');
-  };
-
-  const guardarSoporte = () => {
-    if (!archivoSoporte) {
-      toast.error('Debes cargar el soporte de la extractora');
+  // ── Llegada a planta (EN_CAMINO → EN_PLANTA) ────────────────────
+  const registrarLlegada = async () => {
+    if (!viaje) return;
+    const peso = parseFloat(pesoLlegada);
+    if (!peso || peso <= 0) {
+      toast.error('Ingresa un peso válido');
       return;
     }
-    console.log('Guardar soporte:', { viaje, archivo: archivoSoporte });
-    setEstadoActual('Finalizado');
-    toast.success('Soporte guardado exitosamente', {
-      description: 'El viaje ha sido finalizado.',
-    });
-    navigate('/viajes');
-  };
-
-  const handleArchivoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setArchivoSoporte(e.target.files[0]);
+    setProcesando(true);
+    try {
+      await viajesApi.llegadaPlanta(viaje.id, peso);
+      toast.success('Llegada a planta registrada');
+      setModalLlegada(false);
+      setPesoLlegada('');
+      await cargarViaje();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al registrar llegada');
+    } finally {
+      setProcesando(false);
     }
   };
 
-  // Timeline states
-  const timelineSteps = [
-    {
-      estado: 'Creado',
-      label: 'Creado',
-      icon: FileText,
-      fecha: viaje.fechaCreacion,
-      completado: ['Creado', 'En Camino', 'En Planta', 'Finalizado'].includes(estadoActual)
-    },
-    {
-      estado: 'En Camino',
-      label: 'En Camino',
-      icon: Truck,
-      fecha: viaje.fechaEnCamino,
-      completado: ['En Camino', 'En Planta', 'Finalizado'].includes(estadoActual)
-    },
-    {
-      estado: 'En Planta',
-      label: 'En Planta',
-      icon: Clock,
-      fecha: viaje.fechaEnPlanta,
-      completado: ['En Planta', 'Finalizado'].includes(estadoActual)
-    },
-    {
-      estado: 'Finalizado',
-      label: 'Finalizado',
-      icon: CheckCircle,
-      fecha: viaje.fechaFinalizado,
-      completado: estadoActual === 'Finalizado'
-    },
-  ];
+  // ── Finalizar viaje (EN_PLANTA → FINALIZADO) ────────────────────
+  const finalizarViaje = async () => {
+    if (!viaje) return;
+    if (!window.confirm('¿Finalizar este viaje? Esta acción no se puede deshacer.')) return;
+    setProcesando(true);
+    try {
+      await viajesApi.finalizar(viaje.id);
+      toast.success('Viaje finalizado exitosamente');
+      await cargarViaje();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al finalizar viaje');
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  // Early returns
+  if (loading) return (
+    <div className="flex items-center justify-center py-16 text-muted-foreground gap-3">
+      <Loader2 className="w-5 h-5 animate-spin" /> Cargando viaje...
+    </div>
+  );
+
+  if (!viaje) return (
+    <div className="max-w-3xl mx-auto">
+      <Button variant="ghost" size="sm" onClick={() => navigate('/viajes')} className="mb-4 gap-2">
+        <ArrowLeft className="h-4 w-4" /> Volver a Viajes
+      </Button>
+      <Card className="border-destructive/30 bg-destructive/5">
+        <CardContent className="p-6">
+          <h2 className="text-lg font-semibold text-destructive mb-2">No se pudo cargar el viaje</h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            {errorCarga ?? 'El servidor no devolvió datos para este viaje.'}
+          </p>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => cargarViaje()}>Reintentar</Button>
+            <Button variant="outline" size="sm" onClick={() => navigate('/viajes')}>Volver al listado</Button>
+          </div>
+          <p className="text-xs text-muted-foreground mt-4">
+            ID del viaje: <code className="bg-muted px-1 rounded">{id}</code>
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  const fechaViaje    = parseFechaAPI(viaje.fecha_viaje);
+  const despachadoAt  = parseFechaAPI(viaje.despachado_at);
+  const llegadaAt     = parseFechaAPI(viaje.llegada_planta_at);
+  const finalizadoAt  = parseFechaAPI(viaje.finalizado_at);
+  const peso          = viaje.peso_viaje ? parseFloat(String(viaje.peso_viaje)) : null;
+  const detalles      = viaje.detalles ?? [];
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-7xl">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="mb-8">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate('/viajes')}
-          className="mb-4 gap-2"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Volver a Viajes
+      <div>
+        <Button variant="ghost" size="sm" onClick={() => navigate('/viajes')} className="mb-4 gap-2">
+          <ArrowLeft className="h-4 w-4" /> Volver a Viajes
         </Button>
-        <div className="flex items-center gap-3">
-          <h1>Detalle del Viaje - {viaje.remisionId}</h1>
-          <Badge variant="outline" className={
-            estadoActual === 'Creado' ? 'bg-muted text-muted-foreground border-muted' :
-            estadoActual === 'En Camino' ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30' :
-            estadoActual === 'En Planta' ? 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30' :
-            'bg-success/10 text-success border-success/30'
-          }>
-            {estadoActual}
-          </Badge>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Detalle de Viaje</h1>
+            <p className="text-muted-foreground mt-1">Información completa y seguimiento</p>
+          </div>
+          <div className="text-right">
+            <p className="text-sm text-muted-foreground">Remisión</p>
+            <p className="text-2xl font-bold text-primary">{viaje.remision}</p>
+            <div className="mt-2"><EstadoBadgeLarge estado={viaje.estado} /></div>
+          </div>
         </div>
-        <p className="text-muted-foreground mt-1">
-          Visualiza y gestiona la información del viaje
-        </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Columna izquierda: Wizard (2/3) */}
-        <div className="lg:col-span-2 space-y-8">
-
-          {/* Stepper horizontal - No mostrar solo si estamos en estado En Planta */}
-          {estadoActual !== 'En Planta' && (
-            <Card className="border-border">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  {etapasDisponibles.map((etapa, index) => {
-                    const estaCompleta = etapaActual > etapa.numero;
-                    const estaActiva = etapaActual === etapa.numero;
-
-                    return (
-                      <div key={etapa.numero} className="flex items-center" style={{ flex: index < etapasDisponibles.length - 1 ? 1 : 'none' }}>
-                        {/* Círculo de etapa */}
-                        <button
-                          onClick={() => irAEtapa(etapa.numero)}
-                          className={`flex flex-col items-center gap-2 ${
-                            estaActiva || estaCompleta ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
-                          }`}
-                          disabled={!estaActiva && !estaCompleta}
-                        >
-                          <div
-                            className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition-all ${
-                              estaCompleta
-                                ? 'bg-primary border-primary text-white'
-                                : estaActiva
-                                ? 'bg-primary/10 border-primary text-primary'
-                                : 'bg-muted border-border text-muted-foreground'
-                            }`}
-                          >
-                            {estaCompleta ? (
-                              <Check className="h-5 w-5" />
-                            ) : (
-                              <span className="font-bold">{etapa.numero}</span>
-                            )}
-                          </div>
-                          <div className="text-center">
-                            <div
-                              className={`text-sm font-semibold whitespace-nowrap ${
-                                estaActiva || estaCompleta ? 'text-foreground' : 'text-muted-foreground'
-                              }`}
-                            >
-                              {etapa.nombre}
-                            </div>
-                          </div>
-                        </button>
-
-                        {/* Línea conectora */}
-                        {index < etapasDisponibles.length - 1 && (
-                          <div className="flex-1 h-0.5 mx-3 bg-border relative min-w-[20px]">
-                            <div
-                              className={`absolute inset-0 bg-primary transition-all ${
-                                estaCompleta ? 'w-full' : 'w-0'
-                              }`}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Contenido de las etapas */}
-          <div className="space-y-6">
-            {/* ETAPA 1: INFORMACIÓN DEL VIAJE */}
-            {etapaActual === 1 && (
-              <Card className="border-border">
-                <CardHeader>
-                  <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                      <Truck className="h-6 w-6 text-primary" />
-                    </div>
-                    <div>
-                      <CardTitle>Información del Viaje</CardTitle>
-                      <p className="text-sm text-muted-foreground">
-                        Datos del viaje registrado
-                      </p>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Fecha del Viaje</Label>
-                      <Input value={new Date(viaje.fecha).toLocaleDateString('es-CO')} disabled />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Placa del Vehículo</Label>
-                      <Input value={viaje.placaVehiculo} disabled />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Conductor</Label>
-                      <Input value={viaje.conductor} disabled />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Transportador</Label>
-                      <Input value={viaje.transportador} disabled />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Extractora Destino</Label>
-                      <Input value={viaje.extractora} disabled />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Hora de Salida</Label>
-                      <Input value={viaje.horaSalida} disabled />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* ETAPA 2: COSECHA */}
-            {etapaActual === 2 && (
-              <Card className="border-border">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                        <Leaf className="h-6 w-6 text-primary" />
-                      </div>
-                      <div>
-                        <CardTitle>Cosecha</CardTitle>
-                        <p className="text-sm text-muted-foreground">
-                          {estadoActual === 'Finalizado' ? 'Información de cosecha registrada' : 'Edita o aprueba las cosechas del viaje'}
-                        </p>
-                      </div>
-                    </div>
-                    {estadoActual !== 'Finalizado' && (
-                      <Button onClick={agregarCosecha} className="gap-2">
-                        <Plus className="h-4 w-4" />
-                        Agregar Cosecha
-                      </Button>
-                    )}
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {cosechas.map((cosecha) => (
-                    <Card key={cosecha.id} className="border-border">
-                      <CardContent className="pt-6 space-y-4">
-                        {estadoActual !== 'Finalizado' && (
-                          <div className="flex justify-end">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => eliminarCosecha(cosecha.id)}
-                              className="text-destructive hover:text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        )}
-                        <div className="grid gap-4 md:grid-cols-2">
-                          <div className="space-y-2 md:col-span-2">
-                            <Label>Planilla / Cosecha</Label>
-                            {estadoActual === 'Finalizado' ? (
-                              <Input
-                                value={planillasMock.find(p => p.id === cosecha.planillaId)?.nombre || 'N/A'}
-                                disabled
-                                className="bg-muted"
-                              />
-                            ) : (
-                              <Select
-                                value={cosecha.planillaId}
-                                onValueChange={(value) => {
-                                  const updated = cosechas.map(c =>
-                                    c.id === cosecha.id ? { ...c, planillaId: value } : c
-                                  );
-                                  setCosechas(updated);
-                                }}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Seleccionar planilla..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {planillasMock.map((planilla) => (
-                                    <SelectItem key={planilla.id} value={planilla.id}>
-                                      {planilla.nombre}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            )}
-                          </div>
-
-                          <div className="space-y-2 md:col-span-2">
-                            <Label>Colaboradores</Label>
-                            {estadoActual !== 'Finalizado' && (
-                              <Select
-                                value=""
-                                onValueChange={(value) => {
-                                  if (value) {
-                                    agregarColaboradorACosecha(cosecha.id, value);
-                                  }
-                                }}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Agregar colaborador" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {colaboradores
-                                    .filter(col => !cosecha.colaboradores.includes(col.id))
-                                    .map((col) => (
-                                      <SelectItem key={col.id} value={col.id}>
-                                        {col.nombres} {col.apellidos}
-                                      </SelectItem>
-                                    ))}
-                                </SelectContent>
-                              </Select>
-                            )}
-                            {cosecha.colaboradores.length > 0 && (
-                              <div className="flex flex-wrap gap-2 mt-2">
-                                {cosecha.colaboradores.map((colId) => {
-                                  const col = colaboradores.find(c => c.id === colId);
-                                  return col ? (
-                                    <Badge
-                                      key={colId}
-                                      variant="secondary"
-                                      className="pl-2.5 pr-1 py-1 gap-1"
-                                    >
-                                      <span>{col.nombres} {col.apellidos}</span>
-                                      <button
-                                        type="button"
-                                        onClick={() => eliminarColaboradorDeCosecha(cosecha.id, colId)}
-                                        className="ml-1 hover:bg-muted rounded-sm p-0.5"
-                                      >
-                                        <X className="h-3 w-3" />
-                                      </button>
-                                    </Badge>
-                                  ) : null;
-                                })}
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label>Lote</Label>
-                            {estadoActual === 'Finalizado' ? (
-                              <Input
-                                value={lotesData.find(l => l.id === cosecha.lote)?.nombre || 'N/A'}
-                                disabled
-                                className="bg-muted"
-                              />
-                            ) : (
-                              <Select
-                                value={cosecha.lote}
-                                onValueChange={(value) => {
-                                  const updated = cosechas.map(c =>
-                                    c.id === cosecha.id ? { ...c, lote: value, sublote: '' } : c
-                                  );
-                                  setCosechas(updated);
-                                }}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Seleccionar lote" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {lotesData.map((lote) => (
-                                    <SelectItem key={lote.id} value={lote.id}>
-                                      {lote.nombre}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            )}
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label>Sublote</Label>
-                            {estadoActual === 'Finalizado' ? (
-                              <Input
-                                value={sublotes.find(s => s.id === cosecha.sublote)?.nombre || 'N/A'}
-                                disabled
-                                className="bg-muted"
-                              />
-                            ) : (
-                              <Select
-                                value={cosecha.sublote}
-                                onValueChange={(value) => {
-                                  const updated = cosechas.map(c =>
-                                    c.id === cosecha.id ? { ...c, sublote: value } : c
-                                  );
-                                  setCosechas(updated);
-                                }}
-                                disabled={!cosecha.lote}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Seleccionar sublote" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {sublotes
-                                    .filter(s => s.loteId === cosecha.lote)
-                                    .map((sublote) => (
-                                      <SelectItem key={sublote.id} value={sublote.id}>
-                                        {sublote.nombre}
-                                      </SelectItem>
-                                    ))}
-                                </SelectContent>
-                              </Select>
-                            )}
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label>Número de Gajos</Label>
-                            <Input
-                              type="number"
-                              placeholder="0"
-                              value={cosecha.gajos || ''}
-                              onChange={(e) => {
-                                const updated = cosechas.map(c =>
-                                  c.id === cosecha.id ? { ...c, gajos: parseInt(e.target.value) || 0 } : c
-                                );
-                                setCosechas(updated);
-                              }}
-                              disabled={estadoActual === 'Finalizado'}
-                              className={estadoActual === 'Finalizado' ? 'bg-muted' : ''}
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label>Peso en kg</Label>
-                            <Input
-                              type="number"
-                              placeholder="0"
-                              value={cosecha.pesoKg || ''}
-                              onChange={(e) => {
-                                const updated = cosechas.map(c =>
-                                  c.id === cosecha.id ? { ...c, pesoKg: parseInt(e.target.value) || 0 } : c
-                                );
-                                setCosechas(updated);
-                              }}
-                              disabled={estadoActual === 'Finalizado'}
-                              className={estadoActual === 'Finalizado' ? 'bg-muted' : ''}
-                            />
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                  {cosechas.length === 0 && (
-                    <div className="text-center py-12 text-muted-foreground">
-                      <Leaf className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                      <p>No hay cosechas registradas</p>
-                      <p className="text-sm">Haz clic en "Agregar Cosecha" para crear una</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-
-            {/* ETAPA 3: SOPORTE EXTRACTORA */}
-            {etapaActual === 3 && (
-              <Card className="border-border">
-                <CardHeader>
-                  <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                      <Upload className="h-6 w-6 text-primary" />
-                    </div>
-                    <div>
-                      <CardTitle>Soporte de Extractora</CardTitle>
-                      <p className="text-sm text-muted-foreground">
-                        {estadoActual === 'Finalizado' ? 'Documento cargado de la extractora' : 'Carga el documento enviado por la extractora'}
-                      </p>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {estadoActual === 'Finalizado' ? (
-                    <div className="flex items-center gap-2 p-4 bg-success/10 border border-success/20 rounded-lg">
-                      <CheckCircle className="h-6 w-6 text-success" />
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-success">Soporte cargado exitosamente</p>
-                        <p className="text-xs text-muted-foreground">soporte_extractora_{viaje.id}.pdf</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="space-y-2">
-                        <Label>Archivo del Soporte</Label>
-                        <div className="flex flex-col gap-3">
-                          <Input
-                            type="file"
-                            onChange={handleArchivoChange}
-                            accept=".pdf,.jpg,.jpeg,.png"
-                            className="cursor-pointer"
-                          />
-                          {archivoSoporte && (
-                            <div className="flex items-center gap-2 p-3 bg-success/10 border border-success/20 rounded-lg">
-                              <CheckCircle className="h-5 w-5 text-success" />
-                              <div className="flex-1">
-                                <p className="text-sm font-medium text-success">Archivo cargado</p>
-                                <p className="text-xs text-muted-foreground">{archivoSoporte.name}</p>
-                              </div>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setArchivoSoporte(null)}
-                                className="text-destructive hover:text-destructive"
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          Formatos permitidos: PDF, JPG, PNG
-                        </p>
-                      </div>
-
-                      {!archivoSoporte && (
-                        <div className="text-center py-12 border-2 border-dashed border-border rounded-lg bg-muted/20">
-                          <Upload className="h-12 w-12 mx-auto mb-3 text-muted-foreground opacity-50" />
-                          <p className="text-muted-foreground">Selecciona un archivo para continuar</p>
-                          <p className="text-sm text-muted-foreground">El soporte de la extractora es requerido para finalizar</p>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Botones de navegación */}
-            <div className="flex items-center justify-between pt-4">
-              {(estadoActual === 'En Camino' || estadoActual === 'Finalizado') && (
-                <Button
-                  variant="outline"
-                  onClick={etapaAnterior}
-                  disabled={etapaActual === 1}
-                  className="gap-2"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                  Anterior
-                </Button>
-              )}
-
-              {estadoActual === 'En Planta' && (
-                <Button
-                  variant="outline"
-                  onClick={() => navigate('/viajes')}
-                  className="gap-2"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                  Volver a Viajes
-                </Button>
-              )}
-
-              <div className="flex gap-2 ml-auto">
-                {estadoActual === 'Finalizado' && etapaActual < 3 ? (
-                  <Button
-                    onClick={siguienteEtapa}
-                    className="gap-2"
-                  >
-                    Siguiente
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                ) : estadoActual === 'En Camino' && etapaActual < 2 ? (
-                  <Button
-                    onClick={siguienteEtapa}
-                    className="gap-2"
-                  >
-                    Siguiente
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                ) : (
-                  <>
-                    {estadoActual === 'En Camino' && etapaActual === 2 && (
-                      <Button
-                        onClick={aprobarCosecha}
-                        className="gap-2 bg-success hover:bg-success/90"
-                      >
-                        <Check className="h-4 w-4" />
-                        Aprobar Cosecha
-                      </Button>
-                    )}
-                    {estadoActual === 'En Planta' && etapaActual === 3 && (
-                      <Button
-                        onClick={guardarSoporte}
-                        className="gap-2 bg-success hover:bg-success/90"
-                      >
-                        <Check className="h-4 w-4" />
-                        Guardar y Finalizar
-                      </Button>
-                    )}
-                  </>
-                )}
-              </div>
+      {/* Timeline / Estado del viaje */}
+      <Card className="glass-subtle border-border">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
+              <Truck className="h-6 w-6 text-primary" />
+            </div>
+            <div>
+              <CardTitle>Seguimiento del Viaje</CardTitle>
+              <p className="text-sm text-muted-foreground">Estados y tiempos</p>
             </div>
           </div>
-        </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-4">
+            <div className="p-4 rounded-lg bg-muted/20 border border-border">
+              <div className="flex items-center gap-2 mb-1 text-muted-foreground">
+                <FileText className="h-4 w-4" />
+                <span className="text-xs font-medium">Creado</span>
+              </div>
+              <p className="text-sm font-semibold">
+                {fechaViaje ? fechaViaje.toLocaleDateString('es-CO') : '—'}
+                {' '}
+                <span className="text-xs text-muted-foreground">
+                  {(viaje.hora_salida ?? '').substring(0, 5)}
+                </span>
+              </p>
+            </div>
+            <div className={`p-4 rounded-lg border ${despachadoAt ? 'bg-amber-500/5 border-amber-500/30' : 'bg-muted/20 border-border opacity-50'}`}>
+              <div className="flex items-center gap-2 mb-1 text-muted-foreground">
+                <Truck className="h-4 w-4" />
+                <span className="text-xs font-medium">Despachado</span>
+              </div>
+              <p className="text-sm font-semibold">
+                {despachadoAt ? despachadoAt.toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
+              </p>
+            </div>
+            <div className={`p-4 rounded-lg border ${llegadaAt ? 'bg-blue-500/5 border-blue-500/30' : 'bg-muted/20 border-border opacity-50'}`}>
+              <div className="flex items-center gap-2 mb-1 text-muted-foreground">
+                <MapPin className="h-4 w-4" />
+                <span className="text-xs font-medium">Llegada a Planta</span>
+              </div>
+              <p className="text-sm font-semibold">
+                {llegadaAt ? llegadaAt.toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
+              </p>
+            </div>
+            <div className={`p-4 rounded-lg border ${finalizadoAt ? 'bg-success/5 border-success/30' : 'bg-muted/20 border-border opacity-50'}`}>
+              <div className="flex items-center gap-2 mb-1 text-muted-foreground">
+                <CheckCircle className="h-4 w-4" />
+                <span className="text-xs font-medium">Finalizado</span>
+              </div>
+              <p className="text-sm font-semibold">
+                {finalizadoAt ? finalizadoAt.toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-        {/* Columna derecha: Timeline (1/3) - sticky */}
-        <div className="lg:col-span-1">
-          <div className="sticky top-8">
-            <Card className="border-border">
-              <CardHeader className="border-b border-border">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Clock className="h-4 w-4 text-primary" />
-                  Timeline del Viaje
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6 space-y-6">
-                {/* Progreso general */}
-                {estadoActual !== 'En Planta' && estadoActual !== 'Finalizado' && (
-                  <>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Progreso</span>
-                        <span className="font-semibold">{etapaActual} de {etapasDisponibles.length}</span>
-                      </div>
-                      <div className="h-2 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-primary transition-all duration-300"
-                          style={{ width: `${(etapaActual / etapasDisponibles.length) * 100}%` }}
-                        />
+      {/* Datos del viaje */}
+      <Card className="glass-subtle border-border">
+        <CardHeader>
+          <CardTitle>Información General</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                <Calendar className="h-4 w-4" />
+                <span className="text-xs">Fecha del viaje</span>
+              </div>
+              <p className="text-sm font-medium">
+                {fechaViaje ? fechaViaje.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'}
+              </p>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                <Clock className="h-4 w-4" />
+                <span className="text-xs">Hora salida</span>
+              </div>
+              <p className="text-sm font-medium">{(viaje.hora_salida ?? '').substring(0, 5) || '—'}</p>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                <Truck className="h-4 w-4" />
+                <span className="text-xs">Vehículo / Conductor</span>
+              </div>
+              <p className="text-sm font-medium">{viaje.placa_vehiculo}</p>
+              <p className="text-xs text-muted-foreground">{viaje.nombre_conductor}</p>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                <MapPin className="h-4 w-4" />
+                <span className="text-xs">Extractora</span>
+              </div>
+              <p className="text-sm font-medium">{viaje.extractora?.razon_social ?? '—'}</p>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                <Package className="h-4 w-4" />
+                <span className="text-xs">Gajos totales</span>
+              </div>
+              <p className="text-sm font-medium">
+                {(viaje.cantidad_gajos_total ?? 0).toLocaleString()}
+              </p>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                <Scale className="h-4 w-4" />
+                <span className="text-xs">Peso del viaje</span>
+              </div>
+              <p className="text-sm font-medium">
+                {peso ? `${peso.toLocaleString()} kg` : '—'}
+              </p>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                <Leaf className="h-4 w-4" />
+                <span className="text-xs">Tipo</span>
+              </div>
+              <p className="text-sm font-medium">
+                {viaje.es_homogeneo ? 'Homogéneo' : 'No homogéneo'}
+              </p>
+            </div>
+            {viaje.observaciones && (
+              <div className="md:col-span-2 lg:col-span-4">
+                <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                  <FileText className="h-4 w-4" />
+                  <span className="text-xs">Observaciones</span>
+                </div>
+                <p className="text-sm">{viaje.observaciones}</p>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Cosechas del viaje */}
+      <Card className="glass-subtle border-border">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="h-12 w-12 rounded-xl bg-success/10 flex items-center justify-center">
+              <Leaf className="h-6 w-6 text-success" />
+            </div>
+            <div>
+              <CardTitle>Cosechas ({detalles.length})</CardTitle>
+              <p className="text-sm text-muted-foreground">Cosechas incluidas en este viaje</p>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {detalles.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">No hay cosechas registradas</p>
+          ) : (
+            <div className="space-y-3">
+              {detalles.map((d) => (
+                <div key={d.id}
+                  className="p-4 rounded-lg bg-muted/20 border border-border">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="font-semibold">
+                        {d.cosecha?.lote?.nombre ?? '—'} · {d.cosecha?.sublote?.nombre ?? '—'}
+                      </p>
+                      <div className="flex flex-wrap gap-4 mt-2 text-sm text-muted-foreground">
+                        <span>Gajos reportados: <strong className="text-foreground">{d.cosecha?.gajos_reportados ?? 0}</strong></span>
+                        {d.cosecha?.gajos_reconteo !== undefined && d.cosecha?.gajos_reconteo !== null && (
+                          <span>Reconteo: <strong className="text-foreground">{d.cosecha.gajos_reconteo}</strong></span>
+                        )}
+                        {d.cosecha?.peso_confirmado && (
+                          <span>Peso: <strong className="text-foreground">{parseFloat(d.cosecha.peso_confirmado).toLocaleString()} kg</strong></span>
+                        )}
                       </div>
                     </div>
-                    <div className="h-px bg-border" />
-                  </>
-                )}
-
-                <div className="relative space-y-6">
-                  {/* Línea vertical */}
-                  <div className="absolute left-4 top-4 bottom-4 w-0.5 bg-border" />
-
-                  {timelineSteps.map((step) => {
-                    const Icon = step.icon;
-                    const isActive = step.estado === estadoActual;
-                    const isCompleted = step.completado;
-
-                    return (
-                      <div key={step.estado} className="relative flex gap-3">
-                        {/* Círculo del estado */}
-                        <div
-                          className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 ${
-                            isCompleted
-                              ? 'bg-success border-success/20'
-                              : 'bg-muted border-border'
-                          } ${isActive ? 'ring-2 ring-primary/30' : ''}`}
-                        >
-                          {isCompleted ? (
-                            <CheckCircle className="h-4 w-4 text-white" />
-                          ) : (
-                            <Icon className="h-4 w-4 text-muted-foreground" />
-                          )}
-                        </div>
-
-                        {/* Contenido del estado */}
-                        <div className="flex-1 pb-2">
-                          <h4
-                            className={`text-sm font-semibold ${
-                              isCompleted ? 'text-success' : isActive ? 'text-primary' : 'text-muted-foreground'
-                            }`}
-                          >
-                            {step.label}
-                          </h4>
-                          {step.fecha && (
-                            <p className="text-xs text-muted-foreground">
-                              {new Date(step.fecha).toLocaleString('es-CO', {
-                                month: 'short',
-                                day: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
-                            </p>
-                          )}
-                          {!step.fecha && !isCompleted && (
-                            <p className="text-xs text-muted-foreground">Pendiente</p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+                    {d.reconteo_aprobado && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border text-success bg-success/10 border-success/30">
+                        <Check className="h-3.5 w-3.5" /> Aprobado
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Acciones según estado */}
+      <div className="flex justify-end gap-3">
+        {viaje.estado === 'EN_CAMINO' && (
+          <Button
+            onClick={() => setModalLlegada(true)}
+            className="gap-2 bg-blue-600 hover:bg-blue-700"
+            disabled={procesando}
+          >
+            <MapPin className="h-4 w-4" /> Registrar Llegada a Planta
+          </Button>
+        )}
+        {viaje.estado === 'EN_PLANTA' && (
+          <Button
+            onClick={finalizarViaje}
+            className="gap-2 bg-success hover:bg-success/90"
+            disabled={procesando}
+          >
+            {procesando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            Finalizar Viaje
+          </Button>
+        )}
       </div>
+
+      {/* Modal Llegada a Planta */}
+      {modalLlegada && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle>Registrar Llegada a Planta</CardTitle>
+              <p className="text-sm text-muted-foreground">Ingresa el peso real del viaje</p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Peso del viaje (kg) *</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={pesoLlegada}
+                  onChange={(e) => setPesoLlegada(e.target.value)}
+                  placeholder="Ej: 12500.50"
+                  autoFocus
+                />
+              </div>
+            </CardContent>
+            <div className="p-4 border-t flex justify-end gap-2">
+              <Button variant="outline" onClick={() => { setModalLlegada(false); setPesoLlegada(''); }} disabled={procesando}>
+                Cancelar
+              </Button>
+              <Button onClick={registrarLlegada} disabled={procesando || !pesoLlegada}>
+                {procesando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4 mr-1" />}
+                Confirmar
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
