@@ -577,24 +577,20 @@ export default function NuevoColaboradorWizard() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Salario Base {formData.modalidadPago === 'FIJO' && <span className="text-destructive">*</span>}</Label>
-                  {formData.modalidadPago === 'VARIABLE' ? (
-                    <Input type="number" placeholder="Opcional para variable" value={formData.salarioBase || ''} onChange={e => handleInputChange('salarioBase', parseFloat(e.target.value) || 0)} />
-                  ) : (
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">$</span>
-                      <Input
-                        type="text"
-                        placeholder="1.300.000"
-                        className="pl-7"
-                        value={formData.salarioBase > 0 ? formData.salarioBase.toLocaleString('es-CO') : ''}
-                        onChange={e => {
-                          const raw = e.target.value.replace(/[^0-9]/g, '');
-                          handleInputChange('salarioBase', parseInt(raw) || 0);
-                        }}
-                      />
-                    </div>
-                  )}
+                  <Label>Salario Base (COP) {formData.modalidadPago === 'FIJO' && <span className="text-destructive">*</span>}</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">$</span>
+                    <Input
+                      type="text"
+                      placeholder={formData.modalidadPago === 'VARIABLE' ? 'Opcional' : '1.300.000'}
+                      className="pl-7"
+                      value={formData.salarioBase > 0 ? formData.salarioBase.toLocaleString('es-CO') : ''}
+                      onChange={e => {
+                        const raw = e.target.value.replace(/[^0-9]/g, '');
+                        handleInputChange('salarioBase', parseInt(raw) || 0);
+                      }}
+                    />
+                  </div>
                 </div>
                 {isEditMode && (
                   <div className="flex items-center justify-between p-4 border border-border rounded-lg">
@@ -664,20 +660,6 @@ export default function NuevoColaboradorWizard() {
                   <Label>Caja de Compensación</Label>
                   <Input placeholder="Ej: Cafam" value={formData.cajaCompensacion} onChange={e => handleInputChange('cajaCompensacion', e.target.value)} />
                 </div>
-                {/* Contacto de emergencia aquí */}
-                <div className="border-t border-border pt-4 space-y-4">
-                  <p className="text-sm font-semibold">Contacto de Emergencia</p>
-                  <div className="grid gap-6 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Nombre</Label>
-                      <Input placeholder="Ej: María López" value={formData.contactoEmergenciaNombre} onChange={e => handleInputChange('contactoEmergenciaNombre', e.target.value)} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Teléfono</Label>
-                      <Input placeholder="3109876543" value={formData.contactoEmergenciaTelefono} onChange={e => handleInputChange('contactoEmergenciaTelefono', e.target.value)} />
-                    </div>
-                  </div>
-                </div>
                 {/* Datos de contacto */}
                 <div className="border-t border-border pt-4 space-y-4">
                   <p className="text-sm font-semibold">Datos de Contacto</p>
@@ -728,6 +710,20 @@ export default function NuevoColaboradorWizard() {
                           <option key={m.codigo} value={m.nombre}>{m.nombre}</option>
                         ))}
                       </select>
+                    </div>
+                  </div>
+                </div>
+                {/* Contacto de emergencia aquí */}
+                <div className="border-t border-border pt-4 space-y-4">
+                  <p className="text-sm font-semibold">Contacto de Emergencia</p>
+                  <div className="grid gap-6 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Nombre</Label>
+                      <Input placeholder="Ej: María López" value={formData.contactoEmergenciaNombre} onChange={e => handleInputChange('contactoEmergenciaNombre', e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Teléfono</Label>
+                      <Input placeholder="3109876543" value={formData.contactoEmergenciaTelefono} onChange={e => handleInputChange('contactoEmergenciaTelefono', e.target.value)} />
                     </div>
                   </div>
                 </div>
@@ -1017,7 +1013,7 @@ export default function NuevoColaboradorWizard() {
                   <p className="text-xs text-muted-foreground">{modalidadesPago.find(m => m.codigo === formData.modalidadPago)?.label}</p>
                 </div>
                 <div className="pb-3 border-b border-border">
-                  <p className="text-muted-foreground mb-1">Salario Base</p>
+                  <p className="text-muted-foreground mb-1">Salario Base (COP)</p>
                   <p className="font-medium">{formData.salarioBase > 0 ? `$${formData.salarioBase.toLocaleString('es-CO')}` : '-'}</p>
                 </div>
                 <div className="pb-3 border-b border-border">
