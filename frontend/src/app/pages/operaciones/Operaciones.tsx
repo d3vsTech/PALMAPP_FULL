@@ -89,8 +89,12 @@ export default function Operaciones() {
 
   // ── Helpers ──────────────────────────────────────────
   const formatearFecha = (iso: string): string => {
+    if (!iso) return '—';
     try {
-      return new Date(iso + 'T00:00:00').toLocaleDateString('es-CO', {
+      // Si ya viene con T (timestamp completo) usarlo directo, si no agregar T00:00:00
+      const d = new Date(iso.includes('T') ? iso : iso + 'T00:00:00');
+      if (isNaN(d.getTime())) return iso;
+      return d.toLocaleDateString('es-CO', {
         weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
       });
     } catch { return iso; }
