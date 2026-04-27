@@ -9,9 +9,6 @@ import SeleccionarFinca from './pages/auth/SeleccionarFinca';
 
 // Dashboard
 import Dashboard from './pages/dashboard/Dashboard';
-import DashboardDueno from './pages/dashboard/DashboardDueno';
-import DashboardAdministrador from './pages/dashboard/DashboardAdministrador';
-import DashboardOtrosRoles from './pages/dashboard/DashboardOtrosRoles';
 
 // Agente IA
 import AgenteIA from './pages/agente-ia/AgenteIA';
@@ -48,25 +45,25 @@ import Liquidaciones from './pages/liquidaciones/Liquidaciones';
 // Operaciones
 import Operaciones from './pages/operaciones/Operaciones';
 import NuevaPlanillaWizard from './pages/operaciones/NuevaPlanillaWizard';
-import VerPlanilla from './pages/operaciones/VerPlanilla';
+import VerPlanilla from './pages/operaciones/Verplanilla';
 
 // Viajes
 import Viajes from './pages/viajes/Viajes';
 import DetalleViaje from './pages/viajes/DetalleViaje';
 import NuevoViajeWizard from './pages/viajes/NuevoViajeWizard';
 import ConteoCosecha from './pages/viajes/ConteoCosecha';
-import ConteoCosechaWizard from './pages/viajes/ConteoCosechaWizard';
-import NuevoEditarViaje from './pages/viajes/NuevoEditarViaje';
+import ConteoCosechaWizard from './pages/viajes/Conteocosechawizard';
+import NuevoEditarViaje from './pages/viajes/Nuevoeditarviaje';
 
 // Market
 import Market from './pages/market/Market';
 import Proveedores from './pages/market/Proveedores';
-import ProveedorDetalle from './pages/market/ProveedorDetalle';
-import ProductoDetalle from './pages/market/ProductoDetalle';
+import ProveedorDetalle from './pages/market/Proveedordetalle';
+import ProductoDetalle from './pages/market/Productodetalle';
 import Carrito from './pages/market/Carrito';
 import Checkout from './pages/market/Checkout';
 import Pedidos from './pages/market/Pedidos';
-import PedidoDetalle from './pages/market/PedidoDetalle';
+import PedidoDetalle from './pages/market/Pedidodetalle';
 
 // Usuarios
 import Usuarios from './pages/usuarios/Usuarios';
@@ -134,9 +131,6 @@ export const router = createBrowserRouter([
 
       { path: 'agente-ia', Component: AgenteIA },
 
-      { path: 'dashboard/dueno',         Component: DashboardDueno },
-      { path: 'dashboard/administrador', Component: DashboardAdministrador },
-      { path: 'dashboard/otros',         Component: DashboardOtrosRoles },
 
       { path: 'metricas/productividad-colaboradores', Component: ProductividadColaboradores },
       { path: 'metricas/precios-cosecha',             Component: PreciosCosecha },

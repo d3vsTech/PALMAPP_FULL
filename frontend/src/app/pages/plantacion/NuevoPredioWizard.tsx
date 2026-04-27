@@ -40,6 +40,7 @@ interface LoteLocal {
   fechaSiembra: string;
   hectareasSembradas: number;
   semillasIds: number[];
+  variedad?: string;
 }
 interface SubloteLocal {
   id: string;
@@ -101,6 +102,8 @@ export default function NuevoPredioWizard() {
     data: any[]; total: number; page: number; lastPage: number; loading: boolean;
   }>>({});
   const [wizardLineaOpen, setWizardLineaOpen] = useState<Record<string, string>>({});
+  const [mostrandoFormPalmas, setMostrandoFormPalmas] = useState<string | null>(null);
+  const [visiblePalmas, setVisiblePalmas] = useState<Record<string, number>>({});
 
   // ── Panel resumen: en edición usa API; en creación usa estado local ────────
   const [resumen, setResumen] = useState<any>(null);
@@ -141,7 +144,8 @@ export default function NuevoPredioWizard() {
   const cargarWizardPalmas = async (
     key: string,
     params: { sublote_id: number; linea_id?: number },
-    page = 1
+    page = 1,
+    append = false
   ) => {
     const PER = 50;
     setWizardPag(prev => ({
@@ -153,7 +157,7 @@ export default function NuevoPredioWizard() {
       setWizardPag(prev => ({
         ...prev,
         [key]: {
-          data:     res.data ?? [],
+          data:     append ? [...(prev[key]?.data ?? []), ...(res.data ?? [])] : (res.data ?? []),
           total:    res.meta?.total        ?? 0,
           page:     res.meta?.current_page ?? page,
           lastPage: res.meta?.last_page    ?? 1,
@@ -185,9 +189,10 @@ export default function NuevoPredioWizard() {
         const lotesData = lotesRes.data ?? [];
         setLotes(lotesData.map((l: any) => ({
           id: String(l.id), nombre: l.nombre,
-          fechaSiembra: l.fecha_siembra ?? '',
+          fechaSiembra: (l.fecha_siembra ?? '').split('T')[0],
           hectareasSembradas: Number(l.hectareas_sembradas ?? 0),
           semillasIds: (l.semillas ?? []).map((s: any) => Number(s.id)),
+          variedad: (l.semillas ?? [])[0]?.nombre ?? '',
         })));
 
         // §3.1 Sublotes + §5.1 Líneas
@@ -220,6 +225,21 @@ export default function NuevoPredioWizard() {
     };
     cargar();
   }, [editId]);
+
+  // ── Auto-cargar palmas al entrar al paso 5 en modo edición ─────────────
+  const VISIBLE_STEP = 24;
+  useEffect(() => {
+    if (etapa !== 5 || !editId) return;
+    sublotes.forEach(sub => {
+      const key = `sub_${sub.id}`;
+      if (!wizardPag[key]) {
+        cargarWizardPalmas(key, { sublote_id: Number(sub.id) });
+      }
+    });
+    // Reset visible count when entering step
+    setVisiblePalmas({});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [etapa, editId]);
 
   // ── Helpers locales (modo creación) ──────────────────────────────────────
   const agregarLote = (lote: Omit<LoteLocal, 'id'>) => {
@@ -375,7 +395,7 @@ export default function NuevoPredioWizard() {
         const sublotesDelLote = sublotes.filter(s => s.loteId === lote.id);
         for (const sub of sublotesDelLote) {
           const subBody: any = { lote_id: loteIdReal, nombre: sub.nombre };
-          const cantForm = parseInt(cantPalmasForm[sub.id] ?? '');
+          const cantForm = parseInt(cantPalmasForm[`confirmed_${sub.id}`] ?? cantPalmasForm[sub.id] ?? '');
           const cantFinal = sub.cantidadPalmas > 0
             ? sub.cantidadPalmas
             : (!isNaN(cantForm) && cantForm > 0 ? cantForm : 0);
@@ -415,125 +435,319 @@ export default function NuevoPredioWizard() {
 
   // ── Panel resumen (derecha) ────────────────────────────────────────────────
   const PanelResumen = () => {
+    // En modo edición con datos del API (§1.6)
     if (editId && resumen) {
-      // §1.6 Usar datos del API en modo edición
       const pr = resumen.predio ?? {};
       const tg = resumen.totales_generales ?? {};
       const ls = resumen.lotes ?? [];
       return (
-        <div className="space-y-4">
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-muted-foreground uppercase">Predio</p>
-            <p className="font-bold">{pr.nombre}</p>
-            <p className="text-xs text-muted-foreground">{pr.ubicacion}</p>
-            <div className="flex gap-3 text-xs mt-1">
-              <span>{Number(pr.hectareas_totales ?? 0).toFixed(1)} ha totales</span>
-              <span className="text-success">{Number(pr.hectareas_disponibles ?? 0).toFixed(1)} ha disponibles</span>
+        <div className="space-y-6">
+          {/* Progreso */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Progreso</span>
+              <span className="font-semibold">{etapa} de {ETAPAS.length}</span>
+            </div>
+            <div className="h-2 bg-muted rounded-full overflow-hidden">
+              <div className="h-full bg-primary transition-all duration-300"
+                style={{ width: `${(etapa / ETAPAS.length) * 100}%` }} />
             </div>
           </div>
+
           <div className="h-px bg-border" />
-          <div className="grid grid-cols-3 gap-2 text-center text-xs">
-            {[
-              { label: 'Lotes', val: tg.lotes ?? 0 },
-              { label: 'Sublotes', val: tg.sublotes ?? 0 },
-              { label: 'Palmas', val: (tg.palmas ?? 0).toLocaleString('es-CO') },
-            ].map(({ label, val }) => (
-              <div key={label} className="border border-border rounded-lg p-2">
-                <p className="text-muted-foreground">{label}</p>
-                <p className="font-bold text-lg">{val}</p>
+
+          {/* Predio */}
+          <div className="space-y-2">
+            <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Predio</h4>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Nombre</span>
+                <span className="font-semibold text-sm">{pr.nombre}</span>
               </div>
-            ))}
+              {pr.ubicacion && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Ubicación</span>
+                  <span className="font-semibold text-sm truncate ml-2 max-w-[140px]" title={pr.ubicacion}>{pr.ubicacion}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Hectáreas</span>
+                <span className="font-semibold text-sm">{Number(pr.hectareas_totales ?? 0).toFixed(1)} ha</span>
+              </div>
+              <div className="flex items-center justify-between pt-1 border-t border-border/50">
+                <span className="text-xs text-muted-foreground">Disponibles</span>
+                <span className="font-semibold text-xs text-accent">{Number(pr.hectareas_disponibles ?? 0).toFixed(2)} ha</span>
+              </div>
+            </div>
           </div>
-          {ls.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase">Por Lote</p>
+
+          <div className="h-px bg-border" />
+
+          {/* Resumen detallado */}
+          <div className="space-y-3">
+            <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Resumen Detallado</h4>
+            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
               {ls.map((l: any) => (
-                <div key={l.id} className="border border-border rounded-lg p-2 text-xs">
-                  <div className="flex justify-between font-medium mb-1">
-                    <span>{l.nombre}</span>
-                    <span className="text-muted-foreground">{Number(l.hectareas_sembradas ?? 0).toFixed(1)} ha</span>
+                <div key={l.id} className="border border-border rounded-lg p-3 space-y-2 bg-card">
+                  <div className="flex items-center justify-between pb-2 border-b border-border/50">
+                    <div className="flex items-center gap-2">
+                      <Grid3x3 className="h-4 w-4 text-primary" />
+                      <span className="font-semibold text-sm">{l.nombre}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">{Number(l.hectareas_sembradas ?? 0).toFixed(1)} ha</span>
                   </div>
-                  <div className="flex gap-3 text-muted-foreground">
-                    <span>{l.totales?.sublotes ?? 0} sublotes</span>
-                    <span className="text-success">{(l.totales?.palmas ?? 0).toLocaleString('es-CO')} palmas</span>
+                  {(l.sublotes ?? []).length > 0 ? (
+                    <div className="space-y-1 pl-3">
+                      {(l.sublotes ?? []).map((s: any) => {
+                        const linCount = s.totales?.lineas ?? lineas.filter(ln => ln.subloteId === String(s.id)).length;
+                        return (
+                          <div key={s.id} className="flex items-center justify-between py-1 text-xs">
+                            <div className="flex items-center gap-2">
+                              <Trees className="h-3 w-3 text-primary/70" />
+                              <span>{s.nombre}</span>
+                            </div>
+                            <div className="flex items-center gap-3 text-xs">
+                              {linCount > 0 && (
+                                <span className="text-muted-foreground flex items-center gap-1">
+                                  <GitBranch className="h-3 w-3" />{linCount}
+                                </span>
+                              )}
+                              <span className="text-success font-semibold flex items-center gap-1">
+                                <Leaf className="h-3 w-3" />{(s.totales?.palmas ?? 0).toLocaleString('es-CO')}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground italic pl-3">Sin sublotes</p>
+                  )}
+                  <div className="flex items-center justify-between pt-2 border-t border-border/50 text-xs">
+                    <span className="font-medium">Totales del lote</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-muted-foreground">{l.totales?.sublotes ?? 0} sublotes</span>
+                      {(l.totales?.lineas ?? 0) > 0 && (
+                        <span className="text-muted-foreground">{l.totales?.lineas} líneas</span>
+                      )}
+                      <span className="text-success font-semibold">{(l.totales?.palmas ?? 0).toLocaleString('es-CO')} palmas</span>
+                    </div>
                   </div>
                 </div>
               ))}
+
+              {ls.length > 0 && (
+                <div className="border-2 border-primary/30 rounded-lg p-3 bg-primary/5 space-y-2">
+                  <h5 className="font-semibold text-sm flex items-center gap-2">
+                    <Check className="h-4 w-4 text-primary" /> Totales Generales
+                  </h5>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="flex items-center justify-between p-2 rounded bg-background/50">
+                      <span className="text-muted-foreground">Lotes</span>
+                      <span className="font-bold">{tg.lotes ?? 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between p-2 rounded bg-background/50">
+                      <span className="text-muted-foreground">Sublotes</span>
+                      <span className="font-bold">{tg.sublotes ?? 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between p-2 rounded bg-background/50">
+                      <span className="text-muted-foreground">Líneas</span>
+                      <span className="font-bold">{tg.lineas ?? 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between p-2 rounded bg-success/10">
+                      <span className="text-muted-foreground">Palmas</span>
+                      <span className="font-bold text-success">{(tg.palmas ?? 0).toLocaleString('es-CO')}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {ls.length === 0 && (
+                <div className="text-center py-8 text-muted-foreground">
+                  <p className="text-sm">No hay información para mostrar</p>
+                  <p className="text-xs">Completa las etapas anteriores</p>
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       );
     }
 
     // Modo creación: estado local
+    const totalPalmasCreacion = sublotes.reduce((sum, s) => {
+      const cant = parseInt(cantPalmasForm[`confirmed_${s.id}`] ?? cantPalmasForm[s.id] ?? '0') || s.cantidadPalmas || 0;
+      return sum + cant;
+    }, 0);
+
     return (
-      <div className="space-y-4">
+      <div className="space-y-6">
+        {/* Progreso */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Progreso</span>
+            <span className="font-semibold">{etapa} de {ETAPAS.length}</span>
+          </div>
+          <div className="h-2 bg-muted rounded-full overflow-hidden">
+            <div className="h-full bg-primary transition-all duration-300"
+              style={{ width: `${(etapa / ETAPAS.length) * 100}%` }} />
+          </div>
+        </div>
+
+        <div className="h-px bg-border" />
+
+        {/* Predio */}
         {predioNombre && (
           <>
-            <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Predio</p>
-              <p className="font-bold">{predioNombre}</p>
-              {predioUbicacion && <p className="text-xs text-muted-foreground">{predioUbicacion}</p>}
-              {predioHectareas && (
-                <div className="flex gap-3 text-xs mt-1">
-                  <span>{Number(predioHectareas).toFixed(1)} ha totales</span>
-                  {lotes.length > 0 && (
-                    <span className="text-success">{haDisponibles.toFixed(1)} ha disponibles</span>
-                  )}
+            <div className="space-y-2">
+              <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Predio</h4>
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Nombre</span>
+                  <span className="font-semibold text-sm">{predioNombre}</span>
                 </div>
-              )}
+                {predioUbicacion && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Ubicación</span>
+                    <span className="font-semibold text-sm truncate ml-2 max-w-[140px]" title={predioUbicacion}>{predioUbicacion}</span>
+                  </div>
+                )}
+                {predioHectareas && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Hectáreas</span>
+                    <span className="font-semibold text-sm">{Number(predioHectareas).toFixed(1)} ha</span>
+                  </div>
+                )}
+                {lotes.length > 0 && (
+                  <div className="flex items-center justify-between pt-1 border-t border-border/50">
+                    <span className="text-xs text-muted-foreground">Disponibles</span>
+                    <span className="font-semibold text-xs text-accent">{haDisponibles.toFixed(2)} ha</span>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="h-px bg-border" />
           </>
         )}
-        <div className="grid grid-cols-3 gap-2 text-center text-xs">
-          {[
-            { label: 'Lotes', val: lotes.length },
-            { label: 'Sublotes', val: sublotes.length },
-            { label: 'Líneas', val: lineas.length },
-          ].map(({ label, val }) => (
-            <div key={label} className="border border-border rounded-lg p-2">
-              <p className="text-muted-foreground">{label}</p>
-              <p className="font-bold text-lg">{val}</p>
-            </div>
-          ))}
-        </div>
-        {lotes.map(lote => {
-          const subls = sublotes.filter(s => s.loteId === lote.id);
-          return (
-            <div key={lote.id} className="border border-border rounded-lg p-3 text-xs space-y-1">
-              <div className="flex justify-between font-medium">
-                <span>{lote.nombre}</span>
-                <span className="text-muted-foreground">{lote.hectareasSembradas} ha</span>
-              </div>
-              {subls.map(s => (
-                <div key={s.id} className="pl-2 flex justify-between text-muted-foreground">
-                  <span>{s.nombre}</span>
-                  <span className="text-success">{s.cantidadPalmas} palmas</span>
+
+        {/* Resumen Detallado */}
+        <div className="space-y-3">
+          <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Resumen Detallado</h4>
+          <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+            {lotes.map(lote => {
+              const sublotesDelLote = sublotes.filter(s => s.loteId === lote.id);
+              const lineasDelLote   = lineas.filter(ln => sublotesDelLote.some(s => s.id === ln.subloteId));
+              const palmasDelLote   = sublotesDelLote.reduce((sum, s) => {
+                return sum + (parseInt(cantPalmasForm[`confirmed_${s.id}`] ?? cantPalmasForm[s.id] ?? '0') || s.cantidadPalmas || 0);
+              }, 0);
+
+              return (
+                <div key={lote.id} className="border border-border rounded-lg p-3 space-y-2 bg-card">
+                  <div className="flex items-center justify-between pb-2 border-b border-border/50">
+                    <div className="flex items-center gap-2">
+                      <Grid3x3 className="h-4 w-4 text-primary" />
+                      <span className="font-semibold text-sm">{lote.nombre}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">{lote.hectareasSembradas} ha</span>
+                  </div>
+
+                  {sublotesDelLote.length > 0 ? (
+                    <div className="space-y-1 pl-3">
+                      {sublotesDelLote.map(s => {
+                        const linSub = lineas.filter(ln => ln.subloteId === s.id);
+                        const palSub = parseInt(cantPalmasForm[`confirmed_${s.id}`] ?? cantPalmasForm[s.id] ?? '0') || s.cantidadPalmas || 0;
+                        return (
+                          <div key={s.id} className="flex items-center justify-between py-1 text-xs">
+                            <div className="flex items-center gap-2">
+                              <Trees className="h-3 w-3 text-primary/70" />
+                              <span>{s.nombre}</span>
+                            </div>
+                            <div className="flex items-center gap-3 text-xs">
+                              {linSub.length > 0 && (
+                                <span className="text-muted-foreground flex items-center gap-1">
+                                  <GitBranch className="h-3 w-3" />{linSub.length}
+                                </span>
+                              )}
+                              <span className="text-success font-semibold flex items-center gap-1">
+                                <Leaf className="h-3 w-3" />{palSub}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground italic pl-3">Sin sublotes</p>
+                  )}
+
+                  <div className="flex items-center justify-between pt-2 border-t border-border/50 text-xs">
+                    <span className="font-medium">Totales del lote</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-muted-foreground">{sublotesDelLote.length} sublotes</span>
+                      {lineasDelLote.length > 0 && (
+                        <span className="text-muted-foreground">{lineasDelLote.length} líneas</span>
+                      )}
+                      <span className="text-success font-semibold">{palmasDelLote} palmas</span>
+                    </div>
+                  </div>
                 </div>
-              ))}
-            </div>
-          );
-        })}
+              );
+            })}
+
+            {lotes.length > 0 && (
+              <div className="border-2 border-primary/30 rounded-lg p-3 bg-primary/5 space-y-2">
+                <h5 className="font-semibold text-sm flex items-center gap-2">
+                  <Check className="h-4 w-4 text-primary" /> Totales Generales
+                </h5>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="flex items-center justify-between p-2 rounded bg-background/50">
+                    <span className="text-muted-foreground">Lotes</span>
+                    <span className="font-bold">{lotes.length}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-2 rounded bg-background/50">
+                    <span className="text-muted-foreground">Sublotes</span>
+                    <span className="font-bold">{sublotes.length}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-2 rounded bg-background/50">
+                    <span className="text-muted-foreground">Líneas</span>
+                    <span className="font-bold">{lineas.length}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-2 rounded bg-success/10">
+                    <span className="text-muted-foreground">Palmas</span>
+                    <span className="font-bold text-success">{totalPalmasCreacion}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {lotes.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                <p className="text-sm">No hay información para mostrar</p>
+                <p className="text-xs">Completa las etapas anteriores</p>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     );
   };
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/plantacion')} className="rounded-xl">
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-4xl font-bold">{editId ? 'Editar Plantación' : 'Crear Nueva Plantación'}</h1>
-          <p className="text-muted-foreground">Configura tu plantación paso a paso</p>
+          <div className="flex items-center gap-3 mb-2">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/plantacion')} className="rounded-xl">
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <h1 className="text-4xl font-bold text-foreground">{editId ? 'Editar Plantación' : 'Crear Nueva Plantación'}</h1>
+          </div>
+          <p className="text-muted-foreground ml-14">Configura tu plantación paso a paso</p>
         </div>
       </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* ── Columna izquierda: wizard ──────────────────────────── */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-8">
 
           {/* Stepper */}
           <Card className="border-border">
@@ -551,9 +765,11 @@ export default function NuevoPredioWizard() {
                           <div className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition-all ${completa ? 'bg-primary border-primary text-white' : activa ? 'bg-primary/10 border-primary text-primary' : 'bg-muted border-border text-muted-foreground'}`}>
                             {completa ? <Check className="h-5 w-5" /> : <span className="font-bold">{e.numero}</span>}
                           </div>
-                          <span className={`text-sm font-semibold ${activa || completa ? 'text-foreground' : 'text-muted-foreground'}`}>
-                            {e.nombre}
-                          </span>
+                          <div className="text-center">
+                            <div className={`text-sm font-semibold whitespace-nowrap ${activa || completa ? 'text-foreground' : 'text-muted-foreground'}`}>
+                              {e.nombre}
+                            </div>
+                          </div>
                         </button>
                       </div>
                       {idx < ETAPAS.length - 1 && (
@@ -578,15 +794,17 @@ export default function NuevoPredioWizard() {
                   </div>
                   <div>
                     <CardTitle>Información del Predio</CardTitle>
-                    <p className="text-sm text-muted-foreground">Datos básicos</p>
+                    <p className="text-sm text-muted-foreground">
+                      Ingresa los datos básicos de tu predio
+                    </p>
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
+              <CardContent className="space-y-6">
+                <div className="grid gap-6 md:grid-cols-2">
                   <div className="space-y-2">
-                    <Label>Nombre *</Label>
-                    <Input placeholder="Ej: Finca La Esperanza" maxLength={50}
+                    <Label htmlFor="nombre">Nombre del Predio *</Label>
+                    <Input id="nombre" placeholder="Ej: Predio Norte" maxLength={50}
                       value={predioNombre} onChange={e => setPredioNombre(e.target.value)} />
                   </div>
                   <div className="space-y-2">
@@ -606,8 +824,8 @@ export default function NuevoPredioWizard() {
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Hectáreas Totales *</Label>
-                    <Input type="number" min="0" step="0.01" placeholder="0"
+                    <Label htmlFor="hectareas">Hectáreas Totales *</Label>
+                    <Input id="hectareas" type="number" min="0" step="0.01" placeholder="0"
                       value={predioHectareas} onChange={e => setPredioHectareas(e.target.value)} />
                   </div>
                 </div>
@@ -627,7 +845,7 @@ export default function NuevoPredioWizard() {
                     <div>
                       <CardTitle>Lotes del Predio</CardTitle>
                       <p className="text-sm text-muted-foreground">
-                        Disponibles: {haDisponibles.toFixed(2)} ha
+                        Hectáreas disponibles: {haDisponibles.toFixed(2)} ha
                       </p>
                     </div>
                   </div>
@@ -638,27 +856,41 @@ export default function NuevoPredioWizard() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {lotes.map(l => (
-                  <div key={l.id} className="border border-border rounded-lg p-4 flex items-start justify-between">
-                    <div>
-                      <p className="font-semibold">{l.nombre}</p>
-                      <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
-                        {l.fechaSiembra && <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{l.fechaSiembra}</span>}
-                        <span>{l.hectareasSembradas} ha</span>
-                        {l.semillasIds.length > 0 && (
-                          <span>{l.semillasIds.length} semilla{l.semillasIds.length !== 1 ? 's' : ''}</span>
-                        )}
+                  <div key={l.id} className="border border-border rounded-lg p-4 bg-card">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-lg mb-1">{l.nombre}</h3>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            {l.fechaSiembra
+                              ? (() => { const s = l.fechaSiembra; const d = new Date(s.includes('T') ? s : s + 'T00:00:00'); return isNaN(d.getTime()) ? s : d.toLocaleDateString('es-CO'); })()
+                              : 'Sin fecha'}
+                          </span>
+                          <span>•</span>
+                          <span>{l.hectareasSembradas} ha</span>
+                          {l.semillasIds.length > 0 && (
+                            <span className="flex items-center gap-1">• {l.semillasIds.length} semilla{l.semillasIds.length !== 1 ? 's' : ''}</span>
+                          )}
+                        </div>
                       </div>
+                      <Button variant="ghost" size="icon" onClick={() => eliminarLote(l.id)}
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
-                    <Button variant="ghost" size="icon" onClick={() => eliminarLote(l.id)}
-                      className="h-8 w-8 text-destructive hover:bg-destructive/10">
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {(l.variedad || l.semillasIds.length > 0) && (
+                      <Badge variant="secondary" className="text-xs">
+                        {l.variedad || `${l.semillasIds.length} semilla${l.semillasIds.length !== 1 ? 's' : ''}`}
+                      </Badge>
+                    )}
                   </div>
                 ))}
                 {lotes.length === 0 && !showFormLote && (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Grid3x3 className="h-10 w-10 mx-auto mb-2 opacity-20" />
-                    <p>Agrega tu primer lote</p>
+                  <div className="text-center py-12 text-muted-foreground">
+                    <Grid3x3 className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                    <p>No hay lotes registrados</p>
+                    <p className="text-sm">Agrega tu primer lote para continuar</p>
                   </div>
                 )}
                 {showFormLote && (
@@ -676,40 +908,52 @@ export default function NuevoPredioWizard() {
           {etapa === 3 && (
             <Card className="border-border">
               <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                    <Trees className="h-6 w-6 text-primary" />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                      <Trees className="h-6 w-6 text-primary" />
+                    </div>
+                    <div>
+                      <CardTitle>Sublotes</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        Organiza tus lotes en sublotes
+                      </p>
+                    </div>
                   </div>
-                  <CardTitle>Sublotes</CardTitle>
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
                 {lotes.map(lote => {
                   const subls = sublotes.filter(s => s.loteId === lote.id);
                   return (
-                    <div key={lote.id} className="border border-border rounded-xl p-4 space-y-3">
+                    <div key={lote.id} className="border border-border rounded-xl p-6 space-y-4">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="font-semibold">{lote.nombre}</p>
+                          <h3 className="font-semibold text-lg">{lote.nombre}</h3>
                           <p className="text-sm text-muted-foreground">{subls.length} sublotes</p>
                         </div>
-                        <Button variant="outline" size="sm" onClick={() => setShowFormSublote(lote.id)}>
-                          <Plus className="h-4 w-4 mr-1" /> Agregar
+                        <Button variant="outline" size="sm" onClick={() => setShowFormSublote(lote.id)} className="gap-2">
+                          <Plus className="h-4 w-4" />
+                          Agregar Sublote
                         </Button>
                       </div>
-                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                         {subls.map(s => (
-                          <div key={s.id} className="border border-border rounded-lg p-3 flex items-start justify-between">
-                            <div>
-                              <p className="font-medium text-sm">{s.nombre}</p>
-                              {s.cantidadPalmas > 0 && (
-                                <p className="text-xs text-success">{s.cantidadPalmas} palmas</p>
-                              )}
+                          <div key={s.id} className="border border-border rounded-lg p-4 bg-card">
+                            <div className="flex items-start justify-between mb-2">
+                              <h4 className="font-semibold">{s.nombre}</h4>
+                              <Button variant="ghost" size="icon" onClick={() => eliminarSublote(s.id)}
+                                className="h-7 w-7 text-muted-foreground hover:text-destructive">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
                             </div>
-                            <Button variant="ghost" size="icon" onClick={() => eliminarSublote(s.id)}
-                              className="h-6 w-6 text-destructive hover:bg-destructive/10">
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
+                            {s.cantidadPalmas > 0 && (
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                                <Leaf className="h-3 w-3" />
+                                <span>{s.cantidadPalmas} palmas</span>
+                              </div>
+                            )}
+                            <Badge variant="default" className="mt-2 text-xs">Activo</Badge>
                           </div>
                         ))}
                       </div>
@@ -721,6 +965,12 @@ export default function NuevoPredioWizard() {
                     </div>
                   );
                 })}
+              {lotes.length === 0 && (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Trees className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                  <p>Primero debes crear al menos un lote</p>
+                </div>
+              )}
               </CardContent>
             </Card>
           )}
@@ -733,48 +983,72 @@ export default function NuevoPredioWizard() {
                   <div className="h-12 w-12 rounded-xl bg-accent/10 flex items-center justify-center">
                     <GitBranch className="h-6 w-6 text-accent" />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <CardTitle>Líneas</CardTitle>
-                    <Badge variant="secondary" className="bg-accent/10 text-accent">Opcional</Badge>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <CardTitle>Líneas</CardTitle>
+                      <Badge variant="secondary" className="bg-accent/10 text-accent">
+                        Opcional
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Las líneas son opcionales. Las palmas se pueden agregar directamente a los sublotes.
+                    </p>
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="bg-accent/5 border border-accent/20 rounded-lg p-3">
-                  <p className="text-sm text-muted-foreground">
-                    💡 Las líneas son metadata organizacional opcional. Puedes saltarte este paso.
-                  </p>
-                </div>
+              <CardContent className="space-y-6">
                 {sublotes.map(sub => {
                   const linSub = lineas.filter(ln => ln.subloteId === sub.id);
                   const lote   = lotes.find(l => l.id === sub.loteId);
                   return (
-                    <div key={sub.id} className="border border-border rounded-xl p-4 space-y-3">
+                    <div key={sub.id} className="border border-border rounded-xl p-6 space-y-4">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="font-semibold">{sub.nombre}</p>
-                          <p className="text-xs text-muted-foreground">{lote?.nombre} · {linSub.length} líneas</p>
+                          <h3 className="font-semibold text-lg">{sub.nombre}</h3>
+                          <p className="text-sm text-muted-foreground">{lote?.nombre} • {linSub.length} líneas</p>
                         </div>
-                        <Button variant="outline" size="sm" onClick={() => agregarLinea(sub.id)}>
-                          <Plus className="h-4 w-4 mr-1" /> Agregar Línea
+                        <Button variant="outline" size="sm" onClick={() => agregarLinea(sub.id)} className="gap-2">
+                          <Plus className="h-4 w-4" />
+                          Agregar Línea
                         </Button>
                       </div>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
                         {linSub.map(ln => (
-                          <div key={ln.id} className="flex items-center gap-1 border border-border rounded-lg px-3 py-1.5 text-sm">
-                            <GitBranch className="h-3.5 w-3.5 text-accent" />
-                            <span>Línea {ln.numero}</span>
-                            <button onClick={() => eliminarLinea(ln.id)}
-                              className="ml-1 text-muted-foreground hover:text-destructive">
-                              <Trash2 className="h-3 w-3" />
-                            </button>
+                          <div key={ln.id} className="border border-border rounded-lg p-3 bg-card">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <GitBranch className="h-4 w-4 text-accent" />
+                                <span className="font-semibold text-sm">Línea {ln.numero}</span>
+                              </div>
+                              <Button variant="ghost" size="icon" onClick={() => eliminarLinea(ln.id)}
+                                className="h-6 w-6 text-muted-foreground hover:text-destructive">
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                            <Badge variant="default" className="mt-2 text-xs">Activo</Badge>
                           </div>
                         ))}
-                        {linSub.length === 0 && <p className="text-xs text-muted-foreground">Sin líneas</p>}
                       </div>
+                      {linSub.length === 0 && (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <p className="text-sm">No hay líneas en este sublote</p>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
+              {sublotes.length === 0 && (
+                <div className="text-center py-12 text-muted-foreground">
+                  <GitBranch className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                  <p>Primero debes crear sublotes</p>
+                </div>
+              )}
+
+              <div className="bg-accent/5 border border-accent/20 rounded-lg p-4">
+                <p className="text-sm text-muted-foreground text-center">
+                  💡 <strong>Tip:</strong> Puedes omitir este paso y agregar palmas directamente a los sublotes en la siguiente etapa.
+                </p>
+              </div>
               </CardContent>
             </Card>
           )}
@@ -788,9 +1062,9 @@ export default function NuevoPredioWizard() {
                     <Leaf className="h-6 w-6 text-success" />
                   </div>
                   <div>
-                    <CardTitle>Palmas</CardTitle>
+                    <CardTitle>Registrar Palmas</CardTitle>
                     <p className="text-sm text-muted-foreground">
-                      {editId ? 'Revisa y agrega palmas por sublote' : 'Define la cantidad inicial de palmas'}
+                      Total de palmas: {sublotes.reduce((s, sub) => s + (parseInt(cantPalmasForm[`confirmed_${sub.id}`] ?? cantPalmasForm[sub.id] ?? '0') || sub.cantidadPalmas || 0), 0)}
                     </p>
                   </div>
                 </div>
@@ -803,207 +1077,264 @@ export default function NuevoPredioWizard() {
                   const PER = 50;
 
                   return (
-                    <div key={sub.id} className="border border-border rounded-xl overflow-hidden">
-                      {/* Cabecera del sublote */}
-                      <div className="flex items-center justify-between px-4 py-3 bg-muted/30 border-b border-border">
+                    <div key={sub.id} className="border border-border rounded-xl p-6 space-y-4">
+                      <div className="flex items-center justify-between">
                         <div>
-                          <p className="font-semibold">{sub.nombre}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {lote?.nombre}
-                            {' · '}
-                            <span className="text-success font-medium">
-                              {sub.cantidadPalmas.toLocaleString('es-CO')} palmas
-                            </span>
-                            {tieneLineas && ` · ${linSub.length} línea${linSub.length !== 1 ? 's' : ''}`}
+                          <h3 className="font-semibold text-lg">{sub.nombre}</h3>
+                          <p className="text-sm text-muted-foreground">
+                            {lote?.nombre} • {!tieneLineas
+                              ? (cantPalmasForm[`confirmed_${sub.id}`] || sub.cantidadPalmas || 0)
+                              : sub.cantidadPalmas} palmas
                           </p>
                         </div>
+                        {/* Botón Agregar Palmas en modo edición (solo si tiene líneas) */}
+                        {editId && tieneLineas && (
+                          <Button
+                            onClick={() => setMostrandoFormPalmas(
+                              mostrandoFormPalmas === sub.id ? null : sub.id
+                            )}
+                            className="gap-2 bg-success hover:bg-success/90 text-primary hover:text-primary"
+                          >
+                            <Plus className="h-4 w-4" />
+                            Agregar Palmas
+                          </Button>
+                        )}
                       </div>
 
-                      <div className="p-4 space-y-4">
+                      {/* Formulario agregar palmas en modo edición */}
+                      {editId && mostrandoFormPalmas === sub.id && (
+                        <div className="bg-muted/30 border border-border rounded-lg p-4 space-y-4">
+                          <div className="space-y-2">
+                            <Label>Cantidad de palmas</Label>
+                            <Input
+                              type="number"
+                              placeholder="Ej: 50"
+                              value={cantPalmasForm[`edit_${sub.id}`] ?? ''}
+                              onChange={e => setCantPalmasForm(prev => ({ ...prev, [`edit_${sub.id}`]: e.target.value }))}
+                            />
+                          </div>
+                          {linSub.length > 0 && (
+                            <div className="space-y-2">
+                              <Label>Línea (opcional)</Label>
+                              <select
+                                className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                                value={cantPalmasForm[`editLinea_${sub.id}`] ?? ''}
+                                onChange={e => setCantPalmasForm(prev => ({ ...prev, [`editLinea_${sub.id}`]: e.target.value }))}
+                              >
+                                <option value="">Sin línea</option>
+                                {linSub.map(ln => (
+                                  <option key={ln.id} value={ln.id}>Línea {ln.numero}</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                          <div className="flex gap-2">
+                            <Button
+                              onClick={() => {
+                                const cant = parseInt(cantPalmasForm[`edit_${sub.id}`] ?? '');
+                                if (!cant || cant < 1) { toast.error('Ingresa una cantidad válida'); return; }
+                                const lineaSelId = cantPalmasForm[`editLinea_${sub.id}`] ?? '';
+                                agregarPalmas(sub.id, cant, lineaSelId || undefined);
+                                setCantPalmasForm(prev => {
+                                  const n = { ...prev };
+                                  delete n[`edit_${sub.id}`];
+                                  delete n[`editLinea_${sub.id}`];
+                                  return n;
+                                });
+                                setMostrandoFormPalmas(null);
+                              }}
+                              disabled={!cantPalmasForm[`edit_${sub.id}`] || parseInt(cantPalmasForm[`edit_${sub.id}`] ?? '0') <= 0}
+                            >
+                              Agregar
+                            </Button>
+                            <Button variant="outline" onClick={() => {
+                              setMostrandoFormPalmas(null);
+                              setCantPalmasForm(prev => {
+                                const n = { ...prev };
+                                delete n[`edit_${sub.id}`];
+                                delete n[`editLinea_${sub.id}`];
+                                return n;
+                              });
+                            }}>
+                              Cancelar
+                            </Button>
+                          </div>
+                        </div>
+                      )}
 
-                        {/* ── MODO EDICIÓN ──────────────────────────────── */}
-                        {editId && (
-                          <>
-                            {/* CASO A: Sublote CON líneas → palmas por línea paginadas */}
-                            {tieneLineas && (
-                              <div className="space-y-3">
-                                {linSub.map(ln => {
-                                  const lineaKey = `linea_${ln.id}`;
-                                  const ps       = wizardPag[lineaKey];
-                                  const abierta  = (wizardLineaOpen[sub.id] ?? '') === ln.id;
+                      <div className="space-y-4">
 
-                                  return (
-                                    <div key={ln.id} className="border border-border rounded-lg overflow-hidden">
-                                      {/* Header de línea — click carga palmas */}
-                                      <button
-                                        className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/30 transition-colors text-left"
-                                        onClick={() => {
-                                          const estaAbierta = (wizardLineaOpen[sub.id] ?? '') === ln.id;
-                                          setWizardLineaOpen(prev => ({
-                                            ...prev,
-                                            [sub.id]: estaAbierta ? '' : ln.id,
-                                          }));
-                                          if (!estaAbierta) {
-                                            cargarWizardPalmas(lineaKey, {
-                                              sublote_id: Number(sub.id),
-                                              linea_id: Number(ln.id),
-                                            });
-                                          }
-                                        }}>
-                                        <div className="flex items-center gap-3">
-                                          <Leaf className="h-4 w-4 text-primary" />
-                                          <span className="font-medium text-sm">Línea {ln.numero}</span>
-                                          {ps && !ps.loading && (
-                                            <span className="text-xs text-muted-foreground">
-                                              {ps.total.toLocaleString('es-CO')} palmas
-                                            </span>
-                                          )}
+                        {/* ── MODO EDICIÓN: palmas en grid plano ────────── */}
+                        {editId && (() => {
+                          const key  = `sub_${sub.id}`;
+                          const ps   = wizardPag[key];
+                          if (!ps || ps.loading) return (
+                            <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground">
+                              <Loader2 className="h-4 w-4 animate-spin" /> Cargando palmas...
+                            </div>
+                          );
+                          if (ps.data.length === 0 && !tieneLineas) return null; // CASO B lo maneja abajo
+                          if (ps.data.length === 0 && tieneLineas) return (
+                            <p className="text-center py-6 text-sm text-muted-foreground">No hay palmas registradas</p>
+                          );
+                          return (
+                            <div className="space-y-3">
+                              {(() => {
+                                return (
+                                  <>
+                                    <div className="grid gap-2 md:grid-cols-4 lg:grid-cols-6">
+                                      {ps.data.map((palma: any) => (
+                                        <div key={palma.id}
+                                          className="border border-border rounded-lg p-2 bg-card group hover:border-success/50 transition-colors">
+                                          <div className="flex items-center justify-between mb-1">
+                                            <Leaf className="h-3 w-3 text-success" />
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              onClick={async () => {
+                                                try {
+                                                  await palmasApi.eliminar([Number(palma.id)]);
+                                                  const key = `sub_${sub.id}`;
+                                                  const ps  = wizardPag[key];
+                                                  cargarWizardPalmas(key, { sublote_id: Number(sub.id) }, ps?.page ?? 1);
+                                                  setSublotes(prev => prev.map(s =>
+                                                    s.id === sub.id ? { ...s, cantidadPalmas: Math.max(0, s.cantidadPalmas - 1) } : s
+                                                  ));
+                                                } catch { toast.error('Error al eliminar palma'); }
+                                              }}
+                                              className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                                            >
+                                              <Trash2 className="h-3 w-3" />
+                                            </Button>
+                                          </div>
+                                          <p className="text-xs font-mono font-semibold truncate" title={palma.codigo}>
+                                            {palma.codigo}
+                                          </p>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                          {/* Botón agregar palmas a esta línea */}
-                                          <Button
-                                            size="sm"
-                                            onClick={e => {
-                                              e.stopPropagation();
-                                              const cant = parseInt(cantPalmasForm[`${sub.id}_${ln.id}`] ?? '');
-                                              if (isNaN(cant) || cant < 1) { toast.error('Ingresa una cantidad válida'); return; }
-                                              agregarPalmas(sub.id, cant, ln.id);
-                                            }}
-                                            className="h-7 px-2 text-xs bg-success hover:bg-success/90 text-primary">
-                                            <Plus className="h-3 w-3 mr-1" /> Agregar
-                                          </Button>
-                                          <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${abierta ? 'rotate-180' : ''}`} />
-                                        </div>
-                                      </button>
-
-                                      {/* Input cantidad inline */}
-                                      <div className="px-4 pb-2 pt-1 border-t border-border/30 bg-muted/10 flex items-center gap-3">
-                                        <Label className="text-xs whitespace-nowrap">Agregar palmas:</Label>
-                                        <Input
-                                          type="number" min="1" max="99999"
-                                          placeholder="Cantidad"
-                                          value={cantPalmasForm[`${sub.id}_${ln.id}`] ?? ''}
-                                          onChange={e => setCantPalmasForm(prev => ({
-                                            ...prev, [`${sub.id}_${ln.id}`]: e.target.value,
-                                          }))}
-                                          className="h-7 text-xs w-32"
-                                        />
-                                      </div>
-
-                                      {/* Palmas de la línea paginadas */}
-                                      {abierta && (
-                                        <div className="px-4 pb-4 pt-2 space-y-3">
-                                          {!ps || ps.loading ? (
-                                            <div className="flex items-center gap-2 py-4 text-muted-foreground justify-center">
-                                              <Loader2 className="h-4 w-4 animate-spin" /> Cargando palmas...
-                                            </div>
-                                          ) : ps.data.length === 0 ? (
-                                            <p className="text-sm text-center text-muted-foreground py-4">
-                                              No hay palmas en esta línea
-                                            </p>
-                                          ) : (
-                                            <>
-                                              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                                                {ps.data.map((palma: any) => (
-                                                  <div key={palma.id}
-                                                    className={`rounded-md border p-2 text-center ${palma.estado ? 'bg-success/5 border-success/30' : 'bg-muted border-border'}`}>
-                                                    <p className="text-xs font-mono font-semibold truncate" title={palma.codigo}>
-                                                      {palma.codigo}
-                                                    </p>
-                                                  </div>
-                                                ))}
-                                              </div>
-                                              {/* Paginación §4.1 */}
-                                              {ps.lastPage > 1 && (
-                                                <div className="flex items-center justify-between pt-2 border-t border-border/30">
-                                                  <p className="text-xs text-muted-foreground">
-                                                    {((ps.page - 1) * PER) + 1}–{Math.min(ps.page * PER, ps.total)} de {ps.total.toLocaleString('es-CO')}
-                                                  </p>
-                                                  <div className="flex gap-1">
-                                                    <Button size="sm" variant="outline"
-                                                      disabled={ps.page <= 1}
-                                                      onClick={() => cargarWizardPalmas(lineaKey, { sublote_id: Number(sub.id), linea_id: Number(ln.id) }, ps.page - 1)}>
-                                                      <ChevronLeft className="h-3 w-3" />
-                                                    </Button>
-                                                    <span className="text-xs px-2 py-1 border border-border rounded">
-                                                      {ps.page} / {ps.lastPage}
-                                                    </span>
-                                                    <Button size="sm" variant="outline"
-                                                      disabled={ps.page >= ps.lastPage}
-                                                      onClick={() => cargarWizardPalmas(lineaKey, { sublote_id: Number(sub.id), linea_id: Number(ln.id) }, ps.page + 1)}>
-                                                      <ChevronRight className="h-3 w-3" />
-                                                    </Button>
-                                                  </div>
-                                                </div>
-                                              )}
-                                            </>
-                                          )}
-                                        </div>
-                                      )}
+                                      ))}
                                     </div>
-                                  );
-                                })}
-                              </div>
-                            )}
+                                    {ps.page < ps.lastPage && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="w-full mt-2 gap-2"
+                                        onClick={() => cargarWizardPalmas(
+                                          key, { sublote_id: Number(sub.id) }, ps.page + 1, true
+                                        )}
+                                      >
+                                        Ver más ({(ps.total - ps.data.length).toLocaleString('es-CO')} palmas restantes)
+                                      </Button>
+                                    )}
+                                  </>
+                                );
+                              })()}
 
-                            {/* CASO B: Sublote SIN líneas → solo muestra el número total */}
-                            {!tieneLineas && (
-                              <div className="space-y-3">
-                                <div className="flex items-center justify-between rounded-lg bg-success/5 border border-success/20 px-4 py-3">
+                            </div>
+                          );
+                        })()}
+
+                        {/* CASO B SIN LÍNEAS */}
+                        {editId && !tieneLineas && (
+                              <div className="bg-muted/10 border border-border/50 rounded-lg p-4">
+                                <div className="space-y-3">
+                                  <div>
+                                    <Label className="text-sm font-medium">Número de Palmas</Label>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      Sin líneas definidas - Total de palmas en el sublote
+                                    </p>
+                                  </div>
                                   <div className="flex items-center gap-3">
-                                    <Leaf className="h-5 w-5 text-success" />
-                                    <div>
-                                      <p className="font-semibold text-success text-lg">
-                                        {sub.cantidadPalmas.toLocaleString('es-CO')}
-                                      </p>
-                                      <p className="text-xs text-muted-foreground">palmas registradas en este sublote</p>
-                                    </div>
+                                    <Input
+                                      type="number"
+                                      placeholder="Ej: 170"
+                                      value={(cantPalmasForm[sub.id] ?? sub.cantidadPalmas) || ''}
+                                      onChange={e => setCantPalmasForm(prev => ({ ...prev, [sub.id]: e.target.value }))}
+                                      min="0"
+                                      className="h-12 text-base max-w-xs"
+                                    />
+                                    
                                   </div>
                                 </div>
-                                {/* Formulario para agregar más */}
-                                <div className="flex items-center gap-3">
-                                  <Input
-                                    type="number" min="1" max="99999"
-                                    placeholder="Agregar más palmas..."
-                                    value={cantPalmasForm[sub.id] ?? ''}
-                                    onChange={e => setCantPalmasForm(prev => ({ ...prev, [sub.id]: e.target.value }))}
-                                    className="h-9 text-sm"
-                                  />
-                                  <Button size="sm"
-                                    onClick={() => {
-                                      const cant = parseInt(cantPalmasForm[sub.id] ?? '');
-                                      if (isNaN(cant) || cant < 1) { toast.error('Ingresa una cantidad válida'); return; }
-                                      agregarPalmas(sub.id, cant, undefined);
-                                    }}
-                                    className="h-9 px-3 bg-success hover:bg-success/90 text-primary whitespace-nowrap">
-                                    <Plus className="h-3.5 w-3.5 mr-1" /> Agregar
-                                  </Button>
-                                </div>
                               </div>
                             )}
-                          </>
+
+                        {/* ── MODO CREACIÓN: formulario por sublote ──────── */}
+                        {!editId && !cantPalmasForm[`confirmed_${sub.id}`] && (
+                          <div className="bg-muted/30 border border-border rounded-lg p-4 space-y-4">
+                            <div className="space-y-2">
+                              <Label>Cantidad de palmas</Label>
+                              <Input
+                                type="number"
+                                placeholder="Ej: 50"
+                                value={cantPalmasForm[sub.id] ?? ''}
+                                onChange={e => setCantPalmasForm(prev => ({ ...prev, [sub.id]: e.target.value }))}
+                              />
+                            </div>
+                            {linSub.length > 0 && (
+                              <div className="space-y-2">
+                                <Label>Línea (opcional)</Label>
+                                <select
+                                  className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                                  value={cantPalmasForm[`linea_${sub.id}`] ?? ''}
+                                  onChange={e => setCantPalmasForm(prev => ({ ...prev, [`linea_${sub.id}`]: e.target.value }))}
+                                >
+                                  <option value="">Sin línea</option>
+                                  {linSub.map(linea => (
+                                    <option key={linea.id} value={linea.id}>
+                                      Línea {linea.numero}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+                            <div className="flex gap-2">
+                              <Button
+                                onClick={() => {
+                                  const cant = parseInt(cantPalmasForm[sub.id] ?? '');
+                                  if (cant > 0) {
+                                    setCantPalmasForm(prev => ({ ...prev, [`confirmed_${sub.id}`]: String(cant) }));
+                                  }
+                                }}
+                                disabled={!cantPalmasForm[sub.id] || parseInt(cantPalmasForm[sub.id] ?? '0') <= 0}
+                              >
+                                Guardar
+                              </Button>
+                              <Button
+                                variant="outline"
+                                onClick={() => setCantPalmasForm(prev => ({ ...prev, [sub.id]: '' }))}
+                              >
+                                Cancelar
+                              </Button>
+                            </div>
+                          </div>
                         )}
 
-                        {/* ── MODO CREACIÓN → solo campo de cantidad ────── */}
-                        {!editId && (
-                          <div className="space-y-2">
-                            <Label className="text-xs text-muted-foreground">
-                              Cantidad de palmas a crear en este sublote
-                            </Label>
-                            <Input type="number" min="0" max="99999"
-                              placeholder="0 (dejar sin palmas por ahora)"
-                              value={cantPalmasForm[sub.id] ?? ''}
-                              onChange={e => setCantPalmasForm(prev => ({ ...prev, [sub.id]: e.target.value }))}
-                            />
-                            <p className="text-xs text-muted-foreground">
-                              Más de 5.000 se procesarán en segundo plano.
-                            </p>
+                        {/* MODO CREACIÓN: resumen tras confirmar */}
+                        {!editId && cantPalmasForm[`confirmed_${sub.id}`] && (
+                          <div className="bg-success/5 border border-success/20 rounded-lg p-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Leaf className="h-5 w-5 text-success" />
+                                <span className="font-semibold">
+                                  {cantPalmasForm[`confirmed_${sub.id}`]} palmas registradas
+                                </span>
+                              </div>
+                              <Badge variant="secondary" className="bg-success/10 text-success">
+                                Completado
+                              </Badge>
+                            </div>
                           </div>
                         )}
                       </div>
                     </div>
                   );
                 })}
+              {sublotes.length === 0 && (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Leaf className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                  <p>Primero debes crear sublotes</p>
+                </div>
+              )}
               </CardContent>
             </Card>
           )}
@@ -1037,24 +1368,13 @@ export default function NuevoPredioWizard() {
           <div className="sticky top-8">
             <Card className="border-border">
               <CardHeader className="border-b border-border">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Trees className="h-5 w-5 text-primary" /> Resumen
+                <CardTitle className="flex items-center gap-2">
+                  <Trees className="h-5 w-5 text-primary" />
+                  Resumen
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-4">
-                {/* Barra de progreso del wizard */}
-                <div className="mb-4">
-                  <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                    <span>Paso {etapa} de {ETAPAS.length}</span>
-                    <span>{Math.round((etapa / ETAPAS.length) * 100)}%</span>
-                  </div>
-                  <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div className="h-full bg-primary transition-all duration-300"
-                      style={{ width: `${(etapa / ETAPAS.length) * 100}%` }} />
-                  </div>
-                </div>
-                <div className="h-px bg-border mb-4" />
-                <PanelResumen />
+              <CardContent className="p-6 space-y-6">
+                {PanelResumen()}
               </CardContent>
             </Card>
           </div>
@@ -1074,57 +1394,93 @@ function FormLote({
   onGuardar: (l: Omit<any, 'id'>) => void;
   onCancelar: () => void;
 }) {
-  const [nombre, setNombre]         = useState('');
-  const [fecha, setFecha]           = useState('');
-  const [ha, setHa]                 = useState('');
-  const [semillasIds, setSemillas]  = useState<number[]>([]);
+  const [nombre, setNombre]        = useState('');
+  const [fecha, setFecha]          = useState('');
+  const [ha, setHa]                = useState('');
+  const [semillaId, setSemillaId]  = useState('');
+  const [otraVariedad, setOtraVariedad] = useState('');
 
-  const toggle = (id: number, v: boolean) =>
-    setSemillas(prev => v ? [...prev, id] : prev.filter(x => x !== id));
+  const esOtros = semillaId === '__otros__';
+  const variedadFinal = esOtros ? otraVariedad : (semillasCatalogo.find(s => String(s.id) === semillaId)?.nombre ?? semillaId);
 
   return (
-    <div className="bg-muted/30 border border-border rounded-xl p-4 space-y-4">
-      <h3 className="font-semibold">Nuevo Lote</h3>
-      <div className="grid gap-3 md:grid-cols-2">
-        <div className="space-y-1">
-          <Label className="text-xs">Nombre *</Label>
-          <Input placeholder="Ej: Lote Norte" maxLength={100}
-            value={nombre} onChange={e => setNombre(e.target.value)} />
+    <div className="bg-muted/30 border border-border rounded-xl p-6 space-y-4">
+      <h3 className="font-semibold text-lg">Nuevo Lote</h3>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label>Nombre del Lote *</Label>
+          <Input
+            placeholder="Ej: Lote Norte"
+            value={nombre}
+            onChange={e => setNombre(e.target.value)}
+          />
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Fecha Siembra</Label>
-          <Input type="date" value={fecha}
+        <div className="space-y-2">
+          <Label>Fecha de Siembra</Label>
+          <Input
+            type="date"
+            value={fecha}
             max={new Date().toISOString().split('T')[0]}
-            onChange={e => setFecha(e.target.value)} />
+            onChange={e => setFecha(e.target.value)}
+          />
         </div>
-        <div className="space-y-1 md:col-span-2">
-          <Label className="text-xs">Hectáreas Sembradas *</Label>
-          <Input type="number" min="0" step="0.01" max={haDisponibles}
-            placeholder="0" value={ha} onChange={e => setHa(e.target.value)} />
-          <p className="text-xs text-muted-foreground">Disponibles: {haDisponibles.toFixed(2)} ha</p>
+        <div className="space-y-2">
+          <Label>Hectáreas Sembradas *</Label>
+          <Input
+            type="number"
+            placeholder="0"
+            max={haDisponibles}
+            value={ha}
+            onChange={e => setHa(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">
+            Disponibles: {haDisponibles.toFixed(2)} ha
+          </p>
         </div>
-        {semillasCatalogo.length > 0 && (
-          <div className="md:col-span-2 space-y-2">
-            <Label className="text-xs">Semillas</Label>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {semillasCatalogo.map(s => (
-                <label key={s.id} className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input type="checkbox"
-                    checked={semillasIds.includes(Number(s.id))}
-                    onChange={e => toggle(Number(s.id), e.target.checked)} />
-                  {s.nombre} <span className="text-muted-foreground text-xs">({s.tipo})</span>
-                </label>
-              ))}
-            </div>
-          </div>
-        )}
+        <div className="space-y-2">
+          <Label>Variedad / Semilla *</Label>
+          <select
+            className="w-full h-10 px-3 rounded-md border border-input bg-background text-foreground"
+            value={semillaId}
+            onChange={e => { setSemillaId(e.target.value); setOtraVariedad(''); }}
+          >
+            <option value="">Seleccionar variedad</option>
+            {semillasCatalogo.length > 0
+              ? semillasCatalogo.map(s => (
+                  <option key={s.id} value={String(s.id)}>
+                    {s.nombre}
+                  </option>
+                ))
+              : ['Elaeis Guineensis', 'Híbrido OxG', 'Compacta E3'].map(v => (
+                  <option key={v} value={v}>{v}</option>
+                ))
+            }
+            <option value="__otros__">Otros</option>
+          </select>
+          {esOtros && (
+            <Input
+              placeholder="Escribe la variedad..."
+              value={otraVariedad}
+              onChange={e => setOtraVariedad(e.target.value)}
+              autoFocus
+            />
+          )}
+        </div>
       </div>
+
       <div className="flex gap-2">
-        <Button onClick={() => onGuardar({ nombre, fechaSiembra: fecha, hectareasSembradas: Number(ha) || 0, semillasIds })}
-          disabled={!nombre || !ha}>
+        <Button
+          onClick={() => {
+            const semillasIds = semillaId && !isNaN(Number(semillaId)) ? [Number(semillaId)] : [];
+            onGuardar({ nombre, fechaSiembra: fecha, hectareasSembradas: Number(ha) || 0, semillasIds, variedad: variedadFinal });
+          }}
+          disabled={!nombre || !ha || !semillaId || (esOtros && !otraVariedad.trim())}
+        >
           Guardar Lote
         </Button>
-        <Button variant="outline" onClick={onCancelar}>Cancelar</Button>
+        <Button variant="outline" onClick={onCancelar}>
+          Cancelar
+        </Button>
       </div>
     </div>
   );
@@ -1133,13 +1489,18 @@ function FormLote({
 function FormSublote({ onGuardar, onCancelar }: { onGuardar: (n: string) => void; onCancelar: () => void }) {
   const [nombre, setNombre] = useState('');
   return (
-    <div className="bg-muted/30 border border-border rounded-lg p-3 space-y-3">
-      <Label className="text-xs">Nombre del Sublote *</Label>
-      <Input placeholder="Ej: Sector A" maxLength={50}
-        value={nombre} onChange={e => setNombre(e.target.value)} />
+    <div className="bg-muted/30 border border-border rounded-lg p-4 space-y-4">
+      <div className="space-y-2">
+        <Label>Nombre del Sublote *</Label>
+        <Input
+          placeholder="Ej: Sector A"
+          value={nombre}
+          onChange={e => setNombre(e.target.value)}
+        />
+      </div>
       <div className="flex gap-2">
-        <Button onClick={() => onGuardar(nombre)} disabled={!nombre.trim()} size="sm">Guardar</Button>
-        <Button variant="outline" onClick={onCancelar} size="sm">Cancelar</Button>
+        <Button onClick={() => onGuardar(nombre)} disabled={!nombre.trim()}>Guardar</Button>
+        <Button variant="outline" onClick={onCancelar}>Cancelar</Button>
       </div>
     </div>
   );

@@ -1,9 +1,7 @@
 /**
  * CrearSublote.tsx
- * §3.3 POST /sublotes — lote_id*, nombre*, cantidad_palmas? (0-99999)
- *   - cantidad_palmas <= 5000 → sync (201, sin palmas_async)
- *   - cantidad_palmas > 5000  → async (201 con palmas_async:true + batch_id)
- * §4.6 GET /palmas/batch/{id} — polling cada 3s mientras finished===false
+ * §3.3 POST /sublotes — lote_id*, nombre*, cantidad_palmas?
+ * §4.6 GET /palmas/batch/{id} — polling cada 3s
  */
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
@@ -20,12 +18,11 @@ export default function CrearSublote() {
   const [sp]           = useSearchParams();
   const loteId         = sp.get('loteId');
 
-  const [nombre, setNombre]           = useState('');
-  const [cantidad, setCantidad]       = useState('');
-  const [loading, setLoading]         = useState(false);
-  const [batch, setBatch]             = useState<BatchStatus | null>(null);
+  const [nombre, setNombre]     = useState('');
+  const [cantidad, setCantidad] = useState('');
+  const [loading, setLoading]   = useState(false);
+  const [batch, setBatch]       = useState<BatchStatus | null>(null);
 
-  // §4.6 Polling mientras batch no finaliza
   const pollBatch = async (batchId: string) => {
     const INTERVAL = 3_000;
     const TIMEOUT  = 600_000;
@@ -55,26 +52,20 @@ export default function CrearSublote() {
     e.preventDefault();
     if (!nombre.trim()) { toast.error('El nombre es obligatorio'); return; }
     if (!loteId)        { toast.error('Lote no especificado'); return; }
-
     const cant = cantidad ? parseInt(cantidad) : 0;
     if (cantidad && (isNaN(cant) || cant < 0 || cant > 99999)) {
       toast.error('La cantidad debe estar entre 0 y 99.999'); return;
     }
-
     setLoading(true);
     setBatch(null);
     try {
       const body: any = { lote_id: Number(loteId), nombre: nombre.trim() };
       if (cant > 0) body.cantidad_palmas = cant;
-
-      const res = await sublotesApi.crear(body);  // §3.3
-
+      const res = await sublotesApi.crear(body);
       if (res.palmas_async === true && res.batch_id) {
-        // Async: palmas > 5000 → polling
         toast.info(`Sublote creado. Creando ${cant.toLocaleString('es-CO')} palmas en segundo plano...`);
         pollBatch(res.batch_id);
       } else {
-        // Sync: palmas <= 5000
         toast.success(res.message ?? 'Sublote creado correctamente');
         setLoading(false);
         navigate(`/plantacion/lote/${loteId}`);
@@ -87,20 +78,22 @@ export default function CrearSublote() {
 
   return (
     <div className="space-y-8 max-w-3xl mx-auto">
+      {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => navigate(`/plantacion/lote/${loteId}`)}
           className="h-12 w-12 rounded-xl border border-border/50 hover:bg-muted">
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
-          <h1 className="text-4xl font-bold flex items-center gap-3">
-            <Sprout className="h-10 w-10 text-success" /> Nuevo Sublote
+          <h1 className="text-4xl font-bold text-foreground flex items-center gap-3">
+            <Sprout className="h-10 w-10 text-success" />
+            Nuevo Sublote
           </h1>
-          <p className="text-muted-foreground mt-1">Crea un sublote dentro del lote</p>
+          <p className="text-muted-foreground mt-1">Crea un nuevo sublote dentro del lote</p>
         </div>
       </div>
 
-      {/* Barra de progreso §4.6 */}
+      {/* Barra de progreso batch */}
       {loading && batch && (
         <Card className="border-primary/30 bg-primary/5">
           <CardContent className="p-4 space-y-2">
@@ -116,35 +109,41 @@ export default function CrearSublote() {
         </Card>
       )}
 
-      <Card className="border-border shadow-xl">
+      <Card className="glass-subtle border-border shadow-xl">
         <CardHeader>
           <CardTitle className="text-2xl">Información del Sublote</CardTitle>
-          <CardDescription>Nombre y cantidad inicial de palmas</CardDescription>
+          <CardDescription>
+            Ingresa el nombre del sublote. La cantidad de palmas se actualizará automáticamente al agregar líneas.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Nombre */}
             <div className="space-y-2">
-              <Label className="text-base">
+              <Label htmlFor="nombreSublote" className="text-base">
                 Nombre del Sublote <span className="text-destructive">*</span>
               </Label>
-              <Input placeholder="Ej: Sublote A1, Norte 1" maxLength={50}
+              <Input id="nombreSublote" placeholder="Ej: Sublote A1, Norte 1, Sector B" maxLength={50}
                 value={nombre} onChange={e => setNombre(e.target.value)}
                 className="h-12 text-base" autoFocus />
+              <p className="text-sm text-muted-foreground">
+                Usa un nombre descriptivo que te ayude a identificar este sublote fácilmente
+              </p>
             </div>
 
+            {/* Cantidad de palmas */}
             <div className="space-y-2">
-              <Label className="text-base">Cantidad de Palmas (opcional)</Label>
-              {/* §3.3: 0-99999; >5000 → async */}
+              <Label className="text-base">Cantidad de Palmas <span className="text-muted-foreground text-sm font-normal">(opcional)</span></Label>
               <Input type="number" min="0" max="99999"
                 placeholder="Dejar vacío si se agregarán después"
                 value={cantidad} onChange={e => setCantidad(e.target.value)}
                 className="h-12 text-base" />
               <p className="text-sm text-muted-foreground">
-                Si ingresas una cantidad, las palmas se crean automáticamente.
-                Más de 5.000 se procesarán en segundo plano.
+                Si ingresas una cantidad, las palmas se crean automáticamente. Más de 5.000 se procesarán en segundo plano.
               </p>
             </div>
 
+            {/* Preview de código */}
             {nombre && (
               <div className="rounded-xl bg-primary/5 border border-primary/20 p-4">
                 <p className="text-sm text-muted-foreground">
@@ -154,13 +153,30 @@ export default function CrearSublote() {
               </div>
             )}
 
-            <div className="flex gap-4 pt-4">
+            {/* Info box */}
+            <div className="rounded-xl bg-primary/5 border border-primary/20 p-6">
+              <div className="flex gap-3">
+                <Sprout className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-primary">Información importante</p>
+                  <ul className="text-sm text-muted-foreground space-y-1">
+                    <li>• La cantidad de palmas se calculará automáticamente al agregar líneas</li>
+                    <li>• El sublote se creará en estado <strong>Activo</strong></li>
+                    <li>• Podrás gestionar líneas y palmas después de crear el sublote</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* Botones */}
+            <div className="flex items-center gap-4 pt-4">
               <Button type="button" variant="outline" disabled={loading}
-                onClick={() => navigate(`/plantacion/lote/${loteId}`)} className="flex-1 h-12">
+                onClick={() => navigate(`/plantacion/lote/${loteId}`)}
+                className="flex-1 h-12 text-base">
                 Cancelar
               </Button>
               <Button type="submit" disabled={loading}
-                className="flex-1 h-12 bg-success hover:bg-success/90 text-primary shadow-lg shadow-success/20">
+                className="flex-1 h-12 text-base bg-success hover:bg-success/90 text-primary hover:text-primary shadow-lg shadow-success/20">
                 {loading
                   ? <><Loader2 className="h-5 w-5 mr-2 animate-spin" />Creando...</>
                   : <><Sprout className="h-5 w-5 mr-2" />Crear Sublote</>}
