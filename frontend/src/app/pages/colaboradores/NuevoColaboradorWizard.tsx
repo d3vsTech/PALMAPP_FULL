@@ -33,6 +33,7 @@ import {
   Download,
   Trash2,
   Loader2,
+  Phone,
 } from 'lucide-react';
 import { Switch } from '../../components/ui/switch';
 import { colaboradoresApi } from '../../../api/colaboradores';
@@ -88,12 +89,13 @@ interface FormData {
 const ETAPAS_BASE = [
   { numero: 1, nombre: 'Personal',       descripcion: 'Datos básicos',         icon: Users },
   { numero: 2, nombre: 'Identificación', descripcion: 'Documentos',            icon: IdCard },
-  { numero: 3, nombre: 'Contratación',   descripcion: 'Cargo y salario',       icon: Briefcase },
-  { numero: 4, nombre: 'Seguridad',      descripcion: 'EPS, ARL, Pensión',     icon: Shield },
-  { numero: 5, nombre: 'Dotación',       descripcion: 'Tallas',                icon: Package },
-  { numero: 6, nombre: 'Bancario',       descripcion: 'Cuenta bancaria',       icon: Building2 },
+  { numero: 3, nombre: 'Contacto',       descripcion: 'Datos de contacto',     icon: Phone },
+  { numero: 4, nombre: 'Contratación',   descripcion: 'Cargo y salario',       icon: Briefcase },
+  { numero: 5, nombre: 'Seguridad',      descripcion: 'EPS, ARL, Pensión',     icon: Shield },
+  { numero: 6, nombre: 'Dotación',       descripcion: 'Tallas',                icon: Package },
+  { numero: 7, nombre: 'Bancario',       descripcion: 'Cuenta bancaria',       icon: Building2 },
 ];
-const ETAPA_DOCUMENTOS = { numero: 7, nombre: 'Documentos', descripcion: 'Repositorio', icon: FileText };
+const ETAPA_DOCUMENTOS = { numero: 8, nombre: 'Documentos', descripcion: 'Repositorio', icon: FileText };
 
 // ─── Catálogos ──────────────────────────────────────────────────────────────────
 const tiposDocumento = [
@@ -107,14 +109,9 @@ const modalidadesPago = [
   { codigo: 'FIJO', label: 'Fijo' },
   { codigo: 'VARIABLE', label: 'Variable' },
 ];
-const entidadesEPS    = ['Sanitas', 'Compensar', 'Sura', 'Nueva EPS', 'Salud Total', 'Famisanar'];
-const entidadesARL    = ['Sura', 'Positiva', 'Axisura', 'Liberty'];
-const entidadesPension = ['Porvenir', 'Protección', 'Colfondos', 'Old Mutual', 'Skandia'];
-const bancos          = ['Bancolombia', 'Davivienda', 'BBVA', 'Banco de Bogotá', 'Banco Popular', 'Nequi', 'Daviplata'];
 const tiposCuenta     = [
   { codigo: 'AHORROS', label: 'Ahorros' },
   { codigo: 'CORRIENTE', label: 'Corriente' },
-  { codigo: 'EFECTIVO', label: 'Efectivo' },
 ];
 const tallaCamisas    = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
 const tallaPantalones = ['28', '30', '32', '34', '36', '38', '40', '42'];
@@ -144,6 +141,12 @@ export default function NuevoColaboradorWizard() {
   const [formData, setFormData] = useState<FormData>(FORM_INICIAL);
   const [predios, setPredios] = useState<any[]>([]);
   const [guardando, setGuardando] = useState(false);
+
+  // ── Paramétricas desde API ───────────────────────────────────────────────
+  const [epsOpciones,       setEpsOpciones]       = useState<string[]>([]);
+  const [arlOpciones,       setArlOpciones]       = useState<string[]>([]);
+  const [pensionOpciones,   setPensionOpciones]   = useState<string[]>([]);
+  const [bancariasOpciones, setBancariasOpciones] = useState<string[]>([]);
   const [departamentos, setDepartamentos] = useState<{codigo:string;nombre:string}[]>([]);
   const [municipios, setMunicipios] = useState<{codigo:string;nombre:string}[]>([]);
   const [deptoSel, setDeptoSel] = useState('');
@@ -158,6 +161,25 @@ export default function NuevoColaboradorWizard() {
     prediosApi.listar({ per_page: 100 })
       .then(r => setPredios(r.data ?? []))
       .catch(() => {});
+  }, []);
+
+  // ── Cargar paramétricas desde API ────────────────────────────────────────────
+  useEffect(() => {
+    const cargar = async () => {
+      try {
+        const [eps, arl, pension, bancos] = await Promise.all([
+          colaboradoresApi.getEPS(),
+          colaboradoresApi.getARL(),
+          colaboradoresApi.getFondosPension(),
+          colaboradoresApi.getEntidadesBancarias(),
+        ]);
+        setEpsOpciones((eps.data ?? []).map((e: any) => e.nombre));
+        setArlOpciones((arl.data ?? []).map((e: any) => e.nombre));
+        setPensionOpciones((pension.data ?? []).map((e: any) => e.nombre));
+        setBancariasOpciones((bancos.data ?? []).map((e: any) => e.nombre));
+      } catch { /* silencioso */ }
+    };
+    cargar();
   }, []);
 
   // Cargar departamentos
@@ -242,7 +264,8 @@ export default function NuevoColaboradorWizard() {
     switch (etapa) {
       case 1: return !!formData.primerNombre.trim() && !!formData.primerApellido.trim();
       case 2: return !!formData.numeroDocumento.trim() && !!formData.fechaExpedicion && !!formData.fechaNacimiento;
-      case 3: return !!formData.cargo.trim() && (formData.modalidadPago === 'VARIABLE' || formData.salarioBase > 0) && !!formData.fechaContratacion;
+      case 3: return true; // Contacto opcional
+      case 4: return !!formData.cargo.trim() && (formData.modalidadPago === 'VARIABLE' || formData.salarioBase > 0) && !!formData.fechaContratacion;
       default: return true;
     }
   };
@@ -323,9 +346,9 @@ export default function NuevoColaboradorWizard() {
       if (!formData.numeroDocumento.trim()) { toast.error('El número de documento es obligatorio'); setEtapaActual(2); return; }
       if (!formData.fechaNacimiento)        { toast.error('La fecha de nacimiento es obligatoria'); setEtapaActual(2); return; }
       if (!formData.fechaExpedicion)        { toast.error('La fecha de expedición es obligatoria'); setEtapaActual(2); return; }
-      if (!formData.cargo.trim())           { toast.error('El cargo es obligatorio');           setEtapaActual(3); return; }
+      if (!formData.cargo.trim())           { toast.error('El cargo es obligatorio');           setEtapaActual(4); return; }
       if (formData.modalidadPago === 'FIJO' && formData.salarioBase <= 0) { toast.error('El salario base debe ser mayor a 0 para modalidad Fijo'); setEtapaActual(3); return; }
-      if (!formData.fechaContratacion)      { toast.error('La fecha de ingreso es obligatoria'); setEtapaActual(3); return; }
+      if (!formData.fechaContratacion)      { toast.error('La fecha de ingreso es obligatoria'); setEtapaActual(4); return; }
     }
 
     // Para CREAR: body con campos obligatorios fijos
@@ -427,24 +450,25 @@ export default function NuevoColaboradorWizard() {
                   const estaActiva   = etapaActual === etapa.numero;
                   const Icon = etapa.icon;
                   return (
-                    <div key={etapa.numero} className="flex items-center flex-1">
-                      <button
-                        onClick={() => irAEtapa(etapa.numero)}
-                        className={`flex flex-col items-center gap-2 ${estaActiva || estaCompleta || isEditMode ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
-                        disabled={!isEditMode && !estaActiva && !estaCompleta}
-                      >
-                        <div className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition-all ${estaCompleta ? 'bg-primary border-primary text-white' : estaActiva ? 'bg-primary/10 border-primary text-primary' : 'bg-muted border-border text-muted-foreground'}`}>
-                          {estaCompleta ? <Check className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
-                        </div>
-                        <div className="text-center min-w-[80px]">
-                          <div className={`text-xs font-semibold ${estaActiva ? 'text-primary' : estaCompleta ? 'text-foreground' : 'text-muted-foreground'}`}>
-                            {etapa.nombre}
+                    <div key={etapa.numero} className="flex items-center flex-1 min-w-0">
+                      <div className="flex flex-col items-center flex-1 min-w-0">
+                        <button
+                          onClick={() => irAEtapa(etapa.numero)}
+                          className={`flex flex-col items-center gap-2 ${estaActiva || estaCompleta || isEditMode ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
+                          disabled={!isEditMode && !estaActiva && !estaCompleta}
+                        >
+                          <div className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all ${estaCompleta ? 'bg-primary border-primary text-white' : estaActiva ? 'bg-primary/10 border-primary text-primary' : 'bg-muted border-border text-muted-foreground'}`}>
+                            {estaCompleta ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
                           </div>
-                          <div className="text-xs text-muted-foreground hidden sm:block">{etapa.descripcion}</div>
-                        </div>
-                      </button>
+                          <div className="text-center">
+                            <div className={`text-xs font-semibold whitespace-nowrap ${estaActiva ? 'text-primary' : estaCompleta ? 'text-foreground' : 'text-muted-foreground'}`}>
+                              {etapa.nombre}
+                            </div>
+                          </div>
+                        </button>
+                      </div>
                       {index < ETAPAS.length - 1 && (
-                        <div className={`flex-1 h-0.5 mx-2 ${estaCompleta ? 'bg-primary' : 'bg-border'}`} />
+                        <div className={`flex-1 h-0.5 mx-1 shrink ${estaCompleta ? 'bg-primary' : 'bg-border'}`} />
                       )}
                     </div>
                   );
@@ -538,8 +562,89 @@ export default function NuevoColaboradorWizard() {
             </Card>
           )}
 
-          {/* ── ETAPA 3: CONTRATACIÓN ── */}
+          {/* ── ETAPA 3: CONTACTO ── */}
           {etapaActual === 3 && (
+            <Card className="border-border">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <Phone className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <CardTitle>Datos de Contacto</CardTitle>
+                    <p className="text-sm text-muted-foreground">Información de contacto y emergencia</p>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid gap-6 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Correo Electrónico</Label>
+                    <Input type="email" placeholder="juan@email.com" value={formData.correo} onChange={e => handleInputChange('correo', e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Teléfono</Label>
+                    <Input placeholder="3001234567" value={formData.telefono} onChange={e => handleInputChange('telefono', e.target.value)} />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Dirección</Label>
+                  <Input placeholder="Calle 45 #12-30" value={formData.direccion} onChange={e => handleInputChange('direccion', e.target.value)} />
+                </div>
+                <div className="grid gap-6 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Departamento</Label>
+                    <select
+                      value={deptoSel}
+                      onChange={e => {
+                        setDeptoSel(e.target.value);
+                        const nombre = departamentos.find(d => d.codigo === e.target.value)?.nombre ?? '';
+                        handleInputChange('departamento', nombre);
+                        handleInputChange('municipio', '');
+                        setMunicipios([]);
+                      }}
+                      className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    >
+                      <option value="">Seleccionar departamento...</option>
+                      {departamentos.map(d => (
+                        <option key={d.codigo} value={d.codigo}>{d.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Municipio</Label>
+                    <select
+                      value={formData.municipio}
+                      onChange={e => handleInputChange('municipio', e.target.value)}
+                      disabled={!deptoSel}
+                      className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
+                    >
+                      <option value="">Seleccionar municipio...</option>
+                      {municipios.map(m => (
+                        <option key={m.codigo} value={m.nombre}>{m.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="border-t border-border pt-4 space-y-4">
+                  <p className="text-sm font-semibold">Contacto de Emergencia</p>
+                  <div className="grid gap-6 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Nombre</Label>
+                      <Input placeholder="Ej: María López" value={formData.contactoEmergenciaNombre} onChange={e => handleInputChange('contactoEmergenciaNombre', e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Teléfono</Label>
+                      <Input placeholder="3109876543" value={formData.contactoEmergenciaTelefono} onChange={e => handleInputChange('contactoEmergenciaTelefono', e.target.value)} />
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ── ETAPA 4: CONTRATACIÓN ── */}
+          {etapaActual === 4 && (
             <Card className="border-border">
               <CardHeader>
                 <div className="flex items-center gap-3">
@@ -608,11 +713,11 @@ export default function NuevoColaboradorWizard() {
                 )}
                 <div className="grid gap-6 md:grid-cols-2">
                   <div className="space-y-2">
-                    <Label>Fecha de Ingreso <span className="text-destructive">*</span></Label>
+                    <Label>Fecha de Contratación<span className="text-destructive">*</span></Label>
                     <Input type="date" value={formData.fechaContratacion} onChange={e => handleInputChange('fechaContratacion', e.target.value)} />
                   </div>
                   <div className="space-y-2">
-                    <Label>Fecha de Retiro</Label>
+                    <Label>Fecha de Finalización</Label>
                     <Input type="date" value={formData.fechaFinalizacion} onChange={e => handleInputChange('fechaFinalizacion', e.target.value)} />
                   </div>
                 </div>
@@ -621,7 +726,7 @@ export default function NuevoColaboradorWizard() {
           )}
 
           {/* ── ETAPA 4: SEGURIDAD SOCIAL ── */}
-          {etapaActual === 4 && (
+          {etapaActual === 5 && (
             <Card className="border-border">
               <CardHeader>
                 <div className="flex items-center gap-3">
@@ -639,100 +744,46 @@ export default function NuevoColaboradorWizard() {
                   <Label>EPS</Label>
                   <Select value={formData.eps} onValueChange={v => handleInputChange('eps', v)}>
                     <SelectTrigger><SelectValue placeholder="Selecciona una EPS" /></SelectTrigger>
-                    <SelectContent>{entidadesEPS.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
+                    {/* EPS: API + fallback legacy */}
+                    <SelectContent>
+                      {epsOpciones.length > 0 && !epsOpciones.includes(formData.eps) && formData.eps && <SelectItem value={formData.eps}>{formData.eps}</SelectItem>}
+                      {epsOpciones.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+                    </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
                   <Label>ARL</Label>
                   <Select value={formData.arl} onValueChange={v => handleInputChange('arl', v)}>
                     <SelectTrigger><SelectValue placeholder="Selecciona una ARL" /></SelectTrigger>
-                    <SelectContent>{entidadesARL.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
+                    {/* ARL: API + fallback legacy */}
+                    <SelectContent>
+                      {arlOpciones.length > 0 && !arlOpciones.includes(formData.arl) && formData.arl && <SelectItem value={formData.arl}>{formData.arl}</SelectItem>}
+                      {arlOpciones.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+                    </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
                   <Label>Fondo de Pensión</Label>
                   <Select value={formData.fondoPension} onValueChange={v => handleInputChange('fondoPension', v)}>
                     <SelectTrigger><SelectValue placeholder="Selecciona un fondo" /></SelectTrigger>
-                    <SelectContent>{entidadesPension.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
+                    {/* Pensión: API + fallback legacy */}
+                    <SelectContent>
+                      {pensionOpciones.length > 0 && !pensionOpciones.includes(formData.fondoPension) && formData.fondoPension && <SelectItem value={formData.fondoPension}>{formData.fondoPension}</SelectItem>}
+                      {pensionOpciones.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+                    </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
                   <Label>Caja de Compensación</Label>
                   <Input placeholder="Ej: Cafam" value={formData.cajaCompensacion} onChange={e => handleInputChange('cajaCompensacion', e.target.value)} />
                 </div>
-                {/* Datos de contacto */}
-                <div className="border-t border-border pt-4 space-y-4">
-                  <p className="text-sm font-semibold">Datos de Contacto</p>
-                  <div className="grid gap-6 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Correo Electrónico</Label>
-                      <Input type="email" placeholder="juan@email.com" value={formData.correo} onChange={e => handleInputChange('correo', e.target.value)} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Teléfono</Label>
-                      <Input placeholder="3001234567" value={formData.telefono} onChange={e => handleInputChange('telefono', e.target.value)} />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Dirección</Label>
-                    <Input placeholder="Calle 45 #12-30" value={formData.direccion} onChange={e => handleInputChange('direccion', e.target.value)} />
-                  </div>
-                  <div className="grid gap-6 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Departamento</Label>
-                      <select
-                        value={deptoSel}
-                        onChange={e => {
-                          setDeptoSel(e.target.value);
-                          const nombre = departamentos.find(d => d.codigo === e.target.value)?.nombre ?? '';
-                          handleInputChange('departamento', nombre);
-                          handleInputChange('municipio', '');
-                          setMunicipios([]);
-                        }}
-                        className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                      >
-                        <option value="">Seleccionar departamento...</option>
-                        {departamentos.map(d => (
-                          <option key={d.codigo} value={d.codigo}>{d.nombre}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Municipio</Label>
-                      <select
-                        value={formData.municipio}
-                        onChange={e => handleInputChange('municipio', e.target.value)}
-                        disabled={!deptoSel}
-                        className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
-                      >
-                        <option value="">Seleccionar municipio...</option>
-                        {municipios.map(m => (
-                          <option key={m.codigo} value={m.nombre}>{m.nombre}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-                {/* Contacto de emergencia aquí */}
-                <div className="border-t border-border pt-4 space-y-4">
-                  <p className="text-sm font-semibold">Contacto de Emergencia</p>
-                  <div className="grid gap-6 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Nombre</Label>
-                      <Input placeholder="Ej: María López" value={formData.contactoEmergenciaNombre} onChange={e => handleInputChange('contactoEmergenciaNombre', e.target.value)} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Teléfono</Label>
-                      <Input placeholder="3109876543" value={formData.contactoEmergenciaTelefono} onChange={e => handleInputChange('contactoEmergenciaTelefono', e.target.value)} />
-                    </div>
-                  </div>
-                </div>
+
               </CardContent>
             </Card>
           )}
 
           {/* ── ETAPA 5: DOTACIÓN ── */}
-          {etapaActual === 5 && (
+          {etapaActual === 6 && (
             <Card className="border-border">
               <CardHeader>
                 <div className="flex items-center gap-3">
@@ -772,7 +823,7 @@ export default function NuevoColaboradorWizard() {
           )}
 
           {/* ── ETAPA 6: BANCARIO ── */}
-          {etapaActual === 6 && (
+          {etapaActual === 7 && (
             <Card className="border-border">
               <CardHeader>
                 <div className="flex items-center gap-3">
@@ -790,7 +841,8 @@ export default function NuevoColaboradorWizard() {
                   <Label>Banco</Label>
                   <Select value={formData.banco} onValueChange={v => handleInputChange('banco', v)}>
                     <SelectTrigger><SelectValue placeholder="Selecciona un banco" /></SelectTrigger>
-                    <SelectContent>{bancos.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
+                    <SelectContent>{bancariasOpciones.length > 0 && !bancariasOpciones.includes(formData.banco) && formData.banco && <SelectItem value={formData.banco}>{formData.banco}</SelectItem>}
+                      {bancariasOpciones.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
@@ -809,7 +861,7 @@ export default function NuevoColaboradorWizard() {
           )}
 
           {/* ── ETAPA 7: DOCUMENTOS (solo edición) ── */}
-          {etapaActual === 7 && isEditMode && (
+          {etapaActual === 8 && isEditMode && (
             <Card className="border-border">
               <CardHeader>
                 <div className="flex items-center gap-3">

@@ -5,121 +5,220 @@ import { requestConToken } from '../../../api/request';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
-import { ArrowLeft, Edit, Shield, Loader2, User, Mail, Calendar, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Edit, Mail, Shield, Calendar, Building2, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface Usuario {
   id: number; name: string; email: string;
-  status: boolean; is_admin: boolean; estado: boolean; asignado_at: string;
+  is_admin: boolean; estado: boolean; asignado_at: string;
+  finca?: string;
 }
 
 export default function UsuarioDetalle() {
-  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { token } = useAuth();
+  const { id } = useParams();
+  const { token, user } = useAuth();
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
+  const fincaNombre = user?.fincaActual?.nombre ?? '';
+
+
 
   useEffect(() => {
-    if (!token || !id) return;
-    const cargar = async () => {
+    if (!id || !token) return;
+    (async () => {
       try {
+        // La API no tiene GET /usuarios/{id} — usamos el listado y filtramos
         const res = await requestConToken<{ data: Usuario[] }>(
           `/api/v1/tenant/usuarios`, { method: 'GET' }, token
         );
-        const u = (res.data ?? []).find(x => String(x.id) === id);
-        setUsuario(u ?? null);
-      } catch { /* silencioso */ }
-      finally { setLoading(false); }
-    };
-    cargar();
+        const found = (res.data ?? []).find(u => String(u.id) === String(id));
+        if (found) setUsuario(found);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Error al cargar usuario');
+      } finally { setLoading(false); }
+    })();
   }, [id, token]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-16 text-muted-foreground gap-3">
-        <Loader2 className="w-5 h-5 animate-spin" /> Cargando...
-      </div>
-    );
-  }
+  const getIniciales = (nombre: string) => {
+    const p = nombre.split(' ');
+    return p.length > 1 ? `${p[0][0]}${p[1][0]}`.toUpperCase() : nombre.substring(0, 2).toUpperCase();
+  };
 
-  if (!usuario) {
-    return (
-      <div className="text-center py-16">
-        <p className="text-muted-foreground">Usuario no encontrado</p>
-        <Button variant="outline" onClick={() => navigate('/usuarios')} className="mt-4">
-          <ArrowLeft className="h-4 w-4 mr-2" /> Volver
-        </Button>
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="flex items-center justify-center py-16 text-muted-foreground gap-3">
+      <Loader2 className="w-5 h-5 animate-spin" /> Cargando usuario...
+    </div>
+  );
 
-  const iniciales = usuario.name.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase();
+  if (!usuario) return (
+    <div className="flex flex-col items-center justify-center min-h-[400px]">
+      <p className="text-muted-foreground">Usuario no encontrado</p>
+      <Button onClick={() => navigate('/usuarios')} className="mt-4">Volver a Usuarios</Button>
+    </div>
+  );
+
+  const getRolColor = (isAdmin: boolean) =>
+    isAdmin ? 'bg-primary/10 text-primary border-primary/20' : 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20';
 
   return (
-    <div className="space-y-6 max-w-2xl">
-      <div className="flex items-center gap-4">
-        <Button variant="outline" size="sm" onClick={() => navigate('/usuarios')}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div className="flex-1">
-          <h1>Detalle de Usuario</h1>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => navigate(`/usuarios/editar/${id}`)}>
-            <Edit className="h-4 w-4 mr-2" /> Editar
+    <div className="space-y-6">
+      <div className="flex items-start justify-between">
+        <div className="flex items-start gap-4">
+          <Button variant="ghost" size="icon" onClick={() => navigate('/usuarios')}
+            className="h-10 w-10 rounded-lg border border-border hover:bg-muted">
+            <ArrowLeft className="h-5 w-5" />
           </Button>
-          {!usuario.is_admin && (
-            <Button variant="outline" onClick={() => navigate(`/usuarios/permisos/${id}`)}
-              className="hover:bg-blue-500/10 hover:text-blue-600 hover:border-blue-500">
-              <Shield className="h-4 w-4 mr-2" /> Permisos
-            </Button>
-          )}
+          <div className="space-y-1">
+            <div className="flex items-center gap-3">
+              <h1>Detalle de Usuario</h1>
+              <Badge className={usuario.estado ? 'bg-success/10 text-success border-success/20' : 'bg-muted text-muted-foreground border-muted'}>
+                {usuario.estado ? 'Activo' : 'Inactivo'}
+              </Badge>
+            </div>
+            <p className="text-lead">Información completa del usuario</p>
+          </div>
         </div>
+        <Button onClick={() => navigate(`/usuarios/editar/${id}`)} className="gap-2 bg-primary hover:bg-primary/90">
+          <Edit className="h-4 w-4" /> Editar
+        </Button>
       </div>
 
-      <Card>
+      <Card className="border-border">
         <CardContent className="p-6">
-          <div className="flex items-center gap-4 mb-6">
-            <div className={`flex h-16 w-16 items-center justify-center rounded-full text-lg font-bold ${usuario.estado ? 'bg-primary/10 text-primary border-2 border-primary/20' : 'bg-muted text-muted-foreground border-2 border-border'}`}>
-              {iniciales}
+          <div className="flex items-start gap-6">
+            <div className={`h-24 w-24 rounded-full flex items-center justify-center text-2xl font-bold flex-shrink-0 ${usuario.estado ? 'bg-primary/10 text-primary border-2 border-primary/20' : 'bg-muted text-muted-foreground border-2 border-border'}`}>
+              {getIniciales(usuario.name)}
             </div>
-            <div>
-              <h2 className="text-xl font-bold">{usuario.name}</h2>
-              <div className="flex items-center gap-2 mt-1">
-                <Badge className={usuario.estado ? 'bg-success/10 text-success border-success/20' : 'bg-muted text-muted-foreground border-muted'}>
-                  {usuario.estado ? 'Activo' : 'Inactivo'}
-                </Badge>
-                <Badge className={usuario.is_admin ? 'bg-primary/10 text-primary border-primary/20' : 'bg-muted text-muted-foreground border-muted'}>
+            <div className="flex-1 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">Nombre Completo</p>
+                <p className="font-semibold text-lg">{usuario.name}</p>
+              </div>
+              <div className="space-y-1 min-w-0">
+                <p className="text-sm text-muted-foreground">Email</p>
+                <p className="font-semibold text-lg truncate" title={usuario.email}>{usuario.email}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">Rol</p>
+                <Badge className={`${getRolColor(usuario.is_admin)} text-sm px-3 py-1`}>
                   {usuario.is_admin ? 'Administrador' : 'Usuario'}
                 </Badge>
               </div>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
-              <Mail className="w-4 h-4 text-muted-foreground" />
-              <div>
-                <p className="text-xs text-muted-foreground">Correo electrónico</p>
-                <p className="font-medium">{usuario.email}</p>
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">ID</p>
+                <p className="font-semibold text-lg">{usuario.id}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
-              <Calendar className="w-4 h-4 text-muted-foreground" />
-              <div>
-                <p className="text-xs text-muted-foreground">Asignado el</p>
-                <p className="font-medium">{new Date(usuario.asignado_at).toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
-              </div>
-            </div>
-            {usuario.is_admin && (
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
-                <ShieldCheck className="w-4 h-4 text-primary" />
-                <p className="text-sm text-primary">Este usuario tiene todos los permisos del sistema</p>
-              </div>
-            )}
           </div>
         </CardContent>
       </Card>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card className="border-border">
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <Mail className="h-5 w-5 text-primary" />
+              <CardTitle>Información de Contacto</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4">
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">Correo Electrónico</p>
+                <p className="font-medium">{usuario.email}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border">
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <Shield className="h-5 w-5 text-primary" />
+              <CardTitle>Información del Sistema</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4">
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">Rol Asignado</p>
+                <Badge className={`${getRolColor(usuario.is_admin)} text-base px-3 py-1`}>
+                  {usuario.is_admin ? 'Administrador' : 'Usuario'}
+                </Badge>
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">Estado de la Cuenta</p>
+                <Badge className={`${usuario.estado ? 'bg-success/10 text-success border-success/20' : 'bg-muted text-muted-foreground border-muted'} text-base px-3 py-1`}>
+                  {usuario.estado ? 'Activo' : 'Inactivo'}
+                </Badge>
+              </div>
+
+            </div>
+          </CardContent>
+        </Card>
+
+        {(usuario.asignado_at || fincaNombre) && (
+          <Card className="border-border lg:col-span-2">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <Building2 className="h-5 w-5 text-primary" />
+                <CardTitle>Asignación</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Finca Asignada</p>
+                  <p className="font-medium text-lg">{fincaNombre || usuario.finca || '—'}</p>
+                </div>
+                {usuario.asignado_at && (
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Fecha de Asignación</p>
+                    <p className="font-medium">
+                      {new Date(usuario.asignado_at).toLocaleDateString('es-CO', {
+                        year: 'numeric', month: 'long', day: 'numeric',
+                      })}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      <div className="space-y-4">
+        <h2>Acciones Rápidas</h2>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card className="border-border hover:border-primary/50 transition-colors cursor-pointer" onClick={() => navigate(`/usuarios/permisos/${id}`)}>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Shield className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-semibold">Gestionar Permisos</h3>
+                  <p className="text-sm text-muted-foreground">Configura los permisos del usuario</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-border hover:border-primary/50 transition-colors cursor-pointer" onClick={() => navigate(`/usuarios/editar/${id}`)}>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Edit className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-semibold">Editar Información</h3>
+                  <p className="text-sm text-muted-foreground">Actualiza los datos del usuario</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }
