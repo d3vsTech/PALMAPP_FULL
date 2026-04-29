@@ -46,6 +46,20 @@ function extractError(data: unknown): string {
   if (typeof data === 'string' && data.trim()) return data;
   if (data && typeof data === 'object') {
     const d = data as Record<string, unknown>;
+
+    // Errores de validación (422): preferir el primer detalle de `errors` antes que el mensaje genérico
+    // Forma esperada: { message: "Error de validación", errors: { avatar: ["El avatar no puede superar los 3 MB"] } }
+    const errors = d.errors;
+    if (errors && typeof errors === 'object') {
+      for (const key of Object.keys(errors as Record<string, unknown>)) {
+        const arr = (errors as Record<string, unknown>)[key];
+        if (Array.isArray(arr) && arr.length > 0 && typeof arr[0] === 'string') {
+          return arr[0] as string;
+        }
+        if (typeof arr === 'string' && arr.trim()) return arr;
+      }
+    }
+
     const msg = d.message ?? d.error ?? d.code;
     if (typeof msg === 'string' && msg.trim()) return msg;
   }

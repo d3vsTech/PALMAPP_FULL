@@ -10,7 +10,7 @@ import {
 } from '../../components/ui/alert-dialog';
 import {
   Users, Search, Eye, Edit, Plus, Trash2,
-  TrendingUp, Loader2, ToggleLeft, ToggleRight, FileSpreadsheet,
+  Loader2, UserCheck, UserX, FileSpreadsheet,
 } from 'lucide-react';
 import { colaboradoresApi } from '../../../api/colaboradores';
 import { toast } from 'sonner';
@@ -43,6 +43,7 @@ export default function Colaboradores() {
   }, [searchTerm, cargar]);
 
   const getNombre = (c: any) =>
+    c.nombre_completo ||
     [c.primer_nombre, c.segundo_nombre, c.primer_apellido, c.segundo_apellido].filter(Boolean).join(' ');
 
   const getIniciales = (c: any) =>
@@ -221,11 +222,6 @@ export default function Colaboradores() {
                         </td>
                         <td className="p-4">
                           <div className="flex gap-2 justify-end">
-                            <Button size="sm" variant="outline" onClick={() => handleToggle(c)}
-                              className={c.estado ? 'hover:bg-destructive/10 hover:text-destructive hover:border-destructive' : 'hover:bg-success/10 hover:text-success hover:border-success'}
-                              title={c.estado ? 'Desactivar' : 'Activar'}>
-                              {c.estado ? <ToggleRight className="h-4 w-4 text-success" /> : <ToggleLeft className="h-4 w-4 text-muted-foreground" />}
-                            </Button>
                             <Button size="sm" variant="outline" onClick={() => navigate(`/colaboradores/${c.id}`)}
                               className="hover:bg-primary/10 hover:text-primary hover:border-primary" title="Visualizar">
                               <Eye className="h-4 w-4" />
@@ -233,6 +229,11 @@ export default function Colaboradores() {
                             <Button size="sm" variant="outline" onClick={() => navigate(`/colaboradores/editar/${c.id}`)}
                               className="hover:bg-accent/10 hover:text-accent hover:border-accent" title="Editar">
                               <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => handleToggle(c)}
+                              className={c.estado ? 'border-destructive/50 text-destructive hover:bg-destructive hover:text-white' : 'border-success/50 text-success hover:bg-success hover:text-primary'}
+                              title={c.estado ? 'Desactivar' : 'Activar'}>
+                              {c.estado ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
                             </Button>
                             <Button size="sm" variant="destructive" onClick={() => handleEliminar(Number(c.id), getNombre(c))} title="Eliminar">
                               <Trash2 className="h-4 w-4" />

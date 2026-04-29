@@ -114,7 +114,7 @@ export default function MiPerfil() {
     : '?';
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6">
       {/* Header */}
       <div>
         <h1>Mi Perfil</h1>
@@ -267,6 +267,10 @@ export default function MiPerfil() {
                     minLength={8}
                     className="pl-10"
                   />
+                  <button type="button" onClick={() => setShowNueva(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                    {showNueva ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
               </div>
             </div>

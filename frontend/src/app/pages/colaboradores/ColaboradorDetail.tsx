@@ -9,7 +9,7 @@ import {
 } from '../../components/ui/accordion';
 import {
   ArrowLeft, Edit, User, Briefcase, Shield, FileText,
-  Download, IdCard, Package, Building2, Loader2, Phone,
+  Download, IdCard, Package, Building2, Loader2, Phone, Eye,
 } from 'lucide-react';
 import { colaboradoresApi } from '../../../api/colaboradores';
 import { toast } from 'sonner';
@@ -43,30 +43,51 @@ export default function ColaboradorDetail() {
       .finally(() => { setLoading(false); setLoadingDocs(false); });
   }, [id]);
 
+  // ─── Documentos: descarga autenticada ──────────────────────────────────────
   const descargarDocumento = async (docId: number, nombreArchivo?: string) => {
-    const base = (import.meta.env.VITE_API_URL ?? 'https://31.97.7.50:3000/api').replace(/\/+$/, '');
-    const token = localStorage.getItem('palmapp_token');
-    const tenantId = localStorage.getItem('palmapp_tenant_id');
+    if (!id) return;
     try {
-      const res = await fetch(`${base}/v1/tenant/colaboradores/${id}/documentos/${docId}/descargar`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          ...(tenantId ? { 'X-Tenant-Id': tenantId } : {}),
-        },
-      });
-      if (!res.ok) { toast.error('Error al descargar el documento'); return; }
-      const blob = await res.blob();
-      const contentDisposition = res.headers.get('content-disposition') || '';
-      const match = /filename="(.+)"/.exec(contentDisposition);
-      const filename = match ? match[1] : (nombreArchivo || 'documento');
+      const blob = await colaboradoresApi.descargarDocumentoBlob(Number(id), docId);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = filename;
+      a.download = nombreArchivo || 'documento';
+      document.body.appendChild(a);
       a.click();
+      a.remove();
       window.URL.revokeObjectURL(url);
-    } catch {
-      toast.error('Error al descargar el documento');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al descargar el documento');
+    }
+  };
+
+  // ─── Documentos: visualización en pestaña nueva ────────────────────────────
+  const visualizarDocumento = async (doc: any) => {
+    if (!id) return;
+    // Abrir la pestaña síncronamente al click para evitar el bloqueo de popups
+    const newWindow = window.open('', '_blank');
+    if (!newWindow) {
+      toast.error('Tu navegador bloqueó la nueva pestaña. Permite popups para esta página.');
+      return;
+    }
+    newWindow.document.write(
+      '<title>Cargando documento...</title><div style="font-family:system-ui;padding:2rem;color:#666">Cargando documento...</div>'
+    );
+
+    try {
+      const { blob } = await colaboradoresApi.visualizarDocumento(Number(id), doc.id);
+      const url = URL.createObjectURL(blob);
+      newWindow.location.href = url;
+      // Liberar el objectURL después de un rato (cuando el browser ya lo cargó)
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err: any) {
+      newWindow.close();
+      if (err?.code === 'MIME_NOT_PREVIEWABLE') {
+        toast.info('Este tipo de archivo no se puede previsualizar. Descargando...');
+        descargarDocumento(doc.id, doc.archivo_nombre_original);
+      } else {
+        toast.error(err?.message ?? 'Error al visualizar el documento');
+      }
     }
   };
 
@@ -310,9 +331,14 @@ export default function ColaboradorDetail() {
                                   {doc.fecha_documento && <p className="text-xs text-muted-foreground">{fmt(doc.fecha_documento)}</p>}
                                 </div>
                               </div>
-                              <Button size="sm" variant="ghost" title="Descargar" onClick={() => descargarDocumento(doc.id, doc.archivo_nombre_original)}>
-                                <Download className="h-4 w-4" />
-                              </Button>
+                              <div className="flex items-center gap-1">
+                                <Button size="sm" variant="ghost" title="Visualizar" onClick={() => visualizarDocumento(doc)}>
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button size="sm" variant="ghost" title="Descargar" onClick={() => descargarDocumento(doc.id, doc.archivo_nombre_original)}>
+                                  <Download className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </div>
                           ))
                         )}
@@ -325,6 +351,7 @@ export default function ColaboradorDetail() {
           </CardContent>
         </Card>
       </div>
+
     </div>
   );
 }

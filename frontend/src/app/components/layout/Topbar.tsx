@@ -43,12 +43,12 @@ export default function Topbar() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-card glass-subtle shadow-sm">
-      <div className="flex h-20 items-center justify-between px-8">
-        {/* Isotipo visible en móvil */}
+      <div className="flex h-20 items-center justify-between px-8 lg:px-8 pl-20 lg:pl-8">
+        {/* Isotipo visible en móvil y tablet (oculto en lg+) */}
         <div className="flex items-center gap-4">
-          <PalmappLogo 
+          <PalmappLogo
             variant="isotipo"
-            className="h-12 w-12 md:hidden"
+            className="h-12 w-12 lg:hidden"
           />
         </div>
 

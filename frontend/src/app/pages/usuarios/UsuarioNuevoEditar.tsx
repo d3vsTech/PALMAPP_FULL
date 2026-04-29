@@ -170,11 +170,7 @@ export default function UsuarioNuevoEditar() {
                 </div>
               )}
             </div>
-            <div className="rounded-lg bg-primary/5 border border-primary/10 p-4">
-              <p className="text-sm text-muted-foreground">
-                💡 Los permisos específicos se pueden configurar después en la sección de "Editar Permisos"
-              </p>
-            </div>
+            
           </CardContent>
         </Card>
 

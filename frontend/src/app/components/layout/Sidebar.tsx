@@ -51,20 +51,6 @@ const navItems: NavItem[] = [
     permiso: 'colaboradores.ver',
   },
   {
-    label: 'Gestión de Usuarios',
-    href: '/usuarios',
-    icon: UserCog,
-    roles: ['administrador'],
-    permiso: 'usuarios.ver',
-  },
-  {
-    label: 'Nómina',
-    href: '/nomina',
-    icon: DollarSign,
-    roles: ['dueño', 'administrador', 'jefe_campo'],
-    permiso: 'nomina.ver',
-  },
-  {
     label: 'Operaciones',
     href: '/operaciones',
     icon: Clipboard,
@@ -79,6 +65,13 @@ const navItems: NavItem[] = [
     permiso: 'remisiones.ver',
   },
   {
+    label: 'Nómina',
+    href: '/nomina',
+    icon: DollarSign,
+    roles: ['dueño', 'administrador', 'jefe_campo'],
+    permiso: 'nomina.ver',
+  },
+  {
     label: 'Agente IA',
     href: '/agente-ia',
     icon: Sparkles,
@@ -89,6 +82,13 @@ const navItems: NavItem[] = [
     href: '/market',
     icon: ShoppingBag,
     roles: ['dueño', 'administrador', 'jefe_campo'],
+  },
+  {
+    label: 'Gestión de Usuarios',
+    href: '/usuarios',
+    icon: UserCog,
+    roles: ['administrador'],
+    permiso: 'usuarios.ver',
   },
   {
     label: 'Configuración',
@@ -173,20 +173,20 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Desktop Sidebar */}
-      <aside className="hidden w-72 flex-col bg-card md:flex">
+      {/* Desktop Sidebar — solo visible en pantallas grandes (lg ≥ 1024px) */}
+      <aside className="hidden w-72 flex-col bg-card lg:flex">
         <NavContent />
       </aside>
 
-      {/* Mobile Menu */}
+      {/* Mobile / Tablet Menu — overlay + sidebar deslizable */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-50 md:hidden">
+        <div className="fixed inset-0 z-50 lg:hidden">
           {/* Overlay */}
-          <div 
+          <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => setMobileOpen(false)}
           />
-          
+
           {/* Sidebar */}
           <div className="absolute left-0 top-0 bottom-0 w-72 animate-in slide-in-from-left duration-300">
             <NavContent />
@@ -194,11 +194,11 @@ export default function Sidebar() {
         </div>
       )}
 
-      {/* Mobile Menu Button */}
+      {/* Botón Hamburguesa — visible hasta lg */}
       <Button
         variant="ghost"
         size="sm"
-        className="fixed left-4 top-4 z-40 md:hidden"
+        className="fixed left-4 top-4 z-40 lg:hidden bg-card/80 backdrop-blur-sm border border-border hover:bg-muted shadow-md"
         onClick={() => setMobileOpen(!mobileOpen)}
       >
         {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}

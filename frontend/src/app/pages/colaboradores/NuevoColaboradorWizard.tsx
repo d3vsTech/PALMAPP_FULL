@@ -34,6 +34,7 @@ import {
   Trash2,
   Loader2,
   Phone,
+  Eye,
 } from 'lucide-react';
 import { Switch } from '../../components/ui/switch';
 import { colaboradoresApi } from '../../../api/colaboradores';
@@ -87,15 +88,14 @@ interface FormData {
 
 // ─── Etapas ─────────────────────────────────────────────────────────────────────
 const ETAPAS_BASE = [
-  { numero: 1, nombre: 'Personal',       descripcion: 'Datos básicos',         icon: Users },
-  { numero: 2, nombre: 'Identificación', descripcion: 'Documentos',            icon: IdCard },
-  { numero: 3, nombre: 'Contacto',       descripcion: 'Datos de contacto',     icon: Phone },
-  { numero: 4, nombre: 'Contratación',   descripcion: 'Cargo y salario',       icon: Briefcase },
-  { numero: 5, nombre: 'Seguridad',      descripcion: 'EPS, ARL, Pensión',     icon: Shield },
-  { numero: 6, nombre: 'Dotación',       descripcion: 'Tallas',                icon: Package },
-  { numero: 7, nombre: 'Bancario',       descripcion: 'Cuenta bancaria',       icon: Building2 },
+  { numero: 1, nombre: 'Personal',       descripcion: 'Datos básicos y contacto', icon: Users },
+  { numero: 2, nombre: 'Identificación', descripcion: 'Documentos',               icon: IdCard },
+  { numero: 3, nombre: 'Contratación',   descripcion: 'Cargo y salario',          icon: Briefcase },
+  { numero: 4, nombre: 'Seguridad',      descripcion: 'EPS, ARL, Pensión',        icon: Shield },
+  { numero: 5, nombre: 'Dotación',       descripcion: 'Tallas',                   icon: Package },
+  { numero: 6, nombre: 'Bancario',       descripcion: 'Cuenta bancaria',          icon: Building2 },
 ];
-const ETAPA_DOCUMENTOS = { numero: 8, nombre: 'Documentos', descripcion: 'Repositorio', icon: FileText };
+const ETAPA_DOCUMENTOS = { numero: 7, nombre: 'Documentos', descripcion: 'Repositorio', icon: FileText };
 
 // ─── Catálogos ──────────────────────────────────────────────────────────────────
 const tiposDocumento = [
@@ -156,11 +156,39 @@ export default function NuevoColaboradorWizard() {
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState(false);
 
+  // Catálogo de categorías de documentos (cargado desde la API)
+  type CatDoc = {
+    label: string;
+    unico_por_tipo: boolean;
+    permite_tipo_personalizado?: boolean;
+    tipos: Record<string, string>;
+  };
+  const [categoriasDocs, setCategoriasDocs] = useState<Record<string, CatDoc> | null>(null);
+
+
   // Cargar predios
   useEffect(() => {
     prediosApi.listar({ per_page: 100 })
       .then(r => setPredios(r.data ?? []))
       .catch(() => {});
+  }, []);
+
+  // Cargar catálogo de categorías de documentos desde la API (fuente única de verdad)
+  useEffect(() => {
+    colaboradoresApi.getCategorias()
+      .then(res => setCategoriasDocs(res.data as Record<string, CatDoc>))
+      .catch(() => {
+        // Fallback al hardcoded actualizado si el endpoint falla
+        setCategoriasDocs({
+          DATOS_BASE:            { label: 'Datos base',                          unico_por_tipo: true,  tipos: { DOCUMENTO_DE_IDENTIDAD: 'Documento de identidad', HOJA_DE_VIDA: 'Hoja de vida', ANTECEDENTES: 'Antecedentes', AUTORIZACION_DATOS_PERSONALES: 'Autorización de datos personales' } },
+          CONTRATACION_LABORAL:  { label: 'Contratación laboral',                unico_por_tipo: false, tipos: { CONTRATO_DE_TRABAJO: 'Contrato de trabajo', ACUERDO_DE_CONFIDENCIALIDAD: 'Acuerdo de confidencialidad' } },
+          SST:                   { label: 'SST',                                 unico_por_tipo: false, tipos: { EXAMEN_DE_INGRESO: 'Examen de ingreso' } },
+          PERMISOS_LICENCIAS:    { label: 'Permisos, Licencias e Incapacidades', unico_por_tipo: false, permite_tipo_personalizado: true, tipos: {} },
+          FINALIZACION_CONTRATO: { label: 'Finalización de contrato',            unico_por_tipo: false, tipos: { FINALIZACION_CONTRATO: 'Finalización de contrato' } },
+          DESPRENDIBLES:         { label: 'Desprendibles',                       unico_por_tipo: false, tipos: { DESPRENDIBLES: 'Desprendibles' } },
+          OTROS:                 { label: 'Otros',                               unico_por_tipo: false, permite_tipo_personalizado: true, tipos: {} },
+        });
+      });
   }, []);
 
   // ── Cargar paramétricas desde API ────────────────────────────────────────────
@@ -264,8 +292,7 @@ export default function NuevoColaboradorWizard() {
     switch (etapa) {
       case 1: return !!formData.primerNombre.trim() && !!formData.primerApellido.trim();
       case 2: return !!formData.numeroDocumento.trim() && !!formData.fechaExpedicion && !!formData.fechaNacimiento;
-      case 3: return true; // Contacto opcional
-      case 4: return !!formData.cargo.trim() && (formData.modalidadPago === 'VARIABLE' || formData.salarioBase > 0) && !!formData.fechaContratacion;
+      case 3: return !!formData.cargo.trim() && (formData.modalidadPago === 'VARIABLE' || formData.salarioBase > 0) && !!formData.fechaContratacion;
       default: return true;
     }
   };
@@ -278,9 +305,19 @@ export default function NuevoColaboradorWizard() {
   };
 
   // ─── Documentos ────────────────────────────────────────────────────────────
+  /**
+   * Subida directa: file picker → sube de inmediato.
+   * Para categorías con `permite_tipo_personalizado` (PERMISOS_LICENCIAS, OTROS)
+   * sin tipo fijo, se manda la `categoria` como `tipo_documento` por default.
+   */
   const handleSubirDocumento = async (categoria: string, tipo: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !id) return;
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('El archivo no puede superar los 10 MB');
+      e.target.value = '';
+      return;
+    }
     setUploadingDoc(true);
     try {
       const fd = new FormData();
@@ -311,29 +348,50 @@ export default function NuevoColaboradorWizard() {
   };
 
   const descargarDocumento = async (docId: number, nombreArchivo?: string) => {
-    const base = (import.meta.env.VITE_API_URL ?? 'https://31.97.7.50:3000/api').replace(/\/+$/, '');
-    const token = localStorage.getItem('palmapp_token');
-    const tenantId = localStorage.getItem('palmapp_tenant_id');
+    if (!id) return;
     try {
-      const res = await fetch(`${base}/v1/tenant/colaboradores/${id}/documentos/${docId}/descargar`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          ...(tenantId ? { 'X-Tenant-Id': tenantId } : {}),
-        },
-      });
-      if (!res.ok) { toast.error('Error al descargar el documento'); return; }
-      const blob = await res.blob();
-      const contentDisposition = res.headers.get('content-disposition') || '';
-      const match = /filename="(.+)"/.exec(contentDisposition);
-      const filename = match ? match[1] : (nombreArchivo || 'documento');
+      const blob = await colaboradoresApi.descargarDocumentoBlob(Number(id), docId);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = filename;
+      a.download = nombreArchivo || 'documento';
+      document.body.appendChild(a);
       a.click();
+      a.remove();
       window.URL.revokeObjectURL(url);
-    } catch {
-      toast.error('Error al descargar el documento');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al descargar el documento');
+    }
+  };
+
+  const visualizarDocumento = async (doc: any) => {
+    if (!id) return;
+    // IMPORTANTE: abrir la pestaña síncronamente al click para evitar el bloqueo
+    // de popups del navegador (sólo permiten window.open dentro del handler del click).
+    const newWindow = window.open('', '_blank');
+    if (!newWindow) {
+      toast.error('Tu navegador bloqueó la nueva pestaña. Permite popups para esta página.');
+      return;
+    }
+    // Loader mínimo mientras se baja el blob
+    newWindow.document.write(
+      '<title>Cargando documento...</title><div style="font-family:system-ui;padding:2rem;color:#666">Cargando documento...</div>'
+    );
+
+    try {
+      const { blob } = await colaboradoresApi.visualizarDocumento(Number(id), doc.id);
+      const url = URL.createObjectURL(blob);
+      newWindow.location.href = url;
+      // Liberar el objectURL después de un rato (cuando el browser ya lo cargó)
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err: any) {
+      newWindow.close();
+      if (err?.code === 'MIME_NOT_PREVIEWABLE') {
+        toast.info('Este tipo de archivo no se puede previsualizar. Descargando...');
+        descargarDocumento(doc.id, doc.archivo_nombre_original);
+      } else {
+        toast.error(err?.message ?? 'Error al visualizar el documento');
+      }
     }
   };
 
@@ -441,7 +499,7 @@ export default function NuevoColaboradorWizard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Wizard */}
         <div className="lg:col-span-2 space-y-8">
-          {/* Stepper */}
+          {/* Stepper horizontal */}
           <Card className="border-border">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
@@ -450,25 +508,46 @@ export default function NuevoColaboradorWizard() {
                   const estaActiva   = etapaActual === etapa.numero;
                   const Icon = etapa.icon;
                   return (
-                    <div key={etapa.numero} className="flex items-center flex-1 min-w-0">
-                      <div className="flex flex-col items-center flex-1 min-w-0">
-                        <button
-                          onClick={() => irAEtapa(etapa.numero)}
-                          className={`flex flex-col items-center gap-2 ${estaActiva || estaCompleta || isEditMode ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
-                          disabled={!isEditMode && !estaActiva && !estaCompleta}
+                    <div key={etapa.numero} className="flex items-center flex-1">
+                      {/* Círculo de etapa */}
+                      <button
+                        onClick={() => irAEtapa(etapa.numero)}
+                        className={`flex flex-col items-center gap-2 ${
+                          estaActiva || estaCompleta || isEditMode ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
+                        }`}
+                        disabled={!isEditMode && !estaActiva && !estaCompleta}
+                      >
+                        <div
+                          className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition-all ${
+                            estaCompleta
+                              ? 'bg-primary border-primary text-white'
+                              : estaActiva
+                              ? 'bg-primary/10 border-primary text-primary'
+                              : 'bg-muted border-border text-muted-foreground'
+                          }`}
                         >
-                          <div className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all ${estaCompleta ? 'bg-primary border-primary text-white' : estaActiva ? 'bg-primary/10 border-primary text-primary' : 'bg-muted border-border text-muted-foreground'}`}>
-                            {estaCompleta ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+                          {estaCompleta ? <Check className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
+                        </div>
+                        <div className="text-center min-w-[80px]">
+                          <div
+                            className={`text-xs font-semibold ${
+                              estaActiva || estaCompleta ? 'text-foreground' : 'text-muted-foreground'
+                            }`}
+                          >
+                            {etapa.nombre}
                           </div>
-                          <div className="text-center">
-                            <div className={`text-xs font-semibold whitespace-nowrap ${estaActiva ? 'text-primary' : estaCompleta ? 'text-foreground' : 'text-muted-foreground'}`}>
-                              {etapa.nombre}
-                            </div>
-                          </div>
-                        </button>
-                      </div>
+                        </div>
+                      </button>
+
+                      {/* Línea conectora */}
                       {index < ETAPAS.length - 1 && (
-                        <div className={`flex-1 h-0.5 mx-1 shrink ${estaCompleta ? 'bg-primary' : 'bg-border'}`} />
+                        <div className="flex-1 h-0.5 mx-2 bg-border relative">
+                          <div
+                            className={`absolute inset-0 bg-primary transition-all ${
+                              estaCompleta ? 'w-full' : 'w-0'
+                            }`}
+                          />
+                        </div>
                       )}
                     </div>
                   );
@@ -477,7 +556,7 @@ export default function NuevoColaboradorWizard() {
             </CardContent>
           </Card>
 
-          {/* ── ETAPA 1: INFORMACIÓN PERSONAL ── */}
+          {/* ── ETAPA 1: INFORMACIÓN PERSONAL + CONTACTO ── */}
           {etapaActual === 1 && (
             <Card className="border-border">
               <CardHeader>
@@ -487,11 +566,12 @@ export default function NuevoColaboradorWizard() {
                   </div>
                   <div>
                     <CardTitle>Información Personal</CardTitle>
-                    <p className="text-sm text-muted-foreground">Datos básicos del colaborador</p>
+                    <p className="text-sm text-muted-foreground">Datos básicos y contacto del colaborador</p>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
+                {/* Nombres y apellidos */}
                 <div className="grid gap-6 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="primerApellido">Primer Apellido <span className="text-destructive">*</span></Label>
@@ -510,6 +590,78 @@ export default function NuevoColaboradorWizard() {
                   <div className="space-y-2">
                     <Label htmlFor="segundoNombre">Segundo Nombre</Label>
                     <Input id="segundoNombre" placeholder="Ej: Carlos" value={formData.segundoNombre} onChange={e => handleInputChange('segundoNombre', e.target.value)} />
+                  </div>
+                </div>
+
+                {/* ── Contacto ── */}
+                <div className="border-t border-border pt-6 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Phone className="h-4 w-4 text-primary" />
+                    <p className="text-sm font-semibold">Datos de contacto</p>
+                  </div>
+                  <div className="grid gap-6 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Correo Electrónico</Label>
+                      <Input type="email" placeholder="juan@email.com" value={formData.correo} onChange={e => handleInputChange('correo', e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Teléfono</Label>
+                      <Input placeholder="3001234567" value={formData.telefono} onChange={e => handleInputChange('telefono', e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Dirección</Label>
+                    <Input placeholder="Calle 45 #12-30" value={formData.direccion} onChange={e => handleInputChange('direccion', e.target.value)} />
+                  </div>
+                  <div className="grid gap-6 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Departamento</Label>
+                      <select
+                        value={deptoSel}
+                        onChange={e => {
+                          setDeptoSel(e.target.value);
+                          const nombre = departamentos.find(d => d.codigo === e.target.value)?.nombre ?? '';
+                          handleInputChange('departamento', nombre);
+                          handleInputChange('municipio', '');
+                          setMunicipios([]);
+                        }}
+                        className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      >
+                        <option value="">Seleccionar departamento...</option>
+                        {departamentos.map(d => (
+                          <option key={d.codigo} value={d.codigo}>{d.nombre}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Municipio</Label>
+                      <select
+                        value={formData.municipio}
+                        onChange={e => handleInputChange('municipio', e.target.value)}
+                        disabled={!deptoSel}
+                        className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
+                      >
+                        <option value="">Seleccionar municipio...</option>
+                        {municipios.map(m => (
+                          <option key={m.codigo} value={m.nombre}>{m.nombre}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── Contacto de emergencia ── */}
+                <div className="border-t border-border pt-6 space-y-4">
+                  <p className="text-sm font-semibold">Contacto de emergencia</p>
+                  <div className="grid gap-6 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Nombre</Label>
+                      <Input placeholder="Ej: María López" value={formData.contactoEmergenciaNombre} onChange={e => handleInputChange('contactoEmergenciaNombre', e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Teléfono</Label>
+                      <Input placeholder="3109876543" value={formData.contactoEmergenciaTelefono} onChange={e => handleInputChange('contactoEmergenciaTelefono', e.target.value)} />
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -562,89 +714,8 @@ export default function NuevoColaboradorWizard() {
             </Card>
           )}
 
-          {/* ── ETAPA 3: CONTACTO ── */}
+          {/* ── ETAPA 3: CONTRATACIÓN ── */}
           {etapaActual === 3 && (
-            <Card className="border-border">
-              <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                    <Phone className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <CardTitle>Datos de Contacto</CardTitle>
-                    <p className="text-sm text-muted-foreground">Información de contacto y emergencia</p>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid gap-6 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Correo Electrónico</Label>
-                    <Input type="email" placeholder="juan@email.com" value={formData.correo} onChange={e => handleInputChange('correo', e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Teléfono</Label>
-                    <Input placeholder="3001234567" value={formData.telefono} onChange={e => handleInputChange('telefono', e.target.value)} />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Dirección</Label>
-                  <Input placeholder="Calle 45 #12-30" value={formData.direccion} onChange={e => handleInputChange('direccion', e.target.value)} />
-                </div>
-                <div className="grid gap-6 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Departamento</Label>
-                    <select
-                      value={deptoSel}
-                      onChange={e => {
-                        setDeptoSel(e.target.value);
-                        const nombre = departamentos.find(d => d.codigo === e.target.value)?.nombre ?? '';
-                        handleInputChange('departamento', nombre);
-                        handleInputChange('municipio', '');
-                        setMunicipios([]);
-                      }}
-                      className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    >
-                      <option value="">Seleccionar departamento...</option>
-                      {departamentos.map(d => (
-                        <option key={d.codigo} value={d.codigo}>{d.nombre}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Municipio</Label>
-                    <select
-                      value={formData.municipio}
-                      onChange={e => handleInputChange('municipio', e.target.value)}
-                      disabled={!deptoSel}
-                      className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
-                    >
-                      <option value="">Seleccionar municipio...</option>
-                      {municipios.map(m => (
-                        <option key={m.codigo} value={m.nombre}>{m.nombre}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div className="border-t border-border pt-4 space-y-4">
-                  <p className="text-sm font-semibold">Contacto de Emergencia</p>
-                  <div className="grid gap-6 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Nombre</Label>
-                      <Input placeholder="Ej: María López" value={formData.contactoEmergenciaNombre} onChange={e => handleInputChange('contactoEmergenciaNombre', e.target.value)} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Teléfono</Label>
-                      <Input placeholder="3109876543" value={formData.contactoEmergenciaTelefono} onChange={e => handleInputChange('contactoEmergenciaTelefono', e.target.value)} />
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* ── ETAPA 4: CONTRATACIÓN ── */}
-          {etapaActual === 4 && (
             <Card className="border-border">
               <CardHeader>
                 <div className="flex items-center gap-3">
@@ -726,7 +797,7 @@ export default function NuevoColaboradorWizard() {
           )}
 
           {/* ── ETAPA 4: SEGURIDAD SOCIAL ── */}
-          {etapaActual === 5 && (
+          {etapaActual === 4 && (
             <Card className="border-border">
               <CardHeader>
                 <div className="flex items-center gap-3">
@@ -783,7 +854,7 @@ export default function NuevoColaboradorWizard() {
           )}
 
           {/* ── ETAPA 5: DOTACIÓN ── */}
-          {etapaActual === 6 && (
+          {etapaActual === 5 && (
             <Card className="border-border">
               <CardHeader>
                 <div className="flex items-center gap-3">
@@ -823,7 +894,7 @@ export default function NuevoColaboradorWizard() {
           )}
 
           {/* ── ETAPA 6: BANCARIO ── */}
-          {etapaActual === 7 && (
+          {etapaActual === 6 && (
             <Card className="border-border">
               <CardHeader>
                 <div className="flex items-center gap-3">
@@ -861,7 +932,7 @@ export default function NuevoColaboradorWizard() {
           )}
 
           {/* ── ETAPA 7: DOCUMENTOS (solo edición) ── */}
-          {etapaActual === 8 && isEditMode && (
+          {etapaActual === 7 && isEditMode && (
             <Card className="border-border">
               <CardHeader>
                 <div className="flex items-center gap-3">
@@ -875,24 +946,17 @@ export default function NuevoColaboradorWizard() {
                 </div>
               </CardHeader>
               <CardContent>
-                {loadingDocs ? (
+                {loadingDocs || !categoriasDocs ? (
                   <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground">
                     <Loader2 className="w-4 h-4 animate-spin" /> Cargando documentos...
                   </div>
                 ) : (
                   <Accordion type="multiple" className="w-full">
-                    {[
-                      { key: 'DATOS_BASE',            label: 'Datos Base',                           unico: true,  tipos: { DOCUMENTO_DE_IDENTIDAD: 'Cédula', HOJA_DE_VIDA: 'Hoja de vida', ANTECEDENTES: 'Antecedentes', AUTORIZACION_DATOS_PERSONALES: 'Autorización datos personales' } },
-                      { key: 'CONTRATACION_LABORAL',  label: 'Contratación Laboral',                 unico: true,  tipos: { CONTRATO_DE_TRABAJO: 'Contrato de trabajo', ACUERDO_DE_CONFIDENCIALIDAD: 'Acuerdo de confidencialidad' } },
-                      { key: 'SST',                   label: 'SST',                                  unico: true,  tipos: { EXAMEN_DE_INGRESO: 'Examen de ingreso' } },
-                      { key: 'PERMISOS_LICENCIAS',    label: 'Permisos, Licencias e Incapacidades',  unico: false, tipos: {} },
-                      { key: 'FINALIZACION_CONTRATO', label: 'Finalización de Contrato',             unico: false, tipos: { FINALIZACION_CONTRATO: 'Finalización de contrato' } },
-                      { key: 'DESPRENDIBLES',         label: 'Desprendibles',                        unico: false, tipos: { DESPRENDIBLES: 'Desprendibles' } },
-                      { key: 'OTROS',                 label: 'Otros',                                unico: false, tipos: {} },
-                    ].map(cat => {
-                      const docsDeCategoria = documentos.filter(d => d.categoria === cat.key);
+                    {Object.entries(categoriasDocs).map(([catKey, cat]) => {
+                      const docsDeCategoria = documentos.filter(d => d.categoria === catKey);
+                      const tiposPredefinidos = Object.entries(cat.tipos);
                       return (
-                        <AccordionItem key={cat.key} value={cat.key}>
+                        <AccordionItem key={catKey} value={catKey}>
                           <AccordionTrigger className="text-sm font-semibold">
                             {cat.label}
                             {docsDeCategoria.length > 0 && (
@@ -900,10 +964,9 @@ export default function NuevoColaboradorWizard() {
                             )}
                           </AccordionTrigger>
                           <AccordionContent className="space-y-4">
-                            {/* Helper component for a single doc row */}
-                            {Object.keys(cat.tipos).length > 0 && cat.unico ? (
-                              /* unico_por_tipo=true: un slot por tipo (reemplaza al subir) */
-                              Object.entries(cat.tipos as Record<string, string>).map(([tipo, label]) => {
+                            {tiposPredefinidos.length > 0 && cat.unico_por_tipo ? (
+                              /* unico_por_tipo=true: un slot por tipo (reemplaza al subir) — solo DATOS_BASE */
+                              tiposPredefinidos.map(([tipo, label]) => {
                                 const docDelTipo = docsDeCategoria.find(d => d.tipo_documento === tipo);
                                 return (
                                   <div key={tipo} className="space-y-1">
@@ -913,7 +976,7 @@ export default function NuevoColaboradorWizard() {
                                         <div className="flex items-center gap-3">
                                           <FileText className="h-8 w-8 text-primary shrink-0" />
                                           <div>
-                                            <p className="text-sm font-medium">{docDelTipo.archivo_nombre_original}</p>
+                                            <p className="text-sm font-medium">{docDelTipo.nombre_archivo || docDelTipo.archivo_nombre_original}</p>
                                             <p className="text-xs text-muted-foreground">
                                               {docDelTipo.fecha_documento ?? docDelTipo.created_at?.split('T')[0]}
                                               {docDelTipo.archivo_tamano ? ` • ${(docDelTipo.archivo_tamano / 1024).toFixed(1)} KB` : ''}
@@ -921,6 +984,9 @@ export default function NuevoColaboradorWizard() {
                                           </div>
                                         </div>
                                         <div className="flex items-center gap-1">
+                                          <Button size="sm" variant="ghost" title="Visualizar" onClick={() => visualizarDocumento(docDelTipo)}>
+                                            <Eye className="h-4 w-4" />
+                                          </Button>
                                           <Button size="sm" variant="ghost" title="Descargar" onClick={() => descargarDocumento(docDelTipo.id, docDelTipo.archivo_nombre_original)}>
                                             <Download className="h-4 w-4" />
                                           </Button>
@@ -931,11 +997,11 @@ export default function NuevoColaboradorWizard() {
                                       </div>
                                     ) : (
                                       <div>
-                                        <input type="file" id={`up-${cat.key}-${tipo}`} className="hidden"
+                                        <input type="file" id={`up-${catKey}-${tipo}`} className="hidden"
                                           accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx"
-                                          onChange={e => handleSubirDocumento(cat.key, tipo, e)} />
+                                          onChange={e => handleSubirDocumento(catKey, tipo, e)} />
                                         <Button size="sm" variant="outline" disabled={uploadingDoc}
-                                          onClick={() => document.getElementById(`up-${cat.key}-${tipo}`)?.click()} className="w-full">
+                                          onClick={() => document.getElementById(`up-${catKey}-${tipo}`)?.click()} className="w-full">
                                           <Upload className="h-4 w-4 mr-2" />
                                           {uploadingDoc ? 'Subiendo...' : `Cargar ${label}`}
                                         </Button>
@@ -946,57 +1012,68 @@ export default function NuevoColaboradorWizard() {
                               })
                             ) : (
                               /* unico_por_tipo=false: múltiples documentos permitidos */
-                              <>
-                                {/* Mostrar todos los docs existentes */}
-                                {docsDeCategoria.map(doc => (
-                                  <div key={doc.id} className="flex items-center justify-between p-3 border border-border rounded-lg bg-accent/20">
-                                    <div className="flex items-center gap-3">
-                                      <FileText className="h-8 w-8 text-primary shrink-0" />
-                                      <div>
-                                        <p className="text-sm font-medium">{doc.nombre_archivo || doc.archivo_nombre_original}</p>
-                                        <p className="text-xs text-muted-foreground">
-                                          {doc.fecha_documento ?? doc.created_at?.split('T')[0]}
-                                          {doc.archivo_tamano ? ` • ${(doc.archivo_tamano / 1024).toFixed(1)} KB` : ''}
-                                        </p>
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                      <Button size="sm" variant="ghost" title="Descargar" onClick={() => descargarDocumento(doc.id, doc.archivo_nombre_original)}>
-                                        <Download className="h-4 w-4" />
-                                      </Button>
-                                      <Button size="sm" variant="ghost" onClick={() => handleEliminarDocumento(doc.id)} className="text-destructive hover:text-destructive" title="Eliminar">
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                  </div>
-                                ))}
-                                {/* Botón subir — usa el tipo correcto según la categoría */}
-                                {Object.keys(cat.tipos).length > 0 ? (
-                                  Object.entries(cat.tipos as Record<string, string>).map(([tipo, label]) => (
-                                    <div key={tipo}>
-                                      <input type="file" id={`up-${cat.key}-${tipo}-multi`} className="hidden"
+                              (() => {
+                                // Tipo a enviar: el primer tipo predefinido o la catKey si no hay
+                                const tipoDefault = tiposPredefinidos[0]?.[0] ?? catKey;
+                                const inputId = `up-${catKey}-multi`;
+                                return (
+                                  <>
+                                    {/* Header: hint + botón Subir */}
+                                    <div className="flex items-center justify-between gap-4">
+                                      <p className="text-sm text-muted-foreground">
+                                        Puedes subir múltiples documentos a esta categoría
+                                      </p>
+                                      <input type="file" id={inputId} className="hidden"
                                         accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx"
-                                        onChange={e => handleSubirDocumento(cat.key, tipo, e)} />
-                                      <Button size="sm" variant="outline" disabled={uploadingDoc}
-                                        onClick={() => document.getElementById(`up-${cat.key}-${tipo}-multi`)?.click()} className="w-full">
-                                        <Upload className="h-4 w-4 mr-2" />
-                                        {uploadingDoc ? 'Subiendo...' : `Subir ${label}`}
+                                        onChange={e => handleSubirDocumento(catKey, tipoDefault, e)} />
+                                      <Button size="sm" disabled={uploadingDoc}
+                                        onClick={() => document.getElementById(inputId)?.click()}
+                                        className="gap-2 bg-primary hover:bg-primary/90 shrink-0">
+                                        <Upload className="h-4 w-4" />
+                                        {uploadingDoc ? 'Subiendo...' : 'Subir Documento'}
                                       </Button>
                                     </div>
-                                  ))
-                                ) : (
-                                  <div>
-                                    <input type="file" id={`up-${cat.key}-libre`} className="hidden"
-                                      accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx"
-                                      onChange={e => handleSubirDocumento(cat.key, cat.key, e)} />
-                                    <Button size="sm" variant="outline" disabled={uploadingDoc}
-                                      onClick={() => document.getElementById(`up-${cat.key}-libre`)?.click()} className="w-full">
-                                      <Upload className="h-4 w-4 mr-2" />
-                                      {uploadingDoc ? 'Subiendo...' : 'Subir Documento'}
-                                    </Button>
-                                  </div>
-                                )}
-                              </>
+
+                                    {/* Lista de documentos o placeholder vacío */}
+                                    {docsDeCategoria.length === 0 ? (
+                                      <div className="text-center py-10 text-muted-foreground">
+                                        <FileText className="h-12 w-12 mx-auto mb-2 opacity-30" />
+                                        <p>No hay documentos en esta categoría</p>
+                                      </div>
+                                    ) : (
+                                      <div className="space-y-2">
+                                        {docsDeCategoria.map(doc => (
+                                          <div key={doc.id} className="flex items-center justify-between p-3 border border-border rounded-lg bg-accent/20">
+                                            <div className="flex items-center gap-3">
+                                              <FileText className="h-8 w-8 text-primary shrink-0" />
+                                              <div>
+                                                <p className="text-sm font-medium">{doc.nombre_archivo || doc.archivo_nombre_original}</p>
+                                                <p className="text-xs text-muted-foreground">
+                                                  {(cat.tipos[doc.tipo_documento] ?? doc.tipo_documento)}
+                                                  {doc.fecha_documento ? ` • ${doc.fecha_documento}` : (doc.created_at ? ` • ${doc.created_at.split('T')[0]}` : '')}
+                                                  {doc.archivo_tamano ? ` • ${(doc.archivo_tamano / 1024).toFixed(1)} KB` : ''}
+                                                </p>
+                                                {doc.observacion && <p className="text-xs text-muted-foreground italic">{doc.observacion}</p>}
+                                              </div>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                              <Button size="sm" variant="ghost" title="Visualizar" onClick={() => visualizarDocumento(doc)}>
+                                                <Eye className="h-4 w-4" />
+                                              </Button>
+                                              <Button size="sm" variant="ghost" title="Descargar" onClick={() => descargarDocumento(doc.id, doc.archivo_nombre_original)}>
+                                                <Download className="h-4 w-4" />
+                                              </Button>
+                                              <Button size="sm" variant="ghost" onClick={() => handleEliminarDocumento(doc.id)} className="text-destructive hover:text-destructive" title="Eliminar">
+                                                <Trash2 className="h-4 w-4" />
+                                              </Button>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </>
+                                );
+                              })()
                             )}
                           </AccordionContent>
                         </AccordionItem>
@@ -1091,6 +1168,7 @@ export default function NuevoColaboradorWizard() {
           </Card>
         </div>
       </div>
+
     </div>
   );
 }

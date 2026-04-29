@@ -245,23 +245,7 @@ export default function UsuarioPermisos() {
         </div>
       </div>
 
-      {/* Info card */}
-      <Card className="glass-subtle border-primary/20 bg-primary/5">
-        <CardContent className="pt-6">
-          <div className="flex gap-3">
-            <Shield className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-foreground">Permisos desde el rol</p>
-              <p className="text-sm text-muted-foreground">
-                Los permisos marcados con la etiqueta{' '}
-                <Badge variant="outline" className="mx-1 text-xs">Rol</Badge>{' '}
-                vienen del rol base del usuario y no pueden ser modificados aquí.
-                Los permisos adicionales pueden ser activados o desactivados según sea necesario.
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      
 
       {/* Botones globales */}
       <div className="flex gap-3">

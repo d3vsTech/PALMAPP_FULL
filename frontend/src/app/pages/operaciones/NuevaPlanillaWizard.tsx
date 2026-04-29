@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
+import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -180,6 +181,7 @@ function getNombreColab(col: {nombres: string; apellidos: string; nombre_complet
 
 export default function NuevaPlanillaWizard() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [etapaActual, setEtapaActual] = useState(1);
 
   // ── Estado para planilla ID y loading ─────────────────────────────────────
@@ -272,9 +274,19 @@ export default function NuevaPlanillaWizard() {
 
   // Información General
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
+  // Elaborado por: se llena automáticamente con el nombre del usuario logueado y queda bloqueado
+  const [elaboradoPor, setElaboradoPor] = useState(user?.nombre ?? '');
   const [huboLluvia, setHuboLluvia] = useState<'si' | 'no' | ''>('');
   const [lluvia, setLluvia] = useState('');
   const [inicioLabores, setInicioLabores] = useState('06:00');
+
+  // Si el user llega tarde (carga async del AuthContext) sincronizamos
+  useEffect(() => {
+    if (user?.nombre && !elaboradoPor) {
+      setElaboradoPor(user.nombre);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.nombre]);
   
   // Observaciones y Ausentes (Final)
   const [observaciones, setObservaciones] = useState('');
@@ -312,6 +324,7 @@ export default function NuevaPlanillaWizard() {
         try {
           const res = await operacionesApi.crear({
             fecha,
+            elaborado_por: elaboradoPor || undefined,
             hora_inicio: inicioLabores || undefined,
             hubo_lluvia: huboLluvia === 'si',
             cantidad_lluvia: huboLluvia === 'si' && lluvia ? parseFloat(lluvia) : null,
@@ -330,6 +343,7 @@ export default function NuevaPlanillaWizard() {
         try {
           await operacionesApi.editar(planillaId, {
             fecha: fecha || undefined,
+            elaborado_por: elaboradoPor || undefined,
             hora_inicio: inicioLabores || undefined,
             hubo_lluvia: huboLluvia === 'si',
             cantidad_lluvia: huboLluvia === 'si' && lluvia ? parseFloat(lluvia) : null,
@@ -357,6 +371,7 @@ export default function NuevaPlanillaWizard() {
         // Fallback: crear la planilla si no se creó al avanzar paso 1
         const planRes = await operacionesApi.crear({
           fecha,
+          elaborado_por: elaboradoPor || undefined,
           hora_inicio: inicioLabores || undefined,
           hubo_lluvia: huboLluvia === 'si',
           cantidad_lluvia: huboLluvia === 'si' && lluvia ? parseFloat(lluvia) : null,
@@ -912,7 +927,7 @@ export default function NuevaPlanillaWizard() {
     if (planillaId) await cargarResumen(planillaId);
   };
 
-  const puedeAvanzarEtapa1 = fecha;
+  const puedeAvanzarEtapa1 = fecha && elaboradoPor;
 
   return (
     <div className="container mx-auto py-8 px-4 max-w-7xl">
@@ -1027,7 +1042,18 @@ export default function NuevaPlanillaWizard() {
                       />
                     </div>
 
-</div>
+                    <div className="space-y-2">
+                      <Label htmlFor="elaboradoPor">Elaborado por *</Label>
+                      <Input
+                        id="elaboradoPor"
+                        placeholder="Nombre del usuario"
+                        value={elaboradoPor}
+                        readOnly
+                        disabled
+                        className="opacity-80 cursor-not-allowed"
+                      />
+                    </div>
+                  </div>
 
                   <div className="grid gap-6 md:grid-cols-2">
                     <div className="space-y-2">
