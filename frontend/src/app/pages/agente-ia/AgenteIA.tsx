@@ -16,16 +16,20 @@ import {
   ChevronDown,
   Camera,
 } from 'lucide-react';
-import { agroAgenteApi } from '../../../api/agroAgente';
+import { agroAgenteApi, buildAttachmentUrl } from '../../../api/agroAgente';
+import type { ChatMessage } from '../../../api/agroAgente';
 import { toast } from 'sonner';
 
 // ────────────────────────────────────────────────────────────
 // Tipos
 // ────────────────────────────────────────────────────────────
+/** Adjunto de un mensaje, construido desde attachment_url + mime del backend. */
 interface Attachment {
   name: string;
-  dataUrl: string;
+  url: string;
+  mime: string;
   isImage: boolean;
+  isVideo: boolean;
 }
 
 interface Message {
@@ -33,134 +37,58 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
-  attachments?: Attachment[];
+  attachment?: Attachment | null;
 }
 
-// ────────────────────────────────────────────────────────────
-// Helpers: extracción de imágenes del contenido (markdown, URL, base64)
-// ────────────────────────────────────────────────────────────
-function extractAttachmentsFromContent(text: string): { cleanText: string; attachments: Attachment[] } {
-  if (!text) return { cleanText: '', attachments: [] };
-  const found: Attachment[] = [];
-  let working = text;
+/**
+ * Convierte un ChatMessage del backend en Message del UI usando attachment_url + mime.
+ * Defensivo: tolera campos faltantes/null/string-vacío y nunca lanza, para que un
+ * mensaje malformado del Android (u otro cliente) no rompa toda la lista.
+ */
+function messageFromBackend(m: any): Message {
+  // Adjunto: aceptar variantes de nombres por si el backend móvil usa otros campos
+  const rawUrl = m?.attachment_url ?? m?.attachmentUrl ?? m?.attachment?.url ?? null;
+  const rawMime = m?.mime ?? m?.attachment_mime ?? m?.attachment?.mime ?? null;
+  const rawName = m?.attachment_name ?? m?.attachmentName ?? m?.attachment?.name ?? null;
 
-  // Markdown ![alt](url)
-  working = working.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_m, alt, url) => {
-    found.push({ name: alt || 'imagen', dataUrl: url, isImage: true });
-    return '';
-  });
-
-  // dataURL base64
-  working = working.replace(/data:image\/[a-zA-Z+]+;base64,[A-Za-z0-9+/=]+/g, (m) => {
-    found.push({ name: 'imagen', dataUrl: m, isImage: true });
-    return '';
-  });
-
-  // URLs con extensión de imagen
-  working = working.replace(/https?:\/\/[^\s)]+\.(jpg|jpeg|png|gif|webp|heic)(\?[^\s)]*)?/gi, (m) => {
-    const name = m.split('/').pop()?.split('?')[0] || 'imagen';
-    found.push({ name, dataUrl: m, isImage: true });
-    return '';
-  });
-
-  return { cleanText: working.trim(), attachments: found };
-}
-
-// Deep scan para cubrir formatos desconocidos del backend
-function deepScanForImages(obj: any, depth = 0): Attachment[] {
-  if (!obj || depth > 6) return [];
-  const found: Attachment[] = [];
-  const visit = (value: any, keyHint: string = '') => {
-    if (value === null || value === undefined) return;
-    if (typeof value === 'string') {
-      const s = value.trim();
-      if (!s) return;
-      if (/^data:image\/[a-zA-Z+]+;base64,/.test(s)) {
-        found.push({ name: keyHint || 'imagen', dataUrl: s, isImage: true });
-        return;
-      }
-      if (/^https?:\/\/[^\s]+\.(jpg|jpeg|png|gif|webp|heic)(\?[^\s]*)?$/i.test(s)) {
-        found.push({ name: keyHint || s.split('/').pop()?.split('?')[0] || 'imagen', dataUrl: s, isImage: true });
-        return;
-      }
-      if (/^https?:\/\/[^\s]+$/i.test(s) && /(image|photo|foto|media|upload|storage|picture|thumb|adjunto|attachment)/i.test(s)) {
-        found.push({ name: keyHint || 'imagen', dataUrl: s, isImage: true });
-        return;
-      }
-      if (/^\/(uploads|storage|media|images|photos|archivos|files)\//.test(s)) {
-        found.push({ name: keyHint || s.split('/').pop() || 'imagen', dataUrl: `http://31.97.7.50${s}`, isImage: true });
-        return;
-      }
-      if (/^(image|photo|foto|media|picture|thumbnail|avatar|adjunto|attachment|archivo|file|url)/i.test(keyHint) && /^https?:\/\//.test(s)) {
-        found.push({ name: keyHint || 'imagen', dataUrl: s, isImage: true });
-        return;
-      }
-      return;
+  let attachment: Attachment | null = null;
+  if (rawUrl && rawMime) {
+    const url = buildAttachmentUrl(rawUrl);
+    if (url) {
+      const mime = String(rawMime);
+      attachment = {
+        name: rawName ?? (String(rawUrl).split('/').pop() ?? 'archivo'),
+        url,
+        mime,
+        isImage: mime.startsWith('image/'),
+        isVideo: mime.startsWith('video/'),
+      };
     }
-    if (Array.isArray(value)) {
-      value.forEach(v => visit(v, keyHint));
-      return;
-    }
-    if (typeof value === 'object') {
-      const direct = value.url ?? value.src ?? value.dataUrl ?? value.data_url ?? value.href ?? value.path;
-      if (typeof direct === 'string') {
-        visit(direct, value.name ?? value.filename ?? value.nombre ?? keyHint);
-      }
-      for (const [k, v] of Object.entries(value)) {
-        visit(v, k);
-      }
-    }
+  }
+
+  // Role: normalizar (algunos clientes mandan 'USER'/'ASSISTANT' o 'human'/'bot')
+  const rawRole = String(m?.role ?? m?.tipo ?? '').toLowerCase();
+  const role: 'user' | 'assistant' = (rawRole === 'user' || rawRole === 'human' || rawRole === 'usuario')
+    ? 'user'
+    : 'assistant';
+
+  // Fecha: tolerar valor inválido
+  const rawDate = m?.created_at ?? m?.createdAt ?? m?.fecha;
+  const dateTry = rawDate ? new Date(rawDate) : new Date();
+  const timestamp = isNaN(dateTry.getTime()) ? new Date() : dateTry;
+
+  return {
+    id: m?.id !== undefined ? `msg-${m.id}` : `msg-tmp-${Date.now()}-${Math.random()}`,
+    role,
+    content: typeof m?.content === 'string' ? m.content : (m?.text ?? m?.mensaje ?? ''),
+    timestamp,
+    attachment,
   };
-  visit(obj);
-  const seen = new Set<string>();
-  return found.filter(a => {
-    if (seen.has(a.dataUrl)) return false;
-    seen.add(a.dataUrl);
-    return true;
-  });
 }
 
-// ────────────────────────────────────────────────────────────
-// Persistencia local de attachments
-// ────────────────────────────────────────────────────────────
-const storageKey = (sessionId: number) => `palmapp_chat_attachments_${sessionId}`;
-
-function loadLocalAttachments(sessionId: number): Record<string, Attachment[]> {
-  try {
-    const raw = localStorage.getItem(storageKey(sessionId));
-    return raw ? JSON.parse(raw) : {};
-  } catch { return {}; }
-}
-
-function saveLocalAttachments(sessionId: number, messageId: string | number, attachments: Attachment[]) {
-  try {
-    const existing = loadLocalAttachments(sessionId);
-    existing[String(messageId)] = attachments;
-    localStorage.setItem(storageKey(sessionId), JSON.stringify(existing));
-  } catch (e) {
-    console.warn('[AgenteIA] No se pudieron guardar los adjuntos localmente', e);
-  }
-}
-
-// ────────────────────────────────────────────────────────────
-// File → Attachment
-// ────────────────────────────────────────────────────────────
-const fileToAttachment = (file: File): Promise<Attachment> => {
-  const isImage = file.type.startsWith('image/');
-  if (!isImage) {
-    return Promise.resolve({ name: file.name, dataUrl: '', isImage: false });
-  }
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve({
-      name: file.name,
-      dataUrl: reader.result as string,
-      isImage: true,
-    });
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-};
+// (Bloques de extracción de URLs, deep-scan, persistencia local y fileToAttachment
+//  fueron eliminados: el backend ahora retorna attachment_url + mime en cada
+//  ChatMessage. El render usa esos campos directamente — ver messageFromBackend.)
 
 // ────────────────────────────────────────────────────────────
 // Markdown inline parser (negrita, itálica)
@@ -228,28 +156,21 @@ export default function AgenteIA() {
             try {
               const histo = await agroAgenteApi.cargarMensajes(s.id);
               setSessionId(s.id);
-              const attMap = loadLocalAttachments(s.id);
-              setMessages((histo ?? []).map((m: any) => {
-                const locales = attMap[String(m.id)] ?? [];
-                const extras = deepScanForImages(m);
-                const { cleanText, attachments: fromText } = extractAttachmentsFromContent(m.content ?? '');
-                const all = [...locales, ...extras, ...fromText];
-                const seen = new Set<string>();
-                const deduped = all.filter(a => {
-                  if (seen.has(a.dataUrl)) return false;
-                  seen.add(a.dataUrl);
-                  return true;
-                });
-                return {
-                  id: `msg-${m.id}`,
-                  role: m.role,
-                  content: cleanText || m.content || '',
-                  timestamp: new Date(m.created_at),
-                  attachments: deduped.length > 0 ? deduped : undefined,
-                };
-              }));
+              const lista = (Array.isArray(histo) ? histo : []).reduce<Message[]>((acc, raw) => {
+                try {
+                  acc.push(messageFromBackend(raw));
+                } catch (e) {
+                  console.warn('[AgenteIA] Mensaje malformado descartado:', raw, e);
+                }
+                return acc;
+              }, []);
+              console.log(`[AgenteIA] Historial cargado (${lista.length} mensajes) sesión ${s.id}`);
+              setMessages(lista);
               return;
-            } catch { continue; }
+            } catch (e) {
+              console.warn('[AgenteIA] Error al cargar sesión', s.id, e);
+              continue;
+            }
           }
         }
         const nueva = await agroAgenteApi.crearSesion();
@@ -327,25 +248,29 @@ export default function AgenteIA() {
   // ── Enviar mensaje ──
   const enviarMensaje = async () => {
     const texto = input.trim();
-    if (!texto && attachedFiles.length === 0) return;
-
-    const attachments: Attachment[] = attachedFiles.length > 0
-      ? await Promise.all(attachedFiles.map(fileToAttachment))
-      : [];
+    const archivos = attachedFiles;
+    if (!texto && archivos.length === 0) return;
 
     const hayTexto = texto.length > 0;
-    const textoParaBackend = hayTexto
-      ? texto
-      : attachments.some(a => a.isImage)
-        ? '[Imagen adjunta]'
-        : '[Archivo adjunto]';
+    const userMessageId = `msg-tmp-${Date.now()}`;
+
+    // Burbuja optimista del usuario con preview local del primer adjunto
+    const previewAttachment: Attachment | null = archivos.length > 0
+      ? {
+          name: archivos[0].name,
+          url: URL.createObjectURL(archivos[0]),
+          mime: archivos[0].type || 'application/octet-stream',
+          isImage: (archivos[0].type || '').startsWith('image/'),
+          isVideo: (archivos[0].type || '').startsWith('video/'),
+        }
+      : null;
 
     const userMessage: Message = {
-      id: `msg-${Date.now()}`,
+      id: userMessageId,
       role: 'user',
       content: hayTexto ? texto : '',
       timestamp: new Date(),
-      attachments: attachments.length > 0 ? attachments : undefined,
+      attachment: previewAttachment,
     };
 
     setMessages((prev) => [...prev, userMessage]);
@@ -374,21 +299,45 @@ export default function AgenteIA() {
       }
     }
 
-    const enviar = async (sid: number) => {
-      const res = await agroAgenteApi.enviarMensaje(sid, textoParaBackend);
-      if (attachments.length > 0 && res.user_message?.id !== undefined) {
-        saveLocalAttachments(sid, res.user_message.id, attachments);
-        setMessages((prev) => prev.map(m =>
-          m.id === userMessage.id ? { ...m, id: `msg-${res.user_message.id}` } : m
-        ));
+    /**
+     * - Con archivos → /chat/sessions/{id}/messages/attachment (multipart)
+     *   + el primer archivo lleva el caption (si hay texto)
+     *   + archivos extra se envían en serie, sin caption
+     * - Sin archivos → /chat/sessions/{id}/messages (JSON)
+     */
+    /** Envuelve messageFromBackend en try/catch para no romper si el backend
+     *  retorna un campo inesperado en algún mensaje específico. */
+    const safeMap = (raw: any, fallback?: Partial<Message>): Message => {
+      try { return messageFromBackend(raw); }
+      catch (e) {
+        console.warn('[AgenteIA] No se pudo mapear mensaje del backend:', raw, e);
+        return {
+          id: `msg-err-${Date.now()}-${Math.random()}`,
+          role: 'assistant',
+          content: '(mensaje no disponible)',
+          timestamp: new Date(),
+          attachment: null,
+          ...fallback,
+        };
       }
-      const aiResponse: Message = {
-        id: `msg-${res.assistant_message.id}`,
-        role: 'assistant',
-        content: res.assistant_message.content,
-        timestamp: new Date(res.assistant_message.created_at),
-      };
-      setMessages((prev) => [...prev, aiResponse]);
+    };
+
+    const enviar = async (sid: number) => {
+      if (archivos.length > 0) {
+        const r = await agroAgenteApi.enviarAdjunto(sid, archivos[0], hayTexto ? texto : undefined);
+        const realUser = safeMap(r.user_message);
+        setMessages((prev) => prev.map(m => m.id === userMessageId ? realUser : m));
+        for (let i = 1; i < archivos.length; i++) {
+          const extra = await agroAgenteApi.enviarAdjunto(sid, archivos[i]);
+          setMessages((prev) => [...prev, safeMap(extra.user_message)]);
+        }
+        setMessages((prev) => [...prev, safeMap(r.assistant_message)]);
+      } else {
+        const res = await agroAgenteApi.enviarMensaje(sid, texto);
+        const realUser = safeMap(res.user_message);
+        setMessages((prev) => prev.map(m => m.id === userMessageId ? realUser : m));
+        setMessages((prev) => [...prev, safeMap(res.assistant_message)]);
+      }
     };
 
     try {
@@ -794,7 +743,7 @@ function MessageBubble({
   resaltarTexto: (texto: string, indice: number) => JSX.Element;
 }) {
   const isUser = message.role === 'user';
-  const tieneAttachments = message.attachments && message.attachments.length > 0;
+  const att = message.attachment;
   const tieneTexto = message.content && message.content.trim().length > 0;
 
   return (
@@ -811,31 +760,37 @@ function MessageBubble({
             isUser ? 'bg-primary text-primary-foreground ml-auto' : 'bg-muted text-foreground'
           }`}
         >
-          {/* Attachments (imágenes y archivos) */}
-          {tieneAttachments && (
-            <div className="flex flex-wrap gap-2 mb-2">
-              {message.attachments!.map((att, i) =>
-                att.isImage && att.dataUrl ? (
-                  <a key={i} href={att.dataUrl} target="_blank" rel="noopener noreferrer">
-                    <img
-                      src={att.dataUrl}
-                      alt={att.name}
-                      className="max-h-56 max-w-full rounded-lg border border-border hover:opacity-90 transition-opacity cursor-pointer"
-                    />
-                  </a>
-                ) : (
-                  <div
-                    key={i}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm ${
-                      isUser
-                        ? 'bg-primary-foreground/10 border-primary-foreground/20 text-primary-foreground'
-                        : 'bg-background border-border'
-                    }`}
-                  >
-                    <FileText className="h-4 w-4 flex-shrink-0" />
-                    <span className="truncate max-w-[200px]">{att.name}</span>
-                  </div>
-                ),
+          {/* Adjunto: image / video / link según mime */}
+          {att && (
+            <div className="mb-2">
+              {att.isImage ? (
+                <a href={att.url} target="_blank" rel="noopener noreferrer">
+                  <img
+                    src={att.url}
+                    alt={att.name}
+                    className="max-h-56 max-w-full rounded-lg border border-border hover:opacity-90 transition-opacity cursor-pointer"
+                  />
+                </a>
+              ) : att.isVideo ? (
+                <video
+                  src={att.url}
+                  controls
+                  className="max-h-72 max-w-full rounded-lg border border-border bg-black"
+                />
+              ) : (
+                <a
+                  href={att.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm hover:opacity-90 transition-opacity ${
+                    isUser
+                      ? 'bg-primary-foreground/10 border-primary-foreground/20 text-primary-foreground'
+                      : 'bg-background border-border text-foreground'
+                  }`}
+                >
+                  <FileText className="h-4 w-4 flex-shrink-0" />
+                  <span className="truncate max-w-[220px]">{att.name}</span>
+                </a>
               )}
             </div>
           )}

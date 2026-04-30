@@ -156,6 +156,14 @@ export default function NuevoColaboradorWizard() {
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState(false);
 
+  // ── Foto del Colaborador (avatar) ────────────────────────────────────────
+  // Local: preview del archivo elegido (dataURL) + el File pendiente de subir.
+  // Remoto: avatar_url del servidor (cuando ya existe).
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [avatarUrlRemoto, setAvatarUrlRemoto] = useState<string | null>(null);
+  const [subiendoAvatar, setSubiendoAvatar] = useState(false);
+
   // Catálogo de categorías de documentos (cargado desde la API)
   type CatDoc = {
     label: string;
@@ -234,6 +242,11 @@ export default function NuevoColaboradorWizard() {
     if (!isEditMode || !id) return;
     colaboradoresApi.ver(Number(id)).then(res => {
       const d = res.data;
+      // Avatar remoto si existe
+      if (d.avatar_url) {
+        setAvatarUrlRemoto(d.avatar_url);
+        setImagePreview(d.avatar_url);
+      }
       setFormData({
         estado: d.estado ?? true,
         primerApellido: d.primer_apellido ?? '',
@@ -305,6 +318,54 @@ export default function NuevoColaboradorWizard() {
   };
 
   // ─── Documentos ────────────────────────────────────────────────────────────
+  // ─── Avatar / Foto del Colaborador ─────────────────────────────────────────
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validación cliente
+    const okMime = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'].includes(file.type.toLowerCase());
+    if (!okMime) { toast.error('Formato inválido. Usa JPG, PNG, GIF o WebP.'); return; }
+    if (file.size > 2 * 1024 * 1024) { toast.error('La foto no puede superar los 2 MB'); return; }
+
+    // Preview inmediato
+    const reader = new FileReader();
+    reader.onloadend = () => setImagePreview(reader.result as string);
+    reader.readAsDataURL(file);
+    setAvatarFile(file);
+
+    // Si estamos editando, subir avatar al servidor inmediatamente
+    if (isEditMode && id) {
+      setSubiendoAvatar(true);
+      try {
+        const fd = new FormData();
+        fd.append('avatar', file);
+        const res = await colaboradoresApi.subirAvatar(Number(id), fd);
+        setAvatarUrlRemoto(res.data?.avatar_url ?? null);
+        toast.success(res.message ?? 'Foto actualizada');
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Error al subir la foto');
+      } finally {
+        setSubiendoAvatar(false);
+      }
+    }
+    // En modo creación: el avatar se sube DESPUÉS del POST de colaborador (ver guardarTodo)
+  };
+
+  const handleRemoveImage = async () => {
+    setImagePreview(null);
+    setAvatarFile(null);
+    if (isEditMode && id && avatarUrlRemoto) {
+      try {
+        await colaboradoresApi.eliminarAvatar(Number(id));
+        setAvatarUrlRemoto(null);
+        toast.success('Foto eliminada');
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Error al eliminar la foto');
+      }
+    }
+  };
+
   /**
    * Subida directa: file picker → sube de inmediato.
    * Para categorías con `permite_tipo_personalizado` (PERMISOS_LICENCIAS, OTROS)
@@ -465,12 +526,25 @@ export default function NuevoColaboradorWizard() {
 
     setGuardando(true);
     try {
+      let colaboradorId: number | null = null;
       if (isEditMode && id) {
         const res = await colaboradoresApi.editar(Number(id), body);
         toast.success(res.message ?? 'Colaborador actualizado correctamente');
+        colaboradorId = Number(id);
       } else {
         const res = await colaboradoresApi.crear(body);
         toast.success(res.message ?? 'Colaborador creado correctamente');
+        colaboradorId = res.data?.id ?? null;
+      }
+      // En modo creación: subir el avatar después del POST si el usuario eligió uno
+      if (!isEditMode && colaboradorId && avatarFile) {
+        try {
+          const fd = new FormData();
+          fd.append('avatar', avatarFile);
+          await colaboradoresApi.subirAvatar(colaboradorId, fd);
+        } catch (err) {
+          console.warn('No se pudo subir la foto:', err);
+        }
       }
       navigate('/colaboradores');
     } catch (err) {
@@ -571,6 +645,56 @@ export default function NuevoColaboradorWizard() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
+                {/* Foto del Colaborador */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Foto del Colaborador</Label>
+                  <div className="flex items-center gap-4">
+                    {imagePreview ? (
+                      <div className="relative">
+                        <img
+                          src={imagePreview}
+                          alt="Vista previa"
+                          className="w-24 h-24 rounded-full object-cover border-2 border-border"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleRemoveImage}
+                          className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-1 hover:bg-destructive/90"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="w-24 h-24 rounded-full bg-muted flex items-center justify-center border-2 border-dashed border-border">
+                        {subiendoAvatar
+                          ? <Loader2 className="h-8 w-8 text-muted-foreground animate-spin" />
+                          : <Upload className="h-8 w-8 text-muted-foreground" />}
+                      </div>
+                    )}
+                    <div>
+                      <input
+                        type="file"
+                        id="foto"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => document.getElementById('foto')?.click()}
+                        disabled={subiendoAvatar}
+                      >
+                        <Upload className="h-4 w-4 mr-2" />
+                        {subiendoAvatar ? 'Subiendo...' : 'Cargar Imagen'}
+                      </Button>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        JPG, PNG, GIF o WebP (máx. 2 MB)
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Nombres y apellidos */}
                 <div className="grid gap-6 md:grid-cols-2">
                   <div className="space-y-2">

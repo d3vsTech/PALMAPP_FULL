@@ -286,6 +286,13 @@ export const viajesApi = {
 
   // ── Transiciones de estado ────────────────────────────────────────────────
 
+  /** POST /viajes/{id}/despachar — CREADO → EN_CAMINO (sin requerir conteo previo).
+   *  El conteo de cosecha es opcional; este endpoint pasa el viaje a En Validación
+   *  directamente. Si el backend no expone esta ruta, devolverá 404 y la UI mostrará
+   *  el mensaje de error al usuario. */
+  despachar: (id: number) =>
+    post<{ data: Viaje }>(`/viajes/${id}/despachar`),
+
   /** POST /viajes/{id}/llegada-planta — EN_CAMINO → EN_PLANTA (requiere peso_viaje) */
   llegadaPlanta: (id: number, pesoViaje: number) =>
     post<{ data: Viaje }>(`/viajes/${id}/llegada-planta`, { peso_viaje: pesoViaje }),

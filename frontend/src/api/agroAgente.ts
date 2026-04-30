@@ -25,6 +25,17 @@ const AGRO_API =
   (import.meta.env.VITE_AGRO_AGENTE_URL as string | undefined)?.trim() ??
   'http://31.97.7.50/agro-agente/api';
 
+/** Base SIN /api — para construir URLs absolutas de adjuntos */
+export const AGRO_BASE_URL = AGRO_API.replace(/\/api\/?$/, '');
+
+/** Convierte attachment_url relativa (ej. /storage/chat/abc.jpg) en URL absoluta. */
+export function buildAttachmentUrl(attachmentUrl?: string | null): string | null {
+  if (!attachmentUrl) return null;
+  if (/^https?:\/\//i.test(attachmentUrl)) return attachmentUrl;
+  const path = attachmentUrl.startsWith('/') ? attachmentUrl : `/${attachmentUrl}`;
+  return `${AGRO_BASE_URL}${path}`;
+}
+
 // ────────────────────────────────────────────────────────────────────────
 // Tipos
 // ────────────────────────────────────────────────────────────────────────
@@ -42,6 +53,12 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   created_at: string;
+  /** URL relativa al adjunto (ej. /storage/chat/abc.jpg). Usar `buildAttachmentUrl()` para absolutizar. */
+  attachment_url?: string | null;
+  /** Mime type del adjunto (ej. image/jpeg, video/mp4, application/pdf). */
+  mime?: string | null;
+  /** Nombre original del archivo (opcional). */
+  attachment_name?: string | null;
 }
 
 export interface SendMessageResponse {
@@ -176,6 +193,29 @@ export const agroAgenteApi = {
     });
     const resp: SendMessageResponse = r?.data ?? r;
     console.log('[AgroAgente] enviarMensaje respuesta:', resp);
+    return resp;
+  },
+
+  /**
+   * POST /chat/sessions/{id}/messages/attachment — envía un mensaje con adjunto.
+   * Multipart form-data. NO setear Content-Type manualmente; el browser agrega
+   * el boundary correcto automáticamente.
+   *
+   * El backend devuelve user_message + assistant_message igual que enviarMensaje,
+   * pero con attachment_url + mime poblados en user_message.
+   */
+  enviarAdjunto: async (sessionId: number, file: File, caption?: string): Promise<SendMessageResponse> => {
+    console.log(`[AgroAgente] enviarAdjunto → sesión ${sessionId}:`, file.name, file.type, caption);
+    const fd = new FormData();
+    fd.append('file', file);
+    if (caption && caption.trim()) fd.append('content', caption.trim());
+
+    const r = await agroFetch<any>(`/chat/sessions/${sessionId}/messages/attachment`, {
+      method: 'POST',
+      body: fd,
+    });
+    const resp: SendMessageResponse = r?.data ?? r;
+    console.log('[AgroAgente] enviarAdjunto respuesta:', resp);
     return resp;
   },
 
