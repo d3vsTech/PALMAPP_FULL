@@ -9,6 +9,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '../../components/ui/alert-dialog';
+import {
   ArrowLeft, ArrowRight, Check, Truck, Leaf, Trash2, Edit, Save, X,
   CheckCircle, Clock, FileText, Sparkles, Image as ImageIcon, Upload, Loader2,
 } from 'lucide-react';
@@ -17,6 +21,7 @@ import {
   viajesApi, strField,
   type Viaje, type EstadoViajeApi,
 } from '../../../api/viajes';
+import { formatFechaHora } from '../../utils/fecha';
 
 // ─── tipos UI (3 estados compactos) ───────────────────────────────────────────
 export type EstadoViaje = 'Creado' | 'En Validación' | 'Finalizado';
@@ -52,6 +57,7 @@ export default function DetalleViaje() {
   const { id } = useParams<{ id: string }>();
 
   const [viaje, setViaje] = useState<any>(null);
+  const [confirmEliminarOpen, setConfirmEliminarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [procesando, setProcesando] = useState(false);
 
@@ -150,9 +156,14 @@ export default function DetalleViaje() {
     }
   };
 
-  const eliminarViaje = async () => {
+  const eliminarViaje = () => {
     if (!id) return;
-    if (!window.confirm('¿Estás seguro de que deseas eliminar este viaje?')) return;
+    setConfirmEliminarOpen(true);
+  };
+
+  const confirmarEliminarViaje = async () => {
+    if (!id) return;
+    setConfirmEliminarOpen(false);
     try {
       await viajesApi.eliminar(Number(id));
       toast.success('Viaje eliminado');
@@ -733,7 +744,7 @@ export default function DetalleViaje() {
                           </h4>
                           {step.fecha && (
                             <p className="text-xs text-muted-foreground">
-                              {new Date(step.fecha).toLocaleString('es-CO', {
+                              {formatFechaHora(step.fecha, {
                                 month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
                               })}
                             </p>
@@ -751,6 +762,24 @@ export default function DetalleViaje() {
           </div>
         </div>
       </div>
+
+      {/* AlertDialog: confirmar eliminar viaje */}
+      <AlertDialog open={confirmEliminarOpen} onOpenChange={setConfirmEliminarOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esto eliminará permanentemente este viaje. Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmarEliminarViaje} className="bg-destructive hover:bg-destructive/90">
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

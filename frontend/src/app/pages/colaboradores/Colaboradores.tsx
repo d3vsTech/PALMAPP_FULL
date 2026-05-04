@@ -12,7 +12,7 @@ import {
   Users, Search, Eye, Edit, Plus, Trash2,
   Loader2, UserCheck, UserX, FileSpreadsheet,
 } from 'lucide-react';
-import { colaboradoresApi } from '../../../api/colaboradores';
+import { colaboradoresApi, buildAvatarUrl } from '../../../api/colaboradores';
 import { toast } from 'sonner';
 
 export default function Colaboradores() {
@@ -199,9 +199,17 @@ export default function Colaboradores() {
                       <tr key={c.id} className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors ${i % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}>
                         <td className="p-4">
                           <div className="flex items-center gap-3">
-                            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold ${c.estado ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-muted text-muted-foreground border border-border'}`}>
-                              {getIniciales(c)}
-                            </div>
+                            {c.avatar_url ? (
+                              <img
+                                src={buildAvatarUrl(c.avatar_url) ?? ''}
+                                alt={getNombre(c)}
+                                className={`h-10 w-10 shrink-0 rounded-full object-cover border ${c.estado ? 'border-primary/20' : 'border-border opacity-60'}`}
+                              />
+                            ) : (
+                              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold ${c.estado ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-muted text-muted-foreground border border-border'}`}>
+                                {getIniciales(c)}
+                              </div>
+                            )}
                             <div className="flex flex-col">
                               <span className="font-semibold text-sm">{getNombre(c)}</span>
                               <Badge className={`w-fit mt-1 text-xs ${c.estado ? 'bg-success/10 text-success border-success/20' : 'bg-muted text-muted-foreground border-muted'}`}>

@@ -13,6 +13,27 @@ import { requestConToken, fetchConToken } from './request';
 
 function tkn() { return localStorage.getItem('palmapp_token'); }
 
+// ─── Base URL del servidor (sin /api) para construir URLs absolutas de archivos ──
+const _API_BASE = (
+  (import.meta.env.VITE_API_URL as string | undefined)?.trim() ??
+  'https://31.97.7.50:3000/api'
+).replace(/\/+$/, '');
+/** Host raíz del backend (sin /api), para componer URLs de avatares y documentos */
+export const FILES_BASE_URL = _API_BASE.replace(/\/api\/?$/, '');
+
+/**
+ * Convierte una URL de avatar relativa (ej. /storage/avatars/abc.jpg) en URL absoluta.
+ * Si ya viene completa (http:// o https://) la devuelve tal cual.
+ * Devuelve null si no hay URL.
+ */
+export function buildAvatarUrl(avatarUrl?: string | null): string | null {
+  if (!avatarUrl) return null;
+  if (/^https?:\/\//i.test(avatarUrl)) return avatarUrl;
+  if (avatarUrl.startsWith('data:')) return avatarUrl;          // data URL (preview local)
+  const path = avatarUrl.startsWith('/') ? avatarUrl : `/${avatarUrl}`;
+  return `${FILES_BASE_URL}${path}`;
+}
+
 // ─── Tipos públicos ────────────────────────────────────────────────────────────
 export interface ColaboradorListadoParams {
   search?: string;

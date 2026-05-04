@@ -3,6 +3,10 @@ import { useNavigate, useParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '../../components/ui/alert-dialog';
 import { ArrowLeft, Edit, Package, Trash2, AlertCircle, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -67,12 +71,16 @@ export default function ProductoDetalle() {
   const navigate = useNavigate();
 
   const producto = productosData.find(p => p.id === id);
+  const [confirmEliminarOpen, setConfirmEliminarOpen] = useState(false);
 
   const handleEliminar = () => {
-    if (producto && window.confirm(`¿Estás seguro de que deseas eliminar "${producto.nombre}"?`)) {
-      toast.success('Producto eliminado exitosamente');
-      navigate('/proveedor/productos');
-    }
+    if (producto) setConfirmEliminarOpen(true);
+  };
+
+  const confirmarEliminar = () => {
+    setConfirmEliminarOpen(false);
+    toast.success('Producto eliminado exitosamente');
+    navigate('/proveedor/productos');
   };
 
   if (!producto) {
@@ -281,6 +289,24 @@ export default function ProductoDetalle() {
           </Card>
         </div>
       </div>
+
+      {/* AlertDialog: confirmar eliminar producto */}
+      <AlertDialog open={confirmEliminarOpen} onOpenChange={setConfirmEliminarOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esto eliminará permanentemente <strong>{producto?.nombre}</strong>. Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmarEliminar} className="bg-destructive hover:bg-destructive/90">
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -12,6 +12,10 @@ import {
   SelectValue,
 } from '../../components/ui/select';
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '../../components/ui/alert-dialog';
+import {
   Plus,
   Search,
   Edit,
@@ -96,6 +100,7 @@ export default function ProveedorProductos() {
   const [busqueda, setBusqueda] = useState('');
   const [categoriaFiltro, setCategoriaFiltro] = useState('Todas');
   const [estadoFiltro, setEstadoFiltro] = useState('Todos');
+  const [productoToDelete, setProductoToDelete] = useState<{ id: string; nombre: string } | null>(null);
 
   const productosFiltrados = productos.filter((producto) => {
     const cumpleBusqueda = producto.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
@@ -107,10 +112,14 @@ export default function ProveedorProductos() {
   });
 
   const handleEliminar = (id: string, nombre: string) => {
-    if (window.confirm(`¿Estás seguro de que deseas eliminar "${nombre}"?`)) {
-      setProductos(productos.filter(p => p.id !== id));
-      toast.success('Producto eliminado exitosamente');
-    }
+    setProductoToDelete({ id, nombre });
+  };
+
+  const confirmarEliminar = () => {
+    if (!productoToDelete) return;
+    setProductos(productos.filter(p => p.id !== productoToDelete.id));
+    toast.success('Producto eliminado exitosamente');
+    setProductoToDelete(null);
   };
 
   const getEstadoBadge = (estado: string, stock: number) => {
@@ -290,6 +299,24 @@ export default function ProveedorProductos() {
           Mostrando {productosFiltrados.length} de {productos.length} productos
         </div>
       )}
+
+      {/* AlertDialog: confirmar eliminar producto */}
+      <AlertDialog open={!!productoToDelete} onOpenChange={open => !open && setProductoToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esto eliminará permanentemente <strong>{productoToDelete?.nombre}</strong>. Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmarEliminar} className="bg-destructive hover:bg-destructive/90">
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

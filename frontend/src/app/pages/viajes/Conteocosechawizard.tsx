@@ -26,6 +26,15 @@ import { viajesApi, type OperacionDisponible, type CosechaLibre } from '../../..
 import { selectsApi } from '../../../api/operaciones';
 import { toast } from 'sonner';
 
+// Helper defensivo para fechas (evita "Invalid Date")
+const formatFecha = (v?: any, opts: Intl.DateTimeFormatOptions = {}) => {
+  if (v === null || v === undefined || v === '') return '—';
+  const s = String(v);
+  const ymd = s.slice(0, 10);
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(ymd) ? new Date(ymd + 'T12:00:00') : new Date(s);
+  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('es-CO', opts);
+};
+
 const ETAPAS = [
   { numero: 1, nombre: 'Info. Viaje' },
   { numero: 2, nombre: 'Cosecha' },
@@ -305,7 +314,7 @@ export default function ConteoCosechaWizard({ viaje, onClose }: ConteoCosechaWiz
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="space-y-2">
                         <Label>Fecha del Viaje</Label>
-                        <Input value={new Date(viaje.fecha).toLocaleDateString('es-CO')} disabled />
+                        <Input value={formatFecha(viaje.fecha)} disabled />
                       </div>
                       <div className="space-y-2">
                         <Label>Placa del Vehículo</Label>

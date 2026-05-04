@@ -1,5 +1,19 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
+
+// Helpers de formateo de fechas defensivos (evitan "Invalid Date")
+const formatFecha = (v?: any, opts: Intl.DateTimeFormatOptions = {}) => {
+  if (v === null || v === undefined || v === '') return '—';
+  const s = String(v);
+  const ymd = s.slice(0, 10);
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(ymd) ? new Date(ymd + 'T12:00:00') : new Date(s);
+  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('es-CO', opts);
+};
+const formatFechaHora = (v?: any, opts: Intl.DateTimeFormatOptions = {}) => {
+  if (v === null || v === undefined || v === '') return '—';
+  const d = new Date(String(v));
+  return isNaN(d.getTime()) ? '—' : d.toLocaleString('es-CO', opts);
+};
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
@@ -394,7 +408,7 @@ export default function PedidoDetalle() {
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.text(`Pedido: ${pedido.id}`, pageWidth - 60, 20);
-    doc.text(`Fecha: ${new Date(pedido.fechaCreacion).toLocaleDateString('es-CO')}`, pageWidth - 60, 27);
+    doc.text(`Fecha: ${formatFecha(pedido.fechaCreacion)}`, pageWidth - 60, 27);
     doc.text(`Estado: ${pedido.estado}`, pageWidth - 60, 34);
 
     // Línea divisoria
@@ -475,7 +489,7 @@ export default function PedidoDetalle() {
     doc.text(`Estado de pago: ${pedido.estadoPago}`, 20, yPos + 6);
 
     if (pedido.estadoPago === 'Pagado' && pedido.fechaPago) {
-      doc.text(`Fecha de pago: ${new Date(pedido.fechaPago).toLocaleDateString('es-CO')}`, 20, yPos + 12);
+      doc.text(`Fecha de pago: ${formatFecha(pedido.fechaPago)}`, 20, yPos + 12);
       if (pedido.referenciaPago) {
         doc.text(`Referencia: ${pedido.referenciaPago}`, 20, yPos + 18);
       }
@@ -674,12 +688,9 @@ export default function PedidoDetalle() {
                       <div className="space-y-1">
                         <p className="text-sm text-muted-foreground">Fecha de pago</p>
                         <p className="font-medium">
-                          {new Date(pedido.fechaPago).toLocaleDateString('es-CO', {
-                            day: 'numeric',
-                            month: 'long',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
+                          {formatFechaHora(pedido.fechaPago, {
+                            day: 'numeric', month: 'long', year: 'numeric',
+                            hour: '2-digit', minute: '2-digit',
                           })}
                         </p>
                       </div>
@@ -840,12 +851,9 @@ export default function PedidoDetalle() {
                     <div>
                       <p className="text-sm text-muted-foreground">Fecha de creación</p>
                       <p className="font-medium">
-                        {new Date(pedido.fechaCreacion).toLocaleDateString('es-CO', {
-                          day: 'numeric',
-                          month: 'long',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
+                        {formatFechaHora(pedido.fechaCreacion, {
+                          day: 'numeric', month: 'long', year: 'numeric',
+                          hour: '2-digit', minute: '2-digit',
                         })}
                       </p>
                     </div>
@@ -855,10 +863,8 @@ export default function PedidoDetalle() {
                     <div>
                       <p className="text-sm text-muted-foreground">Entrega estimada</p>
                       <p className="font-medium">
-                        {new Date(pedido.fechaEstimadaEntrega).toLocaleDateString('es-CO', {
-                          day: 'numeric',
-                          month: 'long',
-                          year: 'numeric',
+                        {formatFecha(pedido.fechaEstimadaEntrega, {
+                          day: 'numeric', month: 'long', year: 'numeric',
                         })}
                       </p>
                     </div>
@@ -938,11 +944,9 @@ export default function PedidoDetalle() {
                       <div className="flex items-start justify-between mb-1">
                         <p className="font-medium">{evento.titulo}</p>
                         <p className="text-xs text-muted-foreground">
-                          {new Date(evento.fecha).toLocaleDateString('es-CO', {
-                            day: 'numeric',
-                            month: 'short',
-                            hour: '2-digit',
-                            minute: '2-digit',
+                          {formatFechaHora(evento.fecha, {
+                            day: 'numeric', month: 'short',
+                            hour: '2-digit', minute: '2-digit',
                           })}
                         </p>
                       </div>

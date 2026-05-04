@@ -9,6 +9,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '../../components/ui/alert-dialog';
+import {
   ArrowLeft, ArrowRight, Check, Truck, Leaf, Plus, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -59,6 +63,7 @@ export default function ConteoCosecha() {
 
   // Datos del viaje
   const [viaje, setViaje] = useState<Viaje | null>(null);
+  const [cosechaToDelete, setCosechaToDelete] = useState<CosechaConteo | null>(null);
   const [loading, setLoading] = useState(true);
   const [procesando, setProcesando] = useState(false);
 
@@ -208,12 +213,18 @@ export default function ConteoCosecha() {
     }
   };
 
-  const eliminarCosecha = async (c: CosechaConteo) => {
+  const eliminarCosecha = (c: CosechaConteo) => {
     if (!viaje || !c.detalleId) return;
     if (c.aprobado) { toast.error('No se puede eliminar una cosecha aprobada'); return; }
-    if (!confirm('¿Eliminar esta cosecha del viaje?')) return;
+    setCosechaToDelete(c);
+  };
+
+  const confirmarEliminarCosecha = async () => {
+    if (!viaje || !cosechaToDelete?.detalleId) return;
+    const c = cosechaToDelete;
+    setCosechaToDelete(null);
     try {
-      await viajesApi.eliminarDetalle(viaje.id, c.detalleId);
+      await viajesApi.eliminarDetalle(viaje.id, c.detalleId!);
       toast.success('Cosecha eliminada');
       await cargar();
     } catch (e: any) {
@@ -730,6 +741,24 @@ export default function ConteoCosecha() {
           </div>
         </div>
       </div>
+
+      {/* AlertDialog: confirmar eliminar cosecha del viaje */}
+      <AlertDialog open={!!cosechaToDelete} onOpenChange={open => !open && setCosechaToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esto eliminará permanentemente esta cosecha del viaje. Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmarEliminarCosecha} className="bg-destructive hover:bg-destructive/90">
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

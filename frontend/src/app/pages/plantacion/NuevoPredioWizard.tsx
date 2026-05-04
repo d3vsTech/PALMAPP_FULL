@@ -22,7 +22,7 @@ import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Badge } from '../../components/ui/badge';
 import {
-  MapPin, ArrowLeft, ArrowRight, Save, Check, Plus, Trash2,
+  MapPin, ArrowLeft, ArrowRight, Save, Check, Plus, Trash2, Pencil,
   Trees, Grid3x3, GitBranch, Leaf, Calendar, Loader2,
   ChevronLeft, ChevronRight, ChevronDown,
 } from 'lucide-react';
@@ -79,15 +79,23 @@ export default function NuevoPredioWizard() {
   const [municipios, setMunicipios]         = useState<{codigo:string;nombre:string}[]>([]);
   const [deptoSel, setDeptoSel]             = useState('');
   const [munSel, setMunSel]                 = useState('');
+  // Pendientes (modo edición): nombres del depto/municipio que vinieron del API,
+  // se aplican cuando los catálogos terminen de cargar.
+  const [pendingDepto, setPendingDepto]     = useState<string | null>(null);
+  const [pendingMunicipio, setPendingMunicipio] = useState<string | null>(null);
 
   // ── Estado paso 2: Lotes ───────────────────────────────────────────────────
   const [semillasCatalogo, setSemillasCatalogo] = useState<{id:number;tipo:string;nombre:string}[]>([]);
   const [lotes, setLotes]               = useState<LoteLocal[]>([]);
   const [showFormLote, setShowFormLote] = useState(false);
+  // Edición de lote inline: id del lote que se está editando (null = creando)
+  const [editingLoteId, setEditingLoteId] = useState<string | null>(null);
 
   // ── Estado paso 3: Sublotes ────────────────────────────────────────────────
   const [sublotes, setSublotes]               = useState<SubloteLocal[]>([]);
   const [showFormSublote, setShowFormSublote] = useState<string | null>(null); // loteId
+  // Edición de sublote inline: id del sublote que se está editando (null = creando)
+  const [editingSubloteId, setEditingSubloteId] = useState<string | null>(null);
 
   // ── Estado paso 4: Líneas ──────────────────────────────────────────────────
   const [lineas, setLineas]             = useState<LineaLocal[]>([]);
@@ -95,6 +103,16 @@ export default function NuevoPredioWizard() {
   // ── Estado paso 5 ──────────────────────────────────────────────────────────
   const [cantPalmasForm, setCantPalmasForm] = useState<Record<string, string>>({});
   const [lineaSelForm, setLineaSelForm]     = useState<Record<string, string>>({});
+  // Entradas confirmadas de palmas en modo creación, separadas por línea.
+  // palmasEntries[sub.id] = [{lineaId: '', cantidad: 50}, {lineaId: 'l2', cantidad: 30}]
+  // lineaId vacío ('') significa "sin línea" (sublote sin líneas o entrada general).
+  type PalmasEntry = { lineaId: string; cantidad: number };
+  const [palmasEntries, setPalmasEntries] = useState<Record<string, PalmasEntry[]>>({});
+  // Índice de la entrada que se está editando por sublote (null = ninguna, formulario crea nueva)
+  const [editingEntryIdx, setEditingEntryIdx] = useState<Record<string, number | null>>({});
+  // Helper: total de palmas confirmadas para un sublote (suma de todas las entradas)
+  const totalPalmasSublote = (subId: string): number =>
+    (palmasEntries[subId] ?? []).reduce((acc, e) => acc + (e.cantidad || 0), 0);
   // Paginación de palmas en wizard (edit mode):
   //   clave "linea_{lineaId}"  → palmas de esa línea
   //   clave "sub_{subloteId}"  → palmas del sublote sin líneas (solo conteo, no se cargan)
@@ -127,6 +145,41 @@ export default function NuevoPredioWizard() {
     const mn = municipios.find(m => m.codigo === munSel)?.nombre ?? '';
     setPredioUbicacion([mn, dn].filter(Boolean).join(', '));
   }, [deptoSel, munSel, departamentos, municipios]);
+
+  // Helper: normalizar texto (sin acentos, en minúsculas, sin espacios extra)
+  // para comparar nombres de departamento/municipio aunque el backend devuelva
+  // distinto casing o con/sin tildes.
+  const normalizar = (s: string) =>
+    String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+
+  // Resolver depto pendiente (modo edición): cuando el catálogo de departamentos
+  // ya está cargado y aún no hay deptoSel, busca por nombre y lo aplica.
+  useEffect(() => {
+    if (!pendingDepto || departamentos.length === 0 || deptoSel) return;
+    const target = normalizar(pendingDepto);
+    // Match exacto primero
+    let match = departamentos.find(d => normalizar(d.nombre) === target);
+    // Fallback: contains (por si el ubicacion trae texto extra)
+    if (!match) {
+      match = departamentos.find(d => normalizar(d.nombre).includes(target) || target.includes(normalizar(d.nombre)));
+    }
+    if (match) setDeptoSel(match.codigo);
+  }, [pendingDepto, departamentos, deptoSel]);
+
+  // Resolver municipio pendiente: cuando los municipios del depto cargan,
+  // busca por nombre y aplica el munSel.
+  useEffect(() => {
+    if (!pendingMunicipio || municipios.length === 0 || munSel) return;
+    const target = normalizar(pendingMunicipio);
+    let match = municipios.find(m => normalizar(m.nombre) === target);
+    if (!match) {
+      match = municipios.find(m => normalizar(m.nombre).includes(target) || target.includes(normalizar(m.nombre)));
+    }
+    if (match) {
+      setMunSel(match.codigo);
+      setPendingMunicipio(null);
+    }
+  }, [pendingMunicipio, municipios, munSel]);
 
   // ── §2.0 Cargar semillas ───────────────────────────────────────────────────
   useEffect(() => {
@@ -184,6 +237,18 @@ export default function NuevoPredioWizard() {
         setPredioUbicacion(p.ubicacion ?? '');
         setPredioHectareas(p.hectareas_totales != null ? String(Number(p.hectareas_totales)) : '');
 
+        // Parsear "Municipio, Departamento" para pre-cargar dropdowns
+        if (p.ubicacion) {
+          const partes = String(p.ubicacion).split(',').map((s: string) => s.trim()).filter(Boolean);
+          if (partes.length >= 2) {
+            setPendingMunicipio(partes[0]);
+            setPendingDepto(partes[partes.length - 1]);
+          } else if (partes.length === 1) {
+            // Solo departamento (sin municipio)
+            setPendingDepto(partes[0]);
+          }
+        }
+
         // §2.1 Lotes del predio
         const lotesRes = await lotesApi.listar({ predio_id: Number(editId), per_page: 100 });
         const lotesData = lotesRes.data ?? [];
@@ -227,24 +292,60 @@ export default function NuevoPredioWizard() {
   }, [editId]);
 
   // ── Auto-cargar palmas al entrar al paso 5 en modo edición ─────────────
+  // - Sublote SIN líneas → carga todas sus palmas en clave "sub_{subId}"
+  // - Sublote CON líneas → carga las palmas de cada línea en clave "linea_{lineaId}"
   const VISIBLE_STEP = 24;
   useEffect(() => {
     if (etapa !== 5 || !editId) return;
     sublotes.forEach(sub => {
-      const key = `sub_${sub.id}`;
-      if (!wizardPag[key]) {
-        cargarWizardPalmas(key, { sublote_id: Number(sub.id) });
+      const linSub = lineas.filter(ln => ln.subloteId === sub.id);
+      if (linSub.length > 0) {
+        // Cargar palmas por línea
+        linSub.forEach(ln => {
+          const key = `linea_${ln.id}`;
+          if (!wizardPag[key]) {
+            cargarWizardPalmas(key, {
+              sublote_id: Number(sub.id),
+              linea_id: Number(ln.id),
+            });
+          }
+        });
+      } else {
+        // Sin líneas: carga todas las palmas del sublote
+        const key = `sub_${sub.id}`;
+        if (!wizardPag[key]) {
+          cargarWizardPalmas(key, { sublote_id: Number(sub.id) });
+        }
       }
     });
     // Reset visible count when entering step
     setVisiblePalmas({});
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [etapa, editId]);
+  }, [etapa, editId, sublotes, lineas]);
 
   // ── Helpers locales (modo creación) ──────────────────────────────────────
   const agregarLote = (lote: Omit<LoteLocal, 'id'>) => {
     setLotes(prev => [...prev, { ...lote, id: `l-${Date.now()}` }]);
     setShowFormLote(false);
+  };
+  const actualizarLote = async (id: string, datos: Omit<LoteLocal, 'id'>) => {
+    // En modo edición y con id real (no local "l-..."): persistir via API.
+    if (editId && !id.startsWith('l-')) {
+      try {
+        const body: any = { nombre: datos.nombre };
+        if (datos.fechaSiembra)         body.fecha_siembra = datos.fechaSiembra;
+        if (datos.hectareasSembradas > 0) body.hectareas_sembradas = datos.hectareasSembradas;
+        if (datos.semillasIds && datos.semillasIds.length > 0) body.semillas_ids = datos.semillasIds;
+        await lotesApi.editar(Number(id), body);
+        toast.success('Lote actualizado');
+        await refrescarResumen(editId);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Error al actualizar lote');
+        return;
+      }
+    }
+    setLotes(prev => prev.map(l => (l.id === id ? { ...l, ...datos } : l)));
+    setEditingLoteId(null);
   };
   const eliminarLote = (id: string) => {
     setLotes(prev => prev.filter(l => l.id !== id));
@@ -255,6 +356,21 @@ export default function NuevoPredioWizard() {
   const agregarSublote = (loteId: string, nombre: string) => {
     setSublotes(prev => [...prev, { id: `s-${Date.now()}`, nombre, loteId, cantidadPalmas: 0 }]);
     setShowFormSublote(null);
+  };
+  const actualizarSublote = async (id: string, nombre: string) => {
+    // En modo edición y con id real (no local "s-..."): persistir via API.
+    if (editId && !id.startsWith('s-')) {
+      try {
+        await sublotesApi.editar(Number(id), { nombre });
+        toast.success('Sublote actualizado');
+        await refrescarResumen(editId);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Error al actualizar sublote');
+        return;
+      }
+    }
+    setSublotes(prev => prev.map(s => (s.id === id ? { ...s, nombre } : s)));
+    setEditingSubloteId(null);
   };
   const eliminarSublote = (id: string) => {
     setSublotes(prev => prev.filter(s => s.id !== id));
@@ -444,20 +560,49 @@ export default function NuevoPredioWizard() {
         // §3.3 Crear sublotes del lote
         const sublotesDelLote = sublotes.filter(s => s.loteId === lote.id);
         for (const sub of sublotesDelLote) {
+          const lineasDelSublote = lineas.filter(ln => ln.subloteId === sub.id);
+          const tieneLineasSub = lineasDelSublote.length > 0;
+          const entries = palmasEntries[sub.id] ?? [];
+
           const subBody: any = { lote_id: loteIdReal, nombre: sub.nombre };
-          const cantForm = parseInt(cantPalmasForm[`confirmed_${sub.id}`] ?? cantPalmasForm[sub.id] ?? '');
-          const cantFinal = sub.cantidadPalmas > 0
-            ? sub.cantidadPalmas
-            : (!isNaN(cantForm) && cantForm > 0 ? cantForm : 0);
-          if (cantFinal > 0) subBody.cantidad_palmas = cantFinal;
+
+          // Si NO tiene líneas, podemos enviar cantidad_palmas en el POST de sublote
+          // (el backend crea las palmas automáticamente sin línea).
+          if (!tieneLineasSub) {
+            const totalSinLinea = entries.reduce((acc, e) => acc + e.cantidad, 0);
+            const cantFinal = sub.cantidadPalmas > 0 ? sub.cantidadPalmas : totalSinLinea;
+            if (cantFinal > 0) subBody.cantidad_palmas = cantFinal;
+          }
+
           const subRes = await sublotesApi.crear(subBody);
           const subloteIdReal = subRes.data?.id;
 
-          // §5.3 Crear líneas del sublote (si se agregaron en paso 4)
-          if (subloteIdReal) {
-            const lineasDelSublote = lineas.filter(ln => ln.subloteId === sub.id);
+          // §5.3 Crear líneas del sublote y mapear su id local → id real
+          const lineaIdMap: Record<string, number> = {};
+          if (subloteIdReal && tieneLineasSub) {
             for (const ln of lineasDelSublote) {
-              await lineasApi.crear({ sublote_id: Number(subloteIdReal), numero: ln.numero });
+              const lineaRes = await lineasApi.crear({
+                sublote_id: Number(subloteIdReal),
+                numero: ln.numero,
+              });
+              if (lineaRes.data?.id) lineaIdMap[ln.id] = Number(lineaRes.data.id);
+            }
+          }
+
+          // §4.3 Crear palmas según las entradas del paso 5 (cuando hay líneas o entradas sin línea)
+          if (subloteIdReal && tieneLineasSub && entries.length > 0) {
+            for (const entry of entries) {
+              if (entry.cantidad <= 0) continue;
+              const body: any = {
+                sublote_id: Number(subloteIdReal),
+                cantidad_palmas: entry.cantidad,
+              };
+              if (entry.lineaId && lineaIdMap[entry.lineaId]) {
+                body.linea_id = lineaIdMap[entry.lineaId];
+              }
+              try { await palmasApi.crear(body); } catch (e) {
+                console.warn(`Error creando palmas del sublote ${sub.nombre}:`, e);
+              }
             }
           }
         }
@@ -626,7 +771,7 @@ export default function NuevoPredioWizard() {
 
     // Modo creación: estado local
     const totalPalmasCreacion = sublotes.reduce((sum, s) => {
-      const cant = parseInt(cantPalmasForm[`confirmed_${s.id}`] ?? cantPalmasForm[s.id] ?? '0') || s.cantidadPalmas || 0;
+      const cant = totalPalmasSublote(s.id) || s.cantidadPalmas || 0;
       return sum + cant;
     }, 0);
 
@@ -688,7 +833,7 @@ export default function NuevoPredioWizard() {
               const sublotesDelLote = sublotes.filter(s => s.loteId === lote.id);
               const lineasDelLote   = lineas.filter(ln => sublotesDelLote.some(s => s.id === ln.subloteId));
               const palmasDelLote   = sublotesDelLote.reduce((sum, s) => {
-                return sum + (parseInt(cantPalmasForm[`confirmed_${s.id}`] ?? cantPalmasForm[s.id] ?? '0') || s.cantidadPalmas || 0);
+                return sum + (totalPalmasSublote(s.id) || s.cantidadPalmas || 0);
               }, 0);
 
               return (
@@ -705,7 +850,7 @@ export default function NuevoPredioWizard() {
                     <div className="space-y-1 pl-3">
                       {sublotesDelLote.map(s => {
                         const linSub = lineas.filter(ln => ln.subloteId === s.id);
-                        const palSub = parseInt(cantPalmasForm[`confirmed_${s.id}`] ?? cantPalmasForm[s.id] ?? '0') || s.cantidadPalmas || 0;
+                        const palSub = totalPalmasSublote(s.id) || s.cantidadPalmas || 0;
                         return (
                           <div key={s.id} className="flex items-center justify-between py-1 text-xs">
                             <div className="flex items-center gap-2">
@@ -924,15 +1069,38 @@ export default function NuevoPredioWizard() {
                           )}
                         </div>
                       </div>
-                      <Button variant="ghost" size="icon" onClick={() => eliminarLote(l.id)}
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="icon"
+                          onClick={() => {
+                            setEditingLoteId(l.id);
+                            setShowFormLote(false); // cerrar form de creación si estaba abierto
+                          }}
+                          className="h-8 w-8 text-muted-foreground hover:text-primary"
+                          title="Editar lote">
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => eliminarLote(l.id)}
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          title="Eliminar lote">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                     {(l.variedad || l.semillasIds.length > 0) && (
                       <Badge variant="secondary" className="text-xs">
                         {l.variedad || `${l.semillasIds.length} semilla${l.semillasIds.length !== 1 ? 's' : ''}`}
                       </Badge>
+                    )}
+                    {/* Form inline de edición del lote */}
+                    {editingLoteId === l.id && (
+                      <div className="mt-4">
+                        <FormLote
+                          semillasCatalogo={semillasCatalogo}
+                          haDisponibles={haDisponibles + l.hectareasSembradas}
+                          loteInicial={l}
+                          onGuardar={(datos) => actualizarLote(l.id, datos as Omit<LoteLocal, 'id'>)}
+                          onCancelar={() => setEditingLoteId(null)} />
+                      </div>
                     )}
                   </div>
                 ))}
@@ -992,10 +1160,22 @@ export default function NuevoPredioWizard() {
                           <div key={s.id} className="border border-border rounded-lg p-4 bg-card">
                             <div className="flex items-start justify-between mb-2">
                               <h4 className="font-semibold">{s.nombre}</h4>
-                              <Button variant="ghost" size="icon" onClick={() => eliminarSublote(s.id)}
-                                className="h-7 w-7 text-muted-foreground hover:text-destructive">
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
+                              <div className="flex items-center gap-1">
+                                <Button variant="ghost" size="icon"
+                                  onClick={() => {
+                                    setEditingSubloteId(s.id);
+                                    setShowFormSublote(null);
+                                  }}
+                                  className="h-7 w-7 text-muted-foreground hover:text-primary"
+                                  title="Editar sublote">
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={() => eliminarSublote(s.id)}
+                                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                  title="Eliminar sublote">
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
                             </div>
                             {s.cantidadPalmas > 0 && (
                               <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
@@ -1004,6 +1184,14 @@ export default function NuevoPredioWizard() {
                               </div>
                             )}
                             <Badge variant="default" className="mt-2 text-xs">Activo</Badge>
+                            {editingSubloteId === s.id && (
+                              <div className="mt-3">
+                                <FormSublote
+                                  nombreInicial={s.nombre}
+                                  onGuardar={nombre => actualizarSublote(s.id, nombre)}
+                                  onCancelar={() => setEditingSubloteId(null)} />
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -1114,7 +1302,7 @@ export default function NuevoPredioWizard() {
                   <div>
                     <CardTitle>Registrar Palmas</CardTitle>
                     <p className="text-sm text-muted-foreground">
-                      Total de palmas: {sublotes.reduce((s, sub) => s + (parseInt(cantPalmasForm[`confirmed_${sub.id}`] ?? cantPalmasForm[sub.id] ?? '0') || sub.cantidadPalmas || 0), 0)}
+                      Total de palmas: {sublotes.reduce((s, sub) => s + (totalPalmasSublote(sub.id) || sub.cantidadPalmas || 0), 0).toLocaleString('es-CO')}
                     </p>
                   </div>
                 </div>
@@ -1132,157 +1320,174 @@ export default function NuevoPredioWizard() {
                         <div>
                           <h3 className="font-semibold text-lg">{sub.nombre}</h3>
                           <p className="text-sm text-muted-foreground">
-                            {lote?.nombre} • {!tieneLineas
-                              ? (cantPalmasForm[`confirmed_${sub.id}`] || sub.cantidadPalmas || 0)
-                              : sub.cantidadPalmas} palmas
+                            {lote?.nombre} • {(totalPalmasSublote(sub.id) || sub.cantidadPalmas || 0).toLocaleString('es-CO')} palmas
                           </p>
                         </div>
-                        {/* Botón Agregar Palmas en modo edición (solo si tiene líneas) */}
-                        {editId && tieneLineas && (
-                          <Button
-                            onClick={() => setMostrandoFormPalmas(
-                              mostrandoFormPalmas === sub.id ? null : sub.id
-                            )}
-                            className="gap-2 bg-success hover:bg-success/90 text-primary hover:text-primary"
-                          >
-                            <Plus className="h-4 w-4" />
-                            Agregar Palmas
-                          </Button>
-                        )}
                       </div>
-
-                      {/* Formulario agregar palmas en modo edición */}
-                      {editId && mostrandoFormPalmas === sub.id && (
-                        <div className="bg-muted/30 border border-border rounded-lg p-4 space-y-4">
-                          <div className="space-y-2">
-                            <Label>Cantidad de palmas</Label>
-                            <Input
-                              type="number"
-                              placeholder="Ej: 50"
-                              value={cantPalmasForm[`edit_${sub.id}`] ?? ''}
-                              onChange={e => setCantPalmasForm(prev => ({ ...prev, [`edit_${sub.id}`]: e.target.value }))}
-                            />
-                          </div>
-                          {linSub.length > 0 && (
-                            <div className="space-y-2">
-                              <Label>Línea (opcional)</Label>
-                              <select
-                                className="w-full h-10 px-3 rounded-md border border-input bg-background"
-                                value={cantPalmasForm[`editLinea_${sub.id}`] ?? ''}
-                                onChange={e => setCantPalmasForm(prev => ({ ...prev, [`editLinea_${sub.id}`]: e.target.value }))}
-                              >
-                                <option value="">Sin línea</option>
-                                {linSub.map(ln => (
-                                  <option key={ln.id} value={ln.id}>Línea {ln.numero}</option>
-                                ))}
-                              </select>
-                            </div>
-                          )}
-                          <div className="flex gap-2">
-                            <Button
-                              onClick={() => {
-                                const cant = parseInt(cantPalmasForm[`edit_${sub.id}`] ?? '');
-                                if (!cant || cant < 1) { toast.error('Ingresa una cantidad válida'); return; }
-                                const lineaSelId = cantPalmasForm[`editLinea_${sub.id}`] ?? '';
-                                agregarPalmas(sub.id, cant, lineaSelId || undefined);
-                                setCantPalmasForm(prev => {
-                                  const n = { ...prev };
-                                  delete n[`edit_${sub.id}`];
-                                  delete n[`editLinea_${sub.id}`];
-                                  return n;
-                                });
-                                setMostrandoFormPalmas(null);
-                              }}
-                              disabled={!cantPalmasForm[`edit_${sub.id}`] || parseInt(cantPalmasForm[`edit_${sub.id}`] ?? '0') <= 0}
-                            >
-                              Agregar
-                            </Button>
-                            <Button variant="outline" onClick={() => {
-                              setMostrandoFormPalmas(null);
-                              setCantPalmasForm(prev => {
-                                const n = { ...prev };
-                                delete n[`edit_${sub.id}`];
-                                delete n[`editLinea_${sub.id}`];
-                                return n;
-                              });
-                            }}>
-                              Cancelar
-                            </Button>
-                          </div>
-                        </div>
-                      )}
 
                       <div className="space-y-4">
 
-                        {/* ── MODO EDICIÓN: palmas en grid plano (SOLO si hay líneas) ──
-                             Si el sublote no tiene líneas, no mostramos la grilla individual:
-                             el usuario solo edita el total con un input numérico abajo. */}
-                        {editId && tieneLineas && (() => {
-                          const key  = `sub_${sub.id}`;
-                          const ps   = wizardPag[key];
-                          if (!ps || ps.loading) return (
-                            <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground">
-                              <Loader2 className="h-4 w-4 animate-spin" /> Cargando palmas...
-                            </div>
-                          );
-                          if (ps.data.length === 0) return (
-                            <p className="text-center py-6 text-sm text-muted-foreground">No hay palmas registradas</p>
-                          );
-                          return (
-                            <div className="space-y-3">
-                              {(() => {
-                                return (
-                                  <>
-                                    <div className="grid gap-2 md:grid-cols-4 lg:grid-cols-6">
-                                      {ps.data.map((palma: any) => (
-                                        <div key={palma.id}
-                                          className="border border-border rounded-lg p-2 bg-card group hover:border-success/50 transition-colors">
-                                          <div className="flex items-center justify-between mb-1">
-                                            <Leaf className="h-3 w-3 text-success" />
-                                            <Button
-                                              variant="ghost"
-                                              size="icon"
-                                              onClick={async () => {
-                                                try {
-                                                  await palmasApi.eliminar([Number(palma.id)]);
-                                                  const key = `sub_${sub.id}`;
-                                                  const ps  = wizardPag[key];
-                                                  cargarWizardPalmas(key, { sublote_id: Number(sub.id) }, ps?.page ?? 1);
-                                                  setSublotes(prev => prev.map(s =>
-                                                    s.id === sub.id ? { ...s, cantidadPalmas: Math.max(0, s.cantidadPalmas - 1) } : s
-                                                  ));
-                                                } catch { toast.error('Error al eliminar palma'); }
-                                              }}
-                                              className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-                                            >
-                                              <Trash2 className="h-3 w-3" />
-                                            </Button>
-                                          </div>
-                                          <p className="text-xs font-mono font-semibold truncate" title={palma.codigo}>
-                                            {palma.codigo}
-                                          </p>
-                                        </div>
-                                      ))}
+                        {/* ── MODO EDICIÓN: palmas agrupadas POR LÍNEA (cuando el sublote tiene líneas) ──
+                             Cada línea tiene su propia sección:
+                              - Header: "Línea N · X palmas"
+                              - Grilla con las palmas de esa línea
+                              - Botón "Agregar palmas" que abre el form pre-seleccionando esa línea */}
+                        {editId && tieneLineas && (
+                          <div className="space-y-5">
+                            {linSub.map(ln => {
+                              const key = `linea_${ln.id}`;
+                              const ps  = wizardPag[key];
+                              // Identificador único del form abierto: "{subId}__{lineaId}"
+                              const formKey = `${sub.id}__${ln.id}`;
+                              const formAbierto = mostrandoFormPalmas === formKey;
+                              return (
+                                <div key={ln.id} className="border border-border/50 rounded-lg p-4 bg-muted/10 space-y-3">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <GitBranch className="h-4 w-4 text-accent" />
+                                      <span className="font-semibold text-sm">Línea {ln.numero}</span>
+                                      <Badge variant="secondary" className="text-xs">
+                                        {(ps?.total ?? 0).toLocaleString('es-CO')} palmas
+                                      </Badge>
                                     </div>
-                                    {ps.page < ps.lastPage && (
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="w-full mt-2 gap-2"
-                                        onClick={() => cargarWizardPalmas(
-                                          key, { sublote_id: Number(sub.id) }, ps.page + 1, true
-                                        )}
-                                      >
-                                        Ver más ({(ps.total - ps.data.length).toLocaleString('es-CO')} palmas restantes)
-                                      </Button>
-                                    )}
-                                  </>
-                                );
-                              })()}
+                                    <Button
+                                      size="sm"
+                                      onClick={() => {
+                                        setMostrandoFormPalmas(formAbierto ? null : formKey);
+                                        // Pre-llenar campos del form de esta línea
+                                        setCantPalmasForm(prev => ({
+                                          ...prev,
+                                          [`edit_${formKey}`]: '',
+                                        }));
+                                      }}
+                                      className="gap-1 bg-success hover:bg-success/90 text-primary hover:text-primary"
+                                    >
+                                      <Plus className="h-3.5 w-3.5" />
+                                      Agregar palmas
+                                    </Button>
+                                  </div>
 
-                            </div>
-                          );
-                        })()}
+                                  {/* Formulario inline: aparece DENTRO de la línea con linea_id ya conocida */}
+                                  {formAbierto && (
+                                    <div className="bg-background border border-border rounded-lg p-3 space-y-3">
+                                      <div className="text-xs font-medium text-primary">
+                                        Agregando palmas a <span className="font-bold">Línea {ln.numero}</span>
+                                      </div>
+                                      <div className="space-y-2">
+                                        <Label className="text-xs">Cantidad de palmas</Label>
+                                        <Input
+                                          type="number"
+                                          placeholder="Ej: 50"
+                                          min="0"
+                                          value={cantPalmasForm[`edit_${formKey}`] ?? ''}
+                                          onChange={e => {
+                                            const v = e.target.value;
+                                            const safe = v === '' ? '' : (Number(v) < 0 ? '0' : v);
+                                            setCantPalmasForm(prev => ({ ...prev, [`edit_${formKey}`]: safe }));
+                                          }}
+                                          autoFocus
+                                        />
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <Button
+                                          size="sm"
+                                          onClick={() => {
+                                            const cant = parseInt(cantPalmasForm[`edit_${formKey}`] ?? '');
+                                            if (!cant || cant < 1) { toast.error('Ingresa una cantidad válida'); return; }
+                                            agregarPalmas(sub.id, cant, ln.id);
+                                            setCantPalmasForm(prev => {
+                                              const n = { ...prev };
+                                              delete n[`edit_${formKey}`];
+                                              return n;
+                                            });
+                                            setMostrandoFormPalmas(null);
+                                          }}
+                                          disabled={!cantPalmasForm[`edit_${formKey}`] || parseInt(cantPalmasForm[`edit_${formKey}`] ?? '0') <= 0}
+                                        >
+                                          Agregar
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => {
+                                            setMostrandoFormPalmas(null);
+                                            setCantPalmasForm(prev => {
+                                              const n = { ...prev };
+                                              delete n[`edit_${formKey}`];
+                                              return n;
+                                            });
+                                          }}
+                                        >
+                                          Cancelar
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {!ps || ps.loading ? (
+                                    <div className="flex items-center justify-center py-6 gap-2 text-muted-foreground text-sm">
+                                      <Loader2 className="h-4 w-4 animate-spin" /> Cargando palmas...
+                                    </div>
+                                  ) : ps.data.length === 0 ? (
+                                    <p className="text-center py-4 text-xs text-muted-foreground italic">
+                                      Sin palmas registradas en esta línea
+                                    </p>
+                                  ) : (
+                                    <>
+                                      <div className="grid gap-2 md:grid-cols-4 lg:grid-cols-6">
+                                        {ps.data.map((palma: any) => (
+                                          <div key={palma.id}
+                                            className="border border-border rounded-lg p-2 bg-card group hover:border-success/50 transition-colors">
+                                            <div className="flex items-center justify-between mb-1">
+                                              <Leaf className="h-3 w-3 text-success" />
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={async () => {
+                                                  try {
+                                                    await palmasApi.eliminar([Number(palma.id)]);
+                                                    cargarWizardPalmas(key, {
+                                                      sublote_id: Number(sub.id),
+                                                      linea_id: Number(ln.id),
+                                                    }, ps.page ?? 1);
+                                                    setSublotes(prev => prev.map(s =>
+                                                      s.id === sub.id ? { ...s, cantidadPalmas: Math.max(0, s.cantidadPalmas - 1) } : s
+                                                    ));
+                                                    if (editId) refrescarResumen(editId);
+                                                  } catch { toast.error('Error al eliminar palma'); }
+                                                }}
+                                                className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                                              >
+                                                <Trash2 className="h-3 w-3" />
+                                              </Button>
+                                            </div>
+                                            <p className="text-xs font-mono font-semibold truncate" title={palma.codigo}>
+                                              {palma.codigo}
+                                            </p>
+                                          </div>
+                                        ))}
+                                      </div>
+                                      {ps.page < ps.lastPage && (
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="w-full mt-2 gap-2"
+                                          onClick={() => cargarWizardPalmas(
+                                            key,
+                                            { sublote_id: Number(sub.id), linea_id: Number(ln.id) },
+                                            ps.page + 1, true
+                                          )}
+                                        >
+                                          Ver más ({(ps.total - ps.data.length).toLocaleString('es-CO')} palmas restantes)
+                                        </Button>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
 
                         {/* CASO B SIN LÍNEAS — modo edición.
                              Solo el input. Las palmas se persisten al pulsar
@@ -1308,70 +1513,210 @@ export default function NuevoPredioWizard() {
                           </div>
                         )}
 
-                        {/* ── MODO CREACIÓN: formulario por sublote ──────── */}
-                        {!editId && !cantPalmasForm[`confirmed_${sub.id}`] && (
-                          <div className="bg-muted/30 border border-border rounded-lg p-4 space-y-4">
-                            <div className="space-y-2">
-                              <Label>Cantidad de palmas</Label>
-                              <Input
-                                type="number"
-                                placeholder="Ej: 50"
-                                value={cantPalmasForm[sub.id] ?? ''}
-                                onChange={e => setCantPalmasForm(prev => ({ ...prev, [sub.id]: e.target.value }))}
-                              />
-                            </div>
-                            {linSub.length > 0 && (
-                              <div className="space-y-2">
-                                <Label>Línea (opcional)</Label>
-                                <select
-                                  className="w-full h-10 px-3 rounded-md border border-input bg-background"
-                                  value={cantPalmasForm[`linea_${sub.id}`] ?? ''}
-                                  onChange={e => setCantPalmasForm(prev => ({ ...prev, [`linea_${sub.id}`]: e.target.value }))}
-                                >
-                                  <option value="">Sin línea</option>
-                                  {linSub.map(linea => (
-                                    <option key={linea.id} value={linea.id}>
-                                      Línea {linea.numero}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                            )}
-                            <div className="flex gap-2">
-                              <Button
-                                onClick={() => {
-                                  const cant = parseInt(cantPalmasForm[sub.id] ?? '');
-                                  if (cant > 0) {
-                                    setCantPalmasForm(prev => ({ ...prev, [`confirmed_${sub.id}`]: String(cant) }));
-                                  }
-                                }}
-                                disabled={!cantPalmasForm[sub.id] || parseInt(cantPalmasForm[sub.id] ?? '0') <= 0}
-                              >
-                                Guardar
-                              </Button>
-                              <Button
-                                variant="outline"
-                                onClick={() => setCantPalmasForm(prev => ({ ...prev, [sub.id]: '' }))}
-                              >
-                                Cancelar
-                              </Button>
-                            </div>
-                          </div>
-                        )}
+                        {/* ── MODO CREACIÓN: formulario inline (siempre visible para agregar/editar) ── */}
+                        {!editId && (() => {
+                          const editingIdx = editingEntryIdx[sub.id] ?? null;
+                          const isEditing = editingIdx !== null;
+                          // Líneas que ya tienen entrada (para filtrar del dropdown).
+                          // Si estamos editando, conservamos la línea de la entrada en edición.
+                          const usedLineaIds = new Set(
+                            (palmasEntries[sub.id] ?? [])
+                              .map((e, i) => (i === editingIdx ? null : e.lineaId))
+                              .filter((x): x is string => !!x)
+                          );
+                          const lineasDisponibles = linSub.filter(l => !usedLineaIds.has(l.id));
+                          // Si NO estamos editando y todas las líneas ya tienen entrada → ocultar el form completo
+                          const todasLasLineasUsadas =
+                            !isEditing && linSub.length > 0 && lineasDisponibles.length === 0;
+                          // Sublote SIN líneas que ya tiene una entrada → solo permite editar
+                          const sinLineasYaTieneEntrada =
+                            !isEditing && linSub.length === 0 && (palmasEntries[sub.id] ?? []).length > 0;
 
-                        {/* MODO CREACIÓN: resumen tras confirmar */}
-                        {!editId && cantPalmasForm[`confirmed_${sub.id}`] && (
-                          <div className="bg-success/5 border border-success/20 rounded-lg p-4">
+                          if (todasLasLineasUsadas || sinLineasYaTieneEntrada) {
+                            return (
+                              <div className="bg-muted/20 border border-border/40 rounded-lg p-3 text-xs text-muted-foreground text-center">
+                                {sinLineasYaTieneEntrada
+                                  ? 'Ya hay palmas registradas en este sublote. Edita la entrada para modificarla.'
+                                  : 'Todas las líneas tienen palmas registradas. Edita una entrada para modificarla.'}
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div className="bg-muted/30 border border-border rounded-lg p-4 space-y-4">
+                              {isEditing && (
+                                <div className="text-xs font-medium text-primary">
+                                  Editando entrada de {(palmasEntries[sub.id] ?? [])[editingIdx!]?.lineaId
+                                    ? `Línea ${linSub.find(l => l.id === (palmasEntries[sub.id] ?? [])[editingIdx!].lineaId)?.numero ?? '?'}`
+                                    : 'Sin línea'}
+                                </div>
+                              )}
+                              <div className="space-y-2">
+                                <Label>Cantidad de palmas</Label>
+                                <Input
+                                  type="number"
+                                  placeholder="Ej: 50"
+                                  min="0"
+                                  value={cantPalmasForm[sub.id] ?? ''}
+                                  onChange={e => {
+                                    const v = e.target.value;
+                                    // Bloquear negativos: si llega < 0, lo dejamos en '0'
+                                    const safe = v === '' ? '' : (Number(v) < 0 ? '0' : v);
+                                    setCantPalmasForm(prev => ({ ...prev, [sub.id]: safe }));
+                                  }}
+                                />
+                              </div>
+                              {linSub.length > 0 && (
+                                <div className="space-y-2">
+                                  <Label>Línea (selecciona)</Label>
+                                  <select
+                                    className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                                    value={cantPalmasForm[`linea_${sub.id}`] ?? ''}
+                                    onChange={e => setCantPalmasForm(prev => ({ ...prev, [`linea_${sub.id}`]: e.target.value }))}
+                                  >
+                                    <option value="">Selecciona una línea</option>
+                                    {lineasDisponibles.map(linea => (
+                                      <option key={linea.id} value={linea.id}>
+                                        Línea {linea.numero}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              )}
+                              <div className="flex gap-2">
+                                <Button
+                                  onClick={() => {
+                                    const cant = parseInt(cantPalmasForm[sub.id] ?? '');
+                                    if (!cant || cant <= 0) return;
+                                    const lineaId = cantPalmasForm[`linea_${sub.id}`] ?? '';
+                                    if (isEditing) {
+                                      // Actualizar entrada existente
+                                      setPalmasEntries(prev => ({
+                                        ...prev,
+                                        [sub.id]: (prev[sub.id] ?? []).map((e, i) =>
+                                          i === editingIdx ? { lineaId, cantidad: cant } : e
+                                        ),
+                                      }));
+                                      setEditingEntryIdx(prev => ({ ...prev, [sub.id]: null }));
+                                    } else {
+                                      // Agregar nueva entrada
+                                      setPalmasEntries(prev => ({
+                                        ...prev,
+                                        [sub.id]: [...(prev[sub.id] ?? []), { lineaId, cantidad: cant }],
+                                      }));
+                                    }
+                                    // Limpiar inputs
+                                    setCantPalmasForm(prev => ({
+                                      ...prev,
+                                      [sub.id]: '',
+                                      [`linea_${sub.id}`]: '',
+                                    }));
+                                  }}
+                                  disabled={
+                                    !cantPalmasForm[sub.id] ||
+                                    parseInt(cantPalmasForm[sub.id] ?? '0') <= 0 ||
+                                    (linSub.length > 0 && !cantPalmasForm[`linea_${sub.id}`])
+                                  }
+                                >
+                                  {isEditing ? 'Actualizar' : 'Guardar'}
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  onClick={() => {
+                                    setCantPalmasForm(prev => ({
+                                      ...prev,
+                                      [sub.id]: '',
+                                      [`linea_${sub.id}`]: '',
+                                    }));
+                                    setEditingEntryIdx(prev => ({ ...prev, [sub.id]: null }));
+                                  }}
+                                >
+                                  {isEditing ? 'Cancelar' : 'Limpiar'}
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {/* MODO CREACIÓN: lista de entradas guardadas (separadas por línea) */}
+                        {!editId && (palmasEntries[sub.id]?.length ?? 0) > 0 && (
+                          <div className="bg-success/5 border border-success/20 rounded-lg p-4 space-y-3">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
                                 <Leaf className="h-5 w-5 text-success" />
                                 <span className="font-semibold">
-                                  {cantPalmasForm[`confirmed_${sub.id}`]} palmas registradas
+                                  {totalPalmasSublote(sub.id).toLocaleString('es-CO')} palmas registradas
                                 </span>
                               </div>
                               <Badge variant="secondary" className="bg-success/10 text-success">
-                                Completado
+                                {(palmasEntries[sub.id] ?? []).length} entrada(s)
                               </Badge>
+                            </div>
+                            <div className="space-y-1.5">
+                              {(palmasEntries[sub.id] ?? []).map((entry, idx) => {
+                                const linea = linSub.find(l => l.id === entry.lineaId);
+                                const lineaLabel = entry.lineaId
+                                  ? `Línea ${linea?.numero ?? '?'}`
+                                  : 'Sin línea';
+                                return (
+                                  <div
+                                    key={`${sub.id}-entry-${idx}`}
+                                    className="flex items-center justify-between bg-background/60 border border-border/40 rounded-md px-3 py-2 text-sm"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-medium text-foreground">{lineaLabel}</span>
+                                      <span className="text-muted-foreground">·</span>
+                                      <span className="text-foreground">
+                                        {entry.cantidad.toLocaleString('es-CO')} palmas
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      {/* Botón Editar */}
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => {
+                                          // Cargar la entrada en el formulario y marcar como editing
+                                          setCantPalmasForm(prev => ({
+                                            ...prev,
+                                            [sub.id]: String(entry.cantidad),
+                                            [`linea_${sub.id}`]: entry.lineaId,
+                                          }));
+                                          setEditingEntryIdx(prev => ({ ...prev, [sub.id]: idx }));
+                                        }}
+                                        className="h-7 w-7 text-muted-foreground hover:text-primary"
+                                        title="Editar entrada"
+                                      >
+                                        <Pencil className="h-3.5 w-3.5" />
+                                      </Button>
+                                      {/* Botón Eliminar */}
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => {
+                                          setPalmasEntries(prev => ({
+                                            ...prev,
+                                            [sub.id]: (prev[sub.id] ?? []).filter((_, i) => i !== idx),
+                                          }));
+                                          // Si estábamos editando esa entrada, salir del modo edición
+                                          if ((editingEntryIdx[sub.id] ?? null) === idx) {
+                                            setEditingEntryIdx(prev => ({ ...prev, [sub.id]: null }));
+                                            setCantPalmasForm(prev => ({
+                                              ...prev,
+                                              [sub.id]: '',
+                                              [`linea_${sub.id}`]: '',
+                                            }));
+                                          }
+                                        }}
+                                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                        title="Eliminar entrada"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                         )}
@@ -1396,18 +1741,32 @@ export default function NuevoPredioWizard() {
               <ArrowLeft className="h-4 w-4" /> Anterior
             </Button>
             <div className="flex gap-2">
+              {/* En modo edición: el botón "Guardar cambios" aparece SIEMPRE,
+                   en todas las etapas, para no obligar al usuario a navegar
+                   hasta el final si solo modificó info del predio. */}
+              {editId && (
+                <Button onClick={guardarTodo} disabled={guardando}
+                  variant="outline" className="gap-2">
+                  {guardando
+                    ? <><Loader2 className="h-4 w-4 animate-spin" />Guardando...</>
+                    : <><Save className="h-4 w-4" />Guardar cambios</>}
+                </Button>
+              )}
               {etapa < ETAPAS.length ? (
                 <Button onClick={() => setEtapa(e => e + 1)}
                   disabled={!puedeSiguiente} className="gap-2">
                   Siguiente <ArrowRight className="h-4 w-4" />
                 </Button>
               ) : (
-                <Button onClick={guardarTodo} disabled={guardando}
-                  className="gap-2 bg-success hover:bg-success/90">
-                  {guardando
-                    ? <><Loader2 className="h-4 w-4 animate-spin" />Guardando...</>
-                    : <><Save className="h-4 w-4" />{editId ? 'Guardar Cambios' : 'Guardar Plantación'}</>}
-                </Button>
+                // En modo creación: el botón final crea la plantación.
+                !editId && (
+                  <Button onClick={guardarTodo} disabled={guardando}
+                    className="gap-2 bg-success hover:bg-success/90">
+                    {guardando
+                      ? <><Loader2 className="h-4 w-4 animate-spin" />Guardando...</>
+                      : <><Save className="h-4 w-4" />Guardar Plantación</>}
+                  </Button>
+                )
               )}
             </div>
           </div>
@@ -1437,17 +1796,21 @@ export default function NuevoPredioWizard() {
 // ── Componentes auxiliares ────────────────────────────────────────────────────
 
 function FormLote({
-  semillasCatalogo, haDisponibles, onGuardar, onCancelar,
+  semillasCatalogo, haDisponibles, onGuardar, onCancelar, loteInicial,
 }: {
   semillasCatalogo: {id:number;tipo:string;nombre:string}[];
   haDisponibles: number;
   onGuardar: (l: Omit<any, 'id'>) => void;
   onCancelar: () => void;
+  loteInicial?: LoteLocal;
 }) {
-  const [nombre, setNombre]        = useState('');
-  const [fecha, setFecha]          = useState('');
-  const [ha, setHa]                = useState('');
-  const [semillaId, setSemillaId]  = useState('');
+  const isEditing = !!loteInicial;
+  const [nombre, setNombre]        = useState(loteInicial?.nombre ?? '');
+  const [fecha, setFecha]          = useState(loteInicial?.fechaSiembra ?? '');
+  const [ha, setHa]                = useState(loteInicial ? String(loteInicial.hectareasSembradas) : '');
+  const [semillaId, setSemillaId]  = useState(
+    loteInicial?.semillasIds?.[0] ? String(loteInicial.semillasIds[0]) : ''
+  );
   const [otraVariedad, setOtraVariedad] = useState('');
 
   const esOtros = semillaId === '__otros__';
@@ -1455,7 +1818,7 @@ function FormLote({
 
   return (
     <div className="bg-muted/30 border border-border rounded-xl p-6 space-y-4">
-      <h3 className="font-semibold text-lg">Nuevo Lote</h3>
+      <h3 className="font-semibold text-lg">{isEditing ? 'Editar Lote' : 'Nuevo Lote'}</h3>
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <Label>Nombre del Lote *</Label>
@@ -1526,7 +1889,7 @@ function FormLote({
           }}
           disabled={!nombre || !ha || !semillaId || (esOtros && !otraVariedad.trim())}
         >
-          Guardar Lote
+          {isEditing ? 'Actualizar Lote' : 'Guardar Lote'}
         </Button>
         <Button variant="outline" onClick={onCancelar}>
           Cancelar
@@ -1536,8 +1899,15 @@ function FormLote({
   );
 }
 
-function FormSublote({ onGuardar, onCancelar }: { onGuardar: (n: string) => void; onCancelar: () => void }) {
-  const [nombre, setNombre] = useState('');
+function FormSublote({
+  onGuardar, onCancelar, nombreInicial,
+}: {
+  onGuardar: (n: string) => void;
+  onCancelar: () => void;
+  nombreInicial?: string;
+}) {
+  const isEditing = nombreInicial !== undefined;
+  const [nombre, setNombre] = useState(nombreInicial ?? '');
   return (
     <div className="bg-muted/30 border border-border rounded-lg p-4 space-y-4">
       <div className="space-y-2">
@@ -1549,7 +1919,9 @@ function FormSublote({ onGuardar, onCancelar }: { onGuardar: (n: string) => void
         />
       </div>
       <div className="flex gap-2">
-        <Button onClick={() => onGuardar(nombre)} disabled={!nombre.trim()}>Guardar</Button>
+        <Button onClick={() => onGuardar(nombre)} disabled={!nombre.trim()}>
+          {isEditing ? 'Actualizar' : 'Guardar'}
+        </Button>
         <Button variant="outline" onClick={onCancelar}>Cancelar</Button>
       </div>
     </div>

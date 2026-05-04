@@ -1,5 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
+
+// Helper defensivo para fechas (evita "Invalid Date")
+const formatFecha = (v?: any, opts: Intl.DateTimeFormatOptions = {}) => {
+  if (v === null || v === undefined || v === '') return '—';
+  const s = String(v);
+  const ymd = s.slice(0, 10);
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(ymd) ? new Date(ymd + 'T12:00:00') : new Date(s);
+  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('es-CO', opts);
+};
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
@@ -11,7 +20,7 @@ import {
   ArrowLeft, Edit, User, Briefcase, Shield, FileText,
   Download, IdCard, Package, Building2, Loader2, Phone, Eye,
 } from 'lucide-react';
-import { colaboradoresApi } from '../../../api/colaboradores';
+import { colaboradoresApi, buildAvatarUrl } from '../../../api/colaboradores';
 import { toast } from 'sonner';
 
 const TIPOS_DOC: Record<string, string> = {
@@ -105,7 +114,7 @@ export default function ColaboradorDetail() {
 
   const nombre = [colaborador.primer_nombre, colaborador.segundo_nombre, colaborador.primer_apellido, colaborador.segundo_apellido].filter(Boolean).join(' ');
   const iniciales = ((colaborador.primer_nombre?.[0] ?? '') + (colaborador.primer_apellido?.[0] ?? '')).toUpperCase();
-  const fmt = (d?: string) => d ? new Date(d + 'T12:00:00').toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' }) : '-';
+  const fmt = (d?: string) => formatFecha(d, { year: 'numeric', month: 'long', day: 'numeric' });
 
   // Documentos agrupados por categoría
   const docsPorCategoria = (cat: string) => documentos.filter(d => d.categoria === cat);
@@ -148,9 +157,17 @@ export default function ColaboradorDetail() {
       <Card className="border-border">
         <CardContent className="p-6">
           <div className="flex items-start gap-6">
-            <div className={`h-24 w-24 rounded-full flex items-center justify-center text-2xl font-bold flex-shrink-0 ${colaborador.estado ? 'bg-primary/10 text-primary border-2 border-primary/20' : 'bg-muted text-muted-foreground border-2 border-border'}`}>
-              {iniciales}
-            </div>
+            {colaborador.avatar_url ? (
+              <img
+                src={buildAvatarUrl(colaborador.avatar_url) ?? ''}
+                alt={nombre}
+                className={`h-24 w-24 rounded-full object-cover flex-shrink-0 border-2 ${colaborador.estado ? 'border-primary/20' : 'border-border opacity-60'}`}
+              />
+            ) : (
+              <div className={`h-24 w-24 rounded-full flex items-center justify-center text-2xl font-bold flex-shrink-0 ${colaborador.estado ? 'bg-primary/10 text-primary border-2 border-primary/20' : 'bg-muted text-muted-foreground border-2 border-border'}`}>
+                {iniciales}
+              </div>
+            )}
             <div className="flex-1 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
               <div className="space-y-1">
                 <p className="text-sm text-muted-foreground">Nombre Completo</p>

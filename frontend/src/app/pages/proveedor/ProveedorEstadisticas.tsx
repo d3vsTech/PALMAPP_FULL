@@ -1,5 +1,14 @@
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
+
+// Helper defensivo para fechas (evita "Invalid Date")
+const formatFecha = (v?: any, opts: Intl.DateTimeFormatOptions = {}) => {
+  if (v === null || v === undefined || v === '') return '—';
+  const s = String(v);
+  const ymd = s.slice(0, 10);
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(ymd) ? new Date(ymd + 'T12:00:00') : new Date(s);
+  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('es-CO', opts);
+};
 import {
   TrendingUp,
   TrendingDown,
@@ -372,7 +381,7 @@ export default function ProveedorEstadisticas() {
                 <p className="font-semibold mb-1">{cliente.nombre}</p>
                 <p className="text-2xl font-bold text-primary mb-2">{cliente.total}</p>
                 <p className="text-xs text-muted-foreground">
-                  Último pedido: {new Date(cliente.ultimoPedido).toLocaleDateString('es-CO')}
+                  Último pedido: {formatFecha(cliente.ultimoPedido)}
                 </p>
               </div>
             ))}

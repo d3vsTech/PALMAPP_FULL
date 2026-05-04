@@ -1,5 +1,14 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
+
+// Helper defensivo para fechas (evita "Invalid Date")
+const formatFecha = (v?: any, opts: Intl.DateTimeFormatOptions = {}) => {
+  if (v === null || v === undefined || v === '') return '—';
+  const s = String(v);
+  const ymd = s.slice(0, 10);
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(ymd) ? new Date(ymd + 'T12:00:00') : new Date(s);
+  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('es-CO', opts);
+};
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
@@ -355,11 +364,7 @@ export default function Pedidos() {
                             </Badge>
                           </div>
                           <p className="text-sm text-muted-foreground">
-                            Fecha: {new Date(pedido.fecha).toLocaleDateString('es-CO', {
-                              year: 'numeric',
-                              month: 'long',
-                              day: 'numeric',
-                            })}
+                            Fecha: {formatFecha(pedido.fecha, { year: 'numeric', month: 'long', day: 'numeric' })}
                           </p>
                         </div>
                       </div>

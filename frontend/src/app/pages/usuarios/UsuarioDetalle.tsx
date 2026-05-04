@@ -8,6 +8,15 @@ import { Badge } from '../../components/ui/badge';
 import { ArrowLeft, Edit, Mail, Shield, Calendar, Building2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
+// Helper defensivo para fechas (evita "Invalid Date")
+const formatFecha = (v?: any, opts: Intl.DateTimeFormatOptions = {}) => {
+  if (v === null || v === undefined || v === '') return '—';
+  const s = String(v);
+  const ymd = s.slice(0, 10);
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(ymd) ? new Date(ymd + 'T12:00:00') : new Date(s);
+  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('es-CO', opts);
+};
+
 interface Usuario {
   id: number; name: string; email: string;
   is_admin: boolean; estado: boolean; asignado_at: string;
@@ -176,9 +185,7 @@ export default function UsuarioDetalle() {
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Fecha de Asignación</p>
                     <p className="font-medium">
-                      {new Date(usuario.asignado_at).toLocaleDateString('es-CO', {
-                        year: 'numeric', month: 'long', day: 'numeric',
-                      })}
+                      {formatFecha(usuario.asignado_at, { year: 'numeric', month: 'long', day: 'numeric' })}
                     </p>
                   </div>
                 )}

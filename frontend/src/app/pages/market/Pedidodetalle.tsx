@@ -1,5 +1,19 @@
 import { useNavigate, useParams } from 'react-router';
 import { Button } from '../../components/ui/button';
+
+// Helpers defensivos para fechas (evitan "Invalid Date")
+const formatFecha = (v?: any, opts: Intl.DateTimeFormatOptions = {}) => {
+  if (v === null || v === undefined || v === '') return '—';
+  const s = String(v);
+  const ymd = s.slice(0, 10);
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(ymd) ? new Date(ymd + 'T12:00:00') : new Date(s);
+  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('es-CO', opts);
+};
+const formatHora = (v?: any, opts: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit' }) => {
+  if (v === null || v === undefined || v === '') return '—';
+  const d = new Date(String(v));
+  return isNaN(d.getTime()) ? '—' : d.toLocaleTimeString('es-CO', opts);
+};
 import { Card, CardContent } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import {
@@ -177,11 +191,7 @@ export default function PedidoDetalle() {
             <h1 className="text-4xl font-bold text-foreground">{pedidoData.id}</h1>
             <p className="text-muted-foreground mt-2">
               Realizado el{' '}
-              {new Date(pedidoData.fecha).toLocaleDateString('es-CO', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-              })}
+              {formatFecha(pedidoData.fecha, { year: 'numeric', month: 'long', day: 'numeric' })}
             </p>
           </div>
           <Badge className={`${config.bgColor} ${config.color} ${config.borderColor} border h-fit`}>
@@ -228,14 +238,8 @@ export default function PedidoDetalle() {
                             {eventoConfig.label}
                           </h3>
                           <span className="text-xs text-muted-foreground">
-                            {new Date(evento.fecha).toLocaleDateString('es-CO', {
-                              month: 'short',
-                              day: 'numeric',
-                            })}{' '}
-                            {new Date(evento.fecha).toLocaleTimeString('es-CO', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
+                            {formatFecha(evento.fecha, { month: 'short', day: 'numeric' })}{' '}
+                            {formatHora(evento.fecha)}
                           </span>
                         </div>
                         <p className="text-sm text-muted-foreground">{evento.descripcion}</p>

@@ -1,5 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router';
+
+// Helper defensivo para fechas (evita "Invalid Date")
+const formatFecha = (v?: any, opts: Intl.DateTimeFormatOptions = {}) => {
+  if (v === null || v === undefined || v === '') return '—';
+  const s = String(v);
+  const ymd = s.slice(0, 10);
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(ymd) ? new Date(ymd + 'T12:00:00') : new Date(s);
+  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('es-CO', opts);
+};
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -35,10 +44,9 @@ import {
   Loader2,
   Phone,
   Eye,
-  X,
 } from 'lucide-react';
 import { Switch } from '../../components/ui/switch';
-import { colaboradoresApi } from '../../../api/colaboradores';
+import { colaboradoresApi, buildAvatarUrl } from '../../../api/colaboradores';
 import { fetchConToken } from '../../../api/request';
 import { prediosApi } from '../../../api/plantacion';
 import { toast } from 'sonner';
@@ -268,8 +276,9 @@ export default function NuevoColaboradorWizard() {
 
       // Avatar remoto si existe
       if (d.avatar_url) {
-        setAvatarUrlRemoto(d.avatar_url);
-        setImagePreview(d.avatar_url);
+        const fullUrl = buildAvatarUrl(d.avatar_url);
+        setAvatarUrlRemoto(fullUrl);
+        setImagePreview(fullUrl);
       }
 
       // Predio: API puede devolver { predio: {id, nombre} } o predio_id plano
@@ -401,7 +410,9 @@ export default function NuevoColaboradorWizard() {
         const fd = new FormData();
         fd.append('avatar', file);
         const res = await colaboradoresApi.subirAvatar(Number(id), fd);
-        setAvatarUrlRemoto(res.data?.avatar_url ?? null);
+        const newUrl = buildAvatarUrl(res.data?.avatar_url ?? null);
+        setAvatarUrlRemoto(newUrl);
+        if (newUrl) setImagePreview(newUrl);
         toast.success(res.message ?? 'Foto actualizada');
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Error al subir la foto');
@@ -721,7 +732,7 @@ export default function NuevoColaboradorWizard() {
                           onClick={handleRemoveImage}
                           className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-1 hover:bg-destructive/90"
                         >
-                          <X className="h-3 w-3" />
+                          <Trash2 className="h-3 w-3" />
                         </button>
                       </div>
                     ) : (
@@ -1317,7 +1328,7 @@ export default function NuevoColaboradorWizard() {
                   <p className="font-medium">{formData.numeroDocumento || '-'}</p>
                   <p className="text-xs text-muted-foreground">{tiposDocumento.find(t => t.codigo === formData.tipoDocumento)?.label}</p>
                   {formData.fechaExpedicion && (
-                    <p className="text-xs text-muted-foreground">Expedición: {new Date(formData.fechaExpedicion + 'T12:00:00').toLocaleDateString('es-CO')}</p>
+                    <p className="text-xs text-muted-foreground">Expedición: {formatFecha(formData.fechaExpedicion)}</p>
                   )}
                 </div>
                 <div className="pb-3 border-b border-border">

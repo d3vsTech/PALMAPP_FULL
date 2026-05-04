@@ -1,6 +1,15 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Badge } from '../../components/ui/badge';
+
+// Helper defensivo para fechas (evita "Invalid Date")
+const formatFecha = (v?: any, opts: Intl.DateTimeFormatOptions = {}) => {
+  if (v === null || v === undefined || v === '') return '—';
+  const s = String(v);
+  const ymd = s.slice(0, 10);
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(ymd) ? new Date(ymd + 'T12:00:00') : new Date(s);
+  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('es-CO', opts);
+};
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -291,7 +300,7 @@ export default function ProveedorPedidos() {
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.text(`Pedido: ${pedido.id}`, pageWidth - 60, 20);
-    doc.text(`Fecha: ${new Date(pedido.fechaCreacion).toLocaleDateString('es-CO')}`, pageWidth - 60, 27);
+    doc.text(`Fecha: ${formatFecha(pedido.fechaCreacion)}`, pageWidth - 60, 27);
     doc.text(`Estado: ${pedido.estado}`, pageWidth - 60, 34);
 
     // Línea divisoria
@@ -605,7 +614,7 @@ export default function ProveedorPedidos() {
                       <div className="flex items-center gap-3 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
-                          {new Date(pedido.fechaCreacion).toLocaleDateString('es-CO')}
+                          {formatFecha(pedido.fechaCreacion)}
                         </span>
                         <span>•</span>
                         <span>{pedido.cliente}</span>
