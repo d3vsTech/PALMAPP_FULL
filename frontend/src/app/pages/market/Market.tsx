@@ -188,7 +188,7 @@ export default function Market() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-start justify-between mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
         <div>
           <h1 className="text-4xl font-bold text-foreground">Market</h1>
           <p className="text-muted-foreground mt-2">
@@ -501,7 +501,7 @@ export default function Market() {
                       <Package className="h-12 w-12 text-primary/30" />
                     </div>
                     <div className="flex-1 space-y-2">
-                      <div className="flex items-start justify-between">
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                         <div className="flex-1">
                           <h3 className="font-semibold text-lg text-foreground hover:text-primary transition-colors">
                             {producto.nombre}

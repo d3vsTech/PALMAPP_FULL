@@ -97,7 +97,7 @@ export default function ProductoDetalle() {
           <ArrowLeft className="h-4 w-4" />
           Volver al catálogo
         </Button>
-        <div className="flex items-start justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
             <div className="flex items-center gap-3 mb-2">
               <h1 className="text-4xl font-bold text-foreground">{productoData.nombre}</h1>
@@ -185,7 +185,7 @@ export default function ProductoDetalle() {
           {/* Información del proveedor */}
           <Card className="border-border">
             <CardContent className="p-6">
-              <div className="flex items-start justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                 <div className="flex items-center gap-4">
                   <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
                     <Store className="h-8 w-8 text-primary" />

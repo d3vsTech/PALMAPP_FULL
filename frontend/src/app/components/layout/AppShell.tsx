@@ -16,7 +16,8 @@ export default function AppShell({ children }: AppShellProps) {
       <div className="flex flex-1 flex-col overflow-hidden relative z-10">
         <Topbar />
         <main className="flex-1 overflow-hidden">
-          <div className="h-full p-8 overflow-y-auto custom-scrollbar">
+          {/* Padding adaptativo: 4 en mobile, 6 en tablet, 8 en desktop */}
+          <div className="h-full p-4 sm:p-6 lg:p-8 overflow-y-auto custom-scrollbar">
             {children}
           </div>
         </main>

@@ -1052,6 +1052,9 @@ export default function NuevaPlanillaWizard() {
                         disabled
                         className="opacity-80 cursor-not-allowed"
                       />
+                      <p className="text-xs text-muted-foreground">
+                        Se llena automáticamente con tu nombre de usuario
+                      </p>
                     </div>
                   </div>
 
@@ -1108,16 +1111,11 @@ export default function NuevaPlanillaWizard() {
             {etapaActual === 2 && (
               <Card className="border-border">
                 <CardHeader>
-                  <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                      <Leaf className="h-6 w-6 text-primary" />
-                    </div>
-                    <div>
-                      <CardTitle>Labores de Palma</CardTitle>
-                      <p className="text-sm text-muted-foreground">
-                        Cosecha, plateo, poda, fertilización, sanidad y otros
-                      </p>
-                    </div>
+                  <div>
+                    <CardTitle>Labores de Palma</CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Cosecha, plateo, poda, fertilización, sanidad y otros
+                    </p>
                   </div>
                 </CardHeader>
                 <CardContent className="pt-6">
@@ -1281,11 +1279,8 @@ export default function NuevaPlanillaWizard() {
                           <Card key={trabajo.id} className="border-border hover:border-primary/30 transition-colors">
                             <CardContent className="p-4">
                               <div className="flex items-center justify-between gap-4">
-                                {/* Icono y Lote/Sublote */}
+                                {/* Lote/Sublote */}
                                 <div className="flex items-center gap-3">
-                                  <div className="h-10 w-10 rounded-lg bg-success/10 flex items-center justify-center shrink-0">
-                                    <Leaf className="h-5 w-5 text-success" />
-                                  </div>
                                   <div>
                                     <h4 className="font-semibold text-sm">{lote?.nombre || 'Lote no especificado'}</h4>
                                     <p className="text-xs text-muted-foreground">
@@ -1344,7 +1339,6 @@ export default function NuevaPlanillaWizard() {
 
                       {trabajosCosecha.length === 0 && !cosechaEnEdicion && (
                         <div className="text-center py-12 text-muted-foreground">
-                          <Leaf className="h-12 w-12 mx-auto mb-3 opacity-20" />
                           <p>No hay registros de cosecha</p>
                           <p className="text-sm">Haz clic en "Agregar Cosecha" para crear uno</p>
                         </div>
@@ -1482,9 +1476,6 @@ export default function NuevaPlanillaWizard() {
                             <CardContent className="p-4">
                               <div className="flex items-center justify-between gap-4">
                                 <div className="flex items-center gap-3">
-                                  <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
-                                    <Scissors className="h-5 w-5 text-blue-600" />
-                                  </div>
                                   <div>
                                     <h4 className="font-semibold text-sm">{lote?.nombre || 'Lote no especificado'}</h4>
                                     <p className="text-xs text-muted-foreground">{sublote?.nombre || 'Sublote no especificado'}</p>
@@ -1527,7 +1518,6 @@ export default function NuevaPlanillaWizard() {
 
                       {trabajosPlateo.length === 0 && !plateoEnEdicion && (
                         <div className="text-center py-12 text-muted-foreground">
-                          <Scissors className="h-12 w-12 mx-auto mb-3 opacity-20" />
                           <p>No hay registros de plateo</p>
                           <p className="text-sm">Haz clic en "Agregar Plateo" para crear uno</p>
                         </div>
@@ -1666,9 +1656,6 @@ export default function NuevaPlanillaWizard() {
                             <CardContent className="p-4">
                               <div className="flex items-center justify-between gap-4">
                                 <div className="flex items-center gap-3">
-                                  <div className="h-10 w-10 rounded-lg bg-orange-50 flex items-center justify-center shrink-0">
-                                    <Scissors className="h-5 w-5 text-orange-600" />
-                                  </div>
                                   <div>
                                     <h4 className="font-semibold text-sm">{lote?.nombre || 'Lote no especificado'}</h4>
                                     <p className="text-xs text-muted-foreground">{sublote?.nombre || 'Sublote no especificado'}</p>
@@ -1711,7 +1698,6 @@ export default function NuevaPlanillaWizard() {
 
                       {trabajosPoda.length === 0 && !podaEnEdicion && (
                         <div className="text-center py-12 text-muted-foreground">
-                          <Scissors className="h-12 w-12 mx-auto mb-3 opacity-20" />
                           <p>No hay registros de poda</p>
                           <p className="text-sm">Haz clic en "Agregar Poda" para crear uno</p>
                         </div>
@@ -1888,9 +1874,6 @@ export default function NuevaPlanillaWizard() {
                             <CardContent className="p-4">
                               <div className="flex items-center justify-between gap-4">
                                 <div className="flex items-center gap-3">
-                                  <div className="h-10 w-10 rounded-lg bg-purple-50 flex items-center justify-center shrink-0">
-                                    <Droplets className="h-5 w-5 text-purple-600" />
-                                  </div>
                                   <div>
                                     <h4 className="font-semibold text-sm">{lote?.nombre || 'Lote no especificado'}</h4>
                                     <p className="text-xs text-muted-foreground">{sublote?.nombre || 'Sublote no especificado'}</p>
@@ -1938,7 +1921,6 @@ export default function NuevaPlanillaWizard() {
 
                       {trabajosFertilizacion.length === 0 && !fertilizacionEnEdicion && (
                         <div className="text-center py-12 text-muted-foreground">
-                          <Droplets className="h-12 w-12 mx-auto mb-3 opacity-20" />
                           <p>No hay registros de fertilización</p>
                           <p className="text-sm">Haz clic en "Agregar Fertilización" para crear uno</p>
                         </div>
@@ -2089,11 +2071,8 @@ export default function NuevaPlanillaWizard() {
                           <Card key={trabajo.id} className="border-border hover:border-primary/30 transition-colors">
                             <CardContent className="p-4">
                               <div className="flex items-center justify-between gap-4">
-                                {/* Icon + Lote/Sublote */}
+                                {/* Lote/Sublote */}
                                 <div className="flex items-center gap-3">
-                                  <div className="h-10 w-10 rounded-lg bg-info/10 flex items-center justify-center shrink-0">
-                                    <Shield className="h-5 w-5 text-info" />
-                                  </div>
                                   <div>
                                     <h4 className="font-semibold text-sm">{lote?.nombre || 'Sin lote'}</h4>
                                     <p className="text-xs text-muted-foreground">{sublote?.nombre || 'Sin sublote'}</p>
@@ -2138,7 +2117,6 @@ export default function NuevaPlanillaWizard() {
 
                       {trabajosSanidad.length === 0 && !sanidadEnEdicion && (
                         <div className="text-center py-12 text-muted-foreground">
-                          <Shield className="h-12 w-12 mx-auto mb-3 opacity-20" />
                           <p>No hay registros de sanidad vegetal</p>
                           <p className="text-sm">Haz clic en "Agregar Sanidad" para crear uno</p>
                         </div>
@@ -2298,11 +2276,8 @@ export default function NuevaPlanillaWizard() {
                           <Card key={trabajo.id} className="border-border hover:border-primary/30 transition-colors">
                             <CardContent className="p-4">
                               <div className="flex items-center justify-between gap-4">
-                                {/* Icon + Lote/Sublote */}
+                                {/* Lote/Sublote */}
                                 <div className="flex items-center gap-3">
-                                  <div className="h-10 w-10 rounded-lg bg-muted/50 flex items-center justify-center shrink-0">
-                                    <Wrench className="h-5 w-5 text-muted-foreground" />
-                                  </div>
                                   <div>
                                     <h4 className="font-semibold text-sm">{trabajo.nombre || 'Sin nombre'}</h4>
                                     <p className="text-xs text-muted-foreground">{lote?.nombre || 'Sin lote'} - {sublote?.nombre || 'Sin sublote'}</p>
@@ -2347,7 +2322,6 @@ export default function NuevaPlanillaWizard() {
 
                       {trabajosOtros.length === 0 && !otrosEnEdicion && (
                         <div className="text-center py-12 text-muted-foreground">
-                          <Wrench className="h-12 w-12 mx-auto mb-3 opacity-20" />
                           <p>No hay registros de otros trabajos</p>
                           <p className="text-sm">Haz clic en "Agregar Otros" para crear uno</p>
                         </div>
@@ -2363,16 +2337,11 @@ export default function NuevaPlanillaWizard() {
               <Card className="border-border">
                 <CardHeader>
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                        <Wrench className="h-6 w-6 text-primary" />
-                      </div>
-                      <div>
-                        <CardTitle>Labores de Finca</CardTitle>
-                        <p className="text-sm text-muted-foreground">
-                          Auxiliares y trabajos complementarios
-                        </p>
-                      </div>
+                    <div>
+                      <CardTitle>Labores de Finca</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        Auxiliares y trabajos complementarios
+                      </p>
                     </div>
                     <Button
                       onClick={agregarAuxiliar}
@@ -2501,7 +2470,6 @@ export default function NuevaPlanillaWizard() {
 
                   {trabajosAuxiliares.length === 0 && (
                     <div className="text-center py-12 text-muted-foreground">
-                      <Wrench className="h-12 w-12 mx-auto mb-3 opacity-20" />
                       <p>No hay registros de trabajos auxiliares</p>
                       <p className="text-sm">Haz clic en "Agregar" para crear uno</p>
                     </div>

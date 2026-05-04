@@ -138,17 +138,13 @@ export default function Colaboradores() {
           ].map(({ label, value, sub, cls, badge }) => (
             <Card key={label} className="border-border hover:shadow-lg transition-all duration-300">
               <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <p className="text-sm text-muted-foreground mb-2">{label}</p>
-                    <div className="flex items-baseline gap-2">
-                      <p className="text-4xl font-bold">{loading ? '—' : value}</p>
-                      <span className="text-sm text-muted-foreground">{sub}</span>
-                    </div>
-                    <div className={`inline-flex items-center gap-1 mt-3 px-2.5 py-1 rounded-full text-xs font-medium border ${cls}`}>
-                      <Users className="h-4 w-4" /><span>{badge}</span>
-                    </div>
-                  </div>
+                <p className="text-sm text-muted-foreground mb-2">{label}</p>
+                <div className="flex items-baseline gap-2">
+                  <p className="text-4xl font-bold">{loading ? '—' : value}</p>
+                  <span className="text-sm text-muted-foreground">{sub}</span>
+                </div>
+                <div className={`inline-flex items-center gap-1 mt-3 px-2.5 py-1 rounded-full text-xs font-medium border ${cls}`}>
+                  <Users className="h-4 w-4" /><span>{badge}</span>
                 </div>
               </CardContent>
             </Card>
@@ -163,20 +159,22 @@ export default function Colaboradores() {
           <p className="text-muted-foreground">Todos los colaboradores del sistema</p>
         </div>
 
-        <div className="mb-6 flex items-center gap-4">
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input type="text" placeholder="Buscar por nombre, cédula o cargo..."
               value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10" />
           </div>
-          <Button onClick={() => navigate('/colaboradores/nuevo')}
-            className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20">
-            <Plus className="h-5 w-5" /> Nuevo Colaborador
-          </Button>
-          <Button onClick={() => navigate('/colaboradores/nuevo?import=1')}
-            className="gap-2 bg-accent hover:bg-accent/90 shadow-lg shadow-accent/20">
-            <FileSpreadsheet className="h-5 w-5" /> Importar Colaboradores
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Button onClick={() => navigate('/colaboradores/nuevo')}
+              className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20">
+              <Plus className="h-5 w-5" /> Nuevo Colaborador
+            </Button>
+            <Button onClick={() => navigate('/colaboradores/nuevo?import=1')}
+              className="gap-2 bg-accent hover:bg-accent/90 shadow-lg shadow-accent/20">
+              <FileSpreadsheet className="h-5 w-5" /> Importar Colaboradores
+            </Button>
+          </div>
         </div>
 
         {loading ? (

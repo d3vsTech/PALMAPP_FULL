@@ -204,7 +204,7 @@ export default function Nomina() {
             {nominaPeriodos.map((periodo) => (
               <Card key={periodo.id} className="group relative transition-all duration-300 hover:shadow-xl hover:shadow-primary/5 hover:-translate-y-1 bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-sm border-border/50">
                 <CardHeader>
-                  <div className="flex items-start justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/30 shadow-lg shadow-primary/20 group-hover:shadow-primary/40 transition-all duration-300">
                       <FileText className="h-5 w-5 text-primary" />
                     </div>

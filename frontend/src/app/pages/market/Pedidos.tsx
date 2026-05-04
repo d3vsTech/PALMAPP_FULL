@@ -343,7 +343,7 @@ export default function Pedidos() {
                   <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                     {/* Info principal */}
                     <div className="flex-1 space-y-3">
-                      <div className="flex items-start justify-between">
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                         <div>
                           <div className="flex items-center gap-3 mb-1">
                             <h3 className="text-lg font-bold text-foreground">{pedido.id}</h3>

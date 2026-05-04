@@ -13,7 +13,6 @@ import {
   Clipboard,
   Truck,
   Settings,
-  ShoppingBag,
   Menu,
   X,
   UserCog,
@@ -50,6 +49,7 @@ const navItems: NavItem[] = [
     roles: ['dueño', 'administrador', 'jefe_campo'],
     permiso: 'colaboradores.ver',
   },
+ 
   {
     label: 'Operaciones',
     href: '/operaciones',
@@ -64,7 +64,7 @@ const navItems: NavItem[] = [
     roles: ['dueño', 'administrador', 'jefe_campo'],
     permiso: 'remisiones.ver',
   },
-  {
+   {
     label: 'Nómina',
     href: '/nomina',
     icon: DollarSign,
@@ -80,10 +80,10 @@ const navItems: NavItem[] = [
   {
     label: 'Market',
     href: '/market',
-    icon: ShoppingBag,
+    icon: ShoppingCart,
     roles: ['dueño', 'administrador', 'jefe_campo'],
   },
-  {
+    {
     label: 'Gestión de Usuarios',
     href: '/usuarios',
     icon: UserCog,

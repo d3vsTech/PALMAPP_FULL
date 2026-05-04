@@ -183,7 +183,10 @@ export default function Viajes() {
     }
   };
 
-  // ── Pasar a "En Validación" — directo al backend (conteo OPCIONAL)
+  // ── Pasar a "En Validación" — el conteo es OPCIONAL.
+  //     Llamamos directo al endpoint /despachar. Si el backend lo expone,
+  //     funciona; si responde 404 mostramos el mensaje real para que el equipo
+  //     de backend lo habilite.
   const abrirDialogoValidar = (viaje: ViajeUI, event: React.MouseEvent) => {
     event.stopPropagation();
     setViajeAValidar({ id: viaje.id, remision: viaje.remisionId });
@@ -198,21 +201,7 @@ export default function Viajes() {
       toast.success('Viaje actualizado a "En Validación" exitosamente');
       cargarViajes();
     } catch (e: any) {
-      const msg = String(e?.message ?? '');
-      // El backend aún no expone POST /despachar. Por ahora, mostramos toast con
-      // acción que lleva al conteo (donde aprobando el último reconteo se auto-despacha).
-      const esRouteNotFound = /could not be found|route.*not found/i.test(msg);
-      if (esRouteNotFound) {
-        toast.error('El backend aún no soporta el despacho directo.', {
-          description: 'Por ahora, abre el conteo de cosecha y aprueba un reconteo: el viaje pasará automáticamente a En Validación.',
-          action: {
-            label: 'Ir al conteo',
-            onClick: () => navigate(`/viajes/${id}/conteo`),
-          },
-        });
-      } else {
-        toast.error(msg || 'Error al cambiar el estado del viaje');
-      }
+      toast.error(e?.message ?? 'Error al cambiar el estado del viaje');
     }
   };
 
@@ -286,7 +275,7 @@ export default function Viajes() {
       <AlertDialog open={!!viajeAValidar} onOpenChange={open => !open && setViajeAValidar(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Pasar viaje a En Validación</AlertDialogTitle>
+            <AlertDialogTitle>¿Pasar viaje a En Validación?</AlertDialogTitle>
             <AlertDialogDescription>
               <span>
                 ¿Deseas pasar el viaje <strong>{viajeAValidar?.remision}</strong> al estado{' '}
@@ -304,7 +293,7 @@ export default function Viajes() {
       </AlertDialog>
 
       {/* Header */}
-      <div className="flex items-start justify-between mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
         <div>
           <h1 className="text-4xl font-bold text-foreground">Viajes</h1>
           <p className="text-muted-foreground mt-2">
@@ -322,9 +311,9 @@ export default function Viajes() {
 
       {/* Indicadores Principales */}
       <div>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
           <h2 className="text-2xl font-bold text-foreground">Indicadores Principales</h2>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <Label className="text-sm font-medium">Período:</Label>
             <Select value={periodoKPI} onValueChange={(value: any) => setPeriodoKPI(value)}>
               <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>

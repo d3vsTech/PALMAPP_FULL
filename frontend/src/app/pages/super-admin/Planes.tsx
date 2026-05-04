@@ -100,7 +100,7 @@ export default function Planes() {
             <div className={`bg-gradient-to-r ${plan.color} p-6 relative overflow-hidden`}>
               <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16"></div>
               <div className="relative">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                   <div className="p-2 bg-white/10 rounded-lg">
                     <Package className="w-6 h-6 text-white" />
                   </div>

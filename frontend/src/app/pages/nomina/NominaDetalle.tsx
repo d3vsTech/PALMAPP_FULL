@@ -69,7 +69,7 @@ export default function NominaDetalle() {
         </BreadcrumbList>
       </Breadcrumb>
 
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" asChild>

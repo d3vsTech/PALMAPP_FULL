@@ -470,7 +470,7 @@ export default function LoteDetalle() {
       </nav>
 
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div className="flex items-start gap-4">
           <Button variant="ghost" size="icon" onClick={() => navigate('/plantacion')}
             className="h-12 w-12 rounded-xl border border-border/50 hover:bg-muted">
@@ -602,7 +602,7 @@ export default function LoteDetalle() {
 
       {/* Sección Sublotes */}
       <div>
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
           <div>
             <h2 className="text-2xl font-bold">Sublotes</h2>
             <p className="text-muted-foreground mt-1">

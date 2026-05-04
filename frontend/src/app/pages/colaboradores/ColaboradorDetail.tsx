@@ -123,7 +123,7 @@ export default function ColaboradorDetail() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div className="flex items-start gap-4">
           <Button variant="ghost" size="icon" onClick={() => navigate('/colaboradores')}
             className="h-10 w-10 rounded-lg border border-border hover:bg-muted">

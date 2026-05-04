@@ -307,7 +307,7 @@ export default function Proveedores() {
             >
               <CardContent className="p-6 space-y-4">
                 {/* Header del proveedor */}
-                <div className="flex items-start justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                   <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                     <Store className="h-7 w-7 text-primary" />
                   </div>

@@ -317,7 +317,7 @@ export default function SuperAdminDashboard() {
               </span>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <p className="text-3xl font-bold text-white mb-1">{totalAsignaciones}</p>
                 <p className="text-sm text-gray-400">Total de asignaciones</p>
@@ -402,7 +402,7 @@ export default function SuperAdminDashboard() {
 
       {/* Tenants Recientes */}
       <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
           <h3 className="text-lg font-bold text-white">Fincas recientes</h3>
           <span className="text-xs text-gray-400 bg-white/5 px-3 py-1.5 rounded-lg font-medium border border-white/10">
             Últimos registros

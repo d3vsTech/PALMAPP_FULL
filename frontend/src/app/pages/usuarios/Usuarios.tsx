@@ -137,7 +137,7 @@ export default function Usuarios() {
           ].map(({ label, value, sub, icon: Icon, color, badge }) => (
             <Card key={label} className="border-border hover:shadow-lg transition-all duration-300">
               <CardContent className="p-6">
-                <div className="flex items-start justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                   <div className="flex-1">
                     <p className="text-sm text-muted-foreground mb-2">{label}</p>
                     <div className="flex items-baseline gap-2">
@@ -161,7 +161,7 @@ export default function Usuarios() {
           <p className="text-muted-foreground">Todos los usuarios del sistema</p>
         </div>
 
-        <div className="mb-6 flex items-center gap-4">
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input type="text" placeholder="Buscar por nombre, email o rol..."

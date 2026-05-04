@@ -89,6 +89,19 @@ function normalizeEstado(value: unknown): EstadoTenant {
   return 'ACTIVO';
 }
 
+/**
+ * Formatea una fecha del backend (YYYY-MM-DD o ISO completo) al formato DD/MM/YYYY.
+ * Si la fecha es inválida o vacía, devuelve "—".
+ */
+function formatearFecha(raw?: string | null): string {
+  if (!raw || typeof raw !== 'string') return '—';
+  // Soporta "YYYY-MM-DD", "YYYY-MM-DDTHH:mm:ss" y "YYYY-MM-DD HH:mm:ss"
+  const ymd = raw.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return raw;
+  const [year, month, day] = ymd.split('-');
+  return `${day}/${month}/${year}`;
+}
+
 function normalizeTenant(raw: any): FincaItem {
   return {
     id: toNumber(raw?.id),
@@ -640,11 +653,11 @@ export default function Fincas() {
                     </td>
 
                     <td className="px-6 py-4">
-                      <p className="text-sm text-slate-300">{finca.fechaActivacion || '—'}</p>
+                      <p className="text-sm text-slate-300">{formatearFecha(finca.fechaActivacion)}</p>
                     </td>
 
                     <td className="px-6 py-4">
-                      <p className="text-sm text-slate-300">{finca.fechaSuspension || '—'}</p>
+                      <p className="text-sm text-slate-300">{formatearFecha(finca.fechaSuspension)}</p>
                     </td>
 
                     <td className="px-6 py-4">
@@ -803,7 +816,7 @@ export default function Fincas() {
             <div className="overflow-y-auto max-h-[calc(85vh-80px)] p-6 space-y-6">
               <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-5">
                 <h3 className="text-sm font-semibold text-slate-400 mb-3">Información General</h3>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <p className="text-xs text-slate-500">Nombre</p>
                     <p className="text-white">{detailFinca.nombre || '—'}</p>
@@ -828,7 +841,7 @@ export default function Fincas() {
 
               <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-5">
                 <h3 className="text-sm font-semibold text-slate-400 mb-3">Contacto</h3>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <p className="text-xs text-slate-500">Correo</p>
                     <p className="text-white">{detailFinca.correoContacto || '—'}</p>
@@ -842,7 +855,7 @@ export default function Fincas() {
 
               <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-5">
                 <h3 className="text-sm font-semibold text-slate-400 mb-3">Ubicación</h3>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <p className="text-xs text-slate-500">Departamento</p>
                     <p className="text-white">{detailFinca.departamento || '—'}</p>
@@ -860,14 +873,14 @@ export default function Fincas() {
 
               <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-5">
                 <h3 className="text-sm font-semibold text-slate-400 mb-3">Fechas y Usuarios</h3>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <p className="text-xs text-slate-500">Fecha Activación</p>
-                    <p className="text-white">{detailFinca.fechaActivacion || '—'}</p>
+                    <p className="text-white">{formatearFecha(detailFinca.fechaActivacion)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-slate-500">Fecha Suspensión</p>
-                    <p className="text-white">{detailFinca.fechaSuspension || '—'}</p>
+                    <p className="text-white">{formatearFecha(detailFinca.fechaSuspension)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-slate-500">Usuarios Asignados</p>
