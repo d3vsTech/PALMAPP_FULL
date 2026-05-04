@@ -6,7 +6,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { Eye, EyeOff, UserCircle, Lock, CheckCircle, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { PalmappLogo } from '../../components/common/PalmappLogo';
-import palmaBg from '../../../assets/fe9f1db39291ab118443c5878157a8c4732de54c.png';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -82,17 +81,18 @@ export default function Login() {
 
       {/* Lado derecho - Formulario de login */}
       <div className="flex w-full items-center justify-center p-6 lg:w-1/2 relative z-10 overflow-hidden">
-        {/* Imagen de fondo */}
-        <div 
+        {/* Fondo decorativo con gradient (sin dependencia de imagen externa) */}
+        <div
           className="absolute inset-0 z-0"
           style={{
-            backgroundImage: `url(${palmaBg})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
+            background:
+              'radial-gradient(circle at 20% 20%, hsl(var(--primary) / 0.18) 0%, transparent 45%),' +
+              'radial-gradient(circle at 80% 80%, hsl(var(--accent) / 0.18) 0%, transparent 45%),' +
+              'linear-gradient(135deg, hsl(var(--primary) / 0.10) 0%, hsl(var(--accent) / 0.08) 50%, hsl(var(--background)) 100%)',
           }}
         >
           {/* Overlay muy sutil para mantener legibilidad */}
-          <div className="absolute inset-0 bg-white/30 backdrop-blur-[2px]" />
+          <div className="absolute inset-0 bg-white/40 backdrop-blur-[2px]" />
         </div>
 
         <Card className="w-full max-w-md shadow-2xl relative z-10 bg-white/98 backdrop-blur-md border-border/50">
@@ -175,14 +175,22 @@ export default function Login() {
                 {!loading && 'Iniciar sesión'}
               </Button>
 
-              {/* Link al Super Admin */}
-              <div className="pt-4 text-center border-t border-border">
+              {/* Links a accesos especiales */}
+              <div className="pt-4 text-center border-t border-border space-y-2">
                 <Link
                   to="/super-admin/login"
                   className="text-sm text-muted-foreground hover:text-primary transition-colors inline-flex items-center gap-1"
                 >
                   Acceso de Super Administrador →
                 </Link>
+                <div>
+                  <Link
+                    to="/proveedor/login"
+                    className="text-sm text-muted-foreground hover:text-primary transition-colors inline-flex items-center gap-1"
+                  >
+                    Acceso de Proveedor →
+                  </Link>
+                </div>
               </div>
             </form>
           </CardContent>

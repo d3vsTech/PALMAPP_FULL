@@ -33,6 +33,7 @@ import {
   X,
 } from 'lucide-react';
 import { operacionesApi, selectsApi, Planilla } from '../../../api/operaciones';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Tipos de fertilizantes
 const fertilizantes = [
@@ -59,6 +60,8 @@ interface TrabajoCosecha {
   colaboradores: string[];
   lotes: string[];
   sublotes: string;
+  gajosRecogidos: number;
+  kilos: number;
 }
 
 interface TrabajoPlateo {
@@ -95,6 +98,15 @@ interface TrabajoSanidad {
   trabajoRealizado: string;
 }
 
+interface TrabajoOtros {
+  id: string;
+  colaboradores: string[];
+  lotes: string[];
+  sublotes: string;
+  nombre: string;
+  laborRealizada: string;
+}
+
 interface TrabajoAuxiliar {
   id: string;
   nombre: string;
@@ -103,6 +115,15 @@ interface TrabajoAuxiliar {
   total: number;
   horasExtra: number;
   tipoJornada: 'FIJO' | 'JORNAL';
+}
+
+interface HoraExtraItem {
+  id: string;
+  colaborador: string;
+  tipoHora: string;
+  numeroHoras: number;
+  observacion: string;
+  valor: number;
 }
 
 const ETAPAS = [
@@ -115,14 +136,17 @@ const ETAPAS = [
 export default function VerPlanilla() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const { user } = useAuth();
   const [etapaActual, setEtapaActual] = useState(1);
   const [modoEdicion, setModoEdicion] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
 
   // Datos de colaboradores y lotes desde API
-  const [colaboradores, setColaboradores] = useState<Array<{id: string; nombres: string; apellidos: string}>>([]);
+  const [colaboradores, setColaboradores] = useState<Array<{id: string; nombres: string; apellidos: string; nombre_completo: string}>>([]);
   const [lotesData, setLotesData] = useState<Array<{id: string; nombre: string}>>([]);
+  // Sublotes desde API para resolver el nombre por id en cards de jornales
+  const [sublotesData, setSublotesData] = useState<Array<{id: string; nombre: string}>>([]);
 
   // Información General - DATOS DE LA API (se cargan en useEffect)
   const [fecha, setFecha] = useState('');
@@ -141,7 +165,21 @@ export default function VerPlanilla() {
   const [trabajosPoda, setTrabajosPoda] = useState<TrabajoPoda[]>([]);
   const [trabajosFertilizacion, setTrabajosFertilizacion] = useState<TrabajoFertilizacion[]>([]);
   const [trabajosSanidad, setTrabajosSanidad] = useState<TrabajoSanidad[]>([]);
+  const [trabajosOtros, setTrabajosOtros] = useState<TrabajoOtros[]>([]);
   const [trabajosAuxiliares, setTrabajosAuxiliares] = useState<TrabajoAuxiliar[]>([]);
+  const [horasExtraItems, setHorasExtraItems] = useState<HoraExtraItem[]>([]);
+
+  // ── Helper: formatea fechas defensivamente para evitar "Invalid Date" ─────
+  const formatearFecha = (raw: string, opts: Intl.DateTimeFormatOptions): string => {
+    if (!raw) return '—';
+    // Aceptar tanto YYYY-MM-DD como ISO con timestamp
+    const m = String(raw).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return '—';
+    // Construir Date local (sin problemas de timezone)
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('es-CO', opts);
+  };
 
   // ── Cargar planilla desde API ──────────────────────────────────────────────
   const cargarPlanilla = useCallback(async () => {
@@ -154,31 +192,78 @@ export default function VerPlanilla() {
         selectsApi.colaboradores(),
         selectsApi.lotes(),
       ]);
-      const p = planRes.data;
+      const p: any = planRes.data;
 
       // Campos generales
       setFecha(p.fecha || '');
-      setElaboradoPor(p.creado_por_rel?.name || '');
-      setHuboLluvia(p.hubo_lluvia ? 'si' : 'no');
-      setLluvia(p.cantidad_lluvia ? String(p.cantidad_lluvia) : '');
-      setInicioLabores(p.hora_inicio ? p.hora_inicio.slice(0, 5) : '');
+      // Elaborado por: el API puede devolver el campo con varios nombres distintos.
+      // Si la planilla la creó el usuario actualmente logueado, usamos su nombre como fallback.
+      const elaborado =
+        p.creado_por_rel?.name ??
+        p.creado_por_rel?.nombre ??
+        p.creado_por_rel?.full_name ??
+        p.creado_por_rel?.nombre_completo ??
+        p.creadoPor?.name ??
+        p.creado_por?.name ??
+        p.creado_por?.nombre ??
+        p.elaborado_por ??
+        p.user?.name ??
+        // Fallback: si el creado_por (id) coincide con el usuario logueado, usar su nombre
+        (p.creado_por && user?.id && Number(p.creado_por) === Number(user.id) ? user.nombre : null) ??
+        // Último recurso: si no hay info, mostrar el nombre del usuario actual
+        user?.nombre ??
+        '';
+      setElaboradoPor(elaborado);
+
+      // hubo_lluvia: el API puede devolver true/false, 0/1, "0"/"1", "true"/"false".
+      // Convertimos a booleano de forma robusta antes de mapear a 'si' / 'no'.
+      const lluviaRaw = p.hubo_lluvia;
+      const lluviaBool =
+        lluviaRaw === true || lluviaRaw === 1 || lluviaRaw === '1' ||
+        (typeof lluviaRaw === 'string' && lluviaRaw.toLowerCase() === 'true');
+      setHuboLluvia(lluviaBool ? 'si' : 'no');
+
+      // Cantidad de lluvia (mm) — guardar solo si hay valor numérico > 0
+      if (p.cantidad_lluvia != null) {
+        const n = parseFloat(String(p.cantidad_lluvia));
+        setLluvia(Number.isFinite(n) && n > 0 ? String(n) : '');
+      } else {
+        setLluvia('');
+      }
+
+      setInicioLabores(p.hora_inicio ? String(p.hora_inicio).slice(0, 5) : '');
       setObservaciones(p.observaciones || '');
 
-      // Colaboradores y lotes para displays
-      setColaboradores((colRes.data || []).map((c: any) => ({
-        id: String(c.id),
-        nombres: c.primer_nombre ?? c.nombres ?? '',
-        apellidos: c.primer_apellido ?? c.apellidos ?? '',
-      })));
-      setLotesData((lotRes.data || []).map((l: any) => ({ id: String(l.id), nombre: l.nombre })));
+      // Colaboradores: aceptar todas las variantes de campo (primer_nombre, nombres, nombre_completo, etc.)
+      setColaboradores((colRes.data || []).map((c: any) => {
+        const nombres   = c.primer_nombre   ?? c.nombres   ?? c.nombre   ?? c.first_name ?? '';
+        const apellidos = c.primer_apellido ?? c.apellidos ?? c.apellido ?? c.last_name  ?? '';
+        const nombre_completo = c.nombre_completo ?? c.full_name ?? c.name ??
+          ((nombres || apellidos) ? `${nombres} ${apellidos}`.trim() : `Colab. ${c.id}`);
+        return { id: String(c.id), nombres, apellidos, nombre_completo };
+      }));
+      const lotesArr = (lotRes.data || []).map((l: any) => ({ id: String(l.id), nombre: l.nombre }));
+      setLotesData(lotesArr);
 
-      // Mapear cosechas de API → estado local
+      // Cargar sublotes en paralelo por cada lote para poder resolver nombres en cards
+      const sublotesPromises = lotesArr.map(async (l) => {
+        try {
+          const sr = await selectsApi.sublotes({ lote_id: Number(l.id) });
+          return (sr.data || []).map((s: any) => ({ id: String(s.id), nombre: s.nombre }));
+        } catch { return []; }
+      });
+      const allSubs = (await Promise.all(sublotesPromises)).flat();
+      setSublotesData(allSubs);
+
+      // Mapear cosechas de API → estado local (incluyendo gajos y kilos)
       setTrabajosCosecha(
         (p.cosechas || []).map((c: any) => ({
           id: String(c.id),
           colaboradores: (c.cuadrilla || []).map((q: any) => String(q.empleado_id)),
           lotes: c.lote_id ? [String(c.lote_id)] : [],
-          sublotes: c.sublote?.nombre || '',
+          sublotes: c.sublote?.nombre ?? (c.sublote_id ? String(c.sublote_id) : ''),
+          gajosRecogidos: Number(c.gajos_reportados ?? 0),
+          kilos: c.peso_confirmado != null ? Number(c.peso_confirmado) : 0,
         }))
       );
 
@@ -189,8 +274,8 @@ export default function VerPlanilla() {
           id: String(j.id),
           colaboradores: [String(j.empleado_id)],
           lotes: j.lote_id ? [String(j.lote_id)] : [],
-          sublotes: j.sublote?.nombre || '',
-          numeroPalmas: j.cantidad_palmas || 0,
+          sublotes: j.sublote?.nombre ?? (j.sublote_id ? String(j.sublote_id) : ''),
+          numeroPalmas: Number(j.cantidad_palmas ?? 0),
         }))
       );
       setTrabajosPoda(
@@ -198,8 +283,8 @@ export default function VerPlanilla() {
           id: String(j.id),
           colaboradores: [String(j.empleado_id)],
           lotes: j.lote_id ? [String(j.lote_id)] : [],
-          sublotes: j.sublote?.nombre || '',
-          numeroPalmas: j.cantidad_palmas || 0,
+          sublotes: j.sublote?.nombre ?? (j.sublote_id ? String(j.sublote_id) : ''),
+          numeroPalmas: Number(j.cantidad_palmas ?? 0),
         }))
       );
       setTrabajosFertilizacion(
@@ -207,10 +292,10 @@ export default function VerPlanilla() {
           id: String(j.id),
           colaboradores: [String(j.empleado_id)],
           lotes: j.lote_id ? [String(j.lote_id)] : [],
-          sublotes: j.sublote?.nombre || '',
-          palmas: j.cantidad_palmas || 0,
+          sublotes: j.sublote?.nombre ?? (j.sublote_id ? String(j.sublote_id) : ''),
+          palmas: Number(j.cantidad_palmas ?? 0),
           tipoFertilizante: j.insumo?.nombre || '',
-          cantidadGramos: j.gramos_por_palma || 0,
+          cantidadGramos: Number(j.gramos_por_palma ?? 0),
         }))
       );
       setTrabajosSanidad(
@@ -218,14 +303,26 @@ export default function VerPlanilla() {
           id: String(j.id),
           colaboradores: [String(j.empleado_id)],
           lotes: j.lote_id ? [String(j.lote_id)] : [],
-          sublotes: j.sublote?.nombre || '',
+          sublotes: j.sublote?.nombre ?? (j.sublote_id ? String(j.sublote_id) : ''),
           trabajoRealizado: j.descripcion || '',
+        }))
+      );
+      setTrabajosOtros(
+        jornales.filter((j: any) => j.tipo === 'OTROS').map((j: any) => ({
+          id: String(j.id),
+          colaboradores: [String(j.empleado_id)],
+          lotes: j.lote_id ? [String(j.lote_id)] : [],
+          sublotes: j.sublote?.nombre ?? (j.sublote_id ? String(j.sublote_id) : ''),
+          nombre: j.nombre_trabajo || '',
+          laborRealizada: j.descripcion || '',
         }))
       );
       setTrabajosAuxiliares(
         jornales.filter((j: any) => j.categoria === 'FINCA').map((j: any) => ({
           id: String(j.id),
-          nombre: j.empleado ? `${j.empleado.primer_nombre} ${j.empleado.primer_apellido}`.trim() : '',
+          nombre: j.empleado
+            ? `${j.empleado.primer_nombre ?? ''} ${j.empleado.primer_apellido ?? ''}`.trim()
+            : '',
           labor: j.labor?.nombre || '',
           lugar: j.ubicacion || '',
           total: parseFloat(j.valor_total || '0'),
@@ -234,14 +331,33 @@ export default function VerPlanilla() {
         }))
       );
 
+      // Horas Extras como items detallados
+      setHorasExtraItems(
+        (p.horas_extra || p.horasExtra || []).map((h: any) => {
+          const emp = h.empleado
+            ? `${h.empleado.primer_nombre ?? ''} ${h.empleado.primer_apellido ?? ''}`.trim()
+            : `Colab. ${h.empleado_id}`;
+          return {
+            id: String(h.id),
+            colaborador: emp,
+            tipoHora: h.tipoHoraExtra?.nombre ?? h.tipo_hora_extra?.nombre ?? '',
+            numeroHoras: Number(h.cantidad_horas ?? 0),
+            observacion: h.observacion ?? '',
+            valor: parseFloat(h.valor_calculado ?? '0'),
+          };
+        })
+      );
+
       // Ausencias como texto descriptivo
       const ausenciasTexto = (p.ausencias || [])
         .map((a: any) => {
-          const emp = a.empleado ? `${a.empleado.primer_nombre} ${a.empleado.primer_apellido}`.trim() : '';
+          const emp = a.empleado
+            ? `${a.empleado.primer_nombre ?? ''} ${a.empleado.primer_apellido ?? ''}`.trim()
+            : '';
           const mot = a.motivo_ausencia?.nombre || a.motivo || '';
-          return `${emp} - ${mot}`;
+          return `${emp} — ${mot}`;
         })
-        .join(', ');
+        .join('\n');
       setAusentes(ausenciasTexto);
 
     } catch (err: any) {
@@ -270,8 +386,10 @@ export default function VerPlanilla() {
     }
   };
 
+  // Botón "Editar" → ir al wizard de edición que usa la misma UI que creación.
   const activarEdicion = () => {
-    setModoEdicion(true);
+    if (!id) return;
+    navigate(`/operaciones/planilla/editar/${id}`);
   };
 
   const guardarCambios = async () => {
@@ -679,11 +797,7 @@ export default function VerPlanilla() {
                         />
                       ) : (
                         <div className="text-sm font-medium py-2">
-                          {new Date(fecha).toLocaleDateString('es-CO', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric'
-                          })}
+                          {formatearFecha(fecha, { year: 'numeric', month: 'long', day: 'numeric' })}
                         </div>
                       )}
                     </div>
@@ -696,7 +810,7 @@ export default function VerPlanilla() {
                           onChange={(e) => setElaboradoPor(e.target.value)}
                         />
                       ) : (
-                        <div className="text-sm font-medium py-2">{elaboradoPor}</div>
+                        <div className="text-sm font-medium py-2">{elaboradoPor || '—'}</div>
                       )}
                     </div>
                   </div>
@@ -833,7 +947,7 @@ export default function VerPlanilla() {
                                           .filter(col => !trabajo.colaboradores.includes(col.id))
                                           .map((col) => (
                                             <SelectItem key={col.id} value={col.id}>
-                                              {col.nombres} {col.apellidos}
+                                              {col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${col.id}`}
                                             </SelectItem>
                                           ))}
                                       </SelectContent>
@@ -848,7 +962,7 @@ export default function VerPlanilla() {
                                               variant="secondary"
                                               className="pl-2.5 pr-1 py-1 gap-1"
                                             >
-                                              <span>{col.nombres} {col.apellidos}</span>
+                                              <span>{col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${col.id}`}</span>
                                               <button
                                                 type="button"
                                                 onClick={() => eliminarColaboradorDeCosecha(trabajo.id, colId)}
@@ -866,11 +980,11 @@ export default function VerPlanilla() {
                                   <div className="flex flex-wrap gap-2">
                                     {trabajo.colaboradores.map((colId) => {
                                       const col = colaboradores.find(c => c.id === colId);
-                                      return col ? (
+                                      return (
                                         <Badge key={colId} variant="secondary">
-                                          {col.nombres} {col.apellidos}
+                                          {col?.nombre_completo || (col ? `${col.nombres} ${col.apellidos}`.trim() : '') || `Colaborador ${colId}`}
                                         </Badge>
-                                      ) : null;
+                                      );
                                     })}
                                   </div>
                                 )}
@@ -947,8 +1061,19 @@ export default function VerPlanilla() {
                                     setTrabajosCosecha(updated);
                                   }} />
                                 ) : (
-                                  <div className="text-sm py-2">{trabajo.sublotes}</div>
+                                  <div className="text-sm py-2">{trabajo.sublotes || '—'}</div>
                                 )}
+                              </div>
+                              {/* Gajos y Kilos (read-only) */}
+                              <div className="space-y-2">
+                                <Label>Gajos recogidos</Label>
+                                <div className="text-sm py-2 font-semibold">{trabajo.gajosRecogidos || 0}</div>
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Kilos confirmados</Label>
+                                <div className="text-sm py-2 font-semibold">
+                                  {trabajo.kilos > 0 ? `${trabajo.kilos.toLocaleString('es-CO')} kg` : '— (pendiente de pesaje)'}
+                                </div>
                               </div>
                             </div>
                           </CardContent>
@@ -1009,7 +1134,7 @@ export default function VerPlanilla() {
                                       .filter(col => !trabajo.colaboradores.includes(col.id))
                                       .map((col) => (
                                         <SelectItem key={col.id} value={col.id}>
-                                          {col.nombres} {col.apellidos}
+                                          {col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${col.id}`}
                                         </SelectItem>
                                       ))}
                                   </SelectContent>
@@ -1024,7 +1149,7 @@ export default function VerPlanilla() {
                                           variant="secondary"
                                           className="pl-2.5 pr-1 py-1 gap-1"
                                         >
-                                          <span>{col.nombres} {col.apellidos}</span>
+                                          <span>{col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${col.id}`}</span>
                                           <button
                                             type="button"
                                             onClick={() => eliminarColaboradorDePlateo(trabajo.id, colId)}
@@ -1044,7 +1169,7 @@ export default function VerPlanilla() {
                                   const col = colaboradores.find(c => c.id === colId);
                                   return col ? (
                                     <Badge key={colId} variant="secondary">
-                                      {col.nombres} {col.apellidos}
+                                      {col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${col.id}`}
                                     </Badge>
                                   ) : null;
                                 })}
@@ -1123,7 +1248,7 @@ export default function VerPlanilla() {
                                       .filter(col => !trabajo.colaboradores.includes(col.id))
                                       .map((col) => (
                                         <SelectItem key={col.id} value={col.id}>
-                                          {col.nombres} {col.apellidos}
+                                          {col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${col.id}`}
                                         </SelectItem>
                                       ))}
                                   </SelectContent>
@@ -1138,7 +1263,7 @@ export default function VerPlanilla() {
                                           variant="secondary"
                                           className="pl-2.5 pr-1 py-1 gap-1"
                                         >
-                                          <span>{col.nombres} {col.apellidos}</span>
+                                          <span>{col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${col.id}`}</span>
                                           <button
                                             type="button"
                                             onClick={() => eliminarColaboradorDePoda(trabajo.id, colId)}
@@ -1158,7 +1283,7 @@ export default function VerPlanilla() {
                                   const col = colaboradores.find(c => c.id === colId);
                                   return col ? (
                                     <Badge key={colId} variant="secondary">
-                                      {col.nombres} {col.apellidos}
+                                      {col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${col.id}`}
                                     </Badge>
                                   ) : null;
                                 })}
@@ -1237,7 +1362,7 @@ export default function VerPlanilla() {
                                       .filter(col => !trabajo.colaboradores.includes(col.id))
                                       .map((col) => (
                                         <SelectItem key={col.id} value={col.id}>
-                                          {col.nombres} {col.apellidos}
+                                          {col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${col.id}`}
                                         </SelectItem>
                                       ))}
                                   </SelectContent>
@@ -1252,7 +1377,7 @@ export default function VerPlanilla() {
                                           variant="secondary"
                                           className="pl-2.5 pr-1 py-1 gap-1"
                                         >
-                                          <span>{col.nombres} {col.apellidos}</span>
+                                          <span>{col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${col.id}`}</span>
                                           <button
                                             type="button"
                                             onClick={() => eliminarColaboradorDeFertilizacion(trabajo.id, colId)}
@@ -1272,7 +1397,7 @@ export default function VerPlanilla() {
                                   const col = colaboradores.find(c => c.id === colId);
                                   return col ? (
                                     <Badge key={colId} variant="secondary">
-                                      {col.nombres} {col.apellidos}
+                                      {col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${col.id}`}
                                     </Badge>
                                   ) : null;
                                 })}
@@ -1388,7 +1513,7 @@ export default function VerPlanilla() {
                                       .filter(col => !trabajo.colaboradores.includes(col.id))
                                       .map((col) => (
                                         <SelectItem key={col.id} value={col.id}>
-                                          {col.nombres} {col.apellidos}
+                                          {col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${col.id}`}
                                         </SelectItem>
                                       ))}
                                   </SelectContent>
@@ -1403,7 +1528,7 @@ export default function VerPlanilla() {
                                           variant="secondary"
                                           className="pl-2.5 pr-1 py-1 gap-1"
                                         >
-                                          <span>{col.nombres} {col.apellidos}</span>
+                                          <span>{col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${col.id}`}</span>
                                           <button
                                             type="button"
                                             onClick={() => eliminarColaboradorDeSanidad(trabajo.id, colId)}
@@ -1423,7 +1548,7 @@ export default function VerPlanilla() {
                                   const col = colaboradores.find(c => c.id === colId);
                                   return col ? (
                                     <Badge key={colId} variant="secondary">
-                                      {col.nombres} {col.apellidos}
+                                      {col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${col.id}`}
                                     </Badge>
                                   ) : null;
                                 })}
@@ -1714,7 +1839,7 @@ export default function VerPlanilla() {
                     <div className="flex items-center justify-between">
                       <span className="text-sm">Fecha</span>
                       <span className="font-semibold text-sm">
-                        {new Date(fecha).toLocaleDateString('es-CO', { month: 'short', day: 'numeric' })}
+                        {formatearFecha(fecha, { month: 'short', day: 'numeric' })}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">

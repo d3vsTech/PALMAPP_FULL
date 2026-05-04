@@ -1,90 +1,44 @@
 /**
- * api/operaciones.ts
- * Módulo Operaciones (Planilla del Día) — contrato completo según API_OPERACIONES.md + API_HORAS_EXTRA.md
- * Base: /api/v1/tenant  · Auth: Authorization Bearer + X-Tenant-Id
+ * API Client — Módulo Operaciones (Planilla del Día)
+ *
+ * Cubre el wizard de 5 pasos:
+ *  - Paso 1: Información General
+ *  - Paso 2: Labores de Palma (cosecha, plateo, poda, fertilización, sanidad, otros)
+ *  - Paso 3: Labores de Finca (categoría=FINCA en jornales)
+ *  - Paso 4: Horas Extras
+ *  - Paso 5: Finalización + Ausencias
+ *
+ * Base URL: {host}/api/v1/tenant
+ * Headers: Authorization: Bearer {jwt}, X-Tenant-Id: {tenant_id}
  */
-import { requestConToken } from './request';
+import { requestConToken, fetchConToken } from './request';
 
-// ─── helpers ────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// TIPOS
+// ─────────────────────────────────────────────────────────────────────────────
 
-function tkn() { return localStorage.getItem('palmapp_token'); }
-
-function qs(p?: Record<string, unknown>): string {
-  if (!p) return '';
-  const q = new URLSearchParams();
-  Object.entries(p).forEach(([k, v]) => {
-    if (v !== undefined && v !== null && v !== '') q.append(k, String(v));
-  });
-  const s = q.toString();
-  return s ? `?${s}` : '';
-}
-
-function get<T>(path: string, params?: Record<string, unknown>): Promise<T> {
-  return requestConToken<T>(`/api/v1/tenant${path}${qs(params)}`, { method: 'GET' }, tkn());
-}
-function post<T>(path: string, body?: unknown): Promise<T> {
-  return requestConToken<T>(`/api/v1/tenant${path}`, {
-    method: 'POST',
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-  }, tkn());
-}
-function put<T>(path: string, body: unknown): Promise<T> {
-  return requestConToken<T>(`/api/v1/tenant${path}`, { method: 'PUT', body: JSON.stringify(body) }, tkn());
-}
-function del<T>(path: string): Promise<T> {
-  return requestConToken<T>(`/api/v1/tenant${path}`, { method: 'DELETE' }, tkn());
-}
-function postForm<T>(path: string, fd: FormData): Promise<T> {
-  const token  = tkn();
-  const tenant = localStorage.getItem('palmapp_tenant_id');
-  const headers: Record<string, string> = {};
-  if (token)  headers['Authorization'] = `Bearer ${token}`;
-  if (tenant) headers['X-Tenant-Id']   = tenant;
-  return fetch(`/api/v1/tenant${path}`, { method: 'POST', headers, body: fd }).then(r => r.json());
-}
-
-// ─── tipos ───────────────────────────────────────────────────────────────────
-
-export type EstadoPlanilla      = 'BORRADOR' | 'APROBADA';
-export type PeriodoIndicadores  = 'semanal' | 'quincenal' | 'mensual' | 'personalizado';
-export type TipoJornalPalma     = 'PLATEO' | 'PODA' | 'FERTILIZACION' | 'SANIDAD' | 'OTROS';
-export type EstadoAusencia      = 'PENDIENTE' | 'APROBADA' | 'RECHAZADA' | 'LIQUIDADA';
-export type EstadoHoraExtra     = 'PENDIENTE' | 'APROBADA' | 'RECHAZADA' | 'LIQUIDADA';
+export type EstadoPlanilla = 'BORRADOR' | 'APROBADA';
 
 export interface Planilla {
   id: number;
-  fecha: string;
+  fecha: string;            // YYYY-MM-DD
   hora_inicio?: string | null;
   hora_fin?: string | null;
   hubo_lluvia: boolean;
-  cantidad_lluvia?: string | null;
+  cantidad_lluvia?: string | number | null;
   observaciones?: string | null;
   estado: EstadoPlanilla;
-  creado_por: number;
-  creado_por_rel?: { id: number; name: string };
+  creado_por?: number;
+  creado_por_rel?: { id: number; name: string } | null;
   aprobado_por?: number | null;
-  aprobado_at?: string | null;
-  aprobado_por_rel?: { id: number; name: string };
-  // Agregados del listado
+  aprobado_por_rel?: { id: number; name: string } | null;
   jornales_count?: number;
   cosechas_count?: number;
   ausencias_count?: number;
   colaboradores_count?: number;
-  total_jornales_sum?: string;
-  total_cosechas_sum?: string;
-  total_general?: number;
-  // Relaciones del detalle
-  cosechas?: Cosecha[];
-  jornales?: Jornal[];
-  ausencias?: Ausencia[];
-  horas_extra?: HoraExtra[];
-}
-
-export interface Indicadores {
-  periodo: { tipo: PeriodoIndicadores; fecha_desde: string; fecha_hasta: string };
-  planillas_borrador: number;
-  planillas_aprobadas: number;
-  total_planillas: number;
+  total_jornales_sum?: string | number;
+  total_cosechas_sum?: string | number;
+  total_general?: string | number;
 }
 
 export interface Resumen {
@@ -95,257 +49,283 @@ export interface Resumen {
   inicio_labores: string | null;
   estado: EstadoPlanilla;
   labores: {
-    cosecha: number; plateo: number; poda: number;
-    fertilizacion: number; sanidad: number; otros: number; auxiliares: number;
+    cosecha: number;
+    plateo: number;
+    poda: number;
+    fertilizacion: number;
+    sanidad: number;
+    otros: number;
+    auxiliares: number;
   };
-  ausencias?: { pendientes: number; aprobadas: number; rechazadas: number; liquidadas: number; total: number };
+  ausencias: {
+    pendientes: number;
+    aprobadas: number;
+    rechazadas: number;
+    liquidadas: number;
+    total: number;
+  };
   horas_extra?: {
-    pendientes: number; aprobadas: number; rechazadas: number; liquidadas: number; total: number;
-    horas_totales: string; valor_total: string;
+    pendientes: number;
+    aprobadas: number;
+    rechazadas: number;
+    liquidadas: number;
+    total: number;
+    horas_totales: string;
+    valor_total: string;
   };
 }
 
-export interface CosechaCuadrillaItem {
-  id?: number;
-  empleado_id: number;
-  empleado?: { id: number; primer_nombre: string; primer_apellido: string };
-  peso_calculado_empleado?: string | null;
-  valor_calculado?: string | null;
-}
-export interface Cosecha {
-  id: number;
-  operacion_id: number;
-  lote_id: number;
-  sublote_id?: number | null;
-  gajos_reportados: number;
-  gajos_reconteo?: number | null;
-  peso_confirmado?: string | null;
-  precio_cosecha?: string;
-  promedio_kg_gajo?: string;
-  valor_total?: string | null;
-  lote?: { id: number; nombre: string };
-  sublote?: { id: number; nombre: string };
-  cuadrilla: CosechaCuadrillaItem[];
+export interface Indicadores {
+  periodo: { tipo: string; fecha_desde: string; fecha_hasta: string };
+  planillas_borrador: number;
+  planillas_aprobadas: number;
+  total_planillas: number;
 }
 
-export interface Jornal {
-  id: number;
-  operacion_id: number;
-  empleado_id: number;
-  categoria: 'PALMA' | 'FINCA';
-  tipo?: TipoJornalPalma | null;
-  labor_id?: number | null;
-  lote_id?: number | null;
-  sublote_id?: number | null;
-  cantidad_palmas?: number | null;
-  insumo_id?: number | null;
-  gramos_por_palma?: number | null;
-  nombre_trabajo?: string | null;
-  descripcion?: string | null;
-  ubicacion?: string | null;
-  valor_unitario?: string | null;
-  valor_total?: string | null;
-  estado: boolean;
-  empleado?: { id: number; primer_nombre: string; primer_apellido: string };
-  lote?: { id: number; nombre: string };
-  sublote?: { id: number; nombre: string };
-  insumo?: { id: number; nombre: string };
-  labor?: { id: number; nombre: string; valor_base?: string };
+export type Periodo = 'semanal' | 'quincenal' | 'mensual' | 'personalizado';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+const BASE = '/api/v1/tenant';
+
+function qs(params: Record<string, any> = {}): string {
+  const filtered = Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '');
+  if (filtered.length === 0) return '';
+  return '?' + filtered.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`).join('&');
 }
 
-export interface Ausencia {
-  id: number;
-  operacion_id: number;
-  empleado_id: number;
-  motivo_ausencia_id: number;
-  tipo?: string;
-  fecha_inicio: string;
-  fecha_fin: string;
-  dias_calendario?: number;
-  es_remunerada?: boolean;
-  afecta_nomina?: boolean;
-  porcentaje_pago?: string;
-  estado: EstadoAusencia;
-  motivo?: string;
-  documento_soporte?: string | null;
-  motivo_rechazo?: string | null;
-  empleado?: { id: number; primer_nombre: string; primer_apellido: string };
-  motivo_ausencia?: { id: number; nombre: string; tipo_base?: string; requiere_soporte?: boolean };
+/** Parsea respuestas no-OK e incluye el `code` del backend cuando aplica. */
+async function parseError(res: Response): Promise<{ message: string; code?: string }> {
+  let data: any = null;
+  try {
+    const ct = res.headers.get('content-type') ?? '';
+    data = ct.includes('application/json') ? await res.json() : await res.text();
+  } catch {}
+  if (data && typeof data === 'object') {
+    const msg =
+      (data.errors && typeof data.errors === 'object' && (() => {
+        for (const k of Object.keys(data.errors)) {
+          const arr = data.errors[k];
+          if (Array.isArray(arr) && arr.length && typeof arr[0] === 'string') return arr[0];
+          if (typeof arr === 'string' && arr.trim()) return arr;
+        }
+        return null;
+      })()) ||
+      data.message ||
+      data.error ||
+      'Error al comunicarse con el servidor';
+    return { message: typeof msg === 'string' ? msg : 'Error', code: data.code };
+  }
+  return { message: typeof data === 'string' && data.trim() ? data : 'Error al comunicarse con el servidor' };
 }
 
-export interface HoraExtra {
-  id: number;
-  operacion_id: number;
-  empleado_id: number;
-  tipo_hora_extra_id: number;
-  codigo?: string;
-  porcentaje_recargo?: string;
-  paga_hora_completa?: boolean;
-  cantidad_horas: string;
-  valor_hora_base?: string;
-  valor_calculado?: string;
-  estado: EstadoHoraExtra;
-  observacion?: string;
-  motivo_rechazo?: string | null;
-  empleado?: { id: number; primer_nombre: string; primer_apellido: string };
-  tipoHoraExtra?: { id: number; codigo: string; nombre: string; porcentaje_recargo: string };
+/** Versión de request que devuelve `{ message, code }` en errores HTTP. */
+async function smartRequest<T = any>(endpoint: string, opciones: RequestInit = {}): Promise<T> {
+  const res = await fetchConToken(endpoint, undefined, opciones);
+  if (!res.ok) {
+    const { message, code } = await parseError(res);
+    const err: any = new Error(message);
+    if (code) err.code = code;
+    err.status = res.status;
+    throw err;
+  }
+  if (res.status === 204) return null as unknown as T;
+  const ct = res.headers.get('content-type') ?? '';
+  return (ct.includes('application/json') ? await res.json() : (await res.text() as any)) as T;
 }
 
-/** Item del select de tipos de hora extra */
-export interface TipoHoraExtraSelect {
-  id: number;
-  codigo: string;
-  nombre: string;
-  porcentaje_recargo: string;
-  franja_horaria: string;
-  aplica_festivo: boolean;
-  es_extra: boolean;
-  paga_hora_completa: boolean;
-}
-
-/** Item del select de motivos de ausencia */
-export interface MotivoAusenciaSelect {
-  id: number;
-  nombre: string;
-  tipo_base?: string;
-  requiere_soporte?: boolean;
-  es_remunerada?: boolean;
-  afecta_nomina?: boolean;
-  porcentaje_pago_default?: string;
-}
-
-/** Item del select de labores */
-export interface LaborSelect {
-  id: number;
-  nombre: string;
-  valor_base?: string;
-}
-
-/** Item del select de insumos */
-export interface InsumoSelect {
-  id: number;
-  nombre: string;
-}
-
-// ─── §1 — Operaciones ────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// 1. operacionesApi (Planilla)
+// ─────────────────────────────────────────────────────────────────────────────
 
 export const operacionesApi = {
-  /** POST /operaciones — crea planilla BORRADOR (Paso 1) */
-  crear: (b: {
+  listar: (params: {
+    estado?: EstadoPlanilla;
+    fecha_desde?: string;
+    fecha_hasta?: string;
+    per_page?: number;
+    page?: number;
+  } = {}) =>
+    requestConToken<{ data: Planilla[]; meta: any }>(`${BASE}/operaciones${qs(params)}`),
+
+  /**
+   * Trae el detalle completo de una planilla incluyendo:
+   *  - cosechas[].cuadrilla[].empleado
+   *  - jornales[] con empleado, labor, lote, sublote, insumo
+   *  - ausencias[] con empleado y motivo_ausencia
+   *  - horas_extra[]
+   *  - creado_por_rel, aprobado_por_rel
+   */
+  ver: (id: number) =>
+    requestConToken<{ data: Planilla & Record<string, any> }>(`${BASE}/operaciones/${id}`),
+
+  // Alias para compat con código que ya llamaba .detalle(...)
+  detalle: (id: number) =>
+    requestConToken<{ data: Planilla & Record<string, any> }>(`${BASE}/operaciones/${id}`),
+
+  crear: (payload: {
     fecha: string;
-    hora_inicio?: string;
+    elaborado_por?: string | null;
+    hora_inicio?: string | null;
     hora_fin?: string | null;
     hubo_lluvia: boolean;
-    cantidad_lluvia?: number | null;
+    cantidad_lluvia: number | null;
     observaciones?: string | null;
-  }) => post<{ message: string; data: Planilla }>('/operaciones', b),
+  }) =>
+    smartRequest<{ data: Planilla; message?: string }>(`${BASE}/operaciones`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 
-  /** PUT /operaciones/{id} — edita info general (solo BORRADOR) */
-  editar: (id: number, b: Partial<{
-    fecha: string; hora_inicio: string; hora_fin: string | null;
-    hubo_lluvia: boolean; cantidad_lluvia: number | null; observaciones: string | null;
-  }>) => put<{ message: string; data: Planilla }>(`/operaciones/${id}`, b),
+  editar: (id: number, payload: Partial<{
+    fecha: string;
+    elaborado_por: string | null;
+    hora_inicio: string | null;
+    hora_fin: string | null;
+    hubo_lluvia: boolean;
+    cantidad_lluvia: number | null;
+    observaciones: string | null;
+  }>) =>
+    smartRequest<{ data: Planilla }>(`${BASE}/operaciones/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
 
-  /** GET /operaciones/indicadores?periodo= */
-  indicadores: (p: { periodo?: PeriodoIndicadores; fecha_desde?: string; fecha_hasta?: string } = {}) =>
-    get<{ data: Indicadores }>('/operaciones/indicadores', p as Record<string, unknown>),
+  eliminar: (id: number) =>
+    smartRequest<{ message: string }>(`${BASE}/operaciones/${id}`, { method: 'DELETE' }),
 
-  /** GET /operaciones — listado paginado */
-  listar: (p?: { estado?: EstadoPlanilla; fecha_desde?: string; fecha_hasta?: string; per_page?: number; page?: number }) =>
-    get<{ data: Planilla[]; meta: any }>('/operaciones', p as Record<string, unknown>),
+  aprobar: (id: number) =>
+    smartRequest<{ data: Planilla }>(`${BASE}/operaciones/${id}/aprobar`, { method: 'POST' }),
 
-  /** GET /operaciones/{id} — detalle completo con relaciones */
-  ver: (id: number) => get<{ data: Planilla }>(`/operaciones/${id}`),
+  resumen: (id: number) =>
+    requestConToken<{ data: Resumen }>(`${BASE}/operaciones/${id}/resumen`),
 
-  /** DELETE /operaciones/{id} — solo BORRADOR sin hijos */
-  eliminar: (id: number) => del<{ message: string }>(`/operaciones/${id}`),
-
-  /** GET /operaciones/{id}/resumen — panel derecho del wizard */
-  resumen: (id: number) => get<{ data: Resumen }>(`/operaciones/${id}/resumen`),
-
-  /** POST /operaciones/{id}/aprobar — cierra la planilla */
-  aprobar: (id: number) => post<{ message: string; data: Planilla }>(`/operaciones/${id}/aprobar`),
+  indicadores: (params: { periodo?: Periodo; fecha_desde?: string; fecha_hasta?: string } = {}) =>
+    requestConToken<{ data: Indicadores }>(`${BASE}/operaciones/indicadores${qs(params)}`),
 };
 
-// ─── §2 — Cosechas ───────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// 2. cosechasApi
+// ─────────────────────────────────────────────────────────────────────────────
 
 export const cosechasApi = {
-  /** POST /operaciones/{id}/cosechas */
-  crear: (operacionId: number, b: {
+  crear: (operacionId: number, payload: {
     lote_id: number;
     sublote_id?: number | null;
     gajos_reportados: number;
     peso_confirmado?: number | null;
-    cuadrilla: { empleado_id: number }[];
-  }) => post<{ message: string; data: Cosecha }>(`/operaciones/${operacionId}/cosechas`, b),
+    cuadrilla: Array<{ empleado_id: number }>;
+  }) =>
+    smartRequest<{ data: any }>(`${BASE}/operaciones/${operacionId}/cosechas`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 
-  /** PUT /cosechas/{id} */
-  editar: (id: number, b: Partial<{
-    gajos_reportados: number; gajos_reconteo: number;
-    peso_confirmado: number | null; cuadrilla: { empleado_id: number }[];
-  }>) => put<{ message: string; data: Cosecha }>(`/cosechas/${id}`, b),
+  editar: (id: number, payload: Partial<{
+    gajos_reportados: number;
+    gajos_reconteo: number;
+    peso_confirmado: number | null;
+    cuadrilla: Array<{ empleado_id: number }>;
+  }>) =>
+    smartRequest<{ data: any }>(`${BASE}/cosechas/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
 
-  /** DELETE /cosechas/{id} — falla con 409 COSECHA_EN_VIAJE si está en un viaje */
-  eliminar: (id: number) => del<{ message: string }>(`/cosechas/${id}`),
+  eliminar: (id: number) =>
+    smartRequest<{ message: string }>(`${BASE}/cosechas/${id}`, { method: 'DELETE' }),
 };
 
-// ─── §3 — Jornales (PALMA + FINCA) ──────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// 3. jornalesApi (PLATEO/PODA/FERTILIZACION/SANIDAD/OTROS + FINCA)
+// ─────────────────────────────────────────────────────────────────────────────
 
-interface JornalBase { categoria: 'PALMA'; empleado_id: number; lote_id?: number | null; sublote_id?: number | null; }
-export interface PlateoPayload  extends JornalBase { tipo: 'PLATEO';        cantidad_palmas: number; }
-export interface PodaPayload    extends JornalBase { tipo: 'PODA';          cantidad_palmas: number; }
-export interface FertPayload    extends JornalBase { tipo: 'FERTILIZACION'; cantidad_palmas: number; insumo_id: number; gramos_por_palma: number; }
-export interface SanidadPayload extends JornalBase { tipo: 'SANIDAD';       descripcion: string; }
-export interface OtrosPayload   extends JornalBase { tipo: 'OTROS';         nombre_trabajo: string; descripcion: string; }
-export interface FincaPayload   { categoria: 'FINCA'; labor_id: number; empleado_id: number; ubicacion?: string; observacion?: string; }
-export type JornalPayload = PlateoPayload | PodaPayload | FertPayload | SanidadPayload | OtrosPayload | FincaPayload;
+export interface JornalPalma {
+  categoria: 'PALMA';
+  tipo: 'PLATEO' | 'PODA' | 'FERTILIZACION' | 'SANIDAD' | 'OTROS';
+  empleado_id: number;
+  lote_id?: number | null;
+  sublote_id?: number | null;
+  cantidad_palmas?: number;
+  insumo_id?: number;
+  gramos_por_palma?: number;
+  descripcion?: string;
+  nombre_trabajo?: string;
+}
+
+export interface JornalFinca {
+  categoria: 'FINCA';
+  labor_id: number;
+  empleado_id: number;
+  ubicacion?: string;
+  observacion?: string | null;
+}
 
 export const jornalesApi = {
-  /** POST /operaciones/{id}/jornales */
-  crear: (operacionId: number, b: JornalPayload) =>
-    post<{ message: string; data: Jornal }>(`/operaciones/${operacionId}/jornales`, b),
+  crear: (operacionId: number, payload: JornalPalma | JornalFinca) =>
+    smartRequest<{ data: any }>(`${BASE}/operaciones/${operacionId}/jornales`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 
-  /** PUT /jornales/{id} */
-  editar: (id: number, b: Partial<JornalPayload>) =>
-    put<{ message: string; data: Jornal }>(`/jornales/${id}`, b),
+  editar: (id: number, payload: Partial<JornalPalma | JornalFinca>) =>
+    smartRequest<{ data: any }>(`${BASE}/jornales/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
 
-  /** DELETE /jornales/{id} */
-  eliminar: (id: number) => del<{ message: string }>(`/jornales/${id}`),
+  eliminar: (id: number) =>
+    smartRequest<{ message: string }>(`${BASE}/jornales/${id}`, { method: 'DELETE' }),
 };
 
-// ─── §4 — Horas Extras ───────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// 4. horasExtraApi
+// ─────────────────────────────────────────────────────────────────────────────
 
 export const horasExtraApi = {
-  /** POST /operaciones/{id}/horas-extra (Paso 4) */
-  crear: (operacionId: number, b: {
+  crear: (operacionId: number, payload: {
     empleado_id: number;
     tipo_hora_extra_id: number;
     cantidad_horas: number;
     observacion?: string;
-  }) => post<{ message: string; data: HoraExtra }>(`/operaciones/${operacionId}/horas-extra`, b),
+  }) =>
+    smartRequest<{ data: any }>(`${BASE}/operaciones/${operacionId}/horas-extra`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 
-  /** PUT /horas-extra/{id} — solo PENDIENTE y planilla no aprobada */
-  editar: (id: number, b: Partial<{
-    empleado_id: number; tipo_hora_extra_id: number;
-    cantidad_horas: number; observacion: string;
-  }>) => put<{ message: string; data: HoraExtra }>(`/horas-extra/${id}`, b),
+  editar: (id: number, payload: Partial<{
+    empleado_id: number;
+    tipo_hora_extra_id: number;
+    cantidad_horas: number;
+    observacion: string;
+  }>) =>
+    smartRequest<{ data: any }>(`${BASE}/horas-extra/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
 
-  /** DELETE /horas-extra/{id} */
-  eliminar: (id: number) => del<{ message: string }>(`/horas-extra/${id}`),
+  eliminar: (id: number) =>
+    smartRequest<{ message: string }>(`${BASE}/horas-extra/${id}`, { method: 'DELETE' }),
 
-  /** POST /horas-extra/{id}/aprobar — funciona incluso con planilla APROBADA */
-  aprobar: (id: number) => post<{ message: string; data: HoraExtra }>(`/horas-extra/${id}/aprobar`),
+  aprobar: (id: number) =>
+    smartRequest<{ data: any }>(`${BASE}/horas-extra/${id}/aprobar`, { method: 'POST' }),
 
-  /** POST /horas-extra/{id}/rechazar */
-  rechazar: (id: number, motivo: string) =>
-    post<{ message: string; data: HoraExtra }>(`/horas-extra/${id}/rechazar`, { motivo_rechazo: motivo }),
+  rechazar: (id: number, motivo_rechazo: string) =>
+    smartRequest<{ data: any }>(`${BASE}/horas-extra/${id}/rechazar`, {
+      method: 'POST',
+      body: JSON.stringify({ motivo_rechazo }),
+    }),
 };
 
-// ─── §5 — Ausencias ──────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// 5. ausenciasApi
+// ─────────────────────────────────────────────────────────────────────────────
 
 export const ausenciasApi = {
-  /** POST /operaciones/{id}/ausencias (Paso 5) */
-  crear: (operacionId: number, b: {
+  crear: (operacionId: number, payload: {
     empleado_id: number;
     motivo_ausencia_id: number;
     motivo?: string;
@@ -353,71 +333,114 @@ export const ausenciasApi = {
     entidad?: string;
     numero_radicado?: string;
     porcentaje_pago?: number;
-  }) => post<{ message: string; data: Ausencia }>(`/operaciones/${operacionId}/ausencias`, b),
+  }) =>
+    smartRequest<{ data: any }>(`${BASE}/operaciones/${operacionId}/ausencias`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 
-  /** PUT /ausencias/{id} */
-  editar: (id: number, b: Partial<{
-    empleado_id: number; motivo_ausencia_id: number; motivo: string;
-    fecha_fin: string; entidad: string; numero_radicado: string; porcentaje_pago: number;
-  }>) => put<{ message: string; data: Ausencia }>(`/ausencias/${id}`, b),
+  editar: (id: number, payload: Partial<{
+    motivo_ausencia_id: number;
+    motivo: string;
+    fecha_fin: string;
+    entidad: string;
+    numero_radicado: string;
+    porcentaje_pago: number;
+  }>) =>
+    smartRequest<{ data: any }>(`${BASE}/ausencias/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
 
-  /** DELETE /ausencias/{id} */
-  eliminar: (id: number) => del<{ message: string }>(`/ausencias/${id}`),
+  eliminar: (id: number) =>
+    smartRequest<{ message: string }>(`${BASE}/ausencias/${id}`, { method: 'DELETE' }),
 
-  /** POST /ausencias/{id}/aprobar — funciona incluso con planilla APROBADA */
-  aprobar: (id: number) => post<{ message: string; data: Ausencia }>(`/ausencias/${id}/aprobar`),
+  aprobar: (id: number) =>
+    smartRequest<{ data: any }>(`${BASE}/ausencias/${id}/aprobar`, { method: 'POST' }),
 
-  /** POST /ausencias/{id}/rechazar */
-  rechazar: (id: number, motivo: string) =>
-    post<{ message: string; data: Ausencia }>(`/ausencias/${id}/rechazar`, { motivo_rechazo: motivo }),
+  rechazar: (id: number, motivo_rechazo: string) =>
+    smartRequest<{ data: any }>(`${BASE}/ausencias/${id}/rechazar`, {
+      method: 'POST',
+      body: JSON.stringify({ motivo_rechazo }),
+    }),
 
-  /** POST /ausencias/{id}/documento — multipart, funciona incluso con planilla APROBADA */
-  subirDocumento: (id: number, archivo: File) => {
+  subirDocumento: (id: number, documento: File) => {
     const fd = new FormData();
-    fd.append('documento', archivo);
-    return postForm<{ message: string; data: Ausencia }>(`/ausencias/${id}/documento`, fd);
+    fd.append('documento', documento);
+    return smartRequest<{ data: any }>(`${BASE}/ausencias/${id}/documento`, {
+      method: 'POST',
+      body: fd,
+    });
   },
 };
 
-// ─── §6 — Selects (dropdowns del wizard) ─────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. selectsApi (dropdowns auxiliares del wizard)
+// ─────────────────────────────────────────────────────────────────────────────
 
 export const selectsApi = {
-  /** GET /colaboradores/select */
-  colaboradores: (p?: { modalidad_pago?: string; predio_id?: number }) =>
-    get<{ data: any[] }>('/colaboradores/select', p as Record<string, unknown>),
+  colaboradores: (params: { modalidad_pago?: string; predio_id?: number } = {}) =>
+    requestConToken<{ data: any[] }>(`${BASE}/colaboradores/select${qs(params)}`),
 
-  /** GET /lotes/select */
-  lotes: (p?: { predio_id?: number }) =>
-    get<{ data: any[] }>('/lotes/select', p as Record<string, unknown>),
+  /** Endpoint dedicado del wizard. Solo requiere operaciones.crear|editar. */
+  lotes: (params: { predio_id?: number } = {}) =>
+    requestConToken<{ data: Array<{ id: number; nombre: string; predio_id: number }> }>(
+      `${BASE}/operaciones/lotes/select${qs(params)}`
+    ),
 
-  /** GET /sublotes/select?lote_id= */
-  sublotes: (p: { lote_id: number }) =>
-    get<{ data: any[] }>('/sublotes/select', p as Record<string, unknown>),
+  /** Endpoint dedicado del wizard. Trae cantidad_palmas para autofill. */
+  sublotes: (params: { lote_id?: number } = {}) =>
+    requestConToken<{ data: Array<{ id: number; nombre: string; lote_id: number; cantidad_palmas: number }> }>(
+      `${BASE}/operaciones/sublotes/select${qs(params)}`
+    ),
 
-  /** GET /insumos/select — fertilizantes */
-  insumos: () => get<{ data: InsumoSelect[] }>('/insumos/select'),
+  insumos: () =>
+    requestConToken<{ data: Array<{ id: number; nombre: string; unidad_medida?: string }> }>(
+      `${BASE}/insumos/select`
+    ),
 
-  /** GET /labores/select — labores de finca (incluye valor_base) */
-  labores: () => get<{ data: LaborSelect[] }>('/labores/select'),
+  labores: (params: { estado?: boolean } = {}) =>
+    requestConToken<{ data: Array<{ id: number; nombre: string; valor_base?: string | number }> }>(
+      `${BASE}/labores/select${qs(params)}`
+    ),
 
-  /** GET /motivos-ausencia/select */
-  motivosAusencia: () => get<{ data: MotivoAusenciaSelect[] }>('/motivos-ausencia/select'),
+  motivosAusencia: (params: { estado?: boolean } = {}) =>
+    requestConToken<{ data: Array<{ id: number; nombre: string; tipo_base?: string }> }>(
+      `${BASE}/motivos-ausencia/select${qs(params)}`
+    ),
 
-  /** GET /tipos-hora-extra/select — 7 tipos legales colombianos */
-  tiposHoraExtra: () => get<{ data: TipoHoraExtraSelect[] }>('/tipos-hora-extra/select'),
+  tiposHoraExtra: (params: { estado?: boolean } = {}) =>
+    requestConToken<{ data: Array<{ id: number; nombre: string; codigo?: string; porcentaje_recargo?: string | number }> }>(
+      `${BASE}/tipos-hora-extra/select${qs(params)}`
+    ),
+
+  /**
+   * Crear insumo "on-the-fly" desde el wizard cuando el operador selecciona
+   * "Otro" en el dropdown de Tipo de Fertilizante.
+   *
+   * Endpoint: POST /operaciones/insumos
+   * Permisos: operaciones.crear u operaciones.editar
+   *
+   * Respuesta 201: { data: { id, nombre, unidad_medida: "GRAMOS" } }
+   * Respuesta 409 INSUMO_DUPLICADO: el front debe pedir al usuario que lo
+   *   seleccione del dropdown en lugar de crearlo.
+   *
+   * @example
+   *   try {
+   *     const r = await selectsApi.crearInsumo('Urea 46%');
+   *     // → r.data.id, r.data.nombre, r.data.unidad_medida
+   *   } catch (err: any) {
+   *     if (err.code === 'INSUMO_DUPLICADO') {
+   *       // Pedir al usuario que use el dropdown
+   *     }
+   *   }
+   */
+  crearInsumo: (nombre: string) =>
+    smartRequest<{ data: { id: number; nombre: string; unidad_medida: string } }>(
+      `${BASE}/operaciones/insumos`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ nombre: nombre.trim() }),
+      }
+    ),
 };
-
-// ─── Códigos de error ─────────────────────────────────────────────────────────
-
-export const ErrorCodes = {
-  OPERACION_APROBADA:          'OPERACION_APROBADA',
-  OPERACION_CON_HIJOS:         'OPERACION_CON_HIJOS',
-  COSECHA_EN_VIAJE:            'COSECHA_EN_VIAJE',
-  CALC_ERROR:                  'CALC_ERROR',
-  AUSENCIA_LIQUIDADA:          'AUSENCIA_LIQUIDADA',
-  AUSENCIA_ESTADO_INVALIDO:    'AUSENCIA_ESTADO_INVALIDO',
-  HORA_EXTRA_LIQUIDADA:        'HORA_EXTRA_LIQUIDADA',
-  HORA_EXTRA_ESTADO_INVALIDO:  'HORA_EXTRA_ESTADO_INVALIDO',
-  TIPO_HORA_EXTRA_CON_REGISTROS: 'TIPO_HORA_EXTRA_CON_REGISTROS',
-  PERMISSION_DENIED:           'PERMISSION_DENIED',
-} as const;

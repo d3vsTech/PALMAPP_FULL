@@ -93,6 +93,21 @@ import Diagnosticos from './pages/super-admin/Diagnosticos';
 import RecuperarPasswordSuperAdmin from './pages/super-admin/RecuperarPassword';
 import RestablecerPasswordSuperAdmin from './pages/super-admin/RestablecerPassword';
 
+// Proveedor (módulo independiente — cuenta separada)
+import ProveedorLogin from './pages/proveedor/ProveedorLogin';
+import ProveedorLayout from './pages/proveedor/ProveedorLayout';
+import ProveedorDashboard from './pages/proveedor/ProveedorDashboard';
+import ProveedorProductos from './pages/proveedor/ProveedorProductos';
+import ProveedorPedidos from './pages/proveedor/ProveedorPedidos';
+import ProveedorEstadisticas from './pages/proveedor/ProveedorEstadisticas';
+import ProveedorConfiguracion from './pages/proveedor/ProveedorConfiguracion';
+import NuevoProductoProv from './pages/proveedor/NuevoProducto';
+import EditarProductoProv from './pages/proveedor/EditarProducto';
+import ProductoDetalleProv from './pages/proveedor/ProductoDetalle';
+import CargaMasivaProductos from './pages/proveedor/CargaMasivaProductos';
+import PedidoDetalleProv from './pages/proveedor/PedidoDetalle';
+import ConfiguracionInicialWizard from './pages/proveedor/ConfiguracionInicialWizard';
+
 export const router = createBrowserRouter([
   // ─── Auth finca ───────────────────────────────────────────────────────────
   { path: '/login',                element: <Login /> },
@@ -119,6 +134,27 @@ export const router = createBrowserRouter([
       { path: 'fincas/:tenantId/usuarios',    Component: UsuariosFinca },
       { path: 'actividad',                    Component: Actividad },
       { path: 'diagnosticos',                 Component: Diagnosticos },
+    ],
+  },
+
+  // ─── Proveedor (cuenta separada, login propio) ────────────────────────────
+  { path: '/proveedor/login',                element: <ProveedorLogin /> },
+  { path: '/proveedor/configuracion-inicial', element: <ConfiguracionInicialWizard /> },
+  {
+    path: '/proveedor',
+    element: <ProveedorLayout />,
+    children: [
+      { index: true,                          element: <Navigate to="/proveedor/dashboard" replace /> },
+      { path: 'dashboard',                    Component: ProveedorDashboard },
+      { path: 'productos',                    Component: ProveedorProductos },
+      { path: 'productos/nuevo',              Component: NuevoProductoProv },
+      { path: 'productos/carga-masiva',       Component: CargaMasivaProductos },
+      { path: 'productos/editar/:id',         Component: EditarProductoProv },
+      { path: 'productos/:id',                Component: ProductoDetalleProv },
+      { path: 'pedidos',                      Component: ProveedorPedidos },
+      { path: 'pedidos/:id',                  Component: PedidoDetalleProv },
+      { path: 'estadisticas',                 Component: ProveedorEstadisticas },
+      { path: 'configuracion',                Component: ProveedorConfiguracion },
     ],
   },
 

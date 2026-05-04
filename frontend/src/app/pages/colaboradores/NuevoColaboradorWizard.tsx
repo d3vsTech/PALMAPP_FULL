@@ -35,6 +35,7 @@ import {
   Loader2,
   Phone,
   Eye,
+  X,
 } from 'lucide-react';
 import { Switch } from '../../components/ui/switch';
 import { colaboradoresApi } from '../../../api/colaboradores';
@@ -164,6 +165,11 @@ export default function NuevoColaboradorWizard() {
   const [avatarUrlRemoto, setAvatarUrlRemoto] = useState<string | null>(null);
   const [subiendoAvatar, setSubiendoAvatar] = useState(false);
 
+  // Pending municipio (solo en modo edición): se aplica una vez los municipios
+  // del departamento estén cargados, porque <select value=""> no acepta valores
+  // que aún no estén en su lista de <option>.
+  const [pendingMunicipio, setPendingMunicipio] = useState<string | null>(null);
+
   // Catálogo de categorías de documentos (cargado desde la API)
   type CatDoc = {
     label: string;
@@ -237,16 +243,43 @@ export default function NuevoColaboradorWizard() {
       .catch(() => {});
   }, [deptoSel]);
 
-  // Cargar datos en modo edición
+  // Cargar datos en modo edición — trae TODOS los campos existentes del colaborador
+  // y los precarga en el formulario para que el usuario solo edite lo que quiera.
   useEffect(() => {
     if (!isEditMode || !id) return;
+
+    // Helper: normaliza fechas que pueden venir como "2024-01-15T00:00:00.000Z" → "2024-01-15"
+    const toDateInput = (v: any): string => {
+      if (!v) return '';
+      const s = String(v);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+      const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+      return m ? m[1] : '';
+    };
+    // Helper: salario_base puede venir como "1500000.00" (string) o 1500000 (number)
+    const toNumber = (v: any): number => {
+      if (v === null || v === undefined || v === '') return 0;
+      const n = typeof v === 'number' ? v : parseFloat(String(v));
+      return Number.isFinite(n) ? n : 0;
+    };
+
     colaboradoresApi.ver(Number(id)).then(res => {
-      const d = res.data;
+      const d = res.data ?? {};
+
       // Avatar remoto si existe
       if (d.avatar_url) {
         setAvatarUrlRemoto(d.avatar_url);
         setImagePreview(d.avatar_url);
       }
+
+      // Predio: API puede devolver { predio: {id, nombre} } o predio_id plano
+      const predioId = d.predio?.id ?? d.predio_id ?? null;
+
+      // Modalidad pago: backend usa 'PRODUCCION' pero el form usa 'VARIABLE'
+      const modalidadPagoForm =
+        d.modalidad_pago === 'PRODUCCION' ? 'VARIABLE' :
+        (d.modalidad_pago ?? 'FIJO');
+
       setFormData({
         estado: d.estado ?? true,
         primerApellido: d.primer_apellido ?? '',
@@ -255,15 +288,15 @@ export default function NuevoColaboradorWizard() {
         segundoNombre: d.segundo_nombre ?? '',
         tipoDocumento: d.tipo_documento ?? 'CC',
         numeroDocumento: d.documento ?? '',
-        fechaExpedicion: d.fecha_expedicion_documento ?? '',
-        fechaNacimiento: d.fecha_nacimiento ?? '',
+        fechaExpedicion: toDateInput(d.fecha_expedicion_documento),
+        fechaNacimiento: toDateInput(d.fecha_nacimiento),
         lugarExpedicion: d.lugar_expedicion ?? '',
         cargo: d.cargo ?? '',
-        predioAsignado: d.predio?.id ? String(d.predio.id) : '',
-        modalidadPago: (d.modalidad_pago === 'PRODUCCION' ? 'VARIABLE' : d.modalidad_pago) ?? 'FIJO',
-        salarioBase: parseFloat(d.salario_base ?? '0'),
-        fechaContratacion: d.fecha_ingreso ?? '',
-        fechaFinalizacion: d.fecha_retiro ?? '',
+        predioAsignado: predioId ? String(predioId) : '',
+        modalidadPago: modalidadPagoForm,
+        salarioBase: toNumber(d.salario_base),
+        fechaContratacion: toDateInput(d.fecha_ingreso),
+        fechaFinalizacion: toDateInput(d.fecha_retiro),
         eps: d.eps ?? '',
         arl: d.arl ?? '',
         fondoPension: d.fondo_pension ?? '',
@@ -277,15 +310,42 @@ export default function NuevoColaboradorWizard() {
         correo: d.correo_electronico ?? '',
         telefono: d.telefono ?? '',
         direccion: d.direccion ?? '',
-        municipio: d.municipio ?? '',
+        // Municipio se aplica recién cuando municipios estén cargados (ver pendingMunicipio)
+        municipio: '',
         departamento: d.departamento ?? '',
-        // Will be set by departamento name matching
-
         contactoEmergenciaNombre: d.contacto_emergencia_nombre ?? '',
         contactoEmergenciaTelefono: d.contacto_emergencia_telefono ?? '',
       });
+
+      // Marcar municipio para aplicar después de cargar la lista
+      if (d.municipio) setPendingMunicipio(d.municipio);
     }).catch(() => toast.error('Error al cargar datos del colaborador'));
   }, [id, isEditMode]);
+
+  // Cuando ya tenemos la lista de departamentos Y los datos cargados,
+  // hacer match por nombre → código y disparar la carga de municipios.
+  useEffect(() => {
+    if (!isEditMode) return;
+    if (!formData.departamento || departamentos.length === 0) return;
+    if (deptoSel) return; // ya seteado
+    const match = departamentos.find(
+      d => d.nombre.toLowerCase() === formData.departamento.toLowerCase()
+    );
+    if (match) setDeptoSel(match.codigo);
+  }, [isEditMode, formData.departamento, departamentos, deptoSel]);
+
+  // Cuando los municipios del departamento ya cargaron, aplicar el municipio pendiente.
+  useEffect(() => {
+    if (!isEditMode || !pendingMunicipio) return;
+    if (municipios.length === 0) return;
+    const match = municipios.find(
+      m => m.nombre.toLowerCase() === pendingMunicipio.toLowerCase()
+    );
+    if (match) {
+      setFormData(prev => ({ ...prev, municipio: match.nombre }));
+      setPendingMunicipio(null);
+    }
+  }, [isEditMode, pendingMunicipio, municipios]);
 
   // Cargar documentos al llegar al paso 7
   useEffect(() => {
@@ -661,7 +721,7 @@ export default function NuevoColaboradorWizard() {
                           onClick={handleRemoveImage}
                           className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-1 hover:bg-destructive/90"
                         >
-                          <Trash2 className="h-3 w-3" />
+                          <X className="h-3 w-3" />
                         </button>
                       </div>
                     ) : (

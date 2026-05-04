@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
@@ -30,6 +30,7 @@ import {
   Clock,
   Plus,
   Trash2,
+  Pencil,
   X,
 } from 'lucide-react';
 import { operacionesApi, cosechasApi, jornalesApi, horasExtraApi, ausenciasApi, selectsApi } from '../../../api/operaciones';
@@ -182,11 +183,18 @@ function getNombreColab(col: {nombres: string; apellidos: string; nombre_complet
 export default function NuevaPlanillaWizard() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { id: idParam } = useParams<{ id?: string }>();
+  const isEditMode = Boolean(idParam);
   const [etapaActual, setEtapaActual] = useState(1);
 
   // ── Estado para planilla ID y loading ─────────────────────────────────────
-  const [planillaId, setPlanillaId] = useState<number | null>(null);
+  // En modo edición, planillaId arranca con el id de la URL para que los POSTs
+  // de tarjetas vayan directo a /operaciones/{id}/jornales sin re-crear la planilla.
+  const [planillaId, setPlanillaId] = useState<number | null>(
+    idParam ? Number(idParam) : null
+  );
   const [guardando, setGuardando] = useState(false);
+  const [cargandoPlanilla, setCargandoPlanilla] = useState(isEditMode);
   const [resumen, setResumen] = useState<import('../../../api/operaciones').Resumen | null>(null);
 
   const cargarResumen = async (pid: number) => {
@@ -199,7 +207,7 @@ export default function NuevaPlanillaWizard() {
   // ── Datos API (mismo shape que mockData para compatibilidad con JSX) ───────
   const [colaboradores, setColaboradores] = useState<Array<{id: string; nombres: string; apellidos: string; nombre_completo: string; _raw?: any}>>([]);
   const [lotesData, setLotesData] = useState<Array<{id: string; nombre: string}>>([]);
-  const [sublotes, setSublotes] = useState<Array<{id: string; nombre: string; loteId: string}>>([]);
+  const [sublotes, setSublotes] = useState<Array<{id: string; nombre: string; loteId: string; cantidadPalmas: number}>>([]);
 
   // Mapas ID por nombre para save
   const [insumosMap, setInsumosMap] = useState<Map<string, number>>(new Map());
@@ -247,10 +255,39 @@ export default function NuevaPlanillaWizard() {
         const subPromises = lotes.map(async (l) => {
           try {
             const sr = await selectsApi.sublotes({ lote_id: Number(l.id) });
-            return (sr.data || []).map((s: any) => ({ id: String(s.id), nombre: s.nombre, loteId: l.id }));
-          } catch { return []; }
+            return (sr.data || []).map((s: any) => {
+              // Aceptamos varias variantes del campo de palmas para máxima compatibilidad:
+              // - cantidad_palmas (oficial según API_OPERACIONES.md §8)
+              // - palmas, total_palmas, numero_palmas (variantes legacy)
+              // - sublote.lote.predio.cantidad_palmas (fallback al predio si el sublote no lo trae)
+              const palmasRaw =
+                s.cantidad_palmas ??
+                s.palmas ??
+                s.total_palmas ??
+                s.numero_palmas ??
+                s.cantidadPalmas ??
+                s.lote?.predio?.cantidad_palmas ??
+                s.predio?.cantidad_palmas ??
+                0;
+              return {
+                id: String(s.id),
+                nombre: s.nombre,
+                loteId: l.id,
+                cantidadPalmas: Number(palmasRaw) || 0,
+              };
+            });
+          } catch (err) {
+            console.warn(`[Operaciones] Error cargando sublotes del lote ${l.id}`, err);
+            return [];
+          }
         });
         const allSubs = (await Promise.all(subPromises)).flat();
+        // Diagnóstico: si TODOS los sublotes traen cantidadPalmas=0, probablemente
+        // el backend no está devolviendo el campo. Lo logueamos una sola vez para debug.
+        if (allSubs.length > 0 && allSubs.every(s => s.cantidadPalmas === 0)) {
+          console.warn('[Operaciones] Ningún sublote trae cantidad_palmas. Revisa la respuesta del API:',
+            'Esperado: { id, nombre, lote_id, cantidad_palmas }');
+        }
         setSublotes(allSubs);
         const insumos = (inRes.data || []).map((i: any) => ({ nombre: i.nombre as string, id: i.id as number }));
         const labores = (labRes.data || []).map((l: any) => ({ nombre: l.nombre as string, id: l.id as number }));
@@ -311,6 +348,184 @@ export default function NuevaPlanillaWizard() {
   const [trabajosAuxiliares, setTrabajosAuxiliares] = useState<TrabajoAuxiliar[]>([]);
   const [horasExtras, setHorasExtras] = useState<HoraExtra[]>([]);
   const [horaExtraEnEdicion, setHoraExtraEnEdicion] = useState<HoraExtra | null>(null);
+
+  // ── Prefill desde API en modo edición ─────────────────────────────────────
+  // Carga todos los datos existentes de la planilla y los inyecta en los mismos
+  // estados que usa el flujo de creación. El JSX queda igual al de "Nueva Planilla"
+  // y muestra cards/tarjetas con los datos pre-cargados, listos para editar.
+  useEffect(() => {
+    if (!isEditMode || !idParam) return;
+    let cancelled = false;
+    (async () => {
+      setCargandoPlanilla(true);
+      try {
+        const res = await operacionesApi.ver(Number(idParam));
+        if (cancelled) return;
+        const p: any = res.data ?? {};
+
+        // ── Información General ──
+        const fechaRaw = p.fecha ?? '';
+        const fechaNorm = typeof fechaRaw === 'string'
+          ? (fechaRaw.match(/^\d{4}-\d{2}-\d{2}/)?.[0] ?? '')
+          : '';
+        if (fechaNorm) setFecha(fechaNorm);
+        if (p.hora_inicio) setInicioLabores(String(p.hora_inicio).slice(0, 5));
+
+        // hubo_lluvia: el API puede devolver true/false, 0/1, "0"/"1", "true"/"false".
+        // Convertimos a booleano de forma robusta antes de mapear a 'si' / 'no'.
+        const lluviaRaw = p.hubo_lluvia;
+        const lluviaBool =
+          lluviaRaw === true || lluviaRaw === 1 || lluviaRaw === '1' ||
+          (typeof lluviaRaw === 'string' && lluviaRaw.toLowerCase() === 'true');
+        setHuboLluvia(lluviaBool ? 'si' : 'no');
+
+        // Cantidad de lluvia (mm)
+        if (p.cantidad_lluvia != null) {
+          const n = parseFloat(String(p.cantidad_lluvia));
+          setLluvia(Number.isFinite(n) && n > 0 ? String(n) : '');
+        } else {
+          setLluvia('');
+        }
+        setObservaciones(p.observaciones ?? '');
+        // Elaborado por: el API devuelve el campo con varios nombres distintos según el endpoint
+        const elaboradoApi =
+          p.creado_por_rel?.name ??
+          p.creado_por_rel?.nombre ??
+          p.creado_por_rel?.full_name ??
+          p.creado_por_rel?.nombre_completo ??
+          p.creadoPor?.name ??
+          p.creado_por?.name ??
+          p.creado_por?.nombre ??
+          p.elaborado_por ??
+          p.user?.name ??
+          '';
+        if (elaboradoApi) setElaboradoPor(elaboradoApi);
+
+        // ── Cosechas → trabajosCosecha ──
+        setTrabajosCosecha(
+          (p.cosechas ?? []).map((c: any) => ({
+            id: String(c.id),
+            colaboradores: (c.cuadrilla ?? []).map((q: any) => String(q.empleado_id)),
+            lote: c.lote_id != null ? String(c.lote_id) : '',
+            sublote: c.sublote_id != null ? String(c.sublote_id) : '',
+            gajosRecogidos: Number(c.gajos_reportados ?? 0),
+            kilos: c.peso_confirmado != null ? Number(c.peso_confirmado) : 0,
+          }))
+        );
+
+        // ── Jornales: agrupar por categoría/tipo ──
+        const jornales = (p.jornales ?? []) as any[];
+
+        // PALMA → uno por colaborador (se persisten así, pero al editar agrupar
+        // sigue siendo opcional. Por simplicidad, una tarjeta por jornal).
+        const porTipo = (tipo: string) => jornales.filter(j => j.categoria === 'PALMA' && j.tipo === tipo);
+
+        setTrabajosPlateo(
+          porTipo('PLATEO').map(j => ({
+            id: String(j.id),
+            colaboradores: [String(j.empleado_id)],
+            lote: j.lote_id != null ? String(j.lote_id) : '',
+            sublote: j.sublote_id != null ? String(j.sublote_id) : '',
+            numeroPalmas: Number(j.cantidad_palmas ?? 0),
+          }))
+        );
+        setTrabajosPoda(
+          porTipo('PODA').map(j => ({
+            id: String(j.id),
+            colaboradores: [String(j.empleado_id)],
+            lote: j.lote_id != null ? String(j.lote_id) : '',
+            sublote: j.sublote_id != null ? String(j.sublote_id) : '',
+            numeroPalmas: Number(j.cantidad_palmas ?? 0),
+          }))
+        );
+        setTrabajosFertilizacion(
+          porTipo('FERTILIZACION').map(j => ({
+            id: String(j.id),
+            colaboradores: [String(j.empleado_id)],
+            lote: j.lote_id != null ? String(j.lote_id) : '',
+            sublote: j.sublote_id != null ? String(j.sublote_id) : '',
+            palmas: Number(j.cantidad_palmas ?? 0),
+            tipoFertilizante: j.insumo?.nombre ?? '',
+            otroFertilizante: '',
+            cantidadGramos: Number(j.gramos_por_palma ?? 0),
+          }))
+        );
+        setTrabajosSanidad(
+          porTipo('SANIDAD').map(j => ({
+            id: String(j.id),
+            colaboradores: [String(j.empleado_id)],
+            lote: j.lote_id != null ? String(j.lote_id) : '',
+            sublote: j.sublote_id != null ? String(j.sublote_id) : '',
+            trabajoRealizado: j.descripcion ?? '',
+          }))
+        );
+        setTrabajosOtros(
+          porTipo('OTROS').map(j => ({
+            id: String(j.id),
+            colaboradores: [String(j.empleado_id)],
+            nombre: j.nombre_trabajo ?? '',
+            laborRealizada: j.descripcion ?? '',
+            lote: j.lote_id != null ? String(j.lote_id) : '',
+            sublote: j.sublote_id != null ? String(j.sublote_id) : '',
+          }))
+        );
+
+        // FINCA (Labores de Finca / Auxiliares)
+        const fincas = jornales.filter(j => j.categoria === 'FINCA');
+        setTrabajosAuxiliares(
+          fincas.map(j => {
+            const nombre = j.empleado
+              ? `${j.empleado.primer_nombre ?? ''} ${j.empleado.primer_apellido ?? ''}`.trim()
+              : '';
+            return {
+              id: String(j.id),
+              nombre,
+              labor: j.labor?.nombre ?? '',
+              otraLabor: '',
+              lugar: j.ubicacion ?? '',
+              total: Number(j.valor_total ?? 0),
+              horasExtra: 0,
+            };
+          })
+        );
+
+        // ── Horas Extras ──
+        setHorasExtras(
+          (p.horas_extra ?? p.horasExtra ?? []).map((h: any) => ({
+            id: String(h.id),
+            colaboradorId: String(h.empleado_id),
+            tipoHora: h.tipoHoraExtra?.nombre ?? h.tipo_hora_extra?.nombre ?? '',
+            numeroHoras: Number(h.cantidad_horas ?? 0),
+            observacion: h.observacion ?? '',
+          }))
+        );
+
+        // ── Ausencias ──
+        setAusentes(
+          (p.ausencias ?? []).map((a: any) => ({
+            id: String(a.id),
+            colaboradorId: String(a.empleado_id),
+            motivo: a.motivo_ausencia?.nombre ?? '',
+            otroMotivo: a.motivo ?? '',
+          }))
+        );
+
+        // Resumen lateral
+        try {
+          const r = await operacionesApi.resumen(Number(idParam));
+          if (!cancelled) setResumen(r.data);
+        } catch {}
+      } catch (err: any) {
+        if (!cancelled) {
+          alert(err?.message ?? 'Error al cargar la planilla');
+        }
+      } finally {
+        if (!cancelled) setCargandoPlanilla(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idParam, isEditMode]);
 
   const irAEtapa = (numero: number) => {
     setEtapaActual(numero);
@@ -397,7 +612,28 @@ export default function NuevaPlanillaWizard() {
           }
         }
         for (const t of trabajosFertilizacion) {
-          const insumoId = insumosMap.get(t.tipoFertilizante === 'Otro' ? (t.otroFertilizante||'') : t.tipoFertilizante) ?? insumosMap.get(t.tipoFertilizante);
+          // Resolver insumo_id. Si el usuario marcó "Otro", crearlo on-the-fly.
+          let insumoId: number | undefined;
+          if (t.tipoFertilizante === 'Otro') {
+            const nombreNuevo = (t.otroFertilizante || '').trim();
+            if (!nombreNuevo) continue;
+            const matchLocal = Array.from(insumosMap.entries())
+              .find(([n]) => n.toLowerCase() === nombreNuevo.toLowerCase());
+            if (matchLocal) {
+              insumoId = matchLocal[1];
+            } else {
+              try {
+                const res = await selectsApi.crearInsumo(nombreNuevo);
+                insumoId = res.data.id;
+                setInsumosMap(prev => new Map(prev).set(res.data.nombre, res.data.id));
+              } catch (err: any) {
+                // 409 INSUMO_DUPLICADO o cualquier otro error: saltar la tarjeta
+                continue;
+              }
+            }
+          } else {
+            insumoId = insumosMap.get(t.tipoFertilizante);
+          }
           if (!insumoId) continue;
           for (const cid of t.colaboradores) {
             try { await jornalesApi.crear(pid, { categoria: 'PALMA', tipo: 'FERTILIZACION', empleado_id: parseInt(cid), lote_id: t.lote ? parseInt(t.lote) : null, sublote_id: t.sublote ? parseInt(t.sublote) : null, cantidad_palmas: t.palmas || 0, insumo_id: insumoId, gramos_por_palma: t.cantidadGramos || 0 }); } catch {}
@@ -437,6 +673,24 @@ export default function NuevaPlanillaWizard() {
           if (!motivoId) continue;
           try { await ausenciasApi.crear(pid, { empleado_id: parseInt(a.colaboradorId), motivo_ausencia_id: motivoId, motivo: a.otroMotivo || a.motivo || '' }); } catch {}
         }
+      } else if (isEditMode) {
+        // En modo edición: persistir cambios pendientes de Info General
+        // (las tarjetas de cosecha/jornales/horas-extra/ausencias ya se persisten
+        //  individualmente al pulsar "Guardar" en cada tarjeta).
+        try {
+          await operacionesApi.editar(planillaId, {
+            fecha: fecha || undefined,
+            elaborado_por: elaboradoPor || undefined,
+            hora_inicio: inicioLabores || undefined,
+            hubo_lluvia: huboLluvia === 'si',
+            cantidad_lluvia: huboLluvia === 'si' && lluvia ? parseFloat(lluvia) : null,
+            observaciones: observaciones || null,
+          });
+        } catch (err: any) {
+          // No bloqueamos la navegación si falla — el usuario tiene la opción
+          // de re-editar info general explícitamente desde el paso 1.
+          console.warn('No se pudo actualizar info general:', err?.message);
+        }
       }
 
       // Todos los datos ya están guardados, solo navegar
@@ -473,15 +727,23 @@ export default function NuevaPlanillaWizard() {
       alert('Selecciona al menos un colaborador y un lote');
       return;
     }
+    // Detectar si es una tarjeta existente (id numérico) o nueva (con prefijo "cosecha-")
+    const esExistente = !cosechaEnEdicion.id.includes('-');
     try {
-      const res = await cosechasApi.crear(planillaId, {
+      const payload = {
         lote_id: parseInt(cosechaEnEdicion.lote),
         sublote_id: cosechaEnEdicion.sublote ? parseInt(cosechaEnEdicion.sublote) : undefined,
         gajos_reportados: cosechaEnEdicion.gajosRecogidos || 0,
         peso_confirmado: cosechaEnEdicion.kilos || null,
         cuadrilla: cosechaEnEdicion.colaboradores.map(cid => ({ empleado_id: parseInt(cid) })),
-      });
-      setTrabajosCosecha([{ ...cosechaEnEdicion, id: String(res.data.id) }, ...trabajosCosecha]);
+      };
+      if (esExistente) {
+        await cosechasApi.editar(parseInt(cosechaEnEdicion.id), payload);
+        setTrabajosCosecha(prev => prev.map(t => t.id === cosechaEnEdicion.id ? cosechaEnEdicion : t));
+      } else {
+        const res = await cosechasApi.crear(planillaId, payload);
+        setTrabajosCosecha([{ ...cosechaEnEdicion, id: String(res.data.id) }, ...trabajosCosecha]);
+      }
       setCosechaEnEdicion(null);
       await cargarResumen(planillaId);
     } catch (err: any) {
@@ -509,16 +771,48 @@ export default function NuevaPlanillaWizard() {
       return;
     }
     if (!plateoEnEdicion.colaboradores.length) { alert('Selecciona al menos un colaborador'); return; }
+    const esExistente = !plateoEnEdicion.id.includes('-');
     try {
-      for (const cid of plateoEnEdicion.colaboradores) {
-        await jornalesApi.crear(planillaId, {
-          categoria: 'PALMA', tipo: 'PLATEO', empleado_id: parseInt(cid),
+      if (esExistente) {
+        // Tarjeta existente: PUT al primer colaborador, POST para los adicionales
+        const [primero, ...adicionales] = plateoEnEdicion.colaboradores;
+        await jornalesApi.editar(parseInt(plateoEnEdicion.id), {
+          categoria: 'PALMA', tipo: 'PLATEO', empleado_id: parseInt(primero),
           lote_id: plateoEnEdicion.lote ? parseInt(plateoEnEdicion.lote) : null,
           sublote_id: plateoEnEdicion.sublote ? parseInt(plateoEnEdicion.sublote) : null,
           cantidad_palmas: plateoEnEdicion.numeroPalmas || 0,
         });
+        const nuevasTarjetas: TrabajoPlateo[] = [];
+        for (const cid of adicionales) {
+          const res = await jornalesApi.crear(planillaId, {
+            categoria: 'PALMA', tipo: 'PLATEO', empleado_id: parseInt(cid),
+            lote_id: plateoEnEdicion.lote ? parseInt(plateoEnEdicion.lote) : null,
+            sublote_id: plateoEnEdicion.sublote ? parseInt(plateoEnEdicion.sublote) : null,
+            cantidad_palmas: plateoEnEdicion.numeroPalmas || 0,
+          });
+          nuevasTarjetas.push({
+            id: String(res.data.id),
+            colaboradores: [cid],
+            lote: plateoEnEdicion.lote, sublote: plateoEnEdicion.sublote,
+            numeroPalmas: plateoEnEdicion.numeroPalmas,
+          });
+        }
+        setTrabajosPlateo(prev => [
+          // Reemplazar la tarjeta editada con sólo el primer colaborador
+          ...prev.map(t => t.id === plateoEnEdicion.id ? { ...plateoEnEdicion, colaboradores: [primero] } : t),
+          ...nuevasTarjetas,
+        ]);
+      } else {
+        for (const cid of plateoEnEdicion.colaboradores) {
+          await jornalesApi.crear(planillaId, {
+            categoria: 'PALMA', tipo: 'PLATEO', empleado_id: parseInt(cid),
+            lote_id: plateoEnEdicion.lote ? parseInt(plateoEnEdicion.lote) : null,
+            sublote_id: plateoEnEdicion.sublote ? parseInt(plateoEnEdicion.sublote) : null,
+            cantidad_palmas: plateoEnEdicion.numeroPalmas || 0,
+          });
+        }
+        setTrabajosPlateo([plateoEnEdicion, ...trabajosPlateo]);
       }
-      setTrabajosPlateo([plateoEnEdicion, ...trabajosPlateo]);
       setPlateoEnEdicion(null);
       await cargarResumen(planillaId);
     } catch (err: any) { alert(err?.message ?? 'Error al guardar plateo'); }
@@ -544,16 +838,45 @@ export default function NuevaPlanillaWizard() {
       return;
     }
     if (!podaEnEdicion.colaboradores.length) { alert('Selecciona al menos un colaborador'); return; }
+    const esExistente = !podaEnEdicion.id.includes('-');
     try {
-      for (const cid of podaEnEdicion.colaboradores) {
-        await jornalesApi.crear(planillaId, {
-          categoria: 'PALMA', tipo: 'PODA', empleado_id: parseInt(cid),
+      if (esExistente) {
+        const [primero, ...adicionales] = podaEnEdicion.colaboradores;
+        await jornalesApi.editar(parseInt(podaEnEdicion.id), {
+          categoria: 'PALMA', tipo: 'PODA', empleado_id: parseInt(primero),
           lote_id: podaEnEdicion.lote ? parseInt(podaEnEdicion.lote) : null,
           sublote_id: podaEnEdicion.sublote ? parseInt(podaEnEdicion.sublote) : null,
           cantidad_palmas: podaEnEdicion.numeroPalmas || 0,
         });
+        const nuevasTarjetas: TrabajoPoda[] = [];
+        for (const cid of adicionales) {
+          const res = await jornalesApi.crear(planillaId, {
+            categoria: 'PALMA', tipo: 'PODA', empleado_id: parseInt(cid),
+            lote_id: podaEnEdicion.lote ? parseInt(podaEnEdicion.lote) : null,
+            sublote_id: podaEnEdicion.sublote ? parseInt(podaEnEdicion.sublote) : null,
+            cantidad_palmas: podaEnEdicion.numeroPalmas || 0,
+          });
+          nuevasTarjetas.push({
+            id: String(res.data.id), colaboradores: [cid],
+            lote: podaEnEdicion.lote, sublote: podaEnEdicion.sublote,
+            numeroPalmas: podaEnEdicion.numeroPalmas,
+          });
+        }
+        setTrabajosPoda(prev => [
+          ...prev.map(t => t.id === podaEnEdicion.id ? { ...podaEnEdicion, colaboradores: [primero] } : t),
+          ...nuevasTarjetas,
+        ]);
+      } else {
+        for (const cid of podaEnEdicion.colaboradores) {
+          await jornalesApi.crear(planillaId, {
+            categoria: 'PALMA', tipo: 'PODA', empleado_id: parseInt(cid),
+            lote_id: podaEnEdicion.lote ? parseInt(podaEnEdicion.lote) : null,
+            sublote_id: podaEnEdicion.sublote ? parseInt(podaEnEdicion.sublote) : null,
+            cantidad_palmas: podaEnEdicion.numeroPalmas || 0,
+          });
+        }
+        setTrabajosPoda([podaEnEdicion, ...trabajosPoda]);
       }
-      setTrabajosPoda([podaEnEdicion, ...trabajosPoda]);
       setPodaEnEdicion(null);
       await cargarResumen(planillaId);
     } catch (err: any) { alert(err?.message ?? 'Error al guardar poda'); }
@@ -582,21 +905,81 @@ export default function NuevaPlanillaWizard() {
       return;
     }
     if (!fertilizacionEnEdicion.colaboradores.length) { alert('Selecciona al menos un colaborador'); return; }
-    const fert = fertilizacionEnEdicion.tipoFertilizante === 'Otro' ? fertilizacionEnEdicion.otroFertilizante : fertilizacionEnEdicion.tipoFertilizante;
-    const insumoId = insumosMap.get(fert || '') ?? insumosMap.get(fertilizacionEnEdicion.tipoFertilizante || '');
-    if (!insumoId) { alert('Insumo no encontrado. Verifica el tipo de fertilizante.'); return; }
-    try {
-      for (const cid of fertilizacionEnEdicion.colaboradores) {
-        await jornalesApi.crear(planillaId, {
-          categoria: 'PALMA', tipo: 'FERTILIZACION', empleado_id: parseInt(cid),
-          lote_id: fertilizacionEnEdicion.lote ? parseInt(fertilizacionEnEdicion.lote) : null,
-          sublote_id: fertilizacionEnEdicion.sublote ? parseInt(fertilizacionEnEdicion.sublote) : null,
-          cantidad_palmas: fertilizacionEnEdicion.palmas || 0,
-          insumo_id: insumoId,
-          gramos_por_palma: fertilizacionEnEdicion.cantidadGramos || 0,
-        });
+
+    // 1) Resolver insumo_id. Si el usuario eligió "Otro", crear el insumo on-the-fly
+    //    con POST /operaciones/insumos. Si el nombre ya existe (409 INSUMO_DUPLICADO),
+    //    pedir al usuario que lo seleccione del dropdown en lugar de crearlo.
+    let insumoId: number | undefined;
+
+    if (fertilizacionEnEdicion.tipoFertilizante === 'Otro') {
+      const nombreNuevo = (fertilizacionEnEdicion.otroFertilizante || '').trim();
+      if (!nombreNuevo) {
+        alert('Ingresa el nombre del fertilizante.');
+        return;
       }
-      setTrabajosFertilizacion([fertilizacionEnEdicion, ...trabajosFertilizacion]);
+      // Si ya existe en el mapa local (case-insensitive), reutilizarlo
+      const matchLocal = Array.from(insumosMap.entries())
+        .find(([n]) => n.toLowerCase() === nombreNuevo.toLowerCase());
+      if (matchLocal) {
+        insumoId = matchLocal[1];
+        // Sincronizar el campo para que la card guardada muestre el nombre canónico
+        fertilizacionEnEdicion.otroFertilizante = matchLocal[0];
+      } else {
+        try {
+          const res = await selectsApi.crearInsumo(nombreNuevo);
+          insumoId = res.data.id;
+          // Refrescar mapa y lista para que aparezca en el dropdown sin recargar
+          setInsumosMap(prev => new Map(prev).set(res.data.nombre, res.data.id));
+          setInsumosLista(prev => prev.includes(res.data.nombre) ? prev : [...prev.filter(x => x !== 'Otro'), res.data.nombre, 'Otro']);
+        } catch (err: any) {
+          if (err?.code === 'INSUMO_DUPLICADO') {
+            alert(`Ya existe un fertilizante con el nombre "${nombreNuevo}". Selecciónalo del dropdown en lugar de crearlo nuevamente.`);
+          } else {
+            alert(err?.message ?? 'No se pudo crear el fertilizante');
+          }
+          return;
+        }
+      }
+    } else {
+      insumoId = insumosMap.get(fertilizacionEnEdicion.tipoFertilizante || '');
+    }
+
+    if (!insumoId) { alert('Insumo no encontrado. Verifica el tipo de fertilizante.'); return; }
+
+    const esExistente = !fertilizacionEnEdicion.id.includes('-');
+    const baseFert = {
+      categoria: 'PALMA' as const, tipo: 'FERTILIZACION' as const,
+      lote_id: fertilizacionEnEdicion.lote ? parseInt(fertilizacionEnEdicion.lote) : null,
+      sublote_id: fertilizacionEnEdicion.sublote ? parseInt(fertilizacionEnEdicion.sublote) : null,
+      cantidad_palmas: fertilizacionEnEdicion.palmas || 0,
+      insumo_id: insumoId,
+      gramos_por_palma: fertilizacionEnEdicion.cantidadGramos || 0,
+    };
+    try {
+      if (esExistente) {
+        const [primero, ...adicionales] = fertilizacionEnEdicion.colaboradores;
+        await jornalesApi.editar(parseInt(fertilizacionEnEdicion.id), {
+          ...baseFert, empleado_id: parseInt(primero),
+        });
+        const nuevasTarjetas: TrabajoFertilizacion[] = [];
+        for (const cid of adicionales) {
+          const res = await jornalesApi.crear(planillaId, { ...baseFert, empleado_id: parseInt(cid) });
+          nuevasTarjetas.push({
+            ...fertilizacionEnEdicion,
+            id: String(res.data.id),
+            colaboradores: [cid],
+          });
+        }
+        setTrabajosFertilizacion(prev => [
+          ...prev.map(t => t.id === fertilizacionEnEdicion.id ? { ...fertilizacionEnEdicion, colaboradores: [primero] } : t),
+          ...nuevasTarjetas,
+        ]);
+      } else {
+        for (const cid of fertilizacionEnEdicion.colaboradores) {
+          await jornalesApi.crear(planillaId, { ...baseFert, empleado_id: parseInt(cid) });
+        }
+        setTrabajosFertilizacion([fertilizacionEnEdicion, ...trabajosFertilizacion]);
+      }
       setFertilizacionEnEdicion(null);
       await cargarResumen(planillaId);
     } catch (err: any) { alert(err?.message ?? 'Error al guardar fertilización'); }
@@ -622,16 +1005,32 @@ export default function NuevaPlanillaWizard() {
       return;
     }
     if (!sanidadEnEdicion.colaboradores.length) { alert('Selecciona al menos un colaborador'); return; }
+    const esExistente = !sanidadEnEdicion.id.includes('-');
+    const baseSan = {
+      categoria: 'PALMA' as const, tipo: 'SANIDAD' as const,
+      lote_id: sanidadEnEdicion.lote ? parseInt(sanidadEnEdicion.lote) : null,
+      sublote_id: sanidadEnEdicion.sublote ? parseInt(sanidadEnEdicion.sublote) : null,
+      descripcion: sanidadEnEdicion.trabajoRealizado || 'Trabajo de sanidad',
+    };
     try {
-      for (const cid of sanidadEnEdicion.colaboradores) {
-        await jornalesApi.crear(planillaId, {
-          categoria: 'PALMA', tipo: 'SANIDAD', empleado_id: parseInt(cid),
-          lote_id: sanidadEnEdicion.lote ? parseInt(sanidadEnEdicion.lote) : null,
-          sublote_id: sanidadEnEdicion.sublote ? parseInt(sanidadEnEdicion.sublote) : null,
-          descripcion: sanidadEnEdicion.trabajoRealizado || 'Trabajo de sanidad',
-        });
+      if (esExistente) {
+        const [primero, ...adicionales] = sanidadEnEdicion.colaboradores;
+        await jornalesApi.editar(parseInt(sanidadEnEdicion.id), { ...baseSan, empleado_id: parseInt(primero) });
+        const nuevasTarjetas: TrabajoSanidad[] = [];
+        for (const cid of adicionales) {
+          const res = await jornalesApi.crear(planillaId, { ...baseSan, empleado_id: parseInt(cid) });
+          nuevasTarjetas.push({ ...sanidadEnEdicion, id: String(res.data.id), colaboradores: [cid] });
+        }
+        setTrabajosSanidad(prev => [
+          ...prev.map(t => t.id === sanidadEnEdicion.id ? { ...sanidadEnEdicion, colaboradores: [primero] } : t),
+          ...nuevasTarjetas,
+        ]);
+      } else {
+        for (const cid of sanidadEnEdicion.colaboradores) {
+          await jornalesApi.crear(planillaId, { ...baseSan, empleado_id: parseInt(cid) });
+        }
+        setTrabajosSanidad([sanidadEnEdicion, ...trabajosSanidad]);
       }
-      setTrabajosSanidad([sanidadEnEdicion, ...trabajosSanidad]);
       setSanidadEnEdicion(null);
       await cargarResumen(planillaId);
     } catch (err: any) { alert(err?.message ?? 'Error al guardar sanidad'); }
@@ -658,17 +1057,33 @@ export default function NuevaPlanillaWizard() {
       return;
     }
     if (!otrosEnEdicion.colaboradores.length) { alert('Selecciona al menos un colaborador'); return; }
+    const esExistente = !otrosEnEdicion.id.includes('-');
+    const baseOtros = {
+      categoria: 'PALMA' as const, tipo: 'OTROS' as const,
+      lote_id: otrosEnEdicion.lote ? parseInt(otrosEnEdicion.lote) : null,
+      sublote_id: otrosEnEdicion.sublote ? parseInt(otrosEnEdicion.sublote) : null,
+      nombre_trabajo: otrosEnEdicion.nombre || 'Otros',
+      descripcion: otrosEnEdicion.laborRealizada || 'Trabajo realizado',
+    };
     try {
-      for (const cid of otrosEnEdicion.colaboradores) {
-        await jornalesApi.crear(planillaId, {
-          categoria: 'PALMA', tipo: 'OTROS', empleado_id: parseInt(cid),
-          lote_id: otrosEnEdicion.lote ? parseInt(otrosEnEdicion.lote) : null,
-          sublote_id: otrosEnEdicion.sublote ? parseInt(otrosEnEdicion.sublote) : null,
-          nombre_trabajo: otrosEnEdicion.nombre || 'Otros',
-          descripcion: otrosEnEdicion.laborRealizada || 'Trabajo realizado',
-        });
+      if (esExistente) {
+        const [primero, ...adicionales] = otrosEnEdicion.colaboradores;
+        await jornalesApi.editar(parseInt(otrosEnEdicion.id), { ...baseOtros, empleado_id: parseInt(primero) });
+        const nuevasTarjetas: TrabajoOtros[] = [];
+        for (const cid of adicionales) {
+          const res = await jornalesApi.crear(planillaId, { ...baseOtros, empleado_id: parseInt(cid) });
+          nuevasTarjetas.push({ ...otrosEnEdicion, id: String(res.data.id), colaboradores: [cid] });
+        }
+        setTrabajosOtros(prev => [
+          ...prev.map(t => t.id === otrosEnEdicion.id ? { ...otrosEnEdicion, colaboradores: [primero] } : t),
+          ...nuevasTarjetas,
+        ]);
+      } else {
+        for (const cid of otrosEnEdicion.colaboradores) {
+          await jornalesApi.crear(planillaId, { ...baseOtros, empleado_id: parseInt(cid) });
+        }
+        setTrabajosOtros([otrosEnEdicion, ...trabajosOtros]);
       }
-      setTrabajosOtros([otrosEnEdicion, ...trabajosOtros]);
       setOtrosEnEdicion(null);
       await cargarResumen(planillaId);
     } catch (err: any) { alert(err?.message ?? 'Error al guardar otros'); }
@@ -704,14 +1119,21 @@ export default function NuevaPlanillaWizard() {
       }
     }
     if (!tipoId) { alert('Tipo de hora extra no encontrado'); return; }
+    const esExistente = !horaExtraEnEdicion.id.includes('-');
+    const payload = {
+      empleado_id: parseInt(horaExtraEnEdicion.colaboradorId),
+      tipo_hora_extra_id: tipoId,
+      cantidad_horas: horaExtraEnEdicion.numeroHoras,
+      observacion: horaExtraEnEdicion.observacion || undefined,
+    };
     try {
-      const res = await horasExtraApi.crear(planillaId, {
-        empleado_id: parseInt(horaExtraEnEdicion.colaboradorId),
-        tipo_hora_extra_id: tipoId,
-        cantidad_horas: horaExtraEnEdicion.numeroHoras,
-        observacion: horaExtraEnEdicion.observacion || undefined,
-      });
-      setHorasExtras([{ ...horaExtraEnEdicion, id: String(res.data.id) }, ...horasExtras]);
+      if (esExistente) {
+        await horasExtraApi.editar(parseInt(horaExtraEnEdicion.id), payload);
+        setHorasExtras(prev => prev.map(h => h.id === horaExtraEnEdicion.id ? horaExtraEnEdicion : h));
+      } else {
+        const res = await horasExtraApi.crear(planillaId, payload);
+        setHorasExtras([{ ...horaExtraEnEdicion, id: String(res.data.id) }, ...horasExtras]);
+      }
       setHoraExtraEnEdicion(null);
       await cargarResumen(planillaId);
     } catch (err: any) { alert(err?.message ?? 'Error al guardar hora extra'); }
@@ -941,10 +1363,15 @@ export default function NuevaPlanillaWizard() {
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1>Crear Nueva Planilla</h1>
+        <h1>{isEditMode ? 'Editar Planilla del Día' : 'Crear Nueva Planilla'}</h1>
         <p className="text-muted-foreground mt-1">
-          Configura tu planilla paso a paso
+          {isEditMode
+            ? 'Modifica los datos de la planilla. Los cambios se guardan al avanzar de etapa o pulsar "Guardar".'
+            : 'Configura tu planilla paso a paso'}
         </p>
+        {cargandoPlanilla && (
+          <p className="text-sm text-primary mt-2">Cargando datos de la planilla…</p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -1322,12 +1749,23 @@ export default function NuevaPlanillaWizard() {
                                   </div>
                                 )}
 
+                                {/* Botón editar */}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setCosechaEnEdicion({ ...trabajo })}
+                                  className="text-primary hover:text-primary shrink-0"
+                                  title="Editar"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
                                 {/* Botón eliminar */}
                                 <Button
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => eliminarCosecha(trabajo.id)}
                                   className="text-destructive hover:text-destructive shrink-0"
+                                  title="Eliminar"
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
@@ -1409,7 +1847,7 @@ export default function NuevaPlanillaWizard() {
                                 <Label>Lote</Label>
                                 <Select
                                   value={plateoEnEdicion.lote}
-                                  onValueChange={(value) => setPlateoEnEdicion({ ...plateoEnEdicion, lote: value, sublote: '' })}
+                                  onValueChange={(value) => setPlateoEnEdicion({ ...plateoEnEdicion, lote: value, sublote: '', numeroPalmas: 0 })}
                                 >
                                   <SelectTrigger>
                                     <SelectValue placeholder="Seleccionar lote" />
@@ -1427,7 +1865,15 @@ export default function NuevaPlanillaWizard() {
                                 <Label>Sublote</Label>
                                 <Select
                                   value={plateoEnEdicion.sublote}
-                                  onValueChange={(value) => setPlateoEnEdicion({ ...plateoEnEdicion, sublote: value })}
+                                  onValueChange={(value) => {
+                                    // Autofill "Número de Palmas" con cantidad_palmas del sublote (editable)
+                                    const sub = sublotes.find(s => s.id === value);
+                                    setPlateoEnEdicion({
+                                      ...plateoEnEdicion,
+                                      sublote: value,
+                                      numeroPalmas: sub?.cantidadPalmas ?? 0,
+                                    });
+                                  }}
                                   disabled={!plateoEnEdicion.lote}
                                 >
                                   <SelectTrigger>
@@ -1505,8 +1951,18 @@ export default function NuevaPlanillaWizard() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
+                                  onClick={() => setPlateoEnEdicion({ ...trabajo })}
+                                  className="text-primary hover:text-primary shrink-0"
+                                  title="Editar"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
                                   onClick={() => eliminarPlateo(trabajo.id)}
                                   className="text-destructive hover:text-destructive shrink-0"
+                                  title="Eliminar"
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
@@ -1589,7 +2045,7 @@ export default function NuevaPlanillaWizard() {
                                 <Label>Lote</Label>
                                 <Select
                                   value={podaEnEdicion.lote}
-                                  onValueChange={(value) => setPodaEnEdicion({ ...podaEnEdicion, lote: value, sublote: '' })}
+                                  onValueChange={(value) => setPodaEnEdicion({ ...podaEnEdicion, lote: value, sublote: '', numeroPalmas: 0 })}
                                 >
                                   <SelectTrigger>
                                     <SelectValue placeholder="Seleccionar lote" />
@@ -1607,7 +2063,15 @@ export default function NuevaPlanillaWizard() {
                                 <Label>Sublote</Label>
                                 <Select
                                   value={podaEnEdicion.sublote}
-                                  onValueChange={(value) => setPodaEnEdicion({ ...podaEnEdicion, sublote: value })}
+                                  onValueChange={(value) => {
+                                    // Autofill "Número de Palmas" con cantidad_palmas del sublote (editable)
+                                    const sub = sublotes.find(s => s.id === value);
+                                    setPodaEnEdicion({
+                                      ...podaEnEdicion,
+                                      sublote: value,
+                                      numeroPalmas: sub?.cantidadPalmas ?? 0,
+                                    });
+                                  }}
                                   disabled={!podaEnEdicion.lote}
                                 >
                                   <SelectTrigger>
@@ -1685,8 +2149,18 @@ export default function NuevaPlanillaWizard() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
+                                  onClick={() => setPodaEnEdicion({ ...trabajo })}
+                                  className="text-primary hover:text-primary shrink-0"
+                                  title="Editar"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
                                   onClick={() => eliminarPoda(trabajo.id)}
                                   className="text-destructive hover:text-destructive shrink-0"
+                                  title="Eliminar"
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
@@ -1769,7 +2243,7 @@ export default function NuevaPlanillaWizard() {
                                 <Label>Lote</Label>
                                 <Select
                                   value={fertilizacionEnEdicion.lote}
-                                  onValueChange={(value) => setFertilizacionEnEdicion({ ...fertilizacionEnEdicion, lote: value, sublote: '' })}
+                                  onValueChange={(value) => setFertilizacionEnEdicion({ ...fertilizacionEnEdicion, lote: value, sublote: '', palmas: 0 })}
                                 >
                                   <SelectTrigger>
                                     <SelectValue placeholder="Seleccionar lote" />
@@ -1787,7 +2261,15 @@ export default function NuevaPlanillaWizard() {
                                 <Label>Sublote</Label>
                                 <Select
                                   value={fertilizacionEnEdicion.sublote}
-                                  onValueChange={(value) => setFertilizacionEnEdicion({ ...fertilizacionEnEdicion, sublote: value })}
+                                  onValueChange={(value) => {
+                                    // Autofill "Número de Palmas" con cantidad_palmas del sublote (editable)
+                                    const sub = sublotes.find(s => s.id === value);
+                                    setFertilizacionEnEdicion({
+                                      ...fertilizacionEnEdicion,
+                                      sublote: value,
+                                      palmas: sub?.cantidadPalmas ?? 0,
+                                    });
+                                  }}
                                   disabled={!fertilizacionEnEdicion.lote}
                                 >
                                   <SelectTrigger>
@@ -1908,8 +2390,18 @@ export default function NuevaPlanillaWizard() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
+                                  onClick={() => setFertilizacionEnEdicion({ ...trabajo })}
+                                  className="text-primary hover:text-primary shrink-0"
+                                  title="Editar"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
                                   onClick={() => eliminarFertilizacion(trabajo.id)}
                                   className="text-destructive hover:text-destructive shrink-0"
+                                  title="Eliminar"
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
@@ -2100,12 +2592,23 @@ export default function NuevaPlanillaWizard() {
                                   <p className="font-semibold text-sm truncate">{trabajo.trabajoRealizado || 'Sin descripción'}</p>
                                 </div>
 
+                                {/* Botón editar */}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setSanidadEnEdicion({ ...trabajo })}
+                                  className="text-primary hover:text-primary shrink-0"
+                                  title="Editar"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
                                 {/* Botón eliminar */}
                                 <Button
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => eliminarSanidad(trabajo.id)}
                                   className="text-destructive hover:text-destructive shrink-0"
+                                  title="Eliminar"
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
@@ -2305,12 +2808,23 @@ export default function NuevaPlanillaWizard() {
                                   <p className="font-semibold text-sm truncate">{trabajo.laborRealizada || 'Sin descripción'}</p>
                                 </div>
 
+                                {/* Botón editar */}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setOtrosEnEdicion({ ...trabajo })}
+                                  className="text-primary hover:text-primary shrink-0"
+                                  title="Editar"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
                                 {/* Botón eliminar */}
                                 <Button
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => eliminarOtros(trabajo.id)}
                                   className="text-destructive hover:text-destructive shrink-0"
+                                  title="Eliminar"
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
@@ -2621,12 +3135,23 @@ export default function NuevaPlanillaWizard() {
                             <p className="text-sm truncate">{hora.observacion || 'Sin observación'}</p>
                           </div>
 
+                          {/* Botón editar */}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setHoraExtraEnEdicion({ ...hora })}
+                            className="text-primary hover:text-primary shrink-0"
+                            title="Editar"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
                           {/* Botón eliminar */}
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => eliminarHoraExtra(hora.id)}
                             className="text-destructive hover:text-destructive shrink-0"
+                            title="Eliminar"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>

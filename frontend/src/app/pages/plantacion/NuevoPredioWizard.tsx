@@ -361,12 +361,62 @@ export default function NuevoPredioWizard() {
     setGuardando(true);
     try {
       if (editId) {
-        // §1.4 Solo actualizar datos del predio
+        // §1.4 Actualizar datos del predio
         await prediosApi.editar(Number(editId), {
           nombre: predioNombre.trim().slice(0, 50),
           ubicacion: predioUbicacion.trim().slice(0, 100),
           hectareas_totales: Number(predioHectareas),
         });
+
+        // ── Persistir palmas pendientes (sublotes sin líneas) ────────────────
+        // El usuario pudo haber editado el "Número de Palmas" en el paso 5.
+        // Solo se aceptan deltas POSITIVOS (crear palmas nuevas). Para reducir
+        // hay que eliminar palmas individuales desde la grilla (cuando hay líneas).
+        const sublotesPendientes = sublotes
+          .filter(sub => {
+            const linSub = lineas.filter(ln => ln.subloteId === sub.id);
+            const tieneLineas = linSub.length > 0;
+            if (tieneLineas) return false; // CASO A se maneja inline
+            const raw = cantPalmasForm[sub.id];
+            if (raw === undefined || raw === '') return false;
+            const target = parseInt(raw);
+            if (!Number.isFinite(target)) return false;
+            return target !== sub.cantidadPalmas;
+          })
+          .map(sub => ({
+            sub,
+            target: parseInt(cantPalmasForm[sub.id] ?? ''),
+            delta:  parseInt(cantPalmasForm[sub.id] ?? '') - sub.cantidadPalmas,
+          }));
+
+        const haReducciones = sublotesPendientes.some(p => p.delta < 0);
+        if (haReducciones) {
+          toast.error(
+            'Para reducir el número de palmas debes hacerlo desde la grilla individual (sublote con líneas). No se puede bajar el total directamente.'
+          );
+          // No cancelamos el guardado: ya se guardó el predio. Solo no procesamos los deltas negativos.
+        }
+
+        // Crear las palmas faltantes en serie (cada llamada respeta el async/sync interno)
+        for (const { sub, delta } of sublotesPendientes) {
+          if (delta <= 0) continue;
+          try {
+            await agregarPalmas(sub.id, delta, undefined);
+          } catch {
+            toast.error(`No se pudieron crear las palmas del sublote "${sub.nombre}"`);
+          }
+        }
+
+        // Limpiar inputs y recargar resumen
+        if (sublotesPendientes.length > 0) {
+          setCantPalmasForm(prev => {
+            const n = { ...prev };
+            sublotesPendientes.forEach(({ sub }) => { delete n[sub.id]; });
+            return n;
+          });
+          await refrescarResumen(editId);
+        }
+
         toast.success('Plantación actualizada');
         navigate('/plantacion');
         return;
@@ -1164,8 +1214,10 @@ export default function NuevoPredioWizard() {
 
                       <div className="space-y-4">
 
-                        {/* ── MODO EDICIÓN: palmas en grid plano ────────── */}
-                        {editId && (() => {
+                        {/* ── MODO EDICIÓN: palmas en grid plano (SOLO si hay líneas) ──
+                             Si el sublote no tiene líneas, no mostramos la grilla individual:
+                             el usuario solo edita el total con un input numérico abajo. */}
+                        {editId && tieneLineas && (() => {
                           const key  = `sub_${sub.id}`;
                           const ps   = wizardPag[key];
                           if (!ps || ps.loading) return (
@@ -1173,8 +1225,7 @@ export default function NuevoPredioWizard() {
                               <Loader2 className="h-4 w-4 animate-spin" /> Cargando palmas...
                             </div>
                           );
-                          if (ps.data.length === 0 && !tieneLineas) return null; // CASO B lo maneja abajo
-                          if (ps.data.length === 0 && tieneLineas) return (
+                          if (ps.data.length === 0) return (
                             <p className="text-center py-6 text-sm text-muted-foreground">No hay palmas registradas</p>
                           );
                           return (
@@ -1233,30 +1284,29 @@ export default function NuevoPredioWizard() {
                           );
                         })()}
 
-                        {/* CASO B SIN LÍNEAS */}
+                        {/* CASO B SIN LÍNEAS — modo edición.
+                             Solo el input. Las palmas se persisten al pulsar
+                             "Guardar Cambios" (bulk save) en el botón inferior del wizard. */}
                         {editId && !tieneLineas && (
-                              <div className="bg-muted/10 border border-border/50 rounded-lg p-4">
-                                <div className="space-y-3">
-                                  <div>
-                                    <Label className="text-sm font-medium">Número de Palmas</Label>
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                      Sin líneas definidas - Total de palmas en el sublote
-                                    </p>
-                                  </div>
-                                  <div className="flex items-center gap-3">
-                                    <Input
-                                      type="number"
-                                      placeholder="Ej: 170"
-                                      value={(cantPalmasForm[sub.id] ?? sub.cantidadPalmas) || ''}
-                                      onChange={e => setCantPalmasForm(prev => ({ ...prev, [sub.id]: e.target.value }))}
-                                      min="0"
-                                      className="h-12 text-base max-w-xs"
-                                    />
-                                    
-                                  </div>
-                                </div>
+                          <div className="bg-muted/10 border border-border/50 rounded-lg p-4">
+                            <div className="space-y-3">
+                              <div>
+                                <Label className="text-sm font-medium">Número de Palmas</Label>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Sin líneas definidas — Total de palmas en el sublote
+                                </p>
                               </div>
-                            )}
+                              <Input
+                                type="number"
+                                placeholder="Ej: 170"
+                                value={cantPalmasForm[sub.id] ?? String(sub.cantidadPalmas ?? '')}
+                                onChange={e => setCantPalmasForm(prev => ({ ...prev, [sub.id]: e.target.value }))}
+                                min="0"
+                                className="h-12 text-base max-w-xs"
+                              />
+                            </div>
+                          </div>
+                        )}
 
                         {/* ── MODO CREACIÓN: formulario por sublote ──────── */}
                         {!editId && !cantPalmasForm[`confirmed_${sub.id}`] && (
