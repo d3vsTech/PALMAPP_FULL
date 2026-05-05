@@ -5,6 +5,11 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreTenantRequest;
 use App\Http\Requests\Admin\UpdateTenantRequest;
+use App\Models\Arl;
+use App\Models\EntidadBancaria;
+use App\Models\Eps;
+use App\Models\FondoPension;
+use App\Models\PrecioPalma;
 use App\Models\Tenant;
 use App\Models\TenantConfig;
 use App\Models\TenantUser;
@@ -64,6 +69,17 @@ class TenantController extends Controller
                     'tenant_id' => $tenant->id,
                     ...$request->configDefaults(),
                 ]);
+
+                foreach (PrecioPalma::TIPOS as $tipo) {
+                    PrecioPalma::create([
+                        'tenant_id'    => $tenant->id,
+                        'tipo'         => $tipo,
+                        'precio_palma' => 0,
+                        'estado'       => true,
+                    ]);
+                }
+
+                $this->seedParametricasColaborador($tenant);
 
                 return $tenant;
             });
@@ -417,6 +433,30 @@ class TenantController extends Controller
                 'message' => 'Error al remover el usuario de la finca',
                 'error'   => $e->getMessage(),
             ], 500);
+        }
+    }
+
+    /**
+     * Provisiona los catálogos paramétricos del colaborador (EPS, fondos de
+     * pensión, ARL y entidades bancarias) para un tenant recién creado.
+     */
+    private function seedParametricasColaborador(Tenant $tenant): void
+    {
+        $catalogos = [
+            [Eps::class,             Eps::INICIALES],
+            [FondoPension::class,    FondoPension::INICIALES],
+            [Arl::class,             Arl::INICIALES],
+            [EntidadBancaria::class, EntidadBancaria::INICIALES],
+        ];
+
+        foreach ($catalogos as [$modelClass, $nombres]) {
+            foreach ($nombres as $nombre) {
+                $modelClass::create([
+                    'tenant_id' => $tenant->id,
+                    'nombre'    => $nombre,
+                    'estado'    => true,
+                ]);
+            }
         }
     }
 }

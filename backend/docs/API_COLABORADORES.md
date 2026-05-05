@@ -9,12 +9,52 @@
 
 | Método | Ruta | Permiso | Descripción |
 |--------|------|---------|-------------|
+| GET | `/colaboradores/select` | `colaboradores.ver` o `operaciones.crear` u `operaciones.editar` | Listado liviano para dropdowns (wizard) |
 | GET | `/colaboradores` | `colaboradores.ver` | Listar colaboradores (paginado) |
 | GET | `/colaboradores/{id}` | `colaboradores.ver` | Detalle de un colaborador |
 | POST | `/colaboradores` | `colaboradores.crear` | Crear colaborador |
 | PUT | `/colaboradores/{id}` | `colaboradores.editar` | Editar colaborador |
-| DELETE | `/colaboradores/{id}` | `colaboradores.eliminar` | Eliminar colaborador |
+| DELETE | `/colaboradores/{id}` | `colaboradores.eliminar` | Eliminar colaborador (soft delete) |
+| POST | `/colaboradores/{id}/restaurar` | `colaboradores.crear` | Restaurar colaborador eliminado |
 | PATCH | `/colaboradores/{id}/toggle` | `colaboradores.editar` | Activar/Desactivar |
+| POST | `/colaboradores/{id}/avatar` | `colaboradores.editar` | Subir avatar del colaborador |
+| DELETE | `/colaboradores/{id}/avatar` | `colaboradores.editar` | Eliminar avatar del colaborador |
+
+---
+
+## 0. Listado liviano para Dropdowns (`/select`)
+
+Endpoint pensado para poblar el componente "Agregar colaborador" del wizard de Operaciones y cualquier otro select. **Sin paginación**, devuelve todos los empleados que coincidan con los filtros, con solo los campos imprescindibles.
+
+```
+GET /api/v1/tenant/colaboradores/select
+```
+
+**Permiso:** acepta cualquiera de: `colaboradores.ver`, `operaciones.crear`, `operaciones.editar` — así un operador que solo tenga permisos de Operaciones también puede usar el dropdown.
+
+### Query Parameters
+
+| Parámetro | Tipo | Default | Descripción |
+|-----------|------|---------|-------------|
+| `estado` | boolean | `true` | Por defecto devuelve solo **activos**. Enviar `false` para inactivos. |
+| `modalidad_pago` | string | — | Filtra por `FIJO` o `PRODUCCION` (útil para wizards de nómina) |
+| `predio_id` | integer | — | Solo los asignados a un predio |
+
+### Response 200
+
+```json
+{
+  "data": [
+    { "id": 10, "nombre_completo": "Juan Carlos Pérez López", "documento": "1098765432", "modalidad_pago": "PRODUCCION" },
+    { "id": 11, "nombre_completo": "María García Rojas",     "documento": "1110000111", "modalidad_pago": "FIJO" }
+  ]
+}
+```
+
+**Importante:**
+- Sin `meta` (no es paginado).
+- Se recomienda cachear la respuesta en el cliente y refrescar solo cuando cambie el formulario de colaboradores.
+- Para vistas administrativas con paginación, filtros avanzados y todos los campos del empleado, usa `GET /colaboradores` (sección 1).
 
 ---
 
@@ -33,6 +73,8 @@ GET /api/v1/tenant/colaboradores
 | `modalidad_pago` | string | Enum: `FIJO` o `PRODUCCION` |
 | `predio_id` | integer | Filtra por predio asignado |
 | `estado` | boolean | `true` = activos, `false` = inactivos |
+| `incluir_eliminados` | boolean | `true` incluye colaboradores soft-deleted en el resultado (junto con los vigentes) |
+| `solo_eliminados` | boolean | `true` retorna **únicamente** los colaboradores eliminados (soft delete) |
 | `per_page` | integer | Registros por página (default: 15) |
 
 ### Response 200
@@ -227,7 +269,7 @@ POST /api/v1/tenant/colaboradores
 | `fecha_nacimiento` | date | Mínimo 14 años de edad |
 | `fecha_expedicion_documento` | date | No puede ser futura |
 | `cargo` | string | Máx. 100 caracteres |
-| `salario_base` | decimal | Mín. 0 |
+| `salario_base` | decimal | **Obligatorio solo si `modalidad_pago=FIJO`**. Mín. 0. Para `PRODUCCION` es opcional — ver nota abajo. |
 | `modalidad_pago` | string | Enum: `FIJO` o `PRODUCCION` |
 | `fecha_ingreso` | date | No puede ser futura |
 
@@ -257,6 +299,14 @@ POST /api/v1/tenant/colaboradores
 | `departamento` | string | Máx. 100 |
 | `contacto_emergencia_nombre` | string | Máx. 100 |
 | `contacto_emergencia_telefono` | string | Máx. 50 |
+
+### Regla especial: `salario_base` por modalidad
+
+- `modalidad_pago = FIJO` → `salario_base` **obligatorio**. Si falta, responde 422 con `errors.salario_base = ["El salario base es obligatorio para modalidad FIJO"]`.
+- `modalidad_pago = PRODUCCION` → `salario_base` **opcional**. Si se omite, el backend lo auto-completa con `tenant_config.salario_minimo_vigente` (SMLV configurado a nivel de tenant). El contrato vigente que se genera al crear el colaborador también usa ese mismo salario.
+- `modalidad_pago = PRODUCCION` sin `salario_base` **y** el tenant no tiene `salario_minimo_vigente` configurado → responde 422 con `errors.salario_base = ["No hay salario mínimo vigente configurado en el tenant. Configúralo en Ajustes o envía salario_base explícito."]`.
+
+Aplica igual en `PUT /colaboradores/{id}`: si se cambia la modalidad a `PRODUCCION` sin enviar `salario_base`, se defaultea al SMLV del tenant; si se cambia a `FIJO`, `salario_base` pasa a ser obligatorio en ese update.
 
 ### Response 201
 
@@ -319,7 +369,41 @@ Se puede incluir `estado` (boolean) para activar/desactivar.
 DELETE /api/v1/tenant/colaboradores/{id}
 ```
 
-> **Restricciones:** No se puede eliminar si tiene jornales o registros de nómina asociados.
+> **Comportamiento:** El colaborador se elimina de manera **lógica (soft delete)**.
+> Esto preserva todo el historial asociado: jornales, nómina, cosechas, contratos,
+> documentos y archivos físicos quedan intactos. El colaborador deja de aparecer en
+> listados, dropdowns y reportes operativos. Se puede restaurar con
+> `POST /colaboradores/{id}/restaurar`.
+>
+> Para reportes históricos donde se necesite seguir mostrando el nombre del colaborador
+> eliminado, los controladores correspondientes pueden cargar la relación con
+> `withTrashed()`.
+
+### Confirmación obligatoria desde el frontend
+
+Antes de invocar este endpoint, el frontend **debe** mostrar un diálogo de
+confirmación al usuario advirtiendo del impacto de la acción. Sugerencia de copy:
+
+> ⚠️ **¿Eliminar al colaborador "{nombre_completo}"?**
+>
+> Esta acción **es irreversible** desde la interfaz operativa: el colaborador
+> dejará de aparecer en listados, dropdowns y reportes activos, y se podría
+> perder el acceso rápido a su historial (jornales, nómina, cosechas, contratos,
+> documentos).
+>
+> Si tienes dudas, considera **desactivarlo** en su lugar (`PATCH /toggle`) — eso
+> lo oculta de las vistas operativas pero lo mantiene en el listado de inactivos.
+>
+> [Cancelar]   [Sí, eliminar]
+
+> **Nota técnica:** aunque el copy habla en términos de "irreversible" para que
+> el usuario lo piense dos veces, internamente es soft delete y un administrador
+> puede restaurarlo vía `POST /colaboradores/{id}/restaurar` (visible solo en la
+> vista de "Eliminados" usando `?solo_eliminados=true`). El frontend puede
+> elegir mostrar este detalle o no según el rol del usuario.
+
+El diálogo debe ser **bloqueante** (modal) y la acción destructiva debe estar
+visualmente diferenciada (botón rojo, no-default).
 
 ### Response 200
 
@@ -329,12 +413,47 @@ DELETE /api/v1/tenant/colaboradores/{id}
 }
 ```
 
-### Response 409 (conflicto)
+---
+
+## 5.5. Restaurar Colaborador
+
+```
+POST /api/v1/tenant/colaboradores/{id}/restaurar
+```
+
+> **Permiso:** `colaboradores.crear`. Quien pueda crear colaboradores también puede
+> restaurarlos (es conceptualmente "volver a darle de alta").
+
+Restaura un colaborador previamente eliminado (soft delete). Mantiene su historial
+intacto y vuelve a aparecer en los listados.
+
+### Response 200
 
 ```json
 {
-  "message": "No se puede eliminar el colaborador porque tiene jornales registrados",
-  "code": "EMPLEADO_CON_JORNALES"
+  "message": "Colaborador 'Juan Carlos Pérez López' restaurado correctamente",
+  "data": { "...colaborador con predio y contrato vigente..." }
+}
+```
+
+### Response 409 — colaborador no eliminado
+
+```json
+{
+  "message": "El colaborador no está eliminado",
+  "code": "EMPLEADO_NO_ELIMINADO"
+}
+```
+
+### Response 409 — documento duplicado
+
+Cuando, mientras el colaborador estaba eliminado, se creó otro colaborador activo
+con el mismo `documento`. No se puede restaurar porque rompería la unicidad.
+
+```json
+{
+  "message": "No se puede restaurar: ya existe un colaborador activo con este documento",
+  "code": "DOCUMENTO_DUPLICADO"
 }
 ```
 
@@ -404,6 +523,92 @@ Invierte el estado actual del colaborador (activo ↔ inactivo).
 
 ---
 
+## Avatar del Colaborador
+
+El colaborador tiene un campo opcional `avatar_url` (URL pública generada a partir de
+`avatar_path` interno) que puede usarse para mostrar su foto en listados y vistas de
+detalle. La imagen se almacena en el disco `public` (URL accesible directamente, sin
+endpoint autenticado).
+
+> Si el colaborador no tiene avatar, `avatar_url` viene `null`. El frontend debe caer
+> en las iniciales (primer_nombre + primer_apellido) como fallback.
+
+### Endpoints
+
+| Método | Ruta | Permiso |
+|--------|------|---------|
+| POST | `/colaboradores/{id}/avatar` | `colaboradores.editar` |
+| DELETE | `/colaboradores/{id}/avatar` | `colaboradores.editar` |
+
+### Subir / reemplazar avatar
+
+```
+POST /api/v1/tenant/colaboradores/{id}/avatar
+Content-Type: multipart/form-data
+```
+
+#### Body (form-data)
+
+| Campo | Tipo | Obligatorio | Reglas |
+|-------|------|-------------|--------|
+| `avatar` | file (image) | Sí | Solo `jpg`, `jpeg`, `png`, `webp`. Máx. **3 MB**. |
+
+> Si el colaborador ya tenía un avatar previo, el archivo anterior se elimina del disco
+> automáticamente y se reemplaza por el nuevo.
+
+#### Response 200
+
+```json
+{
+  "message": "Avatar actualizado correctamente",
+  "data": {
+    "id": 1,
+    "primer_nombre": "Juan",
+    "...": "...",
+    "avatar_url": "https://api.tu-dominio.com/storage/tenants/3/empleados/1/avatar/abc123.png"
+  }
+}
+```
+
+#### Response 422
+
+```json
+{
+  "message": "Error de validación",
+  "errors": {
+    "avatar": ["El avatar no puede superar los 3 MB"]
+  }
+}
+```
+
+### Eliminar avatar
+
+```
+DELETE /api/v1/tenant/colaboradores/{id}/avatar
+```
+
+Borra el archivo del disco y deja `avatar_url` en `null`.
+
+#### Response 200
+
+```json
+{
+  "message": "Avatar eliminado correctamente",
+  "data": { "...colaborador con avatar_url: null..." }
+}
+```
+
+#### Response 409
+
+```json
+{
+  "message": "El colaborador no tiene avatar asignado",
+  "code": "AVATAR_NOT_FOUND"
+}
+```
+
+---
+
 ## Documentos del Colaborador
 
 ### Endpoints de Documentos
@@ -414,7 +619,8 @@ Invierte el estado actual del colaborador (activo ↔ inactivo).
 | GET | `/colaboradores/{id}/documentos` | `colaboradores.ver` | Listar documentos del colaborador |
 | POST | `/colaboradores/{id}/documentos` | `colaboradores.editar` | Subir documento |
 | GET | `/colaboradores/{id}/documentos/{docId}` | `colaboradores.ver` | Detalle de un documento |
-| GET | `/colaboradores/{id}/documentos/{docId}/descargar` | `colaboradores.ver` | Descargar archivo |
+| GET | `/colaboradores/{id}/documentos/{docId}/descargar` | `colaboradores.ver` | Descargar archivo (Content-Disposition: attachment) |
+| GET | `/colaboradores/{id}/documentos/{docId}/visualizar` | `colaboradores.ver` | Visualizar archivo inline (preview en navegador) |
 | DELETE | `/colaboradores/{id}/documentos/{docId}` | `colaboradores.editar` | Eliminar documento |
 
 ---
@@ -444,7 +650,7 @@ Retorna la estructura de categorías y tipos disponibles. El frontend usa esto p
     },
     "CONTRATACION_LABORAL": {
       "label": "Contratación laboral",
-      "unico_por_tipo": true,
+      "unico_por_tipo": false,
       "tipos": {
         "CONTRATO_DE_TRABAJO": "Contrato de trabajo",
         "ACUERDO_DE_CONFIDENCIALIDAD": "Acuerdo de confidencialidad"
@@ -452,7 +658,7 @@ Retorna la estructura de categorías y tipos disponibles. El frontend usa esto p
     },
     "SST": {
       "label": "SST",
-      "unico_por_tipo": true,
+      "unico_por_tipo": false,
       "tipos": {
         "EXAMEN_DE_INGRESO": "Examen de ingreso"
       }
@@ -557,7 +763,7 @@ POST /api/v1/tenant/colaboradores/{id}/documentos
 | `fecha_documento` | date | No | Fecha del documento, no puede ser futura |
 | `observacion` | string | No | Máx. 500 caracteres |
 
-> **Comportamiento con documentos únicos:** Si la categoría tiene `unico_por_tipo: true` (ej: `DATOS_BASE`, `CONTRATACION_LABORAL`, `SST`) y ya existe un documento del mismo tipo para ese colaborador, el archivo anterior se elimina automáticamente y se reemplaza por el nuevo.
+> **Comportamiento con documentos únicos:** Si la categoría tiene `unico_por_tipo: true` (actualmente solo `DATOS_BASE`) y ya existe un documento del mismo tipo para ese colaborador, el archivo anterior se elimina automáticamente y se reemplaza por el nuevo. El resto de las categorías (`CONTRATACION_LABORAL`, `SST`, `PERMISOS_LICENCIAS`, `FINALIZACION_CONTRATO`, `DESPRENDIBLES`, `OTROS`) permiten acumular varios documentos del mismo tipo.
 
 ### Response 201
 
@@ -722,6 +928,111 @@ Archivo binario (descarga directa).
 
 ---
 
+### 11.5. Visualizar Documento (preview inline)
+
+```
+GET /api/v1/tenant/colaboradores/{id}/documentos/{docId}/visualizar
+```
+
+A diferencia de `descargar` (que envía `Content-Disposition: attachment` y fuerza el
+diálogo "Guardar como"), este endpoint retorna `Content-Disposition: inline`, lo que
+permite renderizar el archivo directamente en el navegador (PDF en `<iframe>`, imagen
+en `<img>`).
+
+### Mime types soportados
+
+Solo se permite la previsualización para los siguientes tipos:
+
+| Mime type | Render típico |
+|-----------|----------------|
+| `application/pdf` | `<iframe>` |
+| `image/jpeg` / `image/png` / `image/webp` | `<img>` |
+
+Para otros mime types (docx, xlsx, doc, xls, etc.) responde `415` con código
+`MIME_NOT_PREVIEWABLE` y el frontend debe redirigir al endpoint `/descargar`.
+
+### Headers de respuesta (200)
+
+| Header | Valor |
+|--------|-------|
+| `Content-Type` | El mime original del documento |
+| `Content-Disposition` | `inline; filename="<archivo_nombre_original>"` |
+| `Content-Length` | Tamaño del archivo en bytes |
+
+### Uso desde el frontend
+
+> **Importante:** Igual que `descargar`, este endpoint requiere `Authorization` y
+> `X-Tenant-Id`. **No se puede usar la URL directamente en `<iframe src=...>` ni
+> `<embed>`** porque el navegador no envía esos headers en una navegación de iframe
+> y la respuesta sería `401 Unauthorized`.
+
+El front debe pedir el archivo como `blob`, generar un `objectURL` con
+`URL.createObjectURL` y asignarlo al elemento de UI.
+
+```js
+const { data } = await axios.get(
+  `/api/v1/tenant/colaboradores/${empleadoId}/documentos/${docId}/visualizar`,
+  {
+    responseType: 'blob',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'X-Tenant-Id': tenantId,
+    },
+  }
+);
+
+const objectUrl = URL.createObjectURL(data);
+
+// PDF:    <iframe :src="objectUrl" />
+// Imagen: <img    :src="objectUrl" />
+
+// Acuérdate de revocarlo al desmontar la vista para liberar memoria:
+// URL.revokeObjectURL(objectUrl);
+```
+
+### Manejo de 415 (mime no previsualizable)
+
+```js
+try {
+  const res = await axios.get(visualizarUrl, { responseType: 'blob', headers });
+  // ... preview
+} catch (err) {
+  if (err.response?.status === 415) {
+    // Caer al endpoint de descarga
+    window.location.href = descargarUrl;  // o axios + blob + a.click()
+  }
+}
+```
+
+> **Tip:** como axios devuelve el body 415 como `Blob`, para leer el `code` hay que
+> parsearlo: `const text = await err.response.data.text(); JSON.parse(text)`.
+> Una alternativa más simple es chequear `mime_type` antes de pedir `/visualizar` y
+> elegir el endpoint adecuado en el cliente.
+
+### Response 200
+
+Archivo binario (renderizado inline en navegador).
+
+### Response 415 — mime no previsualizable
+
+```json
+{
+  "message": "Este tipo de archivo no se puede visualizar inline. Use el endpoint de descarga.",
+  "code": "MIME_NOT_PREVIEWABLE",
+  "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+}
+```
+
+### Response 404 — archivo no encontrado
+
+```json
+{
+  "message": "Archivo no encontrado en el servidor"
+}
+```
+
+---
+
 ### 12. Eliminar Documento
 
 ```
@@ -740,11 +1051,73 @@ Elimina el registro y el archivo físico del servidor.
 
 ---
 
+## Paramétricas del Colaborador (dropdowns del formulario)
+
+Estos endpoints alimentan los selectores de **EPS**, **fondo de pensión**, **ARL** y **entidad bancaria** del formulario de creación/edición de colaboradores. No forman parte del módulo de colaboradores en sí: la edición del catálogo se hace desde Configuración (permiso `configuracion.editar`). El colaborador guarda el **nombre** seleccionado, no el `id` — esto preserva el histórico aunque el catálogo cambie en el futuro.
+
+### Selects (lectura para dropdowns)
+
+| Método | Ruta | Permiso |
+|--------|------|---------|
+| GET | `/eps/select` | `configuracion.editar` o `colaboradores.{ver|crear|editar}` |
+| GET | `/fondos-pension/select` | idem |
+| GET | `/arl/select` | idem |
+| GET | `/entidades-bancarias/select` | idem |
+
+#### Response 200
+
+Todos los selects devuelven el mismo formato:
+
+```json
+{
+  "data": [
+    { "id": 1, "nombre": "Sura" },
+    { "id": 2, "nombre": "Sanitas" },
+    { "id": 3, "nombre": "Compensar" }
+  ]
+}
+```
+
+**Comportamiento:**
+- Devuelven **solo activos** (`estado = true`).
+- Sin paginación.
+- Ordenados alfabéticamente por `nombre`.
+- El frontend toma el `nombre` del item seleccionado y lo envía en el campo correspondiente del payload de `POST /colaboradores`:
+  - `eps/select` → campo `eps`
+  - `fondos-pension/select` → campo `fondo_pension`
+  - `arl/select` → campo `arl`
+  - `entidades-bancarias/select` → campo `entidad_bancaria`
+
+> Nota: empleados creados antes de existir el catálogo pueden tener un valor que ya no esté en el dropdown. El frontend debe permitir mostrarlo (input pre-cargado con el valor legacy).
+
+### CRUD de las paramétricas
+
+Para administrar el catálogo (crear/editar/eliminar EPS, fondos, ARL o entidades bancarias) hay endpoints CRUD bajo permiso `configuracion.editar`:
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/eps`, `/fondos-pension`, `/arl`, `/entidades-bancarias` | Listar paginado (acepta `?search=` y `?estado=true|false`) |
+| GET | `/eps/{id}` (idem otros) | Detalle |
+| POST | `/eps` (idem otros) | Crear (`{ "nombre": "...", "estado": true }`) |
+| PUT | `/eps/{id}` (idem otros) | Editar |
+| DELETE | `/eps/{id}` (idem otros) | Eliminar |
+
+#### Reglas de validación
+- `nombre`: requerido, máx. 100, único por tenant.
+- `estado`: opcional, boolean (default `true` al crear).
+
+#### Auditoría
+Toda creación, edición y eliminación queda registrada en `auditorias` con módulo `EPS`, `FONDOS_PENSION`, `ARL` o `ENTIDADES_BANCARIAS`.
+
+---
+
 ## Códigos de Error
 
 | Código HTTP | code | Descripción |
 |-------------|------|-------------|
-| 409 | `EMPLEADO_CON_JORNALES` | Tiene jornales registrados, no se puede eliminar |
-| 409 | `EMPLEADO_CON_NOMINA` | Tiene registros de nómina, no se puede eliminar |
+| 409 | `EMPLEADO_NO_ELIMINADO` | Se intentó restaurar un colaborador que no está eliminado |
+| 409 | `DOCUMENTO_DUPLICADO` | Al restaurar, ya existe otro colaborador activo con el mismo documento |
+| 409 | `AVATAR_NOT_FOUND` | Se intentó borrar el avatar de un colaborador que no tiene avatar asignado |
+| 415 | `MIME_NOT_PREVIEWABLE` | El documento no es visualizable inline (use el endpoint de descarga) |
 | 422 | — | Error de validación (ver campo `errors`) |
 | 500 | — | Error interno del servidor |

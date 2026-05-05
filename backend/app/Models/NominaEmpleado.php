@@ -17,6 +17,7 @@ class NominaEmpleado extends Model
         'tenant_id', 'nomina_id', 'empleado_id', 'salario_tipo',
         'salario_base', 'total_jornales', 'total_cosecha',
         'dias_ausencia_descontados', 'total_ausencias_descuento', 'total_ausencias_remunerado',
+        'total_horas_extra', 'total_recargos',
         'total_devengado', 'total_bonificaciones', 'total_deducciones',
         'total_neto', 'estado',
     ];
@@ -30,6 +31,8 @@ class NominaEmpleado extends Model
             'dias_ausencia_descontados' => 'decimal:2',
             'total_ausencias_descuento' => 'decimal:2',
             'total_ausencias_remunerado' => 'decimal:2',
+            'total_horas_extra' => 'decimal:2',
+            'total_recargos' => 'decimal:2',
             'total_devengado' => 'decimal:2',
             'total_bonificaciones' => 'decimal:2',
             'total_deducciones' => 'decimal:2',
@@ -60,5 +63,10 @@ class NominaEmpleado extends Model
     public function cosechaRefs(): HasMany
     {
         return $this->hasMany(NominaCosechaRef::class);
+    }
+
+    public function horaExtraRefs(): HasMany
+    {
+        return $this->hasMany(NominaHoraExtraRef::class);
     }
 }

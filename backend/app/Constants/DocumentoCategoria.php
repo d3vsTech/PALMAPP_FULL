@@ -17,7 +17,7 @@ class DocumentoCategoria
         ],
         'CONTRATACION_LABORAL' => [
             'label' => 'Contratación laboral',
-            'unico_por_tipo' => true,
+            'unico_por_tipo' => false,
             'tipos' => [
                 'CONTRATO_DE_TRABAJO' => 'Contrato de trabajo',
                 'ACUERDO_DE_CONFIDENCIALIDAD' => 'Acuerdo de confidencialidad',
@@ -25,7 +25,7 @@ class DocumentoCategoria
         ],
         'SST' => [
             'label' => 'SST',
-            'unico_por_tipo' => true,
+            'unico_por_tipo' => false,
             'tipos' => [
                 'EXAMEN_DE_INGRESO' => 'Examen de ingreso',
             ],

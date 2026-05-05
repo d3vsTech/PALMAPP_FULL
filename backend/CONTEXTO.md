@@ -49,7 +49,7 @@ Estas tablas no pertenecen a ningún tenant:
 
 **`tenants`** — Cada registro es una finca o empresa agrícola. Contiene nombre, NIT, datos de contacto, estado (ACTIVO/INACTIVO/SUSPENDIDO), plan (BASICO/PROFESIONAL/ENTERPRISE), y límites (max_empleados, max_usuarios). Tiene soft deletes.
 
-**`tenant_config`** — Configuración individual de cada tenant con relación 1:1. Aquí se define si la finca usa jornales (`usa_jornales`), si usa producción/cosecha (`usa_produccion`), el tipo de pago de nómina (`QUINCENAL` o `MENSUAL`), el salario mínimo vigente, el auxilio de transporte, qué módulos están habilitados (vacaciones, liquidación, insumos), y si tiene sincronización offline activa. También tiene un campo `configuracion_extra` tipo JSONB para configuraciones dinámicas futuras.
+**`tenant_config`** — Configuración individual de cada tenant con relación 1:1. Aquí se define si la finca usa jornales (`usa_jornales`), si usa producción/cosecha (`usa_produccion`), el tipo de pago de nómina (`QUINCENAL` o `MENSUAL`), el salario mínimo vigente, el auxilio de transporte, el **divisor de jornada mensual** para el cálculo de horas extras (`divisor_jornada_mensual`, 240 por default — CST tradicional; 210 bajo Ley 2101/2021), qué módulos están habilitados (vacaciones, liquidación, insumos), y si tiene sincronización offline activa. También tiene un campo `configuracion_extra` tipo JSONB para configuraciones dinámicas futuras.
 
 **`users`** — Usuarios del sistema. Tiene dos campos adicionales: `is_super_admin` (booleano, da acceso al panel de administración global) y `status` (activo/inactivo). Un usuario puede pertenecer a múltiples tenants con roles distintos.
 
@@ -148,7 +148,7 @@ El sistema usa JWT (JSON Web Tokens) en lugar de sesiones. No hay cookies ni est
 
 ## 5. Estructura de la Base de Datos
 
-### 5.1 Resumen: 40 tablas organizadas en 13 migraciones
+### 5.1 Resumen: 44 tablas organizadas en 15 migraciones
 
 **Migración 1 — Tenants:** `tenants` (core multi-tenant)
 
@@ -158,7 +158,7 @@ El sistema usa JWT (JSON Web Tokens) en lugar de sesiones. No hay cookies ni est
 
 **Migración 4 — Cultivo (9 tablas):** `predios` (fincas/haciendas), `semillas` (catálogo de variedades), `lotes` (divisiones del predio, `fecha_siembra` y `hectareas_sembradas` nullable), `semilla_lote` (pivot), `sublotes` (subdivisiones del lote), `lineas` (filas dentro del sublote, con `numero` único por sublote y `cantidad_palmas`), `palmas` (plantas individuales, `sublote_id` + `linea_id` nullable FK con `nullOnDelete`), `promedio_lote` (kg/gajo promedio por año), `precio_cosecha` (precio por lote y año)
 
-**Migración 5 — Insumos, Labores y Empleados (6 tablas):** `insumos` (fertilizantes, herbicidas), `precio_abono` (rangos de precio por dosis), `labores` (tipos de trabajo con 3 formas de pago: `JORNAL_FIJO`, `POR_PALMA_INSUMO`, `POR_PALMA_SIMPLE`), `modalidad_contrato` (indefinido, obra/labor, fijo), `cargos` (catálogo de puestos, independiente de empleados), `empleados` (datos completos del trabajador con cargo, salario_base y modalidad_pago directos)
+**Migración 5 — Insumos, Labores y Empleados (6 tablas):** `insumos` (fertilizantes, herbicidas), `precio_abono` (rangos de precio por dosis), `labores` (catálogo **de Labores de Finca** — reparaciones, mantenimiento, etc. — con `nombre` + `valor_base`), `modalidad_contrato` (indefinido, obra/labor, fijo), `cargos` (catálogo de puestos, independiente de empleados), `empleados` (datos completos del trabajador con cargo, salario_base y modalidad_pago directos)
 
 **Migración 6 — Jornales y Cosecha (5 tablas):** `jornales` (registro diario de trabajo, sin campo `fecha` propio — usa la fecha de la operación padre), `viajes` (transporte de fruto), `registro_cosecha` (producción por sublote, sin campo `fecha` propio — usa la fecha de la operación padre), `viaje_detalle` (pivot viaje↔cosecha), `cosecha_cuadrilla` (distribución de cosecha entre empleados)
 
@@ -174,7 +174,20 @@ El sistema usa JWT (JSON Web Tokens) en lugar de sesiones. No hay cookies ni est
 
 **Migración 11 — Ausencias (1 tabla nueva + alter nomina_empleado):** Crea `ausencias` (registros de incapacidades, licencias, permisos y faltas reportados desde la operación diaria; `operacion_id` NOT NULL, rango `fecha_inicio`/`fecha_fin`, flujo PENDIENTE → APROBADA → LIQUIDADA, soporte offline con `sync_uuid`/`sync_estado`). Agrega a `nomina_empleado` las columnas `dias_ausencia_descontados`, `total_ausencias_descuento` y `total_ausencias_remunerado` para reflejar el efecto de las ausencias en la liquidación.
 
-**Migración 13 — Chat del Agente IA (2 tablas nuevas):** Crea `agro_chat_sessions` (conversaciones del usuario con el agente IA: `user_id` + `tenant_id` con `ON DELETE CASCADE`, `titulo`, `created_at`/`updated_at` como `TIMESTAMPTZ`) y `agro_chat_messages` (mensajes individuales: `session_id` FK cascade a sessions, `user_id`, `tenant_id`, `role` `user|assistant|system|tool`, `content` texto, `tool_calls` JSONB para auditar qué consultas SQL hizo el agente, `tokens_in`/`tokens_out` opcionales para telemetría, `created_at` TIMESTAMPTZ). Índices: `(user_id, tenant_id, updated_at)` en sesiones; `(session_id, created_at)` y `(user_id, created_at)` en mensajes. Usadas por un agente IA externo que se conecta a la BD: **solo escribe** en estas dos tablas (4 operaciones: crear sesión, insertar mensaje, tocar `updated_at` de la sesión, eliminar sesión con cascada) y **solo lee** el resto del esquema Laravel (users, tenants, predios, lotes, palmas, etc.).
+**Migración 13 — Rediseño Operación → Planilla del Día:** Alinea el esquema con el wizard de 5 pasos (Info General → Labores de Palma → Labores de Finca → Horas Extras → Finalización). Quita de `operaciones` los campos `hora_inicio_lluvia` y `hora_fin_lluvia` (solo queda `hubo_lluvia` booleano; estados BORRADOR → APROBADA). Simplifica `labores` a catálogo de **Labores de Finca** (`nombre`, `valor_base`, `estado`) — elimina `tipo_pago`, `unidad_medida`, `insumo_id`. Crea `precios_palma` (config per-tenant con `tipo` ∈ {PLATEO, PODA, SANIDAD, OTROS} y `precio_palma` nullable). Rehace `jornales` como tabla unificada con discriminador `categoria` (PALMA|FINCA) + `tipo` (PLATEO|PODA|FERTILIZACION|SANIDAD|OTROS, solo si categoria=PALMA) + `labor_id` (solo si categoria=FINCA). Agrega a `jornales` los campos `descripcion` y `ubicacion` (la columna legacy `horas_extra` fue removida en la migración 16 — ver §6.13). COSECHA no vive en `jornales`: sigue en `registro_cosecha` + `cosecha_cuadrilla`.
+
+**Migración 13.1 — Campos UI Planilla del Día:** Agrega `operaciones.cantidad_lluvia` (decimal 6,2 nullable, milímetros; solo se permite cuando `hubo_lluvia = true`) y `jornales.nombre_trabajo` (varchar 255 nullable; obligatorio solo para `tipo = OTROS`). Son los dos campos que el wizard mostraba en UI y no tenían columna dedicada.
+**Migración 15 — Transportadoras, Extractoras y Refactor de Viajes (3 tablas nuevas + alter viajes):** Crea `empresa_transportadora` (catálogo paramétrico por tenant con `razon_social`, `nit` único por tenant, datos de contacto nullables, `estado`), `transportadores` (relación N:1 con empresa, `nombres`+`apellidos`+`placa_vehiculo` obligatorios y únicos por tenant, documentos, licencia, capacidad), y `extractoras` (plantas extractoras de aceite con `razon_social`, `nit` único por tenant, `ubicacion`, FKs opcionales a `departamentos`/`municipios`, `distancia_km`). Refactoriza `viajes`: agrega `empresa_transportadora_id`/`transportador_id`/`extractora_id` (snapshots con `restrictOnDelete`), `remision` (auto-generada `REM-{YYYY}-{NNN}` única por tenant), `hora_salida`, timestamps de transición (`despachado_at`, `llegada_planta_at`, `finalizado_at`) y `creado_por`. Renombra la columna `estado` boolean a `estado_activo` y agrega un nuevo `estado` varchar(20) con check constraint `('CREADO','EN_CAMINO','EN_PLANTA','FINALIZADO')`. Elimina la columna legacy `numero_viaje`.
+
+**Migración 15.1 — Reconteo aprobado en viaje_detalle:** Agrega a `viaje_detalle` las columnas `reconteo_aprobado` (bool, default `false`), `reconteo_aprobado_at` y `reconteo_aprobado_por` (FK a `users`, `nullOnDelete`), más índice `(tenant_id, reconteo_aprobado)`. Crea también un **unique index parcial** `viaje_detalle_cosecha_activa_unique ON viaje_detalle (cosecha_id) WHERE estado = true` que garantiza que una cosecha solo puede estar en un viaje activo a la vez. Habilita el flujo de auto-despacho: cuando todos los detalles de un viaje quedan `reconteo_aprobado = true`, el viaje transiciona automáticamente a `EN_CAMINO`.
+
+**Migración 16 — Fix `viajes.cantidad_gajos_total` nullable:** La migración 6 (`2026_01_01_000003`) creó `cantidad_gajos_total` como `NOT NULL`, lo cual entra en conflicto con el flujo de creación de viaje: en estado `CREADO` el valor aún no existe — se hidrata luego al aprobar el reconteo de cada detalle (`SUM(registro_cosecha.gajos_reconteo)`). La migración ejecuta `ALTER TABLE viajes ALTER COLUMN cantidad_gajos_total DROP NOT NULL` para permitir el insert inicial. El down revierte con backfill a 0 antes de restaurar el NOT NULL.
+
+**Migración 18 — OCR del formulario de extractora con Claude Vision (1 tabla nueva):** Crea `viaje_documento_bascula` (formulario de extractora adjunto a un viaje: FK `viaje_id` restrictOnDelete, `archivo_path`, `mime_type`, `archivo_tamano`, `estado_ocr` con CHECK IN `PENDIENTE, PROCESANDO, COMPLETADO, REVISION_MANUAL, FALLIDO`, `peso_extraido`, `confianza`, `modelo_usado`, `respuesta_claude` JSONB con el payload crudo, `error_mensaje`, `intentos`, `procesado_at`). Migración 19 (`add_datos_extraidos_to_viaje_documento_bascula`) agrega `datos_extraidos` JSONB con el subset normalizado de los 10 campos que el frontend consume. Se usa en un Job asíncrono (`ProcesarFormularioExtractoraJob`) que llama a Claude Vision para extraer 10 campos del formulario (3 críticos: peso/fecha/hora; 7 opcionales). El Job **no toca la tabla `viajes`** — solo guarda los datos extraídos en el documento. La hidratación y el cierre del viaje los hace el operador después de revisar los datos en el frontend, vía `PATCH /viajes/{id}/validar` + `POST /viajes/{id}/finalizar`. Ver §6.5 y [docs/API_VIAJES_OCR_BASCULA.md](docs/API_VIAJES_OCR_BASCULA.md).
+
+**Migración 17 — Horas Extras (2 tablas nuevas + drop columna legacy + alter nomina_empleado + tabla de snapshots):** Crea `tipos_hora_extra` (catálogo paramétrico por tenant: `codigo` único por tenant con CHECK constraint ∈ {HED, HEN, RN, HRD, HEDF, HENF, RND}, `nombre`, `porcentaje_recargo`, `franja_horaria` ∈ {DIURNO, NOCTURNO, MIXTO}, `aplica_festivo`, `es_extra`, `paga_hora_completa`, `estado`) y `horas_extra` (registros anidados a operación: `operacion_id`/`empleado_id`/`tipo_hora_extra_id` restrictOnDelete, snapshots `codigo`/`porcentaje_recargo`/`paga_hora_completa`, `cantidad_horas`, `valor_hora_base`, `valor_calculado`, máquina de estados PENDIENTE → APROBADA/RECHAZADA → LIQUIDADA, `nomina_id` al liquidar, soporte offline con `sync_uuid`/`sync_estado`). Elimina la columna legacy `jornales.horas_extra` que nunca se conectó al endpoint. Agrega a `nomina_empleado` las columnas `total_horas_extra` (suma de `es_extra=true`) y `total_recargos` (suma de `es_extra=false`), separadas para cálculo correcto de prestaciones sociales. Crea `nomina_hora_extra_ref` (snapshots al cerrar nómina, análoga a `nomina_jornal_ref`). Seeder `TipoHoraExtraSeeder` siembra los 7 tipos legales colombianos (CST arts. 168/179 + Ley 789/2002 art. 26) idempotentemente por tenant activo.
+
+**Migración 14 — Chat del Agente IA (2 tablas nuevas):** Crea `agro_chat_sessions` (conversaciones del usuario con el agente IA: `user_id` + `tenant_id` con `ON DELETE CASCADE`, `titulo`, `created_at`/`updated_at` como `TIMESTAMPTZ`) y `agro_chat_messages` (mensajes individuales: `session_id` FK cascade a sessions, `user_id`, `tenant_id`, `role` `user|assistant|system|tool`, `content` texto, `tool_calls` JSONB para auditar qué consultas SQL hizo el agente, `tokens_in`/`tokens_out` opcionales para telemetría, `created_at` TIMESTAMPTZ). Índices: `(user_id, tenant_id, updated_at)` en sesiones; `(session_id, created_at)` y `(user_id, created_at)` en mensajes. Usadas por un agente IA externo que se conecta a la BD: **solo escribe** en estas dos tablas (4 operaciones: crear sesión, insertar mensaje, tocar `updated_at` de la sesión, eliminar sesión con cascada) y **solo lee** el resto del esquema Laravel (users, tenants, predios, lotes, palmas, etc.).
 
 ### 5.2 Convención de índices
 
@@ -182,7 +195,23 @@ Todas las tablas de negocio tienen como mínimo un índice compuesto `(tenant_id
 
 ### 5.3 Soporte offline
 
-Las tablas `jornales`, `viajes`, `registro_cosecha` y `ausencias` tienen campos `sync_uuid` (UUID generado offline para evitar duplicados) y `sync_estado` (LOCAL o SINCRONIZADO). Cuando el supervisor registra datos en campo sin internet, la PWA los guarda localmente y al reconectar los envía al backend. El backend detecta duplicados por `sync_uuid` y no los re-inserta.
+Las tablas `jornales`, `viajes`, `registro_cosecha`, `ausencias` y `horas_extra` tienen campos `sync_uuid` (UUID generado offline para evitar duplicados) y `sync_estado` (LOCAL o SINCRONIZADO). Cuando el supervisor registra datos en campo sin internet, la PWA los guarda localmente y al reconectar los envía al backend. El backend detecta duplicados por `sync_uuid` y no los re-inserta.
+
+### 5.4 Filosofía de borrado: hard delete + `estado`, salvo dos excepciones
+
+Por default el proyecto usa **hard delete** (eliminación física) y un campo `estado` boolean en cada tabla operativa para "desactivar lógicamente" sin borrar (por ejemplo `PATCH /toggle`). Esto evita la complejidad de soft deletes en cascada y mantiene queries simples.
+
+**Excepciones documentadas que sí usan el trait `SoftDeletes` (con columna `deleted_at`):**
+
+1. **`tenants`** — un tenant es un ente global que puede reactivarse; no se borra físicamente para conservar trazabilidad inter-tenant.
+2. **`empleados`** — desde la migración `2026_04_28_000002_add_soft_deletes_to_empleados.php`. El motivo es preservar el historial laboral (jornales, nómina, cosechas, contratos, documentos) cuando se elimina un colaborador desde la UI. Detalles operativos en §6.3 ("Soft delete + restauración").
+
+   - El `UNIQUE (tenant_id, documento)` se reemplazó por un **índice parcial** `WHERE deleted_at IS NULL` para permitir recrear empleados con el mismo documento tras un soft delete.
+   - Las reglas `Rule::unique(...)` en `StoreEmpleadoRequest` y `UpdateEmpleadoRequest` agregan `whereNull('deleted_at')` para alinearse con el índice.
+   - El `BelongsToTenant` global scope (filtra por `tenant_id`) y el `SoftDeletingScope` (filtra por `deleted_at IS NULL`) coexisten sin conflicto: cada uno aporta su `WHERE` independientemente.
+   - Las relaciones inversas (`Jornal::empleado`, `NominaEmpleado::empleado`, etc.) por default ocultan empleados soft-deleted; cuando un reporte histórico necesite mostrar el nombre, debe usarse `with(['empleado' => fn($q) => $q->withTrashed()])`.
+
+Si en el futuro otro modelo necesita soft delete, se debe documentar aquí explícitamente y cubrir: (1) índices únicos parciales, (2) reglas de validación, (3) carga `withTrashed` en relaciones inversas, (4) endpoint de restauración + auditoría.
 
 ---
 
@@ -220,23 +249,19 @@ Los lotes pueden asociarse con una o más **semillas** (variedades de palma) a t
 
 Modelos: Predio, Lote, Sublote, Linea, Palma, Semilla, SemillaLote, PromedioLote, PrecioCosecha.
 
-### 6.2 Módulo de Insumos y Labores
+### 6.2 Módulo de Insumos, Labores y Precios
 
-**Insumos** son los fertilizantes, herbicidas y demás productos agrícolas. Cada insumo registra únicamente qué producto es (nombre + unidad de medida). Los insumos **no** determinan el precio de la labor — solo indican qué producto se entrega al trabajador.
+**Insumos** (`insumos`) son los fertilizantes, herbicidas y demás productos agrícolas. Cada insumo registra únicamente qué producto es (nombre + unidad de medida). El insumo **no** determina el precio — solo indica qué producto se entrega al trabajador cuando la labor es FERTILIZACION.
 
-**Precios de Abono** (`precio_abono`) es una tabla de escalas **genérica por tenant** que define el precio por palma según los gramos aplicados. Aplica a **todas** las labores de tipo `POR_PALMA_INSUMO` sin importar qué insumo se use. Ejemplo: si un trabajador aplica 200g/palma, el sistema busca en `precio_abono` el rango que contiene 200g y obtiene el precio correspondiente. Típicamente son pocos registros (3-6 rangos por tenant).
+**Precios de Abono** (`precio_abono`) es una tabla de escalas **genérica por tenant** que define el precio por palma según los gramos aplicados. Se usa exclusivamente en jornales de tipo FERTILIZACION. Ejemplo: si un trabajador aplica 200g/palma, el sistema busca el rango que contiene 200g y obtiene `precio_palma`. Típicamente son pocos registros (3-6 rangos por tenant).
 
-**Labores** son los tipos de trabajo que se realizan en campo. Cada labor tiene uno de tres tipos de pago:
+**Precios de Palma** (`precios_palma`) es la config per-tenant del precio por palma para los demás tipos de Labores de Palma de precio fijo: PLATEO, PODA, SANIDAD, OTROS. Cada tenant tiene a lo sumo un registro por `tipo` (UNIQUE). `precio_palma` puede ser NULL para SANIDAD/OTROS mientras no se decida cobrar esas labores — el jornal se guarda con `valor_total = NULL` y el cálculo se activa luego sin cambio de esquema.
 
-- **`JORNAL_FIJO`**: Se paga un valor fijo por día de trabajo. Requiere `valor_base` (tarifa diaria). No usa insumo.
-- **`POR_PALMA_INSUMO`**: Se paga según la cantidad de palmas trabajadas y los gramos aplicados. Requiere `insumo_id` (solo para identificar qué producto se entrega, **no determina el precio**). El precio por palma se obtiene de la tabla genérica `precio_abono` según el rango de gramos aplicados.
-- **`POR_PALMA_SIMPLE`**: Se paga un valor fijo por cada palma trabajada, sin insumo. Requiere `valor_base` (precio por palma). No usa insumo.
+**Precios de Cosecha** (`precios_cosecha`) define el precio pagado por gajo/kg de cosecha según el lote y año (existente, no cambia).
 
-El modelo Labor tiene helpers: `esJornalFijo()`, `esPorPalma()` (true para ambos POR_PALMA_*), `requiereInsumo()`.
+**Labores** (`labores`) es el catálogo paramétrico **exclusivo de Labores de Finca** (arreglos, mantenimiento, transporte interno, etc.). Cada labor tiene `nombre` + `valor_base` (precio fijo que gana el empleado al registrarla). **No** se usa para las Labores de Palma — esas se resuelven con el `tipo` dentro de `jornales` y las tablas de precios (`precios_palma` / `precio_abono` / `precios_cosecha`).
 
-**Validación** (`StoreLaborRequest`): Valida que cada tipo de pago tenga los campos requeridos y prohíbe los que no aplican (ej: `POR_PALMA_INSUMO` exige `insumo_id`, `JORNAL_FIJO` lo prohíbe).
-
-Modelos: Insumo, PrecioAbono, Labor.
+Modelos: Insumo, PrecioAbono, PrecioPalma, Labor.
 
 ### 6.3 Módulo de Empleados
 
@@ -244,60 +269,111 @@ Modelos: Insumo, PrecioAbono, Labor.
 
 **Cargos (`cargos`):** Catálogo de puestos de trabajo con modalidad de contrato asociada y tipo de salario (`FIJO`/`VARIABLE`). Se mantiene como tabla paramétrica independiente, **sin relación FK con empleados** — el cargo se escribe directamente en el registro del empleado.
 
-**Empleados:** Registro completo con nombre desagregado en 4 campos (`primer_nombre`, `segundo_nombre`, `primer_apellido`, `segundo_apellido`). Incluye datos de identificación (tipo de documento: CC, TI, PASAPORTE, CE, PPT; número, fecha de expedición obligatoria, lugar de expedición), cargo directo (`cargo` string, `salario_base` decimal, `modalidad_pago` FIJO/VARIABLE), predio asignado (`predio_id` nullable FK a `predios`), fechas laborales (`fecha_ingreso` obligatoria, `fecha_retiro` nullable), seguridad social colombiana (EPS, ARL, pensión, caja de compensación), datos bancarios (tipo de cuenta, entidad, número — como VARCHAR para soportar ceros iniciales), tallas de dotación, y contacto de emergencia. La unicidad del documento es por tenant (dos tenants pueden tener empleados con el mismo documento).
+**Empleados:** Registro completo con nombre desagregado en 4 campos (`primer_nombre`, `segundo_nombre`, `primer_apellido`, `segundo_apellido`). Incluye datos de identificación (tipo de documento: CC, TI, PASAPORTE, CE, PPT; número, fecha de expedición obligatoria, lugar de expedición), cargo directo (`cargo` string, `salario_base` decimal, `modalidad_pago` FIJO/VARIABLE), predio asignado (`predio_id` nullable FK a `predios`), fechas laborales (`fecha_ingreso` obligatoria, `fecha_retiro` nullable), seguridad social colombiana (EPS, ARL, pensión, caja de compensación), datos bancarios (tipo de cuenta, entidad, número — como VARCHAR para soportar ceros iniciales), tallas de dotación, contacto de emergencia y avatar opcional (`avatar_path`). La unicidad del documento es por tenant **y solo entre empleados activos** — la columna `documento` tiene un índice único parcial `WHERE deleted_at IS NULL`, lo que permite recrear un colaborador con el mismo documento después de un soft delete.
+
+**Regla de `salario_base` por modalidad (Store/Update):** `salario_base` es obligatorio solo cuando `modalidad_pago = FIJO` (regla `required_if`). Cuando es `PRODUCCION`, si no se envía, el FormRequest auto-completa con `tenant_config.salario_minimo_vigente` vía `prepareForValidation()`. Si es PRODUCCION y el tenant no tiene SMLV configurado, devuelve 422 con mensaje descriptivo pidiendo configurar el SMLV primero. El contrato vigente creado junto con el empleado hereda el salario ya resuelto.
+
+**Avatar del colaborador:** Imagen opcional almacenada en disco `public` (URL accesible directamente, mismo patrón que el logo del tenant) en `storage/app/public/tenants/{tenant_id}/empleados/{empleado_id}/avatar/`. Validación: solo `jpg`, `jpeg`, `png`, `webp`, máx **3 MB**. La URL pública se expone como atributo calculado `avatar_url` en el modelo (vía `$appends`); el `avatar_path` interno está en `$hidden`. Endpoints `POST /colaboradores/{id}/avatar` (subir/reemplazar — borra el anterior automáticamente) y `DELETE /colaboradores/{id}/avatar` (limpia archivo y campo). Auditado como módulo `COLABORADORES` con acción `EDITAR`.
+
+**Soft delete + restauración:** El modelo usa el trait `SoftDeletes` (única excepción del proyecto junto con `tenants`, ver §5.2 Filosofía de borrado). `DELETE /colaboradores/{id}` marca `deleted_at` sin tocar el historial ni los archivos en disco; jornales, nómina, cosechas, contratos y documentos quedan intactos referenciando al `empleado_id`. El listado y dropdowns ocultan los eliminados por default; los flags `?incluir_eliminados=true` (mezcla activos + eliminados) y `?solo_eliminados=true` (vista de papelera) permiten exponer la vista administrativa. Restauración con `POST /colaboradores/{id}/restaurar` (permiso `colaboradores.crear`, ruta usa `withTrashed()` en el route binding) — falla con 409 `EMPLEADO_NO_ELIMINADO` o 409 `DOCUMENTO_DUPLICADO` si mientras estaba eliminado se creó otro colaborador con el mismo documento. Auditado como acción `RESTAURAR` (acción libre, no enum). En reportes históricos donde sea necesario seguir mostrando el nombre del colaborador eliminado, los controllers consumidores deben cargar la relación con `withTrashed()` (follow-up por hacer en `JornalController`, `NominaEmpleadoController`, `AusenciaController`, `CosechaCuadrillaController` cuando aparezcan huecos en QA).
 
 **Contratos del empleado (`empleado_contratos`):** Historial de contratos laborales de cada empleado. Cada contrato registra: fecha de inicio, fecha de terminación (nullable), salario acordado (snapshot al momento de firma), estado del contrato (`VIGENTE` o `TERMINADO`), y adjunto PDF escaneado (ruta en disco local privado). Al crear un nuevo contrato VIGENTE, los anteriores deben marcarse como TERMINADO (lógica en capa de aplicación). Los campos `fecha_ingreso` y `fecha_retiro` en `empleados` se usan para cálculos de nómina y prestaciones.
 
 **Documentos del empleado (`empleado_documentos`):** Documentos digitales organizados por categoría, cada uno con archivo adjunto almacenado en disco local privado (`storage/app/private/tenants/{tenant_id}/empleados/{empleado_id}/documentos/`). Las categorías son:
-- **DATOS_BASE** (único por tipo): Documento de identidad, Hoja de vida, Antecedentes, Autorización de datos personales.
-- **CONTRATACION_LABORAL** (único por tipo): Contrato de trabajo, Acuerdo de confidencialidad.
-- **SST** (único por tipo): Examen de ingreso.
+- **DATOS_BASE** (único por tipo — el upload reemplaza al existente): Documento de identidad, Hoja de vida, Antecedentes, Autorización de datos personales.
+- **CONTRATACION_LABORAL** (N documentos del mismo tipo): Contrato de trabajo, Acuerdo de confidencialidad.
+- **SST** (N documentos del mismo tipo): Examen de ingreso.
 - **PERMISOS_LICENCIAS** (N documentos, tipo personalizado desde frontend).
 - **FINALIZACION_CONTRATO** (N documentos, tipo fijo: `FINALIZACION_CONTRATO`).
 - **DESPRENDIBLES** (N documentos, tipo fijo: `DESPRENDIBLES`).
 - **OTROS** (N documentos, tipo personalizado desde frontend).
 
-Las categorías y sus tipos predefinidos están centralizados en `App\Constants\DocumentoCategoria`.
+Las categorías y sus tipos predefinidos están centralizados en `App\Constants\DocumentoCategoria`. **Solo `DATOS_BASE` tiene `unico_por_tipo: true`** — al subir un documento del mismo tipo el anterior se elimina automáticamente del disco y de la BD. El resto de categorías acumulan múltiples documentos del mismo tipo.
+
+**Acceso a archivos de documentos (descarga vs preview):** Como los archivos están en disco privado, todo acceso pasa por endpoints autenticados que validan tenant + permiso + pertenencia al empleado. Hay dos modos:
+- `GET /colaboradores/{id}/documentos/{docId}/descargar` → `Content-Disposition: attachment` (fuerza diálogo "Guardar como"), funciona con cualquier mime type.
+- `GET /colaboradores/{id}/documentos/{docId}/visualizar` → `Content-Disposition: inline` para renderizar en `<iframe>` (PDF) o `<img>` (imágenes). Solo acepta mimes `application/pdf`, `image/jpeg`, `image/png`, `image/webp`; otros responden 415 `MIME_NOT_PREVIEWABLE` y el frontend debe redirigir a `/descargar`. Como ambos endpoints requieren `Authorization` y `X-Tenant-Id`, **el frontend nunca debe usar la URL directa en `<iframe src>` ni `<a href>`**: tiene que pedir el blob por JS y construir un `URL.createObjectURL()`.
 
 Modelos: ModalidadContrato, Cargo, Empleado, EmpleadoContrato, EmpleadoDocumento.
 
 ### 6.4 Módulo de Jornales
 
-Un **jornal** es un registro diario de trabajo de un empleado dentro de una **operación** (planilla diaria). Vincula al empleado con una labor, opcionalmente con un lote/sublote. El jornal **no tiene campo `fecha` propio** — la fecha se obtiene de la operación padre (`operacion.fecha`). El campo `operacion_id` es obligatorio (NOT NULL).
+Un **jornal** es una fila por `(operación × empleado × labor)` que describe lo que ganó un empleado ese día. La tabla `jornales` es **unificada** y usa un discriminador de dos niveles:
 
-Tanto empleados de salario **FIJO** como **VARIABLE** pueden tener jornales registrados. El sistema no distingue entre ellos al registrar la operación diaria — todos los empleados que trabajaron ese día aparecen en la planilla con sus labores asignadas. La diferencia está en cómo la **nómina** usa esa información después:
+- `categoria` ∈ {`PALMA`, `FINCA`}
+- `tipo` ∈ {`PLATEO`, `PODA`, `FERTILIZACION`, `SANIDAD`, `OTROS`} — solo cuando `categoria = PALMA`
+- `labor_id` (FK a `labores`) — solo cuando `categoria = FINCA`
 
-| | Empleado VARIABLE | Empleado FIJO |
+**COSECHA NO vive en `jornales`.** Se maneja en `registro_cosecha` (cabecera por sublote) + `cosecha_cuadrilla` (distribución por empleado), porque es labor de cuadrilla. Las demás Labores de Palma se registran una por empleado (un colaborador por tarjeta en el wizard).
+
+La fecha del jornal se obtiene de la operación padre (`operacion.fecha`); no existe columna `fecha` propia. `operacion_id` es NOT NULL.
+
+Tanto empleados de salario **FIJO** como **PRODUCCION** pueden tener jornales registrados. El sistema no distingue al registrar — todos los empleados que trabajaron aparecen en la planilla con sus labores. La diferencia está en cómo la **nómina** consume esa información:
+
+| | Empleado PRODUCCION | Empleado FIJO |
 |---|---|---|
 | Se registra jornal en operación | Sí | Sí |
 | El jornal calcula `valor_total` | Sí | Sí |
 | En nómina, `valor_total` determina su pago | **Sí** — su sueldo es la suma de jornales + cosechas del período | **No** — su sueldo es `empleado.salario_base` siempre |
 | ¿Para qué sirve el jornal? | Para calcular su pago | Para **control/tracking** (saber qué hizo ese día) |
 
-Cada jornal guarda un **snapshot** del tipo de pago (`tipo_pago`) de la labor al momento de creación, para que si la labor cambia después, el jornal mantiene el contexto original de cálculo.
-
 **Lógica de cálculo** (centralizada en `JornalCalculationService`):
-- Si la labor es `JORNAL_FIJO`: `valor_total = labor.valor_base × dias_jornal`
-- Si la labor es `POR_PALMA_INSUMO`: Se busca en la tabla genérica `precio_abono` (por tenant, sin importar el insumo) el rango que corresponde a los `gramos_por_palma`, se obtiene el `precio_palma`, se guarda en `precio_insumo_snapshot`, y `valor_total = precio_palma × cantidad_palmas`
-- Si la labor es `POR_PALMA_SIMPLE`: `valor_total = labor.valor_base × cantidad_palmas`
+- `calcularPalma(tipo=PLATEO|PODA, ...)`: busca `precios_palma` para `(tenant, tipo)` → `valor_total = cantidad_palmas × precio_palma`.
+- `calcularPalma(tipo=FERTILIZACION, ...)`: busca `precio_abono` por rango de gramos → guarda `precio_insumo_snapshot` y `valor_total = cantidad_palmas × precio_palma`.
+- `calcularPalma(tipo=SANIDAD|OTROS, ...)`: busca `precios_palma` para `(tenant, tipo)` → `valor_total = precio_palma` (valor plano, sin multiplicar). Si `precio_palma` IS NULL, `valor_total = NULL` (se activa luego sin cambio de esquema). SANIDAD/OTROS no usan `cantidad_palmas`.
+- `calcularFinca(labor_id)`: `valor_total = labor.valor_base`. La columna legacy `jornales.horas_extra` fue **eliminada** (migración `2026_04_24_000003`); las horas extras ahora viven en una tabla dedicada `horas_extra` con su propia máquina de estados (ver §6.13).
 
-**Campos condicionales por tipo:**
+**Campos por categoría + tipo:**
 
-| Campo | JORNAL_FIJO | POR_PALMA_INSUMO | POR_PALMA_SIMPLE |
-|---|---|---|---|
-| `dias_jornal` | Requerido (0.5, 1.0, etc.) | Default 1.0 | Default 1.0 |
-| `cantidad_palmas` | No aplica (null) | Requerido | Requerido |
-| `gramos_por_palma` | No aplica (null) | Requerido | No aplica (null) |
-| `precio_insumo_snapshot` | null | Snapshot del precio de abono | null |
-| `valor_unitario` | labor.valor_base | precio de abono | labor.valor_base |
+| Campo | PLATEO | PODA | FERTILIZACION | SANIDAD | OTROS | FINCA |
+|---|---|---|---|---|---|---|
+| `categoria` | PALMA | PALMA | PALMA | PALMA | PALMA | FINCA |
+| `tipo` | PLATEO | PODA | FERTILIZACION | SANIDAD | OTROS | NULL |
+| `labor_id` | NULL | NULL | NULL | NULL | NULL | ✔ |
+| `lote_id` / `sublote_id` | ✔ | ✔ | ✔ | ✔ | ✔ | NULL |
+| `cantidad_palmas` | ✔ | ✔ | ✔ | NULL | NULL | NULL |
+| `insumo_id` | NULL | NULL | ✔ | NULL | NULL | NULL |
+| `gramos_por_palma` | NULL | NULL | ✔ | NULL | NULL | NULL |
+| `descripcion` | NULL | NULL | NULL | ✔ | ✔ | NULL |
+| `ubicacion` | NULL | NULL | NULL | NULL | NULL | ✔ |
+| `valor_total` | palmas × precio | palmas × precio | palmas × precio | NULL u calc | NULL u calc | labor.valor_base |
 
-**Validación** (`StoreJornalRequest`): Valida condicionalmente según el `tipo_pago` de la labor seleccionada.
+**Validación** (`StoreJornalRequest`): aplica las reglas condicionales arriba (categoría PALMA ⇒ tipo obligatorio y labor_id prohibido; FINCA ⇒ inverso; cada tipo valida sus propios campos obligatorios).
 
-Este módulo es **crítico para offline** — los supervisores registran jornales en campo sin internet.
+Este módulo es **crítico para offline** — los supervisores registran jornales en campo sin internet (`sync_uuid`, `sync_estado`).
 
-Modelo: Jornal. Servicio: JornalCalculationService.
+Modelos: Jornal, Labor, PrecioPalma, PrecioAbono. Servicios: JornalCalculationService, CosechaCalculationService.
+
+**API expuesta (Paso 1 + Paso 2 + Paso 3 del wizard):**
+- `OperacionController`: `GET/POST/PUT/DELETE /operaciones`, `POST /operaciones/{id}/aprobar`, `GET /operaciones/{id}/resumen`.
+- `RegistroCosechaController`: `POST /operaciones/{id}/cosechas`, `PUT|DELETE /cosechas/{id}`. Usa `CosechaCalculationService` para calcular cabecera (`valor_total = peso_confirmado × precios_cosecha.precio`) y distribuir `valor_total / N` en partes iguales en `cosecha_cuadrilla`. El cálculo se dispara tanto en POST (si viene `peso_confirmado`) como en PUT (al hidratar el peso posteriormente). Si llega `peso_confirmado` y no hay `precios_cosecha` configurado para el (lote, año), devuelve 422 `CALC_ERROR`. El snapshot `precio_cosecha` en la fila se preserva entre ediciones (solo se refresca si era NULL y llega peso por primera vez). Usa `StoreRegistroCosechaRequest` y `UpdateRegistroCosechaRequest` (FormRequests dedicados).
+- `JornalController`: `POST /operaciones/{id}/jornales`, `PUT|DELETE /jornales/{id}`. Invoca `JornalCalculationService` para hidratar `valor_unitario`, `precio_insumo_snapshot` y `valor_total`. Soporta tanto Labores de Palma (Paso 2, `categoria=PALMA`) como Labores de Finca (Paso 3, `categoria=FINCA` con `labor_id` → `valor_total = labor.valor_base`).
+- `LaborController`: CRUD paramétrico de `labores` bajo `configuracion.editar` + `GET /labores/select` abierto a operadores (`operaciones.crear|editar`) para poblar el dropdown "Labor" del Paso 3. El select devuelve `{id, nombre, valor_base}` sin paginación y filtra `estado=true` por default.
+- Selects de Lote/Sublote para el wizard: existen **dos pares de endpoints separados**, no se mezclan permisos.
+  - `GET /lotes/select` y `GET /sublotes/select`: del módulo de Plantación. Conservan sus permisos originales (`lotes.ver` / `sublotes.ver` + `operaciones.crear|editar` vía OR-logic). Los usa el CRUD admin de Plantación.
+  - `GET /operaciones/lotes/select` y `GET /operaciones/sublotes/select`: **nuevos**, dedicados al Paso 2 (Labores de Palma) del wizard. Solo requieren `operaciones.crear|editar` (mismo patrón que los demás selects auxiliares del wizard). Reutilizan los mismos métodos de controlador. El payload de `/operaciones/sublotes/select` incluye `cantidad_palmas`, que el frontend usa para **auto-rellenar** el input "Número de Palmas" al elegir un sublote en las tarjetas de PLATEO/PODA/FERTILIZACION (el campo sigue editable). No aplica a SANIDAD/OTROS.
+- Creación de insumo desde el wizard: `POST /operaciones/insumos` (requiere `operaciones.crear|editar`). Para el flujo "Otro" del dropdown "Tipo de Fertilizante" en la tarjeta de FERTILIZACION del Paso 2. Solo recibe `nombre`; el backend setea `unidad_medida = 'GRAMOS'` por default y devuelve `{id, nombre, unidad_medida}` para que el front lo use de inmediato como `insumo_id` del jornal. Constraint UNIQUE `(tenant_id, nombre)` en DB (migración `2026_05_04_000001_add_unique_tenant_nombre_to_insumos`); duplicados rebotan con 409 `INSUMO_DUPLICADO`. Audita vía `AuditoriaService::registrarCreacion('INSUMOS', ...)` con observación que indica el origen wizard.
+- Permiso nuevo: `operaciones.aprobar` (además de los `operaciones.ver/crear/editar/eliminar` existentes).
+- Bloqueos: cualquier PUT/DELETE sobre una planilla APROBADA devuelve 409 `OPERACION_APROBADA`.
+- Contrato completo con payloads y ejemplos: [docs/API_OPERACIONES.md](docs/API_OPERACIONES.md).
 
 ### 6.5 Módulo de Cosecha y Viajes
+
+Un **viaje** representa un despacho de fruto de palma desde el predio hacia una **extractora** (planta de beneficio). Se apoya en tres tablas paramétricas por tenant: `empresa_transportadora` (empresas de transporte), `transportadores` (conductores con su placa_vehiculo, hijos N:1 de una empresa) y `extractoras` (plantas destino). Al crear un viaje se selecciona un transportador y una extractora: el backend copia como **snapshot** `empresa_transportadora_id`, `placa_vehiculo` y `nombre_conductor` en la fila de `viajes` para preservar histórico.
+
+Cada viaje lleva un identificador **`remision`** con formato `REM-{YYYY}-{NNN}` auto-generado atómicamente por tenant+año (reemplaza el campo legacy `numero_viaje`, que fue eliminado). El viaje sigue una máquina de **tres estados**:
+
+```
+CREADO ──▶ EN_VALIDACION ──▶ FINALIZADO
+```
+
+- **CREADO**: se enlazan cosechas al viaje (`viaje_detalle`) y se hace el **reconteo de gajos**. El reconteo hidrata `registro_cosecha.gajos_reconteo` vía el endpoint dedicado `PUT /viajes/{id}/reconteo` (el cual también refresca `viajes.cantidad_gajos_total = SUM(gajos_reconteo)`). Solo en este estado el viaje es editable. Hay **dos rutas de salida**: (1) aprobar el reconteo del último detalle dispara la auto-transición a `EN_VALIDACION` (fincas que pagan por producción); (2) `POST /viajes/{id}/saltar-validacion` para fincas que pagan por jornal y no llevan control de cosechas — no exige detalles ni reconteos aprobados.
+- **EN_VALIDACION**: el camión llegó a la extractora y se está validando lo que reportaron. Aquí se hidratan los datos del **formulario de extractora**: `peso_viaje`, `numero_remision_extractora`, `fecha_llegada`, `hora_llegada`, `racimos_recibidos`, `temperatura_pulpa`, `acidez_inicial`, `humedad_semilla`, `calidad_materia_prima` (`excelente`|`buena`|`regular`|`deficiente`) y `observaciones_extractora`. La hidratación puede ser por OCR (subir foto/PDF a `POST /documento-bascula` — pendiente de refactor) o manual (`PATCH /viajes/{id}/validar`).
+- **FINALIZADO**: cerrado. Se dispara el cálculo HOMOGENEO/NO_HOMOGENEO **solo si hay detalles enlazados con peso y gajos**; los viajes "paga por jornal" sin detalles cierran sin recalcular nada.
+
+El borrado lógico del viaje ahora vive en la columna **`estado_activo`** (boolean, renombrada del antiguo `estado`); solo se permite mientras el viaje no esté `FINALIZADO`.
+
+El dashboard de viajes expone **indicadores agregados** vía `GET /viajes/indicadores?periodo=MENSUAL|SEMANAL|ANUAL|CUSTOM&desde=&hasta=`, que retorna en una sola respuesta: `total_viajes`, `en_camino`, `finalizados`, `kilogramos_totales` (SUM `peso_viaje`) y `gajos_totales` (SUM `cantidad_gajos_total`). El listado `GET /viajes` acepta filtros por remision, fecha, estado, vehiculo (placa snapshot), conductor (snapshot), `extractora_id`, `transportador_id`, `empresa_transportadora_id`.
 
 Un **viaje** representa un cargamento de fruto de palma que sale de la finca. Registra la placa del vehículo, conductor, fecha, peso total del viaje, y cantidad total de gajos (racimos).
 
@@ -305,15 +381,27 @@ Un **registro de cosecha** es la producción de un sublote dentro de una **opera
 
 El **viaje_detalle** es el pivot que conecta un viaje con múltiples registros de cosecha (un viaje puede llevar fruto de varios sublotes).
 
-La **cosecha_cuadrilla** distribuye el valor de cada cosecha entre los empleados que participaron. Si 4 empleados cosecharon un sublote, el valor se divide entre ellos.
+La **cosecha_cuadrilla** distribuye el valor de cada cosecha entre los empleados que participaron. Si 4 empleados cosecharon un sublote, el valor se divide entre ellos en partes iguales.
 
-**Tipos de cálculo de cosecha:**
+**Fórmula de cálculo (centralizada en `CosechaCalculationService`):**
+- Cabecera: `valor_total = peso_confirmado × precios_cosecha.precio` (donde `precio` se resuelve por `lote_id + año de la operación`).
+- Cuadrilla: `valor_por_empleado = valor_total / N`, `peso_por_empleado = peso_confirmado / N`.
+- `peso_confirmado` es **opcional** al crear. Si se envía, el cálculo se hace al vuelo (no hay que esperar al viaje). Si no se envía, `valor_total = NULL` y se hidrata luego vía `PUT /cosechas/{id}` con el peso de báscula.
+- Si llega `peso_confirmado` pero no hay `precios_cosecha` configurado para (lote, año), el servicio lanza `InvalidArgumentException` y el controller responde 422 `CALC_ERROR`.
+- `precio_cosecha` en la fila es un **snapshot** escrito al momento del cálculo y se preserva en ediciones posteriores (solo se sobreescribe si era NULL y llega peso por primera vez).
+- `promedio_kg_gajo` es un snapshot histórico (`promedio_lote`) guardado para referencia/reportes; **no participa** en la fórmula del dinero.
+
+**Tipos de cálculo para el módulo de Viajes (futuro, no afecta el valor_total de la cosecha):**
 - `HOMOGENEO`: El promedio kg/gajo se calcula dividiendo peso del viaje entre gajos totales. Todos los sublotes del viaje comparten el mismo promedio.
 - `NO_HOMOGENEO`: Cada sublote usa su propio promedio histórico del año (`promedio_lote`).
 
 Este módulo también es **crítico para offline**.
 
-Modelos: Viaje, RegistroCosecha, ViajeDetalle, CosechaCuadrilla.
+Modelos: Viaje, RegistroCosecha, ViajeDetalle, CosechaCuadrilla, EmpresaTransportadora, Transportador, Extractora. Constante: `App\Constants\ViajeEstado` (CREADO, EN_VALIDACION, FINALIZADO + transiciones). Servicios: CosechaCalculationService, ViajeCalculationService, RemisionGeneratorService.
+
+**Permisos:** las paramétricas (`empresa_transportadora`, `transportadores`, `extractoras`) se gestionan bajo `configuracion.editar` (no se crean permisos específicos). Los endpoints de viajes siguen usando `viajes.*` ya existentes. Contrato completo: [docs/API_VIAJES.md](docs/API_VIAJES.md).
+
+**OCR de asistencia del formulario de extractora (Claude Vision):** el operador sube el formulario a `POST /viajes/{id}/documento-bascula` (multipart) cuando el viaje está en `EN_VALIDACION`; el Job `ProcesarFormularioExtractoraJob` llama a `ClaudeVisionService` para extraer 10 campos (3 críticos: `peso_viaje`/`fecha_llegada`/`hora_llegada`; 7 opcionales: número de remisión, racimos, temperatura/acidez/humedad, calidad, observaciones) y los guarda en `viaje_documento_bascula.datos_extraidos` (jsonb). El Job **no toca la tabla `viajes`** — el frontend hace polling al GET, rellena el formulario con los datos extraídos y muestra una alerta si quedó en `REVISION_MANUAL` (confianza baja o crítico faltante; los datos se guardan igual). El operador revisa, edita si hace falta, y al darle "Finalizar y guardar" el frontend dispara `PATCH /viajes/{id}/validar` (hidrata) + `POST /viajes/{id}/finalizar` (cierra y dispara `ViajeCalculationService::calcularAlFinalizar`). Tenant isolation: el Job restaura `app('current_tenant_id')` al inicio del handle. Modelo: `ViajeDocumentoBascula`. Configuración: variables `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` (default `claude-haiku-4-5-20251001`), `ANTHROPIC_BASCULA_CONFIANZA_MINIMA`. Contrato completo con payloads y troubleshooting: [docs/API_VIAJES_OCR_BASCULA.md](docs/API_VIAJES_OCR_BASCULA.md).
 
 ### 6.6 Módulo de Nómina
 
@@ -368,7 +456,9 @@ Las **ausencias** registran cuándo un empleado no está disponible para trabaja
 
 **Convención de fecha_inicio:** se sincroniza automáticamente con `operacion.fecha` en el `creating` del modelo (`Ausencia::booted()`). Aunque es redundante con la operación padre, se mantiene como columna propia porque las queries de overlap por nómina (`WHERE fecha_inicio <= X AND fecha_fin >= Y`) son críticas para el cálculo y evitan un JOIN constante.
 
-**Catálogo de tipos:** `INCAPACIDAD_EPS`, `INCAPACIDAD_ARL`, `LICENCIA_MATERNIDAD`, `LICENCIA_PATERNIDAD`, `LICENCIA_LUTO`, `PERMISO_REMUNERADO`, `PERMISO_NO_REMUNERADO`, `AUSENCIA_INJUSTIFICADA`, `CALAMIDAD_DOMESTICA`, `SUSPENSION_DISCIPLINARIA`, `OTRO`. El check constraint a nivel de BD restringe los valores válidos.
+**Catálogo paramétrico `motivos_ausencia`:** tabla por tenant con variantes custom de motivos, cada una anclada a un `tipo_base` del enum fijo (`INCAPACIDAD_EPS`, `INCAPACIDAD_ARL`, `LICENCIA_MATERNIDAD`, `LICENCIA_PATERNIDAD`, `LICENCIA_LUTO`, `PERMISO_REMUNERADO`, `PERMISO_NO_REMUNERADO`, `AUSENCIA_INJUSTIFICADA`, `CALAMIDAD_DOMESTICA`, `SUSPENSION_DISCIPLINARIA`, `OTRO`). El check constraint BD restringe los valores válidos en `motivos_ausencia.tipo_base` y en `ausencias.tipo`. El tenant puede crear variantes ("Incapacidad EPS - gripa") todas con el mismo `tipo_base` — la nómina sigue decidiendo por `tipo`. El `MotivoAusenciaSeeder` crea 11 motivos base por tenant activo.
+
+**Snapshot desde el motivo:** al crear una ausencia, el hook `Ausencia::booted()` snapshotea `tipo` ← `motivo.tipo_base`, `es_remunerada`, `afecta_nomina`, y `porcentaje_pago` (default) desde `motivo_ausencia`. Los valores históricos no cambian si el admin edita el motivo después.
 
 **Flujo de aprobación:**
 1. Se crea en estado `PENDIENTE` desde la operación diaria.
@@ -400,7 +490,15 @@ Para soportar esto, `nomina_empleado` tiene 3 columnas adicionales: `dias_ausenc
 
 **Soporte offline:** la tabla incluye `sync_uuid` y `sync_estado`, igual que `jornales` y `registro_cosecha`, para que la PWA pueda registrar ausencias en campo sin internet.
 
-Modelo: Ausencia.
+**API expuesta:**
+- `AusenciaController`: `POST /operaciones/{id}/ausencias`, `PUT|DELETE /ausencias/{id}`, `POST /ausencias/{id}/aprobar`, `POST /ausencias/{id}/rechazar` (con `motivo_rechazo` obligatorio en columna dedicada), `POST /ausencias/{id}/documento` (multipart PDF/imagen, máx 5MB, guardado en `storage/app/tenants/{tenant}/ausencias/{id}/`).
+- `MotivoAusenciaController`: CRUD paramétrico bajo `configuracion.editar` + `GET /motivos-ausencia/select` abierto a operadores del wizard.
+- El wizard del Paso 4 pide solo: `empleado_id`, `motivo_ausencia_id`, `motivo` (observación). Los campos avanzados (`fecha_fin`, `entidad`, `numero_radicado`, `porcentaje_pago`) son opcionales y normalmente los llena el admin desde otro módulo.
+- Aprobar/rechazar/subir documento **funcionan incluso con la operación APROBADA** (flujo administrativo posterior al cierre). PUT/DELETE sí quedan bloqueados con 409 `OPERACION_APROBADA`.
+- Subir documento también bloquea con 409 `AUSENCIA_LIQUIDADA` si la ausencia ya se cerró en nómina.
+- Contrato completo: [docs/API_AUSENCIAS.md](docs/API_AUSENCIAS.md).
+
+Modelos: Ausencia, MotivoAusencia.
 
 ### 6.10 Auditoría
 
@@ -408,7 +506,7 @@ Registra todas las acciones del sistema: login, logout, crear, editar, eliminar.
 
 Modelo: Auditoria.
 
-### 6.12 Chat del Agente IA
+### 6.11 Chat del Agente IA
 
 Un agente de IA externo se conecta directamente a la base de datos PostgreSQL para asistir a los usuarios con consultas sobre su finca. Puede leer todo el esquema Laravel (empleados, predios, lotes, palmas, jornales, nómina, etc.) y persiste las conversaciones en dos tablas propias con prefijo `agro_`:
 
@@ -425,7 +523,7 @@ Un agente de IA externo se conecta directamente a la base de datos PostgreSQL pa
 
 **Aislamiento multi-tenant:** aunque estas tablas son usadas por un servicio externo (no por los controllers Laravel) y por tanto **no** pasan por `BelongsToTenant`, el agente debe siempre incluir `tenant_id` y `user_id` en sus inserts y filtrar por ambos campos en sus queries para evitar fugas de información entre fincas.
 
-### 6.11 Bot de Integraciones (consumo externo de la API)
+### 6.12 Bot de Integraciones (consumo externo de la API)
 
 El sistema soporta un **bot externo** (cliente Python) que lee correos y consume endpoints de la API en nombre de cualquier finca. Está pensado para integraciones donde la información llega por correo (alertas, remisiones, eventos) y debe insertarse/actualizarse en uno o más tenants automáticamente.
 
@@ -461,6 +559,48 @@ El sistema soporta un **bot externo** (cliente Python) que lee correos y consume
 **Nota de seguridad:** otorgar `super_admin` al bot le da acceso técnico a TODOS los tenants. Es aceptable porque (a) el bot vive en un servidor controlado, (b) sus credenciales están en `.env`, (c) solo va a consumir endpoints muy acotados, (d) toda acción queda en auditoría. Si en el futuro el bot pasara a infra del cliente, habría que volver a discutir el modelo.
 
 Documentación completa para el desarrollador del bot: [docs/API_BOT.md](docs/API_BOT.md).
+
+### 6.13 Módulo de Horas Extras
+
+Las **horas extras** son el Paso 4 del wizard de Planilla del Día. Registran el tiempo trabajado por encima de la jornada ordinaria (o los recargos por trabajar en franja nocturna / dominical / festivo) y alimentan la nómina del período. El diseño replica el patrón de Ausencias: un **catálogo paramétrico por tenant** (`tipos_hora_extra`) + **registros anidados** (`horas_extra`) + **máquina de estados** PENDIENTE → APROBADA / RECHAZADA → LIQUIDADA.
+
+**Marco legal colombiano** (Código Sustantivo del Trabajo arts. 168, 179 y Ley 789/2002 art. 26):
+
+| Código | Nombre | % recargo | `es_extra` | `paga_hora_completa` |
+|---|---|---|---|---|
+| HED  | Hora Extra Diurna (6am-9pm)             | 25%  | sí | sí |
+| HEN  | Hora Extra Nocturna (9pm-6am)           | 75%  | sí | sí |
+| RN   | Recargo Nocturno (solo recargo)         | 35%  | no | no |
+| HRD  | Hora Ordinaria Dominical/Festivo        | 75%  | no | sí |
+| HEDF | Hora Extra Diurna Dominical/Festivo     | 100% | sí | sí |
+| HENF | Hora Extra Nocturna Dominical/Festivo   | 150% | sí | sí |
+| RND  | Recargo Nocturno Dominical/Festivo      | 110% | no | no |
+
+`es_extra = false` en RN, HRD y RND porque son **recargos sobre jornada ordinaria**, no tiempo trabajado por encima de la jornada máxima. `paga_hora_completa = false` en RN/RND porque esos recargos solo añaden el porcentaje al salario base (la hora ordinaria ya está cubierta). HRD paga la hora completa porque aplica cuando el empleado trabaja en día de descanso legal.
+
+**Fórmula de cálculo:**
+```
+valor_hora_base = empleado.salario_base / tenant_config.divisor_jornada_mensual  // 240 por default
+
+paga_hora_completa = true  → valor_calculado = cantidad_horas × valor_hora_base × (1 + %recargo/100)
+paga_hora_completa = false → valor_calculado = cantidad_horas × valor_hora_base × (%recargo/100)
+```
+
+Si el empleado no tiene `salario_base` (modalidad PRODUCCION sin pactar), se cae al `tenant_config.salario_minimo_vigente`. Si ambos son null, la API responde 422 `CALC_ERROR`.
+
+**Divisor per-tenant** en `tenant_config.divisor_jornada_mensual` (`smallint NOT NULL default 240`). Valores permitidos: **240** (48h/sem × ~5 semanas — CST tradicional) o **210** (42h/sem — Ley 2101/2021). Al crear una finca desde el super-admin se inicializa automáticamente en 240. El admin del tenant puede cambiarlo vía `PUT /api/v1/tenant/configuracion/nomina` (validación `in:210,240`). El cambio solo afecta nuevas horas extras — los registros existentes tienen `valor_hora_base` snapshotteado al momento de crearse.
+
+**Snapshots**: al crear una hora extra se copian `codigo`, `porcentaje_recargo`, `paga_hora_completa` del tipo paramétrico a la fila. Si luego el admin edita el tipo, los registros históricos no cambian. Lo mismo con `valor_hora_base` (se calcula al momento del registro).
+
+**Relación con nómina**: `nomina_empleado` tiene dos totales separados — `total_horas_extra` (suma de `es_extra=true`) y `total_recargos` (suma de `es_extra=false`) — porque las prestaciones sociales se calculan distinto sobre ambos rubros (cesantías, prima, vacaciones). Los snapshots de cierre viven en `nomina_hora_extra_ref`.
+
+**API expuesta:**
+- `HoraExtraController`: `POST /operaciones/{id}/horas-extra`, `PUT|DELETE /horas-extra/{id}`, `POST /horas-extra/{id}/aprobar|rechazar`.
+- `TipoHoraExtraController`: CRUD paramétrico bajo `configuracion.editar` + `GET /tipos-hora-extra/select` abierto a operadores (`operaciones.crear|editar`) para poblar el dropdown "Tipo de Hora" del Paso 4.
+- Bloqueos: 409 `OPERACION_APROBADA`, 409 `HORA_EXTRA_LIQUIDADA`, 409 `HORA_EXTRA_ESTADO_INVALIDO`, 409 `TIPO_HORA_EXTRA_CON_REGISTROS`, 422 `CALC_ERROR`.
+- Seeder `TipoHoraExtraSeeder` siembra los 7 tipos legales por tenant (idempotente, usa `updateOrCreate` sobre `(tenant_id, codigo)`).
+
+Modelos: TipoHoraExtra, HoraExtra, NominaHoraExtraRef. Contrato completo con payloads y ejemplos: [docs/API_HORAS_EXTRA.md](docs/API_HORAS_EXTRA.md).
 
 ---
 
@@ -531,7 +671,7 @@ agro-campo/
 │   │   │       ├── LoteController.php      ← CRUD lotes + semillas (negocio)
 │   │   │       ├── SubloteController.php   ← CRUD sublotes + auto-creación de palmas (negocio)
 │   │   │       ├── LineaController.php     ← CRUD líneas (metadata opcional, independiente de palmas)
-│   │   │       ├── PalmaController.php     ← CRUD palmas + eliminación masiva
+│   │   │       ├── PalmaController.php     ← CRUD palmas + eliminación masiva + bulk sync/async (batchStatus)
 │   │   │       ├── TenantUserController.php ← Gestión usuarios del tenant
 │   │   │       ├── UserPermissionController.php ← Permisos de usuarios
 │   │   │       ├── EmpleadoController.php   ← CRUD colaboradores + toggle
@@ -601,11 +741,19 @@ agro-campo/
 │   │   ├── VacacionAcumulado.php           ← Saldo de días
 │   │   ├── Liquidacion.php                 ← Prestaciones al retiro
 │   │   ├── LiquidacionDetalle.php          ← Desglose de liquidación
-│   │   └── Ausencia.php                    ← Ausencias reportadas desde la operación diaria
+│   │   ├── Ausencia.php                    ← Ausencias reportadas desde la operación diaria
+│   │   ├── MotivoAusencia.php              ← Catálogo paramétrico de motivos por tenant
+│   │   ├── EmpresaTransportadora.php       ← Catálogo paramétrico de empresas de transporte (viajes)
+│   │   ├── Transportador.php               ← Conductor + placa, hijo de EmpresaTransportadora
+│   │   └── Extractora.php                  ← Planta extractora destino del viaje
 │   ├── Constants/
-│   │   └── DocumentoCategoria.php          ← Categorías y tipos de documentos del empleado
+│   │   ├── DocumentoCategoria.php          ← Categorías y tipos de documentos del empleado
+│   │   └── ViajeEstado.php                 ← Máquina de estados del viaje (CREADO/EN_CAMINO/EN_PLANTA/FINALIZADO)
+│   ├── Jobs/
+│   │   └── CrearPalmasJob.php              ← Job async para bulk de palmas (> 5.000). ShouldBeUnique por sublote, timeout 300s, 1 try
 │   ├── Services/
-│   │   └── AuditoriaService.php            ← Registra acciones CRUD, login, logout
+│   │   ├── AuditoriaService.php            ← Registra acciones CRUD, login, logout
+│   │   └── PalmaCreationService.php        ← Lógica sync/async de creación de palmas (chunking + dispatch Bus::batch)
 │   └── Providers/
 │       └── AppServiceProvider.php          ← Gate viewPulse para super-admin
 ├── bootstrap/
@@ -624,7 +772,8 @@ agro-campo/
 │   ├── API_PLANTACION.md                   ← Doc endpoints Predios, Lotes, Sublotes, Líneas, Palmas
 │   ├── API_COLABORADORES.md                ← Doc colaboradores + documentos
 │   ├── API_USUARIOS_TENANT.md              ← Doc gestión usuarios del tenant
-│   └── API_BOT.md                          ← Guía de integración del bot Python (auth, flujo, errores, cliente)
+│   ├── API_BOT.md                          ← Guía de integración del bot Python (auth, flujo, errores, cliente)
+│   └── API_VIAJES.md                       ← Contrato del módulo de Viajes (paramétricas, máquina de estados, KPIs)
 ├── SETUP.md                                ← Guía de instalación paso a paso
 └── TAREAS.md                               ← Lista completa de tareas back + front
 ```
@@ -663,18 +812,37 @@ DELETE /api/admin/tenants/:id/users/:userId → Remover usuario
 
 **Implementados (CRUD completo con auditoría y permisos):**
 ```
+GET             /api/v1/tenant/dashboard            → Dashboard finca (indicadores, lotes, viajes, lluvias) (dashboard.ver)
+GET             /api/v1/tenant/eps/select           → Dropdown EPS (configuracion.editar O colaboradores.{ver|crear|editar})
+GET|POST        /api/v1/tenant/eps                  → Listar / Crear EPS (configuracion.editar)
+GET|PUT|DELETE  /api/v1/tenant/eps/:id              → Ver / Editar / Eliminar EPS (configuracion.editar)
+GET             /api/v1/tenant/fondos-pension/select → Dropdown Fondos de Pensión (configuracion.editar O colaboradores.{ver|crear|editar})
+GET|POST        /api/v1/tenant/fondos-pension       → Listar / Crear fondo de pensión (configuracion.editar)
+GET|PUT|DELETE  /api/v1/tenant/fondos-pension/:id   → Ver / Editar / Eliminar fondo de pensión (configuracion.editar)
+GET             /api/v1/tenant/arl/select           → Dropdown ARL (configuracion.editar O colaboradores.{ver|crear|editar})
+GET|POST        /api/v1/tenant/arl                  → Listar / Crear ARL (configuracion.editar)
+GET|PUT|DELETE  /api/v1/tenant/arl/:id              → Ver / Editar / Eliminar ARL (configuracion.editar)
+GET             /api/v1/tenant/entidades-bancarias/select → Dropdown Entidades Bancarias (configuracion.editar O colaboradores.{ver|crear|editar})
+GET|POST        /api/v1/tenant/entidades-bancarias  → Listar / Crear entidad bancaria (configuracion.editar)
+GET|PUT|DELETE  /api/v1/tenant/entidades-bancarias/:id → Ver / Editar / Eliminar entidad bancaria (configuracion.editar)
 GET|POST        /api/v1/tenant/predios              → Listar (con palmas_count) / Crear predio  (lotes.ver / lotes.crear)
 GET             /api/v1/tenant/predios/:id/resumen  → Jerarquía completa + totales para wizard  (lotes.ver)
 GET|PUT|DELETE  /api/v1/tenant/predios/:id          → Ver / Editar / Eliminar   (lotes.ver / lotes.editar / lotes.eliminar)
 GET             /api/v1/tenant/lotes/semillas       → Listar semillas activas   (lotes.ver)
 GET|POST        /api/v1/tenant/lotes                → Listar / Crear lote       (lotes.ver / lotes.crear)
+GET             /api/v1/tenant/lotes/select         → Dropdown lotes del módulo Plantación (lotes.ver O operaciones.{crear|editar})
 GET|PUT|DELETE  /api/v1/tenant/lotes/:id            → Ver / Editar / Eliminar   (lotes.ver / lotes.editar / lotes.eliminar)
 GET|POST        /api/v1/tenant/sublotes             → Listar / Crear sublote    (sublotes.ver / sublotes.crear)
+GET             /api/v1/tenant/sublotes/select      → Dropdown sublotes del módulo Plantación (sublotes.ver O operaciones.{crear|editar})
 GET|PUT|DELETE  /api/v1/tenant/sublotes/:id         → Ver / Editar / Eliminar   (sublotes.ver / sublotes.editar / sublotes.eliminar)
+GET             /api/v1/tenant/operaciones/lotes/select    → Dropdown lotes para el wizard de Operaciones (operaciones.crear O operaciones.editar)
+GET             /api/v1/tenant/operaciones/sublotes/select → Dropdown sublotes para el wizard, incluye cantidad_palmas para autofill (operaciones.crear O operaciones.editar)
+POST            /api/v1/tenant/operaciones/insumos         → Crear insumo desde wizard ("Otro" en FERTILIZACION). Solo recibe nombre; unidad_medida='GRAMOS' default. 409 INSUMO_DUPLICADO si ya existe en el tenant. (operaciones.crear O operaciones.editar)
 GET|POST        /api/v1/tenant/lineas               → Listar / Crear línea      (lineas.ver / lineas.crear)
 GET|PUT|DELETE  /api/v1/tenant/lineas/:id           → Ver / Editar / Eliminar   (lineas.ver / lineas.editar / lineas.eliminar)
+GET             /api/v1/tenant/palmas/batch/:batchId → Estado de batch async de palmas (palmas.ver)
 DELETE          /api/v1/tenant/palmas/masivo         → Eliminación masiva        (palmas.eliminar)
-GET|POST        /api/v1/tenant/palmas               → Listar / Crear palma      (palmas.ver / palmas.crear)
+GET|POST        /api/v1/tenant/palmas               → Listar / Crear palmas en bulk (sync ≤5.000 → 201, async >5.000 → 202 + batch_id)  (palmas.ver / palmas.crear)
 GET|PUT         /api/v1/tenant/palmas/:id           → Ver / Editar palma        (palmas.ver / palmas.editar)
 GET|POST        /api/v1/tenant/usuarios             → Listar / Crear usuario    (usuarios.ver / usuarios.crear)
 PUT|DELETE      /api/v1/tenant/usuarios/:id         → Editar / Eliminar usuario (usuarios.editar / usuarios.eliminar)
@@ -688,15 +856,23 @@ GET|POST        /api/v1/tenant/precios-cosecha      → Listar / Crear precio co
 GET|PUT|DELETE  /api/v1/tenant/precios-cosecha/:id → Ver / Editar / Eliminar      (configuracion.editar)
 GET             /api/v1/tenant/auditorias           → Listar auditoría del tenant (configuracion.editar)
 GET             /api/v1/tenant/auditorias/:id       → Detalle de auditoría       (configuracion.editar)
-GET|POST        /api/v1/tenant/colaboradores        → Listar / Crear colaborador (colaboradores.ver / colaboradores.crear)
-GET|PUT|DELETE  /api/v1/tenant/colaboradores/:id    → Ver / Editar / Eliminar    (colaboradores.ver / colaboradores.editar / colaboradores.eliminar)
-PATCH           /api/v1/tenant/colaboradores/:id/toggle → Activar/Desactivar     (colaboradores.editar)
+GET             /api/v1/tenant/colaboradores/select → Dropdown colaboradores (colaboradores.ver O operaciones.{crear|editar})
+GET|POST        /api/v1/tenant/colaboradores        → Listar (con `?incluir_eliminados` y `?solo_eliminados`) / Crear colaborador (colaboradores.ver / colaboradores.crear)
+GET|PUT|DELETE  /api/v1/tenant/colaboradores/:id    → Ver / Editar / Eliminar (soft delete) (colaboradores.ver / colaboradores.editar / colaboradores.eliminar)
+PATCH           /api/v1/tenant/colaboradores/:id/toggle    → Activar/Desactivar     (colaboradores.editar)
+POST            /api/v1/tenant/colaboradores/:id/restaurar → Restaurar colaborador eliminado (colaboradores.crear)
+POST|DELETE     /api/v1/tenant/colaboradores/:id/avatar    → Subir / Eliminar avatar (image, máx 3 MB, disco public) (colaboradores.editar)
+GET             /api/v1/tenant/colaboradores/documento-categorias → Catálogo de categorías y tipos de documento (colaboradores.ver)
+GET|POST        /api/v1/tenant/colaboradores/:id/documentos     → Listar / Subir documento (colaboradores.ver / colaboradores.editar)
+GET|DELETE      /api/v1/tenant/colaboradores/:id/documentos/:docId → Detalle / Eliminar documento (colaboradores.ver / colaboradores.editar)
+GET             /api/v1/tenant/colaboradores/:id/documentos/:docId/descargar  → Descargar archivo (Content-Disposition: attachment) (colaboradores.ver)
+GET             /api/v1/tenant/colaboradores/:id/documentos/:docId/visualizar → Preview inline (PDF/imagen, 415 si otro mime) (colaboradores.ver)
 POST            /api/v1/tenant/bot/test             → Endpoint de prueba del bot externo (solo log, sin permiso)
 ```
 
 **Pendientes por implementar:**
 ```
-/api/v1/tenant/colaboradores/:id/contratos, /api/v1/tenant/colaboradores/:id/documentos
+/api/v1/tenant/colaboradores/:id/contratos
 /api/v1/tenant/jornales
 /api/v1/tenant/viajes, /api/v1/tenant/cosechas
 /api/v1/tenant/nominas, /api/v1/tenant/nominas/:id/calcular, /api/v1/tenant/nominas/:id/cerrar
@@ -761,12 +937,15 @@ POST            /api/v1/tenant/bot/test             → Endpoint de prueba del b
 - ProfileController (editar perfil, cambiar contraseña)
 - **PredioController** — CRUD + `resumen()` (jerarquía completa con totales para wizard) + listado con `lotes_count`/`palmas_count`. Eliminación en cascada (permiso: `lotes.*`)
 - **LoteController** — CRUD completo con auditoría, validación de hectáreas, gestión de semillas y eliminación en cascada (permiso: `lotes.*`)
-- **SubloteController** — CRUD completo con auditoría y eliminación en cascada (permiso: `sublotes.*`)
+- **SubloteController** — CRUD completo con auditoría y eliminación en cascada. Usa `PalmaCreationService` para crear palmas (sync/async según umbral). `update()` rechaza con 409 si hay batch activo para el sublote (permiso: `sublotes.*`)
 - **LineaController** — CRUD completo (index, show, store, update, destroy). Líneas son metadata opcional por sublote, **independientes de palmas** (eliminar líneas no afecta palmas) (permiso: `lineas.*`)
-- **PalmaController** — index, show, store individual, update, eliminación masiva (permiso: `palmas.*`)
-- **EmpleadoController** — CRUD completo + toggle con auditoría, validación de edad ≥ 14 años, protección contra eliminación si tiene jornales/nómina, limpieza de archivos físicos al eliminar (permiso: `colaboradores.*`)
-- **EmpleadoDocumentoController** — Carga, listado, descarga y eliminación de documentos del colaborador. Soporta categorías con documentos únicos por tipo (reemplazo automático). Almacena archivos en disco privado (`local`), descarga segura via controller. Auditoría en todas las acciones de escritura (permiso: `colaboradores.ver` lectura, `colaboradores.editar` escritura)
-- FormRequest validations para Predios, Lotes (con validación de hectáreas y semillas_ids), Sublotes, Líneas, Palmas, Empleados (con validación de edad) y EmpleadoDocumento (con validación de categoría/tipo via DocumentoCategoria)
+- **PalmaController** — index, show, store bulk (sync/async), update, eliminación masiva, `batchStatus(batchId)` para polling de jobs async (permiso: `palmas.*`)
+- **Bulk de palmas con cola (Jobs)** — soporta hasta 99.999 palmas por petición. Umbral 5.000: `<=` sync (chunking 1.000), `>` async vía `CrearPalmasJob` en `Bus::batch()`. `ShouldBeUnique` por sublote evita duplicados. Requiere **queue worker** (`php artisan queue:work`, driver `database`). Doc de implementación y despliegue: `docs/PLAN_BULK_PALMAS.md`
+- **EmpleadoController** — CRUD + toggle + restaurar + upload/delete de avatar, todo con auditoría y validación de edad ≥ 14 años. Usa **soft delete** (trait `SoftDeletes`, columna `deleted_at`) — al eliminar se preserva todo el historial (jornales, nómina, cosechas, contratos, documentos, archivos en disco) y el colaborador se oculta de listados/dropdowns. `index()` acepta `?incluir_eliminados=true` (mezcla activos+eliminados) y `?solo_eliminados=true` (vista de papelera). Endpoint `POST /:id/restaurar` con `withTrashed()` en route binding restaura el registro y verifica que no exista otro activo con el mismo documento (409 `DOCUMENTO_DUPLICADO`). UNIQUE de `documento` por tenant es ahora un índice parcial `WHERE deleted_at IS NULL` que permite reusar el documento tras un soft delete. Avatar en disco `public` (`tenants/{t}/empleados/{id}/avatar/`), reemplazo automático del archivo previo, atributo calculado `avatar_url` expuesto vía `$appends`. (permiso: `colaboradores.*`, `colaboradores.crear` para restaurar)
+- **EmpleadoDocumentoController** — Carga, listado, descarga, **previsualización inline** y eliminación de documentos del colaborador. Almacena archivos en disco privado (`local`), acceso por endpoint autenticado. `download()` envía `Content-Disposition: attachment` (cualquier mime); `visualizar()` envía `Content-Disposition: inline` (solo `application/pdf`, `image/jpeg`, `image/png`, `image/webp` — otros mimes responden 415 `MIME_NOT_PREVIEWABLE`). Categorías con `unico_por_tipo: true` reemplazan el documento existente al subir uno nuevo del mismo tipo; **solo `DATOS_BASE` tiene este comportamiento**, el resto (`CONTRATACION_LABORAL`, `SST`, `PERMISOS_LICENCIAS`, `FINALIZACION_CONTRATO`, `DESPRENDIBLES`, `OTROS`) acumula múltiples documentos. Auditoría en todas las acciones de escritura (permiso: `colaboradores.ver` lectura, `colaboradores.editar` escritura)
+- **DashboardTenantController + DashboardService** — `GET /api/v1/tenant/dashboard` devuelve en una sola respuesta: indicadores principales (`produccion_total_kg`, `promedio_kg_gajo`), promedio kg por lote (todos los lotes activos, 0 si sin producción), viajes finalizados en el rango y lluvias (semana actual / anterior / mes actual / promedio mensual histórico — fijo, no depende del filtro). Filtros: `periodo=semanal|quincenal|mensual|personalizado` + `fecha_inicio`/`fecha_fin` cuando es personalizado. Solo cuenta cosechas activas de operaciones APROBADAS y viajes con estado FINALIZADO. Read-only sin auditoría (permiso: `dashboard.ver`). FormRequest: `DashboardFilterRequest`
+- **Paramétricas del Colaborador (EPS, Fondos de Pensión, ARL, Entidades Bancarias)** — 4 catálogos paramétricos por tenant con schema idéntico (`id`, `tenant_id`, `nombre`, `estado`, timestamps + `unique(['tenant_id','nombre'])`). Cada uno expone CRUD completo bajo `configuracion.editar` con auditoría (`AuditoriaService`) y un endpoint `/select` accesible además con `colaboradores.{ver|crear|editar}` para alimentar los dropdowns del formulario de colaboradores. **El empleado guarda el `nombre`** (string), no el `id` — preserva histórico al renombrar/eliminar entradas del catálogo. Listas iniciales colombianas en constantes `INICIALES` de cada modelo (17 EPS, 5 fondos, 9 ARLs, 23 bancos). Provisionamiento automático al crear tenant vía `Admin\TenantController::seedParametricasColaborador()` y seeder global idempotente `ParametricasColaboradorSeeder` para fincas existentes. Modelos: `Eps`, `FondoPension`, `Arl`, `EntidadBancaria`. Controllers: `EpsController`, `FondoPensionController`, `ArlController`, `EntidadBancariaController`
+- FormRequest validations para Predios, Lotes (con validación de hectáreas y semillas_ids), Sublotes, Líneas, Palmas, Empleados (con validación de edad y `unique` parcial sobre `whereNull('deleted_at')` para soft delete), EmpleadoAvatar (image, máx 3 MB) y EmpleadoDocumento (con validación de categoría/tipo via DocumentoCategoria)
 - AuditoriaService (registrar, registrarCreacion, registrarEdicion, registrarEliminacion)
 - Rol ADMIN (con todos los permisos) + usuarios con permisos directos (sin roles intermedios)
 - Seeder con datos de prueba + RolesAndPermissionsSeeder
@@ -783,8 +962,8 @@ POST            /api/v1/tenant/bot/test             → Endpoint de prueba del b
   - Documentación completa para el desarrollador del bot Python en `docs/API_BOT.md` (login, select-tenant, headers, manejo de errores, cliente Python de referencia)
 
 **Pendiente:**
-- Controllers de: contratos del empleado, jornales, cosecha, ausencias, nómina, vacaciones, liquidación
-- Lógica de cálculo de jornales, cosechas, ausencias y su efecto en nómina, y liquidación
+- Controllers de: contratos del empleado, nómina, vacaciones, liquidación
+- Lógica de cálculo de ausencias sobre la nómina (NominaCalculationService) — snapshots ya existen, falta el agregador por rango
 - Sync offline (SyncController)
 - Tests de aislamiento multi-tenant
 - Todo el frontend
@@ -813,5 +992,6 @@ POST            /api/v1/tenant/bot/test             → Endpoint de prueba del b
 |---|---|---|
 | Plantación (Predios, Lotes, Sublotes, Líneas, Palmas) | `docs/API_PLANTACION.md` | Endpoints CRUD con ejemplos de request/response, permisos, validación de hectáreas, semillas, códigos de palma y errores |
 | Usuarios del Tenant | `docs/API_USUARIOS_TENANT.md` | CRUD usuarios, activar/desactivar, gestión de permisos directos, guía de implementación frontend |
-| Colaboradores | `docs/API_COLABORADORES.md` | CRUD colaboradores, toggle estado, carga/descarga/eliminación de documentos por categoría, categorías de documentos, reemplazo automático de documentos únicos |
+| Colaboradores | `docs/API_COLABORADORES.md` | CRUD colaboradores con soft delete + restaurar + filtros `incluir_eliminados`/`solo_eliminados`, toggle estado, avatar (upload/delete), carga/descarga/preview/eliminación de documentos por categoría, categorías de documentos, reemplazo automático en `DATOS_BASE`, paramétricas (EPS/Pensiones/ARL/Bancos), guía de uso del frontend para descargas y previsualizaciones por blob |
 | Bot de Integraciones | `docs/API_BOT.md` | Guía completa para el desarrollador del bot Python: flujo de autenticación (login + select-tenant), headers obligatorios, endpoint de prueba, manejo de errores, cliente Python de referencia con cache de tokens por tenant, variables de entorno, checklist pre-producción |
+| Dashboard Tenant | `docs/API_DASHBOARD.md` | `GET /api/v1/tenant/dashboard`: contrato, headers, query params (presets de periodo + rango custom), estructura completa de la respuesta (indicadores, lotes, viajes, lluvias), reglas de negocio (solo APROBADAS / FINALIZADO), códigos de error y notas de consumo para el frontend |

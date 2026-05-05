@@ -8,10 +8,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Storage;
 
 class Empleado extends Model
 {
-    use HasFactory, BelongsToTenant;
+    use HasFactory, BelongsToTenant, SoftDeletes;
 
     protected $fillable = [
         'tenant_id', 'primer_nombre', 'segundo_nombre', 'primer_apellido', 'segundo_apellido',
@@ -24,8 +26,12 @@ class Empleado extends Model
         'talla_camisa', 'talla_pantalon', 'talla_calzado',
         'tipo_cuenta', 'entidad_bancaria', 'numero_cuenta',
         'contacto_emergencia_nombre', 'contacto_emergencia_telefono',
-        'estado',
+        'avatar_path', 'estado',
     ];
+
+    protected $hidden = ['avatar_path'];
+
+    protected $appends = ['avatar_url'];
 
     protected function casts(): array
     {
@@ -105,6 +111,13 @@ class Empleado extends Model
             $this->primer_apellido,
             $this->segundo_apellido,
         ])->filter()->implode(' '));
+    }
+
+    public function getAvatarUrlAttribute(): ?string
+    {
+        return $this->avatar_path
+            ? Storage::disk('public')->url($this->avatar_path)
+            : null;
     }
 
     public function scopeActivos($query)

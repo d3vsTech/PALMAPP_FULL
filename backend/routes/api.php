@@ -6,6 +6,8 @@ use App\Http\Controllers\Api\Admin\DiagnosticController;
 use App\Http\Controllers\Api\Admin\TenantController;
 use App\Http\Controllers\Api\Admin\UserController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\DashboardTenantController;
+use App\Http\Controllers\Api\AusenciaController;
 use App\Http\Controllers\Api\BotTestController;
 use App\Http\Controllers\Api\CargoController;
 use App\Http\Controllers\Api\EmpleadoController;
@@ -13,11 +15,15 @@ use App\Http\Controllers\Api\EmpleadoDocumentoController;
 use App\Http\Controllers\Api\ConfiguracionNominaController;
 use App\Http\Controllers\Api\TenantAuditoriaController;
 use App\Http\Controllers\Api\InsumoController;
+use App\Http\Controllers\Api\JornalController;
 use App\Http\Controllers\Api\LaborController;
+use App\Http\Controllers\Api\OperacionController;
+use App\Http\Controllers\Api\RegistroCosechaController;
 use App\Http\Controllers\Api\LineaController;
 use App\Http\Controllers\Api\PrecioAbonoController;
 use App\Http\Controllers\Api\LoteController;
 use App\Http\Controllers\Api\ModalidadContratoController;
+use App\Http\Controllers\Api\MotivoAusenciaController;
 use App\Http\Controllers\Api\PalmaController;
 use App\Http\Controllers\Api\PrecioCosechaController;
 use App\Http\Controllers\Api\PasswordResetController;
@@ -31,6 +37,16 @@ use App\Http\Controllers\Api\TenantSettingsController;
 use App\Http\Controllers\Api\TenantUserController;
 use App\Http\Controllers\Api\UbicacionController;
 use App\Http\Controllers\Api\UserPermissionController;
+use App\Http\Controllers\Api\EmpresaTransportadoraController;
+use App\Http\Controllers\Api\EntidadBancariaController;
+use App\Http\Controllers\Api\EpsController;
+use App\Http\Controllers\Api\ExtractoraController;
+use App\Http\Controllers\Api\FondoPensionController;
+use App\Http\Controllers\Api\ArlController;
+use App\Http\Controllers\Api\HoraExtraController;
+use App\Http\Controllers\Api\TipoHoraExtraController;
+use App\Http\Controllers\Api\ViajeController;
+use App\Http\Controllers\Api\ViajeDocumentoBasculaController;
 use App\Http\Middleware\SetTenant;
 use Illuminate\Support\Facades\Route;
 
@@ -126,7 +142,7 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
 
     // ── Dashboard ──
     Route::middleware('check.permission:dashboard.ver')->group(function () {
-        // Route::get('dashboard', [DashboardTenantController::class, 'index']);
+        Route::get('dashboard', [DashboardTenantController::class, 'index']);
     });
 
     // ── Predios ──
@@ -139,6 +155,8 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
 
     // ── Lotes ──
     Route::get('lotes/semillas', [LoteController::class, 'semillas'])->middleware('check.permission:lotes.ver');
+    Route::get('lotes/select', [LoteController::class, 'select'])
+        ->middleware('check.permission:lotes.ver,operaciones.crear,operaciones.editar');
     Route::get('lotes', [LoteController::class, 'index'])->middleware('check.permission:lotes.ver');
     Route::get('lotes/{lote}', [LoteController::class, 'show'])->middleware('check.permission:lotes.ver');
     Route::post('lotes', [LoteController::class, 'store'])->middleware('check.permission:lotes.crear');
@@ -146,6 +164,8 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
     Route::delete('lotes/{lote}', [LoteController::class, 'destroy'])->middleware('check.permission:lotes.eliminar');
 
     // ── Sublotes ──
+    Route::get('sublotes/select', [SubloteController::class, 'select'])
+        ->middleware('check.permission:sublotes.ver,operaciones.crear,operaciones.editar');
     Route::get('sublotes', [SubloteController::class, 'index'])->middleware('check.permission:sublotes.ver');
     Route::get('sublotes/{sublote}', [SubloteController::class, 'show'])->middleware('check.permission:sublotes.ver');
     Route::post('sublotes', [SubloteController::class, 'store'])->middleware('check.permission:sublotes.crear');
@@ -168,6 +188,8 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
     Route::put('palmas/{palma}', [PalmaController::class, 'update'])->middleware('check.permission:palmas.editar');
 
     // ── Colaboradores ──
+    Route::get('colaboradores/select', [EmpleadoController::class, 'select'])
+        ->middleware('check.permission:colaboradores.ver,operaciones.crear,operaciones.editar');
     Route::get('colaboradores', [EmpleadoController::class, 'index'])
         ->middleware('check.permission:colaboradores.ver');
     Route::get('colaboradores/{empleado}', [EmpleadoController::class, 'show'])
@@ -180,6 +202,15 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
         ->middleware('check.permission:colaboradores.eliminar');
     Route::patch('colaboradores/{empleado}/toggle', [EmpleadoController::class, 'toggle'])
         ->middleware('check.permission:colaboradores.editar');
+    Route::post('colaboradores/{empleado}/restaurar', [EmpleadoController::class, 'restaurar'])
+        ->middleware('check.permission:colaboradores.crear')
+        ->withTrashed();
+
+    // ── Avatar del Colaborador ──
+    Route::post('colaboradores/{empleado}/avatar', [EmpleadoController::class, 'uploadAvatar'])
+        ->middleware('check.permission:colaboradores.editar');
+    Route::delete('colaboradores/{empleado}/avatar', [EmpleadoController::class, 'deleteAvatar'])
+        ->middleware('check.permission:colaboradores.editar');
 
     // ── Documentos del Colaborador ──
     Route::get('colaboradores/documento-categorias', [EmpleadoDocumentoController::class, 'categorias'])
@@ -191,6 +222,8 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
     Route::get('colaboradores/{empleado}/documentos/{documento}', [EmpleadoDocumentoController::class, 'show'])
         ->middleware('check.permission:colaboradores.ver');
     Route::get('colaboradores/{empleado}/documentos/{documento}/descargar', [EmpleadoDocumentoController::class, 'download'])
+        ->middleware('check.permission:colaboradores.ver');
+    Route::get('colaboradores/{empleado}/documentos/{documento}/visualizar', [EmpleadoDocumentoController::class, 'visualizar'])
         ->middleware('check.permission:colaboradores.ver');
     Route::delete('colaboradores/{empleado}/documentos/{documento}', [EmpleadoDocumentoController::class, 'destroy'])
         ->middleware('check.permission:colaboradores.editar');
@@ -205,27 +238,114 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
     Route::get('modalidades/{modalidad}', [ModalidadContratoController::class, 'show'])
         ->middleware('check.permission:configuracion.editar,colaboradores.ver,colaboradores.crear,colaboradores.editar');
 
-    // ── Operaciones: Planilla (cosecha, jornales, auxiliares) ──
-    // Route::apiResource('operaciones', OperacionController::class)->middleware('check.permission:operaciones.ver');
-    // Route::post('operaciones/{operacion}/aprobar', [OperacionController::class, 'aprobar'])->middleware('check.permission:operaciones.editar');
+    // ── Operaciones: Planilla del Día ──
+    Route::get('operaciones/indicadores', [OperacionController::class, 'indicadores'])
+        ->middleware('check.permission:operaciones.ver');
+    Route::get('operaciones', [OperacionController::class, 'index'])
+        ->middleware('check.permission:operaciones.ver');
+    Route::post('operaciones', [OperacionController::class, 'store'])
+        ->middleware('check.permission:operaciones.crear');
+    Route::get('operaciones/{operacion}/resumen', [OperacionController::class, 'resumen'])
+        ->middleware('check.permission:operaciones.ver');
+    Route::post('operaciones/{operacion}/aprobar', [OperacionController::class, 'aprobar'])
+        ->middleware('check.permission:operaciones.aprobar');
+    Route::get('operaciones/{operacion}', [OperacionController::class, 'show'])
+        ->middleware('check.permission:operaciones.ver');
+    Route::put('operaciones/{operacion}', [OperacionController::class, 'update'])
+        ->middleware('check.permission:operaciones.editar');
+    Route::delete('operaciones/{operacion}', [OperacionController::class, 'destroy'])
+        ->middleware('check.permission:operaciones.eliminar');
 
-    // Cosecha
-    // Route::get('cosechas', ...)->middleware('check.permission:cosecha.ver');
-    // Route::post('cosechas', ...)->middleware('check.permission:cosecha.crear');
+    // ── Cosechas (anidadas a Operación) ──
+    Route::post('operaciones/{operacion}/cosechas', [RegistroCosechaController::class, 'store'])
+        ->middleware('check.permission:operaciones.crear');
+    Route::put('cosechas/{cosecha}', [RegistroCosechaController::class, 'update'])
+        ->middleware('check.permission:operaciones.editar');
+    Route::delete('cosechas/{cosecha}', [RegistroCosechaController::class, 'destroy'])
+        ->middleware('check.permission:operaciones.eliminar');
 
-    // Jornales
-    // Route::get('jornales', ...)->middleware('check.permission:jornales.ver');
-    // Route::post('jornales', ...)->middleware('check.permission:jornales.crear');
+    // ── Jornales (anidados a Operación) ──
+    Route::post('operaciones/{operacion}/jornales', [JornalController::class, 'store'])
+        ->middleware('check.permission:operaciones.crear');
+    Route::put('jornales/{jornal}', [JornalController::class, 'update'])
+        ->middleware('check.permission:operaciones.editar');
+    Route::delete('jornales/{jornal}', [JornalController::class, 'destroy'])
+        ->middleware('check.permission:operaciones.eliminar');
 
-    // Auxiliares
-    // Route::get('auxiliares', ...)->middleware('check.permission:auxiliares.ver');
-    // Route::post('auxiliares', ...)->middleware('check.permission:auxiliares.crear');
+    // ── Ausencias (anidadas a Operación) ──
+    Route::post('operaciones/{operacion}/ausencias', [AusenciaController::class, 'store'])
+        ->middleware('check.permission:operaciones.crear');
+    Route::put('ausencias/{ausencia}', [AusenciaController::class, 'update'])
+        ->middleware('check.permission:operaciones.editar');
+    Route::delete('ausencias/{ausencia}', [AusenciaController::class, 'destroy'])
+        ->middleware('check.permission:operaciones.eliminar');
+    Route::post('ausencias/{ausencia}/aprobar', [AusenciaController::class, 'aprobar'])
+        ->middleware('check.permission:configuracion.editar');
+    Route::post('ausencias/{ausencia}/rechazar', [AusenciaController::class, 'rechazar'])
+        ->middleware('check.permission:configuracion.editar');
+    Route::post('ausencias/{ausencia}/documento', [AusenciaController::class, 'subirDocumento'])
+        ->middleware('check.permission:configuracion.editar');
+
+    // ── Horas Extra (anidadas a Operación) ──
+    Route::post('operaciones/{operacion}/horas-extra', [HoraExtraController::class, 'store'])
+        ->middleware('check.permission:operaciones.crear');
+    Route::put('horas-extra/{horaExtra}', [HoraExtraController::class, 'update'])
+        ->middleware('check.permission:operaciones.editar');
+    Route::delete('horas-extra/{horaExtra}', [HoraExtraController::class, 'destroy'])
+        ->middleware('check.permission:operaciones.eliminar');
+    Route::post('horas-extra/{horaExtra}/aprobar', [HoraExtraController::class, 'aprobar'])
+        ->middleware('check.permission:configuracion.editar');
+    Route::post('horas-extra/{horaExtra}/rechazar', [HoraExtraController::class, 'rechazar'])
+        ->middleware('check.permission:configuracion.editar');
+
+    // ── Viajes: Paramétricas (selects para el form) ──
+    Route::get('empresas-transportadoras/select', [EmpresaTransportadoraController::class, 'select'])
+        ->middleware('check.permission:viajes.crear');
+    Route::get('empresas-transportadoras/{empresa}/transportadores', [EmpresaTransportadoraController::class, 'transportadores'])
+        ->middleware('check.permission:viajes.crear');
+    Route::get('extractoras/select', [ExtractoraController::class, 'select'])
+        ->middleware('check.permission:viajes.crear');
 
     // ── Viajes ──
-    // Route::get('viajes', ...)->middleware('check.permission:viajes.ver');
-    // Route::post('viajes', ...)->middleware('check.permission:viajes.crear');
-    // Route::put('viajes/{viaje}', ...)->middleware('check.permission:viajes.editar');
-    // Route::delete('viajes/{viaje}', ...)->middleware('check.permission:viajes.eliminar');
+    Route::get('viajes', [ViajeController::class, 'index'])
+        ->middleware('check.permission:viajes.ver');
+    Route::get('viajes/indicadores', [ViajeController::class, 'indicadores'])
+        ->middleware('check.permission:viajes.ver');
+    Route::get('viajes/operaciones-disponibles', [ViajeController::class, 'operacionesDisponibles'])
+        ->middleware('check.permission:viajes.crear');
+    Route::get('viajes/operaciones/{operacion}/cosechas', [ViajeController::class, 'cosechasDisponibles'])
+        ->middleware('check.permission:viajes.crear');
+
+    Route::post('viajes', [ViajeController::class, 'store'])
+        ->middleware('check.permission:viajes.crear');
+    Route::get('viajes/{viaje}', [ViajeController::class, 'show'])
+        ->middleware('check.permission:viajes.ver');
+    Route::put('viajes/{viaje}', [ViajeController::class, 'update'])
+        ->middleware('check.permission:viajes.editar');
+    Route::delete('viajes/{viaje}', [ViajeController::class, 'destroy'])
+        ->middleware('check.permission:viajes.eliminar');
+
+    Route::post('viajes/{viaje}/detalles', [ViajeController::class, 'addDetalle'])
+        ->middleware('check.permission:viajes.editar');
+    Route::delete('viajes/{viaje}/detalles/{detalle}', [ViajeController::class, 'removeDetalle'])
+        ->middleware('check.permission:viajes.editar');
+    Route::put('viajes/{viaje}/detalles/{detalle}/reconteo', [ViajeController::class, 'updateReconteo'])
+        ->middleware('check.permission:viajes.editar');
+    Route::post('viajes/{viaje}/detalles/{detalle}/aprobar-reconteo', [ViajeController::class, 'aprobarReconteo'])
+        ->middleware('check.permission:viajes.editar');
+
+    Route::post('viajes/{viaje}/saltar-validacion', [ViajeController::class, 'saltarValidacion'])
+        ->middleware('check.permission:viajes.editar');
+    Route::patch('viajes/{viaje}/validar', [ViajeController::class, 'validar'])
+        ->middleware('check.permission:viajes.editar');
+    Route::post('viajes/{viaje}/finalizar', [ViajeController::class, 'finalizar'])
+        ->middleware('check.permission:viajes.editar');
+
+    // ── Viajes: documento de báscula (OCR asíncrono con Claude Vision) ──
+    Route::post('viajes/{viaje}/documento-bascula', [ViajeDocumentoBasculaController::class, 'store'])
+        ->middleware('check.permission:viajes.editar');
+    Route::get('viajes/{viaje}/documento-bascula/{documento}', [ViajeDocumentoBasculaController::class, 'show'])
+        ->middleware('check.permission:viajes.ver');
 
     // ── Nómina ──
     // Route::get('nominas', ...)->middleware('check.permission:nomina.ver');
@@ -258,6 +378,56 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
     Route::put('configuracion/finca', [TenantSettingsController::class, 'updateFinca'])
         ->middleware('check.permission:configuracion.editar');
 
+    // ── Insumos select (dropdown del wizard de Operaciones) ──
+    // Fuera del grupo configuracion.editar para que operadores con permiso de
+    // operaciones también puedan poblar el select "Tipo de Fertilizante".
+    Route::get('insumos/select', [InsumoController::class, 'select'])
+        ->middleware('check.permission:configuracion.editar,operaciones.crear,operaciones.editar');
+
+    // ── Lotes / Sublotes select del wizard de Operaciones ──
+    // Endpoints dedicados al Paso 2 (Labores de Palma). No tocan los permisos
+    // del módulo de Plantación: /lotes/select y /sublotes/select siguen
+    // existiendo con sus permisos originales para el CRUD admin de plantación.
+    // Estos solo requieren permisos de operaciones, igual que los demás
+    // selects del wizard. El payload de sublotes incluye `cantidad_palmas`
+    // para que el frontend autocomplete el campo "Número de Palmas".
+    Route::get('operaciones/lotes/select', [LoteController::class, 'select'])
+        ->middleware('check.permission:operaciones.crear,operaciones.editar');
+    Route::get('operaciones/sublotes/select', [SubloteController::class, 'select'])
+        ->middleware('check.permission:operaciones.crear,operaciones.editar');
+
+    // ── Crear insumo desde el wizard de Fertilización ("Otro" en el dropdown) ──
+    // Endpoint dedicado al Paso 2. No toca el POST /insumos del módulo de
+    // configuración (que sigue requiriendo `unidad_medida` y permiso
+    // `configuracion.editar`). Aquí solo se envía `nombre`; el backend setea
+    // `unidad_medida = 'GRAMOS'` por default. UNIQUE (tenant_id, nombre) en DB.
+    Route::post('operaciones/insumos', [InsumoController::class, 'storeFromWizard'])
+        ->middleware('check.permission:operaciones.crear,operaciones.editar');
+
+    // ── Labores select (dropdown del wizard Paso 3 - Labores de Finca) ──
+    // Fuera del grupo configuracion.editar para que operadores con permiso de
+    // operaciones también puedan poblar el select "Labor".
+    Route::get('labores/select', [LaborController::class, 'select'])
+        ->middleware('check.permission:configuracion.editar,operaciones.crear,operaciones.editar');
+
+    // ── Motivos de ausencia select (dropdown del wizard Paso 4) ──
+    Route::get('motivos-ausencia/select', [MotivoAusenciaController::class, 'select'])
+        ->middleware('check.permission:configuracion.editar,operaciones.crear,operaciones.editar');
+
+    // ── Tipos de hora extra select (dropdown del wizard Paso 4) ──
+    Route::get('tipos-hora-extra/select', [TipoHoraExtraController::class, 'select'])
+        ->middleware('check.permission:configuracion.editar,operaciones.crear,operaciones.editar');
+
+    // ── Paramétricas del colaborador (dropdowns del form de creación/edición) ──
+    Route::get('eps/select', [EpsController::class, 'select'])
+        ->middleware('check.permission:configuracion.editar,colaboradores.ver,colaboradores.crear,colaboradores.editar');
+    Route::get('fondos-pension/select', [FondoPensionController::class, 'select'])
+        ->middleware('check.permission:configuracion.editar,colaboradores.ver,colaboradores.crear,colaboradores.editar');
+    Route::get('arl/select', [ArlController::class, 'select'])
+        ->middleware('check.permission:configuracion.editar,colaboradores.ver,colaboradores.crear,colaboradores.editar');
+    Route::get('entidades-bancarias/select', [EntidadBancariaController::class, 'select'])
+        ->middleware('check.permission:configuracion.editar,colaboradores.ver,colaboradores.crear,colaboradores.editar');
+
     // ══════════════════════════════════════════════════════
     // TABLAS PARAMÉTRICAS (permiso: configuracion.editar)
     // ══════════════════════════════════════════════════════
@@ -289,6 +459,48 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
         Route::post('labores', [LaborController::class, 'store']);
         Route::put('labores/{labor}', [LaborController::class, 'update']);
         Route::delete('labores/{labor}', [LaborController::class, 'destroy']);
+
+        // ── Motivos de Ausencia ──
+        Route::get('motivos-ausencia', [MotivoAusenciaController::class, 'index']);
+        Route::get('motivos-ausencia/{motivoAusencia}', [MotivoAusenciaController::class, 'show']);
+        Route::post('motivos-ausencia', [MotivoAusenciaController::class, 'store']);
+        Route::put('motivos-ausencia/{motivoAusencia}', [MotivoAusenciaController::class, 'update']);
+        Route::delete('motivos-ausencia/{motivoAusencia}', [MotivoAusenciaController::class, 'destroy']);
+
+        // ── Tipos de Hora Extra ──
+        Route::get('tipos-hora-extra', [TipoHoraExtraController::class, 'index']);
+        Route::get('tipos-hora-extra/{tipoHoraExtra}', [TipoHoraExtraController::class, 'show']);
+        Route::post('tipos-hora-extra', [TipoHoraExtraController::class, 'store']);
+        Route::put('tipos-hora-extra/{tipoHoraExtra}', [TipoHoraExtraController::class, 'update']);
+        Route::delete('tipos-hora-extra/{tipoHoraExtra}', [TipoHoraExtraController::class, 'destroy']);
+
+        // ── EPS ──
+        Route::get('eps', [EpsController::class, 'index']);
+        Route::get('eps/{ep}', [EpsController::class, 'show']);
+        Route::post('eps', [EpsController::class, 'store']);
+        Route::put('eps/{ep}', [EpsController::class, 'update']);
+        Route::delete('eps/{ep}', [EpsController::class, 'destroy']);
+
+        // ── Fondos de Pensión ──
+        Route::get('fondos-pension', [FondoPensionController::class, 'index']);
+        Route::get('fondos-pension/{fondoPension}', [FondoPensionController::class, 'show']);
+        Route::post('fondos-pension', [FondoPensionController::class, 'store']);
+        Route::put('fondos-pension/{fondoPension}', [FondoPensionController::class, 'update']);
+        Route::delete('fondos-pension/{fondoPension}', [FondoPensionController::class, 'destroy']);
+
+        // ── ARL ──
+        Route::get('arl', [ArlController::class, 'index']);
+        Route::get('arl/{arl}', [ArlController::class, 'show']);
+        Route::post('arl', [ArlController::class, 'store']);
+        Route::put('arl/{arl}', [ArlController::class, 'update']);
+        Route::delete('arl/{arl}', [ArlController::class, 'destroy']);
+
+        // ── Entidades Bancarias ──
+        Route::get('entidades-bancarias', [EntidadBancariaController::class, 'index']);
+        Route::get('entidades-bancarias/{entidadBancaria}', [EntidadBancariaController::class, 'show']);
+        Route::post('entidades-bancarias', [EntidadBancariaController::class, 'store']);
+        Route::put('entidades-bancarias/{entidadBancaria}', [EntidadBancariaController::class, 'update']);
+        Route::delete('entidades-bancarias/{entidadBancaria}', [EntidadBancariaController::class, 'destroy']);
 
         // ── Promedios por Lote ──
         Route::get('promedios-lote', [PromedioLoteController::class, 'index']);

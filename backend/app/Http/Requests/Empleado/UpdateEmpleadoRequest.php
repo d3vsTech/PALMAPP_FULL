@@ -2,13 +2,33 @@
 
 namespace App\Http\Requests\Empleado;
 
+use App\Models\TenantConfig;
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateEmpleadoRequest extends FormRequest
 {
     public function authorize(): bool
     {
         return true;
+    }
+
+    /**
+     * Si el payload cambia modalidad_pago a PRODUCCION y no trae salario_base,
+     * auto-completa con el SMLV del tenant.
+     */
+    protected function prepareForValidation(): void
+    {
+        if ($this->input('modalidad_pago') === 'PRODUCCION' && ! $this->filled('salario_base')) {
+            $smlv = TenantConfig::where('tenant_id', app('current_tenant_id'))
+                ->value('salario_minimo_vigente');
+            if ($smlv !== null) {
+                $this->merge(['salario_base' => $smlv]);
+            }else{
+                $this->merge(['salario_base' => 0]);
+            }
+        }
     }
 
     public function rules(): array
@@ -25,14 +45,19 @@ class UpdateEmpleadoRequest extends FormRequest
 
             // Identificación
             'tipo_documento'            => 'sometimes|in:CC,TI,PASAPORTE,CE,PPT',
-            'documento'                 => "sometimes|string|max:50|unique:empleados,documento,{$empleadoId},id,tenant_id,{$tenantId}",
+            'documento'                 => [
+                'sometimes', 'string', 'max:50',
+                Rule::unique('empleados', 'documento')
+                    ->ignore($empleadoId)
+                    ->where(fn ($q) => $q->where('tenant_id', $tenantId)->whereNull('deleted_at')),
+            ],
             'fecha_nacimiento'          => 'sometimes|date|before_or_equal:' . now()->subYears(14)->toDateString(),
             'fecha_expedicion_documento' => 'sometimes|date|before_or_equal:today',
             'lugar_expedicion'          => 'nullable|string|max:100',
 
             // Contratación (directo en empleado)
             'cargo'          => 'sometimes|string|max:100',
-            'salario_base'   => 'sometimes|numeric|min:0|max:999999999999.99',
+            'salario_base'   => 'sometimes|required_if:modalidad_pago,FIJO|nullable|numeric|min:0|max:999999999999.99',
             'modalidad_pago' => 'sometimes|in:FIJO,PRODUCCION',
             'predio_id'      => 'nullable|exists:predios,id',
 
@@ -70,6 +95,22 @@ class UpdateEmpleadoRequest extends FormRequest
         ];
     }
 
+    /**
+     * Si viene PRODUCCION sin salario_base (ni siquiera por default desde
+     * prepareForValidation), significa que el tenant no tiene SMLV configurado.
+     */
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function ($v) {
+            if ($this->input('modalidad_pago') === 'PRODUCCION' && ! $this->filled('salario_base')) {
+                $v->errors()->add(
+                    'salario_base',
+                    'No hay salario mínimo vigente configurado en el tenant. Configúralo en Ajustes o envía salario_base explícito.'
+                );
+            }
+        });
+    }
+
     public function messages(): array
     {
         return [
@@ -78,6 +119,7 @@ class UpdateEmpleadoRequest extends FormRequest
             'fecha_nacimiento.before_or_equal' => 'El colaborador debe tener al menos 14 años',
             'fecha_expedicion_documento.before_or_equal' => 'La fecha de expedición no puede ser futura',
             'cargo.max'                      => 'El cargo no puede exceder 100 caracteres',
+            'salario_base.required_if'       => 'El salario base es obligatorio para modalidad FIJO',
             'salario_base.numeric'           => 'El salario base debe ser un valor numérico',
             'salario_base.min'               => 'El salario base no puede ser negativo',
             'modalidad_pago.in'              => 'La modalidad de pago debe ser FIJO o PRODUCCION',

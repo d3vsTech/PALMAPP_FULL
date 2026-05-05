@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Empleado\StoreEmpleadoAvatarRequest;
 use App\Http\Requests\Empleado\StoreEmpleadoRequest;
 use App\Http\Requests\Empleado\UpdateEmpleadoRequest;
 use App\Models\Empleado;
@@ -12,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class EmpleadoController extends Controller
 {
@@ -19,10 +21,48 @@ class EmpleadoController extends Controller
         protected AuditoriaService $auditoria,
     ) {}
 
+    /**
+     * Listado liviano para dropdowns (select).
+     * Sin paginación, solo columnas necesarias. Default: activos.
+     */
+    public function select(Request $request): JsonResponse
+    {
+        try {
+            $soloActivos = !$request->has('estado') || filter_var($request->estado, FILTER_VALIDATE_BOOLEAN);
+
+            $empleados = Empleado::query()
+                ->when($soloActivos, fn($q) => $q->where('estado', true))
+                ->when(!$soloActivos && $request->has('estado'), fn($q) => $q->where('estado', false))
+                ->when($request->modalidad_pago, fn($q, $m) => $q->where('modalidad_pago', $m))
+                ->when($request->predio_id, fn($q, $p) => $q->where('predio_id', $p))
+                ->orderBy('primer_nombre')
+                ->orderBy('primer_apellido')
+                ->get(['id', 'primer_nombre', 'segundo_nombre', 'primer_apellido', 'segundo_apellido',
+                       'documento', 'modalidad_pago', 'estado']);
+
+            return response()->json([
+                'data' => $empleados->map(fn($e) => [
+                    'id'              => $e->id,
+                    'nombre_completo' => $e->nombre_completo,
+                    'documento'       => $e->documento,
+                    'modalidad_pago'  => $e->modalidad_pago,
+                ])->values(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error en colaboradores/select: ' . $e->getMessage());
+            return response()->json(['message' => 'Error al listar colaboradores', 'error' => $e->getMessage()], 500);
+        }
+    }
+
     public function index(Request $request): JsonResponse
     {
         try {
+            $incluirEliminados = filter_var($request->incluir_eliminados, FILTER_VALIDATE_BOOLEAN);
+            $soloEliminados    = filter_var($request->solo_eliminados, FILTER_VALIDATE_BOOLEAN);
+
             $empleados = Empleado::query()
+                ->when($incluirEliminados, fn($q) => $q->withTrashed())
+                ->when($soloEliminados, fn($q) => $q->onlyTrashed())
                 ->with('predio:id,nombre')
                 ->when($request->search, fn($q, $s) => $q->where(function ($q) use ($s) {
                     $q->where('primer_nombre', 'ilike', "%{$s}%")
@@ -174,43 +214,62 @@ class EmpleadoController extends Controller
     public function destroy(Request $request, Empleado $empleado): JsonResponse
     {
         try {
-            if ($empleado->jornales()->exists()) {
-                return response()->json([
-                    'message' => 'No se puede eliminar el colaborador porque tiene jornales registrados',
-                    'code'    => 'EMPLEADO_CON_JORNALES',
-                ], 409);
-            }
-
-            if ($empleado->nominaEmpleados()->exists()) {
-                return response()->json([
-                    'message' => 'No se puede eliminar el colaborador porque tiene registros de nómina',
-                    'code'    => 'EMPLEADO_CON_NOMINA',
-                ], 409);
-            }
-
             $nombreCompleto = $empleado->nombre_completo;
+            $documento = $empleado->documento;
 
             $this->auditoria->registrarEliminacion(
                 $request, 'COLABORADORES', $empleado,
-                "Se eliminó el colaborador '{$nombreCompleto}' (Doc: {$empleado->documento})"
+                "Se eliminó el colaborador '{$nombreCompleto}' (Doc: {$documento})"
             );
 
-            // Eliminar archivos físicos de documentos del disco
-            foreach ($empleado->documentos as $doc) {
-                Storage::disk('local')->delete($doc->archivo_path);
-            }
-
-            $tenantId = app('current_tenant_id');
-            Storage::disk('local')->deleteDirectory("tenants/{$tenantId}/empleados/{$empleado->id}");
-
-            $empleado->contratos()->delete();
-            $empleado->documentos()->delete();
+            // Soft delete: preserva jornales, nómina, cosechas, contratos, documentos y archivos.
             $empleado->delete();
 
             return response()->json(['message' => "Colaborador '{$nombreCompleto}' eliminado correctamente"]);
         } catch (\Throwable $e) {
             Log::error('Error al eliminar empleado: ' . $e->getMessage());
             return response()->json(['message' => 'Error al eliminar el colaborador', 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function restaurar(Request $request, Empleado $empleado): JsonResponse
+    {
+        try {
+            if (! $empleado->trashed()) {
+                return response()->json([
+                    'message' => 'El colaborador no está eliminado',
+                    'code'    => 'EMPLEADO_NO_ELIMINADO',
+                ], 409);
+            }
+
+            $duplicado = Empleado::where('documento', $empleado->documento)
+                ->where('id', '!=', $empleado->id)
+                ->exists();
+
+            if ($duplicado) {
+                return response()->json([
+                    'message' => 'No se puede restaurar: ya existe un colaborador activo con este documento',
+                    'code'    => 'DOCUMENTO_DUPLICADO',
+                ], 409);
+            }
+
+            $empleado->restore();
+
+            $this->auditoria->registrar(
+                request: $request,
+                accion: 'RESTAURAR',
+                modulo: 'COLABORADORES',
+                observaciones: "Se restauró el colaborador '{$empleado->nombre_completo}' (Doc: {$empleado->documento})",
+                datosNuevos: $empleado->fresh()->toArray(),
+            );
+
+            return response()->json([
+                'message' => "Colaborador '{$empleado->nombre_completo}' restaurado correctamente",
+                'data'    => $empleado->fresh()->load('predio:id,nombre', 'contratoVigente'),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error al restaurar empleado: ' . $e->getMessage());
+            return response()->json(['message' => 'Error al restaurar el colaborador', 'error' => $e->getMessage()], 500);
         }
     }
 
@@ -233,6 +292,72 @@ class EmpleadoController extends Controller
         } catch (\Throwable $e) {
             Log::error('Error al cambiar estado del empleado: ' . $e->getMessage());
             return response()->json(['message' => 'Error al cambiar el estado del colaborador', 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function uploadAvatar(StoreEmpleadoAvatarRequest $request, Empleado $empleado): JsonResponse
+    {
+        try {
+            $datosAnteriores = ['avatar_path' => $empleado->avatar_path];
+            $tenantId = app('current_tenant_id');
+
+            if ($empleado->avatar_path) {
+                Storage::disk('public')->delete($empleado->avatar_path);
+            }
+
+            $file = $request->file('avatar');
+            $filename = Str::uuid() . '.' . $file->getClientOriginalExtension();
+            $path = $file->storeAs(
+                "tenants/{$tenantId}/empleados/{$empleado->id}/avatar",
+                $filename,
+                'public'
+            );
+
+            $empleado->update(['avatar_path' => $path]);
+
+            $this->auditoria->registrarEdicion(
+                $request, 'COLABORADORES', $empleado, $datosAnteriores,
+                "Se actualizó el avatar del colaborador '{$empleado->nombre_completo}'"
+            );
+
+            return response()->json([
+                'message' => 'Avatar actualizado correctamente',
+                'data'    => $empleado->fresh(),
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json(['message' => 'Error de validación', 'errors' => $e->errors()], 422);
+        } catch (\Throwable $e) {
+            Log::error('Error al subir avatar del empleado: ' . $e->getMessage());
+            return response()->json(['message' => 'Error al subir el avatar', 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function deleteAvatar(Request $request, Empleado $empleado): JsonResponse
+    {
+        try {
+            if (! $empleado->avatar_path) {
+                return response()->json([
+                    'message' => 'El colaborador no tiene avatar asignado',
+                    'code'    => 'AVATAR_NOT_FOUND',
+                ], 409);
+            }
+
+            $datosAnteriores = ['avatar_path' => $empleado->avatar_path];
+            Storage::disk('public')->delete($empleado->avatar_path);
+            $empleado->update(['avatar_path' => null]);
+
+            $this->auditoria->registrarEdicion(
+                $request, 'COLABORADORES', $empleado, $datosAnteriores,
+                "Se eliminó el avatar del colaborador '{$empleado->nombre_completo}'"
+            );
+
+            return response()->json([
+                'message' => 'Avatar eliminado correctamente',
+                'data'    => $empleado->fresh(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error al eliminar avatar del empleado: ' . $e->getMessage());
+            return response()->json(['message' => 'Error al eliminar el avatar', 'error' => $e->getMessage()], 500);
         }
     }
 }

@@ -76,6 +76,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'operaciones.crear',
             'operaciones.editar',
             'operaciones.eliminar',
+            'operaciones.aprobar',
 
             'cosecha.ver',
             'cosecha.crear',
