@@ -25,13 +25,11 @@ import {
 // ─── tipos UI ─────────────────────────────────────────────────────────────────
 export type EstadoViaje = 'Creado' | 'En Validación' | 'Finalizado';
 
-/** Backend usa CREADO/EN_CAMINO/EN_PLANTA/FINALIZADO; el UI los compacta a 3 estados:
- *  EN_CAMINO + EN_PLANTA = "En Validación" */
+/** Backend usa CREADO/EN_VALIDACION/FINALIZADO (modelo nuevo de 3 estados). */
 const ESTADO_API_TO_UI: Record<EstadoViajeApi, EstadoViaje> = {
-  CREADO:     'Creado',
-  EN_CAMINO:  'En Validación',
-  EN_PLANTA:  'En Validación',
-  FINALIZADO: 'Finalizado',
+  CREADO:        'Creado',
+  EN_VALIDACION: 'En Validación',
+  FINALIZADO:    'Finalizado',
 };
 
 interface ViajeUI {
@@ -184,9 +182,8 @@ export default function Viajes() {
   };
 
   // ── Pasar a "En Validación" — el conteo es OPCIONAL.
-  //     Llamamos directo al endpoint /despachar. Si el backend lo expone,
-  //     funciona; si responde 404 mostramos el mensaje real para que el equipo
-  //     de backend lo habilite.
+  //     Usa POST /viajes/{id}/saltar-validacion (modelo nuevo de 3 estados).
+  //     Aplica para fincas que pagan por jornal y no llevan control de cosechas.
   const abrirDialogoValidar = (viaje: ViajeUI, event: React.MouseEvent) => {
     event.stopPropagation();
     setViajeAValidar({ id: viaje.id, remision: viaje.remisionId });
@@ -197,7 +194,7 @@ export default function Viajes() {
     const id = viajeAValidar.id;
     setViajeAValidar(null);
     try {
-      await viajesApi.despachar(Number(id));
+      await viajesApi.saltarValidacion(Number(id));
       toast.success('Viaje actualizado a "En Validación" exitosamente');
       cargarViajes();
     } catch (e: any) {
@@ -243,10 +240,9 @@ export default function Viajes() {
   });
 
   const totalViajes        = indicadoresApi?.total_viajes ?? viajesPorPeriodo.length;
-  // El backend reporta en_camino y nada de "en_planta" como un solo bloque, pero
-  // como el UI los junta → sumamos en_camino + finalizados-aún-no-cerrados.
-  // Si el backend no expone el dato exacto, calculamos en cliente.
-  const viajesEnValidacion = viajesPorPeriodo.filter(v => v.estado === 'En Validación').length;
+  // El backend reporta `en_validacion` directamente (modelo nuevo de 3 estados).
+  // Si por alguna razón no llega del API, calculamos en cliente.
+  const viajesEnValidacion = indicadoresApi?.en_validacion ?? viajesPorPeriodo.filter(v => v.estado === 'En Validación').length;
   const viajesFinalizados  = indicadoresApi?.finalizados ?? viajesPorPeriodo.filter(v => v.estado === 'Finalizado').length;
   const pesoTotal          = indicadoresApi ? parseFloat(indicadoresApi.kilogramos_totales || '0') : viajesPorPeriodo.reduce((s, v) => s + (v.peso ?? 0), 0);
   const gajosTotal         = indicadoresApi?.gajos_totales ?? viajesPorPeriodo.reduce((s, v) => s + v.gajosEstimados, 0);
@@ -342,10 +338,6 @@ export default function Viajes() {
                   <p className="text-3xl font-bold text-foreground">{loadingKPI ? '…' : totalViajes}</p>
                   <span className="text-sm text-muted-foreground">despachos</span>
                 </div>
-                <div className="inline-flex items-center gap-1 mt-3 px-2.5 py-1 rounded-full text-xs font-medium border text-primary bg-primary/10 border-primary/20">
-                  <TrendingUp className="h-4 w-4" />
-                  <span>Período seleccionado</span>
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -358,10 +350,6 @@ export default function Viajes() {
                 <div className="flex items-baseline gap-2">
                   <p className="text-3xl font-bold text-foreground">{loadingKPI ? '…' : viajesEnValidacion}</p>
                   <span className="text-sm text-muted-foreground">pendientes</span>
-                </div>
-                <div className="inline-flex items-center gap-1 mt-3 px-2.5 py-1 rounded-full text-xs font-medium border text-blue-600 bg-blue-50 border-blue-200 dark:text-blue-500 dark:bg-blue-950/30 dark:border-blue-900/30">
-                  <Clock className="h-4 w-4" />
-                  <span>En proceso</span>
                 </div>
               </div>
             </CardContent>
@@ -376,10 +364,6 @@ export default function Viajes() {
                   <p className="text-3xl font-bold text-foreground">{loadingKPI ? '…' : viajesFinalizados}</p>
                   <span className="text-sm text-muted-foreground">completados</span>
                 </div>
-                <div className="inline-flex items-center gap-1 mt-3 px-2.5 py-1 rounded-full text-xs font-medium border text-success bg-success/10 border-success/20">
-                  <Scale className="h-4 w-4" />
-                  <span>Cerrados</span>
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -392,10 +376,6 @@ export default function Viajes() {
                 <div className="flex items-baseline gap-2">
                   <p className="text-3xl font-bold text-foreground">{loadingKPI ? '…' : pesoTotal.toLocaleString('es-CO')}</p>
                   <span className="text-sm text-muted-foreground">kg</span>
-                </div>
-                <div className="inline-flex items-center gap-1 mt-3 px-2.5 py-1 rounded-full text-xs font-medium border text-success bg-success/10 border-success/20">
-                  <Package className="h-4 w-4" />
-                  <span>{gajosTotal.toLocaleString('es-CO')} gajos</span>
                 </div>
               </div>
             </CardContent>

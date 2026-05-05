@@ -131,10 +131,10 @@ export default function Usuarios() {
         <h2>Resumen</h2>
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {[
-            { label: 'Total Usuarios', value: resumen.total, sub: 'registrados', icon: TrendingUp, color: 'text-primary bg-primary/10 border-primary/20', badge: 'Sistema' },
-            { label: 'Usuarios Activos', value: resumen.activos, sub: 'activos', icon: UserCheck, color: 'text-success bg-success/10 border-success/20', badge: 'Con acceso' },
-            { label: 'Usuarios Inactivos', value: resumen.inactivos, sub: 'inactivos', icon: UserX, color: 'text-muted-foreground bg-muted/50 border-muted', badge: 'Sin acceso' },
-          ].map(({ label, value, sub, icon: Icon, color, badge }) => (
+            { label: 'Total Usuarios', value: resumen.total, sub: 'registrados' },
+            { label: 'Usuarios Activos', value: resumen.activos, sub: 'activos' },
+            { label: 'Usuarios Inactivos', value: resumen.inactivos, sub: 'inactivos' },
+          ].map(({ label, value, sub }) => (
             <Card key={label} className="border-border hover:shadow-lg transition-all duration-300">
               <CardContent className="p-6">
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
@@ -143,9 +143,6 @@ export default function Usuarios() {
                     <div className="flex items-baseline gap-2">
                       <p className="text-4xl font-bold">{loading ? '—' : value}</p>
                       <span className="text-sm text-muted-foreground">{sub}</span>
-                    </div>
-                    <div className={`inline-flex items-center gap-1 mt-3 px-2.5 py-1 rounded-full text-xs font-medium border ${color}`}>
-                      <Icon className="h-4 w-4" /><span>{badge}</span>
                     </div>
                   </div>
                 </div>

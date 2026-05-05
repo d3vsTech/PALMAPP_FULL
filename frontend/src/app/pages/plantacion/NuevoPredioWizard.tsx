@@ -14,7 +14,7 @@
  *   Cada acción llama al API inmediatamente
  *   Panel: §1.6 GET /predios/{id}/resumen — se refresca tras cada operación
  */
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
@@ -685,10 +685,7 @@ export default function NuevoPredioWizard() {
               {ls.map((l: any) => (
                 <div key={l.id} className="border border-border rounded-lg p-3 space-y-2 bg-card">
                   <div className="flex items-center justify-between pb-2 border-b border-border/50">
-                    <div className="flex items-center gap-2">
-                      <Grid3x3 className="h-4 w-4 text-primary" />
-                      <span className="font-semibold text-sm">{l.nombre}</span>
-                    </div>
+                    <span className="font-semibold text-sm">{l.nombre}</span>
                     <span className="text-xs text-muted-foreground">{Number(l.hectareas_sembradas ?? 0).toFixed(1)} ha</span>
                   </div>
                   {(l.sublotes ?? []).length > 0 ? (
@@ -697,19 +694,12 @@ export default function NuevoPredioWizard() {
                         const linCount = s.totales?.lineas ?? lineas.filter(ln => ln.subloteId === String(s.id)).length;
                         return (
                           <div key={s.id} className="flex items-center justify-between py-1 text-xs">
-                            <div className="flex items-center gap-2">
-                              <Trees className="h-3 w-3 text-primary/70" />
-                              <span>{s.nombre}</span>
-                            </div>
+                            <span>{s.nombre}</span>
                             <div className="flex items-center gap-3 text-xs">
                               {linCount > 0 && (
-                                <span className="text-muted-foreground flex items-center gap-1">
-                                  <GitBranch className="h-3 w-3" />{linCount}
-                                </span>
+                                <span className="text-muted-foreground">{linCount} líneas</span>
                               )}
-                              <span className="text-success font-semibold flex items-center gap-1">
-                                <Leaf className="h-3 w-3" />{(s.totales?.palmas ?? 0).toLocaleString('es-CO')}
-                              </span>
+                              <span className="text-success font-semibold">{(s.totales?.palmas ?? 0).toLocaleString('es-CO')} palmas</span>
                             </div>
                           </div>
                         );
@@ -839,10 +829,7 @@ export default function NuevoPredioWizard() {
               return (
                 <div key={lote.id} className="border border-border rounded-lg p-3 space-y-2 bg-card">
                   <div className="flex items-center justify-between pb-2 border-b border-border/50">
-                    <div className="flex items-center gap-2">
-                      <Grid3x3 className="h-4 w-4 text-primary" />
-                      <span className="font-semibold text-sm">{lote.nombre}</span>
-                    </div>
+                    <span className="font-semibold text-sm">{lote.nombre}</span>
                     <span className="text-xs text-muted-foreground">{lote.hectareasSembradas} ha</span>
                   </div>
 
@@ -853,19 +840,12 @@ export default function NuevoPredioWizard() {
                         const palSub = totalPalmasSublote(s.id) || s.cantidadPalmas || 0;
                         return (
                           <div key={s.id} className="flex items-center justify-between py-1 text-xs">
-                            <div className="flex items-center gap-2">
-                              <Trees className="h-3 w-3 text-primary/70" />
-                              <span>{s.nombre}</span>
-                            </div>
+                            <span>{s.nombre}</span>
                             <div className="flex items-center gap-3 text-xs">
                               {linSub.length > 0 && (
-                                <span className="text-muted-foreground flex items-center gap-1">
-                                  <GitBranch className="h-3 w-3" />{linSub.length}
-                                </span>
+                                <span className="text-muted-foreground">{linSub.length} líneas</span>
                               )}
-                              <span className="text-success font-semibold flex items-center gap-1">
-                                <Leaf className="h-3 w-3" />{palSub}
-                              </span>
+                              <span className="text-success font-semibold">{palSub} palmas</span>
                             </div>
                           </div>
                         );
@@ -891,9 +871,7 @@ export default function NuevoPredioWizard() {
 
             {lotes.length > 0 && (
               <div className="border-2 border-primary/30 rounded-lg p-3 bg-primary/5 space-y-2">
-                <h5 className="font-semibold text-sm flex items-center gap-2">
-                  <Check className="h-4 w-4 text-primary" /> Totales Generales
-                </h5>
+                <h5 className="font-semibold text-sm">Totales Generales</h5>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div className="flex items-center justify-between p-2 rounded bg-background/50">
                     <span className="text-muted-foreground">Lotes</span>
@@ -944,35 +922,60 @@ export default function NuevoPredioWizard() {
         {/* ── Columna izquierda: wizard ──────────────────────────── */}
         <div className="lg:col-span-2 space-y-8">
 
-          {/* Stepper */}
+          {/* Stepper horizontal — exacto al diseño del .zip */}
           <Card className="border-border">
             <CardContent className="p-6">
-              <div className="flex items-center">
+              <div className="flex items-center justify-between">
                 {ETAPAS.map((e, idx) => {
                   const completa = etapa > e.numero;
                   const activa   = etapa === e.numero;
                   return (
-                    <div key={e.numero} className="flex items-center flex-1">
-                      <div className="flex-1 flex justify-center">
-                        <button onClick={() => (editId || completa || activa) && setEtapa(e.numero)}
-                          className={`flex flex-col items-center gap-2 ${editId || completa || activa ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
-                          disabled={!editId && !completa && !activa}>
-                          <div className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition-all ${completa ? 'bg-primary border-primary text-white' : activa ? 'bg-primary/10 border-primary text-primary' : 'bg-muted border-border text-muted-foreground'}`}>
-                            {completa ? <Check className="h-5 w-5" /> : <span className="font-bold">{e.numero}</span>}
+                    <React.Fragment key={e.numero}>
+                      {/* Círculo de etapa */}
+                      <button
+                        onClick={() => (editId || completa || activa) && setEtapa(e.numero)}
+                        className={`flex flex-col items-center gap-2 ${
+                          activa || completa || editId ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
+                        }`}
+                        disabled={!editId && !activa && !completa}
+                      >
+                        <div
+                          className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition-all ${
+                            completa
+                              ? 'bg-primary border-primary text-white'
+                              : activa
+                              ? 'bg-primary/10 border-primary text-primary'
+                              : 'bg-muted border-border text-muted-foreground'
+                          }`}
+                        >
+                          {completa ? (
+                            <Check className="h-5 w-5" />
+                          ) : (
+                            <span className="font-bold">{e.numero}</span>
+                          )}
+                        </div>
+                        <div className="text-center">
+                          <div
+                            className={`text-sm font-semibold whitespace-nowrap ${
+                              activa || completa ? 'text-foreground' : 'text-muted-foreground'
+                            }`}
+                          >
+                            {e.nombre}
                           </div>
-                          <div className="text-center">
-                            <div className={`text-sm font-semibold whitespace-nowrap ${activa || completa ? 'text-foreground' : 'text-muted-foreground'}`}>
-                              {e.nombre}
-                            </div>
-                          </div>
-                        </button>
-                      </div>
+                        </div>
+                      </button>
+
+                      {/* Línea conectora */}
                       {idx < ETAPAS.length - 1 && (
-                        <div className="flex-1 h-0.5 mx-2 bg-border relative">
-                          <div className={`absolute inset-0 bg-primary transition-all ${completa ? 'w-full' : 'w-0'}`} />
+                        <div className="flex-1 h-0.5 bg-border relative mx-4">
+                          <div
+                            className={`absolute inset-0 bg-primary transition-all ${
+                              completa ? 'w-full' : 'w-0'
+                            }`}
+                          />
                         </div>
                       )}
-                    </div>
+                    </React.Fragment>
                   );
                 })}
               </div>
@@ -983,17 +986,10 @@ export default function NuevoPredioWizard() {
           {etapa === 1 && (
             <Card className="border-border">
               <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                    <MapPin className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <CardTitle>Información del Predio</CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      Ingresa los datos básicos de tu predio
-                    </p>
-                  </div>
-                </div>
+                <CardTitle>Información del Predio</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Ingresa los datos básicos de tu predio
+                </p>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid gap-6 md:grid-cols-2">
@@ -1033,16 +1029,11 @@ export default function NuevoPredioWizard() {
             <Card className="border-border">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                      <Grid3x3 className="h-6 w-6 text-primary" />
-                    </div>
-                    <div>
-                      <CardTitle>Lotes del Predio</CardTitle>
-                      <p className="text-sm text-muted-foreground">
-                        Hectáreas disponibles: {haDisponibles.toFixed(2)} ha
-                      </p>
-                    </div>
+                  <div>
+                    <CardTitle>Lotes del Predio</CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Hectáreas disponibles: {haDisponibles.toFixed(2)} ha
+                    </p>
                   </div>
                   <Button onClick={() => setShowFormLote(true)} className="gap-2">
                     <Plus className="h-4 w-4" /> Agregar Lote
@@ -1126,19 +1117,10 @@ export default function NuevoPredioWizard() {
           {etapa === 3 && (
             <Card className="border-border">
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                      <Trees className="h-6 w-6 text-primary" />
-                    </div>
-                    <div>
-                      <CardTitle>Sublotes</CardTitle>
-                      <p className="text-sm text-muted-foreground">
-                        Organiza tus lotes en sublotes
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                <CardTitle>Sublotes</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Organiza tus lotes en sublotes
+                </p>
               </CardHeader>
               <CardContent className="space-y-6">
                 {lotes.map(lote => {
@@ -1217,22 +1199,15 @@ export default function NuevoPredioWizard() {
           {etapa === 4 && (
             <Card className="border-border">
               <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-xl bg-accent/10 flex items-center justify-center">
-                    <GitBranch className="h-6 w-6 text-accent" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <CardTitle>Líneas</CardTitle>
-                      <Badge variant="secondary" className="bg-accent/10 text-accent">
-                        Opcional
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Las líneas son opcionales. Las palmas se pueden agregar directamente a los sublotes.
-                    </p>
-                  </div>
+                <div className="flex items-center gap-2">
+                  <CardTitle>Líneas</CardTitle>
+                  <Badge variant="secondary" className="bg-accent/10 text-accent">
+                    Opcional
+                  </Badge>
                 </div>
+                <p className="text-sm text-muted-foreground">
+                  Las líneas son opcionales. Las palmas se pueden agregar directamente a los sublotes.
+                </p>
               </CardHeader>
               <CardContent className="space-y-6">
                 {sublotes.map(sub => {
@@ -1295,17 +1270,10 @@ export default function NuevoPredioWizard() {
           {etapa === 5 && (
             <Card className="border-border">
               <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-xl bg-success/10 flex items-center justify-center">
-                    <Leaf className="h-6 w-6 text-success" />
-                  </div>
-                  <div>
-                    <CardTitle>Registrar Palmas</CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      Total de palmas: {sublotes.reduce((s, sub) => s + (totalPalmasSublote(sub.id) || sub.cantidadPalmas || 0), 0).toLocaleString('es-CO')}
-                    </p>
-                  </div>
-                </div>
+                <CardTitle>Registrar Palmas</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Total de palmas: {sublotes.reduce((s, sub) => s + (totalPalmasSublote(sub.id) || sub.cantidadPalmas || 0), 0).toLocaleString('es-CO')}
+                </p>
               </CardHeader>
               <CardContent className="space-y-6">
                 {sublotes.map(sub => {
@@ -1777,10 +1745,7 @@ export default function NuevoPredioWizard() {
           <div className="sticky top-8">
             <Card className="border-border">
               <CardHeader className="border-b border-border">
-                <CardTitle className="flex items-center gap-2">
-                  <Trees className="h-5 w-5 text-primary" />
-                  Resumen
-                </CardTitle>
+                <CardTitle>Resumen</CardTitle>
               </CardHeader>
               <CardContent className="p-6 space-y-6">
                 {PanelResumen()}

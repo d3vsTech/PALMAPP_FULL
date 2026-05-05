@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router';
 
 // Helper defensivo para fechas (evita "Invalid Date")
@@ -26,6 +26,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../../components/ui/alert-dialog';
 import {
   ArrowLeft,
   ArrowRight,
@@ -468,15 +478,25 @@ export default function NuevoColaboradorWizard() {
     }
   };
 
-  const handleEliminarDocumento = async (docId: number) => {
-    if (!id) return;
+  // Estado para confirmación de eliminación de documento (AlertDialog)
+  const [docAEliminar, setDocAEliminar] = useState<{ id: number; nombre: string } | null>(null);
+
+  const confirmarEliminarDocumento = async () => {
+    if (!id || !docAEliminar) return;
+    const docId = docAEliminar.id;
     try {
       const res = await colaboradoresApi.eliminarDocumento(Number(id), docId);
       toast.success(res.message ?? 'Documento eliminado');
       setDocumentos(prev => prev.filter(d => d.id !== docId));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al eliminar');
+    } finally {
+      setDocAEliminar(null);
     }
+  };
+
+  const handleEliminarDocumento = (docId: number, nombre?: string) => {
+    setDocAEliminar({ id: docId, nombre: nombre ?? 'este documento' });
   };
 
   const descargarDocumento = async (docId: number, nombreArchivo?: string) => {
@@ -653,7 +673,7 @@ export default function NuevoColaboradorWizard() {
                   const estaActiva   = etapaActual === etapa.numero;
                   const Icon = etapa.icon;
                   return (
-                    <div key={etapa.numero} className="flex items-center flex-1">
+                    <React.Fragment key={etapa.numero}>
                       {/* Círculo de etapa */}
                       <button
                         onClick={() => irAEtapa(etapa.numero)}
@@ -673,9 +693,9 @@ export default function NuevoColaboradorWizard() {
                         >
                           {estaCompleta ? <Check className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
                         </div>
-                        <div className="text-center min-w-[80px]">
+                        <div className="text-center">
                           <div
-                            className={`text-xs font-semibold ${
+                            className={`text-xs font-semibold whitespace-nowrap ${
                               estaActiva || estaCompleta ? 'text-foreground' : 'text-muted-foreground'
                             }`}
                           >
@@ -686,7 +706,7 @@ export default function NuevoColaboradorWizard() {
 
                       {/* Línea conectora */}
                       {index < ETAPAS.length - 1 && (
-                        <div className="flex-1 h-0.5 mx-2 bg-border relative">
+                        <div className="flex-1 h-0.5 bg-border relative mx-4">
                           <div
                             className={`absolute inset-0 bg-primary transition-all ${
                               estaCompleta ? 'w-full' : 'w-0'
@@ -694,7 +714,7 @@ export default function NuevoColaboradorWizard() {
                           />
                         </div>
                       )}
-                    </div>
+                    </React.Fragment>
                   );
                 })}
               </div>
@@ -1185,7 +1205,7 @@ export default function NuevoColaboradorWizard() {
                                           <Button size="sm" variant="ghost" title="Descargar" onClick={() => descargarDocumento(docDelTipo.id, docDelTipo.archivo_nombre_original)}>
                                             <Download className="h-4 w-4" />
                                           </Button>
-                                          <Button size="sm" variant="ghost" onClick={() => handleEliminarDocumento(docDelTipo.id)} className="text-destructive hover:text-destructive" title="Eliminar">
+                                          <Button size="sm" variant="ghost" onClick={() => handleEliminarDocumento(docDelTipo.id, docDelTipo.archivo_nombre_original)} className="text-destructive hover:text-destructive" title="Eliminar">
                                             <Trash2 className="h-4 w-4" />
                                           </Button>
                                         </div>
@@ -1258,7 +1278,7 @@ export default function NuevoColaboradorWizard() {
                                               <Button size="sm" variant="ghost" title="Descargar" onClick={() => descargarDocumento(doc.id, doc.archivo_nombre_original)}>
                                                 <Download className="h-4 w-4" />
                                               </Button>
-                                              <Button size="sm" variant="ghost" onClick={() => handleEliminarDocumento(doc.id)} className="text-destructive hover:text-destructive" title="Eliminar">
+                                              <Button size="sm" variant="ghost" onClick={() => handleEliminarDocumento(doc.id, doc.archivo_nombre_original)} className="text-destructive hover:text-destructive" title="Eliminar">
                                                 <Trash2 className="h-4 w-4" />
                                               </Button>
                                             </div>
@@ -1364,6 +1384,26 @@ export default function NuevoColaboradorWizard() {
         </div>
       </div>
 
+      {/* AlertDialog: confirmación de eliminar documento */}
+      <AlertDialog open={!!docAEliminar} onOpenChange={(open) => !open && setDocAEliminar(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar documento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción no se puede deshacer. Se eliminará permanentemente <strong>{docAEliminar?.nombre}</strong> del sistema.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmarEliminarDocumento}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

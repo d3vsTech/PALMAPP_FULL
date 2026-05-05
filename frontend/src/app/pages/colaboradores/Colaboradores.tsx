@@ -132,19 +132,16 @@ export default function Colaboradores() {
         <h2>Resumen</h2>
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {[
-            { label: 'Total Colaboradores', value: meta.total ?? colaboradores.length, sub: 'registrados', cls: 'text-primary bg-primary/10 border-primary/20', badge: 'Personal' },
-            { label: 'Colaboradores Activos', value: activos, sub: 'activos', cls: 'text-success bg-success/10 border-success/20', badge: 'Trabajando' },
-            { label: 'Colaboradores Inactivos', value: inactivos, sub: 'inactivos', cls: 'text-muted-foreground bg-muted/50 border-muted', badge: 'Sin acceso' },
-          ].map(({ label, value, sub, cls, badge }) => (
+            { label: 'Total Colaboradores', value: meta.total ?? colaboradores.length, sub: 'registrados'},
+            { label: 'Colaboradores Activos', value: activos, sub: 'activos'},
+            { label: 'Colaboradores Inactivos', value: inactivos, sub: 'inactivos'},
+          ].map(({ label, value, sub}) => (
             <Card key={label} className="border-border hover:shadow-lg transition-all duration-300">
               <CardContent className="p-6">
                 <p className="text-sm text-muted-foreground mb-2">{label}</p>
                 <div className="flex items-baseline gap-2">
                   <p className="text-4xl font-bold">{loading ? '—' : value}</p>
                   <span className="text-sm text-muted-foreground">{sub}</span>
-                </div>
-                <div className={`inline-flex items-center gap-1 mt-3 px-2.5 py-1 rounded-full text-xs font-medium border ${cls}`}>
-                  <Users className="h-4 w-4" /><span>{badge}</span>
                 </div>
               </CardContent>
             </Card>
@@ -220,11 +217,11 @@ export default function Colaboradores() {
                         </td>
                         <td className="p-4">
                           <span className="text-sm font-medium text-foreground">{c.documento}</span>
-                          <p className="text-xs text-muted-foreground">{c.tipo_documento}</p>
+                          
                         </td>
                         <td className="p-4">
                           <span className="text-sm font-medium text-foreground">{c.cargo}</span>
-                          <p className="text-xs text-muted-foreground">{c.predio?.nombre ?? 'Sin predio'}</p>
+                         
                         </td>
                         <td className="p-4">
                           <div className="flex gap-2 justify-end">

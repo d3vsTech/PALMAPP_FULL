@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { useNavigate } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -7,15 +7,12 @@ import { Label } from '../../components/ui/label';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
-import { Plus, Eye, FileText, CheckCircle, Clock, Loader2 } from 'lucide-react';
+import { Plus, Eye, FileText, Loader2 } from 'lucide-react';
 import StatusBadge from '../../components/common/StatusBadge';
 import { toast } from 'sonner';
 import {
   operacionesApi,
-  type Planilla,
-  type Indicadores,
-  type PeriodoIndicadores,
-  type EstadoPlanilla,
+  type Planilla, type Indicadores, type PeriodoIndicadores, type EstadoPlanilla,
 } from '../../../api/operaciones';
 
 const PER_PAGE = 50;
@@ -23,7 +20,7 @@ const PER_PAGE = 50;
 export default function Operaciones() {
   const navigate = useNavigate();
 
-  // ── Indicadores con filtro de período ───────────────────────────────────────
+  // ── KPIs con filtro de período ─────────────────────────────────────────────
   const [periodoKPI, setPeriodoKPI] = useState<PeriodoIndicadores>('mensual');
   const [fechaInicioKPI, setFechaInicioKPI] = useState('');
   const [fechaFinKPI, setFechaFinKPI] = useState('');
@@ -91,8 +88,8 @@ export default function Operaciones() {
 
   return (
     <div className="space-y-8">
-      {/* Header con botones */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
+      {/* Header con botones - mismo estilo que Mi Plantación */}
+      <div className="flex items-start justify-between mb-8">
         <div>
           <h1 className="text-4xl font-bold text-foreground">Operaciones</h1>
           <p className="text-muted-foreground mt-2">
@@ -108,16 +105,14 @@ export default function Operaciones() {
         </Button>
       </div>
 
-      {/* Indicadores Principales */}
+      {/* KPIs */}
       <div>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+        <div className="flex items-center justify-between mb-4">
           <h2 className="text-2xl font-bold text-foreground">Indicadores Principales</h2>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-3">
             <Label className="text-sm font-medium">Período:</Label>
             <Select value={periodoKPI} onValueChange={(value: any) => setPeriodoKPI(value)}>
-              <SelectTrigger className="w-40">
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="semanal">Semanal</SelectItem>
                 <SelectItem value="quincenal">Quincenal</SelectItem>
@@ -127,74 +122,62 @@ export default function Operaciones() {
             </Select>
             {periodoKPI === 'personalizado' && (
               <>
-                <Input
-                  type="date"
-                  value={fechaInicioKPI}
+                <Input type="date" value={fechaInicioKPI}
                   onChange={(e) => setFechaInicioKPI(e.target.value)}
-                  className="w-40"
-                  placeholder="Fecha inicio"
-                />
-                <Input
-                  type="date"
-                  value={fechaFinKPI}
+                  className="w-40" placeholder="Fecha inicio" />
+                <Input type="date" value={fechaFinKPI}
                   onChange={(e) => setFechaFinKPI(e.target.value)}
-                  className="w-40"
-                  placeholder="Fecha fin"
-                />
+                  className="w-40" placeholder="Fecha fin" />
               </>
             )}
-            {cargandoIndicadores && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
           </div>
         </div>
 
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {/* Planillas en Borrador */}
           <Card className="glass-subtle border-border hover:shadow-lg transition-all duration-300">
             <CardContent className="p-6">
-              <p className="text-sm font-medium text-muted-foreground mb-2">Planillas en Borrador</p>
-              <div className="flex items-baseline gap-2">
-                <p className="text-3xl font-bold text-foreground">
-                  {cargandoIndicadores ? '—' : (indicadores?.planillas_borrador ?? 0)}
-                </p>
-                <span className="text-sm text-muted-foreground">pendientes</span>
-              </div>
-              <div className="inline-flex items-center gap-1 mt-3 px-2.5 py-1 rounded-full text-xs font-medium border text-amber-600 bg-amber-50 border-amber-200 dark:text-amber-500 dark:bg-amber-950/30 dark:border-amber-900/30">
-                <Clock className="h-4 w-4" />
-                <span>Pendientes</span>
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-muted-foreground mb-2">Planillas en Borrador</p>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-3xl font-bold text-foreground">
+                      {cargandoIndicadores ? '—' : (indicadores?.planillas_borrador ?? 0)}
+                    </p>
+                    <span className="text-sm text-muted-foreground">pendientes</span>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Planillas Aprobadas */}
           <Card className="glass-subtle border-border hover:shadow-lg transition-all duration-300">
             <CardContent className="p-6">
-              <p className="text-sm font-medium text-muted-foreground mb-2">Planillas Aprobadas</p>
-              <div className="flex items-baseline gap-2">
-                <p className="text-3xl font-bold text-foreground">
-                  {cargandoIndicadores ? '—' : (indicadores?.planillas_aprobadas ?? 0)}
-                </p>
-                <span className="text-sm text-muted-foreground">completadas</span>
-              </div>
-              <div className="inline-flex items-center gap-1 mt-3 px-2.5 py-1 rounded-full text-xs font-medium border text-success bg-success/10 border-success/20">
-                <CheckCircle className="h-4 w-4" />
-                <span>Cerradas</span>
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-muted-foreground mb-2">Planillas Aprobadas</p>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-3xl font-bold text-foreground">
+                      {cargandoIndicadores ? '—' : (indicadores?.planillas_aprobadas ?? 0)}
+                    </p>
+                    <span className="text-sm text-muted-foreground">completadas</span>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Total Planillas */}
           <Card className="glass-subtle border-border hover:shadow-lg transition-all duration-300">
             <CardContent className="p-6">
-              <p className="text-sm font-medium text-muted-foreground mb-2">Total Planillas</p>
-              <div className="flex items-baseline gap-2">
-                <p className="text-3xl font-bold text-foreground">
-                  {cargandoIndicadores ? '—' : (indicadores?.total_planillas ?? 0)}
-                </p>
-                <span className="text-sm text-muted-foreground">registros</span>
-              </div>
-              <div className="inline-flex items-center gap-1 mt-3 px-2.5 py-1 rounded-full text-xs font-medium border text-primary bg-primary/10 border-primary/20">
-                <FileText className="h-4 w-4" />
-                <span>Período seleccionado</span>
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-muted-foreground mb-2">Total Planillas</p>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-3xl font-bold text-foreground">
+                      {cargandoIndicadores ? '—' : (indicadores?.total_planillas ?? 0)}
+                    </p>
+                    <span className="text-sm text-muted-foreground">registros</span>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -245,43 +228,40 @@ export default function Operaciones() {
                     </tr>
                   </thead>
                   <tbody>
-                    {planillas.map((p, index) => (
+                    {planillas.map((planilla, index) => (
                       <tr
-                        key={p.id}
+                        key={planilla.id}
                         className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors ${
                           index % 2 === 0 ? 'bg-background' : 'bg-muted/5'
                         }`}
                       >
                         <td className="p-4">
                           <span className="text-sm font-medium text-foreground">
-                            {formatearFecha(p.fecha)}
+                            {formatearFecha(planilla.fecha)}
                           </span>
                         </td>
                         <td className="p-4">
-                          <StatusBadge status={mapEstadoUI(p.estado)} />
+                          <StatusBadge status={mapEstadoUI(planilla.estado)} />
                         </td>
                         <td className="p-4 text-center">
                           <span className="inline-flex items-center justify-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
-                            {p.colaboradores_count ?? 0}
+                            {planilla.colaboradores_count ?? 0}
                           </span>
                         </td>
                         <td className="p-4 text-right">
                           <span className="font-semibold text-success">
-                            {formatearMoneda(p.total_general)}
+                            {formatearMoneda(planilla.total_general)}
                           </span>
                         </td>
                         <td className="p-4">
                           <div className="flex gap-2 justify-end">
                             <Button
-                              size="sm"
-                              variant="outline"
-                              asChild
+                              size="sm" variant="outline"
                               className="hover:bg-primary/10 hover:text-primary hover:border-primary"
                               title="Visualizar"
+                              onClick={() => navigate(`/operaciones/planilla/${planilla.id}`)}
                             >
-                              <Link to={`/operaciones/planilla/${p.id}`}>
-                                <Eye className="h-4 w-4" />
-                              </Link>
+                              <Eye className="h-4 w-4" />
                             </Button>
                           </div>
                         </td>

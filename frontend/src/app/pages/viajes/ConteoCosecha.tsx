@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
@@ -20,6 +20,7 @@ import {
   viajesApi, strField,
   type Viaje, type ViajeDetalle, type OperacionDisponible, type CosechaLibre,
 } from '../../../api/viajes';
+import { selectsApi, operacionesApi } from '../../../api/operaciones';
 
 const ETAPAS = [
   { numero: 1, nombre: 'Info. Viaje' },
@@ -82,6 +83,38 @@ export default function ConteoCosecha() {
   const [cargandoOps, setCargandoOps] = useState(false);
   const [cargandoCosechas, setCargandoCosechas] = useState(false);
 
+  // Catálogo de colaboradores y mapa cosecha→empleado_ids
+  const [colaboradoresMap, setColaboradoresMap] = useState<Map<string, { nombres: string; apellidos: string; nombre_completo: string }>>(new Map());
+  const [cuadrillaPorCosecha, setCuadrillaPorCosecha] = useState<Map<number, number[]>>(new Map());
+  const [cuadrillaSeleccionada, setCuadrillaSeleccionada] = useState<string[]>([]);
+
+  // Cargar colaboradores al montar (para resolver nombres)
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await selectsApi.colaboradores();
+        const m = new Map<string, { nombres: string; apellidos: string; nombre_completo: string }>();
+        for (const c of (r.data ?? []) as any[]) {
+          let nombres   = c.primer_nombre   ?? c.nombres   ?? c.nombre   ?? '';
+          let apellidos = c.primer_apellido ?? c.apellidos ?? c.apellido ?? '';
+          const nc = c.nombre_completo ?? c.full_name ?? c.name ?? '';
+          if ((!nombres && !apellidos) && nc) {
+            const partes = String(nc).trim().split(/\s+/);
+            const mid = Math.ceil(partes.length / 2);
+            nombres = partes.slice(0, mid).join(' ');
+            apellidos = partes.slice(mid).join(' ');
+          }
+          if (!nombres && !apellidos) { nombres = 'Colaborador'; apellidos = String(c.id); }
+          m.set(String(c.id), {
+            nombres, apellidos,
+            nombre_completo: nc || `${nombres} ${apellidos}`.trim(),
+          });
+        }
+        setColaboradoresMap(m);
+      } catch {}
+    })();
+  }, []);
+
   // ── mapeo API → local
   const mapDetalle = (d: ViajeDetalle, planillaNombreById: Map<number, string>): CosechaConteo => ({
     id: String(d.id),
@@ -123,14 +156,30 @@ export default function ConteoCosecha() {
     finally { setCargandoOps(false); }
   };
 
-  // ── al elegir planilla, cargar cosechas libres
+  // ── al elegir planilla, cargar cosechas libres + cuadrillas (empleados por cosecha)
   useEffect(() => {
-    if (!cosechaEnEdicion?.planillaId) { setCosechasLibres([]); return; }
+    if (!cosechaEnEdicion?.planillaId) {
+      setCosechasLibres([]);
+      setCuadrillaPorCosecha(new Map());
+      return;
+    }
     setCargandoCosechas(true);
     viajesApi.cosechasLibresDeOperacion(Number(cosechaEnEdicion.planillaId))
       .then(r => setCosechasLibres(r.data ?? []))
       .catch(() => setCosechasLibres([]))
       .finally(() => setCargandoCosechas(false));
+
+    // Traer la planilla completa para extraer empleados de cada cuadrilla
+    operacionesApi.ver(Number(cosechaEnEdicion.planillaId))
+      .then((r: any) => {
+        const m = new Map<number, number[]>();
+        for (const c of (r?.data?.cosechas ?? []) as any[]) {
+          const ids = (c.cuadrilla ?? []).map((q: any) => Number(q.empleado_id)).filter(Boolean);
+          m.set(Number(c.id), ids);
+        }
+        setCuadrillaPorCosecha(m);
+      })
+      .catch(() => setCuadrillaPorCosecha(new Map()));
   }, [cosechaEnEdicion?.planillaId]);
 
   // ── handlers
@@ -153,7 +202,7 @@ export default function ConteoCosecha() {
     cargarOperaciones();
   };
 
-  const cancelarCosecha = () => setCosechaEnEdicion(null);
+  const cancelarCosecha = () => { setCosechaEnEdicion(null); setCuadrillaSeleccionada([]); };
 
   /** Al elegir una "cuadrilla" (que en este API es realmente una cosecha) */
   const handleCuadrillaChange = (cosechaId: string) => {
@@ -161,8 +210,11 @@ export default function ConteoCosecha() {
     const c = cosechasLibres.find(x => String(x.id) === cosechaId);
     if (!c) {
       setCosechaEnEdicion({ ...cosechaEnEdicion, cuadrillaReconteo: cosechaId });
+      setCuadrillaSeleccionada([]);
       return;
     }
+    const empIds = cuadrillaPorCosecha.get(Number(c.id)) ?? [];
+    setCuadrillaSeleccionada(empIds.map(String));
     setCosechaEnEdicion({
       ...cosechaEnEdicion,
       cosechaId: c.id,
@@ -170,7 +222,7 @@ export default function ConteoCosecha() {
       loteName: c.lote?.nombre ?? '—',
       subloteName: c.sublote?.nombre ?? '',
       gajos: c.gajos_reportados ?? 0,
-      cuadrillaCount: c.cuadrilla_count ?? 0,
+      cuadrillaCount: empIds.length || (c.cuadrilla_count ?? 0),
     });
   };
 
@@ -313,7 +365,7 @@ export default function ConteoCosecha() {
                   const estaCompleta = etapaActual > etapa.numero;
                   const estaActiva = etapaActual === etapa.numero;
                   return (
-                    <div key={etapa.numero} className="flex items-center" style={{ flex: index < ETAPAS.length - 1 ? 1 : 'none' }}>
+                    <React.Fragment key={etapa.numero}>
                       <button
                         onClick={() => irAEtapa(etapa.numero)}
                         className={`flex flex-col items-center gap-2 ${estaActiva || estaCompleta ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
@@ -335,11 +387,11 @@ export default function ConteoCosecha() {
                         </div>
                       </button>
                       {index < ETAPAS.length - 1 && (
-                        <div className="flex-1 h-0.5 mx-3 bg-border relative min-w-[20px]">
+                        <div className="flex-1 h-0.5 bg-border relative mx-4">
                           <div className={`absolute inset-0 bg-primary transition-all ${estaCompleta ? 'w-full' : 'w-0'}`} />
                         </div>
                       )}
-                    </div>
+                    </React.Fragment>
                   );
                 })}
               </div>
@@ -429,6 +481,7 @@ export default function ConteoCosecha() {
                                 ...cosechaEnEdicion, planillaId: value, cuadrillaReconteo: '',
                                 cosechaId: null, loteName: '', subloteName: '', gajos: 0, cuadrillaCount: 0,
                               });
+                              setCuadrillaSeleccionada([]);
                             }}
                             disabled={cargandoOps}
                           >
@@ -438,7 +491,7 @@ export default function ConteoCosecha() {
                             <SelectContent>
                               {operaciones.map((op) => (
                                 <SelectItem key={op.id} value={String(op.id)}>
-                                  Planilla {op.fecha} — {op.cosechas_disponibles_count} cosecha{op.cosechas_disponibles_count !== 1 ? 's' : ''}
+                                  Planilla {formatearFechaViaje(op.fecha)} — {op.cosechas_disponibles_count} cosecha{op.cosechas_disponibles_count !== 1 ? 's' : ''}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -478,7 +531,19 @@ export default function ConteoCosecha() {
                         <div className="space-y-2 md:col-span-2">
                           <Label>Colaboradores</Label>
                           <div className="flex flex-wrap gap-2">
-                            {cosechaEnEdicion.cuadrillaCount > 0 ? (
+                            {cuadrillaSeleccionada.length > 0 ? (
+                              cuadrillaSeleccionada.map((empId) => {
+                                const col = colaboradoresMap.get(empId);
+                                const label = col
+                                  ? (col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${empId}`)
+                                  : `Colaborador ${empId}`;
+                                return (
+                                  <Badge key={empId} variant="secondary" className="text-xs">
+                                    {label}
+                                  </Badge>
+                                );
+                              })
+                            ) : cosechaEnEdicion.cuadrillaCount > 0 ? (
                               <Badge variant="outline" className="text-xs">
                                 {cosechaEnEdicion.cuadrillaCount} colaborador{cosechaEnEdicion.cuadrillaCount !== 1 ? 'es' : ''}
                               </Badge>

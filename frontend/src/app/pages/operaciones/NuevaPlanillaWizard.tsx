@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -15,6 +14,16 @@ import {
   SelectValue,
 } from '../../components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../../components/ui/alert-dialog';
 import {
   ArrowLeft,
   ArrowRight,
@@ -33,7 +42,9 @@ import {
   Pencil,
   X,
 } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 import { operacionesApi, cosechasApi, jornalesApi, horasExtraApi, ausenciasApi, selectsApi } from '../../../api/operaciones';
+import { toast } from 'sonner';
 
 // Tipos de fertilizantes
 const fertilizantes = [
@@ -134,8 +145,6 @@ interface TrabajoAuxiliar {
   labor: string;
   otraLabor?: string;
   lugar: string;
-  total: number;
-  horasExtra: number;
 }
 
 interface AusenteRegistro {
@@ -161,25 +170,6 @@ const ETAPAS = [
   { numero: 5, nombre: 'Finalización' },
 ];
 
-
-/** Extrae el nombre completo de un colaborador del API, probando todos los campos posibles */
-function getNombreColab(col: {nombres: string; apellidos: string; nombre_completo: string; _raw?: any}): string {
-  // 1. nombre_completo directo
-  if (col.nombre_completo) return col.nombre_completo;
-  // 2. Campos individuales mapeados
-  const partes = [col.nombres, col.apellidos].filter(Boolean);
-  if (partes.length > 0) return partes.join(' ');
-  // 3. Intentar del objeto crudo directamente
-  if (col._raw) {
-    const r = col._raw;
-    const campos = [r.nombre_completo, r.full_name, r.name,
-      r.primer_nombre, r.nombres, r.nombre,
-      r.primer_apellido, r.apellidos, r.apellido].filter(Boolean);
-    if (campos.length > 0) return campos.slice(0, 2).join(' ');
-  }
-  return '';
-}
-
 export default function NuevaPlanillaWizard() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -187,14 +177,9 @@ export default function NuevaPlanillaWizard() {
   const isEditMode = Boolean(idParam);
   const [etapaActual, setEtapaActual] = useState(1);
 
-  // ── Estado para planilla ID y loading ─────────────────────────────────────
-  // En modo edición, planillaId arranca con el id de la URL para que los POSTs
-  // de tarjetas vayan directo a /operaciones/{id}/jornales sin re-crear la planilla.
-  const [planillaId, setPlanillaId] = useState<number | null>(
-    idParam ? Number(idParam) : null
-  );
+  // ── Estado planilla ID + loading ─────────────────────────────────────────
+  const [planillaId, setPlanillaId] = useState<number | null>(idParam ? Number(idParam) : null);
   const [guardando, setGuardando] = useState(false);
-  const [cargandoPlanilla, setCargandoPlanilla] = useState(isEditMode);
   const [resumen, setResumen] = useState<import('../../../api/operaciones').Resumen | null>(null);
 
   const cargarResumen = async (pid: number) => {
@@ -204,23 +189,22 @@ export default function NuevaPlanillaWizard() {
     } catch {}
   };
 
-  // ── Datos API (mismo shape que mockData para compatibilidad con JSX) ───────
+  // ── Datos de catálogos cargados desde API (reemplazan al mockData del diseño) ──
   const [colaboradores, setColaboradores] = useState<Array<{id: string; nombres: string; apellidos: string; nombre_completo: string; _raw?: any}>>([]);
   const [lotesData, setLotesData] = useState<Array<{id: string; nombre: string}>>([]);
   const [sublotes, setSublotes] = useState<Array<{id: string; nombre: string; loteId: string; cantidadPalmas: number}>>([]);
 
-  // Mapas ID por nombre para save
+  // Mapas auxiliares para resolver nombres → IDs al guardar
   const [insumosMap, setInsumosMap] = useState<Map<string, number>>(new Map());
   const [laboresMap, setLaboresMap] = useState<Map<string, number>>(new Map());
   const [motivosMap, setMotivosMap] = useState<Map<string, number>>(new Map());
   const [tiposHoraExtraMap, setTiposHoraExtraMap] = useState<Map<string, number>>(new Map());
-  // Arrays para los selects del JSX (reemplazan los hardcodeados)
-  const [insumosLista,        setInsumosLista]        = useState<string[]>([]);
-  const [laboresLista,        setLaboresLista]        = useState<string[]>([]);
-  const [motivosLista,        setMotivosLista]        = useState<string[]>([]);
+  const [insumosLista, setInsumosLista] = useState<string[]>([]);
+  const [laboresLista, setLaboresLista] = useState<string[]>([]);
+  const [motivosLista, setMotivosLista] = useState<string[]>([]);
   const [tiposHoraExtraLista, setTiposHoraExtraLista] = useState<string[]>([]);
 
-  // ── Carga inicial de selects desde API ────────────────────────────────────
+  // Carga inicial de catálogos al montar
   useEffect(() => {
     (async () => {
       try {
@@ -232,98 +216,74 @@ export default function NuevaPlanillaWizard() {
           selectsApi.motivosAusencia(),
           selectsApi.tiposHoraExtra(),
         ]);
-        setColaboradores(
-          (colRes.data || []).map((c: any) => {
-            // Intentar todos los campos conocidos
-            const nombres   = c.primer_nombre   ?? c.nombres   ?? c.nombre   ?? c.first_name  ?? '';
-            const apellidos = c.primer_apellido ?? c.apellidos ?? c.apellido ?? c.last_name   ?? '';
-            // nombre_completo: puede venir directo del API o se construye
-            const nombreCompleto = c.nombre_completo ?? c.full_name ?? c.name ??
-              (nombres || apellidos ? `${nombres} ${apellidos}`.trim() : '');
-            return {
-              id: String(c.id),
-              nombres,
-              apellidos,
-              nombre_completo: nombreCompleto,
-              _raw: c,   // objeto crudo para debug
-            };
-          })
-        );
+        setColaboradores((colRes.data || []).map((c: any) => {
+          let nombres   = c.primer_nombre   ?? c.nombres   ?? c.nombre   ?? '';
+          let apellidos = c.primer_apellido ?? c.apellidos ?? c.apellido ?? '';
+          const nombreCompletoApi = c.nombre_completo ?? c.full_name ?? c.name ?? '';
+
+          // Si no llegan separados pero sí llega el completo, partirlo en 2 mitades
+          // para que el badge muestre algo (en vez de quedar vacío y verse como un bloque verde).
+          if ((!nombres && !apellidos) && nombreCompletoApi) {
+            const partes = String(nombreCompletoApi).trim().split(/\s+/);
+            const mid = Math.ceil(partes.length / 2);
+            nombres   = partes.slice(0, mid).join(' ');
+            apellidos = partes.slice(mid).join(' ');
+          }
+
+          // Última garantía: si todavía no hay nada, mostrar al menos el ID.
+          if (!nombres && !apellidos) {
+            nombres = `Colaborador`;
+            apellidos = String(c.id);
+          }
+
+          const nombreCompleto = nombreCompletoApi || `${nombres} ${apellidos}`.trim();
+          return { id: String(c.id), nombres, apellidos, nombre_completo: nombreCompleto, _raw: c };
+        }));
         const lotes = (lotRes.data || []).map((l: any) => ({ id: String(l.id), nombre: l.nombre }));
         setLotesData(lotes);
-        // Cargar sublotes en paralelo por cada lote
         const subPromises = lotes.map(async (l) => {
           try {
             const sr = await selectsApi.sublotes({ lote_id: Number(l.id) });
-            return (sr.data || []).map((s: any) => {
-              // Aceptamos varias variantes del campo de palmas para máxima compatibilidad:
-              // - cantidad_palmas (oficial según API_OPERACIONES.md §8)
-              // - palmas, total_palmas, numero_palmas (variantes legacy)
-              // - sublote.lote.predio.cantidad_palmas (fallback al predio si el sublote no lo trae)
-              const palmasRaw =
-                s.cantidad_palmas ??
-                s.palmas ??
-                s.total_palmas ??
-                s.numero_palmas ??
-                s.cantidadPalmas ??
-                s.lote?.predio?.cantidad_palmas ??
-                s.predio?.cantidad_palmas ??
-                0;
-              return {
-                id: String(s.id),
-                nombre: s.nombre,
-                loteId: l.id,
-                cantidadPalmas: Number(palmasRaw) || 0,
-              };
-            });
-          } catch (err) {
-            console.warn(`[Operaciones] Error cargando sublotes del lote ${l.id}`, err);
-            return [];
-          }
+            return (sr.data || []).map((s: any) => ({
+              id: String(s.id),
+              nombre: s.nombre,
+              loteId: l.id,
+              cantidadPalmas: Number(s.cantidad_palmas ?? s.palmas ?? 0),
+            }));
+          } catch { return []; }
         });
         const allSubs = (await Promise.all(subPromises)).flat();
-        // Diagnóstico: si TODOS los sublotes traen cantidadPalmas=0, probablemente
-        // el backend no está devolviendo el campo. Lo logueamos una sola vez para debug.
-        if (allSubs.length > 0 && allSubs.every(s => s.cantidadPalmas === 0)) {
-          console.warn('[Operaciones] Ningún sublote trae cantidad_palmas. Revisa la respuesta del API:',
-            'Esperado: { id, nombre, lote_id, cantidad_palmas }');
-        }
         setSublotes(allSubs);
         const insumos = (inRes.data || []).map((i: any) => ({ nombre: i.nombre as string, id: i.id as number }));
         const labores = (labRes.data || []).map((l: any) => ({ nombre: l.nombre as string, id: l.id as number }));
         const motivos = (motRes.data || []).map((m: any) => ({ nombre: m.nombre as string, id: m.id as number }));
         const tipos   = (tipoRes.data || []).map((t: any) => ({ nombre: t.nombre as string, id: t.id as number }));
-
         setInsumosMap(new Map(insumos.map(x => [x.nombre, x.id] as [string, number])));
         setLaboresMap(new Map(labores.map(x => [x.nombre, x.id] as [string, number])));
         setMotivosMap(new Map(motivos.map(x => [x.nombre, x.id] as [string, number])));
         setTiposHoraExtraMap(new Map(tipos.map(x => [x.nombre, x.id] as [string, number])));
-
         setInsumosLista(insumos.map(x => x.nombre));
         setLaboresLista(labores.map(x => x.nombre));
         setMotivosLista(motivos.map(x => x.nombre));
         setTiposHoraExtraLista(tipos.map(x => x.nombre));
-      } catch (e) {
-        console.warn('Error cargando selects:', e);
-      }
+      } catch (e) { console.warn('Error cargando selects:', e); }
     })();
   }, []);
 
+
   // Información General
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
-  // Elaborado por: se llena automáticamente con el nombre del usuario logueado y queda bloqueado
   const [elaboradoPor, setElaboradoPor] = useState(user?.nombre ?? '');
+
+  // Sincroniza el nombre del usuario logueado al campo "Elaborado por" en cuanto
+  // el AuthContext termina de cargar (puede llegar tarde por su naturaleza async).
+  useEffect(() => {
+    if (user?.nombre && !elaboradoPor) setElaboradoPor(user.nombre);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.nombre]);
   const [huboLluvia, setHuboLluvia] = useState<'si' | 'no' | ''>('');
   const [lluvia, setLluvia] = useState('');
   const [inicioLabores, setInicioLabores] = useState('06:00');
-
-  // Si el user llega tarde (carga async del AuthContext) sincronizamos
-  useEffect(() => {
-    if (user?.nombre && !elaboradoPor) {
-      setElaboradoPor(user.nombre);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.nombre]);
   
   // Observaciones y Ausentes (Final)
   const [observaciones, setObservaciones] = useState('');
@@ -349,178 +309,116 @@ export default function NuevaPlanillaWizard() {
   const [horasExtras, setHorasExtras] = useState<HoraExtra[]>([]);
   const [horaExtraEnEdicion, setHoraExtraEnEdicion] = useState<HoraExtra | null>(null);
 
-  // ── Prefill desde API en modo edición ─────────────────────────────────────
-  // Carga todos los datos existentes de la planilla y los inyecta en los mismos
-  // estados que usa el flujo de creación. El JSX queda igual al de "Nueva Planilla"
-  // y muestra cards/tarjetas con los datos pre-cargados, listos para editar.
+  // Alerta de planilla duplicada (popup grande)
+  const [alertaDuplicada, setAlertaDuplicada] = useState(false);
+
+  // ── Prefill desde API en modo edición ───────────────────────────────────
   useEffect(() => {
     if (!isEditMode || !idParam) return;
     let cancelled = false;
     (async () => {
-      setCargandoPlanilla(true);
       try {
         const res = await operacionesApi.ver(Number(idParam));
         if (cancelled) return;
         const p: any = res.data ?? {};
-
-        // ── Información General ──
         const fechaRaw = p.fecha ?? '';
         const fechaNorm = typeof fechaRaw === 'string'
           ? (fechaRaw.match(/^\d{4}-\d{2}-\d{2}/)?.[0] ?? '')
           : '';
         if (fechaNorm) setFecha(fechaNorm);
         if (p.hora_inicio) setInicioLabores(String(p.hora_inicio).slice(0, 5));
-
-        // hubo_lluvia: el API puede devolver true/false, 0/1, "0"/"1", "true"/"false".
-        // Convertimos a booleano de forma robusta antes de mapear a 'si' / 'no'.
         const lluviaRaw = p.hubo_lluvia;
         const lluviaBool =
           lluviaRaw === true || lluviaRaw === 1 || lluviaRaw === '1' ||
           (typeof lluviaRaw === 'string' && lluviaRaw.toLowerCase() === 'true');
         setHuboLluvia(lluviaBool ? 'si' : 'no');
-
-        // Cantidad de lluvia (mm)
         if (p.cantidad_lluvia != null) {
           const n = parseFloat(String(p.cantidad_lluvia));
           setLluvia(Number.isFinite(n) && n > 0 ? String(n) : '');
-        } else {
-          setLluvia('');
         }
         setObservaciones(p.observaciones ?? '');
-        // Elaborado por: el API devuelve el campo con varios nombres distintos según el endpoint
         const elaboradoApi =
-          p.creado_por_rel?.name ??
-          p.creado_por_rel?.nombre ??
-          p.creado_por_rel?.full_name ??
-          p.creado_por_rel?.nombre_completo ??
-          p.creadoPor?.name ??
-          p.creado_por?.name ??
-          p.creado_por?.nombre ??
-          p.elaborado_por ??
-          p.user?.name ??
-          '';
+          p.creado_por_rel?.name ?? p.creado_por_rel?.nombre ??
+          p.creadoPor?.name ?? p.creado_por?.name ?? '';
         if (elaboradoApi) setElaboradoPor(elaboradoApi);
 
-        // ── Cosechas → trabajosCosecha ──
-        setTrabajosCosecha(
-          (p.cosechas ?? []).map((c: any) => ({
-            id: String(c.id),
-            colaboradores: (c.cuadrilla ?? []).map((q: any) => String(q.empleado_id)),
-            lote: c.lote_id != null ? String(c.lote_id) : '',
-            sublote: c.sublote_id != null ? String(c.sublote_id) : '',
-            gajosRecogidos: Number(c.gajos_reportados ?? 0),
-            kilos: c.peso_confirmado != null ? Number(c.peso_confirmado) : 0,
-          }))
-        );
-
-        // ── Jornales: agrupar por categoría/tipo ──
+        setTrabajosCosecha((p.cosechas ?? []).map((c: any) => ({
+          id: String(c.id),
+          colaboradores: (c.cuadrilla ?? []).map((q: any) => String(q.empleado_id)),
+          lote: c.lote_id != null ? String(c.lote_id) : '',
+          sublote: c.sublote_id != null ? String(c.sublote_id) : '',
+          gajosRecogidos: Number(c.gajos_reportados ?? 0),
+          kilos: c.peso_confirmado != null ? Number(c.peso_confirmado) : 0,
+        })));
         const jornales = (p.jornales ?? []) as any[];
-
-        // PALMA → uno por colaborador (se persisten así, pero al editar agrupar
-        // sigue siendo opcional. Por simplicidad, una tarjeta por jornal).
         const porTipo = (tipo: string) => jornales.filter(j => j.categoria === 'PALMA' && j.tipo === tipo);
-
-        setTrabajosPlateo(
-          porTipo('PLATEO').map(j => ({
-            id: String(j.id),
-            colaboradores: [String(j.empleado_id)],
-            lote: j.lote_id != null ? String(j.lote_id) : '',
-            sublote: j.sublote_id != null ? String(j.sublote_id) : '',
-            numeroPalmas: Number(j.cantidad_palmas ?? 0),
-          }))
-        );
-        setTrabajosPoda(
-          porTipo('PODA').map(j => ({
-            id: String(j.id),
-            colaboradores: [String(j.empleado_id)],
-            lote: j.lote_id != null ? String(j.lote_id) : '',
-            sublote: j.sublote_id != null ? String(j.sublote_id) : '',
-            numeroPalmas: Number(j.cantidad_palmas ?? 0),
-          }))
-        );
-        setTrabajosFertilizacion(
-          porTipo('FERTILIZACION').map(j => ({
-            id: String(j.id),
-            colaboradores: [String(j.empleado_id)],
-            lote: j.lote_id != null ? String(j.lote_id) : '',
-            sublote: j.sublote_id != null ? String(j.sublote_id) : '',
-            palmas: Number(j.cantidad_palmas ?? 0),
-            tipoFertilizante: j.insumo?.nombre ?? '',
-            otroFertilizante: '',
-            cantidadGramos: Number(j.gramos_por_palma ?? 0),
-          }))
-        );
-        setTrabajosSanidad(
-          porTipo('SANIDAD').map(j => ({
-            id: String(j.id),
-            colaboradores: [String(j.empleado_id)],
-            lote: j.lote_id != null ? String(j.lote_id) : '',
-            sublote: j.sublote_id != null ? String(j.sublote_id) : '',
-            trabajoRealizado: j.descripcion ?? '',
-          }))
-        );
-        setTrabajosOtros(
-          porTipo('OTROS').map(j => ({
-            id: String(j.id),
-            colaboradores: [String(j.empleado_id)],
-            nombre: j.nombre_trabajo ?? '',
-            laborRealizada: j.descripcion ?? '',
-            lote: j.lote_id != null ? String(j.lote_id) : '',
-            sublote: j.sublote_id != null ? String(j.sublote_id) : '',
-          }))
-        );
-
-        // FINCA (Labores de Finca / Auxiliares)
-        const fincas = jornales.filter(j => j.categoria === 'FINCA');
-        setTrabajosAuxiliares(
-          fincas.map(j => {
-            const nombre = j.empleado
-              ? `${j.empleado.primer_nombre ?? ''} ${j.empleado.primer_apellido ?? ''}`.trim()
-              : '';
-            return {
-              id: String(j.id),
-              nombre,
-              labor: j.labor?.nombre ?? '',
-              otraLabor: '',
-              lugar: j.ubicacion ?? '',
-              total: Number(j.valor_total ?? 0),
-              horasExtra: 0,
-            };
-          })
-        );
-
-        // ── Horas Extras ──
-        setHorasExtras(
-          (p.horas_extra ?? p.horasExtra ?? []).map((h: any) => ({
-            id: String(h.id),
-            colaboradorId: String(h.empleado_id),
-            tipoHora: h.tipoHoraExtra?.nombre ?? h.tipo_hora_extra?.nombre ?? '',
-            numeroHoras: Number(h.cantidad_horas ?? 0),
-            observacion: h.observacion ?? '',
-          }))
-        );
-
-        // ── Ausencias ──
-        setAusentes(
-          (p.ausencias ?? []).map((a: any) => ({
-            id: String(a.id),
-            colaboradorId: String(a.empleado_id),
-            motivo: a.motivo_ausencia?.nombre ?? '',
-            otroMotivo: a.motivo ?? '',
-          }))
-        );
-
-        // Resumen lateral
+        setTrabajosPlateo(porTipo('PLATEO').map(j => ({
+          id: String(j.id),
+          colaboradores: [String(j.empleado_id)],
+          lote: j.lote_id != null ? String(j.lote_id) : '',
+          sublote: j.sublote_id != null ? String(j.sublote_id) : '',
+          numeroPalmas: Number(j.cantidad_palmas ?? 0),
+        })));
+        setTrabajosPoda(porTipo('PODA').map(j => ({
+          id: String(j.id),
+          colaboradores: [String(j.empleado_id)],
+          lote: j.lote_id != null ? String(j.lote_id) : '',
+          sublote: j.sublote_id != null ? String(j.sublote_id) : '',
+          numeroPalmas: Number(j.cantidad_palmas ?? 0),
+        })));
+        setTrabajosFertilizacion(porTipo('FERTILIZACION').map(j => ({
+          id: String(j.id),
+          colaboradores: [String(j.empleado_id)],
+          lote: j.lote_id != null ? String(j.lote_id) : '',
+          sublote: j.sublote_id != null ? String(j.sublote_id) : '',
+          palmas: Number(j.cantidad_palmas ?? 0),
+          tipoFertilizante: j.insumo?.nombre ?? '',
+          otroFertilizante: '',
+          cantidadGramos: Number(j.gramos_por_palma ?? 0),
+        })));
+        setTrabajosSanidad(porTipo('SANIDAD').map(j => ({
+          id: String(j.id),
+          colaboradores: [String(j.empleado_id)],
+          lote: j.lote_id != null ? String(j.lote_id) : '',
+          sublote: j.sublote_id != null ? String(j.sublote_id) : '',
+          trabajoRealizado: j.descripcion ?? '',
+        })));
+        setTrabajosOtros(porTipo('OTROS').map(j => ({
+          id: String(j.id),
+          colaboradores: [String(j.empleado_id)],
+          nombre: j.nombre_trabajo ?? '',
+          laborRealizada: j.descripcion ?? '',
+          lote: j.lote_id != null ? String(j.lote_id) : '',
+          sublote: j.sublote_id != null ? String(j.sublote_id) : '',
+        })));
+        setTrabajosAuxiliares(jornales.filter(j => j.categoria === 'FINCA').map(j => ({
+          id: String(j.id),
+          nombre: j.empleado ? `${j.empleado.primer_nombre ?? ''} ${j.empleado.primer_apellido ?? ''}`.trim() : '',
+          labor: j.labor?.nombre ?? '',
+          otraLabor: '',
+          lugar: j.ubicacion ?? '',
+          total: Number(j.valor_total ?? 0),
+          horasExtra: 0,
+        })));
+        setHorasExtras((p.horas_extra ?? p.horasExtra ?? []).map((h: any) => ({
+          id: String(h.id),
+          colaboradorId: String(h.empleado_id),
+          tipoHora: h.tipoHoraExtra?.nombre ?? h.tipo_hora_extra?.nombre ?? '',
+          numeroHoras: Number(h.cantidad_horas ?? 0),
+          observacion: h.observacion ?? '',
+        })));
+        setAusentes((p.ausencias ?? []).map((a: any) => ({
+          id: String(a.id),
+          colaboradorId: String(a.empleado_id),
+          motivo: a.motivo_ausencia?.nombre ?? '',
+          otroMotivo: a.motivo ?? '',
+        })));
         try {
           const r = await operacionesApi.resumen(Number(idParam));
           if (!cancelled) setResumen(r.data);
         } catch {}
       } catch (err: any) {
-        if (!cancelled) {
-          alert(err?.message ?? 'Error al cargar la planilla');
-        }
-      } finally {
-        if (!cancelled) setCargandoPlanilla(false);
+        if (!cancelled) toast.error(err?.message ?? 'Error al cargar la planilla');
       }
     })();
     return () => { cancelled = true; };
@@ -532,45 +430,31 @@ export default function NuevaPlanillaWizard() {
   };
 
   const siguienteEtapa = async () => {
-    // Paso 1 → 2: crear planilla en API antes de avanzar
-    if (etapaActual === 1) {
-      if (!planillaId) {
-        setGuardando(true);
-        try {
-          const res = await operacionesApi.crear({
-            fecha,
-            elaborado_por: elaboradoPor || undefined,
-            hora_inicio: inicioLabores || undefined,
-            hubo_lluvia: huboLluvia === 'si',
-            cantidad_lluvia: huboLluvia === 'si' && lluvia ? parseFloat(lluvia) : null,
-            observaciones: observaciones || null,
-          });
-          setPlanillaId(res.data.id);
-          await cargarResumen(res.data.id);
-        } catch (err: any) {
-          alert(err?.message ?? 'Error al crear la planilla');
+    if (etapaActual >= ETAPAS.length) return;
+
+    // Validar al avanzar desde la etapa 1: que no exista ya planilla para esa fecha (solo en creación nueva).
+    if (etapaActual === 1 && !isEditMode && !planillaId && fecha) {
+      try {
+        // Traemos las últimas 100 planillas y filtramos client-side por fecha exacta.
+        // (Si el filtro fecha_desde/fecha_hasta del API no es estricto, igual funciona.)
+        const dup = await operacionesApi.listar({ per_page: 100 });
+        const lista: any[] = (dup as any).data ?? [];
+        console.log('[planilla-dup] total planillas:', lista.length, 'fecha buscada:', fecha);
+        const yaExiste = lista.some((p: any) => {
+          const f = String(p.fecha ?? p.fecha_planilla ?? '').slice(0, 10);
+          return f === fecha;
+        });
+        if (yaExiste) {
+          console.log('[planilla-dup] DUPLICADA — abriendo alerta');
+          setAlertaDuplicada(true);
           return;
-        } finally {
-          setGuardando(false);
         }
-      } else {
-        // Re-editar info general si ya existe
-        try {
-          await operacionesApi.editar(planillaId, {
-            fecha: fecha || undefined,
-            elaborado_por: elaboradoPor || undefined,
-            hora_inicio: inicioLabores || undefined,
-            hubo_lluvia: huboLluvia === 'si',
-            cantidad_lluvia: huboLluvia === 'si' && lluvia ? parseFloat(lluvia) : null,
-            observaciones: observaciones || null,
-          });
-          await cargarResumen(planillaId);
-        } catch {}
+      } catch (err) {
+        console.warn('[planilla-dup] error verificando duplicado:', err);
       }
     }
-    if (etapaActual < ETAPAS.length) {
-      setEtapaActual(etapaActual + 1);
-    }
+
+    setEtapaActual(etapaActual + 1);
   };
 
   const etapaAnterior = () => {
@@ -582,121 +466,196 @@ export default function NuevaPlanillaWizard() {
   const guardarTodo = async () => {
     setGuardando(true);
     try {
-      if (!planillaId) {
-        // Fallback: crear la planilla si no se creó al avanzar paso 1
-        const planRes = await operacionesApi.crear({
-          fecha,
-          elaborado_por: elaboradoPor || undefined,
-          hora_inicio: inicioLabores || undefined,
-          hubo_lluvia: huboLluvia === 'si',
-          cantidad_lluvia: huboLluvia === 'si' && lluvia ? parseFloat(lluvia) : null,
-          observaciones: observaciones || null,
-        });
-        setPlanillaId(planRes.data.id);
-
-        // Enviar todos los datos acumulados en el estado local
-        const pid = planRes.data.id;
-
-        for (const t of trabajosCosecha) {
-          if (!t.lote || t.colaboradores.length === 0) continue;
-          try { await cosechasApi.crear(pid, { lote_id: parseInt(t.lote), sublote_id: t.sublote ? parseInt(t.sublote) : undefined, gajos_reportados: t.gajosRecogidos || 0, peso_confirmado: t.kilos || null, cuadrilla: t.colaboradores.map(c => ({ empleado_id: parseInt(c) })) }); } catch {}
-        }
-        for (const t of trabajosPlateo) {
-          for (const cid of t.colaboradores) {
-            try { await jornalesApi.crear(pid, { categoria: 'PALMA', tipo: 'PLATEO', empleado_id: parseInt(cid), lote_id: t.lote ? parseInt(t.lote) : null, sublote_id: t.sublote ? parseInt(t.sublote) : null, cantidad_palmas: t.numeroPalmas || 0 }); } catch {}
-          }
-        }
-        for (const t of trabajosPoda) {
-          for (const cid of t.colaboradores) {
-            try { await jornalesApi.crear(pid, { categoria: 'PALMA', tipo: 'PODA', empleado_id: parseInt(cid), lote_id: t.lote ? parseInt(t.lote) : null, sublote_id: t.sublote ? parseInt(t.sublote) : null, cantidad_palmas: t.numeroPalmas || 0 }); } catch {}
-          }
-        }
-        for (const t of trabajosFertilizacion) {
-          // Resolver insumo_id. Si el usuario marcó "Otro", crearlo on-the-fly.
-          let insumoId: number | undefined;
-          if (t.tipoFertilizante === 'Otro') {
-            const nombreNuevo = (t.otroFertilizante || '').trim();
-            if (!nombreNuevo) continue;
-            const matchLocal = Array.from(insumosMap.entries())
-              .find(([n]) => n.toLowerCase() === nombreNuevo.toLowerCase());
-            if (matchLocal) {
-              insumoId = matchLocal[1];
-            } else {
-              try {
-                const res = await selectsApi.crearInsumo(nombreNuevo);
-                insumoId = res.data.id;
-                setInsumosMap(prev => new Map(prev).set(res.data.nombre, res.data.id));
-              } catch (err: any) {
-                // 409 INSUMO_DUPLICADO o cualquier otro error: saltar la tarjeta
-                continue;
-              }
+      const headerBody = {
+        fecha,
+        elaborado_por: elaboradoPor || undefined,
+        hora_inicio: inicioLabores || undefined,
+        hubo_lluvia: huboLluvia === 'si',
+        cantidad_lluvia: huboLluvia === 'si' && lluvia ? parseFloat(lluvia) : null,
+        observaciones: observaciones || null,
+      };
+      let pid = planillaId;
+      if (!pid) {
+        // Validar que no exista ya una planilla para esa fecha
+        if (fecha) {
+          try {
+            const dup = await operacionesApi.listar({ fecha_desde: fecha, fecha_hasta: fecha, per_page: 5 });
+            const yaExiste = (dup.data ?? []).some((p: any) => {
+              const f = String(p.fecha ?? '').slice(0, 10);
+              return f === fecha;
+            });
+            if (yaExiste) {
+              setAlertaDuplicada(true);
+              setGuardando(false);
+              return;
             }
-          } else {
-            insumoId = insumosMap.get(t.tipoFertilizante);
-          }
-          if (!insumoId) continue;
-          for (const cid of t.colaboradores) {
-            try { await jornalesApi.crear(pid, { categoria: 'PALMA', tipo: 'FERTILIZACION', empleado_id: parseInt(cid), lote_id: t.lote ? parseInt(t.lote) : null, sublote_id: t.sublote ? parseInt(t.sublote) : null, cantidad_palmas: t.palmas || 0, insumo_id: insumoId, gramos_por_palma: t.cantidadGramos || 0 }); } catch {}
-          }
+          } catch { /* si la verificación falla, dejamos que el backend responda */ }
         }
-        for (const t of trabajosSanidad) {
-          for (const cid of t.colaboradores) {
-            try { await jornalesApi.crear(pid, { categoria: 'PALMA', tipo: 'SANIDAD', empleado_id: parseInt(cid), lote_id: t.lote ? parseInt(t.lote) : null, sublote_id: t.sublote ? parseInt(t.sublote) : null, descripcion: t.trabajoRealizado || 'Sanidad' }); } catch {}
-          }
-        }
-        for (const t of trabajosOtros) {
-          for (const cid of t.colaboradores) {
-            try { await jornalesApi.crear(pid, { categoria: 'PALMA', tipo: 'OTROS', empleado_id: parseInt(cid), lote_id: t.lote ? parseInt(t.lote) : null, sublote_id: t.sublote ? parseInt(t.sublote) : null, nombre_trabajo: t.nombre || 'Otros', descripcion: t.laborRealizada || 'Realizado' }); } catch {}
-          }
-        }
-        for (const t of trabajosAuxiliares) {
-          if (!t.labor) continue;
-          const laborKey = t.labor === 'Otro' ? (t.otraLabor||'') : t.labor;
-          const laborId = laboresMap.get(laborKey) ?? laboresMap.get(t.labor);
-          if (!laborId) continue;
-          const nombreNorm = (t.nombre||'').toLowerCase().trim();
-          const colab = nombreNorm ? colaboradores.find(c => `${c.nombres} ${c.apellidos}`.toLowerCase().includes(nombreNorm)) : null;
-          if (!colab) continue;
-          try { await jornalesApi.crear(pid, { categoria: 'FINCA', labor_id: laborId, empleado_id: parseInt(colab.id), ubicacion: t.lugar || undefined }); } catch {}
-        }
-        for (const h of horasExtras) {
-          if (!h.colaboradorId || !h.tipoHora || !h.numeroHoras) continue;
-          let tipoId = tiposHoraExtraMap.get(h.tipoHora);
-          if (!tipoId) { for (const [n,i] of tiposHoraExtraMap.entries()) { if (n.toLowerCase().includes(h.tipoHora.toLowerCase())) { tipoId=i; break; } } }
-          if (!tipoId) continue;
-          try { await horasExtraApi.crear(pid, { empleado_id: parseInt(h.colaboradorId), tipo_hora_extra_id: tipoId, cantidad_horas: h.numeroHoras, observacion: h.observacion||undefined }); } catch {}
-        }
-        for (const a of ausentes) {
-          if (!a.colaboradorId) continue;
-          let motivoId = motivosMap.get(a.motivo);
-          if (!motivoId) { for (const [n,i] of motivosMap.entries()) { if (n.toLowerCase().includes(a.motivo.toLowerCase())) { motivoId=i; break; } } }
-          if (!motivoId) continue;
-          try { await ausenciasApi.crear(pid, { empleado_id: parseInt(a.colaboradorId), motivo_ausencia_id: motivoId, motivo: a.otroMotivo || a.motivo || '' }); } catch {}
-        }
-      } else if (isEditMode) {
-        // En modo edición: persistir cambios pendientes de Info General
-        // (las tarjetas de cosecha/jornales/horas-extra/ausencias ya se persisten
-        //  individualmente al pulsar "Guardar" en cada tarjeta).
-        try {
-          await operacionesApi.editar(planillaId, {
-            fecha: fecha || undefined,
-            elaborado_por: elaboradoPor || undefined,
-            hora_inicio: inicioLabores || undefined,
-            hubo_lluvia: huboLluvia === 'si',
-            cantidad_lluvia: huboLluvia === 'si' && lluvia ? parseFloat(lluvia) : null,
-            observaciones: observaciones || null,
-          });
-        } catch (err: any) {
-          // No bloqueamos la navegación si falla — el usuario tiene la opción
-          // de re-editar info general explícitamente desde el paso 1.
-          console.warn('No se pudo actualizar info general:', err?.message);
-        }
+        const res = await operacionesApi.crear(headerBody);
+        pid = res.data.id;
+        setPlanillaId(pid);
+      } else {
+        await operacionesApi.editar(pid, headerBody);
       }
 
-      // Todos los datos ya están guardados, solo navegar
+      // Cosechas
+      for (const t of trabajosCosecha) {
+        if (!t.lote || t.colaboradores.length === 0) continue;
+        try {
+          await cosechasApi.crear(pid, {
+            lote_id: parseInt(t.lote),
+            sublote_id: t.sublote ? parseInt(t.sublote) : undefined,
+            gajos_reportados: t.gajosRecogidos || 0,
+            peso_confirmado: t.kilos || null,
+            cuadrilla: t.colaboradores.map(c => ({ empleado_id: parseInt(c) })),
+          });
+        } catch {}
+      }
+      // Plateo
+      for (const t of trabajosPlateo) {
+        for (const cid of t.colaboradores) {
+          try {
+            await jornalesApi.crear(pid, {
+              categoria: 'PALMA', tipo: 'PLATEO', empleado_id: parseInt(cid),
+              lote_id: t.lote ? parseInt(t.lote) : null,
+              sublote_id: t.sublote ? parseInt(t.sublote) : null,
+              cantidad_palmas: t.numeroPalmas || 0,
+            });
+          } catch {}
+        }
+      }
+      // Poda
+      for (const t of trabajosPoda) {
+        for (const cid of t.colaboradores) {
+          try {
+            await jornalesApi.crear(pid, {
+              categoria: 'PALMA', tipo: 'PODA', empleado_id: parseInt(cid),
+              lote_id: t.lote ? parseInt(t.lote) : null,
+              sublote_id: t.sublote ? parseInt(t.sublote) : null,
+              cantidad_palmas: t.numeroPalmas || 0,
+            });
+          } catch {}
+        }
+      }
+      // Fertilizacion
+      for (const t of trabajosFertilizacion) {
+        let insumoId: number | undefined;
+        if (t.tipoFertilizante === 'Otro') {
+          const nombreNuevo = (t.otroFertilizante || '').trim();
+          if (!nombreNuevo) continue;
+          const matchLocal = Array.from(insumosMap.entries())
+            .find(([n]) => n.toLowerCase() === nombreNuevo.toLowerCase());
+          if (matchLocal) insumoId = matchLocal[1];
+          else {
+            try {
+              const res = await selectsApi.crearInsumo(nombreNuevo);
+              insumoId = res.data.id;
+              setInsumosMap(prev => new Map(prev).set(res.data.nombre, res.data.id));
+            } catch { continue; }
+          }
+        } else {
+          insumoId = insumosMap.get(t.tipoFertilizante);
+        }
+        if (!insumoId) continue;
+        for (const cid of t.colaboradores) {
+          try {
+            await jornalesApi.crear(pid, {
+              categoria: 'PALMA', tipo: 'FERTILIZACION', empleado_id: parseInt(cid),
+              lote_id: t.lote ? parseInt(t.lote) : null,
+              sublote_id: t.sublote ? parseInt(t.sublote) : null,
+              cantidad_palmas: t.palmas || 0,
+              insumo_id: insumoId,
+              gramos_por_palma: t.cantidadGramos || 0,
+            });
+          } catch {}
+        }
+      }
+      // Sanidad
+      for (const t of trabajosSanidad) {
+        for (const cid of t.colaboradores) {
+          try {
+            await jornalesApi.crear(pid, {
+              categoria: 'PALMA', tipo: 'SANIDAD', empleado_id: parseInt(cid),
+              lote_id: t.lote ? parseInt(t.lote) : null,
+              sublote_id: t.sublote ? parseInt(t.sublote) : null,
+              descripcion: t.trabajoRealizado || 'Sanidad',
+            });
+          } catch {}
+        }
+      }
+      // Otros (PALMA-OTROS)
+      for (const t of trabajosOtros) {
+        for (const cid of t.colaboradores) {
+          try {
+            await jornalesApi.crear(pid, {
+              categoria: 'PALMA', tipo: 'OTROS', empleado_id: parseInt(cid),
+              lote_id: t.lote ? parseInt(t.lote) : null,
+              sublote_id: t.sublote ? parseInt(t.sublote) : null,
+              nombre_trabajo: t.nombre || 'Otros',
+              descripcion: t.laborRealizada || 'Realizado',
+            });
+          } catch {}
+        }
+      }
+      // Auxiliares (FINCA)
+      for (const t of trabajosAuxiliares) {
+        if (!t.labor) continue;
+        const laborKey = t.labor === 'Otro' ? (t.otraLabor || '') : t.labor;
+        const laborId = laboresMap.get(laborKey) ?? laboresMap.get(t.labor);
+        if (!laborId) continue;
+        const nombreNorm = (t.nombre || '').toLowerCase().trim();
+        const colab = nombreNorm ? colaboradores.find(c => `${c.nombres} ${c.apellidos}`.toLowerCase().includes(nombreNorm)) : null;
+        if (!colab) continue;
+        try {
+          await jornalesApi.crear(pid, {
+            categoria: 'FINCA', labor_id: laborId,
+            empleado_id: parseInt(colab.id),
+            ubicacion: t.lugar || undefined,
+          });
+        } catch {}
+      }
+      // Horas extras
+      for (const h of horasExtras) {
+        if (!h.colaboradorId || !h.tipoHora || !h.numeroHoras) continue;
+        let tipoId = tiposHoraExtraMap.get(h.tipoHora);
+        if (!tipoId) {
+          for (const [n, i] of tiposHoraExtraMap.entries()) {
+            if (n.toLowerCase().includes(h.tipoHora.toLowerCase())) { tipoId = i; break; }
+          }
+        }
+        if (!tipoId) continue;
+        try {
+          await horasExtraApi.crear(pid, {
+            empleado_id: parseInt(h.colaboradorId),
+            tipo_hora_extra_id: tipoId,
+            cantidad_horas: h.numeroHoras,
+            observacion: h.observacion || undefined,
+          });
+        } catch {}
+      }
+      // Ausencias
+      for (const a of ausentes) {
+        if (!a.colaboradorId) continue;
+        let motivoId = motivosMap.get(a.motivo);
+        if (!motivoId) {
+          for (const [n, i] of motivosMap.entries()) {
+            if (n.toLowerCase().includes(a.motivo.toLowerCase())) { motivoId = i; break; }
+          }
+        }
+        if (!motivoId) continue;
+        try {
+          await ausenciasApi.crear(pid, {
+            empleado_id: parseInt(a.colaboradorId),
+            motivo_ausencia_id: motivoId,
+            motivo: a.otroMotivo || a.motivo || '',
+          });
+        } catch {}
+      }
+
+      toast.success(planillaId ? 'Planilla actualizada' : 'Planilla guardada');
       navigate('/operaciones');
     } catch (err: any) {
-      alert(err?.message ?? 'Error al guardar la planilla. Intente de nuevo.');
+      toast.error(err?.message ?? 'Error al guardar la planilla');
     } finally {
       setGuardando(false);
     }
@@ -714,40 +673,15 @@ export default function NuevaPlanillaWizard() {
     });
   };
 
-  const guardarCosecha = async () => {
-    if (!cosechaEnEdicion || !planillaId) {
-      // Sin planilla creada: solo estado local (se enviará en guardarTodo)
-      if (cosechaEnEdicion) {
-        setTrabajosCosecha([cosechaEnEdicion, ...trabajosCosecha]);
-        setCosechaEnEdicion(null);
-      }
-      return;
-    }
-    if (!cosechaEnEdicion.lote || cosechaEnEdicion.colaboradores.length === 0) {
-      alert('Selecciona al menos un colaborador y un lote');
-      return;
-    }
-    // Detectar si es una tarjeta existente (id numérico) o nueva (con prefijo "cosecha-")
-    const esExistente = !cosechaEnEdicion.id.includes('-');
-    try {
-      const payload = {
-        lote_id: parseInt(cosechaEnEdicion.lote),
-        sublote_id: cosechaEnEdicion.sublote ? parseInt(cosechaEnEdicion.sublote) : undefined,
-        gajos_reportados: cosechaEnEdicion.gajosRecogidos || 0,
-        peso_confirmado: cosechaEnEdicion.kilos || null,
-        cuadrilla: cosechaEnEdicion.colaboradores.map(cid => ({ empleado_id: parseInt(cid) })),
-      };
-      if (esExistente) {
-        await cosechasApi.editar(parseInt(cosechaEnEdicion.id), payload);
-        setTrabajosCosecha(prev => prev.map(t => t.id === cosechaEnEdicion.id ? cosechaEnEdicion : t));
+  const guardarCosecha = () => {
+    if (cosechaEnEdicion) {
+      const existe = trabajosCosecha.some(t => t.id === cosechaEnEdicion.id);
+      if (existe) {
+        setTrabajosCosecha(trabajosCosecha.map(t => t.id === cosechaEnEdicion.id ? cosechaEnEdicion : t));
       } else {
-        const res = await cosechasApi.crear(planillaId, payload);
-        setTrabajosCosecha([{ ...cosechaEnEdicion, id: String(res.data.id) }, ...trabajosCosecha]);
+        setTrabajosCosecha([cosechaEnEdicion, ...trabajosCosecha]);
       }
       setCosechaEnEdicion(null);
-      await cargarResumen(planillaId);
-    } catch (err: any) {
-      alert(err?.message ?? 'Error al guardar cosecha');
     }
   };
 
@@ -765,57 +699,16 @@ export default function NuevaPlanillaWizard() {
     });
   };
 
-  const guardarPlateo = async () => {
-    if (!plateoEnEdicion || !planillaId) {
-      if (plateoEnEdicion) { setTrabajosPlateo([plateoEnEdicion, ...trabajosPlateo]); setPlateoEnEdicion(null); }
-      return;
-    }
-    if (!plateoEnEdicion.colaboradores.length) { alert('Selecciona al menos un colaborador'); return; }
-    const esExistente = !plateoEnEdicion.id.includes('-');
-    try {
-      if (esExistente) {
-        // Tarjeta existente: PUT al primer colaborador, POST para los adicionales
-        const [primero, ...adicionales] = plateoEnEdicion.colaboradores;
-        await jornalesApi.editar(parseInt(plateoEnEdicion.id), {
-          categoria: 'PALMA', tipo: 'PLATEO', empleado_id: parseInt(primero),
-          lote_id: plateoEnEdicion.lote ? parseInt(plateoEnEdicion.lote) : null,
-          sublote_id: plateoEnEdicion.sublote ? parseInt(plateoEnEdicion.sublote) : null,
-          cantidad_palmas: plateoEnEdicion.numeroPalmas || 0,
-        });
-        const nuevasTarjetas: TrabajoPlateo[] = [];
-        for (const cid of adicionales) {
-          const res = await jornalesApi.crear(planillaId, {
-            categoria: 'PALMA', tipo: 'PLATEO', empleado_id: parseInt(cid),
-            lote_id: plateoEnEdicion.lote ? parseInt(plateoEnEdicion.lote) : null,
-            sublote_id: plateoEnEdicion.sublote ? parseInt(plateoEnEdicion.sublote) : null,
-            cantidad_palmas: plateoEnEdicion.numeroPalmas || 0,
-          });
-          nuevasTarjetas.push({
-            id: String(res.data.id),
-            colaboradores: [cid],
-            lote: plateoEnEdicion.lote, sublote: plateoEnEdicion.sublote,
-            numeroPalmas: plateoEnEdicion.numeroPalmas,
-          });
-        }
-        setTrabajosPlateo(prev => [
-          // Reemplazar la tarjeta editada con sólo el primer colaborador
-          ...prev.map(t => t.id === plateoEnEdicion.id ? { ...plateoEnEdicion, colaboradores: [primero] } : t),
-          ...nuevasTarjetas,
-        ]);
+  const guardarPlateo = () => {
+    if (plateoEnEdicion) {
+      const existe = trabajosPlateo.some(t => t.id === plateoEnEdicion.id);
+      if (existe) {
+        setTrabajosPlateo(trabajosPlateo.map(t => t.id === plateoEnEdicion.id ? plateoEnEdicion : t));
       } else {
-        for (const cid of plateoEnEdicion.colaboradores) {
-          await jornalesApi.crear(planillaId, {
-            categoria: 'PALMA', tipo: 'PLATEO', empleado_id: parseInt(cid),
-            lote_id: plateoEnEdicion.lote ? parseInt(plateoEnEdicion.lote) : null,
-            sublote_id: plateoEnEdicion.sublote ? parseInt(plateoEnEdicion.sublote) : null,
-            cantidad_palmas: plateoEnEdicion.numeroPalmas || 0,
-          });
-        }
         setTrabajosPlateo([plateoEnEdicion, ...trabajosPlateo]);
       }
       setPlateoEnEdicion(null);
-      await cargarResumen(planillaId);
-    } catch (err: any) { alert(err?.message ?? 'Error al guardar plateo'); }
+    }
   };
 
   const cancelarPlateo = () => {
@@ -832,54 +725,16 @@ export default function NuevaPlanillaWizard() {
     });
   };
 
-  const guardarPoda = async () => {
-    if (!podaEnEdicion || !planillaId) {
-      if (podaEnEdicion) { setTrabajosPoda([podaEnEdicion, ...trabajosPoda]); setPodaEnEdicion(null); }
-      return;
-    }
-    if (!podaEnEdicion.colaboradores.length) { alert('Selecciona al menos un colaborador'); return; }
-    const esExistente = !podaEnEdicion.id.includes('-');
-    try {
-      if (esExistente) {
-        const [primero, ...adicionales] = podaEnEdicion.colaboradores;
-        await jornalesApi.editar(parseInt(podaEnEdicion.id), {
-          categoria: 'PALMA', tipo: 'PODA', empleado_id: parseInt(primero),
-          lote_id: podaEnEdicion.lote ? parseInt(podaEnEdicion.lote) : null,
-          sublote_id: podaEnEdicion.sublote ? parseInt(podaEnEdicion.sublote) : null,
-          cantidad_palmas: podaEnEdicion.numeroPalmas || 0,
-        });
-        const nuevasTarjetas: TrabajoPoda[] = [];
-        for (const cid of adicionales) {
-          const res = await jornalesApi.crear(planillaId, {
-            categoria: 'PALMA', tipo: 'PODA', empleado_id: parseInt(cid),
-            lote_id: podaEnEdicion.lote ? parseInt(podaEnEdicion.lote) : null,
-            sublote_id: podaEnEdicion.sublote ? parseInt(podaEnEdicion.sublote) : null,
-            cantidad_palmas: podaEnEdicion.numeroPalmas || 0,
-          });
-          nuevasTarjetas.push({
-            id: String(res.data.id), colaboradores: [cid],
-            lote: podaEnEdicion.lote, sublote: podaEnEdicion.sublote,
-            numeroPalmas: podaEnEdicion.numeroPalmas,
-          });
-        }
-        setTrabajosPoda(prev => [
-          ...prev.map(t => t.id === podaEnEdicion.id ? { ...podaEnEdicion, colaboradores: [primero] } : t),
-          ...nuevasTarjetas,
-        ]);
+  const guardarPoda = () => {
+    if (podaEnEdicion) {
+      const existe = trabajosPoda.some(t => t.id === podaEnEdicion.id);
+      if (existe) {
+        setTrabajosPoda(trabajosPoda.map(t => t.id === podaEnEdicion.id ? podaEnEdicion : t));
       } else {
-        for (const cid of podaEnEdicion.colaboradores) {
-          await jornalesApi.crear(planillaId, {
-            categoria: 'PALMA', tipo: 'PODA', empleado_id: parseInt(cid),
-            lote_id: podaEnEdicion.lote ? parseInt(podaEnEdicion.lote) : null,
-            sublote_id: podaEnEdicion.sublote ? parseInt(podaEnEdicion.sublote) : null,
-            cantidad_palmas: podaEnEdicion.numeroPalmas || 0,
-          });
-        }
         setTrabajosPoda([podaEnEdicion, ...trabajosPoda]);
       }
       setPodaEnEdicion(null);
-      await cargarResumen(planillaId);
-    } catch (err: any) { alert(err?.message ?? 'Error al guardar poda'); }
+    }
   };
 
   const cancelarPoda = () => {
@@ -899,90 +754,16 @@ export default function NuevaPlanillaWizard() {
     });
   };
 
-  const guardarFertilizacion = async () => {
-    if (!fertilizacionEnEdicion || !planillaId) {
-      if (fertilizacionEnEdicion) { setTrabajosFertilizacion([fertilizacionEnEdicion, ...trabajosFertilizacion]); setFertilizacionEnEdicion(null); }
-      return;
-    }
-    if (!fertilizacionEnEdicion.colaboradores.length) { alert('Selecciona al menos un colaborador'); return; }
-
-    // 1) Resolver insumo_id. Si el usuario eligió "Otro", crear el insumo on-the-fly
-    //    con POST /operaciones/insumos. Si el nombre ya existe (409 INSUMO_DUPLICADO),
-    //    pedir al usuario que lo seleccione del dropdown en lugar de crearlo.
-    let insumoId: number | undefined;
-
-    if (fertilizacionEnEdicion.tipoFertilizante === 'Otro') {
-      const nombreNuevo = (fertilizacionEnEdicion.otroFertilizante || '').trim();
-      if (!nombreNuevo) {
-        alert('Ingresa el nombre del fertilizante.');
-        return;
-      }
-      // Si ya existe en el mapa local (case-insensitive), reutilizarlo
-      const matchLocal = Array.from(insumosMap.entries())
-        .find(([n]) => n.toLowerCase() === nombreNuevo.toLowerCase());
-      if (matchLocal) {
-        insumoId = matchLocal[1];
-        // Sincronizar el campo para que la card guardada muestre el nombre canónico
-        fertilizacionEnEdicion.otroFertilizante = matchLocal[0];
+  const guardarFertilizacion = () => {
+    if (fertilizacionEnEdicion) {
+      const existe = trabajosFertilizacion.some(t => t.id === fertilizacionEnEdicion.id);
+      if (existe) {
+        setTrabajosFertilizacion(trabajosFertilizacion.map(t => t.id === fertilizacionEnEdicion.id ? fertilizacionEnEdicion : t));
       } else {
-        try {
-          const res = await selectsApi.crearInsumo(nombreNuevo);
-          insumoId = res.data.id;
-          // Refrescar mapa y lista para que aparezca en el dropdown sin recargar
-          setInsumosMap(prev => new Map(prev).set(res.data.nombre, res.data.id));
-          setInsumosLista(prev => prev.includes(res.data.nombre) ? prev : [...prev.filter(x => x !== 'Otro'), res.data.nombre, 'Otro']);
-        } catch (err: any) {
-          if (err?.code === 'INSUMO_DUPLICADO') {
-            alert(`Ya existe un fertilizante con el nombre "${nombreNuevo}". Selecciónalo del dropdown en lugar de crearlo nuevamente.`);
-          } else {
-            alert(err?.message ?? 'No se pudo crear el fertilizante');
-          }
-          return;
-        }
-      }
-    } else {
-      insumoId = insumosMap.get(fertilizacionEnEdicion.tipoFertilizante || '');
-    }
-
-    if (!insumoId) { alert('Insumo no encontrado. Verifica el tipo de fertilizante.'); return; }
-
-    const esExistente = !fertilizacionEnEdicion.id.includes('-');
-    const baseFert = {
-      categoria: 'PALMA' as const, tipo: 'FERTILIZACION' as const,
-      lote_id: fertilizacionEnEdicion.lote ? parseInt(fertilizacionEnEdicion.lote) : null,
-      sublote_id: fertilizacionEnEdicion.sublote ? parseInt(fertilizacionEnEdicion.sublote) : null,
-      cantidad_palmas: fertilizacionEnEdicion.palmas || 0,
-      insumo_id: insumoId,
-      gramos_por_palma: fertilizacionEnEdicion.cantidadGramos || 0,
-    };
-    try {
-      if (esExistente) {
-        const [primero, ...adicionales] = fertilizacionEnEdicion.colaboradores;
-        await jornalesApi.editar(parseInt(fertilizacionEnEdicion.id), {
-          ...baseFert, empleado_id: parseInt(primero),
-        });
-        const nuevasTarjetas: TrabajoFertilizacion[] = [];
-        for (const cid of adicionales) {
-          const res = await jornalesApi.crear(planillaId, { ...baseFert, empleado_id: parseInt(cid) });
-          nuevasTarjetas.push({
-            ...fertilizacionEnEdicion,
-            id: String(res.data.id),
-            colaboradores: [cid],
-          });
-        }
-        setTrabajosFertilizacion(prev => [
-          ...prev.map(t => t.id === fertilizacionEnEdicion.id ? { ...fertilizacionEnEdicion, colaboradores: [primero] } : t),
-          ...nuevasTarjetas,
-        ]);
-      } else {
-        for (const cid of fertilizacionEnEdicion.colaboradores) {
-          await jornalesApi.crear(planillaId, { ...baseFert, empleado_id: parseInt(cid) });
-        }
         setTrabajosFertilizacion([fertilizacionEnEdicion, ...trabajosFertilizacion]);
       }
       setFertilizacionEnEdicion(null);
-      await cargarResumen(planillaId);
-    } catch (err: any) { alert(err?.message ?? 'Error al guardar fertilización'); }
+    }
   };
 
   const cancelarFertilizacion = () => {
@@ -999,41 +780,16 @@ export default function NuevaPlanillaWizard() {
     });
   };
 
-  const guardarSanidad = async () => {
-    if (!sanidadEnEdicion || !planillaId) {
-      if (sanidadEnEdicion) { setTrabajosSanidad([sanidadEnEdicion, ...trabajosSanidad]); setSanidadEnEdicion(null); }
-      return;
-    }
-    if (!sanidadEnEdicion.colaboradores.length) { alert('Selecciona al menos un colaborador'); return; }
-    const esExistente = !sanidadEnEdicion.id.includes('-');
-    const baseSan = {
-      categoria: 'PALMA' as const, tipo: 'SANIDAD' as const,
-      lote_id: sanidadEnEdicion.lote ? parseInt(sanidadEnEdicion.lote) : null,
-      sublote_id: sanidadEnEdicion.sublote ? parseInt(sanidadEnEdicion.sublote) : null,
-      descripcion: sanidadEnEdicion.trabajoRealizado || 'Trabajo de sanidad',
-    };
-    try {
-      if (esExistente) {
-        const [primero, ...adicionales] = sanidadEnEdicion.colaboradores;
-        await jornalesApi.editar(parseInt(sanidadEnEdicion.id), { ...baseSan, empleado_id: parseInt(primero) });
-        const nuevasTarjetas: TrabajoSanidad[] = [];
-        for (const cid of adicionales) {
-          const res = await jornalesApi.crear(planillaId, { ...baseSan, empleado_id: parseInt(cid) });
-          nuevasTarjetas.push({ ...sanidadEnEdicion, id: String(res.data.id), colaboradores: [cid] });
-        }
-        setTrabajosSanidad(prev => [
-          ...prev.map(t => t.id === sanidadEnEdicion.id ? { ...sanidadEnEdicion, colaboradores: [primero] } : t),
-          ...nuevasTarjetas,
-        ]);
+  const guardarSanidad = () => {
+    if (sanidadEnEdicion) {
+      const existe = trabajosSanidad.some(t => t.id === sanidadEnEdicion.id);
+      if (existe) {
+        setTrabajosSanidad(trabajosSanidad.map(t => t.id === sanidadEnEdicion.id ? sanidadEnEdicion : t));
       } else {
-        for (const cid of sanidadEnEdicion.colaboradores) {
-          await jornalesApi.crear(planillaId, { ...baseSan, empleado_id: parseInt(cid) });
-        }
         setTrabajosSanidad([sanidadEnEdicion, ...trabajosSanidad]);
       }
       setSanidadEnEdicion(null);
-      await cargarResumen(planillaId);
-    } catch (err: any) { alert(err?.message ?? 'Error al guardar sanidad'); }
+    }
   };
 
   const cancelarSanidad = () => {
@@ -1051,42 +807,16 @@ export default function NuevaPlanillaWizard() {
     });
   };
 
-  const guardarOtros = async () => {
-    if (!otrosEnEdicion || !planillaId) {
-      if (otrosEnEdicion) { setTrabajosOtros([otrosEnEdicion, ...trabajosOtros]); setOtrosEnEdicion(null); }
-      return;
-    }
-    if (!otrosEnEdicion.colaboradores.length) { alert('Selecciona al menos un colaborador'); return; }
-    const esExistente = !otrosEnEdicion.id.includes('-');
-    const baseOtros = {
-      categoria: 'PALMA' as const, tipo: 'OTROS' as const,
-      lote_id: otrosEnEdicion.lote ? parseInt(otrosEnEdicion.lote) : null,
-      sublote_id: otrosEnEdicion.sublote ? parseInt(otrosEnEdicion.sublote) : null,
-      nombre_trabajo: otrosEnEdicion.nombre || 'Otros',
-      descripcion: otrosEnEdicion.laborRealizada || 'Trabajo realizado',
-    };
-    try {
-      if (esExistente) {
-        const [primero, ...adicionales] = otrosEnEdicion.colaboradores;
-        await jornalesApi.editar(parseInt(otrosEnEdicion.id), { ...baseOtros, empleado_id: parseInt(primero) });
-        const nuevasTarjetas: TrabajoOtros[] = [];
-        for (const cid of adicionales) {
-          const res = await jornalesApi.crear(planillaId, { ...baseOtros, empleado_id: parseInt(cid) });
-          nuevasTarjetas.push({ ...otrosEnEdicion, id: String(res.data.id), colaboradores: [cid] });
-        }
-        setTrabajosOtros(prev => [
-          ...prev.map(t => t.id === otrosEnEdicion.id ? { ...otrosEnEdicion, colaboradores: [primero] } : t),
-          ...nuevasTarjetas,
-        ]);
+  const guardarOtros = () => {
+    if (otrosEnEdicion) {
+      const existe = trabajosOtros.some(t => t.id === otrosEnEdicion.id);
+      if (existe) {
+        setTrabajosOtros(trabajosOtros.map(t => t.id === otrosEnEdicion.id ? otrosEnEdicion : t));
       } else {
-        for (const cid of otrosEnEdicion.colaboradores) {
-          await jornalesApi.crear(planillaId, { ...baseOtros, empleado_id: parseInt(cid) });
-        }
         setTrabajosOtros([otrosEnEdicion, ...trabajosOtros]);
       }
       setOtrosEnEdicion(null);
-      await cargarResumen(planillaId);
-    } catch (err: any) { alert(err?.message ?? 'Error al guardar otros'); }
+    }
   };
 
   const cancelarOtros = () => {
@@ -1104,49 +834,24 @@ export default function NuevaPlanillaWizard() {
     });
   };
 
-  const guardarHoraExtra = async () => {
-    if (!horaExtraEnEdicion || !planillaId) {
-      if (horaExtraEnEdicion) { setHorasExtras([horaExtraEnEdicion, ...horasExtras]); setHoraExtraEnEdicion(null); }
-      return;
-    }
-    if (!horaExtraEnEdicion.colaboradorId || !horaExtraEnEdicion.tipoHora || !horaExtraEnEdicion.numeroHoras) {
-      alert('Completa todos los campos requeridos'); return;
-    }
-    let tipoId = tiposHoraExtraMap.get(horaExtraEnEdicion.tipoHora);
-    if (!tipoId) {
-      for (const [nombre, id] of tiposHoraExtraMap.entries()) {
-        if (nombre.toLowerCase().includes(horaExtraEnEdicion.tipoHora.toLowerCase())) { tipoId = id; break; }
-      }
-    }
-    if (!tipoId) { alert('Tipo de hora extra no encontrado'); return; }
-    const esExistente = !horaExtraEnEdicion.id.includes('-');
-    const payload = {
-      empleado_id: parseInt(horaExtraEnEdicion.colaboradorId),
-      tipo_hora_extra_id: tipoId,
-      cantidad_horas: horaExtraEnEdicion.numeroHoras,
-      observacion: horaExtraEnEdicion.observacion || undefined,
-    };
-    try {
-      if (esExistente) {
-        await horasExtraApi.editar(parseInt(horaExtraEnEdicion.id), payload);
-        setHorasExtras(prev => prev.map(h => h.id === horaExtraEnEdicion.id ? horaExtraEnEdicion : h));
+  const guardarHoraExtra = () => {
+    if (horaExtraEnEdicion) {
+      const existe = horasExtras.some(h => h.id === horaExtraEnEdicion.id);
+      if (existe) {
+        setHorasExtras(horasExtras.map(h => h.id === horaExtraEnEdicion.id ? horaExtraEnEdicion : h));
       } else {
-        const res = await horasExtraApi.crear(planillaId, payload);
-        setHorasExtras([{ ...horaExtraEnEdicion, id: String(res.data.id) }, ...horasExtras]);
+        setHorasExtras([horaExtraEnEdicion, ...horasExtras]); // LIFO
       }
       setHoraExtraEnEdicion(null);
-      await cargarResumen(planillaId);
-    } catch (err: any) { alert(err?.message ?? 'Error al guardar hora extra'); }
+    }
   };
 
   const cancelarHoraExtra = () => {
     setHoraExtraEnEdicion(null);
   };
 
-  const eliminarHoraExtra = async (id: string) => {
-    if (planillaId && !id.startsWith('horaextra-')) { try { await horasExtraApi.eliminar(parseInt(id)); } catch (err: any) { alert(err?.message ?? 'Error'); return; } }
+  const eliminarHoraExtra = (id: string) => {
     setHorasExtras(horasExtras.filter(h => h.id !== id));
-    if (planillaId) await cargarResumen(planillaId);
   };
 
   const agregarAuxiliar = () => {
@@ -1155,55 +860,81 @@ export default function NuevaPlanillaWizard() {
       nombre: '',
       labor: '',
       otraLabor: '',
-      lugar: '',
-      total: 0,
-      horasExtra: 0
+      lugar: ''
     }]);
   };
 
   // Funciones para eliminar trabajos
-  const eliminarCosecha = async (id: string) => {
-    if (planillaId && !id.startsWith('cosecha-')) {
-      try { await cosechasApi.eliminar(parseInt(id)); } catch (err: any) { alert(err?.message ?? 'Error al eliminar'); return; }
-    }
+  const eliminarCosecha = (id: string) => {
     setTrabajosCosecha(trabajosCosecha.filter(t => t.id !== id));
-    if (planillaId) await cargarResumen(planillaId);
   };
 
-  const eliminarPlateo = async (id: string) => {
-    if (planillaId && !id.startsWith('plateo-')) { try { await jornalesApi.eliminar(parseInt(id)); } catch (err: any) { alert(err?.message ?? 'Error'); return; } }
+  const eliminarPlateo = (id: string) => {
     setTrabajosPlateo(trabajosPlateo.filter(t => t.id !== id));
-    if (planillaId) await cargarResumen(planillaId);
   };
 
-  const eliminarPoda = async (id: string) => {
-    if (planillaId && !id.startsWith('poda-')) { try { await jornalesApi.eliminar(parseInt(id)); } catch (err: any) { alert(err?.message ?? 'Error'); return; } }
+  const eliminarPoda = (id: string) => {
     setTrabajosPoda(trabajosPoda.filter(t => t.id !== id));
-    if (planillaId) await cargarResumen(planillaId);
   };
 
-  const eliminarFertilizacion = async (id: string) => {
-    if (planillaId && !id.startsWith('fertilizacion-')) { try { await jornalesApi.eliminar(parseInt(id)); } catch (err: any) { alert(err?.message ?? 'Error'); return; } }
+  const eliminarFertilizacion = (id: string) => {
     setTrabajosFertilizacion(trabajosFertilizacion.filter(t => t.id !== id));
-    if (planillaId) await cargarResumen(planillaId);
   };
 
-  const eliminarSanidad = async (id: string) => {
-    if (planillaId && !id.startsWith('sanidad-')) { try { await jornalesApi.eliminar(parseInt(id)); } catch (err: any) { alert(err?.message ?? 'Error'); return; } }
+  const eliminarSanidad = (id: string) => {
     setTrabajosSanidad(trabajosSanidad.filter(t => t.id !== id));
-    if (planillaId) await cargarResumen(planillaId);
   };
 
-  const eliminarOtros = async (id: string) => {
-    if (planillaId && !id.startsWith('otros-')) { try { await jornalesApi.eliminar(parseInt(id)); } catch (err: any) { alert(err?.message ?? 'Error'); return; } }
+  const eliminarOtros = (id: string) => {
     setTrabajosOtros(trabajosOtros.filter(t => t.id !== id));
-    if (planillaId) await cargarResumen(planillaId);
   };
 
-  const eliminarAuxiliar = async (id: string) => {
-    if (planillaId && !id.startsWith('auxiliar-')) { try { await jornalesApi.eliminar(parseInt(id)); } catch (err: any) { alert(err?.message ?? 'Error'); return; } }
+  const eliminarAuxiliar = (id: string) => {
     setTrabajosAuxiliares(trabajosAuxiliares.filter(t => t.id !== id));
-    if (planillaId) await cargarResumen(planillaId);
+  };
+
+  // Funciones para editar trabajos guardados (cargan el item al formulario sin removerlo de la lista)
+  // Si el usuario cancela, el item original queda intacto. Si guarda, se reemplaza por id.
+  const editarCosecha = (id: string) => {
+    const t = trabajosCosecha.find(x => x.id === id);
+    if (!t) return;
+    setCosechaEnEdicion({ ...t });
+  };
+
+  const editarPlateo = (id: string) => {
+    const t = trabajosPlateo.find(x => x.id === id);
+    if (!t) return;
+    setPlateoEnEdicion({ ...t });
+  };
+
+  const editarPoda = (id: string) => {
+    const t = trabajosPoda.find(x => x.id === id);
+    if (!t) return;
+    setPodaEnEdicion({ ...t });
+  };
+
+  const editarFertilizacion = (id: string) => {
+    const t = trabajosFertilizacion.find(x => x.id === id);
+    if (!t) return;
+    setFertilizacionEnEdicion({ ...t });
+  };
+
+  const editarSanidad = (id: string) => {
+    const t = trabajosSanidad.find(x => x.id === id);
+    if (!t) return;
+    setSanidadEnEdicion({ ...t });
+  };
+
+  const editarOtros = (id: string) => {
+    const t = trabajosOtros.find(x => x.id === id);
+    if (!t) return;
+    setOtrosEnEdicion({ ...t });
+  };
+
+  const editarHoraExtra = (id: string) => {
+    const t = horasExtras.find(x => x.id === id);
+    if (!t) return;
+    setHoraExtraEnEdicion({ ...t });
   };
 
   // Funciones para manejar colaboradores en cosecha en edición
@@ -1304,38 +1035,17 @@ export default function NuevaPlanillaWizard() {
 
 
   // Funciones para ausentes
-  const agregarAusente = async () => {
+  const agregarAusente = () => {
     if (colaboradorAusenteSeleccionado && motivoAusenteSeleccionado) {
       if (motivoAusenteSeleccionado === 'Otro' && !otroMotivoAusente) {
         return;
       }
-
       const nuevoAusente: AusenteRegistro = {
         id: `ausente-${Date.now()}`,
         colaboradorId: colaboradorAusenteSeleccionado,
         motivo: motivoAusenteSeleccionado,
         otroMotivo: motivoAusenteSeleccionado === 'Otro' ? otroMotivoAusente : undefined
       };
-
-      if (planillaId) {
-        let motivoId = motivosMap.get(motivoAusenteSeleccionado);
-        if (!motivoId) {
-          for (const [nombre, id] of motivosMap.entries()) {
-            if (nombre.toLowerCase().includes(motivoAusenteSeleccionado.toLowerCase())) { motivoId = id; break; }
-          }
-        }
-        if (!motivoId) { alert('Motivo de ausencia no encontrado'); return; }
-        try {
-          const res = await ausenciasApi.crear(planillaId, {
-            empleado_id: parseInt(colaboradorAusenteSeleccionado),
-            motivo_ausencia_id: motivoId,
-            motivo: motivoAusenteSeleccionado === 'Otro' ? otroMotivoAusente : motivoAusenteSeleccionado,
-          });
-          nuevoAusente.id = String(res.data.id);
-          await cargarResumen(planillaId);
-        } catch (err: any) { alert(err?.message ?? 'Error al guardar ausencia'); return; }
-      }
-
       setAusentes([...ausentes, nuevoAusente]);
       setColaboradorAusenteSeleccionado('');
       setMotivoAusenteSeleccionado('');
@@ -1343,10 +1053,8 @@ export default function NuevaPlanillaWizard() {
     }
   };
 
-  const eliminarAusente = async (id: string) => {
-    if (planillaId && !id.startsWith('ausente-')) { try { await ausenciasApi.eliminar(parseInt(id)); } catch (err: any) { alert(err?.message ?? 'Error'); return; } }
+  const eliminarAusente = (id: string) => {
     setAusentes(ausentes.filter(a => a.id !== id));
-    if (planillaId) await cargarResumen(planillaId);
   };
 
   const puedeAvanzarEtapa1 = fecha && elaboradoPor;
@@ -1365,13 +1073,8 @@ export default function NuevaPlanillaWizard() {
         </Button>
         <h1>{isEditMode ? 'Editar Planilla del Día' : 'Crear Nueva Planilla'}</h1>
         <p className="text-muted-foreground mt-1">
-          {isEditMode
-            ? 'Modifica los datos de la planilla. Los cambios se guardan al avanzar de etapa o pulsar "Guardar".'
-            : 'Configura tu planilla paso a paso'}
+          Configura tu planilla paso a paso
         </p>
-        {cargandoPlanilla && (
-          <p className="text-sm text-primary mt-2">Cargando datos de la planilla…</p>
-        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -1385,7 +1088,6 @@ export default function NuevaPlanillaWizard() {
                 {ETAPAS.map((etapa, index) => {
                   const estaCompleta = etapaActual > etapa.numero;
                   const estaActiva = etapaActual === etapa.numero;
-
                   return (
                     <div key={etapa.numero} className="flex items-center" style={{ flex: index < ETAPAS.length - 1 ? 1 : 'none' }}>
                       {/* Círculo de etapa */}
@@ -1473,15 +1175,12 @@ export default function NuevaPlanillaWizard() {
                       <Label htmlFor="elaboradoPor">Elaborado por *</Label>
                       <Input
                         id="elaboradoPor"
-                        placeholder="Nombre del usuario"
+                        placeholder="Nombre completo"
                         value={elaboradoPor}
+                        onChange={(e) => setElaboradoPor(e.target.value)}
                         readOnly
-                        disabled
-                        className="opacity-80 cursor-not-allowed"
+                        className="bg-muted/30 cursor-not-allowed"
                       />
-                      <p className="text-xs text-muted-foreground">
-                        Se llena automáticamente con tu nombre de usuario
-                      </p>
                     </div>
                   </div>
 
@@ -1573,7 +1272,7 @@ export default function NuevaPlanillaWizard() {
                               <div className="space-y-2 md:col-span-2">
                                 <Label>Colaboradores</Label>
                                 <Select
-                                  key={`colab-cosecha-${cosechaEnEdicion.colaboradores.join(',')}`}
+                                  value=""
                                   onValueChange={(value) => {
                                     if (value) {
                                       agregarColaboradorEnEdicion(value);
@@ -1588,7 +1287,7 @@ export default function NuevaPlanillaWizard() {
                                       .filter(col => !cosechaEnEdicion.colaboradores.includes(col.id))
                                       .map((col) => (
                                         <SelectItem key={col.id} value={col.id}>
-                                          {getNombreColab(col)}
+                                          {col.nombres} {col.apellidos}
                                         </SelectItem>
                                       ))}
                                   </SelectContent>
@@ -1597,24 +1296,22 @@ export default function NuevaPlanillaWizard() {
                                   <div className="flex flex-wrap gap-2 mt-2">
                                     {cosechaEnEdicion.colaboradores.map((colId) => {
                                       const col = colaboradores.find(c => c.id === colId);
-                                      const nombre = col
-                                        ? (getNombreColab(col) || `Colaborador ${colId}`)
-                                        : `Colaborador ${colId}`;
-                                      return (
-                                        <span
+                                      return col ? (
+                                        <Badge
                                           key={colId}
-                                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20 w-fit shrink-0"
+                                          variant="secondary"
+                                          className="pl-2.5 pr-1 py-1 gap-1"
                                         >
-                                          {nombre}
+                                          <span>{col.nombres} {col.apellidos}</span>
                                           <button
                                             type="button"
                                             onClick={() => eliminarColaboradorEnEdicion(colId)}
-                                            className="ml-0.5 hover:bg-primary/20 rounded-full p-0.5"
+                                            className="ml-1 hover:bg-muted rounded-sm p-0.5"
                                           >
                                             <X className="h-3 w-3" />
                                           </button>
-                                        </span>
-                                      );
+                                        </Badge>
+                                      ) : null;
                                     })}
                                   </div>
                                 )}
@@ -1706,6 +1403,25 @@ export default function NuevaPlanillaWizard() {
                           <Card key={trabajo.id} className="border-border hover:border-primary/30 transition-colors">
                             <CardContent className="p-4">
                               <div className="flex items-center justify-between gap-4">
+                                {/* Colaboradores */}
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs text-muted-foreground mb-1">Colaboradores</p>
+                                  {trabajo.colaboradores?.length > 0 ? (
+                                    <div className="flex flex-wrap gap-1">
+                                      {trabajo.colaboradores?.map((colId) => {
+                                        const col = colaboradores.find(c => c.id === colId);
+                                        return col ? (
+                                          <Badge key={colId} variant="outline" className="text-xs">
+                                            {col.nombres.split(' ')[0]} {col.apellidos.split(' ')[0]}
+                                          </Badge>
+                                        ) : null;
+                                      })}
+                                    </div>
+                                  ) : (
+                                    <p className="text-xs text-muted-foreground">Sin colaboradores</p>
+                                  )}
+                                </div>
+
                                 {/* Lote/Sublote */}
                                 <div className="flex items-center gap-3">
                                   <div>
@@ -1714,25 +1430,6 @@ export default function NuevaPlanillaWizard() {
                                       {sublote?.nombre || 'Sublote no especificado'}
                                     </p>
                                   </div>
-                                </div>
-
-                                {/* Colaboradores */}
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs text-muted-foreground mb-1">Colaboradores</p>
-                                  {trabajo.colaboradores.length > 0 ? (
-                                    <div className="flex flex-wrap gap-1">
-                                      {trabajo.colaboradores.map((colId) => {
-                                        const col = colaboradores.find(c => c.id === colId);
-                                        return col ? (
-                                          <Badge key={colId} variant="outline" className="text-xs">
-                                            {getNombreColab(col) || `Colaborador ${colId}`}
-                                          </Badge>
-                                        ) : null;
-                                      })}
-                                    </div>
-                                  ) : (
-                                    <p className="text-xs text-muted-foreground">Sin colaboradores</p>
-                                  )}
                                 </div>
 
                                 {/* Gajos */}
@@ -1749,26 +1446,26 @@ export default function NuevaPlanillaWizard() {
                                   </div>
                                 )}
 
-                                {/* Botón editar */}
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setCosechaEnEdicion({ ...trabajo })}
-                                  className="text-primary hover:text-primary shrink-0"
-                                  title="Editar"
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                                {/* Botón eliminar */}
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => eliminarCosecha(trabajo.id)}
-                                  className="text-destructive hover:text-destructive shrink-0"
-                                  title="Eliminar"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
+                                {/* Botones acción */}
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => editarCosecha(trabajo.id)}
+                                    disabled={cosechaEnEdicion !== null}
+                                    title="Editar"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => eliminarCosecha(trabajo.id)}
+                                    className="text-destructive hover:text-destructive"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
                               </div>
                             </CardContent>
                           </Card>
@@ -1800,7 +1497,7 @@ export default function NuevaPlanillaWizard() {
                               <div className="space-y-2 md:col-span-2">
                                 <Label>Colaboradores</Label>
                                 <Select
-                                  key={`colab-plateo-${plateoEnEdicion.colaboradores.join(',')}`}
+                                  value=""
                                   onValueChange={(value) => {
                                     if (value && !plateoEnEdicion.colaboradores.includes(value)) {
                                       setPlateoEnEdicion({ ...plateoEnEdicion, colaboradores: [...plateoEnEdicion.colaboradores, value] });
@@ -1815,7 +1512,7 @@ export default function NuevaPlanillaWizard() {
                                       .filter(col => !plateoEnEdicion.colaboradores.includes(col.id))
                                       .map((col) => (
                                         <SelectItem key={col.id} value={col.id}>
-                                          {getNombreColab(col)}
+                                          {col.nombres} {col.apellidos}
                                         </SelectItem>
                                       ))}
                                   </SelectContent>
@@ -1825,19 +1522,16 @@ export default function NuevaPlanillaWizard() {
                                     {plateoEnEdicion.colaboradores.map((colId) => {
                                       const col = colaboradores.find(c => c.id === colId);
                                       return col ? (
-                                        <span
-                                          key={colId}
-                                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20 w-fit shrink-0"
-                                        >
-                                          <span>{getNombreColab(col) || `Colaborador ${colId}`}</span>
+                                        <Badge key={colId} variant="secondary" className="pl-2.5 pr-1 py-1 gap-1">
+                                          <span>{col.nombres} {col.apellidos}</span>
                                           <button
                                             type="button"
                                             onClick={() => setPlateoEnEdicion({ ...plateoEnEdicion, colaboradores: plateoEnEdicion.colaboradores.filter(id => id !== colId) })}
-                                            className="ml-0.5 hover:bg-primary/20 rounded-full p-0.5"
+                                            className="ml-1 hover:bg-muted rounded-sm p-0.5"
                                           >
                                             <X className="h-3 w-3" />
                                           </button>
-                                        </span>
+                                        </Badge>
                                       ) : null;
                                     })}
                                   </div>
@@ -1847,7 +1541,7 @@ export default function NuevaPlanillaWizard() {
                                 <Label>Lote</Label>
                                 <Select
                                   value={plateoEnEdicion.lote}
-                                  onValueChange={(value) => setPlateoEnEdicion({ ...plateoEnEdicion, lote: value, sublote: '', numeroPalmas: 0 })}
+                                  onValueChange={(value) => setPlateoEnEdicion({ ...plateoEnEdicion, lote: value, sublote: '' })}
                                 >
                                   <SelectTrigger>
                                     <SelectValue placeholder="Seleccionar lote" />
@@ -1866,12 +1560,11 @@ export default function NuevaPlanillaWizard() {
                                 <Select
                                   value={plateoEnEdicion.sublote}
                                   onValueChange={(value) => {
-                                    // Autofill "Número de Palmas" con cantidad_palmas del sublote (editable)
                                     const sub = sublotes.find(s => s.id === value);
                                     setPlateoEnEdicion({
                                       ...plateoEnEdicion,
                                       sublote: value,
-                                      numeroPalmas: sub?.cantidadPalmas ?? 0,
+                                      numeroPalmas: Number(sub?.cantidadPalmas ?? 0),
                                     });
                                   }}
                                   disabled={!plateoEnEdicion.lote}
@@ -1921,21 +1614,15 @@ export default function NuevaPlanillaWizard() {
                           <Card key={trabajo.id} className="border-border hover:border-primary/30 transition-colors">
                             <CardContent className="p-4">
                               <div className="flex items-center justify-between gap-4">
-                                <div className="flex items-center gap-3">
-                                  <div>
-                                    <h4 className="font-semibold text-sm">{lote?.nombre || 'Lote no especificado'}</h4>
-                                    <p className="text-xs text-muted-foreground">{sublote?.nombre || 'Sublote no especificado'}</p>
-                                  </div>
-                                </div>
                                 <div className="flex-1 min-w-0">
                                   <p className="text-xs text-muted-foreground mb-1">Colaboradores</p>
-                                  {trabajo.colaboradores.length > 0 ? (
+                                  {trabajo.colaboradores?.length > 0 ? (
                                     <div className="flex flex-wrap gap-1">
-                                      {trabajo.colaboradores.map((colId) => {
+                                      {trabajo.colaboradores?.map((colId) => {
                                         const col = colaboradores.find(c => c.id === colId);
                                         return col ? (
                                           <Badge key={colId} variant="outline" className="text-xs">
-                                            {getNombreColab(col) || `Colaborador ${colId}`}
+                                            {col.nombres.split(' ')[0]} {col.apellidos.split(' ')[0]}
                                           </Badge>
                                         ) : null;
                                       })}
@@ -1944,28 +1631,35 @@ export default function NuevaPlanillaWizard() {
                                     <p className="text-xs text-muted-foreground">Sin colaboradores</p>
                                   )}
                                 </div>
+                                <div className="flex items-center gap-3">
+                                  <div>
+                                    <h4 className="font-semibold text-sm">{lote?.nombre || 'Lote no especificado'}</h4>
+                                    <p className="text-xs text-muted-foreground">{sublote?.nombre || 'Sublote no especificado'}</p>
+                                  </div>
+                                </div>
                                 <div className="text-right shrink-0">
                                   <p className="text-xs text-muted-foreground">Palmas</p>
                                   <p className="font-bold text-lg">{trabajo.numeroPalmas}</p>
                                 </div>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setPlateoEnEdicion({ ...trabajo })}
-                                  className="text-primary hover:text-primary shrink-0"
-                                  title="Editar"
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => eliminarPlateo(trabajo.id)}
-                                  className="text-destructive hover:text-destructive shrink-0"
-                                  title="Eliminar"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => editarPlateo(trabajo.id)}
+                                    disabled={plateoEnEdicion !== null}
+                                    title="Editar"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => eliminarPlateo(trabajo.id)}
+                                    className="text-destructive hover:text-destructive"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
                               </div>
                             </CardContent>
                           </Card>
@@ -1998,7 +1692,7 @@ export default function NuevaPlanillaWizard() {
                               <div className="space-y-2 md:col-span-2">
                                 <Label>Colaboradores</Label>
                                 <Select
-                                  key={`colab-poda-${podaEnEdicion.colaboradores.join(',')}`}
+                                  value=""
                                   onValueChange={(value) => {
                                     if (value && !podaEnEdicion.colaboradores.includes(value)) {
                                       setPodaEnEdicion({ ...podaEnEdicion, colaboradores: [...podaEnEdicion.colaboradores, value] });
@@ -2013,7 +1707,7 @@ export default function NuevaPlanillaWizard() {
                                       .filter(col => !podaEnEdicion.colaboradores.includes(col.id))
                                       .map((col) => (
                                         <SelectItem key={col.id} value={col.id}>
-                                          {getNombreColab(col)}
+                                          {col.nombres} {col.apellidos}
                                         </SelectItem>
                                       ))}
                                   </SelectContent>
@@ -2023,19 +1717,16 @@ export default function NuevaPlanillaWizard() {
                                     {podaEnEdicion.colaboradores.map((colId) => {
                                       const col = colaboradores.find(c => c.id === colId);
                                       return col ? (
-                                        <span
-                                          key={colId}
-                                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20 w-fit shrink-0"
-                                        >
-                                          <span>{getNombreColab(col) || `Colaborador ${colId}`}</span>
+                                        <Badge key={colId} variant="secondary" className="pl-2.5 pr-1 py-1 gap-1">
+                                          <span>{col.nombres} {col.apellidos}</span>
                                           <button
                                             type="button"
                                             onClick={() => setPodaEnEdicion({ ...podaEnEdicion, colaboradores: podaEnEdicion.colaboradores.filter(id => id !== colId) })}
-                                            className="ml-0.5 hover:bg-primary/20 rounded-full p-0.5"
+                                            className="ml-1 hover:bg-muted rounded-sm p-0.5"
                                           >
                                             <X className="h-3 w-3" />
                                           </button>
-                                        </span>
+                                        </Badge>
                                       ) : null;
                                     })}
                                   </div>
@@ -2045,7 +1736,7 @@ export default function NuevaPlanillaWizard() {
                                 <Label>Lote</Label>
                                 <Select
                                   value={podaEnEdicion.lote}
-                                  onValueChange={(value) => setPodaEnEdicion({ ...podaEnEdicion, lote: value, sublote: '', numeroPalmas: 0 })}
+                                  onValueChange={(value) => setPodaEnEdicion({ ...podaEnEdicion, lote: value, sublote: '' })}
                                 >
                                   <SelectTrigger>
                                     <SelectValue placeholder="Seleccionar lote" />
@@ -2064,12 +1755,11 @@ export default function NuevaPlanillaWizard() {
                                 <Select
                                   value={podaEnEdicion.sublote}
                                   onValueChange={(value) => {
-                                    // Autofill "Número de Palmas" con cantidad_palmas del sublote (editable)
                                     const sub = sublotes.find(s => s.id === value);
                                     setPodaEnEdicion({
                                       ...podaEnEdicion,
                                       sublote: value,
-                                      numeroPalmas: sub?.cantidadPalmas ?? 0,
+                                      numeroPalmas: Number(sub?.cantidadPalmas ?? 0),
                                     });
                                   }}
                                   disabled={!podaEnEdicion.lote}
@@ -2119,21 +1809,15 @@ export default function NuevaPlanillaWizard() {
                           <Card key={trabajo.id} className="border-border hover:border-primary/30 transition-colors">
                             <CardContent className="p-4">
                               <div className="flex items-center justify-between gap-4">
-                                <div className="flex items-center gap-3">
-                                  <div>
-                                    <h4 className="font-semibold text-sm">{lote?.nombre || 'Lote no especificado'}</h4>
-                                    <p className="text-xs text-muted-foreground">{sublote?.nombre || 'Sublote no especificado'}</p>
-                                  </div>
-                                </div>
                                 <div className="flex-1 min-w-0">
                                   <p className="text-xs text-muted-foreground mb-1">Colaboradores</p>
-                                  {trabajo.colaboradores.length > 0 ? (
+                                  {trabajo.colaboradores?.length > 0 ? (
                                     <div className="flex flex-wrap gap-1">
-                                      {trabajo.colaboradores.map((colId) => {
+                                      {trabajo.colaboradores?.map((colId) => {
                                         const col = colaboradores.find(c => c.id === colId);
                                         return col ? (
                                           <Badge key={colId} variant="outline" className="text-xs">
-                                            {getNombreColab(col) || `Colaborador ${colId}`}
+                                            {col.nombres.split(' ')[0]} {col.apellidos.split(' ')[0]}
                                           </Badge>
                                         ) : null;
                                       })}
@@ -2142,28 +1826,35 @@ export default function NuevaPlanillaWizard() {
                                     <p className="text-xs text-muted-foreground">Sin colaboradores</p>
                                   )}
                                 </div>
+                                <div className="flex items-center gap-3">
+                                  <div>
+                                    <h4 className="font-semibold text-sm">{lote?.nombre || 'Lote no especificado'}</h4>
+                                    <p className="text-xs text-muted-foreground">{sublote?.nombre || 'Sublote no especificado'}</p>
+                                  </div>
+                                </div>
                                 <div className="text-right shrink-0">
                                   <p className="text-xs text-muted-foreground">Palmas</p>
                                   <p className="font-bold text-lg">{trabajo.numeroPalmas}</p>
                                 </div>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setPodaEnEdicion({ ...trabajo })}
-                                  className="text-primary hover:text-primary shrink-0"
-                                  title="Editar"
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => eliminarPoda(trabajo.id)}
-                                  className="text-destructive hover:text-destructive shrink-0"
-                                  title="Eliminar"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => editarPoda(trabajo.id)}
+                                    disabled={podaEnEdicion !== null}
+                                    title="Editar"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => eliminarPoda(trabajo.id)}
+                                    className="text-destructive hover:text-destructive"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
                               </div>
                             </CardContent>
                           </Card>
@@ -2196,7 +1887,7 @@ export default function NuevaPlanillaWizard() {
                               <div className="space-y-2 md:col-span-2">
                                 <Label>Colaboradores</Label>
                                 <Select
-                                  key={`colab-fert-${fertilizacionEnEdicion.colaboradores.join(',')}`}
+                                  value=""
                                   onValueChange={(value) => {
                                     if (value && !fertilizacionEnEdicion.colaboradores.includes(value)) {
                                       setFertilizacionEnEdicion({ ...fertilizacionEnEdicion, colaboradores: [...fertilizacionEnEdicion.colaboradores, value] });
@@ -2211,7 +1902,7 @@ export default function NuevaPlanillaWizard() {
                                       .filter(col => !fertilizacionEnEdicion.colaboradores.includes(col.id))
                                       .map((col) => (
                                         <SelectItem key={col.id} value={col.id}>
-                                          {getNombreColab(col)}
+                                          {col.nombres} {col.apellidos}
                                         </SelectItem>
                                       ))}
                                   </SelectContent>
@@ -2221,19 +1912,16 @@ export default function NuevaPlanillaWizard() {
                                     {fertilizacionEnEdicion.colaboradores.map((colId) => {
                                       const col = colaboradores.find(c => c.id === colId);
                                       return col ? (
-                                        <span
-                                          key={colId}
-                                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20 w-fit shrink-0"
-                                        >
-                                          <span>{getNombreColab(col) || `Colaborador ${colId}`}</span>
+                                        <Badge key={colId} variant="secondary" className="pl-2.5 pr-1 py-1 gap-1">
+                                          <span>{col.nombres} {col.apellidos}</span>
                                           <button
                                             type="button"
                                             onClick={() => setFertilizacionEnEdicion({ ...fertilizacionEnEdicion, colaboradores: fertilizacionEnEdicion.colaboradores.filter(id => id !== colId) })}
-                                            className="ml-0.5 hover:bg-primary/20 rounded-full p-0.5"
+                                            className="ml-1 hover:bg-muted rounded-sm p-0.5"
                                           >
                                             <X className="h-3 w-3" />
                                           </button>
-                                        </span>
+                                        </Badge>
                                       ) : null;
                                     })}
                                   </div>
@@ -2243,7 +1931,7 @@ export default function NuevaPlanillaWizard() {
                                 <Label>Lote</Label>
                                 <Select
                                   value={fertilizacionEnEdicion.lote}
-                                  onValueChange={(value) => setFertilizacionEnEdicion({ ...fertilizacionEnEdicion, lote: value, sublote: '', palmas: 0 })}
+                                  onValueChange={(value) => setFertilizacionEnEdicion({ ...fertilizacionEnEdicion, lote: value, sublote: '' })}
                                 >
                                   <SelectTrigger>
                                     <SelectValue placeholder="Seleccionar lote" />
@@ -2262,12 +1950,11 @@ export default function NuevaPlanillaWizard() {
                                 <Select
                                   value={fertilizacionEnEdicion.sublote}
                                   onValueChange={(value) => {
-                                    // Autofill "Número de Palmas" con cantidad_palmas del sublote (editable)
                                     const sub = sublotes.find(s => s.id === value);
                                     setFertilizacionEnEdicion({
                                       ...fertilizacionEnEdicion,
                                       sublote: value,
-                                      palmas: sub?.cantidadPalmas ?? 0,
+                                      palmas: Number(sub?.cantidadPalmas ?? 0),
                                     });
                                   }}
                                   disabled={!fertilizacionEnEdicion.lote}
@@ -2305,7 +1992,7 @@ export default function NuevaPlanillaWizard() {
                                     <SelectValue placeholder="Seleccionar tipo" />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    {insumosLista.map((fert) => (
+                                    {fertilizantes.map((fert) => (
                                       <SelectItem key={fert} value={fert}>
                                         {fert}
                                       </SelectItem>
@@ -2355,21 +2042,15 @@ export default function NuevaPlanillaWizard() {
                           <Card key={trabajo.id} className="border-border hover:border-primary/30 transition-colors">
                             <CardContent className="p-4">
                               <div className="flex items-center justify-between gap-4">
-                                <div className="flex items-center gap-3">
-                                  <div>
-                                    <h4 className="font-semibold text-sm">{lote?.nombre || 'Lote no especificado'}</h4>
-                                    <p className="text-xs text-muted-foreground">{sublote?.nombre || 'Sublote no especificado'}</p>
-                                  </div>
-                                </div>
                                 <div className="flex-1 min-w-0">
                                   <p className="text-xs text-muted-foreground mb-1">Colaboradores</p>
-                                  {trabajo.colaboradores.length > 0 ? (
+                                  {trabajo.colaboradores?.length > 0 ? (
                                     <div className="flex flex-wrap gap-1">
-                                      {trabajo.colaboradores.map((colId) => {
+                                      {trabajo.colaboradores?.map((colId) => {
                                         const col = colaboradores.find(c => c.id === colId);
                                         return col ? (
                                           <Badge key={colId} variant="outline" className="text-xs">
-                                            {getNombreColab(col) || `Colaborador ${colId}`}
+                                            {col.nombres.split(' ')[0]} {col.apellidos.split(' ')[0]}
                                           </Badge>
                                         ) : null;
                                       })}
@@ -2377,6 +2058,12 @@ export default function NuevaPlanillaWizard() {
                                   ) : (
                                     <p className="text-xs text-muted-foreground">Sin colaboradores</p>
                                   )}
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <div>
+                                    <h4 className="font-semibold text-sm">{lote?.nombre || 'Lote no especificado'}</h4>
+                                    <p className="text-xs text-muted-foreground">{sublote?.nombre || 'Sublote no especificado'}</p>
+                                  </div>
                                 </div>
                                 <div className="text-right shrink-0">
                                   <p className="text-xs text-muted-foreground">Palmas</p>
@@ -2387,24 +2074,25 @@ export default function NuevaPlanillaWizard() {
                                   <p className="font-semibold text-xs truncate">{fertTipo || 'No especificado'}</p>
                                   <p className="text-xs text-muted-foreground">{trabajo.cantidadGramos}g</p>
                                 </div>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setFertilizacionEnEdicion({ ...trabajo })}
-                                  className="text-primary hover:text-primary shrink-0"
-                                  title="Editar"
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => eliminarFertilizacion(trabajo.id)}
-                                  className="text-destructive hover:text-destructive shrink-0"
-                                  title="Eliminar"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => editarFertilizacion(trabajo.id)}
+                                    disabled={fertilizacionEnEdicion !== null}
+                                    title="Editar"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => eliminarFertilizacion(trabajo.id)}
+                                    className="text-destructive hover:text-destructive"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
                               </div>
                             </CardContent>
                           </Card>
@@ -2437,7 +2125,7 @@ export default function NuevaPlanillaWizard() {
                               <div className="space-y-2 md:col-span-2">
                                 <Label>Colaboradores</Label>
                                 <Select
-                                  key={`colab-sanidad-${sanidadEnEdicion.colaboradores.join(',')}`}
+                                  value=""
                                   onValueChange={(value) => {
                                     if (value && !sanidadEnEdicion.colaboradores.includes(value)) {
                                       setSanidadEnEdicion({
@@ -2455,7 +2143,7 @@ export default function NuevaPlanillaWizard() {
                                       .filter(col => !sanidadEnEdicion.colaboradores.includes(col.id))
                                       .map((col) => (
                                         <SelectItem key={col.id} value={col.id}>
-                                          {getNombreColab(col)}
+                                          {col.nombres} {col.apellidos}
                                         </SelectItem>
                                       ))}
                                   </SelectContent>
@@ -2465,11 +2153,12 @@ export default function NuevaPlanillaWizard() {
                                     {sanidadEnEdicion.colaboradores.map((colId) => {
                                       const col = colaboradores.find(c => c.id === colId);
                                       return col ? (
-                                        <span
+                                        <Badge
                                           key={colId}
-                                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20 w-fit shrink-0"
+                                          variant="secondary"
+                                          className="pl-2.5 pr-1 py-1 gap-1"
                                         >
-                                          {getNombreColab(col) || `Colaborador ${colId}`}
+                                          <span>{col.nombres} {col.apellidos}</span>
                                           <button
                                             type="button"
                                             onClick={() => {
@@ -2478,11 +2167,11 @@ export default function NuevaPlanillaWizard() {
                                                 colaboradores: sanidadEnEdicion.colaboradores.filter(id => id !== colId)
                                               });
                                             }}
-                                            className="ml-0.5 hover:bg-primary/20 rounded-full p-0.5"
+                                            className="ml-1 hover:bg-muted rounded-sm p-0.5"
                                           >
                                             <X className="h-3 w-3" />
                                           </button>
-                                        </span>
+                                        </Badge>
                                       ) : null;
                                     })}
                                   </div>
@@ -2563,26 +2252,30 @@ export default function NuevaPlanillaWizard() {
                           <Card key={trabajo.id} className="border-border hover:border-primary/30 transition-colors">
                             <CardContent className="p-4">
                               <div className="flex items-center justify-between gap-4">
+                                {/* Colaboradores */}
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs text-muted-foreground mb-1">Colaboradores</p>
+                                  {trabajo.colaboradores?.length > 0 ? (
+                                    <div className="flex flex-wrap gap-1">
+                                      {trabajo.colaboradores?.map((colId) => {
+                                        const col = colaboradores.find(c => c.id === colId);
+                                        return col ? (
+                                          <Badge key={colId} variant="outline" className="text-xs">
+                                            {col.nombres} {col.apellidos}
+                                          </Badge>
+                                        ) : null;
+                                      })}
+                                    </div>
+                                  ) : (
+                                    <p className="text-xs text-muted-foreground">Sin colaboradores</p>
+                                  )}
+                                </div>
+
                                 {/* Lote/Sublote */}
                                 <div className="flex items-center gap-3">
                                   <div>
                                     <h4 className="font-semibold text-sm">{lote?.nombre || 'Sin lote'}</h4>
                                     <p className="text-xs text-muted-foreground">{sublote?.nombre || 'Sin sublote'}</p>
-                                  </div>
-                                </div>
-
-                                {/* Colaboradores */}
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs text-muted-foreground mb-1">Colaboradores</p>
-                                  <div className="flex flex-wrap gap-1">
-                                    {trabajo.colaboradores.map((colId) => {
-                                      const col = colaboradores.find(c => c.id === colId);
-                                      return col ? (
-                                        <Badge key={colId} variant="outline" className="text-xs">
-                                          {getNombreColab(col) || `Colaborador ${colId}`}
-                                        </Badge>
-                                      ) : null;
-                                    })}
                                   </div>
                                 </div>
 
@@ -2592,26 +2285,26 @@ export default function NuevaPlanillaWizard() {
                                   <p className="font-semibold text-sm truncate">{trabajo.trabajoRealizado || 'Sin descripción'}</p>
                                 </div>
 
-                                {/* Botón editar */}
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setSanidadEnEdicion({ ...trabajo })}
-                                  className="text-primary hover:text-primary shrink-0"
-                                  title="Editar"
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
                                 {/* Botón eliminar */}
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => eliminarSanidad(trabajo.id)}
-                                  className="text-destructive hover:text-destructive shrink-0"
-                                  title="Eliminar"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => editarSanidad(trabajo.id)}
+                                    disabled={sanidadEnEdicion !== null}
+                                    title="Editar"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => eliminarSanidad(trabajo.id)}
+                                    className="text-destructive hover:text-destructive"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
                               </div>
                             </CardContent>
                           </Card>
@@ -2643,7 +2336,7 @@ export default function NuevaPlanillaWizard() {
                               <div className="space-y-2 md:col-span-2">
                                 <Label>Colaboradores</Label>
                                 <Select
-                                  key={`colab-otros-${otrosEnEdicion.colaboradores.join(',')}`}
+                                  value=""
                                   onValueChange={(value) => {
                                     if (value && !otrosEnEdicion.colaboradores.includes(value)) {
                                       setOtrosEnEdicion({
@@ -2661,7 +2354,7 @@ export default function NuevaPlanillaWizard() {
                                       .filter(col => !otrosEnEdicion.colaboradores.includes(col.id))
                                       .map((col) => (
                                         <SelectItem key={col.id} value={col.id}>
-                                          {getNombreColab(col)}
+                                          {col.nombres} {col.apellidos}
                                         </SelectItem>
                                       ))}
                                   </SelectContent>
@@ -2671,11 +2364,12 @@ export default function NuevaPlanillaWizard() {
                                     {otrosEnEdicion.colaboradores.map((colId) => {
                                       const col = colaboradores.find(c => c.id === colId);
                                       return col ? (
-                                        <span
+                                        <Badge
                                           key={colId}
-                                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20 w-fit shrink-0"
+                                          variant="secondary"
+                                          className="pl-2.5 pr-1 py-1 gap-1"
                                         >
-                                          {getNombreColab(col) || `Colaborador ${colId}`}
+                                          <span>{col.nombres} {col.apellidos}</span>
                                           <button
                                             type="button"
                                             onClick={() => {
@@ -2684,11 +2378,11 @@ export default function NuevaPlanillaWizard() {
                                                 colaboradores: otrosEnEdicion.colaboradores.filter(id => id !== colId)
                                               });
                                             }}
-                                            className="ml-0.5 hover:bg-primary/20 rounded-full p-0.5"
+                                            className="ml-1 hover:bg-muted rounded-sm p-0.5"
                                           >
                                             <X className="h-3 w-3" />
                                           </button>
-                                        </span>
+                                        </Badge>
                                       ) : null;
                                     })}
                                   </div>
@@ -2779,26 +2473,30 @@ export default function NuevaPlanillaWizard() {
                           <Card key={trabajo.id} className="border-border hover:border-primary/30 transition-colors">
                             <CardContent className="p-4">
                               <div className="flex items-center justify-between gap-4">
+                                {/* Colaboradores */}
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs text-muted-foreground mb-1">Colaboradores</p>
+                                  {trabajo.colaboradores?.length > 0 ? (
+                                    <div className="flex flex-wrap gap-1">
+                                      {trabajo.colaboradores?.map((colId) => {
+                                        const col = colaboradores.find(c => c.id === colId);
+                                        return col ? (
+                                          <Badge key={colId} variant="outline" className="text-xs">
+                                            {col.nombres} {col.apellidos}
+                                          </Badge>
+                                        ) : null;
+                                      })}
+                                    </div>
+                                  ) : (
+                                    <p className="text-xs text-muted-foreground">Sin colaboradores</p>
+                                  )}
+                                </div>
+
                                 {/* Lote/Sublote */}
                                 <div className="flex items-center gap-3">
                                   <div>
                                     <h4 className="font-semibold text-sm">{trabajo.nombre || 'Sin nombre'}</h4>
                                     <p className="text-xs text-muted-foreground">{lote?.nombre || 'Sin lote'} - {sublote?.nombre || 'Sin sublote'}</p>
-                                  </div>
-                                </div>
-
-                                {/* Colaboradores */}
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs text-muted-foreground mb-1">Colaboradores</p>
-                                  <div className="flex flex-wrap gap-1">
-                                    {trabajo.colaboradores.map((colId) => {
-                                      const col = colaboradores.find(c => c.id === colId);
-                                      return col ? (
-                                        <Badge key={colId} variant="outline" className="text-xs">
-                                          {getNombreColab(col) || `Colaborador ${colId}`}
-                                        </Badge>
-                                      ) : null;
-                                    })}
                                   </div>
                                 </div>
 
@@ -2808,26 +2506,26 @@ export default function NuevaPlanillaWizard() {
                                   <p className="font-semibold text-sm truncate">{trabajo.laborRealizada || 'Sin descripción'}</p>
                                 </div>
 
-                                {/* Botón editar */}
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setOtrosEnEdicion({ ...trabajo })}
-                                  className="text-primary hover:text-primary shrink-0"
-                                  title="Editar"
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
                                 {/* Botón eliminar */}
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => eliminarOtros(trabajo.id)}
-                                  className="text-destructive hover:text-destructive shrink-0"
-                                  title="Eliminar"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => editarOtros(trabajo.id)}
+                                    disabled={otrosEnEdicion !== null}
+                                    title="Editar"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => eliminarOtros(trabajo.id)}
+                                    className="text-destructive hover:text-destructive"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
                               </div>
                             </CardContent>
                           </Card>
@@ -2882,17 +2580,30 @@ export default function NuevaPlanillaWizard() {
                         </div>
                         <div className="grid gap-4 md:grid-cols-2">
                           <div className="space-y-2">
-                            <Label>Nombre</Label>
-                            <Input
-                              placeholder="Nombre del colaborador"
+                            <Label>Colaborador</Label>
+                            <Select
                               value={trabajo.nombre}
-                              onChange={(e) => {
+                              onValueChange={(value) => {
                                 const updated = trabajosAuxiliares.map(t =>
-                                  t.id === trabajo.id ? { ...t, nombre: e.target.value } : t
+                                  t.id === trabajo.id ? { ...t, nombre: value } : t
                                 );
                                 setTrabajosAuxiliares(updated);
                               }}
-                            />
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Seleccionar colaborador" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {colaboradores.map((col) => {
+                                  const fullName = `${col.nombres} ${col.apellidos}`.trim();
+                                  return (
+                                    <SelectItem key={col.id} value={fullName}>
+                                      {fullName}
+                                    </SelectItem>
+                                  );
+                                })}
+                              </SelectContent>
+                            </Select>
                           </div>
                           <div className="space-y-2">
                             <Label>Labor</Label>
@@ -2913,7 +2624,7 @@ export default function NuevaPlanillaWizard() {
                                 <SelectValue placeholder="Seleccionar labor" />
                               </SelectTrigger>
                               <SelectContent>
-                                {laboresLista.map((labor) => (
+                                {laboresAuxiliares.map((labor) => (
                                   <SelectItem key={labor} value={labor}>
                                     {labor}
                                   </SelectItem>
@@ -2944,34 +2655,6 @@ export default function NuevaPlanillaWizard() {
                               onChange={(e) => {
                                 const updated = trabajosAuxiliares.map(t =>
                                   t.id === trabajo.id ? { ...t, lugar: e.target.value } : t
-                                );
-                                setTrabajosAuxiliares(updated);
-                              }}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Total</Label>
-                            <Input
-                              type="number"
-                              placeholder="0"
-                              value={trabajo.total || ''}
-                              onChange={(e) => {
-                                const updated = trabajosAuxiliares.map(t =>
-                                  t.id === trabajo.id ? { ...t, total: parseInt(e.target.value) || 0 } : t
-                                );
-                                setTrabajosAuxiliares(updated);
-                              }}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Horas Extra</Label>
-                            <Input
-                              type="number"
-                              placeholder="0"
-                              value={trabajo.horasExtra || ''}
-                              onChange={(e) => {
-                                const updated = trabajosAuxiliares.map(t =>
-                                  t.id === trabajo.id ? { ...t, horasExtra: parseInt(e.target.value) || 0 } : t
                                 );
                                 setTrabajosAuxiliares(updated);
                               }}
@@ -3020,6 +2703,28 @@ export default function NuevaPlanillaWizard() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="grid gap-4 md:grid-cols-2">
+                        {/* Colaborador (siempre primero) */}
+                        <div className="space-y-2 md:col-span-2">
+                          <Label>Colaborador</Label>
+                          <Select
+                            value={horaExtraEnEdicion.colaboradorId}
+                            onValueChange={(value) => {
+                              setHoraExtraEnEdicion({ ...horaExtraEnEdicion, colaboradorId: value });
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccionar colaborador" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {colaboradores.map((col) => (
+                                <SelectItem key={col.id} value={col.id}>
+                                  {col.nombres} {col.apellidos}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
                         <div className="space-y-2">
                           <Label>Tipo de Hora</Label>
                           <Select
@@ -3032,7 +2737,7 @@ export default function NuevaPlanillaWizard() {
                               <SelectValue placeholder="Seleccionar tipo de hora" />
                             </SelectTrigger>
                             <SelectContent>
-                              {tiposHoraExtraLista.map((tipo) => (
+                              {tiposHoraExtra.map((tipo) => (
                                 <SelectItem key={tipo} value={tipo}>
                                   {tipo}
                                 </SelectItem>
@@ -3054,27 +2759,6 @@ export default function NuevaPlanillaWizard() {
                               });
                             }}
                           />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label>Colaborador</Label>
-                          <Select
-                            value={horaExtraEnEdicion.colaboradorId}
-                            onValueChange={(value) => {
-                              setHoraExtraEnEdicion({ ...horaExtraEnEdicion, colaboradorId: value });
-                            }}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Seleccionar colaborador" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {colaboradores.map((col) => (
-                                <SelectItem key={col.id} value={col.id}>
-                                  {getNombreColab(col)}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
                         </div>
 
                         <div className="space-y-2 md:col-span-2">
@@ -3135,26 +2819,26 @@ export default function NuevaPlanillaWizard() {
                             <p className="text-sm truncate">{hora.observacion || 'Sin observación'}</p>
                           </div>
 
-                          {/* Botón editar */}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setHoraExtraEnEdicion({ ...hora })}
-                            className="text-primary hover:text-primary shrink-0"
-                            title="Editar"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
                           {/* Botón eliminar */}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => eliminarHoraExtra(hora.id)}
-                            className="text-destructive hover:text-destructive shrink-0"
-                            title="Eliminar"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => editarHoraExtra(hora.id)}
+                              disabled={horaExtraEnEdicion !== null}
+                              title="Editar"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => eliminarHoraExtra(hora.id)}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -3216,7 +2900,7 @@ export default function NuevaPlanillaWizard() {
                               .filter(col => !ausentes.some(a => a.colaboradorId === col.id))
                               .map((col) => (
                                 <SelectItem key={col.id} value={col.id}>
-                                  {getNombreColab(col)}
+                                  {col.nombres} {col.apellidos}
                                 </SelectItem>
                               ))}
                           </SelectContent>
@@ -3237,7 +2921,7 @@ export default function NuevaPlanillaWizard() {
                             <SelectValue placeholder="Seleccionar motivo" />
                           </SelectTrigger>
                           <SelectContent>
-                            {motivosLista.map((motivo) => (
+                            {motivosAusentismo.map((motivo) => (
                               <SelectItem key={motivo} value={motivo}>
                                 {motivo}
                               </SelectItem>
@@ -3290,7 +2974,7 @@ export default function NuevaPlanillaWizard() {
                               return (
                                 <tr key={ausente.id} className="border-t border-border">
                                   <td className="p-3 text-sm">
-                                    {col ? (getNombreColab(col) || '-') : '-'}
+                                    {col ? `${col.nombres} ${col.apellidos}` : '-'}
                                   </td>
                                   <td className="p-3 text-sm">{motivoMostrar}</td>
                                   <td className="p-3 text-right">
@@ -3346,8 +3030,7 @@ export default function NuevaPlanillaWizard() {
                 </Button>
               ) : (
                 <Button
-                  onClick={guardarTodo}
-                  className="gap-2 bg-success hover:bg-success/90"
+                  onClick={guardarTodo} disabled={guardando} className="gap-2 bg-success hover:bg-success/90"
                 >
                   <Save className="h-4 w-4" />
                   Guardar Planilla
@@ -3390,7 +3073,7 @@ export default function NuevaPlanillaWizard() {
                     Resumen Detallado
                   </h4>
 
-                  {!fecha ? (
+                  {!fecha && !elaboradoPor ? (
                     <div className="text-center py-8 text-muted-foreground">
                       <p className="text-sm">No hay información para mostrar</p>
                       <p className="text-xs mt-1">Completa las etapas anteriores</p>
@@ -3405,7 +3088,14 @@ export default function NuevaPlanillaWizard() {
                           </span>
                         </div>
                       )}
-
+                      {elaboradoPor && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm">Elaborado por</span>
+                          <span className="font-semibold text-sm truncate ml-2 max-w-[150px]" title={elaboradoPor}>
+                            {elaboradoPor}
+                          </span>
+                        </div>
+                      )}
                       {huboLluvia && (
                         <div className="flex items-center justify-between">
                           <span className="text-sm">Lluvia</span>
@@ -3427,58 +3117,332 @@ export default function NuevaPlanillaWizard() {
                 <div className="h-px bg-border" />
 
                 {/* Contadores de labores */}
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
-                    Labores
+                    Labores Registradas
                   </h4>
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">Cosecha</span>
-                      <span className="font-semibold text-sm">{resumen?.labores?.cosecha ?? trabajosCosecha.length}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">Plateo</span>
-                      <span className="font-semibold text-sm">{resumen?.labores?.plateo ?? trabajosPlateo.length}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">Poda</span>
-                      <span className="font-semibold text-sm">{resumen?.labores?.poda ?? trabajosPoda.length}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">Fertilización</span>
-                      <span className="font-semibold text-sm">{resumen?.labores?.fertilizacion ?? trabajosFertilizacion.length}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">Sanidad</span>
-                      <span className="font-semibold text-sm">{resumen?.labores?.sanidad ?? trabajosSanidad.length}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">Otros</span>
-                      <span className="font-semibold text-sm">{resumen?.labores?.otros ?? trabajosOtros.length}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">Auxiliares</span>
-                      <span className="font-semibold text-sm">{resumen?.labores?.auxiliares ?? trabajosAuxiliares.length}</span>
-                    </div>
-                    {resumen?.horas_extra && resumen.horas_extra.total > 0 && (
+
+                  {/* Cosecha */}
+                  {trabajosCosecha.length > 0 && (
+                    <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm">Horas Extra</span>
-                        <span className="font-semibold text-sm">{resumen.horas_extra.total} ({resumen.horas_extra.horas_totales}h)</span>
+                        <span className="text-sm font-medium">Cosecha</span>
+                        <Badge variant="outline" className="bg-success/10 text-success border-success/20">
+                          {trabajosCosecha.length}
+                        </Badge>
                       </div>
-                    )}
-                    {resumen?.ausencias && resumen.ausencias.total > 0 && (
+                      <div className="space-y-1 pl-3 border-l-2 border-success/20">
+                        {trabajosCosecha.map((trabajo) => {
+                          const lote = lotesData.find(l => l.id === trabajo.lote);
+                          const sublote = sublotes.find(s => s.id === trabajo.sublote);
+                          return (
+                            <div key={trabajo.id} className="text-xs space-y-0.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-muted-foreground">
+                                  {lote?.nombre} - {sublote?.nombre}
+                                </span>
+                                <span className="font-medium">{trabajo.kilos} kg</span>
+                              </div>
+                              <div className="text-muted-foreground">
+                                {trabajo.gajosRecogidos} gajos · {trabajo.colaboradores?.length || 0} colaboradores
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div className="pt-1 border-t border-border/50">
+                          <div className="flex items-center justify-between font-medium">
+                            <span className="text-xs">Total Cosecha</span>
+                            <span className="text-xs text-success">
+                              {trabajosCosecha.reduce((sum, t) => sum + t.kilos, 0).toLocaleString('es-CO')} kg
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Plateo */}
+                  {trabajosPlateo.length > 0 && (
+                    <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm">Ausencias</span>
-                        <span className="font-semibold text-sm">{resumen.ausencias.total}</span>
+                        <span className="text-sm font-medium">Plateo</span>
+                        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+                          {trabajosPlateo.length}
+                        </Badge>
                       </div>
-                    )}
-                  </div>
+                      <div className="space-y-1 pl-3 border-l-2 border-primary/20">
+                        {trabajosPlateo.map((trabajo) => {
+                          const lote = lotesData.find(l => l.id === trabajo.lote);
+                          const sublote = sublotes.find(s => s.id === trabajo.sublote);
+                          return (
+                            <div key={trabajo.id} className="text-xs space-y-0.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-muted-foreground">
+                                  {lote?.nombre} - {sublote?.nombre}
+                                </span>
+                                <span className="font-medium">{trabajo.numeroPalmas} palmas</span>
+                              </div>
+                              <div className="text-muted-foreground">
+                                {trabajo.colaboradores?.length || 0} colaboradores
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div className="pt-1 border-t border-border/50">
+                          <div className="flex items-center justify-between font-medium">
+                            <span className="text-xs">Total Plateo</span>
+                            <span className="text-xs text-primary">
+                              {trabajosPlateo.reduce((sum, t) => sum + t.numeroPalmas, 0).toLocaleString('es-CO')} palmas
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Poda */}
+                  {trabajosPoda.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">Poda</span>
+                        <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20">
+                          {trabajosPoda.length}
+                        </Badge>
+                      </div>
+                      <div className="space-y-1 pl-3 border-l-2 border-warning/20">
+                        {trabajosPoda.map((trabajo) => {
+                          const lote = lotesData.find(l => l.id === trabajo.lote);
+                          const sublote = sublotes.find(s => s.id === trabajo.sublote);
+                          return (
+                            <div key={trabajo.id} className="text-xs space-y-0.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-muted-foreground">
+                                  {lote?.nombre} - {sublote?.nombre}
+                                </span>
+                                <span className="font-medium">{trabajo.numeroPalmas} palmas</span>
+                              </div>
+                              <div className="text-muted-foreground">
+                                {trabajo.colaboradores?.length || 0} colaboradores
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div className="pt-1 border-t border-border/50">
+                          <div className="flex items-center justify-between font-medium">
+                            <span className="text-xs">Total Poda</span>
+                            <span className="text-xs text-warning">
+                              {trabajosPoda.reduce((sum, t) => sum + t.numeroPalmas, 0).toLocaleString('es-CO')} palmas
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Fertilización */}
+                  {trabajosFertilizacion.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">Fertilización</span>
+                        <Badge variant="outline" className="bg-accent/10 text-accent border-accent/20">
+                          {trabajosFertilizacion.length}
+                        </Badge>
+                      </div>
+                      <div className="space-y-1 pl-3 border-l-2 border-accent/20">
+                        {trabajosFertilizacion.map((trabajo) => {
+                          const lote = lotesData.find(l => l.id === trabajo.lote);
+                          const sublote = sublotes.find(s => s.id === trabajo.sublote);
+                          return (
+                            <div key={trabajo.id} className="text-xs space-y-0.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-muted-foreground">
+                                  {lote?.nombre} - {sublote?.nombre}
+                                </span>
+                                <span className="font-medium">{trabajo.numeroPalmas} palmas</span>
+                              </div>
+                              <div className="text-muted-foreground">
+                                {trabajo.tipoFertilizante} · {trabajo.colaboradores?.length || 0} colaboradores
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Sanidad */}
+                  {trabajosSanidad.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">Sanidad</span>
+                        <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20">
+                          {trabajosSanidad.length}
+                        </Badge>
+                      </div>
+                      <div className="space-y-1 pl-3 border-l-2 border-destructive/20">
+                        {trabajosSanidad.map((trabajo) => {
+                          const lote = lotesData.find(l => l.id === trabajo.lote);
+                          return (
+                            <div key={trabajo.id} className="text-xs space-y-0.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-muted-foreground">{lote?.nombre}</span>
+                                <span className="font-medium">{trabajo.numeroPalmas} palmas</span>
+                              </div>
+                              <div className="text-muted-foreground">
+                                {trabajo.tipoActividad} · {trabajo.colaboradores?.length || 0} colaboradores
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Auxiliares */}
+                  {trabajosAuxiliares.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">Auxiliares</span>
+                        <Badge variant="outline" className="bg-muted text-muted-foreground border-border">
+                          {trabajosAuxiliares.length}
+                        </Badge>
+                      </div>
+                      <div className="space-y-1 pl-3 border-l-2 border-border">
+                        {trabajosAuxiliares.map((trabajo) => (
+                          <div key={trabajo.id} className="text-xs space-y-0.5">
+                            <div className="text-muted-foreground">{trabajo.tipoLabor}</div>
+                            <div className="text-muted-foreground">
+                              {trabajo.colaboradores?.length || 0} colaboradores
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Otros */}
+                  {trabajosOtros.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">Otros</span>
+                        <Badge variant="outline">{trabajosOtros.length}</Badge>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Si no hay labores */}
+                  {trabajosCosecha.length === 0 &&
+                   trabajosPlateo.length === 0 &&
+                   trabajosPoda.length === 0 &&
+                   trabajosFertilizacion.length === 0 &&
+                   trabajosSanidad.length === 0 &&
+                   trabajosOtros.length === 0 &&
+                   trabajosAuxiliares.length === 0 && (
+                    <div className="text-center py-4 text-muted-foreground">
+                      <p className="text-sm">No hay labores registradas</p>
+                    </div>
+                  )}
                 </div>
+
+                {/* Horas Extras */}
+                {horasExtras.length > 0 && (
+                  <>
+                    <div className="h-px bg-border" />
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+                          Horas Extras
+                        </h4>
+                        <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20">
+                          {horasExtras.length}
+                        </Badge>
+                      </div>
+                      <div className="space-y-2">
+                        {horasExtras.map((he) => {
+                          const col = colaboradores.find(c => c.id === he.colaboradorId);
+                          return (
+                            <div key={he.id} className="p-2 bg-muted/30 rounded-md">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-medium">
+                                  {col ? `${col.nombres} ${col.apellidos}` : '-'}
+                                </span>
+                                <span className="text-xs font-bold text-warning">{he.cantidad}h</span>
+                              </div>
+                              <div className="text-xs text-muted-foreground mt-0.5">
+                                {he.tipoHoraExtra}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div className="pt-1 border-t border-border">
+                          <div className="flex items-center justify-between font-medium">
+                            <span className="text-xs">Total Horas</span>
+                            <span className="text-xs text-warning">
+                              {horasExtras.reduce((sum, he) => sum + he.cantidad, 0)} horas
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Ausentes */}
+                {ausentes.length > 0 && (
+                  <>
+                    <div className="h-px bg-border" />
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+                          Ausentes
+                        </h4>
+                        <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20">
+                          {ausentes.length}
+                        </Badge>
+                      </div>
+                      <div className="space-y-2">
+                        {ausentes.map((ausente) => {
+                          const col = colaboradores.find(c => c.id === ausente.colaboradorId);
+                          const motivoMostrar = ausente.motivo === 'Otro' && ausente.otroMotivo
+                            ? ausente.otroMotivo
+                            : ausente.motivo;
+                          return (
+                            <div key={ausente.id} className="p-2 bg-muted/30 rounded-md">
+                              <div className="text-xs font-medium">
+                                {col ? `${col.nombres} ${col.apellidos}` : '-'}
+                              </div>
+                              <div className="text-xs text-muted-foreground mt-0.5">
+                                {motivoMostrar}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>
         </div>
       </div>
+
+      {/* Alerta: planilla duplicada para esa fecha */}
+      <AlertDialog open={alertaDuplicada} onOpenChange={setAlertaDuplicada}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ya existe una planilla para esa fecha</AlertDialogTitle>
+            <AlertDialogDescription>
+              No puedes crear otra planilla para el mismo día. Cambia la fecha o edita la planilla existente desde el listado de operaciones.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setAlertaDuplicada(false)}>
+              Entendido
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -225,10 +225,6 @@ export default function Market() {
                   <p className="text-3xl font-bold text-foreground">{productosData.length}</p>
                   <span className="text-sm text-muted-foreground">items</span>
                 </div>
-                <div className="inline-flex items-center gap-1 mt-3 px-2.5 py-1 rounded-full text-xs font-medium border text-primary bg-primary/10 border-primary/20">
-                  <Package className="h-4 w-4" />
-                  <span>Catálogo activo</span>
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -240,10 +236,6 @@ export default function Market() {
                 <div className="flex items-baseline gap-2">
                   <p className="text-3xl font-bold text-foreground">{totalItemsCarrito}</p>
                   <span className="text-sm text-muted-foreground">productos</span>
-                </div>
-                <div className="inline-flex items-center gap-1 mt-3 px-2.5 py-1 rounded-full text-xs font-medium border text-amber-600 bg-amber-50 border-amber-200 dark:text-amber-500 dark:bg-amber-950/30 dark:border-amber-900/30">
-                  <ShoppingCart className="h-4 w-4" />
-                  <span>Pendiente pago</span>
                 </div>
               </div>
             </CardContent>
@@ -258,10 +250,6 @@ export default function Market() {
                 <div className="flex items-baseline gap-2">
                   <p className="text-3xl font-bold text-foreground">3</p>
                   <span className="text-sm text-muted-foreground">en proceso</span>
-                </div>
-                <div className="inline-flex items-center gap-1 mt-3 px-2.5 py-1 rounded-full text-xs font-medium border text-success bg-success/10 border-success/20">
-                  <TrendingUp className="h-4 w-4" />
-                  <span>En camino</span>
                 </div>
               </div>
             </CardContent>

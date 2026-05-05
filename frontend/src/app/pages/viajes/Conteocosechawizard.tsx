@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
@@ -101,8 +101,30 @@ export default function ConteoCosechaWizard({ viaje, onClose }: ConteoCosechaWiz
     })();
   }, []);
 
+  // Helper para formatear fecha (ISO, YYYY-MM-DD, Date u objeto) a "5 de mayo de 2026"
+  const formatearFecha = (raw: any): string => {
+    if (!raw) return '';
+    // Si viene como objeto {date: "..."} u otro wrapper
+    let s: string = '';
+    if (typeof raw === 'string') s = raw;
+    else if (raw instanceof Date) s = raw.toISOString();
+    else if (typeof raw === 'object' && raw !== null) {
+      s = raw.date ?? raw.iso ?? raw.value ?? String(raw);
+    } else {
+      s = String(raw);
+    }
+    const m = s.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return s;
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    if (isNaN(d.getTime())) return s;
+    return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
+  };
+
   // planillasMock = operaciones disponibles (ya cargadas como state)
-  const planillasMock = operaciones.map(o => ({ id: String(o.id), nombre: `Planilla ${o.fecha}` }));
+  const planillasMock = operaciones.map((o: any) => ({
+    id: String(o.id),
+    nombre: `Planilla ${formatearFecha(o.fecha ?? o.fecha_planilla ?? o.created_at)}${o.cosechas_disponibles_count ? ` — ${o.cosechas_disponibles_count} cosecha${o.cosechas_disponibles_count > 1 ? 's' : ''}` : ''}`,
+  }));
 
   // Cargar operaciones disponibles al montar
   useEffect(() => {
@@ -238,9 +260,8 @@ export default function ConteoCosechaWizard({ viaje, onClose }: ConteoCosechaWiz
                   {ETAPAS.map((etapa, index) => {
                     const estaCompleta = etapaActual > etapa.numero;
                     const estaActiva = etapaActual === etapa.numero;
-
                     return (
-                      <div key={etapa.numero} className="flex items-center" style={{ flex: index < ETAPAS.length - 1 ? 1 : 'none' }}>
+                      <React.Fragment key={etapa.numero}>
                         {/* Círculo de etapa */}
                         <button
                           onClick={() => irAEtapa(etapa.numero)}
@@ -277,7 +298,7 @@ export default function ConteoCosechaWizard({ viaje, onClose }: ConteoCosechaWiz
 
                         {/* Línea conectora */}
                         {index < ETAPAS.length - 1 && (
-                          <div className="flex-1 h-0.5 mx-3 bg-border relative min-w-[20px]">
+                          <div className="flex-1 h-0.5 bg-border relative mx-4">
                             <div
                               className={`absolute inset-0 bg-primary transition-all ${
                                 estaCompleta ? 'w-full' : 'w-0'
@@ -285,7 +306,7 @@ export default function ConteoCosechaWizard({ viaje, onClose }: ConteoCosechaWiz
                             />
                           </div>
                         )}
-                      </div>
+                      </React.Fragment>
                     );
                   })}
                 </div>

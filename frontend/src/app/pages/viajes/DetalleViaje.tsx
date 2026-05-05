@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
@@ -19,7 +19,7 @@ import {
 import { toast } from 'sonner';
 import {
   viajesApi, strField,
-  type Viaje, type EstadoViajeApi,
+  type Viaje, type EstadoViajeApi, type EstadoOcrDocumento, type CalidadMateriaPrima,
 } from '../../../api/viajes';
 import { formatFechaHora } from '../../utils/fecha';
 
@@ -27,10 +27,9 @@ import { formatFechaHora } from '../../utils/fecha';
 export type EstadoViaje = 'Creado' | 'En Validación' | 'Finalizado';
 
 const ESTADO_API_TO_UI: Record<EstadoViajeApi, EstadoViaje> = {
-  CREADO:     'Creado',
-  EN_CAMINO:  'En Validación',
-  EN_PLANTA:  'En Validación',
-  FINALIZADO: 'Finalizado',
+  CREADO:        'Creado',
+  EN_VALIDACION: 'En Validación',
+  FINALIZADO:    'Finalizado',
 };
 
 const ETAPAS = [
@@ -68,10 +67,14 @@ export default function DetalleViaje() {
     transportador: '', extractora: '', horaSalida: '',
   });
 
-  // Validación con IA (UI mock — no hay endpoint real)
+  // Validación con IA — flujo real OCR (API_VIAJES_OCR_BASCULA.md)
   const [imagenFormulario, setImagenFormulario] = useState<File | null>(null);
   const [imagenPreview, setImagenPreview] = useState<string | null>(null);
   const [procesandoIA, setProcesandoIA] = useState(false);
+  const [documentoOcrId, setDocumentoOcrId] = useState<number | null>(null);
+  const [estadoOCR, setEstadoOCR] = useState<EstadoOcrDocumento | null>(null);
+  const [confianzaOCR, setConfianzaOCR] = useState<number | null>(null);
+  const [errorOCR, setErrorOCR] = useState<string | null>(null);
   const [datosExtractora, setDatosExtractora] = useState<DatosExtractora>({
     numeroRemision: '', fechaLlegada: '', horaLlegada: '',
     pesoRecibido: 0, racimosRecibidos: 0,
@@ -96,14 +99,16 @@ export default function DetalleViaje() {
   const estadoApi: EstadoViajeApi = (viaje?.estado as EstadoViajeApi) ?? 'CREADO';
   const estadoActual: EstadoViaje = ESTADO_API_TO_UI[estadoApi] ?? 'Creado';
 
-  // Etapas disponibles según estado
+  // Etapas disponibles según estado.
+  // En "En Validación" la pantalla muestra solo el Formulario de Extractora,
+  // sin stepper visible. Para los demás estados mostramos las etapas correspondientes.
   const etapasDisponibles = estadoActual === 'En Validación'
     ? [ETAPAS[2]]
     : estadoActual === 'Finalizado'
     ? ETAPAS
     : ETAPAS.filter(e => e.numero <= 2);
 
-  // Etapa inicial: si "En Validación" → soporte; si no → 1
+  // Etapa inicial: si "En Validación" → Soporte (3); si no → 1
   const [etapaActual, setEtapaActual] = useState(1);
   useEffect(() => {
     if (estadoActual === 'En Validación') setEtapaActual(3);
@@ -176,51 +181,201 @@ export default function DetalleViaje() {
   const handleImagenFormularioChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    // Reset estado OCR si el usuario cambia la imagen
+    setEstadoOCR(null);
+    setConfianzaOCR(null);
+    setErrorOCR(null);
+    setDocumentoOcrId(null);
     setImagenFormulario(file);
     const reader = new FileReader();
     reader.onloadend = () => setImagenPreview(reader.result as string);
     reader.readAsDataURL(file);
   };
 
-  // Mock de IA: simula extracción tras 1.5 segundos
-  const transcribirConIA = () => {
+  /**
+   * Flujo OCR formulario de extractora (4 pasos) — API_VIAJES_OCR_BASCULA.md
+   *  1. POST documento-bascula  → 202 + documento_id + poll_url
+   *  2. Polling cada 2.5s al GET documento-bascula/{docId} hasta estado terminal (timeout 60s)
+   *  3. Mapear datos_extraidos al form (sin sobrescribir campos ya editados)
+   *  4. UI según estado: COMPLETADO / REVISION_MANUAL / FALLIDO
+   */
+  const transcribirConIA = async () => {
+    if (!id || !imagenFormulario) return;
     setProcesandoIA(true);
-    setTimeout(() => {
-      setDatosExtractora({
-        numeroRemision: `REM-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`,
-        fechaLlegada:   new Date().toISOString().split('T')[0],
-        horaLlegada:    new Date().toTimeString().slice(0, 5),
-        pesoRecibido:   12500,
-        racimosRecibidos: 850,
-        temperaturaPulpa: 28.5,
-        acidezInicial: 1.2,
-        humedadSemilla: 18.5,
-        calidadMateriaPrima: 'Buena',
-        observaciones: 'Datos extraídos automáticamente del formulario',
-      });
+    setEstadoOCR(null);
+    setErrorOCR(null);
+    setConfianzaOCR(null);
+
+    try {
+      // ── Paso 1: subir documento
+      const upRes = await viajesApi.subirDocumentoBascula(Number(id), imagenFormulario);
+      const docId = upRes.data.documento_id ?? upRes.data.id;
+      if (!docId) throw new Error('No se recibió documento_id del servidor');
+      setDocumentoOcrId(docId);
+      setEstadoOCR(upRes.data.estado_ocr ?? 'PENDIENTE');
+
+      // ── Paso 2: polling (cada 2.5s, timeout 60s)
+      const inicio = Date.now();
+      const TIMEOUT_MS = 60_000;
+      const INTERVAL_MS = 2500;
+
+      let final: any = null;
+      while (Date.now() - inicio < TIMEOUT_MS) {
+        await new Promise((r) => setTimeout(r, INTERVAL_MS));
+        const polRes = await viajesApi.getDocumentoBasculaStatus(Number(id), docId);
+        const d = polRes.data;
+        setEstadoOCR(d.estado_ocr);
+        if (d.estado_ocr === 'COMPLETADO' || d.estado_ocr === 'REVISION_MANUAL' || d.estado_ocr === 'FALLIDO') {
+          final = d;
+          break;
+        }
+      }
+
+      if (!final) {
+        toast.error('La transcripción tardó demasiado. Reintenta o digita los datos a mano.');
+        return;
+      }
+
+      // ── Paso 3: mapear resultados (no sobrescribir campos ya editados)
+      const conf = final.confianza != null ? Number(final.confianza) : null;
+      setConfianzaOCR(conf);
+      setErrorOCR(final.error_mensaje ?? null);
+
+      const dx: Record<string, any> = final.datos_extraidos ?? {};
+      // Debug visible en consola para diagnosticar campos faltantes
+      console.log('[OCR] datos_extraidos:', dx);
+
+      // Si Claude devuelve la calificación por porcentajes (verdes/sobremaduro/podrido/mal_formado),
+      // derivamos `calidad_materia_prima` automáticamente sumando los % no aceptables.
+      const verdes        = parseFloat(String(dx.verdes ?? dx.calificacion_verdes ?? 0).replace(',', '.')) || 0;
+      const sobremaduro   = parseFloat(String(dx.sobre_maduro ?? dx.sobremaduro ?? dx.calificacion_sobremaduro ?? 0).replace(',', '.')) || 0;
+      const podrido       = parseFloat(String(dx.podrido ?? dx.calificacion_podrido ?? 0).replace(',', '.')) || 0;
+      const malFormado    = parseFloat(String(dx.mal_formado ?? dx.malformado ?? dx.calificacion_mal_formado ?? 0).replace(',', '.')) || 0;
+      const peduncuLargo  = parseFloat(String(dx.pedunculo_largo ?? dx.calificacion_pedunculo_largo ?? 0).replace(',', '.')) || 0;
+      const sumaMalas = verdes + sobremaduro + podrido + malFormado + peduncuLargo;
+      let calidadDerivada: string | null = null;
+      if (sumaMalas > 0) {
+        if (sumaMalas <= 5)       calidadDerivada = 'excelente';
+        else if (sumaMalas <= 15) calidadDerivada = 'buena';
+        else if (sumaMalas <= 30) calidadDerivada = 'regular';
+        else                      calidadDerivada = 'deficiente';
+      }
+
+      // Helpers: si el API devuelve algo válido lo usa; si no, conserva el valor previo.
+      const pickStr = (apiVal: any, prev: string): string => {
+        if (apiVal === undefined || apiVal === null) return prev;
+        const s = String(apiVal).trim();
+        return s.length > 0 ? s : prev;
+      };
+      const pickNum = (apiVal: any, prev: number): number => {
+        if (apiVal === undefined || apiVal === null || apiVal === '') return prev;
+        const n = typeof apiVal === 'number' ? apiVal : parseFloat(String(apiVal).replace(/[^\d.,-]/g, '').replace(',', '.'));
+        return Number.isFinite(n) ? n : prev;
+      };
+      // Lee valor desde múltiples keys posibles (defensivo si el backend cambia naming)
+      const firstDef = (...keys: string[]): any => {
+        for (const k of keys) {
+          if (dx[k] !== undefined && dx[k] !== null && dx[k] !== '') return dx[k];
+        }
+        return undefined;
+      };
+
+      setDatosExtractora((prev) => ({
+        // numeroRemision corresponde al TIQUETE / Nro. REMISION de la extractora
+        // (NO al "Numero de Registro" interno del proveedor — eso es otro campo).
+        numeroRemision:    pickStr(firstDef(
+          'numero_remision_extractora', 'numero_remision', 'remision_extractora',
+          'numero_tiquete', 'tiquete', 'nro_remision', 'nro_tiquete'
+        ), prev.numeroRemision),
+        fechaLlegada:      pickStr(firstDef('fecha_llegada', 'fecha'), prev.fechaLlegada),
+        horaLlegada:       pickStr(firstDef('hora_llegada', 'hora'), prev.horaLlegada),
+        pesoRecibido:      pickNum(firstDef('peso_viaje', 'peso_recibido', 'peso_neto', 'peso'), prev.pesoRecibido),
+        racimosRecibidos:  pickNum(firstDef('racimos_recibidos', 'racimos', 'gajos_recibidos'), prev.racimosRecibidos),
+        temperaturaPulpa:  pickNum(firstDef('temperatura_pulpa', 'temperatura'), prev.temperaturaPulpa),
+        acidezInicial:     pickNum(firstDef('acidez_inicial', 'acidez'), prev.acidezInicial),
+        humedadSemilla:    pickNum(firstDef('humedad_semilla', 'humedad'), prev.humedadSemilla),
+        // Backend devuelve lowercase ("buena"); si no llega, usa la derivada por % de calificación.
+        calidadMateriaPrima: (pickStr(firstDef('calidad_materia_prima', 'calidad'), prev.calidadMateriaPrima).toLowerCase() ||
+          calidadDerivada || prev.calidadMateriaPrima),
+        observaciones:     pickStr(firstDef('observaciones_extractora', 'observaciones'), prev.observaciones),
+      }));
+
+      // ── Paso 4: UI feedback según estado terminal
+      if (final.estado_ocr === 'COMPLETADO') {
+        toast.success(
+          conf != null
+            ? `Datos extraídos con confianza ${(conf * 100).toFixed(0)}%`
+            : 'Datos extraídos correctamente'
+        );
+      } else if (final.estado_ocr === 'REVISION_MANUAL') {
+        toast.warning('Algunos datos requieren revisión manual', {
+          description: final.error_mensaje ?? 'Verifica los campos marcados.',
+        });
+      } else if (final.estado_ocr === 'FALLIDO') {
+        toast.error('No pudimos procesar el documento', {
+          description: final.error_mensaje ?? 'Sube otra foto o digita a mano.',
+        });
+      }
+    } catch (e: any) {
+      const status = e?.status;
+      const code = e?.code;
+      if (status === 503 || code === 'ANTHROPIC_SIN_CONFIGURAR') {
+        toast.error('OCR no disponible, contacte al admin');
+      } else if (status === 409 || code === 'VIAJE_ESTADO_INVALIDO') {
+        toast.error('Este viaje no acepta OCR en su estado actual');
+      } else if (status === 422) {
+        toast.error(e?.message ?? 'Archivo inválido (revisa formato/tamaño)');
+      } else {
+        toast.error(e?.message ?? 'Error al transcribir el documento');
+      }
+    } finally {
       setProcesandoIA(false);
-      toast.success('Datos extraídos correctamente');
-    }, 1500);
+    }
   };
 
+  /**
+   * Botón "Finalizar y guardar" — paso 4 del flujo OCR.
+   *  4a. PATCH /viajes/{id}/validar  — hidrata los 10 campos editables (todos opcionales)
+   *  4b. POST  /viajes/{id}/finalizar — cierra el viaje + dispara cálculos backend
+   */
   const guardarValidacion = async () => {
     if (!id) return;
-    if (!datosExtractora.pesoRecibido) {
-      toast.error('El peso recibido es requerido');
-      return;
-    }
     setProcesando(true);
     try {
-      // Si está en EN_CAMINO, mover a EN_PLANTA con el peso recibido
-      if (estadoApi === 'EN_CAMINO') {
-        await viajesApi.llegadaPlanta(Number(id), datosExtractora.pesoRecibido);
+      // SelectItems ya usan valores lowercase ('excelente'|'buena'|'regular'|'deficiente')
+      const calidad: CalidadMateriaPrima | null =
+        (['excelente', 'buena', 'regular', 'deficiente'] as const)
+          .find(c => c === datosExtractora.calidadMateriaPrima) ?? null;
+
+      // 4a — hidratar (solo manda los campos que el operador llenó; nullable lo demás)
+      await viajesApi.validar(Number(id), {
+        peso_viaje: datosExtractora.pesoRecibido || null,
+        numero_remision_extractora: datosExtractora.numeroRemision || null,
+        fecha_llegada: datosExtractora.fechaLlegada || null,
+        hora_llegada: datosExtractora.horaLlegada || null,
+        racimos_recibidos: datosExtractora.racimosRecibidos || null,
+        temperatura_pulpa: datosExtractora.temperaturaPulpa || null,
+        acidez_inicial: datosExtractora.acidezInicial || null,
+        humedad_semilla: datosExtractora.humedadSemilla || null,
+        calidad_materia_prima: calidad,
+        observaciones_extractora: datosExtractora.observaciones || null,
+      });
+
+      // 4b — finalizar (EN_VALIDACION → FINALIZADO)
+      try {
+        await viajesApi.finalizar(Number(id));
+        toast.success('Viaje finalizado');
+        navigate('/viajes');
+      } catch (e2: any) {
+        const msg = String(e2?.message ?? '');
+        if (msg.includes('VIAJE_INCOMPLETO') || msg.toLowerCase().includes('incompleto')) {
+          toast.error('Falta capturar el peso o el conteo de gajos antes de cerrar');
+        } else {
+          toast.error(e2?.message ?? 'Error al finalizar el viaje');
+        }
       }
-      // Finalizar (EN_PLANTA → FINALIZADO)
-      await viajesApi.finalizar(Number(id));
-      toast.success('Viaje finalizado');
-      navigate('/viajes');
     } catch (e: any) {
-      toast.error(e?.message ?? 'Error al finalizar el viaje');
+      toast.error(e?.message ?? 'Error al guardar la validación');
     } finally {
       setProcesando(false);
     }
@@ -261,8 +416,10 @@ export default function DetalleViaje() {
   const extractora  = strField(viaje.extractora);
   const horaSalida  = String(viaje.hora_salida ?? '').slice(0, 5);
   const fechaCreado = viaje.created_at ?? null;
-  const fechaValidacion = viaje.fecha_despachado ?? viaje.fecha_en_camino ?? null;
-  const fechaFinalizado = viaje.fecha_finalizado ?? null;
+  // En el modelo nuevo, `validacion_at` es la fecha exacta de transición a EN_VALIDACION.
+  // Mantenemos fallbacks a campos legacy por si el backend aún devuelve los antiguos.
+  const fechaValidacion = viaje.validacion_at ?? viaje.fecha_despachado ?? viaje.fecha_en_camino ?? null;
+  const fechaFinalizado = viaje.finalizado_at ?? viaje.fecha_finalizado ?? null;
 
   const detalles = (viaje.detalles ?? []) as any[];
 
@@ -297,7 +454,8 @@ export default function DetalleViaje() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Columna izquierda: Wizard (2/3) */}
         <div className="lg:col-span-2 space-y-8">
-          {/* Stepper */}
+          {/* Stepper — oculto cuando el viaje está en validación (solo se muestra el formulario) */}
+          {estadoActual !== 'En Validación' && (
           <Card className="border-border">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
@@ -305,7 +463,7 @@ export default function DetalleViaje() {
                   const estaCompleta = etapaActual > etapa.numero;
                   const estaActiva = etapaActual === etapa.numero;
                   return (
-                    <div key={etapa.numero} className="flex items-center" style={{ flex: index < etapasDisponibles.length - 1 ? 1 : 'none' }}>
+                    <React.Fragment key={etapa.numero}>
                       <button
                         onClick={() => irAEtapa(etapa.numero)}
                         className={`flex flex-col items-center gap-2 ${estaActiva || estaCompleta ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
@@ -325,16 +483,17 @@ export default function DetalleViaje() {
                         </div>
                       </button>
                       {index < etapasDisponibles.length - 1 && (
-                        <div className="flex-1 h-0.5 mx-3 bg-border relative min-w-[20px]">
+                        <div className="flex-1 h-0.5 bg-border relative mx-4">
                           <div className={`absolute inset-0 bg-primary transition-all ${estaCompleta ? 'w-full' : 'w-0'}`} />
                         </div>
                       )}
-                    </div>
+                    </React.Fragment>
                   );
                 })}
               </div>
             </CardContent>
           </Card>
+          )}
 
           {/* Contenido de etapas */}
           <div className="space-y-6">
@@ -535,7 +694,42 @@ export default function DetalleViaje() {
                   </CardContent>
                 </Card>
 
-                {/* Datos extraídos */}
+                {/* Banner de estado OCR (REVISION_MANUAL / FALLIDO / confianza) */}
+                {estadoOCR === 'REVISION_MANUAL' && (
+                  <div className="flex items-start gap-3 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                    <Sparkles className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mt-0.5" />
+                    <div className="flex-1 text-sm">
+                      <p className="font-medium text-yellow-700 dark:text-yellow-300">
+                        Revisa estos datos cuidadosamente
+                      </p>
+                      <p className="text-yellow-700/80 dark:text-yellow-300/80">
+                        {errorOCR ?? 'Algunos campos tienen baja confianza o faltan. Verifica antes de guardar.'}
+                        {confianzaOCR != null && ` (Confianza: ${(confianzaOCR * 100).toFixed(0)}%)`}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {estadoOCR === 'FALLIDO' && (
+                  <div className="flex items-start gap-3 p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
+                    <X className="h-5 w-5 text-destructive mt-0.5" />
+                    <div className="flex-1 text-sm">
+                      <p className="font-medium text-destructive">No pudimos procesar el documento</p>
+                      <p className="text-destructive/80">
+                        {errorOCR ?? 'Sube otra foto o digita los datos a mano.'}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {estadoOCR === 'COMPLETADO' && confianzaOCR != null && (
+                  <div className="flex items-center gap-2 p-3 bg-success/10 border border-success/30 rounded-lg text-sm">
+                    <CheckCircle className="h-4 w-4 text-success" />
+                    <span className="text-success">
+                      Datos extraídos con confianza {(confianzaOCR * 100).toFixed(0)}%. Revisa y guarda.
+                    </span>
+                  </div>
+                )}
+
+                {/* Datos extraídos — solo visible después de subir el archivo */}
                 {imagenFormulario && (
                   <Card className="border-border">
                     <CardHeader>
@@ -546,7 +740,7 @@ export default function DetalleViaje() {
                         <div>
                           <CardTitle>Datos de la Extractora</CardTitle>
                           <p className="text-sm text-muted-foreground">
-                            {procesandoIA ? 'Extrayendo datos automáticamente...' : 'Verifica y edita los datos extraídos'}
+                            {procesandoIA ? 'Transcribiendo formulario… esto toma 5-15 segundos' : 'Verifica y edita los datos extraídos'}
                           </p>
                         </div>
                       </div>
@@ -608,10 +802,10 @@ export default function DetalleViaje() {
                             disabled={procesandoIA || estadoActual === 'Finalizado'}>
                             <SelectTrigger><SelectValue placeholder="Seleccionar calidad" /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="Excelente">Excelente</SelectItem>
-                              <SelectItem value="Buena">Buena</SelectItem>
-                              <SelectItem value="Regular">Regular</SelectItem>
-                              <SelectItem value="Deficiente">Deficiente</SelectItem>
+                              <SelectItem value="excelente">Excelente</SelectItem>
+                              <SelectItem value="buena">Buena</SelectItem>
+                              <SelectItem value="regular">Regular</SelectItem>
+                              <SelectItem value="deficiente">Deficiente</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>

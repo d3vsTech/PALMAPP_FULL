@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
@@ -32,8 +32,9 @@ import {
   CheckCircle,
   X,
 } from 'lucide-react';
-import { operacionesApi, selectsApi, Planilla } from '../../../api/operaciones';
+import { operacionesApi, selectsApi } from '../../../api/operaciones';
 import { useAuth } from '../../contexts/AuthContext';
+import { toast } from 'sonner';
 
 // Tipos de fertilizantes
 const fertilizantes = [
@@ -60,8 +61,6 @@ interface TrabajoCosecha {
   colaboradores: string[];
   lotes: string[];
   sublotes: string;
-  gajosRecogidos: number;
-  kilos: number;
 }
 
 interface TrabajoPlateo {
@@ -98,15 +97,6 @@ interface TrabajoSanidad {
   trabajoRealizado: string;
 }
 
-interface TrabajoOtros {
-  id: string;
-  colaboradores: string[];
-  lotes: string[];
-  sublotes: string;
-  nombre: string;
-  laborRealizada: string;
-}
-
 interface TrabajoAuxiliar {
   id: string;
   nombre: string;
@@ -117,20 +107,20 @@ interface TrabajoAuxiliar {
   tipoJornada: 'FIJO' | 'JORNAL';
 }
 
-interface HoraExtraItem {
+interface HoraExtraRegistro {
   id: string;
-  colaborador: string;
+  colaboradorId: string;
   tipoHora: string;
   numeroHoras: number;
   observacion: string;
-  valor: number;
 }
 
 const ETAPAS = [
   { numero: 1, nombre: 'Info. General' },
   { numero: 2, nombre: 'Labores de Palma' },
   { numero: 3, nombre: 'Labores de Finca' },
-  { numero: 4, nombre: 'Finalización' },
+  { numero: 4, nombre: 'Horas Extras' },
+  { numero: 5, nombre: 'Finalización' },
 ];
 
 export default function VerPlanilla() {
@@ -142,46 +132,41 @@ export default function VerPlanilla() {
   const [loading, setLoading] = useState(true);
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
 
-  // Datos de colaboradores y lotes desde API
-  const [colaboradores, setColaboradores] = useState<Array<{id: string; nombres: string; apellidos: string; nombre_completo: string}>>([]);
-  const [lotesData, setLotesData] = useState<Array<{id: string; nombre: string}>>([]);
-  // Sublotes desde API para resolver el nombre por id en cards de jornales
-  const [sublotesData, setSublotesData] = useState<Array<{id: string; nombre: string}>>([]);
-
-  // Información General - DATOS DE LA API (se cargan en useEffect)
-  const [fecha, setFecha] = useState('');
-  const [elaboradoPor, setElaboradoPor] = useState('');
-  const [huboLluvia, setHuboLluvia] = useState<'si' | 'no' | ''>('');
-  const [lluvia, setLluvia] = useState('');
-  const [inicioLabores, setInicioLabores] = useState('');
-  
-  // Observaciones y Ausentes (Final)
-  const [observaciones, setObservaciones] = useState('');
-  const [ausentes, setAusentes] = useState('');
-  
-  // Estados de trabajos - se cargan desde API
-  const [trabajosCosecha, setTrabajosCosecha] = useState<TrabajoCosecha[]>([]);
-  const [trabajosPlateo, setTrabajosPlateo] = useState<TrabajoPlateo[]>([]);
-  const [trabajosPoda, setTrabajosPoda] = useState<TrabajoPoda[]>([]);
-  const [trabajosFertilizacion, setTrabajosFertilizacion] = useState<TrabajoFertilizacion[]>([]);
-  const [trabajosSanidad, setTrabajosSanidad] = useState<TrabajoSanidad[]>([]);
-  const [trabajosOtros, setTrabajosOtros] = useState<TrabajoOtros[]>([]);
-  const [trabajosAuxiliares, setTrabajosAuxiliares] = useState<TrabajoAuxiliar[]>([]);
-  const [horasExtraItems, setHorasExtraItems] = useState<HoraExtraItem[]>([]);
-
-  // ── Helper: formatea fechas defensivamente para evitar "Invalid Date" ─────
+  // Helper defensivo para fechas
   const formatearFecha = (raw: string, opts: Intl.DateTimeFormatOptions): string => {
     if (!raw) return '—';
-    // Aceptar tanto YYYY-MM-DD como ISO con timestamp
     const m = String(raw).match(/^(\d{4})-(\d{2})-(\d{2})/);
     if (!m) return '—';
-    // Construir Date local (sin problemas de timezone)
     const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
     if (isNaN(d.getTime())) return '—';
     return d.toLocaleDateString('es-CO', opts);
   };
 
-  // ── Cargar planilla desde API ──────────────────────────────────────────────
+  // Catálogos cargados desde API (reemplazan al mockData del diseño)
+  const [colaboradores, setColaboradores] = useState<Array<{id: string; nombres: string; apellidos: string; nombre_completo: string}>>([]);
+  const [lotesData, setLotesData] = useState<Array<{id: string; nombre: string}>>([]);
+
+  // Información General
+  const [fecha, setFecha] = useState('');
+  const [elaboradoPor, setElaboradoPor] = useState('');
+  const [huboLluvia, setHuboLluvia] = useState<'si' | 'no' | ''>('');
+  const [lluvia, setLluvia] = useState('');
+  const [inicioLabores, setInicioLabores] = useState('');
+
+  // Observaciones y Ausentes (Final)
+  const [observaciones, setObservaciones] = useState('');
+  const [ausentes, setAusentes] = useState('');
+
+  // Estados de trabajos (se cargan del API)
+  const [trabajosCosecha, setTrabajosCosecha] = useState<TrabajoCosecha[]>([]);
+  const [trabajosPlateo, setTrabajosPlateo] = useState<TrabajoPlateo[]>([]);
+  const [trabajosPoda, setTrabajosPoda] = useState<TrabajoPoda[]>([]);
+  const [trabajosFertilizacion, setTrabajosFertilizacion] = useState<TrabajoFertilizacion[]>([]);
+  const [trabajosSanidad, setTrabajosSanidad] = useState<TrabajoSanidad[]>([]);
+  const [trabajosAuxiliares, setTrabajosAuxiliares] = useState<TrabajoAuxiliar[]>([]);
+  const [horasExtras, setHorasExtras] = useState<HoraExtraRegistro[]>([]);
+
+  // Carga inicial: planilla + catálogos
   const cargarPlanilla = useCallback(async () => {
     if (!id) return;
     setLoading(true);
@@ -194,182 +179,118 @@ export default function VerPlanilla() {
       ]);
       const p: any = planRes.data;
 
-      // Campos generales
       setFecha(p.fecha || '');
-      // Elaborado por: el API puede devolver el campo con varios nombres distintos.
-      // Si la planilla la creó el usuario actualmente logueado, usamos su nombre como fallback.
       const elaborado =
-        p.creado_por_rel?.name ??
-        p.creado_por_rel?.nombre ??
-        p.creado_por_rel?.full_name ??
-        p.creado_por_rel?.nombre_completo ??
-        p.creadoPor?.name ??
-        p.creado_por?.name ??
-        p.creado_por?.nombre ??
-        p.elaborado_por ??
-        p.user?.name ??
-        // Fallback: si el creado_por (id) coincide con el usuario logueado, usar su nombre
-        (p.creado_por && user?.id && Number(p.creado_por) === Number(user.id) ? user.nombre : null) ??
-        // Último recurso: si no hay info, mostrar el nombre del usuario actual
-        user?.nombre ??
-        '';
+        p.creado_por_rel?.name ?? p.creado_por_rel?.nombre ??
+        p.creadoPor?.name ?? p.creado_por?.name ??
+        (user?.id && Number(p.creado_por) === Number(user.id) ? user.nombre : '') ?? '';
       setElaboradoPor(elaborado);
-
-      // hubo_lluvia: el API puede devolver true/false, 0/1, "0"/"1", "true"/"false".
-      // Convertimos a booleano de forma robusta antes de mapear a 'si' / 'no'.
       const lluviaRaw = p.hubo_lluvia;
       const lluviaBool =
         lluviaRaw === true || lluviaRaw === 1 || lluviaRaw === '1' ||
         (typeof lluviaRaw === 'string' && lluviaRaw.toLowerCase() === 'true');
       setHuboLluvia(lluviaBool ? 'si' : 'no');
-
-      // Cantidad de lluvia (mm) — guardar solo si hay valor numérico > 0
       if (p.cantidad_lluvia != null) {
         const n = parseFloat(String(p.cantidad_lluvia));
         setLluvia(Number.isFinite(n) && n > 0 ? String(n) : '');
-      } else {
-        setLluvia('');
       }
-
       setInicioLabores(p.hora_inicio ? String(p.hora_inicio).slice(0, 5) : '');
       setObservaciones(p.observaciones || '');
 
-      // Colaboradores: aceptar todas las variantes de campo (primer_nombre, nombres, nombre_completo, etc.)
       setColaboradores((colRes.data || []).map((c: any) => {
-        const nombres   = c.primer_nombre   ?? c.nombres   ?? c.nombre   ?? c.first_name ?? '';
-        const apellidos = c.primer_apellido ?? c.apellidos ?? c.apellido ?? c.last_name  ?? '';
-        const nombre_completo = c.nombre_completo ?? c.full_name ?? c.name ??
-          ((nombres || apellidos) ? `${nombres} ${apellidos}`.trim() : `Colab. ${c.id}`);
+        let nombres   = c.primer_nombre   ?? c.nombres   ?? c.nombre   ?? '';
+        let apellidos = c.primer_apellido ?? c.apellidos ?? c.apellido ?? '';
+        const nombreCompletoApi = c.nombre_completo ?? c.full_name ?? c.name ?? '';
+
+        // Si no llegan separados pero sí llega el completo, partirlo en 2 mitades
+        if ((!nombres && !apellidos) && nombreCompletoApi) {
+          const partes = String(nombreCompletoApi).trim().split(/\s+/);
+          const mid = Math.ceil(partes.length / 2);
+          nombres   = partes.slice(0, mid).join(' ');
+          apellidos = partes.slice(mid).join(' ');
+        }
+
+        // Última garantía
+        if (!nombres && !apellidos) {
+          nombres = `Colaborador`;
+          apellidos = String(c.id);
+        }
+
+        const nombre_completo = nombreCompletoApi || `${nombres} ${apellidos}`.trim();
         return { id: String(c.id), nombres, apellidos, nombre_completo };
       }));
-      const lotesArr = (lotRes.data || []).map((l: any) => ({ id: String(l.id), nombre: l.nombre }));
-      setLotesData(lotesArr);
+      setLotesData((lotRes.data || []).map((l: any) => ({ id: String(l.id), nombre: l.nombre })));
 
-      // Cargar sublotes en paralelo por cada lote para poder resolver nombres en cards
-      const sublotesPromises = lotesArr.map(async (l) => {
-        try {
-          const sr = await selectsApi.sublotes({ lote_id: Number(l.id) });
-          return (sr.data || []).map((s: any) => ({ id: String(s.id), nombre: s.nombre }));
-        } catch { return []; }
-      });
-      const allSubs = (await Promise.all(sublotesPromises)).flat();
-      setSublotesData(allSubs);
-
-      // Mapear cosechas de API → estado local (incluyendo gajos y kilos)
-      setTrabajosCosecha(
-        (p.cosechas || []).map((c: any) => ({
-          id: String(c.id),
-          colaboradores: (c.cuadrilla || []).map((q: any) => String(q.empleado_id)),
-          lotes: c.lote_id ? [String(c.lote_id)] : [],
-          sublotes: c.sublote?.nombre ?? (c.sublote_id ? String(c.sublote_id) : ''),
-          gajosRecogidos: Number(c.gajos_reportados ?? 0),
-          kilos: c.peso_confirmado != null ? Number(c.peso_confirmado) : 0,
-        }))
-      );
-
-      // Mapear jornales por tipo
+      setTrabajosCosecha((p.cosechas || []).map((c: any) => ({
+        id: String(c.id),
+        colaboradores: (c.cuadrilla || []).map((q: any) => String(q.empleado_id)),
+        lotes: c.lote_id ? [String(c.lote_id)] : [],
+        sublotes: c.sublote?.nombre || '',
+      })));
       const jornales = p.jornales || [];
-      setTrabajosPlateo(
-        jornales.filter((j: any) => j.tipo === 'PLATEO').map((j: any) => ({
-          id: String(j.id),
-          colaboradores: [String(j.empleado_id)],
-          lotes: j.lote_id ? [String(j.lote_id)] : [],
-          sublotes: j.sublote?.nombre ?? (j.sublote_id ? String(j.sublote_id) : ''),
-          numeroPalmas: Number(j.cantidad_palmas ?? 0),
-        }))
-      );
-      setTrabajosPoda(
-        jornales.filter((j: any) => j.tipo === 'PODA').map((j: any) => ({
-          id: String(j.id),
-          colaboradores: [String(j.empleado_id)],
-          lotes: j.lote_id ? [String(j.lote_id)] : [],
-          sublotes: j.sublote?.nombre ?? (j.sublote_id ? String(j.sublote_id) : ''),
-          numeroPalmas: Number(j.cantidad_palmas ?? 0),
-        }))
-      );
-      setTrabajosFertilizacion(
-        jornales.filter((j: any) => j.tipo === 'FERTILIZACION').map((j: any) => ({
-          id: String(j.id),
-          colaboradores: [String(j.empleado_id)],
-          lotes: j.lote_id ? [String(j.lote_id)] : [],
-          sublotes: j.sublote?.nombre ?? (j.sublote_id ? String(j.sublote_id) : ''),
-          palmas: Number(j.cantidad_palmas ?? 0),
-          tipoFertilizante: j.insumo?.nombre || '',
-          cantidadGramos: Number(j.gramos_por_palma ?? 0),
-        }))
-      );
-      setTrabajosSanidad(
-        jornales.filter((j: any) => j.tipo === 'SANIDAD').map((j: any) => ({
-          id: String(j.id),
-          colaboradores: [String(j.empleado_id)],
-          lotes: j.lote_id ? [String(j.lote_id)] : [],
-          sublotes: j.sublote?.nombre ?? (j.sublote_id ? String(j.sublote_id) : ''),
-          trabajoRealizado: j.descripcion || '',
-        }))
-      );
-      setTrabajosOtros(
-        jornales.filter((j: any) => j.tipo === 'OTROS').map((j: any) => ({
-          id: String(j.id),
-          colaboradores: [String(j.empleado_id)],
-          lotes: j.lote_id ? [String(j.lote_id)] : [],
-          sublotes: j.sublote?.nombre ?? (j.sublote_id ? String(j.sublote_id) : ''),
-          nombre: j.nombre_trabajo || '',
-          laborRealizada: j.descripcion || '',
-        }))
-      );
-      setTrabajosAuxiliares(
-        jornales.filter((j: any) => j.categoria === 'FINCA').map((j: any) => ({
-          id: String(j.id),
-          nombre: j.empleado
-            ? `${j.empleado.primer_nombre ?? ''} ${j.empleado.primer_apellido ?? ''}`.trim()
-            : '',
-          labor: j.labor?.nombre || '',
-          lugar: j.ubicacion || '',
-          total: parseFloat(j.valor_total || '0'),
-          horasExtra: 0,
-          tipoJornada: 'FIJO' as const,
-        }))
-      );
-
-      // Horas Extras como items detallados
-      setHorasExtraItems(
-        (p.horas_extra || p.horasExtra || []).map((h: any) => {
-          const emp = h.empleado
-            ? `${h.empleado.primer_nombre ?? ''} ${h.empleado.primer_apellido ?? ''}`.trim()
-            : `Colab. ${h.empleado_id}`;
-          return {
-            id: String(h.id),
-            colaborador: emp,
-            tipoHora: h.tipoHoraExtra?.nombre ?? h.tipo_hora_extra?.nombre ?? '',
-            numeroHoras: Number(h.cantidad_horas ?? 0),
-            observacion: h.observacion ?? '',
-            valor: parseFloat(h.valor_calculado ?? '0'),
-          };
-        })
-      );
-
-      // Ausencias como texto descriptivo
-      const ausenciasTexto = (p.ausencias || [])
-        .map((a: any) => {
-          const emp = a.empleado
-            ? `${a.empleado.primer_nombre ?? ''} ${a.empleado.primer_apellido ?? ''}`.trim()
-            : '';
-          const mot = a.motivo_ausencia?.nombre || a.motivo || '';
-          return `${emp} — ${mot}`;
-        })
-        .join('\n');
+      setTrabajosPlateo(jornales.filter((j: any) => j.tipo === 'PLATEO').map((j: any) => ({
+        id: String(j.id),
+        colaboradores: [String(j.empleado_id)],
+        lotes: j.lote_id ? [String(j.lote_id)] : [],
+        sublotes: j.sublote?.nombre || '',
+        numeroPalmas: Number(j.cantidad_palmas ?? 0),
+      })));
+      setTrabajosPoda(jornales.filter((j: any) => j.tipo === 'PODA').map((j: any) => ({
+        id: String(j.id),
+        colaboradores: [String(j.empleado_id)],
+        lotes: j.lote_id ? [String(j.lote_id)] : [],
+        sublotes: j.sublote?.nombre || '',
+        numeroPalmas: Number(j.cantidad_palmas ?? 0),
+      })));
+      setTrabajosFertilizacion(jornales.filter((j: any) => j.tipo === 'FERTILIZACION').map((j: any) => ({
+        id: String(j.id),
+        colaboradores: [String(j.empleado_id)],
+        lotes: j.lote_id ? [String(j.lote_id)] : [],
+        sublotes: j.sublote?.nombre || '',
+        palmas: Number(j.cantidad_palmas ?? 0),
+        tipoFertilizante: j.insumo?.nombre || '',
+        cantidadGramos: Number(j.gramos_por_palma ?? 0),
+      })));
+      setTrabajosSanidad(jornales.filter((j: any) => j.tipo === 'SANIDAD').map((j: any) => ({
+        id: String(j.id),
+        colaboradores: [String(j.empleado_id)],
+        lotes: j.lote_id ? [String(j.lote_id)] : [],
+        sublotes: j.sublote?.nombre || '',
+        trabajoRealizado: j.descripcion || '',
+      })));
+      setTrabajosAuxiliares(jornales.filter((j: any) => j.categoria === 'FINCA').map((j: any) => ({
+        id: String(j.id),
+        nombre: j.empleado ? `${j.empleado.primer_nombre ?? ''} ${j.empleado.primer_apellido ?? ''}`.trim() : '',
+        labor: j.labor?.nombre || '',
+        lugar: j.ubicacion || '',
+        total: parseFloat(j.valor_total || '0'),
+        horasExtra: 0,
+        tipoJornada: 'FIJO' as const,
+      })));
+      // Horas Extras
+      const hExtras = (p.horas_extra ?? p.horasExtra ?? []) as any[];
+      setHorasExtras(hExtras.map((h: any) => ({
+        id: String(h.id),
+        colaboradorId: String(h.empleado_id ?? ''),
+        tipoHora: h.tipoHoraExtra?.nombre ?? h.tipo_hora_extra?.nombre ?? '',
+        numeroHoras: Number(h.cantidad_horas ?? h.numero_horas ?? 0),
+        observacion: h.observacion ?? '',
+      })));
+      const ausenciasTexto = (p.ausencias || []).map((a: any) => {
+        const emp = a.empleado ? `${a.empleado.primer_nombre ?? ''} ${a.empleado.primer_apellido ?? ''}`.trim() : '';
+        const mot = a.motivo_ausencia?.nombre || a.motivo || '';
+        return `${emp} — ${mot}`;
+      }).join('\n');
       setAusentes(ausenciasTexto);
-
     } catch (err: any) {
       setErrorCarga(err?.message ?? 'Error al cargar la planilla');
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, user]);
 
   useEffect(() => { cargarPlanilla(); }, [cargarPlanilla]);
 
-  // ────────────────────────────────────────────────────────────────────────────
   const irAEtapa = (numero: number) => {
     setEtapaActual(numero);
   };
@@ -386,9 +307,10 @@ export default function VerPlanilla() {
     }
   };
 
-  // Botón "Editar" → ir al wizard de edición que usa la misma UI que creación.
   const activarEdicion = () => {
     if (!id) return;
+    // Navega al wizard idéntico al de creación, pero con todos los datos
+    // precargados desde el API por NuevaPlanillaWizard al detectar :id en la URL.
     navigate(`/operaciones/planilla/editar/${id}`);
   };
 
@@ -402,10 +324,11 @@ export default function VerPlanilla() {
         cantidad_lluvia: huboLluvia === 'si' && lluvia ? parseFloat(lluvia) : null,
         observaciones: observaciones || null,
       });
+      toast.success('Cambios guardados');
       setModoEdicion(false);
       await cargarPlanilla();
     } catch (err: any) {
-      alert(err?.message ?? 'Error al guardar cambios');
+      toast.error(err?.message ?? 'Error al guardar cambios');
     }
   };
 
@@ -413,9 +336,10 @@ export default function VerPlanilla() {
     if (!id) return;
     try {
       await operacionesApi.aprobar(Number(id));
+      toast.success('Planilla aprobada');
       navigate('/operaciones');
     } catch (err: any) {
-      alert(err?.message ?? 'Error al aprobar planilla');
+      toast.error(err?.message ?? 'Error al aprobar planilla');
     }
   };
 
@@ -716,7 +640,6 @@ export default function VerPlanilla() {
                 {ETAPAS.map((etapa, index) => {
                   const estaCompleta = etapaActual > etapa.numero;
                   const estaActiva = etapaActual === etapa.numero;
-
                   return (
                     <div key={etapa.numero} className="flex items-center" style={{ flex: index < ETAPAS.length - 1 ? 1 : 'none' }}>
                       {/* Círculo de etapa */}
@@ -797,7 +720,11 @@ export default function VerPlanilla() {
                         />
                       ) : (
                         <div className="text-sm font-medium py-2">
-                          {formatearFecha(fecha, { year: 'numeric', month: 'long', day: 'numeric' })}
+                          {new Date(fecha).toLocaleDateString('es-CO', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          })}
                         </div>
                       )}
                     </div>
@@ -810,7 +737,7 @@ export default function VerPlanilla() {
                           onChange={(e) => setElaboradoPor(e.target.value)}
                         />
                       ) : (
-                        <div className="text-sm font-medium py-2">{elaboradoPor || '—'}</div>
+                        <div className="text-sm font-medium py-2">{elaboradoPor}</div>
                       )}
                     </div>
                   </div>
@@ -947,7 +874,7 @@ export default function VerPlanilla() {
                                           .filter(col => !trabajo.colaboradores.includes(col.id))
                                           .map((col) => (
                                             <SelectItem key={col.id} value={col.id}>
-                                              {col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${col.id}`}
+                                              {col.nombres} {col.apellidos}
                                             </SelectItem>
                                           ))}
                                       </SelectContent>
@@ -962,7 +889,7 @@ export default function VerPlanilla() {
                                               variant="secondary"
                                               className="pl-2.5 pr-1 py-1 gap-1"
                                             >
-                                              <span>{col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${col.id}`}</span>
+                                              <span>{col.nombres} {col.apellidos}</span>
                                               <button
                                                 type="button"
                                                 onClick={() => eliminarColaboradorDeCosecha(trabajo.id, colId)}
@@ -978,11 +905,17 @@ export default function VerPlanilla() {
                                   </>
                                 ) : (
                                   <div className="flex flex-wrap gap-2">
+                                    {trabajo.colaboradores.length === 0 && (
+                                      <span className="text-sm text-muted-foreground">Sin colaboradores</span>
+                                    )}
                                     {trabajo.colaboradores.map((colId) => {
                                       const col = colaboradores.find(c => c.id === colId);
+                                      const label = col
+                                        ? (col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${colId}`)
+                                        : `Colaborador ${colId}`;
                                       return (
                                         <Badge key={colId} variant="secondary">
-                                          {col?.nombre_completo || (col ? `${col.nombres} ${col.apellidos}`.trim() : '') || `Colaborador ${colId}`}
+                                          {label}
                                         </Badge>
                                       );
                                     })}
@@ -1061,19 +994,8 @@ export default function VerPlanilla() {
                                     setTrabajosCosecha(updated);
                                   }} />
                                 ) : (
-                                  <div className="text-sm py-2">{trabajo.sublotes || '—'}</div>
+                                  <div className="text-sm py-2">{trabajo.sublotes}</div>
                                 )}
-                              </div>
-                              {/* Gajos y Kilos (read-only) */}
-                              <div className="space-y-2">
-                                <Label>Gajos recogidos</Label>
-                                <div className="text-sm py-2 font-semibold">{trabajo.gajosRecogidos || 0}</div>
-                              </div>
-                              <div className="space-y-2">
-                                <Label>Kilos confirmados</Label>
-                                <div className="text-sm py-2 font-semibold">
-                                  {trabajo.kilos > 0 ? `${trabajo.kilos.toLocaleString('es-CO')} kg` : '— (pendiente de pesaje)'}
-                                </div>
                               </div>
                             </div>
                           </CardContent>
@@ -1134,7 +1056,7 @@ export default function VerPlanilla() {
                                       .filter(col => !trabajo.colaboradores.includes(col.id))
                                       .map((col) => (
                                         <SelectItem key={col.id} value={col.id}>
-                                          {col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${col.id}`}
+                                          {col.nombres} {col.apellidos}
                                         </SelectItem>
                                       ))}
                                   </SelectContent>
@@ -1149,7 +1071,7 @@ export default function VerPlanilla() {
                                           variant="secondary"
                                           className="pl-2.5 pr-1 py-1 gap-1"
                                         >
-                                          <span>{col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${col.id}`}</span>
+                                          <span>{col.nombres} {col.apellidos}</span>
                                           <button
                                             type="button"
                                             onClick={() => eliminarColaboradorDePlateo(trabajo.id, colId)}
@@ -1165,13 +1087,19 @@ export default function VerPlanilla() {
                               </>
                             ) : (
                               <div className="flex flex-wrap gap-2">
+                                {trabajo.colaboradores.length === 0 && (
+                                  <span className="text-sm text-muted-foreground">Sin colaboradores</span>
+                                )}
                                 {trabajo.colaboradores.map((colId) => {
                                   const col = colaboradores.find(c => c.id === colId);
-                                  return col ? (
+                                  const label = col
+                                    ? (col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${colId}`)
+                                    : `Colaborador ${colId}`;
+                                  return (
                                     <Badge key={colId} variant="secondary">
-                                      {col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${col.id}`}
+                                      {label}
                                     </Badge>
-                                  ) : null;
+                                  );
                                 })}
                               </div>
                             )}
@@ -1248,7 +1176,7 @@ export default function VerPlanilla() {
                                       .filter(col => !trabajo.colaboradores.includes(col.id))
                                       .map((col) => (
                                         <SelectItem key={col.id} value={col.id}>
-                                          {col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${col.id}`}
+                                          {col.nombres} {col.apellidos}
                                         </SelectItem>
                                       ))}
                                   </SelectContent>
@@ -1263,7 +1191,7 @@ export default function VerPlanilla() {
                                           variant="secondary"
                                           className="pl-2.5 pr-1 py-1 gap-1"
                                         >
-                                          <span>{col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${col.id}`}</span>
+                                          <span>{col.nombres} {col.apellidos}</span>
                                           <button
                                             type="button"
                                             onClick={() => eliminarColaboradorDePoda(trabajo.id, colId)}
@@ -1279,13 +1207,19 @@ export default function VerPlanilla() {
                               </>
                             ) : (
                               <div className="flex flex-wrap gap-2">
+                                {trabajo.colaboradores.length === 0 && (
+                                  <span className="text-sm text-muted-foreground">Sin colaboradores</span>
+                                )}
                                 {trabajo.colaboradores.map((colId) => {
                                   const col = colaboradores.find(c => c.id === colId);
-                                  return col ? (
+                                  const label = col
+                                    ? (col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${colId}`)
+                                    : `Colaborador ${colId}`;
+                                  return (
                                     <Badge key={colId} variant="secondary">
-                                      {col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${col.id}`}
+                                      {label}
                                     </Badge>
-                                  ) : null;
+                                  );
                                 })}
                               </div>
                             )}
@@ -1362,7 +1296,7 @@ export default function VerPlanilla() {
                                       .filter(col => !trabajo.colaboradores.includes(col.id))
                                       .map((col) => (
                                         <SelectItem key={col.id} value={col.id}>
-                                          {col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${col.id}`}
+                                          {col.nombres} {col.apellidos}
                                         </SelectItem>
                                       ))}
                                   </SelectContent>
@@ -1377,7 +1311,7 @@ export default function VerPlanilla() {
                                           variant="secondary"
                                           className="pl-2.5 pr-1 py-1 gap-1"
                                         >
-                                          <span>{col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${col.id}`}</span>
+                                          <span>{col.nombres} {col.apellidos}</span>
                                           <button
                                             type="button"
                                             onClick={() => eliminarColaboradorDeFertilizacion(trabajo.id, colId)}
@@ -1393,13 +1327,19 @@ export default function VerPlanilla() {
                               </>
                             ) : (
                               <div className="flex flex-wrap gap-2">
+                                {trabajo.colaboradores.length === 0 && (
+                                  <span className="text-sm text-muted-foreground">Sin colaboradores</span>
+                                )}
                                 {trabajo.colaboradores.map((colId) => {
                                   const col = colaboradores.find(c => c.id === colId);
-                                  return col ? (
+                                  const label = col
+                                    ? (col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${colId}`)
+                                    : `Colaborador ${colId}`;
+                                  return (
                                     <Badge key={colId} variant="secondary">
-                                      {col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${col.id}`}
+                                      {label}
                                     </Badge>
-                                  ) : null;
+                                  );
                                 })}
                               </div>
                             )}
@@ -1513,7 +1453,7 @@ export default function VerPlanilla() {
                                       .filter(col => !trabajo.colaboradores.includes(col.id))
                                       .map((col) => (
                                         <SelectItem key={col.id} value={col.id}>
-                                          {col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${col.id}`}
+                                          {col.nombres} {col.apellidos}
                                         </SelectItem>
                                       ))}
                                   </SelectContent>
@@ -1528,7 +1468,7 @@ export default function VerPlanilla() {
                                           variant="secondary"
                                           className="pl-2.5 pr-1 py-1 gap-1"
                                         >
-                                          <span>{col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${col.id}`}</span>
+                                          <span>{col.nombres} {col.apellidos}</span>
                                           <button
                                             type="button"
                                             onClick={() => eliminarColaboradorDeSanidad(trabajo.id, colId)}
@@ -1544,13 +1484,19 @@ export default function VerPlanilla() {
                               </>
                             ) : (
                               <div className="flex flex-wrap gap-2">
+                                {trabajo.colaboradores.length === 0 && (
+                                  <span className="text-sm text-muted-foreground">Sin colaboradores</span>
+                                )}
                                 {trabajo.colaboradores.map((colId) => {
                                   const col = colaboradores.find(c => c.id === colId);
-                                  return col ? (
+                                  const label = col
+                                    ? (col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${colId}`)
+                                    : `Colaborador ${colId}`;
+                                  return (
                                     <Badge key={colId} variant="secondary">
-                                      {col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${col.id}`}
+                                      {label}
                                     </Badge>
-                                  ) : null;
+                                  );
                                 })}
                               </div>
                             )}
@@ -1709,8 +1655,60 @@ export default function VerPlanilla() {
               </Card>
             )}
 
-            {/* ETAPA 4: FINALIZACIÓN */}
+            {/* ETAPA 4: HORAS EXTRAS */}
             {etapaActual === 4 && (
+              <Card className="border-border">
+                <CardHeader>
+                  <CardTitle>Horas Extras</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Registros de horas extras de los colaboradores
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {horasExtras.map((hora) => {
+                    const col = colaboradores.find(c => c.id === hora.colaboradorId);
+                    const colLabel = col
+                      ? (col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${hora.colaboradorId}`)
+                      : `Colaborador ${hora.colaboradorId}`;
+                    return (
+                      <Card key={hora.id} className="border-border">
+                        <CardContent className="pt-6 space-y-4">
+                          {/* Colaborador (siempre primero) */}
+                          <div className="space-y-2">
+                            <Label>Colaborador</Label>
+                            <div className="text-sm font-semibold py-2">{colLabel}</div>
+                          </div>
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <div className="space-y-2">
+                              <Label>Tipo de Hora</Label>
+                              <div className="text-sm font-medium py-2">{hora.tipoHora || '—'}</div>
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Número de Horas</Label>
+                              <div className="text-sm font-medium py-2">{hora.numeroHoras}</div>
+                            </div>
+                            {hora.observacion && (
+                              <div className="space-y-2 md:col-span-2">
+                                <Label>Observación</Label>
+                                <div className="text-sm py-2">{hora.observacion}</div>
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                  {horasExtras.length === 0 && (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <p>No hay registros de horas extras</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* ETAPA 5: FINALIZACIÓN */}
+            {etapaActual === 5 && (
               <Card className="border-border">
                 <CardHeader>
                   <div className="flex items-center gap-3">
@@ -1809,7 +1807,7 @@ export default function VerPlanilla() {
               <CardHeader className="border-b border-border">
                 <CardTitle className="flex items-center gap-2">
                   <FileText className="h-5 w-5 text-primary" />
-                  Resumen de Planilla
+                  Resumen
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-6 space-y-6">
@@ -1832,48 +1830,292 @@ export default function VerPlanilla() {
                 {/* RESUMEN DETALLADO */}
                 <div className="space-y-2">
                   <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
-                    Datos
+                    Resumen Detallado
                   </h4>
 
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">Fecha</span>
-                      <span className="font-semibold text-sm">
-                        {formatearFecha(fecha, { month: 'short', day: 'numeric' })}
-                      </span>
+                  {!fecha && !elaboradoPor ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <p className="text-sm">No hay información para mostrar</p>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">Cosecha</span>
-                      <span className="font-semibold text-sm">
-                        {totalColaboradoresCosecha} colab.
-                      </span>
+                  ) : (
+                    <div className="space-y-1">
+                      {fecha && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm">Fecha</span>
+                          <span className="font-semibold text-sm">
+                            {new Date(fecha).toLocaleDateString('es-CO')}
+                          </span>
+                        </div>
+                      )}
+                      {elaboradoPor && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm">Elaborado por</span>
+                          <span className="font-semibold text-sm truncate ml-2 max-w-[150px]" title={elaboradoPor}>
+                            {elaboradoPor}
+                          </span>
+                        </div>
+                      )}
+                      {huboLluvia && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm">Lluvia</span>
+                          <span className="font-semibold text-sm">
+                            {huboLluvia === 'si' && lluvia ? `${lluvia} mm` : 'No'}
+                          </span>
+                        </div>
+                      )}
+                      {inicioLabores && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm">Inicio Labores</span>
+                          <span className="font-semibold text-sm">{inicioLabores}</span>
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">Plateo</span>
-                      <span className="font-semibold text-sm">
-                        {totalPalmasPlateo} palmas
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">Poda</span>
-                      <span className="font-semibold text-sm">
-                        {totalPalmasPoda} palmas
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">Fertilización</span>
-                      <span className="font-semibold text-sm">
-                        {totalPalmasFertilizacion} palmas
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">Auxiliares</span>
-                      <span className="font-semibold text-sm text-success">
-                        ${(totalAuxiliares / 1000).toFixed(0)}k
-                      </span>
-                    </div>
-                  </div>
+                  )}
                 </div>
+
+                <div className="h-px bg-border" />
+
+                {/* LABORES REGISTRADAS */}
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+                    Labores Registradas
+                  </h4>
+
+                  {/* Cosecha */}
+                  {trabajosCosecha.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">Cosecha</span>
+                        <Badge variant="outline" className="bg-success/10 text-success border-success/20">
+                          {trabajosCosecha.length}
+                        </Badge>
+                      </div>
+                      <div className="space-y-1 pl-3 border-l-2 border-success/20">
+                        {trabajosCosecha.map((trabajo) => {
+                          const loteNombre = (trabajo.lotes ?? []).map(loteId => lotesData.find(l => l.id === loteId)?.nombre).filter(Boolean).join(', ');
+                          return (
+                            <div key={trabajo.id} className="text-xs space-y-0.5">
+                              <div className="text-muted-foreground">
+                                {loteNombre || '—'}{trabajo.sublotes ? ` · ${trabajo.sublotes}` : ''}
+                              </div>
+                              <div className="text-muted-foreground">
+                                {trabajo.colaboradores?.length || 0} colaboradores
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Plateo */}
+                  {trabajosPlateo.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">Plateo</span>
+                        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+                          {trabajosPlateo.length}
+                        </Badge>
+                      </div>
+                      <div className="space-y-1 pl-3 border-l-2 border-primary/20">
+                        {trabajosPlateo.map((trabajo) => {
+                          const loteNombre = (trabajo.lotes ?? []).map(loteId => lotesData.find(l => l.id === loteId)?.nombre).filter(Boolean).join(', ');
+                          return (
+                            <div key={trabajo.id} className="text-xs space-y-0.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-muted-foreground">
+                                  {loteNombre || '—'}{trabajo.sublotes ? ` · ${trabajo.sublotes}` : ''}
+                                </span>
+                                <span className="font-medium">{trabajo.numeroPalmas} palmas</span>
+                              </div>
+                              <div className="text-muted-foreground">
+                                {trabajo.colaboradores?.length || 0} colaboradores
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div className="pt-1 border-t border-border/50">
+                          <div className="flex items-center justify-between font-medium">
+                            <span className="text-xs">Total Plateo</span>
+                            <span className="text-xs text-primary">
+                              {totalPalmasPlateo.toLocaleString('es-CO')} palmas
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Poda */}
+                  {trabajosPoda.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">Poda</span>
+                        <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20">
+                          {trabajosPoda.length}
+                        </Badge>
+                      </div>
+                      <div className="space-y-1 pl-3 border-l-2 border-warning/20">
+                        {trabajosPoda.map((trabajo) => {
+                          const loteNombre = (trabajo.lotes ?? []).map(loteId => lotesData.find(l => l.id === loteId)?.nombre).filter(Boolean).join(', ');
+                          return (
+                            <div key={trabajo.id} className="text-xs space-y-0.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-muted-foreground">
+                                  {loteNombre || '—'}{trabajo.sublotes ? ` · ${trabajo.sublotes}` : ''}
+                                </span>
+                                <span className="font-medium">{trabajo.numeroPalmas} palmas</span>
+                              </div>
+                              <div className="text-muted-foreground">
+                                {trabajo.colaboradores?.length || 0} colaboradores
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div className="pt-1 border-t border-border/50">
+                          <div className="flex items-center justify-between font-medium">
+                            <span className="text-xs">Total Poda</span>
+                            <span className="text-xs text-warning">
+                              {totalPalmasPoda.toLocaleString('es-CO')} palmas
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Fertilización */}
+                  {trabajosFertilizacion.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">Fertilización</span>
+                        <Badge variant="outline" className="bg-accent/10 text-accent border-accent/20">
+                          {trabajosFertilizacion.length}
+                        </Badge>
+                      </div>
+                      <div className="space-y-1 pl-3 border-l-2 border-accent/20">
+                        {trabajosFertilizacion.map((trabajo) => {
+                          const loteNombre = (trabajo.lotes ?? []).map(loteId => lotesData.find(l => l.id === loteId)?.nombre).filter(Boolean).join(', ');
+                          return (
+                            <div key={trabajo.id} className="text-xs space-y-0.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-muted-foreground">
+                                  {loteNombre || '—'}{trabajo.sublotes ? ` · ${trabajo.sublotes}` : ''}
+                                </span>
+                                <span className="font-medium">{trabajo.palmas} palmas</span>
+                              </div>
+                              <div className="text-muted-foreground">
+                                {trabajo.tipoFertilizante || '—'} · {trabajo.colaboradores?.length || 0} colab.
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Sanidad */}
+                  {trabajosSanidad.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">Sanidad</span>
+                        <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20">
+                          {trabajosSanidad.length}
+                        </Badge>
+                      </div>
+                      <div className="space-y-1 pl-3 border-l-2 border-destructive/20">
+                        {trabajosSanidad.map((trabajo) => {
+                          const loteNombre = (trabajo.lotes ?? []).map(loteId => lotesData.find(l => l.id === loteId)?.nombre).filter(Boolean).join(', ');
+                          return (
+                            <div key={trabajo.id} className="text-xs space-y-0.5">
+                              <div className="text-muted-foreground">
+                                {loteNombre || '—'}{trabajo.sublotes ? ` · ${trabajo.sublotes}` : ''}
+                              </div>
+                              <div className="text-muted-foreground">
+                                {trabajo.colaboradores?.length || 0} colaboradores
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Auxiliares */}
+                  {trabajosAuxiliares.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">Auxiliares</span>
+                        <Badge variant="outline" className="bg-muted text-muted-foreground border-border">
+                          {trabajosAuxiliares.length}
+                        </Badge>
+                      </div>
+                      <div className="space-y-1 pl-3 border-l-2 border-border">
+                        {trabajosAuxiliares.map((trabajo) => (
+                          <div key={trabajo.id} className="text-xs space-y-0.5">
+                            <div className="text-muted-foreground">{trabajo.labor || trabajo.nombre || '—'}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Si no hay labores */}
+                  {trabajosCosecha.length === 0 &&
+                   trabajosPlateo.length === 0 &&
+                   trabajosPoda.length === 0 &&
+                   trabajosFertilizacion.length === 0 &&
+                   trabajosSanidad.length === 0 &&
+                   trabajosAuxiliares.length === 0 && (
+                    <div className="text-center py-4 text-muted-foreground">
+                      <p className="text-sm">No hay labores registradas</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Horas Extras */}
+                {horasExtras.length > 0 && (
+                  <>
+                    <div className="h-px bg-border" />
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+                          Horas Extras
+                        </h4>
+                        <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20">
+                          {horasExtras.length}
+                        </Badge>
+                      </div>
+                      <div className="space-y-2">
+                        {horasExtras.map((he) => {
+                          const col = colaboradores.find(c => c.id === he.colaboradorId);
+                          const colLabel = col
+                            ? (col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${he.colaboradorId}`)
+                            : `Colaborador ${he.colaboradorId}`;
+                          return (
+                            <div key={he.id} className="p-2 bg-muted/30 rounded-md">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-medium">{colLabel}</span>
+                                <span className="text-xs font-bold text-warning">{he.numeroHoras}h</span>
+                              </div>
+                              <div className="text-xs text-muted-foreground mt-0.5">
+                                {he.tipoHora || '—'}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div className="pt-1 border-t border-border">
+                          <div className="flex items-center justify-between font-medium">
+                            <span className="text-xs">Total Horas</span>
+                            <span className="text-xs text-warning">
+                              {horasExtras.reduce((sum, he) => sum + (he.numeroHoras || 0), 0)} horas
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>
