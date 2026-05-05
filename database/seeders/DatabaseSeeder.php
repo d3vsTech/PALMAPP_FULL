@@ -66,6 +66,7 @@ class DatabaseSeeder extends Seeder
             'pais' => 'CO',
             'salario_minimo_vigente' => 1423500.00,
             'auxilio_transporte' => 200000.00,
+            'divisor_jornada_mensual' => 240,
             'sync_habilitado' => true,
         ]);
 
@@ -108,7 +109,7 @@ class DatabaseSeeder extends Seeder
         // Asignar permisos directos (operaciones, viajes, colaboradores lectura)
         $operador->givePermissionTo([
             'dashboard.ver',
-            'operaciones.ver', 'operaciones.crear', 'operaciones.editar', 'operaciones.eliminar',
+            'operaciones.ver', 'operaciones.crear', 'operaciones.editar', 'operaciones.eliminar', 'operaciones.aprobar',
             'cosecha.ver', 'cosecha.crear', 'cosecha.editar', 'cosecha.eliminar',
             'jornales.ver', 'jornales.crear', 'jornales.editar', 'jornales.eliminar',
             'auxiliares.ver', 'auxiliares.crear', 'auxiliares.editar', 'auxiliares.eliminar',
@@ -142,6 +143,15 @@ class DatabaseSeeder extends Seeder
             'viajes.ver',
             'nomina.ver',
         ]);
+
+        // ═══ 6. CATÁLOGOS PARAMÉTRICOS ═══
+        $this->call(MotivoAusenciaSeeder::class);
+        $this->call(TipoHoraExtraSeeder::class);
+        $this->call(ViajesParametricasSeeder::class);
+        $this->call(ParametricasColaboradorSeeder::class);
+
+        // ═══ 7. DATOS DEMO DE OPERACIONES (temporal para desarrollo) ═══
+        $this->call(DemoOperacionSeeder::class);
 
         $this->command->info('');
         $this->command->info('══════════════════════════════════════════');

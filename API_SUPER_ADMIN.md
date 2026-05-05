@@ -305,6 +305,24 @@ POST /api/admin/tenants
 }
 ```
 
+**Efectos colaterales (dentro de la misma transaccion):**
+
+Al crear el tenant, el sistema tambien inicializa automaticamente las siguientes parametrias:
+
+- **`TenantConfig`**: 1 registro con valores por defecto (modulos activos, `tipo_pago_nomina = QUINCENAL`, SMLV, subsidio de transporte).
+- **`PrecioPalma`**: 4 registros canonicos con `precio_palma = 0` y `estado = true`:
+
+  | `tipo`    | `precio_palma` |
+  |-----------|----------------|
+  | `PLATEO`  | `0.00`         |
+  | `PODA`    | `0.00`         |
+  | `SANIDAD` | `0.00`         |
+  | `OTROS`   | `0.00`         |
+
+  > Los 4 tipos son fijos del dominio y siempre deben existir por tenant. El admin de la finca los ajusta despues desde su modulo de parametrias.
+
+Si cualquiera de estas inserciones falla, la transaccion se revierte completa y el tenant no queda creado.
+
 ---
 
 ### 3.3 Ver Detalle de Tenant

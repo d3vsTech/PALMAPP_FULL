@@ -1,0 +1,45 @@
+<?php
+
+namespace App\Http\Requests\MotivoAusencia;
+
+use App\Models\Ausencia;
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+
+class StoreMotivoAusenciaRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return true;
+    }
+
+    public function rules(): array
+    {
+        return [
+            'nombre'                  => 'required|string|max:100',
+            'tipo_base'               => ['required', Rule::in(self::tiposBase())],
+            'es_remunerada'           => 'sometimes|boolean',
+            'afecta_nomina'           => 'sometimes|boolean',
+            'porcentaje_pago_default' => 'sometimes|numeric|min:0|max:100',
+            'requiere_soporte'        => 'sometimes|boolean',
+            'estado'                  => 'sometimes|boolean',
+        ];
+    }
+
+    private static function tiposBase(): array
+    {
+        return [
+            Ausencia::TIPO_INCAPACIDAD_EPS,
+            Ausencia::TIPO_INCAPACIDAD_ARL,
+            Ausencia::TIPO_LICENCIA_MATERNIDAD,
+            Ausencia::TIPO_LICENCIA_PATERNIDAD,
+            Ausencia::TIPO_LICENCIA_LUTO,
+            Ausencia::TIPO_PERMISO_REMUNERADO,
+            Ausencia::TIPO_PERMISO_NO_REMUNERADO,
+            Ausencia::TIPO_AUSENCIA_INJUSTIFICADA,
+            Ausencia::TIPO_CALAMIDAD_DOMESTICA,
+            Ausencia::TIPO_SUSPENSION_DISCIPLINARIA,
+            Ausencia::TIPO_OTRO,
+        ];
+    }
+}

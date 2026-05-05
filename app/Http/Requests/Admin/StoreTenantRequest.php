@@ -91,6 +91,7 @@ class StoreTenantRequest extends FormRequest
             'pais'                  => 'CO',
             'salario_minimo_vigente' => 1750905.00,
             'auxilio_transporte'    => 249095.00,
+            'divisor_jornada_mensual' => 240,
             'sync_habilitado'       => false,
         ];
     }

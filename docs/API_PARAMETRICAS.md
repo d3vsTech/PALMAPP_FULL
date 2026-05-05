@@ -376,6 +376,7 @@ Configuración del tenant para el módulo de nómina. Solo 2 endpoints (ver y ed
     "tipo_pago_nomina": "QUINCENAL",
     "salario_minimo_vigente": 1300000.00,
     "auxilio_transporte": 162000.00,
+    "divisor_jornada_mensual": 240,
     "moneda": "COP",
     "zona_horaria": "America/Bogota",
     "pais": "CO"
@@ -385,14 +386,15 @@ Configuración del tenant para el módulo de nómina. Solo 2 endpoints (ver y ed
 
 ### Editar (PUT)
 
-Solo se pueden editar estos 3 campos. Los demás (`moneda`, `zona_horaria`, `pais`) son de solo lectura.
+Solo se pueden editar estos 4 campos. Los demás (`moneda`, `zona_horaria`, `pais`) son de solo lectura.
 
 ```json
 // PUT /configuracion/nomina
 {
   "tipo_pago_nomina": "MENSUAL",
   "salario_minimo_vigente": 1300000.00,
-  "auxilio_transporte": 162000.00
+  "auxilio_transporte": 162000.00,
+  "divisor_jornada_mensual": 240
 }
 ```
 
@@ -401,6 +403,7 @@ Solo se pueden editar estos 3 campos. Los demás (`moneda`, `zona_horaria`, `pai
 | `tipo_pago_nomina` | string | `QUINCENAL` o `MENSUAL` |
 | `salario_minimo_vigente` | decimal | Salario mínimo legal vigente |
 | `auxilio_transporte` | decimal | Auxilio de transporte vigente |
+| `divisor_jornada_mensual` | integer | `240` (CST tradicional, 48h/sem) o `210` (Ley 2101/2021, 42h/sem). Usado para calcular `valor_hora = salario_base / divisor` en el módulo de Horas Extras. |
 
 ---
 
@@ -561,6 +564,127 @@ Historial de acciones realizadas dentro de la finca. Solo lectura — los regist
 | `ELIMINAR`              | Eliminación de un registro |
 | `ACTUALIZAR_PERMISOS`   | Cambio de permisos de usuario |
 | `REVOCAR_PERMISOS`      | Revocación de permisos |
+
+---
+
+## 11. Tipos de Hora Extra
+
+Catálogo paramétrico por tenant con los 7 tipos de hora extra reconocidos por la legislación laboral colombiana (Código Sustantivo del Trabajo arts. 168, 179 y Ley 789/2002 art. 26). Usado por el Paso 4 del wizard de Planilla del Día.
+
+### Endpoints
+
+| Método   | URL                                | Descripción |
+|----------|------------------------------------|-------------|
+| `GET`    | `/tipos-hora-extra/select`         | Dropdown del wizard (sin paginación). Permiso especial: `configuracion.editar` **o** `operaciones.crear` **o** `operaciones.editar`. |
+| `GET`    | `/tipos-hora-extra`                | Listar (paginado). |
+| `GET`    | `/tipos-hora-extra/{id}`           | Ver detalle. |
+| `POST`   | `/tipos-hora-extra`                | Crear. |
+| `PUT`    | `/tipos-hora-extra/{id}`           | Actualizar. |
+| `DELETE` | `/tipos-hora-extra/{id}`           | Eliminar. Falla con 409 `TIPO_HORA_EXTRA_CON_REGISTROS` si hay horas extras asociadas. |
+
+### Campos
+
+| Campo | Tipo | Requerido al crear | Descripción |
+|---|---|---|---|
+| `codigo` | string(10) | ✔ | Uno de `HED`, `HEN`, `RN`, `HRD`, `HEDF`, `HENF`, `RND`. Único por tenant. |
+| `nombre` | string(100) | ✔ | Nombre legible. |
+| `porcentaje_recargo` | decimal(5,2) | ✔ | Porcentaje adicional sobre la hora ordinaria (0-200). |
+| `franja_horaria` | enum | ✔ | `DIURNO`, `NOCTURNO` o `MIXTO`. |
+| `aplica_festivo` | boolean | — | Default `false`. |
+| `es_extra` | boolean | — | Default `true`. `false` para RN/RND (solo recargos). |
+| `paga_hora_completa` | boolean | — | Default `true`. Si `false`, se paga solo el recargo (no la hora ordinaria). |
+| `estado` | boolean | — | Default `true`. |
+
+### Valores sembrados por default
+
+| codigo | nombre | % | franja | festivo | es_extra | paga_hora_completa |
+|---|---|---|---|---|---|---|
+| HED  | Hora Extra Diurna (6am-9pm)             | 25.00  | DIURNO   | false | true  | true  |
+| HEN  | Hora Extra Nocturna (9pm-6am)           | 75.00  | NOCTURNO | false | true  | true  |
+| RN   | Recargo Nocturno                        | 35.00  | NOCTURNO | false | false | false |
+| HRD  | Hora Ordinaria Dominical/Festivo        | 75.00  | DIURNO   | true  | false | true  |
+| HEDF | Hora Extra Diurna Dominical/Festivo     | 100.00 | DIURNO   | true  | true  | true  |
+| HENF | Hora Extra Nocturna Dominical/Festivo   | 150.00 | NOCTURNO | true  | true  | true  |
+| RND  | Recargo Nocturno Dominical/Festivo      | 110.00 | NOCTURNO | true  | false | false |
+
+Documentación completa del módulo (registros, máquina de estados, integración con nómina, fórmulas): [API_HORAS_EXTRA.md](./API_HORAS_EXTRA.md).
+
+---
+
+## 12. Paramétricas del Colaborador (EPS, Fondos de Pensión, ARL, Entidades Bancarias)
+
+Cuatro catálogos paramétricos por tenant que alimentan los selectores del formulario de creación/edición de colaboradores. El **empleado guarda el `nombre`** seleccionado (no el `id`), por lo que renombrar o eliminar una entrada del catálogo NO afecta los empleados ya creados — preservando el histórico.
+
+Las cuatro paramétricas comparten exactamente el mismo schema y comportamiento; varían solo en los nombres de tabla y URLs.
+
+### Endpoints
+
+Cada paramétrica expone 6 endpoints (5 CRUD + 1 select):
+
+| Recurso | URL base | Modelo | Tabla |
+|---------|----------|--------|-------|
+| EPS | `/eps` | `Eps` | `eps` |
+| Fondos de Pensión | `/fondos-pension` | `FondoPension` | `fondos_pension` |
+| ARL | `/arl` | `Arl` | `arl` |
+| Entidades Bancarias | `/entidades-bancarias` | `EntidadBancaria` | `entidades_bancarias` |
+
+| Método | URL | Permiso | Descripción |
+|--------|-----|---------|-------------|
+| `GET` | `/{recurso}/select` | `configuracion.editar` **o** `colaboradores.{ver|crear|editar}` | Dropdown sin paginación (solo activos). |
+| `GET` | `/{recurso}` | `configuracion.editar` | Listar paginado. |
+| `GET` | `/{recurso}/{id}` | `configuracion.editar` | Ver detalle. |
+| `POST` | `/{recurso}` | `configuracion.editar` | Crear. |
+| `PUT` | `/{recurso}/{id}` | `configuracion.editar` | Actualizar. |
+| `DELETE` | `/{recurso}/{id}` | `configuracion.editar` | Eliminar. |
+
+### Campos
+
+| Campo | Tipo | Requerido al crear | Descripción |
+|-------|------|--------------------|-------------|
+| `nombre` | string(100) | ✔ | Único por tenant. |
+| `estado` | boolean | — | Default `true`. |
+
+### Crear / Editar
+
+```json
+// POST /eps
+{ "nombre": "Sura" }
+
+// PUT /eps/{id}
+{ "nombre": "Sura EPS", "estado": false }
+```
+
+### Respuesta del select
+
+```json
+{
+  "data": [
+    { "id": 1, "nombre": "Sura" },
+    { "id": 2, "nombre": "Sanitas" }
+  ]
+}
+```
+
+> Sin paginación. Devuelve solo activos. Ordenado alfabéticamente por `nombre`. El frontend toma el `nombre` y lo envía en el campo correspondiente del payload de `POST /colaboradores` (`eps`, `fondo_pension`, `arl`, `entidad_bancaria`).
+
+### Provisionamiento al crear tenant
+
+Al crear un tenant nuevo desde `POST /api/admin/tenants`, el backend siembra automáticamente las cuatro paramétricas con un catálogo inicial vigente para Colombia (EPS, fondos, ARLs, bancos). El admin del tenant puede editarlo libremente desde Configuración.
+
+Las listas iniciales viven en constantes del modelo:
+- `App\Models\Eps::INICIALES` (17 EPS)
+- `App\Models\FondoPension::INICIALES` (5 fondos)
+- `App\Models\Arl::INICIALES` (9 ARLs)
+- `App\Models\EntidadBancaria::INICIALES` (23 entidades)
+
+Para sembrarlas en fincas existentes (idempotente):
+```bash
+php artisan db:seed --class=ParametricasColaboradorSeeder
+```
+
+### Nota documental
+
+El consumo desde el formulario del colaborador (qué select va con qué campo del payload) está documentado en [API_COLABORADORES.md § Paramétricas del Colaborador](./API_COLABORADORES.md).
 
 ---
 

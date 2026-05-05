@@ -32,11 +32,11 @@ class Ausencia extends Model
     public const ESTADO_LIQUIDADA = 'LIQUIDADA';
 
     protected $fillable = [
-        'tenant_id', 'operacion_id', 'empleado_id',
+        'tenant_id', 'operacion_id', 'empleado_id', 'motivo_ausencia_id',
         'tipo', 'fecha_inicio', 'fecha_fin', 'dias_calendario', 'dias_habiles',
         'es_remunerada', 'afecta_nomina', 'porcentaje_pago',
         'valor_dia_base', 'valor_calculado',
-        'entidad', 'numero_radicado', 'motivo', 'documento_soporte',
+        'entidad', 'numero_radicado', 'motivo', 'motivo_rechazo', 'documento_soporte',
         'estado', 'aprobado_por', 'aprobado_at',
         'nomina_id', 'creado_por',
         'sync_uuid', 'sync_estado',
@@ -61,6 +61,25 @@ class Ausencia extends Model
     protected static function booted(): void
     {
         static::creating(function (Ausencia $ausencia) {
+            // Snapshot desde el motivo paramétrico (tipo + flags de nómina)
+            if ($ausencia->motivo_ausencia_id) {
+                $motivo = MotivoAusencia::find($ausencia->motivo_ausencia_id);
+                if ($motivo) {
+                    if (empty($ausencia->tipo)) {
+                        $ausencia->tipo = $motivo->tipo_base;
+                    }
+                    if (!isset($ausencia->attributes['es_remunerada'])) {
+                        $ausencia->es_remunerada = $motivo->es_remunerada;
+                    }
+                    if (!isset($ausencia->attributes['afecta_nomina'])) {
+                        $ausencia->afecta_nomina = $motivo->afecta_nomina;
+                    }
+                    if ($ausencia->porcentaje_pago === null) {
+                        $ausencia->porcentaje_pago = $motivo->porcentaje_pago_default;
+                    }
+                }
+            }
+
             // Sincronizar fecha_inicio con la operación padre
             if ($ausencia->operacion_id && empty($ausencia->fecha_inicio)) {
                 $operacion = Operacion::find($ausencia->operacion_id);
@@ -92,6 +111,11 @@ class Ausencia extends Model
     public function empleado(): BelongsTo
     {
         return $this->belongsTo(Empleado::class);
+    }
+
+    public function motivoAusencia(): BelongsTo
+    {
+        return $this->belongsTo(MotivoAusencia::class, 'motivo_ausencia_id');
     }
 
     public function nomina(): BelongsTo

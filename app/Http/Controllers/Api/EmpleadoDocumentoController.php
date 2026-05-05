@@ -163,6 +163,42 @@ class EmpleadoDocumentoController extends Controller
     }
 
     /**
+     * Devuelve el archivo con Content-Disposition: inline para visualizarlo en navegador
+     * (iframe / <img>). Solo aplica para mime types previsualizables.
+     */
+    public function visualizar(Empleado $empleado, EmpleadoDocumento $documento)
+    {
+        try {
+            abort_if($documento->empleado_id !== $empleado->id, 404, 'Documento no encontrado');
+
+            $mimesVisualizables = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+            if (! in_array($documento->mime_type, $mimesVisualizables, true)) {
+                return response()->json([
+                    'message'   => 'Este tipo de archivo no se puede visualizar inline. Use el endpoint de descarga.',
+                    'code'      => 'MIME_NOT_PREVIEWABLE',
+                    'mime_type' => $documento->mime_type,
+                ], 415);
+            }
+
+            if (! Storage::disk('local')->exists($documento->archivo_path)) {
+                return response()->json(['message' => 'Archivo no encontrado en el servidor'], 404);
+            }
+
+            return Storage::disk('local')->response(
+                $documento->archivo_path,
+                $documento->archivo_nombre_original,
+                [
+                    'Content-Type'        => $documento->mime_type,
+                    'Content-Disposition' => 'inline; filename="' . $documento->archivo_nombre_original . '"',
+                ]
+            );
+        } catch (\Throwable $e) {
+            Log::error('Error al visualizar documento del colaborador: ' . $e->getMessage());
+            return response()->json(['message' => 'Error al visualizar el documento', 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Elimina un documento.
      */
     public function destroy(Request $request, Empleado $empleado, EmpleadoDocumento $documento): JsonResponse

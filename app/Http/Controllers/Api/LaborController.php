@@ -16,13 +16,33 @@ class LaborController extends Controller
         protected AuditoriaService $auditoria,
     ) {}
 
+    /**
+     * Listado liviano para dropdowns (wizard Paso 3 - Labores de Finca).
+     * Sin paginación. Incluye valor_base para que el UI muestre el Total al seleccionar.
+     */
+    public function select(Request $request): JsonResponse
+    {
+        try {
+            $soloActivos = !$request->has('estado') || filter_var($request->estado, FILTER_VALIDATE_BOOLEAN);
+
+            $labores = Labor::query()
+                ->when($soloActivos, fn($q) => $q->where('estado', true))
+                ->when(!$soloActivos && $request->has('estado'), fn($q) => $q->where('estado', false))
+                ->orderBy('nombre')
+                ->get(['id', 'nombre', 'valor_base']);
+
+            return response()->json(['data' => $labores]);
+        } catch (\Throwable $e) {
+            Log::error('Error en labores/select: ' . $e->getMessage());
+            return response()->json(['message' => 'Error al listar labores', 'error' => $e->getMessage()], 500);
+        }
+    }
+
     public function index(Request $request): JsonResponse
     {
         try {
             $labores = Labor::query()
-                ->with('insumo:id,nombre')
                 ->when($request->search, fn($q, $s) => $q->where('nombre', 'ilike', "%{$s}%"))
-                ->when($request->tipo_pago, fn($q, $t) => $q->where('tipo_pago', $t))
                 ->when($request->has('estado'), fn($q) => $q->where('estado', filter_var($request->estado, FILTER_VALIDATE_BOOLEAN)))
                 ->orderBy('nombre')
                 ->paginate($request->per_page ?? 15);
@@ -44,14 +64,7 @@ class LaborController extends Controller
 
     public function show(Labor $labor): JsonResponse
     {
-        try {
-            $labor->load('insumo', 'insumo.preciosAbono');
-
-            return response()->json(['data' => $labor]);
-        } catch (\Throwable $e) {
-            Log::error('Error al obtener labor: ' . $e->getMessage());
-            return response()->json(['message' => 'Error al obtener la labor', 'error' => $e->getMessage()], 500);
-        }
+        return response()->json(['data' => $labor]);
     }
 
     public function store(StoreLaborRequest $request): JsonResponse
@@ -59,11 +72,11 @@ class LaborController extends Controller
         try {
             $labor = Labor::create($request->validated());
 
-            $this->auditoria->registrarCreacion($request, 'LABORES', $labor, "Se creó la labor '{$labor->nombre}' ({$labor->tipo_pago})");
+            $this->auditoria->registrarCreacion($request, 'LABORES', $labor, "Se creó la labor de finca '{$labor->nombre}'");
 
             return response()->json([
                 'message' => 'Labor creada correctamente',
-                'data'    => $labor->load('insumo:id,nombre'),
+                'data'    => $labor,
             ], 201);
         } catch (\Throwable $e) {
             Log::error('Error al crear labor: ' . $e->getMessage());
@@ -75,12 +88,9 @@ class LaborController extends Controller
     {
         try {
             $validated = $request->validate([
-                'nombre'        => 'sometimes|string|max:100',
-                'tipo_pago'     => 'sometimes|in:JORNAL_FIJO,POR_PALMA_INSUMO,POR_PALMA_SIMPLE',
-                'valor_base'    => 'nullable|numeric|min:0|max:99999999.99',
-                'unidad_medida' => 'nullable|in:PALMAS,JORNAL',
-                'insumo_id'     => 'nullable|exists:insumos,id',
-                'estado'        => 'sometimes|boolean',
+                'nombre'     => 'sometimes|string|max:100',
+                'valor_base' => 'sometimes|numeric|min:0|max:99999999.99',
+                'estado'     => 'sometimes|boolean',
             ]);
 
             $datosAnteriores = $labor->toArray();
@@ -90,7 +100,7 @@ class LaborController extends Controller
 
             return response()->json([
                 'message' => 'Labor actualizada correctamente',
-                'data'    => $labor->fresh()->load('insumo:id,nombre'),
+                'data'    => $labor->fresh(),
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json(['message' => 'Error de validación', 'errors' => $e->errors()], 422);

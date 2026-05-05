@@ -35,9 +35,10 @@ class ConfiguracionNominaController extends Controller
             return response()->json([
                 'data' => [
                     // Editables
-                    'tipo_pago_nomina'       => $config->tipo_pago_nomina,
-                    'salario_minimo_vigente' => $config->salario_minimo_vigente,
-                    'auxilio_transporte'     => $config->auxilio_transporte,
+                    'tipo_pago_nomina'         => $config->tipo_pago_nomina,
+                    'salario_minimo_vigente'   => $config->salario_minimo_vigente,
+                    'auxilio_transporte'       => $config->auxilio_transporte,
+                    'divisor_jornada_mensual'  => $config->divisor_jornada_mensual,
                     // Solo lectura
                     'moneda'        => $config->moneda,
                     'zona_horaria'  => $config->zona_horaria,
@@ -58,9 +59,10 @@ class ConfiguracionNominaController extends Controller
     {
         try {
             $validated = $request->validate([
-                'tipo_pago_nomina'       => 'sometimes|in:QUINCENAL,MENSUAL',
-                'salario_minimo_vigente' => 'sometimes|numeric|min:0|max:99999999.99',
-                'auxilio_transporte'     => 'sometimes|numeric|min:0|max:99999999.99',
+                'tipo_pago_nomina'         => 'sometimes|in:QUINCENAL,MENSUAL',
+                'salario_minimo_vigente'   => 'sometimes|numeric|min:0|max:99999999.99',
+                'auxilio_transporte'       => 'sometimes|numeric|min:0|max:99999999.99',
+                'divisor_jornada_mensual'  => 'sometimes|integer|in:210,240',
             ]);
 
             $tenantId = app('current_tenant_id');
@@ -73,7 +75,7 @@ class ConfiguracionNominaController extends Controller
                 ], 404);
             }
 
-            $datosAnteriores = $config->only(['tipo_pago_nomina', 'salario_minimo_vigente', 'auxilio_transporte']);
+            $datosAnteriores = $config->only(['tipo_pago_nomina', 'salario_minimo_vigente', 'auxilio_transporte', 'divisor_jornada_mensual']);
 
             $config->update($validated);
 
@@ -88,9 +90,10 @@ class ConfiguracionNominaController extends Controller
             return response()->json([
                 'message' => 'Configuración de nómina actualizada correctamente',
                 'data'    => [
-                    'tipo_pago_nomina'       => $config->tipo_pago_nomina,
-                    'salario_minimo_vigente' => $config->salario_minimo_vigente,
-                    'auxilio_transporte'     => $config->auxilio_transporte,
+                    'tipo_pago_nomina'         => $config->tipo_pago_nomina,
+                    'salario_minimo_vigente'   => $config->salario_minimo_vigente,
+                    'auxilio_transporte'       => $config->auxilio_transporte,
+                    'divisor_jornada_mensual'  => $config->divisor_jornada_mensual,
                     'moneda'        => $config->moneda,
                     'zona_horaria'  => $config->zona_horaria,
                     'pais'          => $config->pais,

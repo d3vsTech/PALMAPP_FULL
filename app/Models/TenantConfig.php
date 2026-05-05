@@ -17,6 +17,7 @@ class TenantConfig extends Model
         'tipo_pago_nomina',
         'moneda', 'zona_horaria', 'pais',
         'salario_minimo_vigente', 'auxilio_transporte',
+        'divisor_jornada_mensual',
         'sync_habilitado',
         'configuracion_extra',
     ];
@@ -35,6 +36,7 @@ class TenantConfig extends Model
             'sync_habilitado'       => 'boolean',
             'salario_minimo_vigente' => 'decimal:2',
             'auxilio_transporte'    => 'decimal:2',
+            'divisor_jornada_mensual' => 'integer',
             'configuracion_extra'   => 'array',
         ];
     }

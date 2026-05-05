@@ -13,12 +13,18 @@ class ViajeDetalle extends Model
     protected $table = 'viaje_detalle';
 
     protected $fillable = [
-        'tenant_id', 'viaje_id', 'cosecha_id', 'estado',
+        'tenant_id', 'viaje_id', 'cosecha_id',
+        'reconteo_aprobado', 'reconteo_aprobado_at', 'reconteo_aprobado_por',
+        'estado',
     ];
 
     protected function casts(): array
     {
-        return ['estado' => 'boolean'];
+        return [
+            'reconteo_aprobado' => 'boolean',
+            'reconteo_aprobado_at' => 'datetime',
+            'estado' => 'boolean',
+        ];
     }
 
     public function viaje(): BelongsTo
@@ -29,5 +35,25 @@ class ViajeDetalle extends Model
     public function cosecha(): BelongsTo
     {
         return $this->belongsTo(RegistroCosecha::class, 'cosecha_id');
+    }
+
+    public function aprobadoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reconteo_aprobado_por');
+    }
+
+    public function scopeActivos($query)
+    {
+        return $query->where('estado', true);
+    }
+
+    public function scopeAprobados($query)
+    {
+        return $query->where('reconteo_aprobado', true);
+    }
+
+    public function scopePendientes($query)
+    {
+        return $query->where('reconteo_aprobado', false);
     }
 }

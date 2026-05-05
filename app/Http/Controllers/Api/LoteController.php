@@ -78,6 +78,31 @@ class LoteController extends Controller
     }
 
     /**
+     * GET /api/v1/tenant/lotes/select
+     * Listado liviano para dropdowns (id, nombre, predio_id + predio.nombre).
+     * Default: solo activos. Soporta filtro por predio_id.
+     */
+    public function select(Request $request): JsonResponse
+    {
+        try {
+            $soloActivos = !$request->has('estado') || filter_var($request->estado, FILTER_VALIDATE_BOOLEAN);
+
+            $lotes = \App\Models\Lote::query()
+                ->when($soloActivos, fn($q) => $q->where('estado', true))
+                ->when(!$soloActivos && $request->has('estado'), fn($q) => $q->where('estado', false))
+                ->when($request->predio_id, fn($q, $p) => $q->where('predio_id', $p))
+                ->with('predio:id,nombre')
+                ->orderBy('nombre')
+                ->get(['id', 'nombre', 'predio_id']);
+
+            return response()->json(['data' => $lotes]);
+        } catch (\Throwable $e) {
+            Log::error('Error en lotes/select: ' . $e->getMessage());
+            return response()->json(['message' => 'Error al listar lotes', 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * GET /api/v1/tenant/lotes/semillas
      * Lista semillas activas para asociar a lotes
      */

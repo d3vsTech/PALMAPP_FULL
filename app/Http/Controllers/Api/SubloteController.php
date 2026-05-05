@@ -38,6 +38,30 @@ class SubloteController extends Controller
     }
 
     /**
+     * GET /api/v1/tenant/sublotes/select
+     * Listado liviano para dropdowns (id, nombre, lote_id, cantidad_palmas).
+     * Default: solo activos. Soporta filtro por lote_id.
+     */
+    public function select(Request $request): JsonResponse
+    {
+        try {
+            $soloActivos = !$request->has('estado') || filter_var($request->estado, FILTER_VALIDATE_BOOLEAN);
+
+            $sublotes = \App\Models\Sublote::query()
+                ->when($soloActivos, fn($q) => $q->where('estado', true))
+                ->when(!$soloActivos && $request->has('estado'), fn($q) => $q->where('estado', false))
+                ->when($request->lote_id, fn($q, $l) => $q->where('lote_id', $l))
+                ->orderBy('nombre')
+                ->get(['id', 'nombre', 'lote_id', 'cantidad_palmas']);
+
+            return response()->json(['data' => $sublotes]);
+        } catch (\Throwable $e) {
+            Log::error('Error en sublotes/select: ' . $e->getMessage());
+            return response()->json(['message' => 'Error al listar sublotes', 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * GET /api/v1/tenant/sublotes
      */
     public function index(Request $request): JsonResponse

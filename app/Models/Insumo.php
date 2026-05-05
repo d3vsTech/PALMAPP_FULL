@@ -20,9 +20,12 @@ class Insumo extends Model
         return ['estado' => 'boolean'];
     }
 
-    public function labores(): HasMany
+    /**
+     * Jornales de FERTILIZACION que usaron este insumo.
+     */
+    public function jornales(): HasMany
     {
-        return $this->hasMany(Labor::class);
+        return $this->hasMany(Jornal::class);
     }
 
     public function scopeActivos($query)

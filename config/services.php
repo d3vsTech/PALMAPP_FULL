@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+    'anthropic' => [
+        'api_key' => env('ANTHROPIC_API_KEY'),
+        'model'   => env('ANTHROPIC_MODEL', 'claude-haiku-4-5-20251001'),
+        'bascula' => [
+            'confianza_minima' => (float) env('ANTHROPIC_BASCULA_CONFIANZA_MINIMA', 0.70),
+        ],
+    ],
+
 ];

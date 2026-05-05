@@ -285,7 +285,38 @@ Devuelve la jerarquía completa del predio (`lotes → sublotes`) más los total
 
 ## 2. Lotes
 
-### 2.0 Listar semillas activas (para select)
+### 2.0 Listar lotes activos (para select del wizard)
+
+Endpoint liviano sin paginación pensado para los dropdowns del wizard de Operaciones. Devuelve solo los campos necesarios (`id`, `nombre`, `predio_id`, `predio.nombre`).
+
+```
+GET /lotes/select
+```
+
+**Permiso:** acepta cualquiera de `lotes.ver`, `operaciones.crear`, `operaciones.editar`.
+
+**Query params:**
+
+| Param | Tipo | Default | Descripción |
+|---|---|---|---|
+| `estado` | boolean | `true` | Por defecto solo activos. Enviar `false` para inactivos. |
+| `predio_id` | integer | — | Filtra los lotes de un predio específico |
+
+**Respuesta 200:**
+```json
+{
+  "data": [
+    { "id": 1, "nombre": "Lote A", "predio_id": 1, "predio": { "id": 1, "nombre": "Finca La Esperanza" } },
+    { "id": 2, "nombre": "Lote B", "predio_id": 1, "predio": { "id": 1, "nombre": "Finca La Esperanza" } }
+  ]
+}
+```
+
+Sin `meta` (no paginado). Para listados administrativos con filtros y paginación usa [§2.1](#21-listar-lotes).
+
+---
+
+### 2.0.1 Listar semillas activas (para select)
 
 ```
 GET /lotes/semillas
@@ -522,6 +553,37 @@ DELETE /lotes/{id}
 ---
 
 ## 3. Sublotes
+
+### 3.0 Listar sublotes activos (para select del wizard)
+
+Endpoint liviano sin paginación. Pensado para el dropdown "Seleccionar sublote" del wizard de Operaciones, que típicamente se filtra por el lote elegido en el campo anterior.
+
+```
+GET /sublotes/select
+```
+
+**Permiso:** acepta cualquiera de `sublotes.ver`, `operaciones.crear`, `operaciones.editar`.
+
+**Query params:**
+
+| Param | Tipo | Default | Descripción |
+|---|---|---|---|
+| `estado` | boolean | `true` | Por defecto solo activos |
+| `lote_id` | integer | — | Filtra los sublotes de un lote específico (recomendado para el wizard) |
+
+**Respuesta 200:**
+```json
+{
+  "data": [
+    { "id": 1, "nombre": "Sublote A1", "lote_id": 1, "cantidad_palmas": 120 },
+    { "id": 2, "nombre": "Sublote A2", "lote_id": 1, "cantidad_palmas": 85 }
+  ]
+}
+```
+
+Sin `meta`. Para listados administrativos con filtros y paginación usa [§3.1](#31-listar-sublotes).
+
+---
 
 ### 3.1 Listar sublotes
 

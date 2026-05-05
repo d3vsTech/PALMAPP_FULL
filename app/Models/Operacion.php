@@ -16,15 +16,19 @@ class Operacion extends Model
 
     protected $fillable = [
         'tenant_id', 'fecha', 'hora_inicio', 'hora_fin',
-        'estado', 'hubo_lluvia', 'hora_inicio_lluvia', 'hora_fin_lluvia',
+        'estado', 'hubo_lluvia', 'cantidad_lluvia',
         'observaciones', 'creado_por', 'aprobado_por', 'aprobado_at',
     ];
+
+    public const ESTADO_BORRADOR = 'BORRADOR';
+    public const ESTADO_APROBADA = 'APROBADA';
 
     protected function casts(): array
     {
         return [
             'fecha'              => 'date',
             'hubo_lluvia'        => 'boolean',
+            'cantidad_lluvia'    => 'decimal:2',
             'aprobado_at'        => 'datetime',
         ];
     }
