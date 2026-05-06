@@ -1,5 +1,10 @@
 /**
- * API — Nómina, Liquidaciones, Préstamos, Permisos, Ausencias
+ * API — Nómina (alineado a docs/API_NOMINA.md)
+ *
+ * Cubre:
+ *  - Nóminas (CRUD + indicadores + cerrar)
+ *  - NominaEmpleado (preview, resumen-trabajo, liquidar, re-liquidar, desprendible)
+ *  - Conceptos (catálogo + select)
  */
 
 import { apiClient, PaginatedResponse } from './client';
@@ -16,118 +21,392 @@ function toQuery(params?: Record<string, unknown>): string {
   return s ? `?${s}` : '';
 }
 
+// ─── Tipos ────────────────────────────────────────────────────────────────────
+
+export type EstadoNomina = 'BORRADOR' | 'CERRADA';
+export type EstadoNominaEmpleado = 'PENDIENTE' | 'LIQUIDADO';
+export type Periodicidad = 'QUINCENAL' | 'MENSUAL';
+export type SalarioTipo = 'FIJO' | 'VARIABLE';
+export type ModalidadPago = 'FIJO' | 'PRODUCCION';
+
+export type TipoConcepto =
+  | 'DEDUCCION_LEGAL'
+  | 'DEDUCCION_VOLUNTARIA'
+  | 'BONIFICACION_FIJA'
+  | 'BONIFICACION_VARIABLE';
+
+export type SubtipoConcepto =
+  | 'PRESTAMO'
+  | 'AHORRO_VOLUNTARIO'
+  | 'LIBRANZA'
+  | 'EMBARGO'
+  | 'ALIMENTACION'
+  | 'ANTIGUEDAD'
+  | 'PRODUCTIVIDAD'
+  | 'OTRO';
+
+export type AplicaA = 'FIJO' | 'VARIABLE' | 'AMBOS';
+
 export interface Nomina {
   id: number;
-  periodo: string;
+  tenant_id?: number;
+  mes: number;
+  anio: number;
+  quincena: number | null;
+  tipo_pago_snapshot: Periodicidad;
   fecha_inicio: string;
   fecha_fin: string;
-  estado: string;
-  total?: number;
+  estado: EstadoNomina;
+  observacion?: string | null;
+  total_fijos: string;
+  total_variables: string;
+  total_bonificaciones: string;
+  total_deducciones: string;
+  total_general: string;
+  empleados_count?: number;
+  empleados_liquidados_count?: number;
+  cerrada_por?: number | null;
+  cerrada_at?: string | null;
+  cerrada_por_rel?: { id: number; name: string } | null;
 }
 
-export interface Prestamo {
-  id: number;
-  colaborador_id: number;
-  monto: number;
-  cuotas: number;
-  saldo: number;
-  estado: string;
+export interface NominaIndicadores {
+  total_periodos: number;
+  borradores: number;
+  cerradas: number;
+  total_devengado: number;
 }
 
-export interface Permiso {
+export interface EmpleadoDisponible {
   id: number;
-  colaborador_id: number;
+  nombre_completo: string;
+  documento: string;
+  cargo: string;
+  modalidad_pago: ModalidadPago;
+  salario_base: number;
+  predio: { id: number; nombre: string } | null;
+}
+
+export interface NominaEmpleadoConcepto {
+  id: number;
+  concepto_id: number;
+  operacion: 'SUMA' | 'RESTA';
+  valor_calculado: string;
+  porcentaje_aplicado: string | null;
+  base_aplicada: string | null;
+  es_manual: boolean;
+  observacion?: string | null;
+  concepto: { codigo: string; nombre: string };
+}
+
+export interface NominaEmpleado {
+  id: number;
+  nomina_id: number;
+  empleado_id: number;
+  salario_tipo: SalarioTipo;
+  salario_base: string;
+  estado: EstadoNominaEmpleado;
+  dias_trabajados: number | null;
+  total_jornales: string;
+  total_cosecha: string;
+  total_horas_extra: string;
+  total_recargos: string;
+  total_incapacidades: string;
+  total_devengado: string;
+  subsidio_transporte: string;
+  total_bonificaciones: string;
+  total_deducciones: string;
+  total_neto: string;
+  cargo_snapshot?: string | null;
+  predio_snapshot?: string | null;
+  salario_minimo_snapshot?: string | null;
+  liquidado_por?: number | null;
+  liquidado_at?: string | null;
+  empleado?: {
+    id: number;
+    nombre_completo?: string;
+    primer_nombre?: string;
+    primer_apellido?: string;
+    documento?: string;
+    cargo?: string;
+    predio?: { id: number; nombre: string } | null;
+  };
+  conceptos?: NominaEmpleadoConcepto[];
+}
+
+export interface ConceptoLegalPreview {
+  concepto_id: number;
+  codigo: string;
+  nombre: string;
+  porcentaje: number;
+  base: number;
+  valor: number;
+}
+
+export interface PreviewLiquidacion {
+  dias_periodo: number;
+  dias_trabajados: number;
+  salario_base: number;
+  total_jornales: number;
+  total_cosecha: number;
+  total_horas_extra: number;
+  total_recargos: number;
+  total_incapacidades: number;
+  dias_ausencia_descontados: number;
+  total_ausencias_descuento: number;
+  total_devengado: number;
+  subsidio_transporte: number;
+  conceptos_legales: ConceptoLegalPreview[];
+  total_deducciones_legales: number;
+  total_neto_propuesto: number;
+  empleado: {
+    id: number;
+    nombre_completo: string;
+    documento: string;
+    cargo: string;
+    salario_tipo: SalarioTipo;
+    predio: { id: number; nombre: string } | null;
+  };
+}
+
+export interface FilaResumenTrabajo {
   fecha: string;
-  tipo: string;
-  motivo?: string;
-  estado: string;
+  lote?: string;
+  sublote?: string;
+  cosecha?: string;
+  racimos?: number;
+  promedio_kg?: number;
+  peso_kg?: number;
+  precio_kg?: number;
+  total_cosecha?: number;
+  jornal: number;
+  palmas?: number;
+  descripcion?: string;
 }
 
-export interface Ausencia {
-  id: number;
-  colaborador_id: number;
-  fecha_inicio: string;
-  fecha_fin?: string;
-  tipo: string;
-  motivo?: string;
+export interface CategoriaResumenTrabajo {
+  filas: FilaResumenTrabajo[];
+  subtotal_valor?: number;
+  subtotal_jornal: number;
+  subtotal_racimos?: number;
+  subtotal_peso?: number;
+  subtotal_palmas?: number;
 }
 
-export interface Vacacion {
-  id: number;
-  colaborador_id: number;
-  fecha_inicio: string;
-  fecha_fin: string;
-  dias: number;
-  estado: string;
+export interface ResumenTrabajo {
+  cosecha: CategoriaResumenTrabajo;
+  plateo: CategoriaResumenTrabajo;
+  poda: CategoriaResumenTrabajo;
+  fertilizacion: CategoriaResumenTrabajo;
+  sanidad: CategoriaResumenTrabajo;
+  otros: CategoriaResumenTrabajo;
+  finca: CategoriaResumenTrabajo;
+  total_general: number;
 }
+
+export interface BonificacionInput {
+  nombre: string;
+  valor: number;
+}
+
+export interface DeduccionVoluntariaInput {
+  concepto_id: number;
+  valor: number;
+  observacion?: string;
+}
+
+export interface LiquidarPayload {
+  dias_trabajados?: number;
+  bonificaciones?: BonificacionInput[];
+  deducciones_voluntarias?: DeduccionVoluntariaInput[];
+}
+
+export interface DesprendibleData {
+  finca: string;
+  empleado: {
+    id: number;
+    nombre_completo: string;
+    documento: string;
+    cargo: string;
+    salario_tipo: SalarioTipo;
+    salario_base: number;
+  };
+  nomina: {
+    id: number;
+    periodo_label: string;
+    mes: number;
+    anio: number;
+    quincena: number | null;
+    tipo_pago: Periodicidad;
+    fecha_inicio: string;
+    fecha_fin: string;
+    estado: EstadoNomina;
+  };
+  liquidacion: {
+    fecha: string;
+    fecha_humana: string;
+    liquidado_por: string;
+    dias_trabajados: number;
+    total_jornales: number;
+    total_cosecha: number;
+    total_horas_extra: number;
+    total_recargos: number;
+    total_incapacidades: number;
+    subsidio_transporte: number;
+    total_devengado: number;
+    total_bonificaciones: number;
+    total_deducciones: number;
+    total_neto: number;
+    bonificaciones: { codigo?: string; nombre: string; valor: number; observacion?: string }[];
+    deducciones: {
+      codigo: string;
+      nombre: string;
+      porcentaje?: number;
+      base?: number;
+      valor: number;
+      es_manual: boolean;
+      observacion?: string;
+    }[];
+  };
+  resumen_trabajo: ResumenTrabajo | null;
+}
+
+export interface NominaConcepto {
+  id: number;
+  codigo: string;
+  nombre: string;
+  tipo: TipoConcepto;
+  subtipo: SubtipoConcepto | null;
+  operacion: 'SUMA' | 'RESTA';
+  calculo: 'PORCENTAJE' | 'VALOR_FIJO';
+  porcentaje?: number | null;
+  valor_referencia?: number | null;
+  aplica_a: AplicaA;
+  activo: boolean;
+  obligatorio?: boolean;
+}
+
+// ─── Endpoints ────────────────────────────────────────────────────────────────
 
 export const nominaApi = {
   // ─── Nóminas ───────────────────────────────────────────────────────────────
-  getNominas: (params?: { search?: string; estado?: string; per_page?: number; page?: number }) =>
+  listar: (params?: { estado?: EstadoNomina; mes?: number; anio?: number; per_page?: number; page?: number }) =>
     apiClient.get<PaginatedResponse<Nomina>>(`/v1/tenant/nominas${toQuery(params)}`, T),
 
-  getNomina: (id: number) =>
-    apiClient.get<{ data: Nomina }>(`/v1/tenant/nominas/${id}`, T),
+  indicadores: () =>
+    apiClient.get<{ data: NominaIndicadores }>(`/v1/tenant/nominas/indicadores`, T),
 
-  createNomina: (payload: Partial<Nomina>) =>
-    apiClient.post<{ data: Nomina; message: string }>('/v1/tenant/nominas', payload, T),
+  ver: (id: number) =>
+    apiClient.get<{ data: Nomina & { empleados?: NominaEmpleado[] } }>(`/v1/tenant/nominas/${id}`, T),
 
-  cerrarNomina: (id: number) =>
-    apiClient.patch<{ message: string }>(`/v1/tenant/nominas/${id}/cerrar`, undefined, T),
+  crear: (payload: {
+    mes: number;
+    anio: number;
+    periodicidad: Periodicidad;
+    quincena?: 1 | 2 | null;
+    observacion?: string | null;
+  }) =>
+    apiClient.post<{ data: Nomina; message: string }>(`/v1/tenant/nominas`, payload, T),
 
-  getDesprendible: (nominaId: number, colaboradorId: number) =>
-    apiClient.get<{ data: Record<string, unknown> }>(
-      `/v1/tenant/nominas/${nominaId}/desprendible/${colaboradorId}`, T
+  editar: (id: number, payload: Partial<{
+    mes: number;
+    anio: number;
+    periodicidad: Periodicidad;
+    quincena: 1 | 2 | null;
+    observacion: string | null;
+  }>) =>
+    apiClient.put<{ data: Nomina; message: string }>(`/v1/tenant/nominas/${id}`, payload, T),
+
+  eliminar: (id: number) =>
+    apiClient.delete<{ message: string }>(`/v1/tenant/nominas/${id}`, T),
+
+  cerrar: (id: number) =>
+    apiClient.post<{ data: Nomina; message: string }>(`/v1/tenant/nominas/${id}/cerrar`, undefined, T),
+
+  empleadosDisponibles: (id: number) =>
+    apiClient.get<{ data: EmpleadoDisponible[] }>(`/v1/tenant/nominas/${id}/empleados-disponibles`, T),
+
+  agregarEmpleados: (id: number, empleado_ids: number[]) =>
+    apiClient.post<{ data: NominaEmpleado[]; message: string }>(
+      `/v1/tenant/nominas/${id}/empleados`,
+      { empleado_ids },
+      T,
     ),
 
-  // ─── Liquidaciones ─────────────────────────────────────────────────────────
-  getLiquidaciones: (params?: { per_page?: number; page?: number }) =>
-    apiClient.get<PaginatedResponse<Record<string, unknown>>>(
-      `/v1/tenant/liquidaciones${toQuery(params)}`, T
+  // ─── NominaEmpleado ────────────────────────────────────────────────────────
+  quitarEmpleado: (nominaEmpleadoId: number) =>
+    apiClient.delete<{ message: string }>(`/v1/tenant/nomina-empleado/${nominaEmpleadoId}`, T),
+
+  preview: (nominaEmpleadoId: number) =>
+    apiClient.get<{ data: PreviewLiquidacion }>(
+      `/v1/tenant/nomina-empleado/${nominaEmpleadoId}/preview`,
+      T,
     ),
 
-  createLiquidacion: (payload: Record<string, unknown>) =>
-    apiClient.post<{ data: Record<string, unknown>; message: string }>(
-      '/v1/tenant/liquidaciones', payload, T
+  resumenTrabajo: (nominaEmpleadoId: number) =>
+    apiClient.get<{ data: ResumenTrabajo }>(
+      `/v1/tenant/nomina-empleado/${nominaEmpleadoId}/resumen-trabajo`,
+      T,
     ),
 
-  // ─── Préstamos ─────────────────────────────────────────────────────────────
-  getPrestamos: (params?: { colaborador_id?: number; per_page?: number; page?: number }) =>
-    apiClient.get<PaginatedResponse<Prestamo>>(`/v1/tenant/prestamos${toQuery(params)}`, T),
+  liquidar: (nominaEmpleadoId: number, payload: LiquidarPayload) =>
+    apiClient.post<{ data: NominaEmpleado; message: string }>(
+      `/v1/tenant/nomina-empleado/${nominaEmpleadoId}/liquidar`,
+      payload,
+      T,
+    ),
 
-  createPrestamo: (payload: Partial<Prestamo>) =>
-    apiClient.post<{ data: Prestamo; message: string }>('/v1/tenant/prestamos', payload, T),
+  reLiquidar: (nominaEmpleadoId: number, payload: LiquidarPayload) =>
+    apiClient.put<{ data: NominaEmpleado; message: string }>(
+      `/v1/tenant/nomina-empleado/${nominaEmpleadoId}/liquidacion`,
+      payload,
+      T,
+    ),
 
-  updatePrestamo: (id: number, payload: Partial<Prestamo>) =>
-    apiClient.put<{ data: Prestamo }>(`/v1/tenant/prestamos/${id}`, payload, T),
+  desprendible: (nominaEmpleadoId: number) =>
+    apiClient.get<{ data: DesprendibleData }>(
+      `/v1/tenant/nomina-empleado/${nominaEmpleadoId}/desprendible`,
+      T,
+    ),
 
-  // ─── Permisos laborales ────────────────────────────────────────────────────
-  getPermisos: (params?: { colaborador_id?: number; per_page?: number; page?: number }) =>
-    apiClient.get<PaginatedResponse<Permiso>>(`/v1/tenant/permisos${toQuery(params)}`, T),
+  desprendiblePdf: (nominaEmpleadoId: number) =>
+    apiClient.getBlob(`/v1/tenant/nomina-empleado/${nominaEmpleadoId}/desprendible/pdf`, T),
 
-  createPermiso: (payload: Partial<Permiso>) =>
-    apiClient.post<{ data: Permiso; message: string }>('/v1/tenant/permisos', payload, T),
+  desprendibleWhatsapp: (nominaEmpleadoId: number) =>
+    apiClient.post<{
+      message: string;
+      data: { url: string; filename: string; expires_at: string };
+    }>(`/v1/tenant/nomina-empleado/${nominaEmpleadoId}/desprendible/whatsapp`, undefined, T),
 
-  updatePermiso: (id: number, payload: Partial<Permiso>) =>
-    apiClient.put<{ data: Permiso }>(`/v1/tenant/permisos/${id}`, payload, T),
+  // ─── Conceptos ─────────────────────────────────────────────────────────────
+  conceptos: {
+    listar: (params?: { tipo?: TipoConcepto; activo?: boolean }) =>
+      apiClient.get<{ data: NominaConcepto[] }>(
+        `/v1/tenant/nomina-conceptos${toQuery(params)}`,
+        T,
+      ),
 
-  // ─── Ausencias ─────────────────────────────────────────────────────────────
-  getAusencias: (params?: { colaborador_id?: number; per_page?: number; page?: number }) =>
-    apiClient.get<PaginatedResponse<Ausencia>>(`/v1/tenant/ausencias${toQuery(params)}`, T),
+    select: (params?: { tipo?: TipoConcepto; aplica_a?: AplicaA }) =>
+      apiClient.get<{ data: NominaConcepto[] }>(
+        `/v1/tenant/nomina-conceptos/select${toQuery(params)}`,
+        T,
+      ),
 
-  createAusencia: (payload: Partial<Ausencia>) =>
-    apiClient.post<{ data: Ausencia; message: string }>('/v1/tenant/ausencias', payload, T),
+    crear: (payload: Partial<NominaConcepto>) =>
+      apiClient.post<{ data: NominaConcepto; message: string }>(
+        `/v1/tenant/nomina-conceptos`,
+        payload,
+        T,
+      ),
 
-  updateAusencia: (id: number, payload: Partial<Ausencia>) =>
-    apiClient.put<{ data: Ausencia }>(`/v1/tenant/ausencias/${id}`, payload, T),
+    editar: (id: number, payload: Partial<NominaConcepto>) =>
+      apiClient.put<{ data: NominaConcepto; message: string }>(
+        `/v1/tenant/nomina-conceptos/${id}`,
+        payload,
+        T,
+      ),
 
-  // ─── Vacaciones ────────────────────────────────────────────────────────────
-  getVacaciones: (params?: { colaborador_id?: number; per_page?: number; page?: number }) =>
-    apiClient.get<PaginatedResponse<Vacacion>>(`/v1/tenant/vacaciones${toQuery(params)}`, T),
-
-  createVacacion: (payload: Partial<Vacacion>) =>
-    apiClient.post<{ data: Vacacion; message: string }>('/v1/tenant/vacaciones', payload, T),
-
-  updateVacacion: (id: number, payload: Partial<Vacacion>) =>
-    apiClient.put<{ data: Vacacion }>(`/v1/tenant/vacaciones/${id}`, payload, T),
+    eliminar: (id: number) =>
+      apiClient.delete<{ message: string }>(`/v1/tenant/nomina-conceptos/${id}`, T),
+  },
 };

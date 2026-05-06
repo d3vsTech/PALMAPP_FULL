@@ -24,7 +24,25 @@ export { colaboradoresApi } from './colaboradores';
 export type { Colaborador, ColaboradorPayload, Contrato } from './colaboradores';
 
 export { nominaApi } from './nomina';
-export type { Nomina, Prestamo, Permiso, Ausencia, Vacacion } from './nomina';
+export type {
+  Nomina,
+  NominaEmpleado,
+  NominaIndicadores,
+  EmpleadoDisponible,
+  PreviewLiquidacion,
+  ResumenTrabajo,
+  DesprendibleData,
+  NominaConcepto,
+  EstadoNomina,
+  EstadoNominaEmpleado,
+  Periodicidad,
+  SalarioTipo,
+  TipoConcepto,
+  AplicaA,
+  LiquidarPayload,
+  BonificacionInput,
+  DeduccionVoluntariaInput,
+} from './nomina';
 
 export { operacionesApi } from './operaciones';
 export type { Planilla, PlanillaPayload, LineaPlanilla } from './operaciones';

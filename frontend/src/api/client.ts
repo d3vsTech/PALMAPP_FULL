@@ -175,6 +175,15 @@ export const apiClient = {
   delete: <T>(path: string, requiresTenant = false) =>
     request<T>(path, { method: 'DELETE', requiresTenant }),
 
+  getBlob: async (path: string, requiresTenant = false): Promise<Blob> => {
+    const response = await fetch(`${BASE_URL}${path}`, {
+      method: 'GET',
+      headers: buildHeaders(requiresTenant),
+    });
+    if (!response.ok) throw await parseError(response);
+    return response.blob();
+  },
+
   /** Multipart/form-data (ej: subir logo) */
   postForm: <T>(path: string, formData: FormData, requiresTenant = false) => {
     const headers: Record<string, string> = { Accept: 'application/json' };

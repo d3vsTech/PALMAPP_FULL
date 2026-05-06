@@ -1,5 +1,4 @@
-// DESPRENDIBLE DE PAGO - Vista de confirmación después de liquidar v2.0
-// v2.0: Diseño moderno sin bordes gruesos, fondos sutiles, bordes laterales de color
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
@@ -9,341 +8,280 @@ import {
   Download,
   MessageCircle,
   ArrowLeft,
+  Loader2,
 } from 'lucide-react';
-import { nominaPeriodos, colaboradores } from '../../lib/mockData';
-import { useRef } from 'react';
+import { toast } from 'sonner';
+import { nominaApi, DesprendibleData } from '../../../api/nomina';
+import type { ApiError } from '../../../api/client';
 
-// Mock de datos de liquidación (esto vendría del backend)
-const liquidacionData = {
-  c1: {
-    tipoSalario: 'VARIABLE',
-    diasTrabajados: 10,
-    base: 865000,
-    extras: 0,
-    incapacidades: 0,
-    totalBruto: 865000,
-    subsidioTransporte: 162000,
-    salud: 34600,
-    pension: 34600,
-    adelantos: 50000,
-    ahorro: 20000,
-    bonificacion: 0,
-    totalNeto: 887800,
-  },
-  c2: {
-    tipoSalario: 'FIJO',
-    diasTrabajados: 15,
-    base: 1500000,
-    extras: 0,
-    incapacidades: 0,
-    totalBruto: 1500000,
-    subsidioTransporte: 162000,
-    salud: 60000,
-    pension: 60000,
-    adelantos: 0,
-    ahorro: 0,
-    bonificacion: 58364,
-    totalNeto: 1600364,
-  },
-  c3: {
-    tipoSalario: 'VARIABLE',
-    diasTrabajados: 8,
-    base: 652000,
-    extras: 0,
-    incapacidades: 0,
-    totalBruto: 652000,
-    subsidioTransporte: 162000,
-    salud: 26080,
-    pension: 26080,
-    adelantos: 0,
-    ahorro: 0,
-    bonificacion: 0,
-    totalNeto: 761840,
-  },
-};
+function fmt(n: number): string {
+  return `$${n.toLocaleString('es-CO')}`;
+}
 
 export default function DesprendiblePago() {
   const { nominaId, colaboradorId } = useParams();
   const navigate = useNavigate();
-  const desprendibleRef = useRef<HTMLDivElement>(null);
+  const nominaEmpleadoId = colaboradorId ? parseInt(colaboradorId) : null;
 
-  const periodo = nominaPeriodos.find((p) => p.id === nominaId);
-  const colaborador = colaboradores.find((c) => c.id === colaboradorId);
-  const liquidacion = liquidacionData[colaboradorId as keyof typeof liquidacionData];
+  const [data, setData] = useState<DesprendibleData | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [descargando, setDescargando] = useState(false);
+  const [generandoWa, setGenerandoWa] = useState(false);
 
-  if (!periodo || !colaborador || !liquidacion) {
+  useEffect(() => {
+    if (!nominaEmpleadoId) return;
+    setCargando(true);
+    nominaApi
+      .desprendible(nominaEmpleadoId)
+      .then((res) => setData(res.data))
+      .catch((err: ApiError) => toast.error(err.message ?? 'Error al cargar desprendible'))
+      .finally(() => setCargando(false));
+  }, [nominaEmpleadoId]);
+
+  const descargarPdf = async () => {
+    if (!nominaEmpleadoId || !data) return;
+    setDescargando(true);
+    try {
+      const blob = await nominaApi.desprendiblePdf(nominaEmpleadoId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const filename = `desprendible_${data.empleado.documento}_${data.nomina.anio}_${String(data.nomina.mes).padStart(2, '0')}${data.nomina.quincena ? `_Q${data.nomina.quincena}` : ''}.pdf`;
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      const e = err as ApiError;
+      toast.error(e.message ?? 'Error al descargar');
+    } finally {
+      setDescargando(false);
+    }
+  };
+
+  const enviarWhatsapp = async () => {
+    if (!nominaEmpleadoId) return;
+    setGenerandoWa(true);
+    try {
+      const res = await nominaApi.desprendibleWhatsapp(nominaEmpleadoId);
+      const text = encodeURIComponent(`Desprendible de pago: ${res.data.url}`);
+      window.open(`https://wa.me/?text=${text}`, '_blank');
+    } catch (err) {
+      const e = err as ApiError;
+      toast.error(e.message ?? 'Error al generar enlace');
+    } finally {
+      setGenerandoWa(false);
+    }
+  };
+
+  if (cargando) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-2">No encontrado</h1>
-          <p className="text-muted-foreground mb-4">No se encontró la información</p>
-          <Button onClick={() => navigate('/nomina')}>Volver a Nómina</Button>
-        </div>
+      <div className="flex items-center justify-center py-20 gap-2 text-muted-foreground">
+        <Loader2 className="h-5 w-5 animate-spin" />
+        Cargando desprendible...
       </div>
     );
   }
 
-  const handleImprimir = () => {
-    window.print();
-  };
+  if (!data) {
+    return (
+      <div className="text-center py-20 text-muted-foreground">
+        Desprendible no disponible.
+      </div>
+    );
+  }
 
-  const handleDescargar = () => {
-    // Aquí iría la lógica para generar PDF
-    alert('Generando PDF del desprendible...');
-  };
-
-  const handleEnviarWhatsApp = () => {
-    // Aquí iría la lógica para enviar por WhatsApp
-    const telefono = colaborador.telefono || '';
-    const mensaje = `Hola ${colaborador.nombres}, te enviamos tu desprendible de pago del período ${periodo.periodo}. Total neto a pagar: $${liquidacion.totalNeto.toLocaleString('es-CO')}`;
-    const url = `https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`;
-    window.open(url, '_blank');
-  };
-
-  const handleAceptar = () => {
-    navigate(`/nomina/${nominaId}`);
-  };
-
-  const nombreCompleto = `${colaborador.nombres} ${colaborador.apellidos}`;
-  const fechaActual = new Date().toLocaleDateString('es-CO', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+  const { empleado, nomina, liquidacion } = data;
 
   return (
-    <div className="space-y-6">
-      {/* Header - NO SE IMPRIME */}
-      <div className="print:hidden">
+    <div className="space-y-6 print:space-y-2">
+      <div className="flex items-center justify-between print:hidden">
         <Button
           variant="ghost"
           size="sm"
           onClick={() => navigate(`/nomina/${nominaId}`)}
-          className="mb-4 gap-2"
+          className="gap-2"
         >
           <ArrowLeft className="h-4 w-4" />
-          Volver
+          Volver a la nómina
         </Button>
 
-        <div className="mb-6">
-          <h1 className="text-4xl font-bold text-foreground">Desprendible Generado</h1>
-          <p className="text-muted-foreground mt-2">Liquidación confirmada exitosamente</p>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => window.print()} className="gap-2">
+            <Printer className="h-4 w-4" />
+            Imprimir
+          </Button>
+          <Button onClick={descargarPdf} disabled={descargando} className="gap-2">
+            {descargando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            Descargar PDF
+          </Button>
+          <Button variant="outline" onClick={enviarWhatsapp} disabled={generandoWa} className="gap-2">
+            {generandoWa ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+            WhatsApp
+          </Button>
         </div>
       </div>
 
-      {/* DESPRENDIBLE - SE IMPRIME */}
-      <div ref={desprendibleRef} className="print:p-8">
-        <Card className="border border-border shadow-lg max-w-4xl mx-auto">
-          <CardContent className="p-8">
-            {/* Header del desprendible */}
-            <div className="mb-8">
-              <div className="grid grid-cols-3 mb-6">
-                <div className="col-span-1 p-6 flex items-center justify-center bg-primary/5 rounded-l-lg">
-                  <div className="text-center">
-                    <div className="text-primary font-bold text-xl">FINCA</div>
-                    <div className="text-success font-bold text-xl">PUERTO ARTURO</div>
-                  </div>
-                </div>
-                <div className="col-span-2 p-6 flex items-center justify-center bg-muted/30 rounded-r-lg">
-                  <h2 className="text-2xl font-bold text-center">
-                    DESPRENDIBLE DE NÓMINA
-                  </h2>
-                </div>
-              </div>
+      <Card className="border-2 border-success bg-success/5 print:hidden">
+        <CardContent className="p-4 flex items-center gap-3">
+          <div className="h-10 w-10 rounded-full bg-success/20 flex items-center justify-center">
+            <Check className="h-5 w-5 text-success" />
+          </div>
+          <div>
+            <p className="font-semibold text-success">Liquidación confirmada</p>
+            <p className="text-xs text-muted-foreground">
+              El empleado ha sido liquidado correctamente.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
-              {/* Información del colaborador */}
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="p-4 bg-muted/20 rounded-lg">
-                  <span className="font-bold text-muted-foreground text-xs">NOMBRE</span>
-                  <div className="font-semibold text-base mt-1">{nombreCompleto}</div>
-                </div>
-                <div className="p-4 bg-muted/20 rounded-lg">
-                  <span className="font-bold text-muted-foreground text-xs">CÉDULA</span>
-                  <div className="font-semibold text-base mt-1">{colaborador.numeroDocumento}</div>
-                </div>
+      <Card className="border-border max-w-3xl mx-auto">
+        <CardContent className="p-8 space-y-6">
+          <div className="text-center border-b border-border pb-4">
+            <h2 className="text-xl font-bold uppercase">{data.finca}</h2>
+            <p className="text-sm text-muted-foreground">Desprendible de pago</p>
+          </div>
 
-                <div className="p-4 bg-muted/20 rounded-lg">
-                  <span className="font-bold text-muted-foreground text-xs">FECHA</span>
-                  <div className="font-semibold text-base mt-1">{fechaActual}</div>
-                </div>
-                <div className="p-4 bg-muted/20 rounded-lg">
-                  <span className="font-bold text-muted-foreground text-xs">PERÍODO</span>
-                  <div className="font-semibold text-base mt-1">{periodo.periodo}</div>
-                </div>
-
-                <div className="p-4 bg-muted/20 rounded-lg">
-                  <span className="font-bold text-muted-foreground text-xs">BASE</span>
-                  <div className="font-semibold text-base mt-1">{liquidacion.tipoSalario}</div>
-                </div>
-                <div className="p-4 bg-muted/20 rounded-lg">
-                  <span className="font-bold text-muted-foreground text-xs">DÍAS CANCELADOS</span>
-                  <div className="font-semibold text-base mt-1">{liquidacion.diasTrabajados}</div>
-                </div>
-              </div>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <p className="text-xs text-muted-foreground">Empleado</p>
+              <p className="font-semibold">{empleado.nombre_completo}</p>
             </div>
-
-            {/* Tabla de liquidación */}
-            <div className="space-y-6">
-              {/* DEVENGADO */}
-              <div className="bg-success/5 rounded-lg p-5 border-l-4 border-success">
-                <h3 className="font-bold text-sm text-success mb-4">DEVENGADO</h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="font-medium text-sm">
-                      {liquidacion.tipoSalario === 'VARIABLE' ? 'BASE (JORNALES)' : 'SUELDO BÁSICO'}
-                    </span>
-                    <span className="font-bold text-base">
-                      ${liquidacion.base.toLocaleString('es-CO')}
-                    </span>
-                  </div>
-                  {liquidacion.extras > 0 && (
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium text-sm">EXTRAS (HORAS/DOMIN)</span>
-                      <span className="font-bold text-base">
-                        ${liquidacion.extras.toLocaleString('es-CO')}
-                      </span>
-                    </div>
-                  )}
-                  {liquidacion.incapacidades > 0 && (
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium text-sm">INCAPACIDADES</span>
-                      <span className="font-bold text-base">
-                        ${liquidacion.incapacidades.toLocaleString('es-CO')}
-                      </span>
-                    </div>
-                  )}
-                  <div className="border-t-2 border-success/30 pt-3 mt-3">
-                    <div className="flex justify-between items-center bg-success/10 p-3 rounded">
-                      <span className="font-bold text-success">TOTAL BRUTO</span>
-                      <span className="font-bold text-lg text-success">
-                        ${liquidacion.totalBruto.toLocaleString('es-CO')}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center pt-2">
-                    <span className="font-medium text-sm">SUBSIDIO TRANSPORTE</span>
-                    <span className="font-bold text-base">
-                      ${liquidacion.subsidioTransporte.toLocaleString('es-CO')}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* DEDUCCIONES */}
-              <div className="bg-destructive/5 rounded-lg p-5 border-l-4 border-destructive">
-                <h3 className="font-bold text-sm text-destructive mb-4">DEDUCCIONES</h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="font-medium text-sm">DESCUENTO SALUD (4%)</span>
-                    <span className="font-bold text-base text-destructive">
-                      ${liquidacion.salud.toLocaleString('es-CO')}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="font-medium text-sm">DESCUENTO PENSIÓN (4%)</span>
-                    <span className="font-bold text-base text-destructive">
-                      ${liquidacion.pension.toLocaleString('es-CO')}
-                    </span>
-                  </div>
-                  {liquidacion.adelantos > 0 && (
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium text-sm">DCTO ADELANTOS</span>
-                      <span className="font-bold text-base text-destructive">
-                        ${liquidacion.adelantos.toLocaleString('es-CO')}
-                      </span>
-                    </div>
-                  )}
-                  {liquidacion.ahorro > 0 && (
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium text-sm">AHORRO</span>
-                      <span className="font-bold text-base text-destructive">
-                        ${liquidacion.ahorro.toLocaleString('es-CO')}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* BONIFICACIÓN */}
-              {liquidacion.bonificacion > 0 && (
-                <div className="bg-green-50 rounded-lg p-5 border-l-4 border-green-500">
-                  <h3 className="font-bold text-sm text-green-700 mb-4">BONIFICACIÓN</h3>
-                  <div className="flex justify-between items-center">
-                    <span className="font-medium text-sm">BONIFICACIÓN</span>
-                    <span className="font-bold text-base text-green-700">
-                      ${liquidacion.bonificacion.toLocaleString('es-CO')}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* TOTAL NETO */}
-              <div className="bg-primary/10 rounded-lg p-6 border-2 border-primary mt-8">
-                <div className="flex justify-between items-center">
-                  <span className="font-bold text-2xl">TOTAL NETO</span>
-                  <span className="font-bold text-4xl text-primary">
-                    ${liquidacion.totalNeto.toLocaleString('es-CO')}
-                  </span>
-                </div>
-              </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Documento</p>
+              <p className="font-semibold">{empleado.documento}</p>
             </div>
-
-            {/* Footer */}
-            <div className="mt-12 pt-8 border-t border-border">
-              <div className="grid grid-cols-2 gap-8">
-                <div className="text-center">
-                  <div className="h-20 border-b-2 border-muted-foreground/30 mb-3"></div>
-                  <p className="text-sm font-semibold text-muted-foreground">FIRMA RECIBIDO</p>
-                </div>
-                <div className="text-center">
-                  <div className="h-20 border-b-2 border-muted-foreground/30 mb-3"></div>
-                  <p className="text-sm font-semibold text-muted-foreground">HUELLA</p>
-                </div>
-              </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Cargo</p>
+              <p className="font-semibold">{empleado.cargo}</p>
             </div>
-
-            {/* Nota al pie */}
-            <div className="mt-6 text-xs text-center text-muted-foreground italic">
-              <p>
-                Este desprendible es un documento oficial de pago. Consérvelo para sus registros.
+            <div>
+              <p className="text-xs text-muted-foreground">Tipo de salario</p>
+              <p className="font-semibold">{empleado.salario_tipo}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Período</p>
+              <p className="font-semibold">{nomina.periodo_label}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Fechas</p>
+              <p className="font-semibold">
+                {nomina.fecha_inicio} → {nomina.fecha_fin}
               </p>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Días trabajados</p>
+              <p className="font-semibold">{liquidacion.dias_trabajados}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Liquidado</p>
+              <p className="font-semibold">{liquidacion.fecha_humana}</p>
+            </div>
+          </div>
 
-      {/* Botones de acción duplicados abajo - NO SE IMPRIME */}
-      <div className="print:hidden grid grid-cols-2 lg:grid-cols-4 gap-4 max-w-4xl mx-auto">
-        <Button
-          onClick={handleAceptar}
-          size="lg"
-          className="gap-2 bg-success hover:bg-success/90"
-        >
-          <Check className="h-5 w-5" />
-          Aceptar
-        </Button>
+          <div className="border-l-4 border-success pl-4 space-y-2">
+            <h3 className="font-semibold text-success">Devengado</h3>
+            {liquidacion.total_jornales > 0 && (
+              <Row label="Jornales / Salario base" value={fmt(liquidacion.total_jornales)} />
+            )}
+            {liquidacion.total_cosecha > 0 && (
+              <Row label="Cosecha" value={fmt(liquidacion.total_cosecha)} />
+            )}
+            {liquidacion.total_horas_extra > 0 && (
+              <Row label="Horas extra" value={fmt(liquidacion.total_horas_extra)} />
+            )}
+            {liquidacion.total_recargos > 0 && (
+              <Row label="Recargos" value={fmt(liquidacion.total_recargos)} />
+            )}
+            {liquidacion.total_incapacidades > 0 && (
+              <Row label="Incapacidades" value={fmt(liquidacion.total_incapacidades)} />
+            )}
+            {liquidacion.bonificaciones.map((b, i) => (
+              <Row
+                key={i}
+                label={`Bonificación: ${b.nombre}${b.observacion ? ` (${b.observacion})` : ''}`}
+                value={fmt(b.valor)}
+              />
+            ))}
+            <Row label="Subsidio de transporte" value={fmt(liquidacion.subsidio_transporte)} />
+            <div className="border-t pt-2 flex justify-between font-bold">
+              <span>Total devengado</span>
+              <span className="text-success">
+                {fmt(
+                  liquidacion.total_devengado +
+                    liquidacion.total_bonificaciones +
+                    liquidacion.subsidio_transporte,
+                )}
+              </span>
+            </div>
+          </div>
 
-        <Button onClick={handleImprimir} variant="outline" size="lg" className="gap-2">
-          <Printer className="h-5 w-5" />
-          Imprimir
-        </Button>
+          <div className="border-l-4 border-destructive pl-4 space-y-2">
+            <h3 className="font-semibold text-destructive">Deducciones</h3>
+            {liquidacion.deducciones.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No aplica</p>
+            ) : (
+              liquidacion.deducciones.map((d, i) => (
+                <Row
+                  key={i}
+                  label={
+                    d.nombre +
+                    (d.porcentaje !== undefined && d.base !== undefined
+                      ? ` (${d.porcentaje}%)`
+                      : '') +
+                    (d.observacion ? ` — ${d.observacion}` : '')
+                  }
+                  value={fmt(d.valor)}
+                  destructivo
+                />
+              ))
+            )}
+            <div className="border-t pt-2 flex justify-between font-bold">
+              <span>Total deducciones</span>
+              <span className="text-destructive">{fmt(liquidacion.total_deducciones)}</span>
+            </div>
+          </div>
 
-        <Button
-          onClick={handleEnviarWhatsApp}
-          variant="outline"
-          size="lg"
-          className="gap-2 bg-green-50 hover:bg-green-100 text-green-700 border-green-200"
-        >
-          <MessageCircle className="h-5 w-5" />
-          Enviar WhatsApp
-        </Button>
+          <div className="bg-primary/10 p-4 rounded-lg flex justify-between items-center">
+            <span className="font-bold text-lg">Total neto a pagar</span>
+            <span className="font-bold text-2xl text-primary">
+              {fmt(liquidacion.total_neto)}
+            </span>
+          </div>
 
-        <Button onClick={handleDescargar} variant="outline" size="lg" className="gap-2">
-          <Download className="h-5 w-5" />
-          Descargar PDF
-        </Button>
-      </div>
+          <div className="grid grid-cols-2 gap-8 pt-8 mt-8 border-t border-border">
+            <div className="text-center">
+              <div className="border-t border-foreground pt-2">
+                <p className="text-xs text-muted-foreground">Recibido conforme</p>
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="border-t border-foreground pt-2">
+                <p className="text-xs text-muted-foreground">Huella</p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function Row({
+  label,
+  value,
+  destructivo,
+}: {
+  label: string;
+  value: string;
+  destructivo?: boolean;
+}) {
+  return (
+    <div className="flex justify-between text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className={`font-semibold ${destructivo ? 'text-destructive' : ''}`}>{value}</span>
     </div>
   );
 }

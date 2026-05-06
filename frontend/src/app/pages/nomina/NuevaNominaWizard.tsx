@@ -1,5 +1,4 @@
-// TABLA VERSION - Nueva Nómina Wizard con tabla en paso 2
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
@@ -21,10 +20,24 @@ import {
   FileText,
   Users,
   Calendar,
-  X,
   UserPlus,
+  Loader2,
 } from 'lucide-react';
-import { colaboradores } from '../../lib/mockData';
+import { toast } from 'sonner';
+import { nominaApi, Periodicidad } from '../../../api/nomina';
+import { colaboradoresApi } from '../../../api/colaboradores';
+import type { ApiError } from '../../../api/client';
+
+interface EmpleadoActivo {
+  id: number;
+  nombres: string;
+  apellidos: string;
+  documento?: string;
+  cargo?: string | null;
+  modalidad_pago?: 'FIJO' | 'PRODUCCION' | null;
+  salario_base?: number | null;
+  estado?: boolean;
+}
 
 const MESES = [
   { valor: 1, nombre: 'Enero' },
@@ -51,128 +64,129 @@ export default function NuevaNominaWizard() {
   const navigate = useNavigate();
   const [pasoActual, setPasoActual] = useState(1);
 
-  // Verificación de versión
-  console.log('NuevaNominaWizard - TABLA VERSION - Timestamp:', Date.now());
-
-  // Datos del período
-  const [ano, setAno] = useState(new Date().getFullYear().toString());
+  // Paso 1
+  const ano = new Date().getFullYear().toString();
   const [mes, setMes] = useState('');
-  const [periodicidad, setPeriodicidad] = useState('quincenal');
-  const [quincena, setQuincena] = useState('');
+  const [periodicidad, setPeriodicidad] = useState<Periodicidad>('QUINCENAL');
+  const [quincena, setQuincena] = useState<'1' | '2' | ''>('');
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
 
-  // Empleados seleccionados
-  const [empleadosSeleccionados, setEmpleadosSeleccionados] = useState<string[]>([]);
+  // Paso 2
+  const [empleados, setEmpleados] = useState<EmpleadoActivo[]>([]);
+  const [empleadosSeleccionados, setEmpleadosSeleccionados] = useState<number[]>([]);
+  const [cargandoEmpleados, setCargandoEmpleados] = useState(false);
+
+  // Paso 3
+  const [creando, setCreando] = useState(false);
 
   // Calcular fechas automáticamente
   useEffect(() => {
-    if (ano && mes) {
-      const anoNum = parseInt(ano);
-      const mesNum = parseInt(mes);
-
-      if (periodicidad === 'mensual') {
-        // Primer día del mes
-        const inicio = new Date(anoNum, mesNum - 1, 1);
-        // Último día del mes
-        const fin = new Date(anoNum, mesNum, 0);
-
-        setFechaInicio(inicio.toISOString().split('T')[0]);
-        setFechaFin(fin.toISOString().split('T')[0]);
-      } else if (periodicidad === 'quincenal' && quincena) {
-        if (quincena === '1') {
-          // Primera quincena: día 1 al 15
-          const inicio = new Date(anoNum, mesNum - 1, 1);
-          const fin = new Date(anoNum, mesNum - 1, 15);
-
-          setFechaInicio(inicio.toISOString().split('T')[0]);
-          setFechaFin(fin.toISOString().split('T')[0]);
-        } else if (quincena === '2') {
-          // Segunda quincena: día 16 al último día del mes
-          const inicio = new Date(anoNum, mesNum - 1, 16);
-          const fin = new Date(anoNum, mesNum, 0);
-
-          setFechaInicio(inicio.toISOString().split('T')[0]);
-          setFechaFin(fin.toISOString().split('T')[0]);
-        }
-      }
+    if (!mes) {
+      setFechaInicio('');
+      setFechaFin('');
+      return;
+    }
+    const a = parseInt(ano);
+    const m = parseInt(mes);
+    const fmt = (d: Date) => d.toISOString().split('T')[0];
+    if (periodicidad === 'MENSUAL') {
+      setFechaInicio(fmt(new Date(a, m - 1, 1)));
+      setFechaFin(fmt(new Date(a, m, 0)));
+    } else if (periodicidad === 'QUINCENAL' && quincena === '1') {
+      setFechaInicio(fmt(new Date(a, m - 1, 1)));
+      setFechaFin(fmt(new Date(a, m - 1, 15)));
+    } else if (periodicidad === 'QUINCENAL' && quincena === '2') {
+      setFechaInicio(fmt(new Date(a, m - 1, 16)));
+      setFechaFin(fmt(new Date(a, m, 0)));
+    } else {
+      setFechaInicio('');
+      setFechaFin('');
     }
   }, [ano, mes, periodicidad, quincena]);
 
-  // Funciones para manejar empleados
-  const agregarEmpleado = (empleadoId: string) => {
-    if (!empleadosSeleccionados.includes(empleadoId)) {
-      setEmpleadosSeleccionados([...empleadosSeleccionados, empleadoId]);
-    }
-  };
+  // Cargar empleados activos al entrar al paso 2
+  useEffect(() => {
+    if (pasoActual !== 2 || empleados.length > 0) return;
+    setCargandoEmpleados(true);
+    colaboradoresApi
+      .listar({ estado: true, per_page: 200 })
+      .then((res) => setEmpleados(res.data as EmpleadoActivo[]))
+      .catch((err: ApiError) => toast.error(err.message ?? 'Error al cargar empleados'))
+      .finally(() => setCargandoEmpleados(false));
+  }, [pasoActual, empleados.length]);
 
-  const quitarEmpleado = (empleadoId: string) => {
-    setEmpleadosSeleccionados(empleadosSeleccionados.filter((id) => id !== empleadoId));
+  const agregarEmpleado = (id: number) => {
+    setEmpleadosSeleccionados((prev) => (prev.includes(id) ? prev : [...prev, id]));
   };
-
-  const agregarTodos = () => {
-    const todosLosIds = colaboradores
-      .filter((c) => c.estado === 'Activo')
-      .map((c) => c.id);
-    setEmpleadosSeleccionados(todosLosIds);
+  const quitarEmpleado = (id: number) => {
+    setEmpleadosSeleccionados((prev) => prev.filter((x) => x !== id));
   };
-
-  const quitarTodos = () => {
-    setEmpleadosSeleccionados([]);
-  };
+  const agregarTodos = () => setEmpleadosSeleccionados(empleados.map((e) => e.id));
+  const quitarTodos = () => setEmpleadosSeleccionados([]);
 
   const handleSiguiente = () => {
-    if (pasoActual < 3) {
-      setPasoActual(pasoActual + 1);
-    }
+    if (pasoActual < 3) setPasoActual(pasoActual + 1);
   };
-
   const handleAtras = () => {
-    if (pasoActual > 1) {
-      setPasoActual(pasoActual - 1);
-    }
+    if (pasoActual > 1) setPasoActual(pasoActual - 1);
   };
 
-  const handleFinalizar = () => {
-    // Aquí iría la lógica para crear la nómina
-    console.log('Crear nómina:', {
-      ano,
-      mes,
-      periodicidad,
-      quincena,
-      fechaInicio,
-      fechaFin,
-      empleados: empleadosSeleccionados,
-    });
-
-    // Navegar al detalle de la nómina creada
-    navigate('/nomina');
+  const handleFinalizar = async () => {
+    setCreando(true);
+    try {
+      const nuevaNomina = await nominaApi.crear({
+        mes: parseInt(mes),
+        anio: parseInt(ano),
+        periodicidad,
+        quincena: periodicidad === 'QUINCENAL' ? (parseInt(quincena) as 1 | 2) : null,
+      });
+      const nominaId = nuevaNomina.data.id;
+      try {
+        await nominaApi.agregarEmpleados(nominaId, empleadosSeleccionados);
+      } catch (err) {
+        const e = err as ApiError;
+        toast.warning(`Nómina creada, pero no se pudieron agregar todos los empleados: ${e.message ?? ''}`);
+      }
+      toast.success('Nómina creada correctamente');
+      navigate(`/nomina/${nominaId}`);
+    } catch (err) {
+      const e = err as ApiError;
+      if (e.code === 'NOMINA_DUPLICADA') {
+        toast.error('Ya existe una nómina para ese período');
+      } else {
+        toast.error(e.message ?? 'No se pudo crear la nómina');
+      }
+    } finally {
+      setCreando(false);
+    }
   };
 
   const puedeAvanzar = () => {
     if (pasoActual === 1) {
-      if (periodicidad === 'mensual') {
-        return ano && mes && fechaInicio && fechaFin;
-      } else {
-        return ano && mes && quincena && fechaInicio && fechaFin;
-      }
+      if (!mes || !fechaInicio || !fechaFin) return false;
+      if (periodicidad === 'QUINCENAL' && !quincena) return false;
+      return true;
     }
-    if (pasoActual === 2) {
-      return empleadosSeleccionados.length > 0;
-    }
+    if (pasoActual === 2) return empleadosSeleccionados.length > 0;
     return true;
   };
 
-  const mesNombre = MESES.find((m) => m.valor.toString() === mes)?.nombre || '';
-  const quincenaNombre = periodicidad === 'mensual'
-    ? 'Mensual'
-    : quincena === '1'
-      ? 'Primera Quincena'
-      : 'Segunda Quincena';
+  const mesNombre = MESES.find((m) => m.valor.toString() === mes)?.nombre ?? '';
+  const quincenaNombre =
+    periodicidad === 'MENSUAL'
+      ? 'Mensual'
+      : quincena === '1'
+        ? 'Primera Quincena'
+        : 'Segunda Quincena';
+
+  const empleadosActivos = empleados;
+
+  const getIniciales = (nombres: string, apellidos: string) =>
+    `${nombres.charAt(0)}${apellidos.charAt(0)}`.toUpperCase();
 
   return (
     <div className="space-y-8">
-      {/* Header */}
       <div>
         <Button
           variant="ghost"
@@ -191,27 +205,27 @@ export default function NuevaNominaWizard() {
 
       {/* Stepper */}
       <div className="flex items-center justify-between relative">
-        {/* Línea de progreso */}
         <div className="absolute top-6 left-0 right-0 h-0.5 bg-border -z-10" />
         <div
           className="absolute top-6 left-0 h-0.5 bg-primary transition-all duration-500 -z-10"
           style={{ width: `${((pasoActual - 1) / (pasos.length - 1)) * 100}%` }}
         />
-
         {pasos.map((paso) => {
           const Icon = paso.icono;
           const isCompleted = pasoActual > paso.numero;
           const isCurrent = pasoActual === paso.numero;
-
           return (
-            <div key={paso.numero} className="flex flex-col items-center gap-2 bg-background px-4">
+            <div
+              key={paso.numero}
+              className="flex flex-col items-center gap-2 bg-background px-4"
+            >
               <div
                 className={`h-12 w-12 rounded-full flex items-center justify-center border-2 transition-all ${
                   isCompleted
                     ? 'bg-primary border-primary'
                     : isCurrent
-                    ? 'bg-primary/10 border-primary'
-                    : 'bg-background border-border'
+                      ? 'bg-primary/10 border-primary'
+                      : 'bg-background border-border'
                 }`}
               >
                 {isCompleted ? (
@@ -245,7 +259,6 @@ export default function NuevaNominaWizard() {
         })}
       </div>
 
-      {/* Contenido del paso actual */}
       <Card className="border-border">
         <CardContent className="p-8">
           {/* Paso 1: Información del período */}
@@ -256,7 +269,9 @@ export default function NuevaNominaWizard() {
                   <Calendar className="h-6 w-6 text-primary" />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-bold text-foreground">Información del Período</h2>
+                  <h2 className="text-2xl font-bold text-foreground">
+                    Información del Período
+                  </h2>
                   <p className="text-sm text-muted-foreground">
                     Define el período de la nómina
                   </p>
@@ -282,26 +297,27 @@ export default function NuevaNominaWizard() {
 
                 <div className="space-y-2">
                   <Label htmlFor="periodicidad">Periodicidad *</Label>
-                  <Select value={periodicidad} onValueChange={(value) => {
-                    setPeriodicidad(value);
-                    if (value === 'mensual') {
-                      setQuincena('');
-                    }
-                  }}>
+                  <Select
+                    value={periodicidad}
+                    onValueChange={(v) => {
+                      setPeriodicidad(v as Periodicidad);
+                      if (v === 'MENSUAL') setQuincena('');
+                    }}
+                  >
                     <SelectTrigger id="periodicidad">
                       <SelectValue placeholder="Selecciona periodicidad" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="quincenal">Quincenal</SelectItem>
-                      <SelectItem value="mensual">Mensual</SelectItem>
+                      <SelectItem value="QUINCENAL">Quincenal</SelectItem>
+                      <SelectItem value="MENSUAL">Mensual</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
-                {periodicidad === 'quincenal' && (
+                {periodicidad === 'QUINCENAL' && (
                   <div className="space-y-2">
                     <Label htmlFor="quincena">Quincena *</Label>
-                    <Select value={quincena} onValueChange={setQuincena}>
+                    <Select value={quincena} onValueChange={(v) => setQuincena(v as '1' | '2')}>
                       <SelectTrigger id="quincena">
                         <SelectValue placeholder="Selecciona quincena" />
                       </SelectTrigger>
@@ -317,26 +333,15 @@ export default function NuevaNominaWizard() {
               <div className="grid gap-6 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="fechaInicio">Fecha Inicio *</Label>
-                  <Input
-                    id="fechaInicio"
-                    type="date"
-                    value={fechaInicio}
-                    onChange={(e) => setFechaInicio(e.target.value)}
-                  />
+                  <Input id="fechaInicio" type="date" value={fechaInicio} readOnly />
                 </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="fechaFin">Fecha Fin *</Label>
-                  <Input
-                    id="fechaFin"
-                    type="date"
-                    value={fechaFin}
-                    onChange={(e) => setFechaFin(e.target.value)}
-                  />
+                  <Input id="fechaFin" type="date" value={fechaFin} readOnly />
                 </div>
               </div>
 
-              {ano && mes && fechaInicio && fechaFin && (
+              {mes && fechaInicio && fechaFin && (
                 <Card className="border-primary bg-primary/5 mt-6">
                   <CardContent className="p-4">
                     <div className="space-y-3">
@@ -353,7 +358,7 @@ export default function NuevaNominaWizard() {
                             {new Date(fechaInicio + 'T00:00:00').toLocaleDateString('es-CO', {
                               day: '2-digit',
                               month: 'long',
-                              year: 'numeric'
+                              year: 'numeric',
                             })}
                           </p>
                         </div>
@@ -363,7 +368,7 @@ export default function NuevaNominaWizard() {
                             {new Date(fechaFin + 'T00:00:00').toLocaleDateString('es-CO', {
                               day: '2-digit',
                               month: 'long',
-                              year: 'numeric'
+                              year: 'numeric',
                             })}
                           </p>
                         </div>
@@ -384,7 +389,9 @@ export default function NuevaNominaWizard() {
                     <Users className="h-6 w-6 text-primary" />
                   </div>
                   <div>
-                    <h2 className="text-2xl font-bold text-foreground">Seleccionar Empleados</h2>
+                    <h2 className="text-2xl font-bold text-foreground">
+                      Seleccionar Empleados
+                    </h2>
                     <p className="text-sm text-muted-foreground">
                       Agrega empleados a este período de nómina
                     </p>
@@ -397,8 +404,8 @@ export default function NuevaNominaWizard() {
                     size="sm"
                     onClick={agregarTodos}
                     disabled={
-                      empleadosSeleccionados.length ===
-                      colaboradores.filter((c) => c.estado === 'Activo').length
+                      empleadosSeleccionados.length === empleadosActivos.length ||
+                      empleadosActivos.length === 0
                     }
                   >
                     <UserPlus className="h-4 w-4 mr-2" />
@@ -415,44 +422,47 @@ export default function NuevaNominaWizard() {
                 </div>
               </div>
 
-              {/* Tabla de empleados disponibles */}
               <div>
                 <p className="text-sm font-medium mb-3">Empleados Activos</p>
                 <Card className="border-border">
                   <CardContent className="p-0">
-                    <div className="overflow-x-auto">
-                      <table className="w-full">
-                        <thead>
-                          <tr className="border-b border-border bg-muted/30">
-                            <th className="text-left p-4 font-semibold text-sm text-muted-foreground w-12">
-                              <span className="sr-only">Seleccionar</span>
-                            </th>
-                            <th className="text-left p-4 font-semibold text-sm text-muted-foreground">
-                              Empleado
-                            </th>
-                            <th className="text-left p-4 font-semibold text-sm text-muted-foreground">
-                              Cargo
-                            </th>
-                            <th className="text-left p-4 font-semibold text-sm text-muted-foreground">
-                              Modalidad
-                            </th>
-                            <th className="text-right p-4 font-semibold text-sm text-muted-foreground">
-                              Salario Base
-                            </th>
-                            <th className="text-left p-4 font-semibold text-sm text-muted-foreground">
-                              Estado
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {colaboradores
-                            .filter((c) => c.estado === 'Activo')
-                            .map((empleado, index) => {
+                    {cargandoEmpleados ? (
+                      <div className="flex items-center justify-center py-12 gap-2 text-muted-foreground">
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        Cargando empleados...
+                      </div>
+                    ) : empleadosActivos.length === 0 ? (
+                      <div className="text-center py-12 text-muted-foreground">
+                        No hay empleados activos.
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-border bg-muted/30">
+                              <th className="text-left p-4 font-semibold text-sm text-muted-foreground w-12">
+                                <span className="sr-only">Seleccionar</span>
+                              </th>
+                              <th className="text-left p-4 font-semibold text-sm text-muted-foreground">
+                                Empleado
+                              </th>
+                              <th className="text-left p-4 font-semibold text-sm text-muted-foreground">
+                                Cargo
+                              </th>
+                              <th className="text-left p-4 font-semibold text-sm text-muted-foreground">
+                                Modalidad
+                              </th>
+                              <th className="text-right p-4 font-semibold text-sm text-muted-foreground">
+                                Salario Base
+                              </th>
+                              <th className="text-left p-4 font-semibold text-sm text-muted-foreground">
+                                Estado
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {empleadosActivos.map((empleado, index) => {
                               const isSelected = empleadosSeleccionados.includes(empleado.id);
-                              const getIniciales = (nombres: string, apellidos: string) => {
-                                return `${nombres.charAt(0)}${apellidos.charAt(0)}`.toUpperCase();
-                              };
-
                               return (
                                 <tr
                                   key={empleado.id}
@@ -460,14 +470,18 @@ export default function NuevaNominaWizard() {
                                     index % 2 === 0 ? 'bg-background' : 'bg-muted/5'
                                   } ${isSelected ? 'bg-primary/5' : ''}`}
                                   onClick={() =>
-                                    isSelected ? quitarEmpleado(empleado.id) : agregarEmpleado(empleado.id)
+                                    isSelected
+                                      ? quitarEmpleado(empleado.id)
+                                      : agregarEmpleado(empleado.id)
                                   }
                                 >
                                   <td className="p-4" onClick={(e) => e.stopPropagation()}>
                                     <Checkbox
                                       checked={isSelected}
                                       onCheckedChange={() =>
-                                        isSelected ? quitarEmpleado(empleado.id) : agregarEmpleado(empleado.id)
+                                        isSelected
+                                          ? quitarEmpleado(empleado.id)
+                                          : agregarEmpleado(empleado.id)
                                       }
                                     />
                                   </td>
@@ -498,31 +512,26 @@ export default function NuevaNominaWizard() {
                                   </td>
                                   <td className="p-4">
                                     <Badge variant="outline" className="text-xs">
-                                      {empleado.modalidadPago || 'N/A'}
+                                      {empleado.modalidad_pago || 'N/A'}
                                     </Badge>
                                   </td>
                                   <td className="p-4 text-right">
                                     <span className="text-sm font-medium">
-                                      ${empleado.salarioBase?.toLocaleString('es-CO') || 0}
+                                      ${(empleado.salario_base ?? 0).toLocaleString('es-CO')}
                                     </span>
                                   </td>
                                   <td className="p-4">
-                                    <Badge
-                                      className={`text-xs ${
-                                        empleado.estado === 'Activo'
-                                          ? 'bg-success/10 text-success border-success/20'
-                                          : 'bg-muted text-muted-foreground border-muted'
-                                      }`}
-                                    >
-                                      {empleado.estado}
+                                    <Badge className="text-xs bg-success/10 text-success border-success/20">
+                                      Activo
                                     </Badge>
                                   </td>
                                 </tr>
                               );
                             })}
-                        </tbody>
-                      </table>
-                    </div>
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </div>
@@ -570,7 +579,7 @@ export default function NuevaNominaWizard() {
                           {new Date(fechaInicio + 'T00:00:00').toLocaleDateString('es-CO', {
                             day: '2-digit',
                             month: 'short',
-                            year: 'numeric'
+                            year: 'numeric',
                           })}
                         </p>
                       </div>
@@ -580,7 +589,7 @@ export default function NuevaNominaWizard() {
                           {new Date(fechaFin + 'T00:00:00').toLocaleDateString('es-CO', {
                             day: '2-digit',
                             month: 'short',
-                            year: 'numeric'
+                            year: 'numeric',
                           })}
                         </p>
                       </div>
@@ -596,26 +605,29 @@ export default function NuevaNominaWizard() {
                     </h3>
                     <div className="space-y-2">
                       {empleadosSeleccionados.map((id) => {
-                        const empleado = colaboradores.find((c) => c.id === id);
+                        const empleado = empleadosActivos.find((c) => c.id === id);
+                        if (!empleado) return null;
                         return (
-                          <div key={id} className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors">
+                          <div
+                            key={id}
+                            className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors"
+                          >
                             <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                               <span className="text-sm font-medium text-primary">
-                                {empleado?.nombres.charAt(0)}
-                                {empleado?.apellidos.charAt(0)}
+                                {getIniciales(empleado.nombres, empleado.apellidos)}
                               </span>
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium">
-                                {empleado?.nombres} {empleado?.apellidos}
+                                {empleado.nombres} {empleado.apellidos}
                               </p>
                               <p className="text-xs text-muted-foreground">
-                                {empleado?.cargo}
+                                {empleado.cargo ?? 'Sin cargo'}
                               </p>
                             </div>
                             <div className="text-right">
                               <p className="text-sm font-semibold text-primary">
-                                ${empleado?.salarioBase?.toLocaleString('es-CO') || 0}
+                                ${(empleado.salario_base ?? 0).toLocaleString('es-CO')}
                               </p>
                             </div>
                           </div>
@@ -645,7 +657,7 @@ export default function NuevaNominaWizard() {
         <Button
           variant="outline"
           onClick={handleAtras}
-          disabled={pasoActual === 1}
+          disabled={pasoActual === 1 || creando}
           className="gap-2"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -658,8 +670,8 @@ export default function NuevaNominaWizard() {
             <ArrowRight className="h-4 w-4" />
           </Button>
         ) : (
-          <Button onClick={handleFinalizar} className="gap-2">
-            <Check className="h-4 w-4" />
+          <Button onClick={handleFinalizar} disabled={creando} className="gap-2">
+            {creando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
             Crear Nómina
           </Button>
         )}

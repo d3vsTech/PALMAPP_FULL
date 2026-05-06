@@ -1,16 +1,7 @@
-// VER LIQUIDACIÓN - Solo lectura v1.0
-// Muestra cómo fue liquidado un colaborador sin permitir edición
-// Estructura según formato actual de la finca:
-// - BASE/SUELDO BÁSICO + EXTRAS + INCAPACIDADES = TOTAL BRUTO
-// - SUBSIDIO TRANSPORTE (suma aparte)
-// - DEDUCCIONES: Salud (4%), Pensión (4%), Adelantos, Ahorro
-// - BONIFICACIÓN (suma al final)
-// - TOTAL NETO = Total Bruto + Subsidio + Bonificación - Deducciones
-import { useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
-import { Input } from '../../components/ui/input';
 import { Badge } from '../../components/ui/badge';
 import {
   Breadcrumb,
@@ -22,145 +13,135 @@ import {
 } from '../../components/ui/breadcrumb';
 import {
   ArrowLeft,
-  Calculator,
+  Download,
+  FileText,
   TrendingUp,
   TrendingDown,
-  Plus,
-  Trash2,
   Calendar as CalendarIcon,
-  Package,
-  Check,
-  Save,
+  Loader2,
+  Send,
 } from 'lucide-react';
-import { nominaPeriodos, colaboradores } from '../../lib/mockData';
+import { toast } from 'sonner';
+import { nominaApi, DesprendibleData, CategoriaResumenTrabajo } from '../../../api/nomina';
+import type { ApiError } from '../../../api/client';
 
-// Datos de ejemplo para el resumen de trabajo diario
-const resumenTrabajoDiario: Record<string, Array<{
-  fecha: string;
-  lote: string;
-  sublote: string;
-  cosecha: string;
-  cuadrilla: string;
-  diasTrabajados: number;
-  racimos: number;
-  peso: number;
-  promedio: number;
-  precioKg: number;
-  total: number;
-  jornal: number;
-}>> = {
-  c1: [
-    { fecha: '2026-04-01', lote: 'TARRO', sublote: 'TA-01', cosecha: 'C-2026-001', cuadrilla: 'Cuadrilla A', diasTrabajados: 1, racimos: 45, peso: 675, promedio: 15.0, precioKg: 45, total: 30375, jornal: 85000 },
-    { fecha: '2026-04-02', lote: 'PISCINAS', sublote: 'PS-02', cosecha: 'C-2026-002', cuadrilla: 'Cuadrilla A', diasTrabajados: 1, racimos: 48, peso: 720, promedio: 15.0, precioKg: 45, total: 32400, jornal: 88000 },
-    { fecha: '2026-04-03', lote: 'PISCINAS', sublote: 'PS-03', cosecha: 'C-2026-003', cuadrilla: 'Individual', diasTrabajados: 1, racimos: 42, peso: 630, promedio: 15.0, precioKg: 42, total: 26460, jornal: 82000 },
-    { fecha: '2026-04-04', lote: 'ESCUELA', sublote: 'ES-01', cosecha: 'C-2026-004', cuadrilla: 'Cuadrilla B', diasTrabajados: 1, racimos: 50, peso: 750, promedio: 15.0, precioKg: 42, total: 31500, jornal: 90000 },
-    { fecha: '2026-04-05', lote: 'ESCUELA', sublote: 'ES-02', cosecha: 'C-2026-005', cuadrilla: 'Cuadrilla B', diasTrabajados: 1, racimos: 46, peso: 690, promedio: 15.0, precioKg: 42, total: 28980, jornal: 86000 },
-    { fecha: '2026-04-08', lote: 'CASIRO', sublote: 'CA-01', cosecha: 'C-2026-006', cuadrilla: 'Individual', diasTrabajados: 1, racimos: 44, peso: 660, promedio: 15.0, precioKg: 42, total: 27720, jornal: 84000 },
-    { fecha: '2026-04-09', lote: 'CASIRO', sublote: 'CA-02', cosecha: 'C-2026-007', cuadrilla: 'Cuadrilla A', diasTrabajados: 1, racimos: 47, peso: 705, promedio: 15.0, precioKg: 42, total: 29610, jornal: 87000 },
-    { fecha: '2026-04-10', lote: 'SEMBRIO A', sublote: 'SA-01', cosecha: 'C-2026-008', cuadrilla: 'Cuadrilla C', diasTrabajados: 1, racimos: 49, peso: 735, promedio: 15.0, precioKg: 42, total: 30870, jornal: 89000 },
-    { fecha: '2026-04-11', lote: 'SEMBRIO A', sublote: 'SA-02', cosecha: 'C-2026-009', cuadrilla: 'Cuadrilla C', diasTrabajados: 1, racimos: 43, peso: 645, promedio: 15.0, precioKg: 42, total: 27090, jornal: 83000 },
-    { fecha: '2026-04-12', lote: 'TARRO', sublote: 'TA-02', cosecha: 'C-2026-010', cuadrilla: 'Individual', diasTrabajados: 1, racimos: 51, peso: 765, promedio: 15.0, precioKg: 42, total: 32130, jornal: 91000 },
-  ],
-  c2: [],
-  c3: [
-    { fecha: '2026-04-01', lote: 'PISCINAS', sublote: 'PS-01', cosecha: 'C-2026-001', cuadrilla: 'Cuadrilla B', diasTrabajados: 1, racimos: 40, peso: 600, promedio: 15.0, precioKg: 45, total: 27000, jornal: 80000 },
-    { fecha: '2026-04-02', lote: 'PISCINAS', sublote: 'PS-04', cosecha: 'C-2026-002', cuadrilla: 'Individual', diasTrabajados: 1, racimos: 42, peso: 630, promedio: 15.0, precioKg: 45, total: 28350, jornal: 82000 },
-    { fecha: '2026-04-03', lote: 'ESCUELA', sublote: 'ES-03', cosecha: 'C-2026-003', cuadrilla: 'Cuadrilla A', diasTrabajados: 1, racimos: 38, peso: 570, promedio: 15.0, precioKg: 42, total: 23940, jornal: 78000 },
-    { fecha: '2026-04-04', lote: 'ESCUELA', sublote: 'ES-01', cosecha: 'C-2026-004', cuadrilla: 'Cuadrilla A', diasTrabajados: 1, racimos: 45, peso: 675, promedio: 15.0, precioKg: 42, total: 28350, jornal: 85000 },
-    { fecha: '2026-04-05', lote: 'CASIRO', sublote: 'CA-03', cosecha: 'C-2026-005', cuadrilla: 'Individual', diasTrabajados: 1, racimos: 41, peso: 615, promedio: 15.0, precioKg: 42, total: 25830, jornal: 81000 },
-    { fecha: '2026-04-08', lote: 'CASIRO', sublote: 'CA-01', cosecha: 'C-2026-006', cuadrilla: 'Cuadrilla B', diasTrabajados: 1, racimos: 39, peso: 585, promedio: 15.0, precioKg: 42, total: 24570, jornal: 79000 },
-    { fecha: '2026-04-09', lote: 'SEMBRIO A', sublote: 'SA-03', cosecha: 'C-2026-007', cuadrilla: 'Cuadrilla C', diasTrabajados: 1, racimos: 43, peso: 645, promedio: 15.0, precioKg: 42, total: 27090, jornal: 83000 },
-    { fecha: '2026-04-10', lote: 'SEMBRIO A', sublote: 'SA-01', cosecha: 'C-2026-008', cuadrilla: 'Cuadrilla C', diasTrabajados: 1, racimos: 44, peso: 660, promedio: 15.0, precioKg: 42, total: 27720, jornal: 84000 },
-  ],
-};
-
-const nominaDetalles = [
-  {
-    colaboradorId: 'c1',
-    tipoSalario: 'VARIABLE',
-    salarioBase: 1300000,
-  },
-  {
-    colaboradorId: 'c2',
-    tipoSalario: 'FIJO',
-    salarioBase: 1500000,
-  },
-  {
-    colaboradorId: 'c3',
-    tipoSalario: 'VARIABLE',
-    salarioBase: 1400000,
-  },
+const CATEGORIAS: { key: keyof Omit<NonNullable<DesprendibleData['resumen_trabajo']>, 'total_general'>; titulo: string }[] = [
+  { key: 'cosecha', titulo: 'Cosecha' },
+  { key: 'plateo', titulo: 'Plateo' },
+  { key: 'poda', titulo: 'Poda' },
+  { key: 'fertilizacion', titulo: 'Fertilización' },
+  { key: 'sanidad', titulo: 'Sanidad' },
+  { key: 'otros', titulo: 'Otros' },
+  { key: 'finca', titulo: 'Finca' },
 ];
+
+function getIniciales(nombre: string): string {
+  const partes = nombre.trim().split(' ').filter(Boolean);
+  if (partes.length === 0) return '?';
+  if (partes.length === 1) return partes[0].substring(0, 2).toUpperCase();
+  return `${partes[0][0]}${partes[1][0]}`.toUpperCase();
+}
+
+function fmt(n: number): string {
+  return `$${n.toLocaleString('es-CO')}`;
+}
+
+function Item({
+  label,
+  value,
+  destructivo,
+}: {
+  label: string;
+  value: string;
+  destructivo?: boolean;
+}) {
+  return (
+    <div className="flex justify-between text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className={`font-semibold ${destructivo ? 'text-destructive' : ''}`}>{value}</span>
+    </div>
+  );
+}
 
 export default function VerLiquidacion() {
   const { nominaId, colaboradorId } = useParams();
   const navigate = useNavigate();
+  const nominaEmpleadoId = colaboradorId ? parseInt(colaboradorId) : null;
 
-  const periodo = nominaPeriodos.find((p) => p.id === nominaId);
-  const colaborador = colaboradores.find((c) => c.id === colaboradorId);
-  const detalle = nominaDetalles.find((d) => d.colaboradorId === colaboradorId);
+  const [data, setData] = useState<DesprendibleData | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [descargando, setDescargando] = useState(false);
+  const [generandoWa, setGenerandoWa] = useState(false);
 
-  // Datos mockeados de liquidación (en producción vendrían de la API)
-  const incapacidades = 0;
-  const bonificaciones = colaboradorId === 'c2' ? 58364 : 0;
-  const ahorro = colaboradorId === 'c1' ? 20000 : 0;
-  const prestamos = colaboradorId === 'c1' ? [{ concepto: 'Adelanto quincena', valor: 50000 }] : [];
+  useEffect(() => {
+    if (!nominaEmpleadoId) return;
+    setCargando(true);
+    nominaApi
+      .desprendible(nominaEmpleadoId)
+      .then((res) => setData(res.data))
+      .catch((err: ApiError) => toast.error(err.message ?? 'Error al cargar liquidación'))
+      .finally(() => setCargando(false));
+  }, [nominaEmpleadoId]);
 
-  if (!periodo || !colaborador || !detalle) {
+  const descargarPdf = async () => {
+    if (!nominaEmpleadoId || !data) return;
+    setDescargando(true);
+    try {
+      const blob = await nominaApi.desprendiblePdf(nominaEmpleadoId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const filename = `desprendible_${data.empleado.documento}_${data.nomina.anio}_${String(data.nomina.mes).padStart(2, '0')}${data.nomina.quincena ? `_Q${data.nomina.quincena}` : ''}.pdf`;
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      const e = err as ApiError;
+      toast.error(e.message ?? 'Error al descargar PDF');
+    } finally {
+      setDescargando(false);
+    }
+  };
+
+  const enviarWhatsapp = async () => {
+    if (!nominaEmpleadoId) return;
+    setGenerandoWa(true);
+    try {
+      const res = await nominaApi.desprendibleWhatsapp(nominaEmpleadoId);
+      const text = encodeURIComponent(`Desprendible de pago: ${res.data.url}`);
+      window.open(`https://wa.me/?text=${text}`, '_blank');
+    } catch (err) {
+      const e = err as ApiError;
+      toast.error(e.message ?? 'Error al generar enlace');
+    } finally {
+      setGenerandoWa(false);
+    }
+  };
+
+  if (cargando) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-2">No encontrado</h1>
-          <p className="text-muted-foreground mb-4">
-            No se encontró la información de liquidación
-          </p>
-          <Button onClick={() => navigate('/nomina')}>Volver a Nómina</Button>
-        </div>
+      <div className="flex items-center justify-center py-20 gap-2 text-muted-foreground">
+        <Loader2 className="h-5 w-5 animate-spin" />
+        Cargando liquidación...
       </div>
     );
   }
 
-  const diasTrabajados = resumenTrabajoDiario[colaboradorId as keyof typeof resumenTrabajoDiario] || [];
+  if (!data) {
+    return (
+      <div className="text-center py-20 text-muted-foreground">
+        Liquidación no encontrada.
+      </div>
+    );
+  }
 
-  const totalJornales = diasTrabajados.reduce((sum, dia) => sum + dia.jornal, 0);
-  const totalRacimos = diasTrabajados.reduce((sum, dia) => sum + dia.racimos, 0);
-  const totalPeso = diasTrabajados.reduce((sum, dia) => sum + dia.peso, 0);
-  const totalCosecha = diasTrabajados.reduce((sum, dia) => sum + dia.total, 0);
-  const totalDias = diasTrabajados.length;
-
-  // Cálculos de liquidación según formato real
-  const salarioBase = detalle.tipoSalario === 'VARIABLE' ? totalJornales : (detalle.salarioBase || 0);
-  const totalBruto = salarioBase + incapacidades;
-  const auxTransporte = 162000;
-
-  // Base de cotización para calcular deducciones (Total Bruto)
-  const baseCotizacion = totalBruto;
-
-  // Deducciones legales (se calculan sobre Total Bruto)
-  const salud = Math.round(baseCotizacion * 0.04);
-  const pension = Math.round(baseCotizacion * 0.04);
-
-  // Total de préstamos/adelantos
-  const totalPrestamos = prestamos.reduce((sum, p) => sum + (Number(p.valor) || 0), 0);
-
-  // Cálculo final
-  const totalDeducciones = salud + pension + totalPrestamos + ahorro;
-  const netoAPagar = totalBruto + auxTransporte + bonificaciones - totalDeducciones;
-
-  const volverANomina = () => {
-    navigate(`/nomina/${nominaId}`);
-  };
-
-  const getIniciales = (nombre: string) => {
-    const partes = nombre.split(' ');
-    return partes.length > 1
-      ? `${partes[0][0]}${partes[1][0]}`.toUpperCase()
-      : nombre.substring(0, 2).toUpperCase();
-  };
+  const { empleado, nomina, liquidacion, resumen_trabajo } = data;
+  const esVariable = empleado.salario_tipo === 'VARIABLE';
 
   return (
     <div className="space-y-6">
-      {/* Breadcrumb */}
       <Breadcrumb>
         <BreadcrumbList>
           <BreadcrumbItem>
@@ -171,346 +152,245 @@ export default function VerLiquidacion() {
           <BreadcrumbSeparator />
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link to={`/nomina/${nominaId}`}>{periodo.periodo}</Link>
+              <Link to={`/nomina/${nominaId}`}>{nomina.periodo_label}</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
           <BreadcrumbItem>
-            <BreadcrumbPage>Liquidar Colaborador</BreadcrumbPage>
+            <BreadcrumbPage>Liquidación</BreadcrumbPage>
           </BreadcrumbItem>
         </BreadcrumbList>
       </Breadcrumb>
 
-      {/* Header */}
-      <div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate(`/nomina/${nominaId}`)}
-          className="mb-4 gap-2"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Volver
-        </Button>
-
-        <div className="flex items-center gap-4">
-          <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center border-2 border-primary/20">
-            <span className="text-xl font-bold text-primary">
-              {getIniciales(`${colaborador.nombres} ${colaborador.apellidos}`)}
-            </span>
-          </div>
-          <div>
-            <h1 className="text-4xl font-bold text-foreground">
-              {colaborador.nombres} {colaborador.apellidos}
-            </h1>
-            <div className="flex items-center gap-3 mt-2">
-              <Badge variant="outline">{detalle.tipoSalario}</Badge>
-              <span className="text-muted-foreground">•</span>
-              <span className="text-muted-foreground">{periodo.periodo}</span>
+      <div className="flex items-start justify-between">
+        <div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate(`/nomina/${nominaId}`)}
+            className="mb-4 gap-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Volver
+          </Button>
+          <div className="flex items-center gap-4">
+            <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center border-2 border-primary/20">
+              <span className="text-xl font-bold text-primary">
+                {getIniciales(empleado.nombre_completo)}
+              </span>
+            </div>
+            <div>
+              <h1 className="text-4xl font-bold text-foreground">{empleado.nombre_completo}</h1>
+              <div className="flex items-center gap-3 mt-2">
+                <Badge variant="outline">{empleado.salario_tipo}</Badge>
+                <span className="text-muted-foreground">·</span>
+                <span className="text-muted-foreground">{empleado.cargo}</span>
+                <span className="text-muted-foreground">·</span>
+                <span className="text-muted-foreground">{nomina.periodo_label}</span>
+              </div>
             </div>
           </div>
         </div>
+
+        <div className="flex gap-2">
+          <Button onClick={descargarPdf} disabled={descargando} className="gap-2">
+            {descargando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            Descargar PDF
+          </Button>
+          <Button variant="outline" onClick={enviarWhatsapp} disabled={generandoWa} className="gap-2">
+            {generandoWa ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            WhatsApp
+          </Button>
+        </div>
       </div>
 
-      {/* Resumen de Trabajo Diario - Solo para VARIABLE */}
-      {detalle.tipoSalario === 'VARIABLE' && (
+      <Card className="border-border">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-xl">
+            <FileText className="h-6 w-6 text-primary" />
+            Información del período
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <p className="text-xs text-muted-foreground">Finca</p>
+              <p className="font-medium">{data.finca}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Documento</p>
+              <p className="font-medium">{empleado.documento}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Período</p>
+              <p className="font-medium">
+                {nomina.fecha_inicio} → {nomina.fecha_fin}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Liquidado por</p>
+              <p className="font-medium">{liquidacion.liquidado_por}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {esVariable && resumen_trabajo && (
         <Card className="border-border">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-xl">
               <CalendarIcon className="h-6 w-6 text-primary" />
-              Resumen de Trabajo - Planilla Diaria
+              Resumen de trabajo
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            {diasTrabajados.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/30">
-                      <th className="text-left p-2 font-semibold text-xs text-muted-foreground whitespace-nowrap">
-                        Fecha
-                      </th>
-                      <th className="text-left p-2 font-semibold text-xs text-muted-foreground whitespace-nowrap">
-                        Lote
-                      </th>
-                      <th className="text-left p-2 font-semibold text-xs text-muted-foreground whitespace-nowrap">
-                        Sublote
-                      </th>
-                      <th className="text-left p-2 font-semibold text-xs text-muted-foreground whitespace-nowrap">
-                        Cosecha
-                      </th>
-                      <th className="text-left p-2 font-semibold text-xs text-muted-foreground whitespace-nowrap">
-                        Cuadrilla
-                      </th>
-                      <th className="text-center p-2 font-semibold text-xs text-muted-foreground whitespace-nowrap">
-                        Días
-                      </th>
-                      <th className="text-right p-2 font-semibold text-xs text-muted-foreground whitespace-nowrap">
-                        Racimos
-                      </th>
-                      <th className="text-right p-2 font-semibold text-xs text-muted-foreground whitespace-nowrap">
-                        Peso (kg)
-                      </th>
-                      <th className="text-right p-2 font-semibold text-xs text-muted-foreground whitespace-nowrap">
-                        Prom.
-                      </th>
-                      <th className="text-right p-2 font-semibold text-xs text-muted-foreground whitespace-nowrap">
-                        Precio/kg
-                      </th>
-                      <th className="text-right p-2 font-semibold text-xs text-muted-foreground whitespace-nowrap">
-                        Total Cosecha
-                      </th>
-                      <th className="text-right p-2 font-semibold text-xs text-muted-foreground whitespace-nowrap bg-green-50">
-                        Jornal
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {diasTrabajados.map((dia, index) => (
-                      <tr
-                        key={index}
-                        className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors ${
-                          index % 2 === 0 ? 'bg-background' : 'bg-muted/5'
-                        }`}
-                      >
-                        <td className="p-2 text-xs whitespace-nowrap">
-                          {new Date(dia.fecha).toLocaleDateString('es-CO', {
-                            day: '2-digit',
-                            month: '2-digit',
-                          })}
-                        </td>
-                        <td className="p-2 text-xs font-medium whitespace-nowrap">{dia.lote}</td>
-                        <td className="p-2 text-xs text-muted-foreground whitespace-nowrap">{dia.sublote}</td>
-                        <td className="p-2 text-xs text-muted-foreground whitespace-nowrap">{dia.cosecha}</td>
-                        <td className="p-2 text-xs text-muted-foreground whitespace-nowrap">{dia.cuadrilla}</td>
-                        <td className="p-2 text-xs text-center whitespace-nowrap">{dia.diasTrabajados}</td>
-                        <td className="p-2 text-xs text-right font-medium whitespace-nowrap">{dia.racimos}</td>
-                        <td className="p-2 text-xs text-right font-medium whitespace-nowrap">{dia.peso}</td>
-                        <td className="p-2 text-xs text-right whitespace-nowrap">{dia.promedio.toFixed(1)}</td>
-                        <td className="p-2 text-xs text-right whitespace-nowrap">${dia.precioKg}</td>
-                        <td className="p-2 text-xs text-right font-semibold text-amber-600 whitespace-nowrap">
-                          ${dia.total.toLocaleString('es-CO')}
-                        </td>
-                        <td className="p-2 text-xs text-right font-bold text-success bg-green-50 whitespace-nowrap">
-                          ${dia.jornal.toLocaleString('es-CO')}
-                        </td>
-                      </tr>
-                    ))}
-                    <tr className="border-t-2 border-primary bg-primary/5">
-                      <td className="p-2 text-xs font-bold" colSpan={6}>TOTALES</td>
-                      <td className="p-2 text-xs text-right font-bold">{totalRacimos}</td>
-                      <td className="p-2 text-xs text-right font-bold">{totalPeso}</td>
-                      <td className="p-2 text-xs"></td>
-                      <td className="p-2 text-xs"></td>
-                      <td className="p-2 text-xs text-right font-bold text-amber-600">
-                        ${totalCosecha.toLocaleString('es-CO')}
-                      </td>
-                      <td className="p-2 text-xs text-right font-bold text-success bg-green-100">
-                        ${totalJornales.toLocaleString('es-CO')}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+          <CardContent className="space-y-4">
+            {CATEGORIAS.map(({ key, titulo }) => {
+              const cat = resumen_trabajo[key] as CategoriaResumenTrabajo;
+              if (!cat || cat.filas.length === 0) return null;
+              return (
+                <div key={key} className="border border-border rounded-lg overflow-hidden">
+                  <div className="bg-primary/10 px-3 py-2 border-b border-border flex justify-between items-center">
+                    <h4 className="font-semibold text-sm text-primary">{titulo}</h4>
+                    <span className="font-semibold text-sm text-success">
+                      ${cat.subtotal_jornal.toLocaleString('es-CO')}
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-border bg-muted/30">
+                          <th className="text-left p-2">Fecha</th>
+                          <th className="text-left p-2">Lote</th>
+                          <th className="text-left p-2">Sublote</th>
+                          <th className="text-right p-2">Jornal</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cat.filas.map((f, i) => (
+                          <tr
+                            key={i}
+                            className={`border-b border-border last:border-0 ${
+                              i % 2 === 0 ? 'bg-background' : 'bg-muted/5'
+                            }`}
+                          >
+                            <td className="p-2">{f.fecha}</td>
+                            <td className="p-2">{f.lote ?? '-'}</td>
+                            <td className="p-2">{f.sublote ?? '-'}</td>
+                            <td className="p-2 text-right font-semibold text-success">
+                              ${f.jornal.toLocaleString('es-CO')}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })}
+            <div className="flex justify-end pt-2 border-t-2 border-primary">
+              <div className="flex items-center gap-3">
+                <span className="font-bold">Total General:</span>
+                <span className="text-2xl font-bold text-success">
+                  ${resumen_trabajo.total_general.toLocaleString('es-CO')}
+                </span>
               </div>
-            ) : (
-              <div className="text-center py-12 text-muted-foreground">
-                <Package className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                <p className="text-lg font-medium mb-1">Sin Registro</p>
-                <p className="text-sm">
-                  No hay registro de jornales para este período.
-                </p>
-              </div>
-            )}
+            </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Apartado de Liquidación */}
       <Card className="border-border">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-xl">
-            <Calculator className="h-6 w-6 text-primary" />
-            Desprendible de Nómina
+            <TrendingUp className="h-6 w-6 text-success" />
+            Devengado
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6">
-          {/* INFORMACIÓN BÁSICA */}
-          <div className="grid grid-cols-2 gap-4 p-4 bg-muted/20 rounded-lg">
-            <div>
-              <p className="text-sm text-muted-foreground">Días Trabajados</p>
-              <p className="text-xl font-bold">{totalDias}</p>
+        <CardContent>
+          <div className="space-y-2 bg-success/5 p-4 rounded-lg border border-success/20">
+            <Item label="Días trabajados" value={String(liquidacion.dias_trabajados)} />
+            {liquidacion.total_jornales > 0 && (
+              <Item label="Jornales" value={fmt(liquidacion.total_jornales)} />
+            )}
+            {liquidacion.total_cosecha > 0 && (
+              <Item label="Cosecha" value={fmt(liquidacion.total_cosecha)} />
+            )}
+            {liquidacion.total_horas_extra > 0 && (
+              <Item label="Horas extra" value={fmt(liquidacion.total_horas_extra)} />
+            )}
+            {liquidacion.total_recargos > 0 && (
+              <Item label="Recargos" value={fmt(liquidacion.total_recargos)} />
+            )}
+            {liquidacion.total_incapacidades > 0 && (
+              <Item label="Incapacidades" value={fmt(liquidacion.total_incapacidades)} />
+            )}
+            {liquidacion.bonificaciones.length > 0 && (
+              <>
+                <p className="text-xs font-semibold mt-3 mb-1">Bonificaciones</p>
+                {liquidacion.bonificaciones.map((b, i) => (
+                  <Item
+                    key={i}
+                    label={b.nombre + (b.observacion ? ` (${b.observacion})` : '')}
+                    value={fmt(b.valor)}
+                  />
+                ))}
+              </>
+            )}
+            <div className="flex justify-between pt-2 border-t border-success/30">
+              <span className="font-bold text-success">Total devengado</span>
+              <span className="font-bold text-lg text-success">
+                {fmt(liquidacion.total_devengado + liquidacion.total_bonificaciones)}
+              </span>
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Cédula</p>
-              <p className="text-xl font-bold">{colaborador.numeroDocumento}</p>
-            </div>
+            <Item label="Subsidio transporte" value={fmt(liquidacion.subsidio_transporte)} />
           </div>
+        </CardContent>
+      </Card>
 
-          {/* DEVENGADO */}
-          <div>
-            <h3 className="font-semibold mb-3 flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-success" />
-              Devengado
-            </h3>
-            <div className="space-y-3 bg-success/5 p-5 rounded-lg border border-success/20">
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground font-medium">
-                  {detalle.tipoSalario === 'VARIABLE' ? 'BASE (Jornales)' : 'SUELDO BÁSICO'}
-                </span>
-                <span className="font-bold text-lg">
-                  ${salarioBase.toLocaleString('es-CO')}
-                </span>
-              </div>
-
-              <div className="flex justify-between items-center gap-3">
-                <span className="text-muted-foreground font-medium">INCAPACIDADES</span>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  value={incapacidades || ''}
-                  disabled
-                  className="w-48 text-right font-semibold"
+      <Card className="border-border">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-xl">
+            <TrendingDown className="h-6 w-6 text-destructive" />
+            Deducciones
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2 bg-destructive/5 p-4 rounded-lg border border-destructive/20">
+            {liquidacion.deducciones.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center">No aplica</p>
+            ) : (
+              liquidacion.deducciones.map((d, i) => (
+                <Item
+                  key={i}
+                  label={
+                    d.nombre +
+                    (d.porcentaje !== undefined && d.base !== undefined
+                      ? ` (${d.porcentaje}% sobre ${fmt(d.base)})`
+                      : '') +
+                    (d.observacion ? ` — ${d.observacion}` : '')
+                  }
+                  value={fmt(d.valor)}
+                  destructivo
                 />
-              </div>
-
-              <div className="flex justify-between pt-3 border-t-2 border-success/30">
-                <span className="font-bold text-success">TOTAL BRUTO</span>
-                <span className="font-bold text-xl text-success">
-                  ${totalBruto.toLocaleString('es-CO')}
-                </span>
-              </div>
-
-              <div className="flex justify-between pt-2">
-                <span className="text-muted-foreground font-medium">SUBSIDIO TRANSPORTE</span>
-                <span className="font-bold text-lg">
-                  ${auxTransporte.toLocaleString('es-CO')}
-                </span>
-              </div>
+              ))
+            )}
+            <div className="flex justify-between pt-2 border-t border-destructive/30">
+              <span className="font-semibold">Total deducciones</span>
+              <span className="font-semibold text-destructive">
+                {fmt(liquidacion.total_deducciones)}
+              </span>
             </div>
           </div>
+        </CardContent>
+      </Card>
 
-          {/* DEDUCCIONES */}
+      <Card className="border-2 border-primary bg-primary/5">
+        <CardContent className="p-6 flex items-center justify-between">
           <div>
-            <h3 className="font-semibold mb-3 flex items-center gap-2">
-              <TrendingDown className="h-5 w-5 text-destructive" />
-              Deducciones
-            </h3>
-            <div className="space-y-3 bg-destructive/5 p-5 rounded-lg border border-destructive/20">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground font-medium">DESCUENTO SALUD (4%)</span>
-                <span className="font-bold text-destructive">
-                  ${salud.toLocaleString('es-CO')}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground font-medium">DESCUENTO PENSIÓN (4%)</span>
-                <span className="font-bold text-destructive">
-                  ${pension.toLocaleString('es-CO')}
-                </span>
-              </div>
-
-              {/* PRÉSTAMOS/ADELANTOS */}
-              <div className="pt-3 border-t border-destructive/20">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-muted-foreground font-medium">DCTO ADELANTOS</span>
-                </div>
-
-                {prestamos.length > 0 ? (
-                  <div className="space-y-2 mt-2">
-                    {prestamos.map((prestamo, index) => (
-                      <div key={index} className="flex items-center justify-between gap-2 py-1">
-                        <span className="text-sm">{prestamo.concepto}</span>
-                        <span className="font-semibold text-destructive">
-                          ${prestamo.valor.toLocaleString('es-CO')}
-                        </span>
-                      </div>
-                    ))}
-                    <div className="flex justify-end pt-1 border-t border-destructive/20">
-                      <span className="text-sm font-semibold text-destructive">
-                        Total: ${totalPrestamos.toLocaleString('es-CO')}
-                      </span>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-sm text-right font-semibold text-destructive">$0</p>
-                )}
-              </div>
-
-              <div className="flex justify-between items-center gap-3 pt-2">
-                <span className="text-muted-foreground font-medium">AHORRO</span>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  value={ahorro || ''}
-                  disabled
-                  className="w-48 text-right font-semibold"
-                />
-              </div>
-            </div>
+            <p className="text-sm text-muted-foreground">Total neto a pagar</p>
+            <p className="text-xs text-muted-foreground">{liquidacion.fecha_humana}</p>
           </div>
-
-          {/* BONIFICACIÓN */}
-          <div>
-            <h3 className="font-semibold mb-3 flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-green-600" />
-              Bonificación
-            </h3>
-            <div className="bg-green-50 p-5 rounded-lg border border-green-200">
-              <div className="flex justify-between items-center gap-3">
-                <span className="text-muted-foreground font-medium">BONIFICACIÓN</span>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  value={bonificaciones || ''}
-                  disabled
-                  className="w-48 text-right font-semibold"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* RESUMEN FINAL */}
-          <div className="pt-6 border-t-2">
-            <div className="space-y-4 bg-primary/10 p-6 rounded-lg border-2 border-primary/30">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <p className="text-muted-foreground">Total Bruto</p>
-                  <p className="font-bold text-lg">${totalBruto.toLocaleString('es-CO')}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Subsidio Transporte</p>
-                  <p className="font-bold text-lg text-success">${auxTransporte.toLocaleString('es-CO')}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Bonificaciones</p>
-                  <p className="font-bold text-lg text-green-600">${bonificaciones.toLocaleString('es-CO')}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Total Deducciones</p>
-                  <p className="font-bold text-lg text-destructive">${totalDeducciones.toLocaleString('es-CO')}</p>
-                </div>
-              </div>
-
-              <div className="flex justify-between pt-4 border-t-2 border-primary/30">
-                <span className="font-bold text-2xl">TOTAL NETO</span>
-                <span className="font-bold text-3xl text-primary">
-                  ${netoAPagar.toLocaleString('es-CO')}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Botón de volver */}
-          <div className="flex justify-end pt-6">
-            <Button
-              onClick={volverANomina}
-              className="gap-2"
-              size="lg"
-            >
-              <ArrowLeft className="h-5 w-5" />
-              Volver a Nómina
-            </Button>
-          </div>
+          <p className="text-4xl font-bold text-primary">{fmt(liquidacion.total_neto)}</p>
         </CardContent>
       </Card>
     </div>
