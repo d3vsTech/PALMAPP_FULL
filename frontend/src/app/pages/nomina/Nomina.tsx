@@ -1,557 +1,486 @@
+// VERSIÓN: Botón Liquidar BORRADOR MAYÚSCULAS - v2.0
 import { useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { Button } from '../../components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
+import { Card, CardContent } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
-import { Label } from '../../components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
-import { Plus, FileText, Calculator, Palmtree, TrendingUp, TrendingDown } from 'lucide-react';
-import StatusBadge from '../../components/common/StatusBadge';
-import { nominaPeriodos, colaboradores } from '../../lib/mockData';
-import { CrearNominaModal } from '../../components/nomina/CrearNominaModal';
-import { LiquidacionFinalModal } from '../../components/liquidaciones/LiquidacionFinalModal';
-import { CrearVacacionesModal } from '../../components/liquidaciones/CrearVacacionesModal';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../../components/ui/table';
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../../components/ui/select';
+import {
+  Plus,
+  FileText,
+  Calculator,
+  TrendingUp,
+  TrendingDown,
+  Eye,
+  Search,
+  Filter,
+  DollarSign,
+  Users,
+  Calendar,
+  Receipt,
+  PiggyBank,
+} from 'lucide-react';
+import StatusBadge from '../../components/common/StatusBadge';
+import { nominaPeriodos } from '../../lib/mockData';
 import { Badge } from '../../components/ui/badge';
 
-// Mock data para vacaciones
-const vacacionesData = [
-  { id: 'v1', colaboradorId: 'c1', nombres: 'Carlos', apellidos: 'Rodríguez', diasGenerados: 30, diasTomados: 15, diasPagados: 0, diasDisponibles: 15 },
-  { id: 'v2', colaboradorId: 'c2', nombres: 'María', apellidos: 'González', diasGenerados: 30, diasTomados: 10, diasPagados: 5, diasDisponibles: 15 },
-];
-
 export default function Nomina() {
-  const [openModalNomina, setOpenModalNomina] = useState(false);
-  const [openModalLiquidacion, setOpenModalLiquidacion] = useState(false);
-  const [openModalVacaciones, setOpenModalVacaciones] = useState(false);
-  
-  // Simuladores
-  const [colaboradorSeleccionado, setColaboradorSeleccionado] = useState('');
-  const [diasTrabajados, setDiasTrabajados] = useState('');
-  const [resultado, setResultado] = useState<number | null>(null);
-  const [tipoCalculo, setTipoCalculo] = useState<'cesantias' | 'intereses' | 'prima'>('cesantias');
+  const navigate = useNavigate();
 
-  const calcularCesantias = () => {
-    const colaborador = colaboradores.find((c) => c.id === colaboradorSeleccionado);
-    if (!colaborador) return;
-    
-    const salario = colaborador.salarioBase;
-    const subsidioTransporte = salario <= (2 * 1423500) ? 140606 : 0;
-    const dias = parseInt(diasTrabajados);
-    const cesantias = ((salario + subsidioTransporte) * dias) / 360;
-    setResultado(cesantias);
-  };
+  // Verificación de versión
+  console.log('Nomina - BORRADOR MAYÚSCULAS v2.0 - Timestamp:', Date.now());
 
-  const calcularIntereses = () => {
-    const colaborador = colaboradores.find((c) => c.id === colaboradorSeleccionado);
-    if (!colaborador) return;
-    
-    const salario = colaborador.salarioBase;
-    const subsidioTransporte = salario <= (2 * 1423500) ? 140606 : 0;
-    const dias = parseInt(diasTrabajados);
-    const cesantias = ((salario + subsidioTransporte) * dias) / 360;
-    const intereses = (cesantias * 0.12 * dias) / 360;
-    setResultado(intereses);
-  };
+  const [filtroEstado, setFiltroEstado] = useState<string>('todos');
+  const [filtroMes, setFiltroMes] = useState<string>('todos');
+  const [filtroBusqueda, setFiltroBusqueda] = useState('');
+  const [prestamos, setPrestamos] = useState<any[]>([]);
 
-  const calcularPrima = () => {
-    const colaborador = colaboradores.find((c) => c.id === colaboradorSeleccionado);
-    if (!colaborador) return;
-    
-    const salario = colaborador.salarioBase;
-    const subsidioTransporte = salario <= (2 * 1423500) ? 140606 : 0;
-    const dias = parseInt(diasTrabajados);
-    const prima = ((salario + subsidioTransporte) * dias) / 360;
-    setResultado(prima);
-  };
+  // Filtrar nóminas
+  const nominasFiltradas = nominaPeriodos.filter((nomina) => {
+    const cumpleEstado =
+      filtroEstado === 'todos' ||
+      nomina.estado === filtroEstado ||
+      nomina.estado.toUpperCase() === filtroEstado.toUpperCase();
+    const cumpleMes = filtroMes === 'todos' || nomina.mes.toString() === filtroMes;
+    const cumpleBusqueda =
+      filtroBusqueda === '' ||
+      nomina.periodo.toLowerCase().includes(filtroBusqueda.toLowerCase());
+    return cumpleEstado && cumpleMes && cumpleBusqueda;
+  });
 
-  const handleCalcular = () => {
-    if (tipoCalculo === 'cesantias') calcularCesantias();
-    else if (tipoCalculo === 'intereses') calcularIntereses();
-    else if (tipoCalculo === 'prima') calcularPrima();
-  };
-
-  const handleCrearNomina = (data: { ano: number; mes: number; quincena: number }) => {
-    console.log('Crear nómina:', data);
-    // Aquí iría la lógica para crear la nómina
-  };
-
-  const handleGuardarLiquidacion = (liquidacion: any) => {
-    console.log('Guardar liquidación:', liquidacion);
-  };
-
-  const handleGuardarVacaciones = (vacaciones: any) => {
-    console.log('Guardar vacaciones:', vacaciones);
-  };
-
-  const totalNominasActivas = nominaPeriodos.filter(p => p.estado === 'Borrador').length;
-  const totalNominasCerradas = nominaPeriodos.filter(p => p.estado === 'Cerrada').length;
+  const totalNominasActivas = nominaPeriodos.filter((p) => p.estado === 'BORRADOR' || p.estado === 'Borrador').length;
+  const totalNominasCerradas = nominaPeriodos.filter((p) => p.estado === 'CERRADA' || p.estado === 'Cerrada').length;
+  const totalDevengado = nominaPeriodos.reduce((sum, p) => sum + p.devengadoTotal, 0);
+  const totalColaboradores = nominaPeriodos.length > 0 ? 24 : 0;
 
   return (
     <div className="space-y-6">
-      {/* Modales */}
-      <CrearNominaModal
-        isOpen={openModalNomina}
-        onClose={() => setOpenModalNomina(false)}
-        onSave={handleCrearNomina}
-      />
-      
-      <LiquidacionFinalModal
-        isOpen={openModalLiquidacion}
-        onClose={() => setOpenModalLiquidacion(false)}
-        colaboradores={colaboradores.map(c => ({
-          ...c,
-          fechaIngreso: c.fechaIngreso || '2020-01-01'
-        }))}
-        onSave={handleGuardarLiquidacion}
-      />
-
-      <CrearVacacionesModal
-        isOpen={openModalVacaciones}
-        onClose={() => setOpenModalVacaciones(false)}
-        colaboradores={colaboradores.map(c => ({
-          id: c.id,
-          nombres: c.nombres,
-          apellidos: c.apellidos,
-          diasVacacionesDisponibles: 15
-        }))}
-        onSave={handleGuardarVacaciones}
-      />
-
-      {/* Header ultra-moderno */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-3xl border border-primary/30 p-10 shadow-2xl shadow-primary/10">
-        <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-primary/30 to-primary/5 blur-3xl" />
-        <div className="absolute -bottom-32 -left-32 h-80 w-80 rounded-full bg-gradient-to-br from-accent/30 to-accent/5 blur-3xl" />
-        
-        <div className="relative z-10">
-          <div className="mb-4 inline-flex items-center gap-2.5 rounded-full bg-gradient-to-r from-primary/20 to-primary/10 backdrop-blur-sm border border-primary/30 px-4 py-2 shadow-lg shadow-primary/20">
-            <div className="relative h-2.5 w-2.5">
-              <div className="absolute inset-0 rounded-full bg-primary animate-pulse" />
-              <div className="absolute inset-0 rounded-full bg-primary blur-sm animate-pulse" />
-            </div>
-            <span className="text-sm font-semibold text-primary">Gestión de Nómina</span>
-          </div>
-          <h1 className="text-5xl font-bold mb-3 bg-gradient-to-br from-foreground via-foreground to-foreground/60 bg-clip-text">
-            Nómina y Liquidaciones
-          </h1>
-          <p className="text-xl text-muted-foreground font-medium">
-            Gestión de períodos de nómina, desprendibles y prestaciones sociales
+      {/* Header con botón de crear */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-4xl font-bold text-foreground">Nómina</h1>
+          <p className="text-muted-foreground mt-2">
+            Gestión de períodos de nómina y desprendibles de pago
           </p>
+        </div>
+        <div className="flex gap-3">
+          <Button
+            onClick={() => navigate('/nomina/planilla-diaria')}
+            size="lg"
+            variant="outline"
+            className="gap-2"
+          >
+            <Receipt className="h-4 w-4" />
+            Planilla Diaria
+          </Button>
+          <Button
+            onClick={() => navigate('/nomina/nuevo-prestamo')}
+            size="lg"
+            variant="outline"
+            className="gap-2 border-primary text-primary hover:bg-primary/10"
+          >
+            <DollarSign className="h-5 w-5" />
+            Nuevo Préstamo
+          </Button>
+          <Button onClick={() => navigate('/nomina/nueva')} size="lg" className="gap-2">
+            <Plus className="h-5 w-5" />
+            Nueva Nómina
+          </Button>
         </div>
       </div>
 
-      {/* KPIs */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-sm border-border/50">
-          <CardHeader className="pb-2">
-            <CardDescription className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-primary" />
-              Nóminas en Borrador
-            </CardDescription>
-            <CardTitle className="text-4xl font-bold text-primary">{totalNominasActivas}</CardTitle>
-          </CardHeader>
+      {/* Estadísticas */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card className="border-border">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground mb-2">
+                  Total Períodos
+                </p>
+                <p className="text-3xl font-bold text-foreground">{nominaPeriodos.length}</p>
+                <p className="text-xs text-muted-foreground mt-1">Histórico</p>
+              </div>
+              <div className="h-14 w-14 rounded-xl bg-primary/10 flex items-center justify-center">
+                <Calendar className="h-7 w-7 text-primary" />
+              </div>
+            </div>
+          </CardContent>
         </Card>
-        <Card className="bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-sm border-border/50">
-          <CardHeader className="pb-2">
-            <CardDescription className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-success" />
-              Nóminas Cerradas
-            </CardDescription>
-            <CardTitle className="text-4xl font-bold text-success">{totalNominasCerradas}</CardTitle>
-          </CardHeader>
+
+        <Card className="border-border">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground mb-2">
+                  Nóminas en Borrador
+                </p>
+                <p className="text-3xl font-bold text-foreground">{totalNominasActivas}</p>
+                <p className="text-xs text-muted-foreground mt-1">Pendientes de cerrar</p>
+              </div>
+              <div className="h-14 w-14 rounded-xl bg-amber-500/10 flex items-center justify-center">
+                <FileText className="h-7 w-7 text-amber-600" />
+              </div>
+            </div>
+          </CardContent>
         </Card>
-        <Card className="bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-sm border-border/50">
-          <CardHeader className="pb-2">
-            <CardDescription className="flex items-center gap-2">
-              <Calculator className="h-4 w-4 text-accent" />
-              Total Períodos
-            </CardDescription>
-            <CardTitle className="text-4xl font-bold text-accent">{nominaPeriodos.length}</CardTitle>
-          </CardHeader>
+
+        <Card className="border-border">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground mb-2">
+                  Nóminas Cerradas
+                </p>
+                <p className="text-3xl font-bold text-foreground">{totalNominasCerradas}</p>
+                <p className="text-xs text-muted-foreground mt-1">Completadas</p>
+              </div>
+              <div className="h-14 w-14 rounded-xl bg-success/10 flex items-center justify-center">
+                <FileText className="h-7 w-7 text-success" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground mb-2">
+                  Total Devengado
+                </p>
+                <p className="text-3xl font-bold text-foreground">
+                  ${(totalDevengado / 1000000).toFixed(1)}M
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">Acumulado</p>
+              </div>
+              <div className="h-14 w-14 rounded-xl bg-green-500/10 flex items-center justify-center">
+                <DollarSign className="h-7 w-7 text-green-600" />
+              </div>
+            </div>
+          </CardContent>
         </Card>
       </div>
 
-      <Tabs defaultValue="nomina" className="space-y-6">
-        <TabsList className="bg-muted/50 backdrop-blur-sm">
-          <TabsTrigger value="nomina" className="gap-2">
-            <FileText className="h-4 w-4" />
-            Nómina
-          </TabsTrigger>
-          <TabsTrigger value="liquidaciones" className="gap-2">
-            <Calculator className="h-4 w-4" />
-            Liquidaciones
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Tab de Nómina */}
-        <TabsContent value="nomina" className="space-y-6">
-          <div className="flex items-center justify-end">
-            <Button onClick={() => setOpenModalNomina(true)} className="bg-primary hover:bg-primary/90">
-              <Plus className="mr-2 h-4 w-4" />
-              Nueva Nómina
-            </Button>
+      {/* Préstamos Registrados */}
+      {prestamos.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="mb-2">Préstamos Registrados</h2>
+              <p className="text-muted-foreground">Descuentos automáticos programados</p>
+            </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {nominaPeriodos.map((periodo) => (
-              <Card key={periodo.id} className="group relative transition-all duration-300 hover:shadow-xl hover:shadow-primary/5 hover:-translate-y-1 bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-sm border-border/50">
-                <CardHeader>
-                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/30 shadow-lg shadow-primary/20 group-hover:shadow-primary/40 transition-all duration-300">
-                      <FileText className="h-5 w-5 text-primary" />
-                    </div>
-                    <StatusBadge status={periodo.estado as any} />
-                  </div>
-                  <CardTitle className="mt-2">{periodo.periodo}</CardTitle>
-                  <CardDescription>
-                    {periodo.mes}/{periodo.ano} - Quincena {periodo.quincena}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground flex items-center gap-1">
-                        <TrendingUp className="h-3 w-3 text-success" />
-                        Devengado:
-                      </span>
-                      <span className="font-medium text-success">
-                        ${periodo.devengadoTotal.toLocaleString('es-CO')}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground flex items-center gap-1">
-                        <TrendingDown className="h-3 w-3 text-destructive" />
-                        Deducciones:
-                      </span>
-                      <span className="font-medium text-destructive">
-                        ${periodo.deduccionesTotal.toLocaleString('es-CO')}
-                      </span>
-                    </div>
-                    <div className="flex justify-between border-t pt-2">
-                      <span className="font-semibold">Neto:</span>
-                      <span className="font-semibold text-primary">
-                        ${periodo.netoTotal.toLocaleString('es-CO')}
-                      </span>
-                    </div>
-                  </div>
-                  <Button asChild variant="outline" className="w-full">
-                    <Link to={`/nomina/${periodo.id}`}>Ver Detalle</Link>
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
+          <Card className="border-border">
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30">
+                      <th className="text-left p-4 font-semibold text-sm text-muted-foreground">
+                        Colaborador
+                      </th>
+                      <th className="text-left p-4 font-semibold text-sm text-muted-foreground">
+                        Concepto
+                      </th>
+                      <th className="text-left p-4 font-semibold text-sm text-muted-foreground">
+                        Fecha Desde
+                      </th>
+                      <th className="text-left p-4 font-semibold text-sm text-muted-foreground">
+                        Fecha Hasta
+                      </th>
+                      <th className="text-right p-4 font-semibold text-sm text-muted-foreground">
+                        Monto
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {prestamos.map((ahorro, index) => (
+                      <tr
+                        key={ahorro.id}
+                        className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors ${
+                          index % 2 === 0 ? 'bg-background' : 'bg-muted/5'
+                        }`}
+                      >
+                        <td className="p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary border border-primary/20">
+                              <Users className="h-5 w-5" />
+                            </div>
+                            <span className="font-semibold text-sm">{ahorro.colaboradorNombre}</span>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <span className="text-sm">{ahorro.concepto}</span>
+                        </td>
+                        <td className="p-4">
+                          <span className="text-sm">
+                            {new Date(ahorro.fechaDesde).toLocaleDateString('es-CO')}
+                          </span>
+                        </td>
+                        <td className="p-4">
+                          <span className="text-sm">
+                            {new Date(ahorro.fechaHasta).toLocaleDateString('es-CO')}
+                          </span>
+                        </td>
+                        <td className="p-4 text-right">
+                          <span className="text-sm font-semibold text-primary">
+                            ${ahorro.monto.toLocaleString('es-CO')}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Filtros */}
+      <Card className="border-border">
+        <CardContent className="p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <Filter className="h-5 w-5 text-muted-foreground" />
+            <h3 className="font-semibold">Filtros</h3>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Buscar</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por período..."
+                  value={filtroBusqueda}
+                  onChange={(e) => setFiltroBusqueda(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Estado</label>
+              <Select value={filtroEstado} onValueChange={setFiltroEstado}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  <SelectItem value="BORRADOR">Borrador</SelectItem>
+                  <SelectItem value="CERRADA">Cerrada</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Mes</label>
+              <Select value={filtroMes} onValueChange={setFiltroMes}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  <SelectItem value="1">Enero</SelectItem>
+                  <SelectItem value="2">Febrero</SelectItem>
+                  <SelectItem value="3">Marzo</SelectItem>
+                  <SelectItem value="4">Abril</SelectItem>
+                  <SelectItem value="5">Mayo</SelectItem>
+                  <SelectItem value="6">Junio</SelectItem>
+                  <SelectItem value="7">Julio</SelectItem>
+                  <SelectItem value="8">Agosto</SelectItem>
+                  <SelectItem value="9">Septiembre</SelectItem>
+                  <SelectItem value="10">Octubre</SelectItem>
+                  <SelectItem value="11">Noviembre</SelectItem>
+                  <SelectItem value="12">Diciembre</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
-          {nominaPeriodos.length === 0 && (
-            <Card className="bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-sm border-border/50">
-              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-                  <FileText className="h-8 w-8 text-muted-foreground" />
-                </div>
-                <h3 className="mb-2 text-lg font-semibold">No hay períodos de nómina</h3>
-                <p className="mb-4 text-sm text-muted-foreground">
-                  Comienza creando tu primer período de nómina
-                </p>
-                <Button onClick={() => setOpenModalNomina(true)}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Crear Primera Nómina
-                </Button>
-              </CardContent>
-            </Card>
+          {(filtroEstado !== 'todos' || filtroMes !== 'todos' || filtroBusqueda !== '') && (
+            <div className="mt-4 flex items-center gap-2">
+              <Badge variant="outline" className="gap-1">
+                {nominasFiltradas.length} resultado{nominasFiltradas.length !== 1 ? 's' : ''}
+              </Badge>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setFiltroEstado('todos');
+                  setFiltroMes('todos');
+                  setFiltroBusqueda('');
+                }}
+              >
+                Limpiar filtros
+              </Button>
+            </div>
           )}
-        </TabsContent>
+        </CardContent>
+      </Card>
 
-        {/* Tab de Liquidaciones */}
-        <TabsContent value="liquidaciones" className="space-y-6">
-          <Tabs defaultValue="cesantias" className="space-y-6">
-            <TabsList className="bg-muted/50 backdrop-blur-sm">
-              <TabsTrigger value="cesantias">Cesantías</TabsTrigger>
-              <TabsTrigger value="intereses">Intereses Cesantías</TabsTrigger>
-              <TabsTrigger value="prima">Prima de Servicios</TabsTrigger>
-              <TabsTrigger value="vacaciones">Vacaciones</TabsTrigger>
-              <TabsTrigger value="final">Liquidación Final</TabsTrigger>
-            </TabsList>
+      {/* Listado de nóminas */}
+      <div className="space-y-4">
+        <div>
+          <h2 className="mb-2">Nóminas Creadas</h2>
+          <p className="text-muted-foreground">Historial de períodos de nómina procesados</p>
+        </div>
 
-            {/* Cesantías */}
-            <TabsContent value="cesantias">
-              <Card className="bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-sm border-border/50">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Calculator className="h-5 w-5 text-primary" />
-                    Simulador de Cesantías
-                  </CardTitle>
-                  <CardDescription>
-                    Fórmula: (Salario + Subsidio Transporte) × Días trabajados / 360
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Colaborador</Label>
-                      <Select value={colaboradorSeleccionado} onValueChange={(val) => { setColaboradorSeleccionado(val); setResultado(null); setTipoCalculo('cesantias'); }}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecciona un colaborador" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {colaboradores.map((c) => (
-                            <SelectItem key={c.id} value={c.id}>
-                              {c.nombres} {c.apellidos} - ${c.salarioBase.toLocaleString('es-CO')}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Días Trabajados</Label>
-                      <Input
-                        type="number"
-                        placeholder="180"
-                        value={diasTrabajados}
-                        onChange={(e) => { setDiasTrabajados(e.target.value); setResultado(null); }}
-                      />
-                    </div>
-                    <Button onClick={handleCalcular} className="w-full" disabled={!colaboradorSeleccionado || !diasTrabajados}>
-                      <Calculator className="mr-2 h-4 w-4" />
-                      Calcular Cesantías
-                    </Button>
-                  </div>
-
-                  {resultado !== null && (
-                    <Card className="border-primary bg-gradient-to-br from-primary/10 to-primary/5 backdrop-blur-sm">
-                      <CardHeader>
-                        <CardTitle>Resultado</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-3xl font-bold text-primary">
-                          ${resultado.toLocaleString('es-CO', { maximumFractionDigits: 0 })}
-                        </div>
-                        <p className="text-sm text-muted-foreground mt-2">
-                          Valor de cesantías a pagar
-                        </p>
-                      </CardContent>
-                    </Card>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Intereses sobre Cesantías */}
-            <TabsContent value="intereses">
-              <Card className="bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-sm border-border/50">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Calculator className="h-5 w-5 text-primary" />
-                    Intereses sobre Cesantías
-                  </CardTitle>
-                  <CardDescription>
-                    Fórmula: Cesantías × 12% × (Días / 360)
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Colaborador</Label>
-                      <Select value={colaboradorSeleccionado} onValueChange={(val) => { setColaboradorSeleccionado(val); setResultado(null); setTipoCalculo('intereses'); }}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecciona un colaborador" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {colaboradores.map((c) => (
-                            <SelectItem key={c.id} value={c.id}>
-                              {c.nombres} {c.apellidos}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Días Trabajados</Label>
-                      <Input
-                        type="number"
-                        placeholder="180"
-                        value={diasTrabajados}
-                        onChange={(e) => { setDiasTrabajados(e.target.value); setResultado(null); }}
-                      />
-                    </div>
-                    <Button onClick={handleCalcular} className="w-full" disabled={!colaboradorSeleccionado || !diasTrabajados}>
-                      <Calculator className="mr-2 h-4 w-4" />
-                      Calcular Intereses
-                    </Button>
-                  </div>
-
-                  {resultado !== null && (
-                    <Card className="border-primary bg-gradient-to-br from-primary/10 to-primary/5 backdrop-blur-sm">
-                      <CardHeader>
-                        <CardTitle>Resultado</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-3xl font-bold text-primary">
-                          ${resultado.toLocaleString('es-CO', { maximumFractionDigits: 0 })}
-                        </div>
-                        <p className="text-sm text-muted-foreground mt-2">
-                          Valor de intereses sobre cesantías
-                        </p>
-                      </CardContent>
-                    </Card>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Prima de Servicios */}
-            <TabsContent value="prima">
-              <Card className="bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-sm border-border/50">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Calculator className="h-5 w-5 text-primary" />
-                    Prima de Servicios
-                  </CardTitle>
-                  <CardDescription>
-                    Fórmula: (Salario + Subsidio Transporte) × Días trabajados en semestre / 360
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Colaborador</Label>
-                      <Select value={colaboradorSeleccionado} onValueChange={(val) => { setColaboradorSeleccionado(val); setResultado(null); setTipoCalculo('prima'); }}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecciona un colaborador" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {colaboradores.map((c) => (
-                            <SelectItem key={c.id} value={c.id}>
-                              {c.nombres} {c.apellidos}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Días Trabajados en Semestre</Label>
-                      <Input
-                        type="number"
-                        placeholder="180"
-                        value={diasTrabajados}
-                        onChange={(e) => { setDiasTrabajados(e.target.value); setResultado(null); }}
-                      />
-                    </div>
-                    <Button onClick={handleCalcular} className="w-full" disabled={!colaboradorSeleccionado || !diasTrabajados}>
-                      <Calculator className="mr-2 h-4 w-4" />
-                      Calcular Prima
-                    </Button>
-                  </div>
-
-                  {resultado !== null && (
-                    <Card className="border-primary bg-gradient-to-br from-primary/10 to-primary/5 backdrop-blur-sm">
-                      <CardHeader>
-                        <CardTitle>Resultado</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-3xl font-bold text-primary">
-                          ${resultado.toLocaleString('es-CO', { maximumFractionDigits: 0 })}
-                        </div>
-                        <p className="text-sm text-muted-foreground mt-2">
-                          Valor de prima de servicios
-                        </p>
-                      </CardContent>
-                    </Card>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Vacaciones */}
-            <TabsContent value="vacaciones">
-              <Card className="bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-sm border-border/50">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="flex items-center gap-2">
-                        <Palmtree className="h-5 w-5 text-success" />
-                        Gestión de Vacaciones
-                      </CardTitle>
-                      <CardDescription>
-                        Días generados, tomados y disponibles por colaborador
-                      </CardDescription>
-                    </div>
-                    <Button onClick={() => setOpenModalVacaciones(true)} className="bg-success hover:bg-success/90">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Nueva Solicitud
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="rounded-lg border overflow-hidden">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-muted/50">
-                          <TableHead>Colaborador</TableHead>
-                          <TableHead className="text-center">Días Generados</TableHead>
-                          <TableHead className="text-center">Días Tomados</TableHead>
-                          <TableHead className="text-center">Días Pagados</TableHead>
-                          <TableHead className="text-center">Días Disponibles</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {vacacionesData.map((v) => (
-                          <TableRow key={v.id}>
-                            <TableCell className="font-medium">{v.nombres} {v.apellidos}</TableCell>
-                            <TableCell className="text-center">{v.diasGenerados}</TableCell>
-                            <TableCell className="text-center">
-                              <Badge variant="outline">{v.diasTomados}</Badge>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <Badge variant="outline">{v.diasPagados}</Badge>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <Badge className="bg-success">{v.diasDisponibles}</Badge>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Liquidación Final */}
-            <TabsContent value="final">
-              <Card className="bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-sm border-border/50">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <FileText className="h-5 w-5 text-primary" />
-                    Liquidación Final de Contrato
-                  </CardTitle>
-                  <CardDescription>
-                    Cálculo completo al finalizar relación laboral
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex flex-col items-center py-8">
-                    <p className="text-muted-foreground mb-4">
-                      Genera una liquidación final completa con todos los conceptos legales
-                    </p>
-                    <Button onClick={() => setOpenModalLiquidacion(true)} className="bg-primary hover:bg-primary/90">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Nueva Liquidación Final
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-        </TabsContent>
-      </Tabs>
+        {nominasFiltradas.length > 0 ? (
+          <Card className="border-border">
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30">
+                      <th className="text-left p-4 font-semibold text-sm text-muted-foreground">
+                        Período
+                      </th>
+                      <th className="text-left p-4 font-semibold text-sm text-muted-foreground">
+                        Estado
+                      </th>
+                      <th className="text-right p-4 font-semibold text-sm text-muted-foreground">
+                        Devengado
+                      </th>
+                      <th className="text-right p-4 font-semibold text-sm text-muted-foreground">
+                        Deducciones
+                      </th>
+                      <th className="text-right p-4 font-semibold text-sm text-muted-foreground">
+                        Neto Total
+                      </th>
+                      <th className="text-right p-4 font-semibold text-sm text-muted-foreground">
+                        Acciones
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {nominasFiltradas.map((periodo, index) => (
+                      <tr
+                        key={periodo.id}
+                        className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors ${
+                          index % 2 === 0 ? 'bg-background' : 'bg-muted/5'
+                        }`}
+                      >
+                        <td className="p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20">
+                              <FileText className="h-5 w-5" />
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="font-semibold text-sm">{periodo.periodo}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {periodo.mes}/{periodo.ano} - Quincena {periodo.quincena}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <StatusBadge status={periodo.estado as any} />
+                        </td>
+                        <td className="p-4 text-right">
+                          <div className="flex flex-col items-end">
+                            <span className="text-sm font-semibold text-success">
+                              ${periodo.devengadoTotal.toLocaleString('es-CO')}
+                            </span>
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <TrendingUp className="h-3 w-3 text-success" />
+                              Ingresos
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-4 text-right">
+                          <div className="flex flex-col items-end">
+                            <span className="text-sm font-semibold text-destructive">
+                              ${periodo.deduccionesTotal.toLocaleString('es-CO')}
+                            </span>
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <TrendingDown className="h-3 w-3 text-destructive" />
+                              Descuentos
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-4 text-right">
+                          <div className="flex flex-col items-end">
+                            <span className="text-sm font-bold text-primary">
+                              ${periodo.netoTotal.toLocaleString('es-CO')}
+                            </span>
+                            <span className="text-xs text-muted-foreground">A pagar</span>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex gap-2 justify-end">
+                            {periodo.estado === 'BORRADOR' || periodo.estado === 'Borrador' ? (
+                              <Button
+                                size="sm"
+                                onClick={() => navigate(`/nomina/${periodo.id}`)}
+                                className="gap-1 bg-primary hover:bg-primary/90"
+                              >
+                                <Calculator className="h-4 w-4" />
+                                Liquidar
+                              </Button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => navigate(`/nomina/${periodo.id}`)}
+                                className="hover:bg-primary/10 hover:text-primary hover:border-primary gap-1"
+                              >
+                                <Eye className="h-4 w-4" />
+                                Ver
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        ) : nominaPeriodos.length === 0 ? (
+          <Card className="bg-gradient-to-br from-muted/20 to-muted/5 border-dashed border-2">
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <FileText className="h-16 w-16 text-muted-foreground mb-4" />
+              <p className="text-lg font-semibold mb-2">No hay períodos de nómina</p>
+              <p className="text-sm text-muted-foreground mb-4">
+                Comienza creando tu primer período de nómina
+              </p>
+              <Button onClick={() => navigate('/nomina/nueva')} className="gap-2">
+                <Plus className="h-4 w-4" />
+                Crear Primera Nómina
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="bg-gradient-to-br from-muted/20 to-muted/5 border-dashed border-2">
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <Search className="h-16 w-16 text-muted-foreground mb-4" />
+              <p className="text-lg font-semibold mb-2">No se encontraron resultados</p>
+              <p className="text-sm text-muted-foreground mb-4">
+                Intenta ajustar los filtros de búsqueda
+              </p>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setFiltroEstado('todos');
+                  setFiltroMes('todos');
+                  setFiltroBusqueda('');
+                }}
+              >
+                Limpiar filtros
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }

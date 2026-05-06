@@ -1,4 +1,4 @@
-import { InputHTMLAttributes, forwardRef } from 'react';
+import { InputHTMLAttributes, KeyboardEvent, forwardRef } from 'react';
 import { cn } from '../lib/utils';
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
@@ -8,9 +8,16 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, label, error, helperText, id, ...props }, ref) => {
+  ({ className, label, error, helperText, id, type, onKeyDown, min, ...props }, ref) => {
     const inputId = id || `input-${Math.random().toString(36).substring(7)}`;
-    
+    const isNumber = type === 'number';
+    const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+      if (isNumber && (e.key === '-' || e.key === '+' || e.key === 'e' || e.key === 'E')) {
+        e.preventDefault();
+      }
+      onKeyDown?.(e);
+    };
+
     return (
       <div className="space-y-2">
         {label && (
@@ -21,6 +28,9 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         <input
           id={inputId}
           ref={ref}
+          type={type}
+          min={isNumber && min === undefined ? 0 : min}
+          onKeyDown={handleKeyDown}
           className={cn(
             'w-full px-4 py-3 bg-input-background border-2 rounded-xl text-foreground placeholder:text-muted-foreground transition-all duration-200',
             'focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary',

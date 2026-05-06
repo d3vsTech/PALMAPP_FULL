@@ -38,9 +38,22 @@ import NuevoColaboradorWizard from './pages/colaboradores/NuevoColaboradorWizard
 // Nómina
 import Nomina from './pages/nomina/Nomina';
 import NominaDetalle from './pages/nomina/NominaDetalle';
+import NuevaNominaWizard from './pages/nomina/NuevaNominaWizard';
+import NuevoPrestamo from './pages/nomina/NuevoPrestamo';
+import NuevaLiquidacionWizard from './pages/nomina/NuevaLiquidacionWizard';
+import LiquidarColaborador from './pages/nomina/LiquidarColaborador';
+import VerLiquidacion from './pages/nomina/VerLiquidacion';
+import PlanillaDiaria from './pages/nomina/PlanillaDiaria';
+import DesprendiblePago from './pages/nomina/DesprendiblePago';
 
 // Liquidaciones
+import LiquidacionesLayout from './pages/liquidaciones/LiquidacionesLayout';
 import Liquidaciones from './pages/liquidaciones/Liquidaciones';
+import CesantiasDetalle from './pages/liquidaciones/CesantiasDetalle';
+import InteresesDetalle from './pages/liquidaciones/InteresesDetalle';
+import PrimaDetalle from './pages/liquidaciones/PrimaDetalle';
+import VacacionesDetalle from './pages/liquidaciones/VacacionesDetalle';
+import LiquidacionFinalDetalle from './pages/liquidaciones/LiquidacionFinalDetalle';
 
 // Operaciones
 import Operaciones from './pages/operaciones/Operaciones';
@@ -187,10 +200,28 @@ export const router = createBrowserRouter([
       { path: 'colaboradores/editar/:id', Component: NuevoColaboradorWizard },
       { path: 'colaboradores/:id',        Component: ColaboradorDetail },
 
-      { path: 'nomina',     element: <ProtectedRoute permiso="nomina.ver"><Nomina /></ProtectedRoute> },
-      { path: 'nomina/:id',       Component: NominaDetalle },
+      { path: 'nomina',                     element: <ProtectedRoute permiso="nomina.ver"><Nomina /></ProtectedRoute> },
+      { path: 'nomina/nueva',               Component: NuevaNominaWizard },
+      { path: 'nomina/nuevo-prestamo',      Component: NuevoPrestamo },
+      { path: 'nomina/planilla-diaria',     Component: PlanillaDiaria },
+      { path: 'nomina/liquidacion/nueva',   Component: NuevaLiquidacionWizard },
+      { path: 'nomina/:id',                 Component: NominaDetalle },
+      { path: 'nomina/:nominaId/liquidar/:colaboradorId',     Component: LiquidarColaborador },
+      { path: 'nomina/:nominaId/ver/:colaboradorId',          Component: VerLiquidacion },
+      { path: 'nomina/:nominaId/desprendible/:colaboradorId', Component: DesprendiblePago },
 
-      { path: 'liquidaciones', Component: Liquidaciones },
+      {
+        path: 'liquidaciones',
+        element: <LiquidacionesLayout />,
+        children: [
+          { index: true,                       Component: Liquidaciones },
+          { path: 'cesantias/:id',             Component: CesantiasDetalle },
+          { path: 'intereses/:id',             Component: InteresesDetalle },
+          { path: 'prima/:id',                 Component: PrimaDetalle },
+          { path: 'vacaciones/:id',            Component: VacacionesDetalle },
+          { path: 'liquidacion-final/:id',     Component: LiquidacionFinalDetalle },
+        ],
+      },
 
       { path: 'operaciones',                  element: <ProtectedRoute permiso="operaciones.ver"><Operaciones /></ProtectedRoute> },
       { path: 'operaciones/planilla/nueva',   Component: NuevaPlanillaWizard },

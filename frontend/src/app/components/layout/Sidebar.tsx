@@ -17,6 +17,7 @@ import {
   X,
   UserCog,
   Sparkles,
+  FileText,
 } from 'lucide-react';
 
 interface NavItem {
@@ -68,6 +69,13 @@ const navItems: NavItem[] = [
     label: 'Nómina',
     href: '/nomina',
     icon: DollarSign,
+    roles: ['dueño', 'administrador', 'jefe_campo'],
+    permiso: 'nomina.ver',
+  },
+  {
+    label: 'Liquidaciones',
+    href: '/liquidaciones',
+    icon: FileText,
     roles: ['dueño', 'administrador', 'jefe_campo'],
     permiso: 'nomina.ver',
   },
