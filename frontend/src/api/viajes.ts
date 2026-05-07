@@ -1,16 +1,17 @@
 /**
  * api/viajes.ts
- * Módulo de Viajes — contrato completo según API_VIAJES.md
+ * Módulo de Viajes — contrato completo según API_VIAJES.md y API_VIAJES_OCR_BASCULA.md
  * Base: /api/v1/tenant  · Auth: Authorization Bearer + X-Tenant-Id
  *
- * Cambios respecto al contrato anterior:
- *  - 3 estados en vez de 4: CREADO → EN_VALIDACION → FINALIZADO
- *  - `despachar` y `llegada-planta` se reemplazan por `saltar-validacion` y `validar (PATCH)`
- *  - `validar` hidrata: peso_viaje, numero_remision_extractora, fecha_llegada, hora_llegada,
- *    racimos_recibidos, temperatura_pulpa, acidez_inicial, humedad_semilla,
- *    calidad_materia_prima, observaciones_extractora
- *  - CRUD completo de paramétricas (empresas_transportadoras, transportadores, extractoras)
- *  - OCR del formulario de extractora: subirDocumentoBascula + getDocumentoBasculaStatus
+ * Modelo de validación (refine 2026-05-07):
+ *  - 3 estados: CREADO → EN_VALIDACION → FINALIZADO
+ *  - PATCH /validar hidrata 10 campos: peso_viaje, numero_remision_extractora,
+ *    fecha_llegada, hora_llegada, fruto_verde, sobre_maduro, podrido,
+ *    pedunculo_largo, mal_formado, observaciones_extractora.
+ *  - OCR Claude Vision asíncrono: subirDocumentoBascula + getDocumentoBasculaStatus.
+ *    El GET devuelve `validaciones_cruzadas` (conductor/placa extraídos vs snapshot)
+ *    y `datos_extraidos` con los 10 campos persistibles + 2 auxiliares cross-check.
+ *  - CRUD completo de paramétricas (empresas_transportadoras, transportadores, extractoras).
  */
 import { requestConToken, fetchConToken } from './request';
 
@@ -55,7 +56,11 @@ function del<T>(path: string): Promise<T> {
 /** Estados del viaje (modelo nuevo de 3 estados) */
 export type EstadoViajeApi = 'CREADO' | 'EN_VALIDACION' | 'FINALIZADO';
 
-/** Calidad cualitativa de la materia prima */
+/**
+ * @deprecated Reemplazado por los 5 porcentajes de calificación (fruto_verde,
+ * sobre_maduro, podrido, pedunculo_largo, mal_formado). Se mantiene el alias
+ * para evitar romper consumidores antiguos durante la transición.
+ */
 export type CalidadMateriaPrima = 'excelente' | 'buena' | 'regular' | 'deficiente';
 
 // ── Paramétricas ────────────────────────────────────────────────────────────
@@ -178,11 +183,16 @@ export interface Viaje {
   numero_remision_extractora?: string | null;
   fecha_llegada?: string | null;
   hora_llegada?: string | null;
-  racimos_recibidos?: number | null;
-  temperatura_pulpa?: string | number | null;
-  acidez_inicial?: string | number | null;
-  humedad_semilla?: string | number | null;
-  calidad_materia_prima?: CalidadMateriaPrima | null;
+  /** Porcentaje 0-100 de fruto verde según calificación de la extractora */
+  fruto_verde?: string | number | null;
+  /** Porcentaje 0-100 de fruto sobre maduro */
+  sobre_maduro?: string | number | null;
+  /** Porcentaje 0-100 de fruto podrido */
+  podrido?: string | number | null;
+  /** Porcentaje 0-100 de fruto con pedúnculo largo */
+  pedunculo_largo?: string | number | null;
+  /** Porcentaje 0-100 de fruto mal formado */
+  mal_formado?: string | number | null;
   observaciones_extractora?: string | null;
   // Datos generales
   observaciones?: string | null;
@@ -235,17 +245,23 @@ export interface HidratarReconteoPayload {
   peso_confirmado?: number | null;
 }
 
-/** Payload para PATCH /viajes/{id}/validar (datos del formulario de extractora) */
+/**
+ * Payload para PATCH /viajes/{id}/validar — datos del formulario de extractora.
+ *
+ * Solo permitido cuando viaje.estado = EN_VALIDACION. No transiciona estado
+ * (el cierre lo hace POST /finalizar). Todos los campos son opcionales; los
+ * porcentajes deben estar entre 0 y 100.
+ */
 export interface ValidarViajePayload {
   peso_viaje?: number | null;
   numero_remision_extractora?: string | null;
   fecha_llegada?: string | null;
   hora_llegada?: string | null;
-  racimos_recibidos?: number | null;
-  temperatura_pulpa?: number | null;
-  acidez_inicial?: number | null;
-  humedad_semilla?: number | null;
-  calidad_materia_prima?: CalidadMateriaPrima | null;
+  fruto_verde?: number | null;
+  sobre_maduro?: number | null;
+  podrido?: number | null;
+  pedunculo_largo?: number | null;
+  mal_formado?: number | null;
   observaciones_extractora?: string | null;
 }
 
@@ -316,6 +332,36 @@ export interface IndicadoresParams {
 /** Estado del documento de báscula (OCR) */
 export type EstadoOcrDocumento = 'PENDIENTE' | 'PROCESANDO' | 'COMPLETADO' | 'REVISION_MANUAL' | 'FALLIDO';
 
+/**
+ * Datos extraídos por Claude Vision: 10 campos persistibles en viajes (PATCH /validar)
+ * + 2 auxiliares cross-check (no van al viaje, solo se comparan contra el snapshot).
+ */
+export interface DatosExtraidosBascula extends ValidarViajePayload {
+  /** Auxiliar cross-check: nombre del conductor impreso en el documento. */
+  nombre_conductor_extraido?: string | null;
+  /** Auxiliar cross-check: placa del vehículo impresa en el documento. */
+  placa_vehiculo_extraida?: string | null;
+}
+
+/**
+ * Resultado de la comparación tolerante de un campo cross-check (conductor o placa)
+ * entre lo que Claude extrajo y el snapshot guardado en el viaje.
+ *
+ * - `coincide: true`  → coincide después de normalizar.
+ * - `coincide: false` → discrepancia → mostrar alerta no bloqueante.
+ * - `coincide: null`  → Claude no pudo leerlo → no se puede verificar.
+ */
+export interface ValidacionCruzadaCampo {
+  extraido: string | null;
+  esperado: string;
+  coincide: boolean | null;
+}
+
+export interface ValidacionesCruzadas {
+  conductor: ValidacionCruzadaCampo;
+  placa: ValidacionCruzadaCampo;
+}
+
 /** Documento de báscula y su estado de OCR — alineado con API_VIAJES_OCR_BASCULA.md */
 export interface DocumentoBascula {
   id?: number;
@@ -329,7 +375,13 @@ export interface DocumentoBascula {
   intentos?: number;
   procesado_at?: string | null;
   error_mensaje?: string | null;
-  datos_extraidos?: Partial<ValidarViajePayload> | null;
+  datos_extraidos?: DatosExtraidosBascula | null;
+  /**
+   * Solo presente en estados terminales con datos disponibles
+   * (COMPLETADO o REVISION_MANUAL). Comparación tolerante de conductor y placa
+   * extraídos contra el snapshot del viaje.
+   */
+  validaciones_cruzadas?: ValidacionesCruzadas;
   viaje?: { id: number; remision: string; estado: EstadoViajeApi };
   /** URL para hacer polling — devuelta por el POST */
   poll_url?: string;

@@ -1,3 +1,20 @@
 @import './fonts.css';
 @import './tailwind.css';
 @import './theme.css';
+
+/* Da más aire a la flecha del <select> nativo: oculta la flecha del navegador
+   y la reemplaza por un chevron SVG posicionado a la derecha con margen. */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>");
+  background-repeat: no-repeat;
+  background-position: right 0.85rem center;
+  background-size: 1rem;
+  padding-right: 2.25rem !important;
+}
+/* IE/legacy: oculta el caret nativo si quedara */
+select::-ms-expand {
+  display: none;
+}

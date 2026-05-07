@@ -18,7 +18,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
-import { Plus, MapPin, Edit, Trash2, Sprout, Grid3x3, Search, Loader2 } from 'lucide-react';
+import { Plus, MapPin, Edit, Trash2, Search, Loader2 } from 'lucide-react';
 import { prediosApi } from '../../../api/plantacion';
 import { toast } from 'sonner';
 
@@ -96,43 +96,22 @@ export default function MiPlantacion() {
       <div className="grid gap-4 sm:grid-cols-3">
         <Card className="border-border">
           <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                <MapPin className="h-5 w-5 text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-muted-foreground mb-0.5">Hectáreas</p>
-                <p className="text-2xl font-bold truncate">{totalHa.toFixed(1)} ha</p>
-              </div>
-            </div>
+            <p className="text-xs text-muted-foreground mb-0.5">Hectáreas</p>
+            <p className="text-2xl font-bold truncate">{totalHa.toFixed(1)} ha</p>
           </CardContent>
         </Card>
 
         <Card className="border-border">
           <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                <Grid3x3 className="h-5 w-5 text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-muted-foreground mb-0.5">Lotes</p>
-                <p className="text-2xl font-bold truncate">{totalLotes}</p>
-              </div>
-            </div>
+            <p className="text-xs text-muted-foreground mb-0.5">Lotes</p>
+            <p className="text-2xl font-bold truncate">{totalLotes}</p>
           </CardContent>
         </Card>
 
         <Card className="border-border">
           <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-success/10 flex items-center justify-center shrink-0">
-                <Sprout className="h-5 w-5 text-success" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-muted-foreground mb-0.5">Palmas</p>
-                <p className="text-2xl font-bold truncate">{totalPalmas.toLocaleString('es-CO')}</p>
-              </div>
-            </div>
+            <p className="text-xs text-muted-foreground mb-0.5">Palmas</p>
+            <p className="text-2xl font-bold truncate">{totalPalmas.toLocaleString('es-CO')}</p>
           </CardContent>
         </Card>
       </div>

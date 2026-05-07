@@ -573,13 +573,24 @@ export default function Viajes() {
                                       </Button>
                                     </>
                                   ) : (
-                                    <Button size="sm" variant="outline" asChild
-                                      className="hover:bg-primary/10 hover:text-primary hover:border-primary"
-                                      title="Visualizar">
-                                      <Link to={`/viajes/${viaje.id}`}>
-                                        <Eye className="h-4 w-4" />
-                                      </Link>
-                                    </Button>
+                                    <>
+                                      <Button size="sm" variant="outline" asChild
+                                        className="hover:bg-primary/10 hover:text-primary hover:border-primary"
+                                        title="Visualizar">
+                                        <Link to={`/viajes/${viaje.id}`}>
+                                          <Eye className="h-4 w-4" />
+                                        </Link>
+                                      </Button>
+                                      <Button
+                                        size="sm" variant="outline"
+                                        onClick={(e) => abrirDialogoEliminar(viaje, e)}
+                                        className="hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
+                                        title="Eliminar"
+                                        disabled={viaje.estado === 'Finalizado'}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </>
                                   )}
                                 </div>
                               </td>

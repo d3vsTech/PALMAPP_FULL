@@ -312,6 +312,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   const [trabajosOtros, setTrabajosOtros] = useState<TrabajoOtros[]>([]);
   const [otrosEnEdicion, setOtrosEnEdicion] = useState<TrabajoOtros | null>(null);
   const [trabajosAuxiliares, setTrabajosAuxiliares] = useState<TrabajoAuxiliar[]>([]);
+  const [auxiliarEnEdicion, setAuxiliarEnEdicion] = useState<TrabajoAuxiliar | null>(null);
   const [horasExtras, setHorasExtras] = useState<HoraExtra[]>([]);
   const [horaExtraEnEdicion, setHoraExtraEnEdicion] = useState<HoraExtra | null>(null);
 
@@ -863,13 +864,42 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   };
 
   const agregarAuxiliar = () => {
-    setTrabajosAuxiliares([...trabajosAuxiliares, {
+    setAuxiliarEnEdicion({
       id: `auxiliar-${Date.now()}`,
       nombre: '',
       labor: '',
       otraLabor: '',
-      lugar: ''
-    }]);
+      lugar: '',
+    });
+  };
+
+  const guardarAuxiliar = () => {
+    if (!auxiliarEnEdicion) return;
+    if (!auxiliarEnEdicion.nombre || !auxiliarEnEdicion.labor) {
+      toast.error('Selecciona colaborador y labor antes de guardar');
+      return;
+    }
+    if (auxiliarEnEdicion.labor === 'Otro' && !auxiliarEnEdicion.otraLabor?.trim()) {
+      toast.error('Especifica el tipo de labor');
+      return;
+    }
+    const existe = trabajosAuxiliares.some(t => t.id === auxiliarEnEdicion.id);
+    if (existe) {
+      setTrabajosAuxiliares(trabajosAuxiliares.map(t => (t.id === auxiliarEnEdicion.id ? auxiliarEnEdicion : t)));
+    } else {
+      setTrabajosAuxiliares([auxiliarEnEdicion, ...trabajosAuxiliares]);
+    }
+    setAuxiliarEnEdicion(null);
+  };
+
+  const cancelarAuxiliar = () => {
+    setAuxiliarEnEdicion(null);
+  };
+
+  const editarAuxiliar = (id: string) => {
+    const t = trabajosAuxiliares.find(x => x.id === id);
+    if (!t) return;
+    setAuxiliarEnEdicion({ ...t });
   };
 
   // Funciones para eliminar trabajos
@@ -1079,18 +1109,53 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1>
-          {modoLectura
-            ? 'Ver Planilla del Día'
-            : isEditMode
-              ? 'Editar Planilla del Día'
-              : 'Crear Nueva Planilla'}
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          {modoLectura
-            ? `Detalle de la planilla${estadoPlanilla ? ` — Estado: ${estadoPlanilla}` : ''}`
-            : 'Configura tu planilla paso a paso'}
-        </p>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h1>
+              {modoLectura
+                ? 'Ver Planilla del Día'
+                : isEditMode
+                  ? 'Editar Planilla del Día'
+                  : 'Crear Nueva Planilla'}
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              {modoLectura
+                ? `Detalle de la planilla${estadoPlanilla ? ` — Estado: ${estadoPlanilla}` : ''}`
+                : 'Configura tu planilla paso a paso'}
+            </p>
+          </div>
+          {modoLectura && estadoPlanilla === 'BORRADOR' && idParam && (
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => navigate(`/operaciones/planilla/editar/${idParam}`)}
+                className="gap-2"
+              >
+                <Pencil className="h-4 w-4" />
+                Editar
+              </Button>
+              <Button
+                onClick={async () => {
+                  setAprobando(true);
+                  try {
+                    await operacionesApi.aprobar(Number(idParam));
+                    toast.success('Planilla aprobada');
+                    setEstadoPlanilla('APROBADA');
+                  } catch (err: any) {
+                    toast.error(err?.message ?? 'Error al aprobar');
+                  } finally {
+                    setAprobando(false);
+                  }
+                }}
+                disabled={aprobando}
+                className="gap-2 bg-success hover:bg-success/90"
+              >
+                <Check className="h-4 w-4" />
+                Aprobar Planilla
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -2598,37 +2663,26 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                     <Button
                       onClick={agregarAuxiliar}
                       className="gap-2"
+                      disabled={auxiliarEnEdicion !== null}
                     >
                       <Plus className="h-4 w-4" />
-                      Agregar
+                      Agregar Labor
                     </Button>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {trabajosAuxiliares.map((trabajo) => (
-                    <Card key={trabajo.id} className="border-border">
+                  {/* Formulario de edición */}
+                  {auxiliarEnEdicion && (
+                    <Card className="border-border border-2 border-primary/50">
                       <CardContent className="pt-6 space-y-4">
-                        <div className="flex justify-end">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => eliminarAuxiliar(trabajo.id)}
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
                         <div className="grid gap-4 md:grid-cols-2">
                           <div className="space-y-2">
                             <Label>Colaborador</Label>
                             <Select
-                              value={trabajo.nombre}
-                              onValueChange={(value) => {
-                                const updated = trabajosAuxiliares.map(t =>
-                                  t.id === trabajo.id ? { ...t, nombre: value } : t
-                                );
-                                setTrabajosAuxiliares(updated);
-                              }}
+                              value={auxiliarEnEdicion.nombre}
+                              onValueChange={(value) =>
+                                setAuxiliarEnEdicion({ ...auxiliarEnEdicion, nombre: value })
+                              }
                             >
                               <SelectTrigger>
                                 <SelectValue placeholder="Seleccionar colaborador" />
@@ -2648,17 +2702,14 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                           <div className="space-y-2">
                             <Label>Labor</Label>
                             <Select
-                              value={trabajo.labor}
-                              onValueChange={(value) => {
-                                const updated = trabajosAuxiliares.map(t =>
-                                  t.id === trabajo.id ? {
-                                    ...t,
-                                    labor: value,
-                                    otraLabor: value !== 'Otro' ? '' : t.otraLabor
-                                  } : t
-                                );
-                                setTrabajosAuxiliares(updated);
-                              }}
+                              value={auxiliarEnEdicion.labor}
+                              onValueChange={(value) =>
+                                setAuxiliarEnEdicion({
+                                  ...auxiliarEnEdicion,
+                                  labor: value,
+                                  otraLabor: value !== 'Otro' ? '' : auxiliarEnEdicion.otraLabor,
+                                })
+                              }
                             >
                               <SelectTrigger>
                                 <SelectValue placeholder="Seleccionar labor" />
@@ -2672,43 +2723,94 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                               </SelectContent>
                             </Select>
                           </div>
-                          {trabajo.labor === 'Otro' && (
+                          {auxiliarEnEdicion.labor === 'Otro' && (
                             <div className="space-y-2 md:col-span-2">
                               <Label>Especificar otra labor</Label>
                               <Input
                                 placeholder="Ingrese el tipo de labor"
-                                value={trabajo.otraLabor || ''}
-                                onChange={(e) => {
-                                  const updated = trabajosAuxiliares.map(t =>
-                                    t.id === trabajo.id ? { ...t, otraLabor: e.target.value } : t
-                                  );
-                                  setTrabajosAuxiliares(updated);
-                                }}
+                                value={auxiliarEnEdicion.otraLabor || ''}
+                                onChange={(e) =>
+                                  setAuxiliarEnEdicion({ ...auxiliarEnEdicion, otraLabor: e.target.value })
+                                }
                               />
                             </div>
                           )}
-                          <div className="space-y-2">
+                          <div className="space-y-2 md:col-span-2">
                             <Label>Lugar</Label>
                             <Input
                               placeholder="Ubicación"
-                              value={trabajo.lugar}
-                              onChange={(e) => {
-                                const updated = trabajosAuxiliares.map(t =>
-                                  t.id === trabajo.id ? { ...t, lugar: e.target.value } : t
-                                );
-                                setTrabajosAuxiliares(updated);
-                              }}
+                              value={auxiliarEnEdicion.lugar}
+                              onChange={(e) =>
+                                setAuxiliarEnEdicion({ ...auxiliarEnEdicion, lugar: e.target.value })
+                              }
                             />
                           </div>
                         </div>
+                        <div className="flex justify-end gap-2 pt-2 border-t">
+                          <Button variant="outline" onClick={cancelarAuxiliar} className="gap-2">
+                            <X className="h-4 w-4" />
+                            Cancelar
+                          </Button>
+                          <Button onClick={guardarAuxiliar} className="gap-2 bg-success hover:bg-success/90">
+                            <Save className="h-4 w-4" />
+                            Guardar Labor
+                          </Button>
+                        </div>
                       </CardContent>
                     </Card>
-                  ))}
+                  )}
 
-                  {trabajosAuxiliares.length === 0 && (
+                  {/* Cards de labores guardadas */}
+                  {trabajosAuxiliares.map((trabajo) => {
+                    const labelLabor =
+                      trabajo.labor === 'Otro' && trabajo.otraLabor ? trabajo.otraLabor : trabajo.labor;
+                    return (
+                      <Card key={trabajo.id} className="border-border hover:border-primary/30 transition-colors">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs text-muted-foreground mb-1">Colaborador</p>
+                              <p className="font-semibold text-sm">
+                                {trabajo.nombre || 'Sin colaborador'}
+                              </p>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs text-muted-foreground mb-1">Labor</p>
+                              <p className="text-sm font-medium">{labelLabor || 'Sin labor'}</p>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs text-muted-foreground mb-1">Lugar</p>
+                              <p className="text-sm">{trabajo.lugar || '—'}</p>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => editarAuxiliar(trabajo.id)}
+                                disabled={auxiliarEnEdicion !== null}
+                                title="Editar"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => eliminarAuxiliar(trabajo.id)}
+                                className="text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+
+                  {trabajosAuxiliares.length === 0 && !auxiliarEnEdicion && (
                     <div className="text-center py-12 text-muted-foreground">
                       <p>No hay registros de trabajos auxiliares</p>
-                      <p className="text-sm">Haz clic en "Agregar" para crear uno</p>
+                      <p className="text-sm">Haz clic en "Agregar Labor" para crear uno</p>
                     </div>
                   )}
                 </CardContent>
@@ -3072,41 +3174,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                   Siguiente
                   <ArrowRight className="h-4 w-4" />
                 </Button>
-              ) : modoLectura ? (
-                <>
-                  {estadoPlanilla === 'BORRADOR' && (
-                    <Button
-                      variant="outline"
-                      onClick={() => navigate(`/operaciones/planilla/editar/${idParam}`)}
-                      className="gap-2"
-                    >
-                      <Pencil className="h-4 w-4" />
-                      Editar planilla
-                    </Button>
-                  )}
-                  {estadoPlanilla === 'BORRADOR' && idParam && (
-                    <Button
-                      onClick={async () => {
-                        setAprobando(true);
-                        try {
-                          await operacionesApi.aprobar(Number(idParam));
-                          toast.success('Planilla aprobada');
-                          setEstadoPlanilla('APROBADA');
-                        } catch (err: any) {
-                          toast.error(err?.message ?? 'Error al aprobar');
-                        } finally {
-                          setAprobando(false);
-                        }
-                      }}
-                      disabled={aprobando}
-                      className="gap-2 bg-success hover:bg-success/90"
-                    >
-                      <Check className="h-4 w-4" />
-                      Aprobar Planilla
-                    </Button>
-                  )}
-                </>
-              ) : (
+              ) : modoLectura ? null : (
                 <Button
                   onClick={guardarTodo} disabled={guardando} className="gap-2 bg-success hover:bg-success/90"
                 >

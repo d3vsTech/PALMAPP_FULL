@@ -7,11 +7,21 @@ import { Label } from '../../components/ui/label';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
-import { Plus, Eye, FileText, Loader2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../../components/ui/alert-dialog';
+import { Plus, Eye, FileText, Loader2, Trash2 } from 'lucide-react';
 import StatusBadge from '../../components/common/StatusBadge';
 import { toast } from 'sonner';
 import {
-  operacionesApi,
+  operacionesApi, cosechasApi, jornalesApi, horasExtraApi, ausenciasApi,
   type Planilla, type Indicadores, type PeriodoIndicadores, type EstadoPlanilla,
 } from '../../../api/operaciones';
 
@@ -50,6 +60,10 @@ export default function Operaciones() {
   const [planillas, setPlanillas] = useState<Planilla[]>([]);
   const [cargandoLista, setCargandoLista] = useState(true);
 
+  // ── Eliminación de planilla ────────────────────────────────────────────────
+  const [planillaAEliminar, setPlanillaAEliminar] = useState<Planilla | null>(null);
+  const [eliminando, setEliminando] = useState(false);
+
   const cargarLista = useCallback(async () => {
     setCargandoLista(true);
     try {
@@ -63,6 +77,53 @@ export default function Operaciones() {
   }, []);
 
   useEffect(() => { cargarLista(); }, [cargarLista]);
+
+  const eliminarPlanilla = async () => {
+    if (!planillaAEliminar) return;
+    setEliminando(true);
+    const id = planillaAEliminar.id;
+    try {
+      // Intento directo (planilla sin hijos)
+      await operacionesApi.eliminar(id);
+    } catch (e: any) {
+      const code = e?.code ?? e?.error_code;
+      if (code === 'OPERACION_APROBADA') {
+        toast.error('No se puede eliminar una planilla aprobada');
+        setEliminando(false);
+        return;
+      }
+      if (code !== 'OPERACION_CON_HIJOS') {
+        toast.error(e?.message ?? 'Error al eliminar la planilla');
+        setEliminando(false);
+        return;
+      }
+      // Cascade: elimino todos los hijos y reintento
+      try {
+        const det = await operacionesApi.ver(id);
+        const p: any = det.data ?? {};
+        const cosechas: any[] = p.cosechas ?? [];
+        const jornales: any[] = p.jornales ?? [];
+        const horasExtra: any[] = p.horas_extra ?? p.horasExtra ?? [];
+        const ausencias: any[] = p.ausencias ?? [];
+        await Promise.all([
+          ...cosechas.map((c) => cosechasApi.eliminar(Number(c.id)).catch(() => null)),
+          ...jornales.map((j) => jornalesApi.eliminar(Number(j.id)).catch(() => null)),
+          ...horasExtra.map((h) => horasExtraApi.eliminar(Number(h.id)).catch(() => null)),
+          ...ausencias.map((a) => ausenciasApi.eliminar(Number(a.id)).catch(() => null)),
+        ]);
+        await operacionesApi.eliminar(id);
+      } catch (err: any) {
+        toast.error(err?.message ?? 'Error al eliminar la planilla');
+        setEliminando(false);
+        return;
+      }
+    }
+    toast.success('Planilla eliminada');
+    setPlanillaAEliminar(null);
+    setEliminando(false);
+    cargarLista();
+    cargarIndicadores();
+  };
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   const formatearFecha = (iso: string): string => {
@@ -263,6 +324,15 @@ export default function Operaciones() {
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
+                            <Button
+                              size="sm" variant="outline"
+                              className="hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
+                              title="Eliminar"
+                              onClick={() => setPlanillaAEliminar(planilla)}
+                              disabled={planilla.estado === 'APROBADA'}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
                         </td>
                       </tr>
@@ -274,6 +344,30 @@ export default function Operaciones() {
           </Card>
         )}
       </div>
+
+      <AlertDialog
+        open={!!planillaAEliminar}
+        onOpenChange={(o) => !o && setPlanillaAEliminar(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar planilla del día</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={eliminando}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={eliminarPlanilla}
+              disabled={eliminando}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              {eliminando ? 'Eliminando...' : 'Eliminar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

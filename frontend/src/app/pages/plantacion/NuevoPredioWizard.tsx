@@ -661,8 +661,8 @@ export default function NuevoPredioWizard() {
               </div>
               {pr.ubicacion && (
                 <div className="flex items-center justify-between">
-                  <span className="text-sm">Ubicación</span>
-                  <span className="font-semibold text-sm truncate ml-2 max-w-[140px]" title={pr.ubicacion}>{pr.ubicacion}</span>
+                  <span className="text-sm shrink-0">Ubicación</span>
+                  <span className="font-semibold text-sm ml-2 text-right break-words">{pr.ubicacion}</span>
                 </div>
               )}
               <div className="flex items-center justify-between">
@@ -793,8 +793,8 @@ export default function NuevoPredioWizard() {
                 </div>
                 {predioUbicacion && (
                   <div className="flex items-center justify-between">
-                    <span className="text-sm">Ubicación</span>
-                    <span className="font-semibold text-sm truncate ml-2 max-w-[140px]" title={predioUbicacion}>{predioUbicacion}</span>
+                    <span className="text-sm shrink-0">Ubicación</span>
+                    <span className="font-semibold text-sm ml-2 text-right break-words">{predioUbicacion}</span>
                   </div>
                 )}
                 {predioHectareas && (

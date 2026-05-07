@@ -30,13 +30,33 @@ import type { ApiError } from '../../../api/client';
 
 interface EmpleadoActivo {
   id: number;
-  nombres: string;
-  apellidos: string;
+  nombres?: string | null;
+  apellidos?: string | null;
+  primer_nombre?: string | null;
+  primer_apellido?: string | null;
+  nombre_completo?: string | null;
   documento?: string;
   cargo?: string | null;
   modalidad_pago?: 'FIJO' | 'PRODUCCION' | null;
   salario_base?: number | null;
   estado?: boolean;
+}
+
+function nombreApellidoDe(emp: EmpleadoActivo): { nombres: string; apellidos: string } {
+  const nombres =
+    emp.primer_nombre ?? emp.nombres ?? '';
+  const apellidos =
+    emp.primer_apellido ?? emp.apellidos ?? '';
+  if (nombres || apellidos) return { nombres, apellidos };
+  // Si solo viene nombre_completo, lo partimos en dos mitades.
+  const completo = (emp.nombre_completo ?? '').trim();
+  if (!completo) return { nombres: 'Empleado', apellidos: String(emp.id) };
+  const partes = completo.split(/\s+/);
+  const mid = Math.ceil(partes.length / 2);
+  return {
+    nombres: partes.slice(0, mid).join(' '),
+    apellidos: partes.slice(mid).join(' '),
+  };
 }
 
 const MESES = [
@@ -182,8 +202,12 @@ export default function NuevaNominaWizard() {
 
   const empleadosActivos = empleados;
 
-  const getIniciales = (nombres: string, apellidos: string) =>
-    `${nombres.charAt(0)}${apellidos.charAt(0)}`.toUpperCase();
+  const getIniciales = (nombres: string, apellidos: string) => {
+    const n = (nombres ?? '').trim();
+    const a = (apellidos ?? '').trim();
+    const ini = `${n.charAt(0)}${a.charAt(0)}`.toUpperCase();
+    return ini || '?';
+  };
 
   return (
     <div className="space-y-8">
@@ -486,24 +510,29 @@ export default function NuevaNominaWizard() {
                                     />
                                   </td>
                                   <td className="p-4">
-                                    <div className="flex items-center gap-3">
-                                      <div
-                                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${
-                                          isSelected
-                                            ? 'bg-primary/10 text-primary border-primary/20'
-                                            : 'bg-muted text-muted-foreground border-border'
-                                        }`}
-                                      >
-                                        <span className="text-sm font-bold">
-                                          {getIniciales(empleado.nombres, empleado.apellidos)}
-                                        </span>
-                                      </div>
-                                      <div>
-                                        <span className="font-semibold text-sm">
-                                          {empleado.nombres} {empleado.apellidos}
-                                        </span>
-                                      </div>
-                                    </div>
+                                    {(() => {
+                                      const { nombres, apellidos } = nombreApellidoDe(empleado);
+                                      return (
+                                        <div className="flex items-center gap-3">
+                                          <div
+                                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${
+                                              isSelected
+                                                ? 'bg-primary/10 text-primary border-primary/20'
+                                                : 'bg-muted text-muted-foreground border-border'
+                                            }`}
+                                          >
+                                            <span className="text-sm font-bold">
+                                              {getIniciales(nombres, apellidos)}
+                                            </span>
+                                          </div>
+                                          <div>
+                                            <span className="font-semibold text-sm">
+                                              {nombres} {apellidos}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
                                   </td>
                                   <td className="p-4">
                                     <span className="text-sm font-medium">
@@ -607,6 +636,7 @@ export default function NuevaNominaWizard() {
                       {empleadosSeleccionados.map((id) => {
                         const empleado = empleadosActivos.find((c) => c.id === id);
                         if (!empleado) return null;
+                        const { nombres, apellidos } = nombreApellidoDe(empleado);
                         return (
                           <div
                             key={id}
@@ -614,12 +644,12 @@ export default function NuevaNominaWizard() {
                           >
                             <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                               <span className="text-sm font-medium text-primary">
-                                {getIniciales(empleado.nombres, empleado.apellidos)}
+                                {getIniciales(nombres, apellidos)}
                               </span>
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium">
-                                {empleado.nombres} {empleado.apellidos}
+                                {nombres} {apellidos}
                               </p>
                               <p className="text-xs text-muted-foreground">
                                 {empleado.cargo ?? 'Sin cargo'}

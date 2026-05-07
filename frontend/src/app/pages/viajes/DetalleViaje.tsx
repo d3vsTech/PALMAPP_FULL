@@ -6,22 +6,20 @@ import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Badge } from '../../components/ui/badge';
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '../../components/ui/select';
-import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
 import {
   ArrowLeft, ArrowRight, Check, Truck, Leaf, Trash2, Edit, Save, X,
   CheckCircle, Clock, FileText, Sparkles, Image as ImageIcon, Upload, Loader2,
+  AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   viajesApi, strField,
-  type Viaje, type EstadoViajeApi, type EstadoOcrDocumento, type CalidadMateriaPrima,
+  type Viaje, type EstadoViajeApi, type EstadoOcrDocumento,
 } from '../../../api/viajes';
-import { formatFechaHora } from '../../utils/fecha';
+import { formatFecha, formatFechaHora, formatHora } from '../../utils/fecha';
 
 // ─── tipos UI (3 estados compactos) ───────────────────────────────────────────
 export type EstadoViaje = 'Creado' | 'En Validación' | 'Finalizado';
@@ -43,11 +41,11 @@ interface DatosExtractora {
   fechaLlegada: string;
   horaLlegada: string;
   pesoRecibido: number;
-  racimosRecibidos: number;
-  temperaturaPulpa: number;
-  acidezInicial: number;
-  humedadSemilla: number;
-  calidadMateriaPrima: string;
+  frutoVerde: number;
+  sobreMaduro: number;
+  podrido: number;
+  pedunculoLargo: number;
+  malFormado: number;
   observaciones: string;
 }
 
@@ -77,10 +75,16 @@ export default function DetalleViaje() {
   const [errorOCR, setErrorOCR] = useState<string | null>(null);
   const [datosExtractora, setDatosExtractora] = useState<DatosExtractora>({
     numeroRemision: '', fechaLlegada: '', horaLlegada: '',
-    pesoRecibido: 0, racimosRecibidos: 0,
-    temperaturaPulpa: 0, acidezInicial: 0, humedadSemilla: 0,
-    calidadMateriaPrima: '', observaciones: '',
+    pesoRecibido: 0,
+    frutoVerde: 0, sobreMaduro: 0, podrido: 0, pedunculoLargo: 0, malFormado: 0,
+    observaciones: '',
   });
+
+  // Alertas de cross-check del OCR (conductor/placa que llegó vs snapshot del viaje)
+  const [validacionesCruzadas, setValidacionesCruzadas] = useState<{
+    conductor: { extraido: string | null; esperado: string; coincide: boolean | null };
+    placa: { extraido: string | null; esperado: string; coincide: boolean | null };
+  } | null>(null);
 
   // ── carga
   const cargar = useCallback(async () => {
@@ -245,22 +249,6 @@ export default function DetalleViaje() {
       // Debug visible en consola para diagnosticar campos faltantes
       console.log('[OCR] datos_extraidos:', dx);
 
-      // Si Claude devuelve la calificación por porcentajes (verdes/sobremaduro/podrido/mal_formado),
-      // derivamos `calidad_materia_prima` automáticamente sumando los % no aceptables.
-      const verdes        = parseFloat(String(dx.verdes ?? dx.calificacion_verdes ?? 0).replace(',', '.')) || 0;
-      const sobremaduro   = parseFloat(String(dx.sobre_maduro ?? dx.sobremaduro ?? dx.calificacion_sobremaduro ?? 0).replace(',', '.')) || 0;
-      const podrido       = parseFloat(String(dx.podrido ?? dx.calificacion_podrido ?? 0).replace(',', '.')) || 0;
-      const malFormado    = parseFloat(String(dx.mal_formado ?? dx.malformado ?? dx.calificacion_mal_formado ?? 0).replace(',', '.')) || 0;
-      const peduncuLargo  = parseFloat(String(dx.pedunculo_largo ?? dx.calificacion_pedunculo_largo ?? 0).replace(',', '.')) || 0;
-      const sumaMalas = verdes + sobremaduro + podrido + malFormado + peduncuLargo;
-      let calidadDerivada: string | null = null;
-      if (sumaMalas > 0) {
-        if (sumaMalas <= 5)       calidadDerivada = 'excelente';
-        else if (sumaMalas <= 15) calidadDerivada = 'buena';
-        else if (sumaMalas <= 30) calidadDerivada = 'regular';
-        else                      calidadDerivada = 'deficiente';
-      }
-
       // Helpers: si el API devuelve algo válido lo usa; si no, conserva el valor previo.
       const pickStr = (apiVal: any, prev: string): string => {
         if (apiVal === undefined || apiVal === null) return prev;
@@ -281,24 +269,28 @@ export default function DetalleViaje() {
       };
 
       setDatosExtractora((prev) => ({
-        // numeroRemision corresponde al TIQUETE / Nro. REMISION de la extractora
-        // (NO al "Numero de Registro" interno del proveedor — eso es otro campo).
-        numeroRemision:    pickStr(firstDef(
+        numeroRemision:  pickStr(firstDef(
           'numero_remision_extractora', 'numero_remision', 'remision_extractora',
-          'numero_tiquete', 'tiquete', 'nro_remision', 'nro_tiquete'
+          'nro_remision',
         ), prev.numeroRemision),
-        fechaLlegada:      pickStr(firstDef('fecha_llegada', 'fecha'), prev.fechaLlegada),
-        horaLlegada:       pickStr(firstDef('hora_llegada', 'hora'), prev.horaLlegada),
-        pesoRecibido:      pickNum(firstDef('peso_viaje', 'peso_recibido', 'peso_neto', 'peso'), prev.pesoRecibido),
-        racimosRecibidos:  pickNum(firstDef('racimos_recibidos', 'racimos', 'gajos_recibidos'), prev.racimosRecibidos),
-        temperaturaPulpa:  pickNum(firstDef('temperatura_pulpa', 'temperatura'), prev.temperaturaPulpa),
-        acidezInicial:     pickNum(firstDef('acidez_inicial', 'acidez'), prev.acidezInicial),
-        humedadSemilla:    pickNum(firstDef('humedad_semilla', 'humedad'), prev.humedadSemilla),
-        // Backend devuelve lowercase ("buena"); si no llega, usa la derivada por % de calificación.
-        calidadMateriaPrima: (pickStr(firstDef('calidad_materia_prima', 'calidad'), prev.calidadMateriaPrima).toLowerCase() ||
-          calidadDerivada || prev.calidadMateriaPrima),
-        observaciones:     pickStr(firstDef('observaciones_extractora', 'observaciones'), prev.observaciones),
+        fechaLlegada:    pickStr(firstDef('fecha_llegada', 'fecha'), prev.fechaLlegada),
+        horaLlegada:     pickStr(firstDef('hora_llegada', 'hora'), prev.horaLlegada),
+        pesoRecibido:    pickNum(firstDef('peso_viaje', 'peso_recibido', 'peso_neto', 'peso'), prev.pesoRecibido),
+        frutoVerde:      pickNum(firstDef('fruto_verde', 'verdes', 'calificacion_verdes'), prev.frutoVerde),
+        sobreMaduro:     pickNum(firstDef('sobre_maduro', 'sobremaduro', 'calificacion_sobremaduro'), prev.sobreMaduro),
+        podrido:         pickNum(firstDef('podrido', 'calificacion_podrido'), prev.podrido),
+        pedunculoLargo:  pickNum(firstDef('pedunculo_largo', 'calificacion_pedunculo_largo'), prev.pedunculoLargo),
+        malFormado:      pickNum(firstDef('mal_formado', 'malformado', 'calificacion_mal_formado'), prev.malFormado),
+        observaciones:   pickStr(firstDef('observaciones_extractora', 'observaciones'), prev.observaciones),
       }));
+
+      // Cross-check: el GET del OCR devuelve `validaciones_cruzadas` cuando está
+      // en estado terminal con datos. Solo guardamos para mostrar la alerta.
+      if (final.validaciones_cruzadas) {
+        setValidacionesCruzadas(final.validaciones_cruzadas);
+      } else {
+        setValidacionesCruzadas(null);
+      }
 
       // ── Paso 4: UI feedback según estado terminal
       if (final.estado_ocr === 'COMPLETADO') {
@@ -342,22 +334,17 @@ export default function DetalleViaje() {
     if (!id) return;
     setProcesando(true);
     try {
-      // SelectItems ya usan valores lowercase ('excelente'|'buena'|'regular'|'deficiente')
-      const calidad: CalidadMateriaPrima | null =
-        (['excelente', 'buena', 'regular', 'deficiente'] as const)
-          .find(c => c === datosExtractora.calidadMateriaPrima) ?? null;
-
       // 4a — hidratar (solo manda los campos que el operador llenó; nullable lo demás)
       await viajesApi.validar(Number(id), {
         peso_viaje: datosExtractora.pesoRecibido || null,
         numero_remision_extractora: datosExtractora.numeroRemision || null,
         fecha_llegada: datosExtractora.fechaLlegada || null,
         hora_llegada: datosExtractora.horaLlegada || null,
-        racimos_recibidos: datosExtractora.racimosRecibidos || null,
-        temperatura_pulpa: datosExtractora.temperaturaPulpa || null,
-        acidez_inicial: datosExtractora.acidezInicial || null,
-        humedad_semilla: datosExtractora.humedadSemilla || null,
-        calidad_materia_prima: calidad,
+        fruto_verde: datosExtractora.frutoVerde || null,
+        sobre_maduro: datosExtractora.sobreMaduro || null,
+        podrido: datosExtractora.podrido || null,
+        pedunculo_largo: datosExtractora.pedunculoLargo || null,
+        mal_formado: datosExtractora.malFormado || null,
         observaciones_extractora: datosExtractora.observaciones || null,
       });
 
@@ -409,12 +396,17 @@ export default function DetalleViaje() {
   if (!viaje) return null;
 
   const remisionId  = String(viaje.remision ?? viaje.id ?? '');
-  const fechaViaje  = String(viaje.fecha_viaje ?? '');
+  // type="date" necesita YYYY-MM-DD. Si llega ISO completo, recortamos.
+  const fechaViaje  = String(viaje.fecha_viaje ?? '').slice(0, 10);
   const placa       = String(viaje.placa_vehiculo ?? '');
   const conductor   = String(viaje.nombre_conductor ?? '');
   const transporte  = strField(viaje.empresa ?? viaje.empresa_transportadora);
   const extractora  = strField(viaje.extractora);
-  const horaSalida  = String(viaje.hora_salida ?? '').slice(0, 5);
+  // type="time" necesita HH:MM. La hora puede venir como ISO completo o "HH:MM:SS".
+  const horaSalidaRaw = String(viaje.hora_salida ?? '');
+  const horaSalida = horaSalidaRaw.includes('T')
+    ? horaSalidaRaw.slice(11, 16)
+    : horaSalidaRaw.slice(0, 5);
   const fechaCreado = viaje.created_at ?? null;
   // En el modelo nuevo, `validacion_at` es la fecha exacta de transición a EN_VALIDACION.
   // Mantenemos fallbacks a campos legacy por si el backend aún devuelve los antiguos.
@@ -683,11 +675,85 @@ export default function DetalleViaje() {
                       </>
                     )}
                     {estadoActual === 'Finalizado' && (
-                      <div className="flex items-center gap-2 p-4 bg-success/10 border border-success/20 rounded-lg">
-                        <CheckCircle className="h-6 w-6 text-success" />
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-success">Formulario validado exitosamente</p>
-                          <p className="text-xs text-muted-foreground">Datos extraídos y verificados</p>
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2 p-4 bg-success/10 border border-success/20 rounded-lg">
+                          <CheckCircle className="h-6 w-6 text-success" />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-success">Formulario validado exitosamente</p>
+                            <p className="text-xs text-muted-foreground">Datos extraídos y verificados</p>
+                          </div>
+                        </div>
+
+                        {validacionesCruzadas && (
+                          validacionesCruzadas.conductor.coincide === false ||
+                          validacionesCruzadas.placa.coincide === false
+                        ) && (
+                          <div className="flex items-start gap-3 p-3 rounded-md border border-amber-300 bg-amber-50 text-amber-900">
+                            <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
+                            <div className="text-sm">
+                              <p className="font-semibold">El camión que llegó no coincide con el planeado</p>
+                              <ul className="mt-1 space-y-0.5">
+                                {validacionesCruzadas.conductor.coincide === false && (
+                                  <li>
+                                    Conductor: <strong>{validacionesCruzadas.conductor.extraido ?? '—'}</strong>
+                                    {' '}vs planeado <strong>{validacionesCruzadas.conductor.esperado}</strong>
+                                  </li>
+                                )}
+                                {validacionesCruzadas.placa.coincide === false && (
+                                  <li>
+                                    Placa: <strong>{validacionesCruzadas.placa.extraido ?? '—'}</strong>
+                                    {' '}vs planeada <strong>{validacionesCruzadas.placa.esperado}</strong>
+                                  </li>
+                                )}
+                              </ul>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label>Número de Remisión</Label>
+                            <Input value={String(viaje?.numero_remision_extractora ?? '')} disabled />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Fecha de Llegada</Label>
+                            <Input value={formatFecha(viaje?.fecha_llegada)} disabled />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Hora de Llegada</Label>
+                            <Input value={formatHora(viaje?.hora_llegada)} disabled />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Peso Recibido (kg)</Label>
+                            <Input value={String(viaje?.peso_viaje ?? '')} disabled />
+                          </div>
+                          <div className="space-y-2 md:col-span-2">
+                            <Label className="text-sm font-semibold">Calificación de fruto (%)</Label>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Fruto verde</Label>
+                            <Input value={String(viaje?.fruto_verde ?? 0)} disabled />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Sobre maduro</Label>
+                            <Input value={String(viaje?.sobre_maduro ?? 0)} disabled />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Podrido</Label>
+                            <Input value={String(viaje?.podrido ?? 0)} disabled />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Pedúnculo largo</Label>
+                            <Input value={String(viaje?.pedunculo_largo ?? 0)} disabled />
+                          </div>
+                          <div className="space-y-2 md:col-span-2">
+                            <Label>Mal formado</Label>
+                            <Input value={String(viaje?.mal_formado ?? 0)} disabled />
+                          </div>
+                          <div className="space-y-2 md:col-span-2">
+                            <Label>Observaciones</Label>
+                            <Input value={String(viaje?.observaciones_extractora ?? '')} disabled />
+                          </div>
                         </div>
                       </div>
                     )}
@@ -746,6 +812,32 @@ export default function DetalleViaje() {
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-4">
+                      {validacionesCruzadas && (
+                        validacionesCruzadas.conductor.coincide === false ||
+                        validacionesCruzadas.placa.coincide === false
+                      ) && (
+                        <div className="flex items-start gap-3 p-3 rounded-md border border-amber-300 bg-amber-50 text-amber-900">
+                          <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
+                          <div className="text-sm">
+                            <p className="font-semibold">El camión que llegó no coincide con el planeado</p>
+                            <ul className="mt-1 space-y-0.5">
+                              {validacionesCruzadas.conductor.coincide === false && (
+                                <li>
+                                  Conductor: <strong>{validacionesCruzadas.conductor.extraido ?? '—'}</strong>
+                                  {' '}vs planeado <strong>{validacionesCruzadas.conductor.esperado}</strong>
+                                </li>
+                              )}
+                              {validacionesCruzadas.placa.coincide === false && (
+                                <li>
+                                  Placa: <strong>{validacionesCruzadas.placa.extraido ?? '—'}</strong>
+                                  {' '}vs planeada <strong>{validacionesCruzadas.placa.esperado}</strong>
+                                </li>
+                              )}
+                            </ul>
+                            <p className="mt-1 text-xs">Verifica antes de guardar. Puedes continuar si la diferencia es esperada.</p>
+                          </div>
+                        </div>
+                      )}
                       <div className="grid gap-4 md:grid-cols-2">
                         <div className="space-y-2">
                           <Label>Número de Remisión</Label>
@@ -767,47 +859,45 @@ export default function DetalleViaje() {
                         </div>
                         <div className="space-y-2">
                           <Label>Peso Recibido (kg)</Label>
-                          <Input type="number" value={datosExtractora.pesoRecibido || ''}
+                          <Input type="number" value={datosExtractora.pesoRecibido}
                             onChange={(e) => setDatosExtractora({ ...datosExtractora, pesoRecibido: parseFloat(e.target.value) || 0 })}
                             disabled={procesandoIA || estadoActual === 'Finalizado'} />
                         </div>
+                        <div className="space-y-2 md:col-span-2">
+                          <Label className="text-sm font-semibold">Calificación de fruto (%)</Label>
+                          <p className="text-xs text-muted-foreground">
+                            Porcentajes 0–100 según la remisión de la extractora.
+                          </p>
+                        </div>
                         <div className="space-y-2">
-                          <Label>Racimos Recibidos</Label>
-                          <Input type="number" value={datosExtractora.racimosRecibidos || ''}
-                            onChange={(e) => setDatosExtractora({ ...datosExtractora, racimosRecibidos: parseInt(e.target.value) || 0 })}
+                          <Label>Fruto verde</Label>
+                          <Input type="number" step="0.01" max={100} value={datosExtractora.frutoVerde}
+                            onChange={(e) => setDatosExtractora({ ...datosExtractora, frutoVerde: parseFloat(e.target.value) || 0 })}
                             disabled={procesandoIA || estadoActual === 'Finalizado'} />
                         </div>
                         <div className="space-y-2">
-                          <Label>Temperatura Pulpa (°C)</Label>
-                          <Input type="number" step="0.1" value={datosExtractora.temperaturaPulpa || ''}
-                            onChange={(e) => setDatosExtractora({ ...datosExtractora, temperaturaPulpa: parseFloat(e.target.value) || 0 })}
+                          <Label>Sobre maduro</Label>
+                          <Input type="number" step="0.01" max={100} value={datosExtractora.sobreMaduro}
+                            onChange={(e) => setDatosExtractora({ ...datosExtractora, sobreMaduro: parseFloat(e.target.value) || 0 })}
                             disabled={procesandoIA || estadoActual === 'Finalizado'} />
                         </div>
                         <div className="space-y-2">
-                          <Label>Acidez Inicial (%)</Label>
-                          <Input type="number" step="0.1" value={datosExtractora.acidezInicial || ''}
-                            onChange={(e) => setDatosExtractora({ ...datosExtractora, acidezInicial: parseFloat(e.target.value) || 0 })}
+                          <Label>Podrido</Label>
+                          <Input type="number" step="0.01" max={100} value={datosExtractora.podrido}
+                            onChange={(e) => setDatosExtractora({ ...datosExtractora, podrido: parseFloat(e.target.value) || 0 })}
                             disabled={procesandoIA || estadoActual === 'Finalizado'} />
                         </div>
                         <div className="space-y-2">
-                          <Label>Humedad Semilla (%)</Label>
-                          <Input type="number" step="0.1" value={datosExtractora.humedadSemilla || ''}
-                            onChange={(e) => setDatosExtractora({ ...datosExtractora, humedadSemilla: parseFloat(e.target.value) || 0 })}
+                          <Label>Pedúnculo largo</Label>
+                          <Input type="number" step="0.01" max={100} value={datosExtractora.pedunculoLargo}
+                            onChange={(e) => setDatosExtractora({ ...datosExtractora, pedunculoLargo: parseFloat(e.target.value) || 0 })}
                             disabled={procesandoIA || estadoActual === 'Finalizado'} />
                         </div>
                         <div className="space-y-2 md:col-span-2">
-                          <Label>Calidad Materia Prima</Label>
-                          <Select value={datosExtractora.calidadMateriaPrima}
-                            onValueChange={(v) => setDatosExtractora({ ...datosExtractora, calidadMateriaPrima: v })}
-                            disabled={procesandoIA || estadoActual === 'Finalizado'}>
-                            <SelectTrigger><SelectValue placeholder="Seleccionar calidad" /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="excelente">Excelente</SelectItem>
-                              <SelectItem value="buena">Buena</SelectItem>
-                              <SelectItem value="regular">Regular</SelectItem>
-                              <SelectItem value="deficiente">Deficiente</SelectItem>
-                            </SelectContent>
-                          </Select>
+                          <Label>Mal formado</Label>
+                          <Input type="number" step="0.01" max={100} value={datosExtractora.malFormado}
+                            onChange={(e) => setDatosExtractora({ ...datosExtractora, malFormado: parseFloat(e.target.value) || 0 })}
+                            disabled={procesandoIA || estadoActual === 'Finalizado'} />
                         </div>
                         <div className="space-y-2 md:col-span-2">
                           <Label>Observaciones</Label>
