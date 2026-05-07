@@ -667,9 +667,10 @@ class ViajeController extends Controller
      * PATCH /viajes/{viaje}/validar
      *
      * Hidrata los datos del formulario de extractora (peso recibido, número
-     * de remisión de la extractora, fecha/hora de llegada, racimos, métricas
-     * de calidad) sin transicionar el estado. El cierre del viaje lo dispara
-     * `finalizar()` aparte.
+     * de remisión de la extractora, fecha/hora de llegada, observaciones y
+     * los 5 porcentajes de calificación de fruto: verde, sobre maduro,
+     * podrido, pedúnculo largo, mal formado) sin transicionar el estado.
+     * El cierre del viaje lo dispara `finalizar()` aparte.
      */
     public function validar(ValidarViajeRequest $request, Viaje $viaje): JsonResponse
     {
@@ -688,11 +689,11 @@ class ViajeController extends Controller
                 'numero_remision_extractora',
                 'fecha_llegada',
                 'hora_llegada',
-                'racimos_recibidos',
-                'temperatura_pulpa',
-                'acidez_inicial',
-                'humedad_semilla',
-                'calidad_materia_prima',
+                'fruto_verde',
+                'sobre_maduro',
+                'podrido',
+                'pedunculo_largo',
+                'mal_formado',
                 'observaciones_extractora',
             ]);
 

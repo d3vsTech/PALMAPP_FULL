@@ -1,6 +1,6 @@
 # API — Viajes · OCR del formulario de extractora con Claude Vision
 
-> Complemento a [API_VIAJES.md](./API_VIAJES.md). Documenta el flujo automatizado que asiste al operador en la digitación del formulario de extractora: el operador sube una foto/PDF cuando el viaje está `EN_VALIDACION`, Claude Vision extrae los datos clave, el frontend los muestra en el formulario y el operador revisa, edita y guarda. **El OCR no toca la tabla `viajes` directamente** — la persistencia y el cierre del viaje siguen pasando por los endpoints manuales `PATCH /validar` y `POST /finalizar`.
+> Complemento a [API_VIAJES.md](./API_VIAJES.md). Documenta el flujo automatizado que asiste al operador en la digitación del formulario de extractora: el operador sube una foto/PDF cuando el viaje está `EN_VALIDACION`, Claude Vision extrae los datos clave (incluyendo dos campos auxiliares de cross-check: nombre del conductor y placa impresos en el documento), el frontend los muestra en el formulario, y el operador revisa, edita y guarda. **El OCR no toca la tabla `viajes` directamente** — la persistencia y el cierre del viaje siguen pasando por los endpoints manuales `PATCH /validar` y `POST /finalizar`.
 
 ---
 
@@ -9,9 +9,9 @@
 ```
 ┌──────────────────┐     ┌──────────────────┐     ┌────────────────────┐     ┌────────────────────┐
 │ POST documento-  │     │ Job: Claude      │     │ GET polling        │     │ Operador revisa    │
-│ bascula          │ ──▶ │ extrae 10 campos │ ──▶ │ datos_extraidos    │ ──▶ │ y edita en form    │
-│ (foto/PDF)       │     │ → guarda en doc  │     │ → frontend rellena │     │                    │
-│                  │     │ NO toca viajes   │     │   el form          │     │                    │
+│ bascula          │ ──▶ │ extrae 12 campos │ ──▶ │ datos_extraidos    │ ──▶ │ y edita en form;   │
+│ (foto/PDF)       │     │ → guarda en doc  │     │ + validaciones_    │     │ atiende alertas    │
+│                  │     │ NO toca viajes   │     │   cruzadas (live)  │     │ de mismatch        │
 └──────────────────┘     └──────────────────┘     └────────────────────┘     └────────┬───────────┘
                                                                                        │
                                                                                        ▼
@@ -27,7 +27,7 @@
 
 **El OCR es solo asistencia** — el operador siempre tiene la última palabra antes de persistir. Esto evita que un error de Claude (peso confundido, fecha mal leída) cierre un viaje incorrecto.
 
-**Ganancia:** reduce ~10 campos de digitación a una revisión rápida + clic. Los 3 críticos (peso, fecha y hora de llegada) son los que más errores causan en captura manual; el OCR los pre-rellena.
+**Ganancia:** reduce ~10 campos de digitación a una revisión rápida + clic. Los 4 críticos (peso, número de remisión, fecha y hora de llegada) son los que más errores causan en captura manual; el OCR los pre-rellena. Adicionalmente, dos campos auxiliares (nombre del conductor y placa impresos) se contrastan contra el snapshot del viaje para alertar al operador si llegó un camión distinto al planeado.
 
 ---
 
@@ -90,7 +90,7 @@ php artisan queue:work --queue=default
 | `confianza` | decimal(4,3) | 0.000–1.000 reportado por el modelo |
 | `modelo_usado` | string(50) | Snapshot del modelo al momento de procesar |
 | `respuesta_claude` | jsonb | Payload crudo de la API (auditoría/debug) |
-| `datos_extraidos` | jsonb | **Subset normalizado** que el frontend consume: los 10 campos validados (tipos correctos, enums respetados, fechas/horas validadas) |
+| `datos_extraidos` | jsonb | **Subset normalizado** que el frontend consume: 10 campos persistibles en `viajes` + 2 auxiliares de cross-check (`nombre_conductor_extraido`, `placa_vehiculo_extraida`) que NO van al viaje |
 | `error_mensaje` | text | Razón si REVISION_MANUAL o FALLIDO |
 | `intentos` | smallint | Incrementado por el Job en cada reintento |
 | `procesado_at` | timestamp | Cuando Claude respondió |
@@ -119,8 +119,9 @@ PENDIENTE ──(Job toma)──▶ PROCESANDO ──▶ COMPLETADO       (confi
 
 ### 2.2 Campos críticos vs opcionales
 
-- **Críticos (obligatorios):** `peso_viaje`, `fecha_llegada`, `hora_llegada`. Si Claude no logra leer alguno, el documento va a `REVISION_MANUAL`.
-- **Opcionales:** `numero_remision_extractora`, `racimos_recibidos`, `temperatura_pulpa`, `acidez_inicial`, `humedad_semilla`, `calidad_materia_prima`, `observaciones_extractora`. Es esperado que muchos formularios NO los traigan; Claude devuelve `null` sin penalizar la confianza.
+- **Críticos (obligatorios):** `peso_viaje`, `numero_remision_extractora`, `fecha_llegada`, `hora_llegada`. Si Claude no logra leer alguno, el documento va a `REVISION_MANUAL`.
+- **Opcionales (persistibles en `viajes`):** `fruto_verde`, `sobre_maduro`, `podrido`, `pedunculo_largo`, `mal_formado`, `observaciones_extractora`. Es esperado que muchos formularios no traigan todas las calificaciones; Claude devuelve `null` por categoría sin penalizar la confianza.
+- **Auxiliares cross-check (NO persistibles en `viajes`):** `nombre_conductor_extraido`, `placa_vehiculo_extraida`. Se comparan en el GET contra el snapshot del viaje para emitir alertas no bloqueantes cuando no coinciden. Su ausencia no degrada la confianza ni manda el documento a `REVISION_MANUAL`.
 
 ---
 
@@ -159,9 +160,9 @@ El front debe hacer polling a `poll_url` cada 2–3 segundos hasta que `estado_o
 
 ### 3.2 `GET /api/v1/tenant/viajes/{viaje}/documento-bascula/{documento}`
 
-Permiso: `viajes.ver`. Retorna el estado del documento, los 10 campos extraídos por Claude, y un snapshot mínimo del viaje (id, remision, estado actual).
+Permiso: `viajes.ver`. Retorna el estado del documento, los 12 campos extraídos por Claude, un snapshot mínimo del viaje (id, remision, estado actual) y, cuando el OCR ya alcanzó un estado terminal con datos disponibles, una sección `validaciones_cruzadas` con la comparación tolerante de conductor y placa.
 
-**Respuesta 200 (caso feliz, COMPLETADO):**
+**Respuesta 200 (caso feliz, COMPLETADO con conductor y placa coincidiendo):**
 
 ```json
 {
@@ -176,15 +177,29 @@ Permiso: `viajes.ver`. Retorna el estado del documento, los 10 campos extraídos
     "error_mensaje": null,
     "datos_extraidos": {
       "peso_viaje": 12500.50,
-      "numero_remision_extractora": "EXT-2026-04578",
+      "numero_remision_extractora": "0042",
       "fecha_llegada": "2026-04-24",
       "hora_llegada": "10:45",
-      "racimos_recibidos": 248,
-      "temperatura_pulpa": 28.5,
-      "acidez_inicial": 3.2,
-      "humedad_semilla": 18.7,
-      "calidad_materia_prima": "buena",
-      "observaciones_extractora": "Llegada sin novedad."
+      "fruto_verde": 0,
+      "sobre_maduro": 17.5,
+      "podrido": 2.5,
+      "pedunculo_largo": 0,
+      "mal_formado": 5,
+      "observaciones_extractora": "Llegada sin novedad.",
+      "nombre_conductor_extraido": "JORDAN MIGUEL BLANCO TOLOZA",
+      "placa_vehiculo_extraida": "JFF319"
+    },
+    "validaciones_cruzadas": {
+      "conductor": {
+        "extraido": "JORDAN MIGUEL BLANCO TOLOZA",
+        "esperado": "Jordan Blanco Toloza",
+        "coincide": true
+      },
+      "placa": {
+        "extraido": "JFF319",
+        "esperado": "JFF-319",
+        "coincide": true
+      }
     },
     "viaje": {
       "id": 87,
@@ -194,6 +209,37 @@ Permiso: `viajes.ver`. Retorna el estado del documento, los 10 campos extraídos
   }
 }
 ```
+
+**Respuesta 200 (COMPLETADO con mismatch — el camión llegó con conductor/placa distintos):**
+
+```json
+{
+  "data": {
+    "id": 45,
+    "estado_ocr": "COMPLETADO",
+    "...": "...",
+    "datos_extraidos": {
+      "...": "...",
+      "nombre_conductor_extraido": "PEDRO GOMEZ",
+      "placa_vehiculo_extraida": "XYZ-987"
+    },
+    "validaciones_cruzadas": {
+      "conductor": {
+        "extraido": "PEDRO GOMEZ",
+        "esperado": "Jordan Blanco Toloza",
+        "coincide": false
+      },
+      "placa": {
+        "extraido": "XYZ-987",
+        "esperado": "JFF-319",
+        "coincide": false
+      }
+    }
+  }
+}
+```
+
+El frontend debe pintar una alerta visible y no bloqueante (ej. "⚠️ El conductor que llegó no coincide con el planeado en el viaje. Verifica antes de guardar."). El operador puede continuar y guardar — el cross-check no bloquea el flujo.
 
 **Respuesta 200 (REVISION_MANUAL — datos disponibles pero baja confianza o crítico faltante):**
 
@@ -210,16 +256,21 @@ Permiso: `viajes.ver`. Retorna el estado del documento, los 10 campos extraídos
     "error_mensaje": "Faltan campos críticos en el documento: hora_llegada",
     "datos_extraidos": {
       "peso_viaje": 12500.50,
+      "numero_remision_extractora": "0042",
       "fecha_llegada": "2026-04-24",
       "hora_llegada": null,
       "...": "..."
+    },
+    "validaciones_cruzadas": {
+      "conductor": { "extraido": null, "esperado": "Jordan Blanco Toloza", "coincide": null },
+      "placa": { "extraido": "JFF319", "esperado": "JFF-319", "coincide": true }
     },
     "viaje": { "id": 87, "remision": "REM-2026-015", "estado": "EN_VALIDACION" }
   }
 }
 ```
 
-El frontend debe mostrar una alerta visible ("⚠️ Revisa estos datos cuidadosamente") y pre-rellenar el form con `datos_extraidos` para que el operador complete lo que Claude no pudo leer (en este caso, `hora_llegada`).
+El frontend debe mostrar una alerta visible ("⚠️ Revisa estos datos cuidadosamente") y pre-rellenar el form con `datos_extraidos` para que el operador complete lo que Claude no pudo leer (en este caso, `hora_llegada`). Cuando un campo cross-check viene `null` (Claude no pudo leerlo), `coincide` se reporta como `null` — el frontend debe interpretarlo como "no se pudo verificar" (ni alerta de mismatch ni confirmación de match).
 
 **Respuesta 200 (mientras procesa):**
 
@@ -233,6 +284,8 @@ El frontend debe mostrar una alerta visible ("⚠️ Revisa estos datos cuidados
   }
 }
 ```
+
+> Mientras el documento esté en `PENDIENTE`, `PROCESANDO` o `FALLIDO`, la respuesta NO incluye la sección `validaciones_cruzadas` — solo aparece cuando hay datos extraídos disponibles (estados `COMPLETADO` y `REVISION_MANUAL`).
 
 **Respuesta 200 (FALLIDO — Claude inaccesible):**
 
@@ -288,17 +341,20 @@ failed(Throwable):
 
 Resumen del prompt (ver [app/Services/ClaudeVisionService.php](../app/Services/ClaudeVisionService.php) constante `SYSTEM_PROMPT`):
 
-- Marca explícitamente **3 campos como CRÍTICOS** (peso_viaje, fecha_llegada, hora_llegada) y los otros 7 como opcionales.
-- Para `peso_viaje`: prioriza "Peso Neto"; si solo hay Bruto + Tara calcula Neto = Bruto - Tara; si hay Bruto sin tara devuelve bruto y aclara en observaciones; toneladas → ×1000.
-- Lista sinónimos comunes en español para los opcionales.
-- Fuerza `calidad_materia_prima` al enum `excelente|buena|regular|deficiente` (null si no aparece).
+- Marca explícitamente **4 campos como CRÍTICOS** (peso_viaje, numero_remision_extractora, fecha_llegada, hora_llegada) y el resto como opcionales (5 calificaciones de fruto, observaciones, y 2 auxiliares cross-check).
+- Para `peso_viaje`: prioriza "Peso Neto"; si solo hay Bruto + Tara calcula Neto = Bruto - Tara; si hay Bruto sin tara devuelve bruto y aclara en observaciones; toneladas → ×1000. Aclara que en formato colombiano `21.140` = 21140 kg (punto = miles).
+- Para `numero_remision_extractora`: enumera **etiquetas válidas** (`N° DE REMISIÓN`, `NRO. REMISIÓN`, `No. DOCUMENTO`, etc.) y **etiquetas a evitar** (`NÚMERO DE TIQUETE`, `NÚMERO DE REGISTRO`, `COD`) que son IDs internos del sistema de báscula y NO la remisión que firma el conductor.
+- Para `fecha_llegada` y `hora_llegada`: enseña a convertir formatos comunes en remisiones colombianas (`05/may/2026`, `10/04/26` DD/MM/YY, `09:46 PM` → 24h) y a NO usar la fecha/hora de salida si solo aparece esa.
+- Para los 5 porcentajes de calificación: lista sinónimos por categoría (incluyendo el typo "PRODRIDO" visto en formularios reales) y obliga a devolver null por categoría ausente (NO asumir 0). NUNCA > 100.
+- Para `nombre_conductor_extraido`: instruye a usar la etiqueta CONDUCTOR específicamente, no PROVEEDOR / PROPIETARIO / "PESADO POR".
+- Para `placa_vehiculo_extraida`: devuelve tal cual sin normalizar (la normalización se hace al comparar en el GET).
 - **Nunca inventa valores** — devuelve `null` cuando no ve un dato.
-- Confianza global ≤ 0.5 si falta algún crítico.
-- Devuelve solo JSON válido (sin code fences ni texto extra).
+- Confianza global ≤ 0.5 si falta algún crítico. La ausencia de los auxiliares (conductor/placa) NO penaliza la confianza.
+- Devuelve solo JSON válido (sin code fences ni texto extra) con las 12 keys + `confianza`.
 
 **User:** bloque `image` (o `document` para PDF) + bloque `text` `"Extrae los datos del formulario de extractora de este documento."`
 
-El servicio tiene fallbacks defensivos: remueve code fences si Claude los incluye, descarta valores fuera del enum de calidad, recorta strings al max length del FormRequest, valida formato YYYY-MM-DD y HH:MM.
+El servicio tiene fallbacks defensivos: remueve code fences si Claude los incluye, recorta strings al max length del FormRequest, valida formato YYYY-MM-DD y HH:MM, y descarta porcentajes fuera de rango [0, 100] (probablemente Claude leyó mal el separador decimal).
 
 ---
 
@@ -342,14 +398,14 @@ curl -X PATCH "$BASE/viajes/87/validar" "${H[@]}" \
   -H "Content-Type: application/json" \
   -d '{
     "peso_viaje": 12500.50,
-    "numero_remision_extractora": "EXT-2026-04578",
+    "numero_remision_extractora": "0042",
     "fecha_llegada": "2026-04-24",
     "hora_llegada": "10:45",
-    "racimos_recibidos": 248,
-    "temperatura_pulpa": 28.5,
-    "acidez_inicial": 3.2,
-    "humedad_semilla": 18.7,
-    "calidad_materia_prima": "buena",
+    "fruto_verde": 0,
+    "sobre_maduro": 17.5,
+    "podrido": 2.5,
+    "pedunculo_largo": 0,
+    "mal_formado": 5,
     "observaciones_extractora": "Llegada sin novedad."
   }'
 
@@ -389,8 +445,11 @@ curl -X POST "$BASE/viajes/87/finalizar" "${H[@]}"
 - Marco legal del módulo: [CONTEXTO.md §6.5](../CONTEXTO.md).
 - Código:
   - [app/Services/ClaudeVisionService.php](../app/Services/ClaudeVisionService.php)
+  - [app/Services/ViajeOcrCrossCheckService.php](../app/Services/ViajeOcrCrossCheckService.php) — comparación tolerante de conductor y placa para `validaciones_cruzadas`.
   - [app/Jobs/ProcesarFormularioExtractoraJob.php](../app/Jobs/ProcesarFormularioExtractoraJob.php)
   - [app/Http/Controllers/Api/ViajeDocumentoBasculaController.php](../app/Http/Controllers/Api/ViajeDocumentoBasculaController.php)
   - [app/Models/ViajeDocumentoBascula.php](../app/Models/ViajeDocumentoBascula.php)
   - [database/migrations/2026_04_24_000007_create_viaje_documento_bascula_table.php](../database/migrations/2026_04_24_000007_create_viaje_documento_bascula_table.php)
+  - [database/migrations/2026_05_04_000002_add_extractora_form_fields_to_viajes.php](../database/migrations/2026_05_04_000002_add_extractora_form_fields_to_viajes.php) — agrega los 9 campos iniciales del formulario (modelo original con métricas de pulpa/acidez/humedad y enum cualitativo).
   - [database/migrations/2026_05_05_000001_add_datos_extraidos_to_viaje_documento_bascula.php](../database/migrations/2026_05_05_000001_add_datos_extraidos_to_viaje_documento_bascula.php)
+  - [database/migrations/2026_05_07_000001_refine_extractora_fields_on_viajes.php](../database/migrations/2026_05_07_000001_refine_extractora_fields_on_viajes.php) — realinea el modelo con lo que las remisiones colombianas realmente traen: dropea las 5 métricas obsoletas y el enum, agrega los 5 porcentajes por categoría de fruto.

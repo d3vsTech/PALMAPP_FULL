@@ -18,17 +18,20 @@ use Throwable;
 
 /**
  * Procesa el formulario de extractora subido al viaje (foto/PDF) usando
- * Claude Vision y guarda los 10 campos extraídos en el documento.
+ * Claude Vision y guarda los 12 campos extraídos en el documento.
  *
  * Este Job NO toca la tabla `viajes`: el operador revisa los datos extraídos
  * en el frontend, los edita si hace falta, y luego usa los endpoints
  * manuales `PATCH /viajes/{id}/validar` (hidratar) y `POST /viajes/{id}/finalizar`
  * (cerrar) para persistir y disparar los cálculos.
  *
- * Campos críticos: peso_viaje, fecha_llegada, hora_llegada. Si la confianza
- * es baja o falta cualquier crítico, el documento queda en REVISION_MANUAL
- * para que el frontend pinte una alerta — los datos extraídos se guardan
- * igual como hint editable.
+ * Campos críticos: peso_viaje, numero_remision_extractora, fecha_llegada,
+ * hora_llegada. Si la confianza es baja o falta cualquier crítico, el
+ * documento queda en REVISION_MANUAL para que el frontend pinte una alerta
+ * — los datos extraídos se guardan igual como hint editable. Dos campos
+ * auxiliares (`nombre_conductor_extraido`, `placa_vehiculo_extraida`) NO
+ * se persisten en `viajes`; los lee el GET de polling para emitir alertas
+ * cruzadas contra el snapshot del viaje.
  */
 class ProcesarFormularioExtractoraJob implements ShouldQueue
 {

@@ -9,6 +9,7 @@ use App\Jobs\ProcesarFormularioExtractoraJob;
 use App\Models\Viaje;
 use App\Models\ViajeDocumentoBascula;
 use App\Services\AuditoriaService;
+use App\Services\ViajeOcrCrossCheckService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -18,6 +19,7 @@ class ViajeDocumentoBasculaController extends Controller
 {
     public function __construct(
         protected AuditoriaService $auditoria,
+        protected ViajeOcrCrossCheckService $crossCheck,
     ) {}
 
     /**
@@ -25,7 +27,7 @@ class ViajeDocumentoBasculaController extends Controller
      *
      * Recibe el formulario de extractora (imagen o PDF), lo guarda en storage
      * privado y encola `ProcesarFormularioExtractoraJob` para que Claude Vision
-     * extraiga los 10 campos del formulario y los guarde en
+     * extraiga los 12 campos del formulario y los guarde en
      * `viaje_documento_bascula.datos_extraidos`. **No hidrata `viajes`**: el
      * frontend hace polling al GET, rellena el form con los datos extraídos,
      * el operador revisa y al darle "Finalizar y guardar" se llaman
@@ -100,10 +102,17 @@ class ViajeDocumentoBasculaController extends Controller
      *
      * Endpoint de polling. El front lo consulta cada 2-3 segundos tras el POST
      * hasta que estado_ocr entra a un estado terminal (COMPLETADO,
-     * REVISION_MANUAL, FALLIDO). Devuelve los 10 campos extraídos en
+     * REVISION_MANUAL, FALLIDO). Devuelve los 12 campos extraídos en
      * `datos_extraidos` para que el front los use como hint editable en el
      * formulario del operador. La persistencia y los cálculos se hacen luego
      * vía `PATCH /viajes/{id}/validar` + `POST /viajes/{id}/finalizar`.
+     *
+     * Además, cuando el OCR ya alcanzó un estado terminal con datos disponibles
+     * (COMPLETADO o REVISION_MANUAL), agrega la sección `validaciones_cruzadas`
+     * con la comparación tolerante de conductor y placa contra el snapshot
+     * del viaje. El front la usa para pintar alertas no bloqueantes cuando
+     * `coincide = false` (camión llegó con conductor o placa distintos a los
+     * planeados).
      */
     public function show(Request $request, Viaje $viaje, ViajeDocumentoBascula $documento): JsonResponse
     {
@@ -115,24 +124,47 @@ class ViajeDocumentoBasculaController extends Controller
                 ], 404);
             }
 
-            return response()->json([
-                'data' => [
-                    'id'              => $documento->id,
-                    'estado_ocr'      => $documento->estado_ocr,
-                    'peso_extraido'   => $documento->peso_extraido,
-                    'confianza'       => $documento->confianza,
-                    'modelo_usado'    => $documento->modelo_usado,
-                    'intentos'        => $documento->intentos,
-                    'procesado_at'    => $documento->procesado_at,
-                    'error_mensaje'   => $documento->error_mensaje,
-                    'datos_extraidos' => $documento->datos_extraidos,
-                    'viaje' => [
-                        'id'       => $viaje->id,
-                        'remision' => $viaje->remision,
-                        'estado'   => $viaje->estado,
-                    ],
+            $payload = [
+                'id'              => $documento->id,
+                'estado_ocr'      => $documento->estado_ocr,
+                'peso_extraido'   => $documento->peso_extraido,
+                'confianza'       => $documento->confianza,
+                'modelo_usado'    => $documento->modelo_usado,
+                'intentos'        => $documento->intentos,
+                'procesado_at'    => $documento->procesado_at,
+                'error_mensaje'   => $documento->error_mensaje,
+                'datos_extraidos' => $documento->datos_extraidos,
+                'viaje' => [
+                    'id'       => $viaje->id,
+                    'remision' => $viaje->remision,
+                    'estado'   => $viaje->estado,
                 ],
-            ]);
+            ];
+
+            $estadoConDatos = in_array($documento->estado_ocr, [
+                ViajeDocumentoBascula::ESTADO_COMPLETADO,
+                ViajeDocumentoBascula::ESTADO_REVISION_MANUAL,
+            ], true);
+
+            if ($estadoConDatos && is_array($documento->datos_extraidos)) {
+                $conductorExtraido = $documento->datos_extraidos['nombre_conductor_extraido'] ?? null;
+                $placaExtraida     = $documento->datos_extraidos['placa_vehiculo_extraida'] ?? null;
+
+                $payload['validaciones_cruzadas'] = [
+                    'conductor' => [
+                        'extraido' => $conductorExtraido,
+                        'esperado' => $viaje->nombre_conductor,
+                        'coincide' => $this->crossCheck->compararConductor($conductorExtraido, $viaje->nombre_conductor),
+                    ],
+                    'placa' => [
+                        'extraido' => $placaExtraida,
+                        'esperado' => $viaje->placa_vehiculo,
+                        'coincide' => $this->crossCheck->compararPlaca($placaExtraida, $viaje->placa_vehiculo),
+                    ],
+                ];
+            }
+
+            return response()->json(['data' => $payload]);
         } catch (\Throwable $e) {
             Log::error('Error al consultar documento de báscula', [
                 'viaje_id'     => $viaje->id,
