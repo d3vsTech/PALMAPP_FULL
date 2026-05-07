@@ -1,4 +1,4 @@
-var _a;
+var _a, _b;
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
@@ -18,9 +18,15 @@ export default defineConfig({
     server: {
         port: 5173,
         proxy: {
-            // Redirigir llamadas /api al backend durante desarrollo
+            // Backend principal de Laravel (tenant, colaboradores, viajes, etc.)
             '/api': {
                 target: (_a = process.env.VITE_API_URL) !== null && _a !== void 0 ? _a : 'http://agro-campo.test',
+                changeOrigin: true,
+                secure: false,
+            },
+            // Backend del Agente IA (FastAPI en otra máquina)
+            '/agro-agente': {
+                target: (_b = process.env.VITE_AGRO_AGENTE_TARGET) !== null && _b !== void 0 ? _b : 'http://31.97.7.50',
                 changeOrigin: true,
                 secure: false,
             },

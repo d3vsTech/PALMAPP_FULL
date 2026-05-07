@@ -4,3 +4,7 @@
 # y Netlify reescribe internamente al servidor HTTP.
 /agro-api/*       http://31.97.7.50/agro-agente/api/:splat       200
 /agro-uploads/*   http://31.97.7.50/agro-agente/uploads/:splat   200
+
+# Catch-all para que React Router maneje las rutas en el cliente.
+# Debe ir AL FINAL para que los proxies de arriba matcheen primero.
+/*                /index.html                                    200

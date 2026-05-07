@@ -170,12 +170,18 @@ const ETAPAS = [
   { numero: 5, nombre: 'Finalización' },
 ];
 
-export default function NuevaPlanillaWizard() {
+interface NuevaPlanillaWizardProps {
+  modoLectura?: boolean;
+}
+
+export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanillaWizardProps = {}) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { id: idParam } = useParams<{ id?: string }>();
-  const isEditMode = Boolean(idParam);
+  const isEditMode = Boolean(idParam) && !modoLectura;
   const [etapaActual, setEtapaActual] = useState(1);
+  const [estadoPlanilla, setEstadoPlanilla] = useState<string>('');
+  const [aprobando, setAprobando] = useState(false);
 
   // ── Estado planilla ID + loading ─────────────────────────────────────────
   const [planillaId, setPlanillaId] = useState<number | null>(idParam ? Number(idParam) : null);
@@ -312,15 +318,17 @@ export default function NuevaPlanillaWizard() {
   // Alerta de planilla duplicada (popup grande)
   const [alertaDuplicada, setAlertaDuplicada] = useState(false);
 
-  // ── Prefill desde API en modo edición ───────────────────────────────────
+  // ── Prefill desde API en modo edición o lectura ─────────────────────────
   useEffect(() => {
-    if (!isEditMode || !idParam) return;
+    if (!idParam) return;
+    if (!isEditMode && !modoLectura) return;
     let cancelled = false;
     (async () => {
       try {
         const res = await operacionesApi.ver(Number(idParam));
         if (cancelled) return;
         const p: any = res.data ?? {};
+        setEstadoPlanilla(String(p.estado ?? ''));
         const fechaRaw = p.fecha ?? '';
         const fechaNorm = typeof fechaRaw === 'string'
           ? (fechaRaw.match(/^\d{4}-\d{2}-\d{2}/)?.[0] ?? '')
@@ -423,7 +431,7 @@ export default function NuevaPlanillaWizard() {
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [idParam, isEditMode]);
+  }, [idParam, isEditMode, modoLectura]);
 
   const irAEtapa = (numero: number) => {
     setEtapaActual(numero);
@@ -1071,9 +1079,17 @@ export default function NuevaPlanillaWizard() {
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1>{isEditMode ? 'Editar Planilla del Día' : 'Crear Nueva Planilla'}</h1>
+        <h1>
+          {modoLectura
+            ? 'Ver Planilla del Día'
+            : isEditMode
+              ? 'Editar Planilla del Día'
+              : 'Crear Nueva Planilla'}
+        </h1>
         <p className="text-muted-foreground mt-1">
-          Configura tu planilla paso a paso
+          {modoLectura
+            ? `Detalle de la planilla${estadoPlanilla ? ` — Estado: ${estadoPlanilla}` : ''}`
+            : 'Configura tu planilla paso a paso'}
         </p>
       </div>
 
@@ -1142,7 +1158,31 @@ export default function NuevaPlanillaWizard() {
           </Card>
 
           {/* Contenido de las etapas */}
-          <div className="space-y-6">
+          {modoLectura && (
+            <style>{`
+              .wizard-modo-lectura button:has(svg.lucide-pencil),
+              .wizard-modo-lectura button:has(svg.lucide-trash-2),
+              .wizard-modo-lectura button:has(svg.lucide-plus),
+              .wizard-modo-lectura button:has(svg.lucide-x) {
+                display: none !important;
+              }
+              .wizard-modo-lectura input:disabled,
+              .wizard-modo-lectura textarea:disabled,
+              .wizard-modo-lectura button:disabled,
+              .wizard-modo-lectura [data-disabled] {
+                opacity: 1 !important;
+                cursor: default !important;
+              }
+              .wizard-modo-lectura input:disabled,
+              .wizard-modo-lectura textarea:disabled {
+                background-color: transparent !important;
+              }
+            `}</style>
+          )}
+          <fieldset
+            disabled={modoLectura}
+            className={`space-y-6 m-0 p-0 border-0 ${modoLectura ? 'wizard-modo-lectura' : ''}`}
+          >
             {/* ETAPA 1: INFORMACIÓN GENERAL */}
             {etapaActual === 1 && (
               <Card className="border-border">
@@ -2884,75 +2924,79 @@ export default function NuevaPlanillaWizard() {
                   </div>
 
                   <div className="space-y-4">
-                    <Label>Ausentes</Label>
-                    <div className="grid gap-4 md:grid-cols-3">
-                      <div className="space-y-2">
-                        <Label htmlFor="colaboradorAusente">Colaborador</Label>
-                        <Select
-                          value={colaboradorAusenteSeleccionado}
-                          onValueChange={setColaboradorAusenteSeleccionado}
-                        >
-                          <SelectTrigger id="colaboradorAusente">
-                            <SelectValue placeholder="Seleccionar colaborador" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {colaboradores
-                              .filter(col => !ausentes.some(a => a.colaboradorId === col.id))
-                              .map((col) => (
-                                <SelectItem key={col.id} value={col.id}>
-                                  {col.nombres} {col.apellidos}
-                                </SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="motivoAusente">Motivo</Label>
-                        <Select
-                          value={motivoAusenteSeleccionado}
-                          onValueChange={(value) => {
-                            setMotivoAusenteSeleccionado(value);
-                            if (value !== 'Otro') {
-                              setOtroMotivoAusente('');
-                            }
-                          }}
-                        >
-                          <SelectTrigger id="motivoAusente">
-                            <SelectValue placeholder="Seleccionar motivo" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {motivosAusentismo.map((motivo) => (
-                              <SelectItem key={motivo} value={motivo}>
-                                {motivo}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>&nbsp;</Label>
-                        <Button
-                          type="button"
-                          onClick={agregarAusente}
-                          disabled={!colaboradorAusenteSeleccionado || !motivoAusenteSeleccionado || (motivoAusenteSeleccionado === 'Otro' && !otroMotivoAusente)}
-                          className="w-full gap-2"
-                        >
-                          <Plus className="h-4 w-4" />
-                          Agregar
-                        </Button>
-                      </div>
-                    </div>
+                    <Label>Novedades</Label>
+                    {!modoLectura && (
+                      <>
+                        <div className="grid gap-4 md:grid-cols-3">
+                          <div className="space-y-2">
+                            <Label htmlFor="colaboradorAusente">Colaborador</Label>
+                            <Select
+                              value={colaboradorAusenteSeleccionado}
+                              onValueChange={setColaboradorAusenteSeleccionado}
+                            >
+                              <SelectTrigger id="colaboradorAusente">
+                                <SelectValue placeholder="Seleccionar colaborador" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {colaboradores
+                                  .filter(col => !ausentes.some(a => a.colaboradorId === col.id))
+                                  .map((col) => (
+                                    <SelectItem key={col.id} value={col.id}>
+                                      {col.nombres} {col.apellidos}
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="motivoAusente">Motivo</Label>
+                            <Select
+                              value={motivoAusenteSeleccionado}
+                              onValueChange={(value) => {
+                                setMotivoAusenteSeleccionado(value);
+                                if (value !== 'Otro') {
+                                  setOtroMotivoAusente('');
+                                }
+                              }}
+                            >
+                              <SelectTrigger id="motivoAusente">
+                                <SelectValue placeholder="Seleccionar motivo" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {motivosAusentismo.map((motivo) => (
+                                  <SelectItem key={motivo} value={motivo}>
+                                    {motivo}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>&nbsp;</Label>
+                            <Button
+                              type="button"
+                              onClick={agregarAusente}
+                              disabled={!colaboradorAusenteSeleccionado || !motivoAusenteSeleccionado || (motivoAusenteSeleccionado === 'Otro' && !otroMotivoAusente)}
+                              className="w-full gap-2"
+                            >
+                              <Plus className="h-4 w-4" />
+                              Agregar
+                            </Button>
+                          </div>
+                        </div>
 
-                    {motivoAusenteSeleccionado === 'Otro' && (
-                      <div className="space-y-2">
-                        <Label htmlFor="otroMotivoAusente">Especificar otro motivo</Label>
-                        <Input
-                          id="otroMotivoAusente"
-                          placeholder="Ingrese el motivo"
-                          value={otroMotivoAusente}
-                          onChange={(e) => setOtroMotivoAusente(e.target.value)}
-                        />
-                      </div>
+                        {motivoAusenteSeleccionado === 'Otro' && (
+                          <div className="space-y-2">
+                            <Label htmlFor="otroMotivoAusente">Especificar otro motivo</Label>
+                            <Input
+                              id="otroMotivoAusente"
+                              placeholder="Ingrese el motivo"
+                              value={otroMotivoAusente}
+                              onChange={(e) => setOtroMotivoAusente(e.target.value)}
+                            />
+                          </div>
+                        )}
+                      </>
                     )}
 
                     {ausentes.length > 0 && (
@@ -3004,7 +3048,7 @@ export default function NuevaPlanillaWizard() {
                 </CardContent>
               </Card>
             )}
-          </div>
+          </fieldset>
 
           {/* Botones de navegación */}
           <div className="flex items-center justify-between pt-4">
@@ -3022,12 +3066,46 @@ export default function NuevaPlanillaWizard() {
               {etapaActual < ETAPAS.length ? (
                 <Button
                   onClick={siguienteEtapa}
-                  disabled={etapaActual === 1 && !puedeAvanzarEtapa1}
+                  disabled={etapaActual === 1 && !puedeAvanzarEtapa1 && !modoLectura}
                   className="gap-2"
                 >
                   Siguiente
                   <ArrowRight className="h-4 w-4" />
                 </Button>
+              ) : modoLectura ? (
+                <>
+                  {estadoPlanilla === 'BORRADOR' && (
+                    <Button
+                      variant="outline"
+                      onClick={() => navigate(`/operaciones/planilla/editar/${idParam}`)}
+                      className="gap-2"
+                    >
+                      <Pencil className="h-4 w-4" />
+                      Editar planilla
+                    </Button>
+                  )}
+                  {estadoPlanilla === 'BORRADOR' && idParam && (
+                    <Button
+                      onClick={async () => {
+                        setAprobando(true);
+                        try {
+                          await operacionesApi.aprobar(Number(idParam));
+                          toast.success('Planilla aprobada');
+                          setEstadoPlanilla('APROBADA');
+                        } catch (err: any) {
+                          toast.error(err?.message ?? 'Error al aprobar');
+                        } finally {
+                          setAprobando(false);
+                        }
+                      }}
+                      disabled={aprobando}
+                      className="gap-2 bg-success hover:bg-success/90"
+                    >
+                      <Check className="h-4 w-4" />
+                      Aprobar Planilla
+                    </Button>
+                  )}
+                </>
               ) : (
                 <Button
                   onClick={guardarTodo} disabled={guardando} className="gap-2 bg-success hover:bg-success/90"
