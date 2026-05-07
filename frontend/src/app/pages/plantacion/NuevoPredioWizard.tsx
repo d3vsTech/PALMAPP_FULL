@@ -22,6 +22,16 @@ import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Badge } from '../../components/ui/badge';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../../components/ui/alert-dialog';
+import {
   MapPin, ArrowLeft, ArrowRight, Save, Check, Plus, Trash2, Pencil,
   Trees, Grid3x3, GitBranch, Leaf, Calendar, Loader2,
   ChevronLeft, ChevronRight, ChevronDown,
@@ -108,6 +118,15 @@ export default function NuevoPredioWizard() {
   // lineaId vacío ('') significa "sin línea" (sublote sin líneas o entrada general).
   type PalmasEntry = { lineaId: string; cantidad: number };
   const [palmasEntries, setPalmasEntries] = useState<Record<string, PalmasEntry[]>>({});
+
+  // Estados para confirmación de eliminación
+  type PendienteEliminar =
+    | { tipo: 'lote'; id: string; nombre: string }
+    | { tipo: 'sublote'; id: string; nombre: string }
+    | { tipo: 'linea'; id: string; numero: number }
+    | { tipo: 'palma'; id: string; codigo: string; key: string; subloteId: string; lineaId: string; page: number };
+  const [pendienteEliminar, setPendienteEliminar] = useState<PendienteEliminar | null>(null);
+  const [eliminandoItem, setEliminandoItem] = useState(false);
   // Índice de la entrada que se está editando por sublote (null = ninguna, formulario crea nueva)
   const [editingEntryIdx, setEditingEntryIdx] = useState<Record<string, number | null>>({});
   // Helper: total de palmas confirmadas para un sublote (suma de todas las entradas)
@@ -347,7 +366,17 @@ export default function NuevoPredioWizard() {
     setLotes(prev => prev.map(l => (l.id === id ? { ...l, ...datos } : l)));
     setEditingLoteId(null);
   };
-  const eliminarLote = (id: string) => {
+  const eliminarLote = async (id: string) => {
+    if (editId && !id.startsWith('lt-')) {
+      try {
+        await lotesApi.eliminar(Number(id));
+        toast.success('Lote eliminado');
+        await refrescarResumen(editId);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Error al eliminar lote');
+        return;
+      }
+    }
     setLotes(prev => prev.filter(l => l.id !== id));
     const subIds = sublotes.filter(s => s.loteId === id).map(s => s.id);
     setSublotes(prev => prev.filter(s => s.loteId !== id));
@@ -372,9 +401,52 @@ export default function NuevoPredioWizard() {
     setSublotes(prev => prev.map(s => (s.id === id ? { ...s, nombre } : s)));
     setEditingSubloteId(null);
   };
-  const eliminarSublote = (id: string) => {
+  const eliminarSublote = async (id: string) => {
+    if (editId && !id.startsWith('s-')) {
+      try {
+        await sublotesApi.eliminar(Number(id));
+        toast.success('Sublote eliminado');
+        await refrescarResumen(editId);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Error al eliminar sublote');
+        return;
+      }
+    }
     setSublotes(prev => prev.filter(s => s.id !== id));
     setLineas(prev => prev.filter(ln => ln.subloteId !== id));
+  };
+
+  const confirmarEliminarItem = async () => {
+    if (!pendienteEliminar) return;
+    setEliminandoItem(true);
+    try {
+      if (pendienteEliminar.tipo === 'lote') {
+        await eliminarLote(pendienteEliminar.id);
+      } else if (pendienteEliminar.tipo === 'sublote') {
+        await eliminarSublote(pendienteEliminar.id);
+      } else if (pendienteEliminar.tipo === 'linea') {
+        await eliminarLinea(pendienteEliminar.id);
+      } else if (pendienteEliminar.tipo === 'palma') {
+        try {
+          await palmasApi.eliminar([Number(pendienteEliminar.id)]);
+          await cargarWizardPalmas(
+            pendienteEliminar.key,
+            { sublote_id: Number(pendienteEliminar.subloteId), linea_id: Number(pendienteEliminar.lineaId) },
+            pendienteEliminar.page,
+          );
+          setSublotes(prev => prev.map(s =>
+            s.id === pendienteEliminar.subloteId ? { ...s, cantidadPalmas: Math.max(0, s.cantidadPalmas - 1) } : s
+          ));
+          if (editId) refrescarResumen(editId);
+          toast.success('Palma eliminada');
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : 'Error al eliminar palma');
+        }
+      }
+    } finally {
+      setEliminandoItem(false);
+      setPendienteEliminar(null);
+    }
   };
 
   // ── Líneas: en edición llama API; en creación guarda local ────────────────
@@ -1070,7 +1142,7 @@ export default function NuevoPredioWizard() {
                           title="Editar lote">
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => eliminarLote(l.id)}
+                        <Button variant="ghost" size="icon" onClick={() => setPendienteEliminar({ tipo: 'lote', id: l.id, nombre: l.nombre })}
                           className="h-8 w-8 text-muted-foreground hover:text-destructive"
                           title="Eliminar lote">
                           <Trash2 className="h-4 w-4" />
@@ -1152,7 +1224,7 @@ export default function NuevoPredioWizard() {
                                   title="Editar sublote">
                                   <Pencil className="h-3.5 w-3.5" />
                                 </Button>
-                                <Button variant="ghost" size="icon" onClick={() => eliminarSublote(s.id)}
+                                <Button variant="ghost" size="icon" onClick={() => setPendienteEliminar({ tipo: 'sublote', id: s.id, nombre: s.nombre })}
                                   className="h-7 w-7 text-muted-foreground hover:text-destructive"
                                   title="Eliminar sublote">
                                   <Trash2 className="h-3.5 w-3.5" />
@@ -1233,7 +1305,7 @@ export default function NuevoPredioWizard() {
                                 <GitBranch className="h-4 w-4 text-accent" />
                                 <span className="font-semibold text-sm">Línea {ln.numero}</span>
                               </div>
-                              <Button variant="ghost" size="icon" onClick={() => eliminarLinea(ln.id)}
+                              <Button variant="ghost" size="icon" onClick={() => setPendienteEliminar({ tipo: 'linea', id: ln.id, numero: ln.numero })}
                                 className="h-6 w-6 text-muted-foreground hover:text-destructive">
                                 <Trash2 className="h-3 w-3" />
                               </Button>
@@ -1411,19 +1483,15 @@ export default function NuevoPredioWizard() {
                                               <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                onClick={async () => {
-                                                  try {
-                                                    await palmasApi.eliminar([Number(palma.id)]);
-                                                    cargarWizardPalmas(key, {
-                                                      sublote_id: Number(sub.id),
-                                                      linea_id: Number(ln.id),
-                                                    }, ps.page ?? 1);
-                                                    setSublotes(prev => prev.map(s =>
-                                                      s.id === sub.id ? { ...s, cantidadPalmas: Math.max(0, s.cantidadPalmas - 1) } : s
-                                                    ));
-                                                    if (editId) refrescarResumen(editId);
-                                                  } catch { toast.error('Error al eliminar palma'); }
-                                                }}
+                                                onClick={() => setPendienteEliminar({
+                                                  tipo: 'palma',
+                                                  id: String(palma.id),
+                                                  codigo: palma.codigo,
+                                                  key,
+                                                  subloteId: sub.id,
+                                                  lineaId: ln.id,
+                                                  page: ps.page ?? 1,
+                                                })}
                                                 className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
                                               >
                                                 <Trash2 className="h-3 w-3" />
@@ -1754,6 +1822,35 @@ export default function NuevoPredioWizard() {
           </div>
         </div>
       </div>
+
+      <AlertDialog
+        open={!!pendienteEliminar}
+        onOpenChange={(o) => !eliminandoItem && !o && setPendienteEliminar(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendienteEliminar?.tipo === 'lote' && 'Eliminar lote'}
+              {pendienteEliminar?.tipo === 'sublote' && 'Eliminar sublote'}
+              {pendienteEliminar?.tipo === 'linea' && 'Eliminar línea'}
+              {pendienteEliminar?.tipo === 'palma' && 'Eliminar palma'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={eliminandoItem}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); confirmarEliminarItem(); }}
+              disabled={eliminandoItem}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              {eliminandoItem ? 'Eliminando...' : 'Eliminar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

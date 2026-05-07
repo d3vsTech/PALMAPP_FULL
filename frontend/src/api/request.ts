@@ -84,7 +84,14 @@ export async function requestConToken<T = any>(
 ): Promise<T> {
   const res = await fetchConToken(endpoint, token, opciones);
   const data = await parseBody(res);
-  if (!res.ok) throw new Error(extractError(data));
+  if (!res.ok) {
+    const err: any = new Error(extractError(data));
+    err.status = res.status;
+    err.code = (data as any)?.code ?? null;
+    err.errors = (data as any)?.errors ?? null;
+    err.body = data;
+    throw err;
+  }
   return data as T;
 }
 

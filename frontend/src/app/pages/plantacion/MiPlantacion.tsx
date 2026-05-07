@@ -29,6 +29,7 @@ export default function MiPlantacion() {
   const [search, setSearch]     = useState('');
   const [elimId, setElimId]     = useState<number | null>(null);
   const [elimOpen, setElimOpen] = useState(false);
+  const [eliminando, setEliminando] = useState(false);
 
   const cargar = useCallback(async (q?: string) => {
     setLoading(true);
@@ -49,15 +50,35 @@ export default function MiPlantacion() {
 
   const confirmarEliminar = async () => {
     if (!elimId) return;
+    setEliminando(true);
     try {
       const res = await prediosApi.eliminar(elimId);
       toast.success(res.message ?? 'Predio eliminado');
+      setElimOpen(false);
+      setElimId(null);
       await cargar(search);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error al eliminar');
+    } catch (err: any) {
+      console.error('[predios.eliminar]', {
+        status: err?.status,
+        code: err?.code,
+        message: err?.message,
+        errors: err?.errors,
+        body: err?.body,
+      });
+      let msg = err?.message ?? 'Error al eliminar el predio';
+      if (err?.status === 401 || err?.status === 403) {
+        msg = `Sin permiso para eliminar predios (${err.status})`;
+      } else if (err?.status === 404) {
+        msg = 'El predio ya no existe (404)';
+      } else if (err?.status === 500) {
+        msg = `Error interno del servidor (500): ${err.message ?? ''}`;
+      } else if (err?.status) {
+        msg = `${err.message} [HTTP ${err.status}${err.code ? ` · ${err.code}` : ''}]`;
+      }
+      toast.error(msg);
+    } finally {
+      setEliminando(false);
     }
-    setElimOpen(false);
-    setElimId(null);
   };
 
   const totalHa     = predios.reduce((s, p) => s + Number(p.hectareas_totales ?? 0), 0);
@@ -67,18 +88,22 @@ export default function MiPlantacion() {
   return (
     <div className="space-y-6">
       {/* AlertDialog eliminar */}
-      <AlertDialog open={elimOpen} onOpenChange={setElimOpen}>
+      <AlertDialog open={elimOpen} onOpenChange={(o) => !eliminando && setElimOpen(o)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+            <AlertDialogTitle>Eliminar predio</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción no se puede deshacer. Esto eliminará permanentemente el predio y todos sus lotes.
+              Esta acción no se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmarEliminar} className="bg-destructive hover:bg-destructive/90">
-              Eliminar
+            <AlertDialogCancel disabled={eliminando}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); confirmarEliminar(); }}
+              disabled={eliminando}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              {eliminando ? 'Eliminando...' : 'Eliminar'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
