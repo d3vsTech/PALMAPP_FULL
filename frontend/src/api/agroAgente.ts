@@ -17,24 +17,37 @@
  */
 
 // URL base del backend del Agente IA (FastAPI).
-// Por defecto apunta directo al server de producción para evitar depender
-// de configuración de proxy. FastAPI tiene CORS abierto (allow_origins=["*"]),
-// así que las llamadas cross-origin desde localhost funcionan.
+// En producción usamos un proxy de Netlify (`public/_redirects`) que reescribe
+// `/agro-api/*` → `http://31.97.7.50/agro-agente/api/*`. Esto evita el bloqueo
+// de "Mixed Content" del browser cuando el sitio se sirve por HTTPS.
+// En desarrollo, Vite proxea `/agro-agente/api` (ver vite.config.ts).
 // Para overridear, usar la env var VITE_AGRO_AGENTE_URL.
 const AGRO_API =
   (import.meta.env.VITE_AGRO_AGENTE_URL as string | undefined)?.trim() ??
-  'http://31.97.7.50/agro-agente/api';
+  '/agro-api';
 
-/** Base SIN /api — para construir URLs absolutas de adjuntos */
-export const AGRO_BASE_URL = AGRO_API.replace(/\/api\/?$/, '');
+/**
+ * Prefijo HTTPS para los adjuntos del chat. En producción los servimos a
+ * través del proxy de Netlify `/agro-uploads/*` (ver `public/_redirects`),
+ * y en dev/local mantenemos compatibilidad con la URL absoluta tradicional.
+ */
+const AGRO_UPLOADS =
+  AGRO_API === '/agro-api'
+    ? '/agro-uploads'
+    : AGRO_API.replace(/\/api\/?$/, '') + '/uploads';
 
-/** Convierte attachment_url relativa (ej. /storage/chat/abc.jpg) en URL absoluta. */
+/** Convierte attachment_url relativa (ej. /uploads/chat/abc.jpg) en URL absoluta. */
 export function buildAttachmentUrl(attachmentUrl?: string | null): string | null {
   if (!attachmentUrl) return null;
   if (/^https?:\/\//i.test(attachmentUrl)) return attachmentUrl;
-  const path = attachmentUrl.startsWith('/') ? attachmentUrl : `/${attachmentUrl}`;
-  return `${AGRO_BASE_URL}${path}`;
+  // El backend envía rutas tipo "/uploads/chat/foo.jpg". Quitamos el prefijo
+  // y lo concatenamos con el proxy seguro `/agro-uploads`.
+  const stripped = attachmentUrl.replace(/^\/?uploads\/?/, '');
+  return `${AGRO_UPLOADS}/${stripped}`;
 }
+
+/** Base sin /api — útil si algún día necesitás abrir el host directamente. */
+export const AGRO_BASE_URL = AGRO_API.replace(/\/api\/?$/, '');
 
 // ────────────────────────────────────────────────────────────────────────
 // Tipos

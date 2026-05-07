@@ -1,0 +1,6 @@
+# Proxy de Netlify hacia el backend HTTP de AgroAgente.
+# Evita el bloqueo de "Mixed Content" cuando el sitio se sirve por HTTPS.
+# El frontend llama a `/agro-api/*` y `/agro-uploads/*` (mismo origen HTTPS)
+# y Netlify reescribe internamente al servidor HTTP.
+/agro-api/*       http://31.97.7.50/agro-agente/api/:splat       200
+/agro-uploads/*   http://31.97.7.50/agro-agente/uploads/:splat   200
