@@ -19,6 +19,16 @@ use Illuminate\Support\Facades\Schema;
  *
  * `calidad_materia_prima` se valida en FormRequest (sin CHECK en BD) para
  * permitir variantes futuras sin migración.
+ *
+ * NOTA HISTÓRICA: la modelación de calidad como un único enum cualitativo
+ * (excelente|buena|regular|deficiente) más métricas de pulpa/acidez/humedad
+ * resultó no coincidir con lo que las remisiones colombianas realmente
+ * traen impreso. La migración complementaria
+ * `2026_05_07_000001_refine_extractora_fields_on_viajes` corrige el modelo
+ * a 5 porcentajes por categoría de fruto. Esta migración se mantiene
+ * intacta para que entornos con datos productivos (ej. server de pruebas
+ * que ya la tiene aplicada) puedan seguir el camino normal de migrate sin
+ * romper su `down()`.
  */
 return new class extends Migration
 {

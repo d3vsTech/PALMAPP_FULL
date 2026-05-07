@@ -164,6 +164,8 @@ El sistema usa JWT (JSON Web Tokens) en lugar de sesiones. No hay cookies ni est
 
 **Migración 7 — Nómina (7 tablas):** `nomina_concepto` (catálogo unificado de deducciones y bonificaciones), `nomina_tabla_legal` (porcentajes legales con vigencia), `nominas` (encabezado del período), `nomina_empleado` (línea por trabajador), `nomina_empleado_concepto` (detalle de cada deducción/bonificación), `nomina_jornal_ref` (snapshot de jornales incluidos), `nomina_cosecha_ref` (snapshot de cosechas incluidas)
 
+**Migración 20 — Rediseño Nómina para liquidación por empleado (alter de 3 tablas):** Alinea las tablas de nómina con el wizard de 4 pasos descrito en §6.6. (1) `nominas`: simplifica `estado` a `BORRADOR | CERRADA` (drop `CALCULADA`), cambia `quincena` de enum string `('PRIMERA','SEGUNDA')` a `smallint` nullable (1, 2, NULL), agrega `tipo_pago_snapshot` enum `(QUINCENAL,MENSUAL)` para blindar la nómina histórica de cambios futuros del tenant, y unique compuesto `(tenant_id, anio, mes, quincena)` para impedir duplicados. (2) `nomina_empleado`: simplifica `estado` a `PENDIENTE | LIQUIDADO`, agrega `dias_trabajados`, `subsidio_transporte` (columna directa, no concepto), `total_incapacidades`, snapshots `cargo_snapshot`/`predio_snapshot`/`salario_minimo_snapshot`, auditoría `liquidado_por`/`liquidado_at`. (3) `nomina_concepto.subtipo`: amplía con `PRESTAMO` y `AHORRO_VOLUNTARIO`. Nuevo seeder `NominaConceptoSeeder` siembra 23 conceptos colombianos por tenant (8 activos automáticos: SALUD/PENSIÓN al 4% + 6 tramos de Fondo de Solidaridad Pensional según IBC en SMLV; 15 plantilla precargada `activo=false` que el admin activa cuando los necesite: RETEFUENTE, EMBARGO, LIBRANZA, CUOTA_SINDICAL, AFC, PENSION_VOL, AUX_ALIMENTACION, BON_PRODUCTIVIDAD, BON_ANTIGUEDAD, COMISIONES, PRIMA_EXTRALEGAL, AUX_EDUCATIVO; tres de la plantilla — DCTO_ADELANTO, AHORRO, BONIFICACION — vienen `activo=true` porque la UI las usa directamente).
+
 **Migración 8 — Vacaciones y Liquidación (4 tablas):** `vacaciones` (solicitudes), `vacacion_acumulado` (saldo de días), `liquidaciones` (cálculo de prestaciones al retiro), `liquidacion_detalle` (desglose concepto por concepto)
 
 **Migración 9 — Refinamiento de Labores y Jornales:** Expande `labores.tipo_pago` de 2 a 3 valores (`JORNAL_FIJO`, `POR_PALMA_INSUMO`, `POR_PALMA_SIMPLE`). Elimina `fecha` de `jornales` y `registro_cosecha` (se obtiene de la operación padre). Hace `operacion_id` obligatorio (NOT NULL) en ambas tablas. Renombra `jornales.valor_insumo` a `precio_insumo_snapshot`. Agrega `jornales.tipo_pago` como snapshot del tipo de pago al momento de creación.
@@ -368,7 +370,7 @@ CREADO ──▶ EN_VALIDACION ──▶ FINALIZADO
 ```
 
 - **CREADO**: se enlazan cosechas al viaje (`viaje_detalle`) y se hace el **reconteo de gajos**. El reconteo hidrata `registro_cosecha.gajos_reconteo` vía el endpoint dedicado `PUT /viajes/{id}/reconteo` (el cual también refresca `viajes.cantidad_gajos_total = SUM(gajos_reconteo)`). Solo en este estado el viaje es editable. Hay **dos rutas de salida**: (1) aprobar el reconteo del último detalle dispara la auto-transición a `EN_VALIDACION` (fincas que pagan por producción); (2) `POST /viajes/{id}/saltar-validacion` para fincas que pagan por jornal y no llevan control de cosechas — no exige detalles ni reconteos aprobados.
-- **EN_VALIDACION**: el camión llegó a la extractora y se está validando lo que reportaron. Aquí se hidratan los datos del **formulario de extractora**: `peso_viaje`, `numero_remision_extractora`, `fecha_llegada`, `hora_llegada`, `racimos_recibidos`, `temperatura_pulpa`, `acidez_inicial`, `humedad_semilla`, `calidad_materia_prima` (`excelente`|`buena`|`regular`|`deficiente`) y `observaciones_extractora`. La hidratación puede ser por OCR (subir foto/PDF a `POST /documento-bascula` — pendiente de refactor) o manual (`PATCH /viajes/{id}/validar`).
+- **EN_VALIDACION**: el camión llegó a la extractora y se está validando lo que reportaron. Aquí se hidratan los datos del **formulario de extractora**: `peso_viaje`, `numero_remision_extractora`, `fecha_llegada`, `hora_llegada`, los 5 porcentajes de calificación de fruto (`fruto_verde`, `sobre_maduro`, `podrido`, `pedunculo_largo`, `mal_formado`) y `observaciones_extractora`. La hidratación puede ser por OCR (subir foto/PDF a `POST /documento-bascula`) o manual (`PATCH /viajes/{id}/validar`). Adicional, el OCR captura el **nombre del conductor y la placa impresos** en la remisión y el GET de polling los compara contra el snapshot del viaje (`nombre_conductor`, `placa_vehiculo`) en una sección `validaciones_cruzadas`: si un camión llegó con conductor o placa distintos a los planeados, el frontend pinta una alerta no bloqueante.
 - **FINALIZADO**: cerrado. Se dispara el cálculo HOMOGENEO/NO_HOMOGENEO **solo si hay detalles enlazados con peso y gajos**; los viajes "paga por jornal" sin detalles cierran sin recalcular nada.
 
 El borrado lógico del viaje ahora vive en la columna **`estado_activo`** (boolean, renombrada del antiguo `estado`); solo se permite mientras el viaje no esté `FINALIZADO`.
@@ -405,22 +407,43 @@ Modelos: Viaje, RegistroCosecha, ViajeDetalle, CosechaCuadrilla, EmpresaTranspor
 
 ### 6.6 Módulo de Nómina
 
-Es el módulo más complejo del sistema. Opera en períodos (quincenas o meses, según la configuración del tenant).
+Es el módulo más complejo del sistema. Opera en períodos (quincenas o meses), con liquidación **por empleado individualmente** (no en bloque). Documentación completa de la API: [docs/API_NOMINA.md](docs/API_NOMINA.md).
 
-**Conceptos de nómina (`nomina_concepto`):** Catálogo unificado de todo lo que puede sumar o restar en una nómina. Cada concepto tiene: tipo (deducción legal, deducción voluntaria, bonificación fija, bonificación variable), subtipo (salud, pensión, ARL, fondo solidaridad, libranza, embargo, productividad, transporte, alimentación, antigüedad), operación (SUMA o RESTA), método de cálculo (porcentaje, valor fijo, fórmula), valor de referencia, base de cálculo (salario base, total devengado, salario mínimo, manual), y si aplica a empleados fijos, variables o ambos.
+**Conceptos de nómina (`nomina_concepto`):** Catálogo unificado por tenant de todo lo que puede sumar o restar en una nómina. Cada concepto tiene: tipo (DEDUCCION_LEGAL, DEDUCCION_VOLUNTARIA, BONIFICACION_FIJA, BONIFICACION_VARIABLE), subtipo (SALUD, PENSION, ARL, FONDO_SOLIDARIDAD, LIBRANZA, EMBARGO, **PRESTAMO**, **AHORRO_VOLUNTARIO**, PRODUCTIVIDAD, TRANSPORTE, ALIMENTACION, ANTIGUEDAD, OTRO), operación (SUMA/RESTA), método de cálculo (PORCENTAJE/VALOR_FIJO/FORMULA), `valor_referencia`, `base_calculo` (SALARIO_BASE/TOTAL_DEVENGADO/SALARIO_MINIMO/MANUAL), y `aplica_a` (FIJO/VARIABLE/AMBOS). El `NominaConceptoSeeder` siembra 23 conceptos por tenant (ver Migración 20 en §3.1).
 
-**Tabla legal (`nomina_tabla_legal`):** Historial de porcentajes legales colombianos con vigencia. Por ejemplo: "Salud - empleado 4%, empresa 8.5%, vigente desde 2026-01-01". Esto permite que cuando cambien los porcentajes, se pueda recalcular nóminas históricas con los valores correctos de su época.
+**Tabla legal (`nomina_tabla_legal`):** Historial de porcentajes legales colombianos con vigencia. Por ejemplo: "Salud - empleado 4%, empresa 8.5%, vigente desde 2026-01-01". Permite recalcular nóminas históricas con los valores correctos de su época.
 
-**Flujo de nómina:**
-1. Se crea un período (`nominas`) con estado BORRADOR
-2. Se agregan empleados al período (`nomina_empleado`). Para empleados fijos, el `total_devengado = empleado.salario_base`. Para variables, se suman jornales + cosechas del rango de fechas.
-3. Se ejecuta "Calcular": el sistema recorre cada empleado, aplica los conceptos obligatorios (salud 4%, pensión 4%, etc.), calcula bonificaciones, genera los snapshots de jornales y cosechas referenciados. Estado pasa a CALCULADA.
-4. Se pueden hacer ajustes manuales (agregar conceptos, cambiar valores).
-5. Se ejecuta "Cerrar": la nómina pasa a CERRADA y se vuelve inmutable. No se puede editar ni eliminar.
+**Flujo del wizard (4 pasos):**
+1. **Crear período (`POST /nominas`)**: el frontend envía `{ mes, anio, periodicidad: QUINCENAL|MENSUAL, quincena? }`. El backend snapshottea `tipo_pago_snapshot` desde el body (no desde `tenant_config.tipo_pago_nomina` — el config solo es default informativo del frontend) y calcula `fecha_inicio`/`fecha_fin` automáticamente. Estado: BORRADOR.
+2. **Agregar empleados (`POST /nominas/{id}/empleados`)**: del listado de activos del tenant. Cada `nomina_empleado` arranca en estado PENDIENTE con `salario_tipo` derivado de `empleado.modalidad_pago` (FIJO o VARIABLE).
+3. **Liquidar empleado por empleado** (`POST /nomina-empleado/{id}/liquidar`): el `NominaCalculationService` calcula el devengado, aplica conceptos legales automáticamente y persiste los conceptos manuales (bonificaciones libres + deducciones voluntarias del catálogo). Estado del empleado pasa a LIQUIDADO. Re-liquidación permitida vía `PUT /liquidacion` mientras la nómina siga BORRADOR. Antes hay un `GET /preview` que devuelve el cálculo propuesto sin persistir, y para empleados VARIABLE un `GET /resumen-trabajo` que devuelve la planilla diaria agrupada por categoría (cosecha, plateo, poda, fertilización, sanidad, otros, finca).
+4. **Cerrar nómina (`POST /nominas/{id}/cerrar`)**: requiere que **todos** los empleados estén LIQUIDADOS. `CerrarNominaService` ejecuta en una sola transacción: crea snapshots en `nomina_jornal_ref`/`nomina_cosecha_ref`/`nomina_hora_extra_ref`, marca `Ausencia.estado=LIQUIDADA` y `HoraExtra.estado=LIQUIDADA` para los registros APROBADOS del rango, recalcula totales globales, y cambia `nomina.estado=CERRADA` (inmutable).
 
-**Snapshots:** `nomina_jornal_ref` y `nomina_cosecha_ref` guardan una copia del valor de cada jornal y cosecha incluidos en la nómina. Así, si después alguien modifica un jornal, la nómina cerrada mantiene el valor original con el que se calculó.
+**Reglas de cálculo (normatividad colombiana, en `NominaCalculationService`):**
+- **Devengado FIJO:** `salario_base × (dias_trabajados / dias_periodo) + total_incapacidades_remuneradas + total_horas_extra + total_recargos`. `dias_trabajados = dias_periodo - dias_ausencia_no_remunerada`.
+- **Devengado VARIABLE:** `Σ jornales.valor_total + Σ cosecha_cuadrilla.valor_calculado + ...` (solo operaciones APROBADAS). `dias_trabajados = count(distinct DATE(operacion.fecha))`.
+- **Subsidio de transporte:** columna directa en `nomina_empleado.subsidio_transporte` (NO es concepto). Aplica si `salario_base ≤ 2 × SMLV`. Monto: `tenant_config.auxilio_transporte × (dias_trabajados / dias_periodo)`. No suma al IBC (no es salario).
+- **Salud y Pensión (4% cada uno):** sobre IBC = `total_devengado` (sin subsidio). Topes: mínimo 1 SMLV proporcional, máximo 25 SMLV proporcional al período.
+- **Fondo de Solidaridad Pensional:** un único tramo según IBC mensualizado en SMLV — FSP_1 (1.0% si >4 SMLV) hasta FSP_6 (2.0% si >20 SMLV). Ley 100/1993 art. 27, modif. Ley 797/2003.
+- **Ausencias:** ya documentado en §6.9. EPS días 1-2 al 100%, días 3+ al 66.67%; ARL al 100%; permisos no remunerados/injustificadas descuentan `(salario/30) × dias × (1 − %pago/100)`.
+- **Horas extras y recargos:** ya snapshotteados en `horas_extra.valor_calculado` (boot logic con divisor por tenant). El service de nómina solo agrega los APROBADOS del rango, separados en `total_horas_extra` (es_extra=true) y `total_recargos` (es_extra=false) — la separación es necesaria para reportes legales (UGPP/DIAN).
 
-Modelos: NominaConcepto, NominaTablaLegal, Nomina, NominaEmpleado, NominaEmpleadoConcepto, NominaJornalRef, NominaCosechaRef.
+**Snapshots históricos:** una nómina CERRADA debe ser reproducible años después. Por eso al cerrar se persisten:
+- `nomina_jornal_ref(jornal_id, valor_snapshot)`, `nomina_cosecha_ref(cosecha_cuadrilla_id, valor_snapshot)`, `nomina_hora_extra_ref(hora_extra_id, valor_snapshot)` — congelan los valores actuales.
+- `nomina_empleado.cargo_snapshot`, `predio_snapshot`, `salario_minimo_snapshot` — congelan datos del empleado y el SMLV vigente al momento.
+- `Ausencia.nomina_id` + `estado=LIQUIDADA`, `HoraExtra.nomina_id` + `estado=LIQUIDADA` — bloquean ediciones posteriores de los registros referenciados.
+
+**Estados:** Nómina (`BORRADOR → CERRADA`, sin estado intermedio CALCULADA). NominaEmpleado (`PENDIENTE → LIQUIDADO`).
+
+**Permisos Spatie:** `nomina.ver`, `nomina.crear`, `nomina.editar`, `nomina.eliminar`, `nomina.liquidar`, `nomina.cerrar`, `nomina-conceptos.ver`, `nomina-conceptos.gestionar`.
+
+**Desprendible:** `GET /nomina-empleado/{id}/desprendible` (JSON), `GET .../desprendible/pdf` (DomPDF, paquete `barryvdh/laravel-dompdf`, vista en `resources/views/desprendible/nomina.blade.php`), `POST .../desprendible/whatsapp` (genera URL firmada del PDF para envío manual vía `wa.me/?text=URL` — placeholder de futura integración con WhatsApp Business API).
+
+Modelos: NominaConcepto, NominaTablaLegal, Nomina, NominaEmpleado, NominaEmpleadoConcepto, NominaJornalRef, NominaCosechaRef, NominaHoraExtraRef.
+
+Services: `NominaCalculationService` (preview + liquidar), `AgrupadorJornalesService` (resumen para VARIABLE), `CerrarNominaService` (cierre transaccional + snapshots), `DesprendibleService` (data + PDF + WhatsApp placeholder).
+
+Controllers: `NominaController` (CRUD + indicadores + cerrar), `NominaEmpleadoController` (agregar/eliminar empleados, preview, resumen-trabajo, liquidar, desprendible), `NominaConceptoController` (CRUD del catálogo + select).
 
 ### 6.7 Módulo de Vacaciones
 
@@ -641,7 +664,7 @@ Los permisos están agrupados por módulo y son los mismos para todos los tenant
 - **Colaboradores:** `colaboradores.*`, `contratos.*`
 - **Operaciones:** `operaciones.*`, `cosecha.*`, `jornales.*`, `auxiliares.*`
 - **Viajes:** `viajes.*`
-- **Nómina:** `nomina.ver`, `nomina.crear`, `nomina.editar`, `nomina.calcular`, `nomina.cerrar`
+- **Nómina:** `nomina.ver`, `nomina.crear`, `nomina.editar`, `nomina.eliminar`, `nomina.liquidar`, `nomina.cerrar`, `nomina-conceptos.ver`, `nomina-conceptos.gestionar`
 - **Usuarios:** `usuarios.ver`, `usuarios.crear`, `usuarios.editar`, `usuarios.eliminar`, `usuarios.ver_permisos`, `usuarios.editar_permisos`, `usuarios.desactivar`
 - **Configuración:** `configuracion.editar`
 
@@ -870,13 +893,32 @@ GET             /api/v1/tenant/colaboradores/:id/documentos/:docId/visualizar �
 POST            /api/v1/tenant/bot/test             → Endpoint de prueba del bot externo (solo log, sin permiso)
 ```
 
+**Implementados — Nómina (rediseño liquidación por empleado, ver §6.6 y [docs/API_NOMINA.md](docs/API_NOMINA.md)):**
+```
+GET             /api/v1/tenant/nominas/indicadores                              (nomina.ver)
+GET|POST        /api/v1/tenant/nominas                                          (nomina.ver / nomina.crear)
+GET|PUT|DELETE  /api/v1/tenant/nominas/:id                                      (nomina.ver / nomina.editar / nomina.eliminar)
+POST            /api/v1/tenant/nominas/:id/cerrar                               (nomina.cerrar)
+GET             /api/v1/tenant/nominas/:id/empleados-disponibles                (nomina.editar)
+POST            /api/v1/tenant/nominas/:id/empleados                            (nomina.editar)
+DELETE          /api/v1/tenant/nomina-empleado/:id                              (nomina.editar)
+GET             /api/v1/tenant/nomina-empleado/:id/preview                      (nomina.liquidar)
+GET             /api/v1/tenant/nomina-empleado/:id/resumen-trabajo              (nomina.liquidar) — solo VARIABLE
+POST            /api/v1/tenant/nomina-empleado/:id/liquidar                     (nomina.liquidar)
+PUT             /api/v1/tenant/nomina-empleado/:id/liquidacion                  (nomina.liquidar) — re-liquidar
+GET             /api/v1/tenant/nomina-empleado/:id/desprendible                 (nomina.ver) — JSON
+GET             /api/v1/tenant/nomina-empleado/:id/desprendible/pdf             (nomina.ver) — PDF DomPDF
+POST            /api/v1/tenant/nomina-empleado/:id/desprendible/whatsapp        (nomina.ver) — URL firmada
+GET|POST        /api/v1/tenant/nomina-conceptos                                 (nomina-conceptos.ver / nomina-conceptos.gestionar)
+GET             /api/v1/tenant/nomina-conceptos/select                          (nomina.liquidar)
+PUT|DELETE      /api/v1/tenant/nomina-conceptos/:id                             (nomina-conceptos.gestionar)
+```
+
 **Pendientes por implementar:**
 ```
 /api/v1/tenant/colaboradores/:id/contratos
 /api/v1/tenant/jornales
 /api/v1/tenant/viajes, /api/v1/tenant/cosechas
-/api/v1/tenant/nominas, /api/v1/tenant/nominas/:id/calcular, /api/v1/tenant/nominas/:id/cerrar
-/api/v1/tenant/nomina-conceptos
 /api/v1/tenant/vacaciones, /api/v1/tenant/vacaciones-acumulado/:empleadoId
 /api/v1/tenant/liquidaciones, /api/v1/tenant/liquidaciones/:id/calcular, /api/v1/tenant/liquidaciones/:id/aprobar
 /api/v1/tenant/sync/jornales, /api/v1/tenant/sync/cosechas, /api/v1/tenant/sync/catalogs
@@ -962,9 +1004,9 @@ POST            /api/v1/tenant/bot/test             → Endpoint de prueba del b
   - Documentación completa para el desarrollador del bot Python en `docs/API_BOT.md` (login, select-tenant, headers, manejo de errores, cliente Python de referencia)
 
 **Pendiente:**
-- Controllers de: contratos del empleado, nómina, vacaciones, liquidación
-- Lógica de cálculo de ausencias sobre la nómina (NominaCalculationService) — snapshots ya existen, falta el agregador por rango
+- Controllers de: contratos del empleado, vacaciones, liquidación (al retiro)
 - Sync offline (SyncController)
+- Integración real de WhatsApp Business API para envío automático de desprendibles (hoy es placeholder con URL firmada del PDF)
 - Tests de aislamiento multi-tenant
 - Todo el frontend
 

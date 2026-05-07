@@ -17,7 +17,7 @@ CREADO ──▶ EN_VALIDACION ──▶ FINALIZADO
 - **CREADO**: planilla abierta. Se enlazan las cosechas (`viaje_detalle`) que van en el camión y se hace el **reconteo de gajos** (se corrigen los gajos reportados contra los realmente cargados); también se puede capturar `peso_confirmado` opcional. Es el único estado donde el viaje es editable. Hay **dos rutas de salida**:
   1. **Aprobar reconteo de todos los detalles** → auto-transición a `EN_VALIDACION` (fincas que pagan por producción).
   2. **Saltar a validación** vía `POST /viajes/{id}/saltar-validacion` → no requiere detalles ni reconteos aprobados (fincas que pagan por jornal y no llevan control de cosechas).
-- **EN_VALIDACION**: el camión llegó a la extractora y se está validando lo que reportaron. Aquí se hidratan los datos del **formulario de extractora** (peso recibido, número de remisión interna de la extractora, fecha/hora de llegada, racimos contados por la extractora, métricas de calidad: temperatura pulpa, acidez inicial, humedad de semilla, calificación cualitativa). La hidratación puede ocurrir vía OCR del documento (`POST /viajes/{id}/documento-bascula`) o vía captura manual (`PATCH /viajes/{id}/validar`).
+- **EN_VALIDACION**: el camión llegó a la extractora y se está validando lo que reportaron. Aquí se hidratan los datos del **formulario de extractora** (peso recibido, número de remisión interna de la extractora, fecha/hora de llegada, observaciones, y los 5 porcentajes de calificación de fruto: verde, sobre maduro, podrido, pedúnculo largo, mal formado). La hidratación puede ocurrir vía OCR del documento (`POST /viajes/{id}/documento-bascula`) o vía captura manual (`PATCH /viajes/{id}/validar`).
 - **FINALIZADO**: el viaje está cerrado. Solo lectura. Al entrar a este estado se dispara el cálculo final del promedio kg/gajo en los `registro_cosecha` asociados **solo si hay detalles + peso + gajos**; los viajes "paga por jornal" sin detalles cierran sin recalcular nada.
 
 El campo `remision` (formato `REM-{YYYY}-{NNN}`) se autogenera al crear el viaje y es el identificador visible para el usuario.
@@ -93,14 +93,14 @@ El campo `remision` (formato `REM-{YYYY}-{NNN}`) se autogenera al crear el viaje
 | `hora_salida` | time | sí | Hora planeada, form de creación |
 | `peso_viaje` | decimal(10,2) | no | Peso recibido por la extractora. Se hidrata en EN_VALIDACION (OCR o manual). |
 | `cantidad_gajos_total` | integer | no | Se llena con el reconteo (queda NULL en viajes "paga por jornal") |
-| `numero_remision_extractora` | string(50) | no | Número interno que asigna la extractora al recibir el camión |
+| `numero_remision_extractora` | string(50) | no | Número interno que asigna la extractora al recibir el camión (etiqueta "N° Remisión" / "No. Documento" en la remisión impresa) |
 | `fecha_llegada` | date | no | Reportada por la extractora |
 | `hora_llegada` | time | no | Reportada por la extractora |
-| `racimos_recibidos` | integer | no | Conteo de la extractora (puede diferir de `cantidad_gajos_total`) |
-| `temperatura_pulpa` | decimal(5,2) | no | °C |
-| `acidez_inicial` | decimal(5,2) | no | % |
-| `humedad_semilla` | decimal(5,2) | no | % |
-| `calidad_materia_prima` | string(20) | no | enum: `excelente` \| `buena` \| `regular` \| `deficiente` (validado en FormRequest) |
+| `fruto_verde` | decimal(5,2) | no | % de fruto verde según la calificación impresa en la remisión (0–100) |
+| `sobre_maduro` | decimal(5,2) | no | % de fruto sobre maduro (0–100) |
+| `podrido` | decimal(5,2) | no | % de fruto podrido (0–100) |
+| `pedunculo_largo` | decimal(5,2) | no | % de fruto con pedúnculo largo (0–100) |
+| `mal_formado` | decimal(5,2) | no | % de fruto mal formado (0–100) |
 | `observaciones_extractora` | string(500) | no | Notas que reporta la extractora |
 | `observaciones` | string(255) | no | Notas internas del operador |
 | `es_homogeneo` | boolean | no | default `true` |
@@ -149,7 +149,7 @@ Esto garantiza que **una cosecha solo puede estar en un viaje activo**. Si el vi
 | Crear viaje | `POST /viajes` | — | Crea en `CREADO`. Autogenera `remision`. Snapshot de placa/conductor desde `transportador_id`. |
 | Aprobar reconteo de detalle | `POST /viajes/{id}/detalles/{detalleId}/aprobar-reconteo` | `CREADO` | Marca `reconteo_aprobado=true`. **Si todos los detalles del viaje quedan aprobados, el viaje auto-transiciona a `EN_VALIDACION`** (set `validacion_at = now()`). Acción de auditoría: `TRANSICIONAR_VALIDACION` cuando dispara el salto, `APROBAR_RECONTEO` en otro caso. |
 | Saltar a validación | `POST /viajes/{id}/saltar-validacion` | `CREADO` | → `EN_VALIDACION`. **No exige** detalles enlazados ni reconteos aprobados. Para fincas que pagan por jornal y no llevan control de cosechas. Set `validacion_at = now()`. Body opcional: `{ observaciones?: string }` se concatena al campo `observaciones` del viaje. Acción auditoría: `SALTAR_VALIDACION`. |
-| Validar (captura manual) | `PATCH /viajes/{id}/validar` | `EN_VALIDACION` | Hidrata los datos del formulario de extractora (peso, número de remisión extractora, fecha/hora de llegada, racimos, temperatura, acidez, humedad, calidad, observaciones extractora). **No transiciona** estado. Todos los campos del payload son opcionales. Acción auditoría: `VALIDAR`. |
+| Validar (captura manual) | `PATCH /viajes/{id}/validar` | `EN_VALIDACION` | Hidrata los datos del formulario de extractora (peso, número de remisión extractora, fecha/hora de llegada, observaciones, y los 5 porcentajes de calificación: fruto_verde, sobre_maduro, podrido, pedunculo_largo, mal_formado). **No transiciona** estado. Todos los campos del payload son opcionales. Acción auditoría: `VALIDAR`. |
 | Finalizar | `POST /viajes/{id}/finalizar` | `EN_VALIDACION` | → `FINALIZADO`. Set `finalizado_at = now()`. Dispara cálculo HOMOGENEO/NO_HOMOGENEO solo si el viaje tiene detalles enlazados con peso y gajos; si no hay detalles (paga por jornal), cierra sin recalcular. |
 | **OCR formulario extractora** (asistencia) | `POST /viajes/{id}/documento-bascula` | `EN_VALIDACION` | Sube foto/PDF y dispara `ProcesarFormularioExtractoraJob`. El Job extrae los 10 campos con Claude Vision y los guarda en `viaje_documento_bascula.datos_extraidos`; **NO toca la tabla `viajes`**. El frontend hace polling al GET, rellena el form con los datos extraídos y el operador revisa/edita. Al darle "Finalizar y guardar", el frontend dispara `PATCH /validar` + `POST /finalizar` con los datos editados. Si Claude tiene baja confianza o no lee los 3 críticos, el documento queda en `REVISION_MANUAL` (los datos se guardan igual; es solo una alerta visual). Ver [API_VIAJES_OCR_BASCULA.md](./API_VIAJES_OCR_BASCULA.md). |
 
@@ -451,21 +451,21 @@ Captura manual de los datos que reportó la extractora. **No transiciona** el es
 ```json
 {
   "peso_viaje": 12500.50,
-  "numero_remision_extractora": "EXT-2026-04578",
+  "numero_remision_extractora": "0042",
   "fecha_llegada": "2026-04-22",
   "hora_llegada": "10:45",
-  "racimos_recibidos": 248,
-  "temperatura_pulpa": 28.5,
-  "acidez_inicial": 3.2,
-  "humedad_semilla": 18.7,
-  "calidad_materia_prima": "buena",
+  "fruto_verde": 0,
+  "sobre_maduro": 17.5,
+  "podrido": 2.5,
+  "pedunculo_largo": 0,
+  "mal_formado": 5,
   "observaciones_extractora": "Llegada sin novedad."
 }
 ```
 
 **Validación:**
 - `viaje.estado = EN_VALIDACION` → si no, 409 `VIAJE_ESTADO_INVALIDO`.
-- `calidad_materia_prima` debe estar en `['excelente','buena','regular','deficiente']`.
+- Cada porcentaje (`fruto_verde`, `sobre_maduro`, `podrido`, `pedunculo_largo`, `mal_formado`) debe estar entre 0 y 100.
 - `hora_llegada` debe seguir formato `HH:MM` (24 h).
 - Auditoría: acción `VALIDAR`, módulo `VIAJES`.
 

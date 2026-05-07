@@ -103,8 +103,12 @@ class RolesAndPermissionsSeeder extends Seeder
             'nomina.ver',
             'nomina.crear',
             'nomina.editar',
-            'nomina.calcular',
+            'nomina.eliminar',
+            'nomina.liquidar',
             'nomina.cerrar',
+
+            'nomina-conceptos.ver',
+            'nomina-conceptos.gestionar',
 
             // ── Gestión de Usuarios ──
             'usuarios.ver',

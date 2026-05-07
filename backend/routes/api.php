@@ -44,6 +44,9 @@ use App\Http\Controllers\Api\ExtractoraController;
 use App\Http\Controllers\Api\FondoPensionController;
 use App\Http\Controllers\Api\ArlController;
 use App\Http\Controllers\Api\HoraExtraController;
+use App\Http\Controllers\Api\Nomina\NominaConceptoController;
+use App\Http\Controllers\Api\Nomina\NominaController;
+use App\Http\Controllers\Api\Nomina\NominaEmpleadoController;
 use App\Http\Controllers\Api\TipoHoraExtraController;
 use App\Http\Controllers\Api\ViajeController;
 use App\Http\Controllers\Api\ViajeDocumentoBasculaController;
@@ -347,12 +350,60 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
     Route::get('viajes/{viaje}/documento-bascula/{documento}', [ViajeDocumentoBasculaController::class, 'show'])
         ->middleware('check.permission:viajes.ver');
 
-    // ── Nómina ──
-    // Route::get('nominas', ...)->middleware('check.permission:nomina.ver');
-    // Route::post('nominas', ...)->middleware('check.permission:nomina.crear');
-    // Route::put('nominas/{nomina}', ...)->middleware('check.permission:nomina.editar');
-    // Route::post('nominas/{nomina}/calcular', ...)->middleware('check.permission:nomina.calcular');
-    // Route::post('nominas/{nomina}/cerrar', ...)->middleware('check.permission:nomina.cerrar');
+    // ── Nómina: CRUD del período ──
+    Route::get('nominas/indicadores', [NominaController::class, 'indicadores'])
+        ->middleware('check.permission:nomina.ver');
+    Route::get('nominas', [NominaController::class, 'index'])
+        ->middleware('check.permission:nomina.ver');
+    Route::get('nominas/{nomina}', [NominaController::class, 'show'])
+        ->middleware('check.permission:nomina.ver');
+    Route::post('nominas', [NominaController::class, 'store'])
+        ->middleware('check.permission:nomina.crear');
+    Route::put('nominas/{nomina}', [NominaController::class, 'update'])
+        ->middleware('check.permission:nomina.editar');
+    Route::delete('nominas/{nomina}', [NominaController::class, 'destroy'])
+        ->middleware('check.permission:nomina.eliminar');
+    Route::post('nominas/{nomina}/cerrar', [NominaController::class, 'cerrar'])
+        ->middleware('check.permission:nomina.cerrar');
+
+    // ── Nómina: empleados de la nómina ──
+    Route::get('nominas/{nomina}/empleados-disponibles', [NominaEmpleadoController::class, 'empleadosDisponibles'])
+        ->middleware('check.permission:nomina.editar');
+    Route::post('nominas/{nomina}/empleados', [NominaEmpleadoController::class, 'agregar'])
+        ->middleware('check.permission:nomina.editar');
+    Route::delete('nomina-empleado/{nominaEmpleado}', [NominaEmpleadoController::class, 'eliminar'])
+        ->middleware('check.permission:nomina.editar');
+
+    // ── Nómina: liquidación de empleado ──
+    Route::get('nomina-empleado/{nominaEmpleado}/preview', [NominaEmpleadoController::class, 'preview'])
+        ->middleware('check.permission:nomina.liquidar');
+    Route::get('nomina-empleado/{nominaEmpleado}/resumen-trabajo', [NominaEmpleadoController::class, 'resumenTrabajo'])
+        ->middleware('check.permission:nomina.liquidar');
+    Route::post('nomina-empleado/{nominaEmpleado}/liquidar', [NominaEmpleadoController::class, 'liquidar'])
+        ->middleware('check.permission:nomina.liquidar');
+    Route::put('nomina-empleado/{nominaEmpleado}/liquidacion', [NominaEmpleadoController::class, 'liquidar'])
+        ->middleware('check.permission:nomina.liquidar');
+
+    // ── Nómina: desprendible ──
+    Route::get('nomina-empleado/{nominaEmpleado}/desprendible', [NominaEmpleadoController::class, 'desprendible'])
+        ->middleware('check.permission:nomina.ver');
+    Route::get('nomina-empleado/{nominaEmpleado}/desprendible/pdf', [NominaEmpleadoController::class, 'desprendiblePdf'])
+        ->middleware('check.permission:nomina.ver')
+        ->name('nomina.desprendible.descarga');
+    Route::post('nomina-empleado/{nominaEmpleado}/desprendible/whatsapp', [NominaEmpleadoController::class, 'desprendibleWhatsapp'])
+        ->middleware('check.permission:nomina.ver');
+
+    // ── Nómina: catálogo de conceptos ──
+    Route::get('nomina-conceptos', [NominaConceptoController::class, 'index'])
+        ->middleware('check.permission:nomina-conceptos.ver');
+    Route::get('nomina-conceptos/select', [NominaConceptoController::class, 'select'])
+        ->middleware('check.permission:nomina.liquidar');
+    Route::post('nomina-conceptos', [NominaConceptoController::class, 'store'])
+        ->middleware('check.permission:nomina-conceptos.gestionar');
+    Route::put('nomina-conceptos/{nominaConcepto}', [NominaConceptoController::class, 'update'])
+        ->middleware('check.permission:nomina-conceptos.gestionar');
+    Route::delete('nomina-conceptos/{nominaConcepto}', [NominaConceptoController::class, 'destroy'])
+        ->middleware('check.permission:nomina-conceptos.gestionar');
 
     // ── Gestión de Usuarios del Tenant ──
     Route::get('usuarios', [TenantUserController::class, 'index'])

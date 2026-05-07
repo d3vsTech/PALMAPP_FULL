@@ -24,11 +24,11 @@ class ValidarViajeRequest extends FormRequest
             'numero_remision_extractora' => 'nullable|string|max:50',
             'fecha_llegada'              => 'nullable|date',
             'hora_llegada'               => 'nullable|date_format:H:i',
-            'racimos_recibidos'          => 'nullable|integer|min:0',
-            'temperatura_pulpa'          => 'nullable|numeric|min:0|max:999.99',
-            'acidez_inicial'             => 'nullable|numeric|min:0|max:999.99',
-            'humedad_semilla'            => 'nullable|numeric|min:0|max:999.99',
-            'calidad_materia_prima'      => 'nullable|in:excelente,buena,regular,deficiente',
+            'fruto_verde'                => 'nullable|numeric|min:0|max:100',
+            'sobre_maduro'               => 'nullable|numeric|min:0|max:100',
+            'podrido'                    => 'nullable|numeric|min:0|max:100',
+            'pedunculo_largo'            => 'nullable|numeric|min:0|max:100',
+            'mal_formado'                => 'nullable|numeric|min:0|max:100',
             'observaciones_extractora'   => 'nullable|string|max:500',
         ];
     }
@@ -36,8 +36,7 @@ class ValidarViajeRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'hora_llegada.date_format'        => 'La hora de llegada debe tener formato HH:MM (24 horas).',
-            'calidad_materia_prima.in'        => 'La calidad de materia prima debe ser: excelente, buena, regular o deficiente.',
+            'hora_llegada.date_format' => 'La hora de llegada debe tener formato HH:MM (24 horas).',
         ];
     }
 }

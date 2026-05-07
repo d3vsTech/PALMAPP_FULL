@@ -147,10 +147,14 @@ class DatabaseSeeder extends Seeder
         // ═══ 6. CATÁLOGOS PARAMÉTRICOS ═══
         $this->call(MotivoAusenciaSeeder::class);
         $this->call(TipoHoraExtraSeeder::class);
+        $this->call(NominaConceptoSeeder::class);
         $this->call(ViajesParametricasSeeder::class);
         $this->call(ParametricasColaboradorSeeder::class);
 
-        // ═══ 7. DATOS DEMO DE OPERACIONES (temporal para desarrollo) ═══
+        // ═══ 7. EMPLEADOS DEMO (1 FIJO + 2 VARIABLE para probar nómina) ═══
+        $this->call(EmpleadoSeeder::class);
+
+        // ═══ 8. DATOS DEMO DE OPERACIONES (temporal para desarrollo) ═══
         $this->call(DemoOperacionSeeder::class);
 
         $this->command->info('');

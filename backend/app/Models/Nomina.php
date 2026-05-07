@@ -14,8 +14,14 @@ class Nomina extends Model
 
     protected $table = 'nominas';
 
+    public const ESTADO_BORRADOR = 'BORRADOR';
+    public const ESTADO_CERRADA  = 'CERRADA';
+
+    public const TIPO_PAGO_QUINCENAL = 'QUINCENAL';
+    public const TIPO_PAGO_MENSUAL   = 'MENSUAL';
+
     protected $fillable = [
-        'tenant_id', 'quincena', 'mes', 'anio',
+        'tenant_id', 'quincena', 'tipo_pago_snapshot', 'mes', 'anio',
         'fecha_inicio', 'fecha_fin',
         'total_fijos', 'total_variables', 'total_bonificaciones',
         'total_deducciones', 'total_general',
@@ -28,6 +34,9 @@ class Nomina extends Model
             'fecha_inicio' => 'date',
             'fecha_fin' => 'date',
             'cerrada_at' => 'datetime',
+            'quincena' => 'integer',
+            'mes' => 'integer',
+            'anio' => 'integer',
             'total_fijos' => 'decimal:2',
             'total_variables' => 'decimal:2',
             'total_bonificaciones' => 'decimal:2',
@@ -86,10 +95,15 @@ class Nomina extends Model
     /**
      * Calcula automáticamente fecha_inicio y fecha_fin según
      * el tipo de pago, mes, año y quincena.
+     *
+     * Si $tipo no se pasa, cae al config del tenant. Pero el endpoint
+     * POST /nominas siempre lo pasa explícitamente desde el body
+     * (`periodicidad`), así que el config queda como fallback solo para
+     * llamadas internas que no tengan otro contexto.
      */
-    public static function calcularRangoFechas(int $mes, int $anio, ?int $quincena = null): array
+    public static function calcularRangoFechas(int $mes, int $anio, ?int $quincena = null, ?string $tipo = null): array
     {
-        $tipo = static::tipoPagoTenant();
+        $tipo = $tipo ?? static::tipoPagoTenant();
 
         if ($tipo === 'MENSUAL') {
             return [
