@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
@@ -6,57 +6,135 @@ import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Textarea } from '../../components/ui/textarea';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
 import {
-  ArrowLeft,
-  MapPin,
-  CreditCard,
-  CheckCircle,
-  Package,
-  Truck,
-  FileText,
+  ArrowLeft, MapPin, CreditCard, CheckCircle, Truck, User, Phone, Home, Loader2,
 } from 'lucide-react';
+import { toast } from 'sonner';
+import { marketApi, toNumber, type Carrito as CarritoT } from '../../../api/market';
+
+const DEPARTAMENTOS = [
+  'Amazonas', 'Antioquia', 'Arauca', 'Atlántico', 'Bolívar', 'Boyacá', 'Caldas',
+  'Caquetá', 'Casanare', 'Cauca', 'Cesar', 'Chocó', 'Córdoba', 'Cundinamarca',
+  'Guainía', 'Guaviare', 'Huila', 'La Guajira', 'Magdalena', 'Meta', 'Nariño',
+  'Norte de Santander', 'Putumayo', 'Quindío', 'Risaralda', 'San Andrés y Providencia',
+  'Santander', 'Sucre', 'Tolima', 'Valle del Cauca', 'Vaupés', 'Vichada',
+];
+
+const METODOS_PAGO = [
+  { id: 'PSE', nombre: 'Pago con PSE', descripcion: 'Pago seguro desde tu cuenta bancaria' },
+  { id: 'Tarjeta de Crédito', nombre: 'Tarjeta de Crédito', descripcion: 'Visa, Mastercard, American Express' },
+  { id: 'Pago Contra Entrega', nombre: 'Pago Contra Entrega', descripcion: 'Paga al recibir tu pedido' },
+  { id: 'Transferencia Bancaria', nombre: 'Transferencia Bancaria', descripcion: 'Transferencia directa a cuenta del proveedor' },
+];
 
 export default function Checkout() {
   const navigate = useNavigate();
 
   const [paso, setPaso] = useState(1);
+  const [carrito, setCarrito] = useState<CarritoT | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [enviando, setEnviando] = useState(false);
+
   const [direccion, setDireccion] = useState({
-    tipo: 'finca',
-    lote: '',
+    nombreCompleto: '',
+    telefono: '',
+    direccion: '',
+    ciudad: '',
+    departamento: '',
+    codigoPostal: '',
     indicaciones: '',
   });
   const [metodoPago, setMetodoPago] = useState('');
 
-  // Mock data del carrito
-  const items = [
-    {
-      nombre: 'Fertilizante NPK 15-15-15',
-      cantidad: 10,
-      precio: 95000,
-      unidad: 'bulto 50kg',
-    },
-    {
-      nombre: 'Glifosato 48% SL',
-      cantidad: 5,
-      precio: 42000,
-      unidad: 'litro',
-    },
-  ];
+  useEffect(() => {
+    setCargando(true);
+    marketApi.carrito()
+      .then((res) => {
+        setCarrito(res.data);
+        if (res.data.items.length === 0) {
+          toast.error('Tu carrito está vacío');
+          navigate('/market');
+        }
+      })
+      .catch((e: any) => {
+        toast.error(e?.message ?? 'Error al cargar carrito');
+        navigate('/market');
+      })
+      .finally(() => setCargando(false));
+  }, [navigate]);
 
-  const subtotal = items.reduce((sum, item) => sum + item.precio * item.cantidad, 0);
-  const envio = 25000;
-  const total = subtotal + envio;
-
-  const confirmarPedido = () => {
-    // Lógica para procesar el pedido
-    navigate('/market/pedidos');
+  const composeDireccionEntrega = (): string => {
+    const partes = [
+      direccion.nombreCompleto,
+      direccion.telefono ? `Tel: ${direccion.telefono}` : '',
+      direccion.direccion,
+      [direccion.ciudad, direccion.departamento].filter(Boolean).join(', '),
+      direccion.codigoPostal ? `CP: ${direccion.codigoPostal}` : '',
+      direccion.indicaciones,
+    ].filter(Boolean);
+    return partes.join(' · ');
   };
+
+  const confirmarPedido = async () => {
+    setEnviando(true);
+    try {
+      const res = await marketApi.checkout({
+        notas: direccion.indicaciones.trim() || undefined,
+        metodo_pago: metodoPago,
+        direccion_entrega: composeDireccionEntrega(),
+      });
+      const total = res.total_pedidos ?? res.data?.length ?? 1;
+      toast.success(
+        total > 1
+          ? `${total} pedidos creados (uno por proveedor)`
+          : 'Pedido creado correctamente',
+      );
+      if (res.data && res.data.length === 1) {
+        navigate(`/market/pedidos/${res.data[0].codigo}`);
+      } else {
+        navigate('/market/pedidos');
+      }
+    } catch (err: any) {
+      const code = err?.code ?? err?.error_code;
+      if (code === 'STOCK_INSUFICIENTE') {
+        const detalles = (err?.errors ?? err?.body?.errors) as
+          | { producto: string; disponible: number; solicitado: number }[]
+          | undefined;
+        if (Array.isArray(detalles) && detalles.length > 0) {
+          const lista = detalles
+            .map((d) => `${d.producto}: solicitaste ${d.solicitado}, hay ${d.disponible}`)
+            .join('. ');
+          toast.error(`Stock insuficiente — ${lista}`);
+        } else {
+          toast.error('Stock insuficiente para uno o más productos');
+        }
+      } else if (code === 'STOCK_INSUFICIENTE_CONCURRENTE') {
+        toast.error('El stock cambió mientras procesábamos tu pedido. Intenta de nuevo.');
+      } else if (code === 'CARRITO_VACIO') {
+        toast.error('Tu carrito está vacío');
+      } else {
+        toast.error(err?.message ?? 'No se pudo crear el pedido');
+      }
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  if (cargando) {
+    return (
+      <div className="flex items-center justify-center py-20 gap-2 text-muted-foreground">
+        <Loader2 className="h-5 w-5 animate-spin" />
+        Cargando...
+      </div>
+    );
+  }
+
+  const items = carrito?.items ?? [];
+  const resumen = carrito?.resumen ?? { subtotal: 0, costo_envio: 0, total: 0, cantidad_items: 0 };
+  const subtotal = toNumber(resumen.subtotal);
+  const total = toNumber(resumen.total);
 
   return (
     <div className="space-y-8">
@@ -102,15 +180,11 @@ export default function Checkout() {
                         estaCompleta
                           ? 'bg-primary border-primary text-white'
                           : estaActiva
-                          ? 'bg-primary/10 border-primary text-primary'
-                          : 'bg-muted border-border text-muted-foreground'
+                            ? 'bg-primary/10 border-primary text-primary'
+                            : 'bg-muted border-border text-muted-foreground'
                       }`}
                     >
-                      {estaCompleta ? (
-                        <CheckCircle className="h-5 w-5" />
-                      ) : (
-                        <Icon className="h-5 w-5" />
-                      )}
+                      {estaCompleta ? <CheckCircle className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
                     </div>
                     <div
                       className={`text-sm font-semibold whitespace-nowrap ${
@@ -138,7 +212,6 @@ export default function Checkout() {
       </Card>
 
       <div className="grid gap-8 lg:grid-cols-3">
-        {/* Formulario */}
         <div className="lg:col-span-2 space-y-6">
           {/* Paso 1: Dirección */}
           {paso === 1 && (
@@ -151,62 +224,134 @@ export default function Checkout() {
                   <div>
                     <h2 className="text-xl font-bold">Dirección de Entrega</h2>
                     <p className="text-sm text-muted-foreground">
-                      Indica dónde deseas recibir tu pedido
+                      Completa los datos para recibir tu pedido
                     </p>
                   </div>
                 </div>
 
                 <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Tipo de entrega</Label>
-                    <Select
-                      value={direccion.tipo}
-                      onValueChange={(val) => setDireccion({ ...direccion, tipo: val })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="finca">Finca Principal</SelectItem>
-                        <SelectItem value="lote">Lote Específico</SelectItem>
-                        <SelectItem value="bodega">Bodega</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="nombreCompleto">
+                        Nombre completo <span className="text-destructive">*</span>
+                      </Label>
+                      <div className="relative">
+                        <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          id="nombreCompleto"
+                          placeholder="Ej: Juan Pérez"
+                          value={direccion.nombreCompleto}
+                          onChange={(e) => setDireccion({ ...direccion, nombreCompleto: e.target.value })}
+                          className="pl-9"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="telefono">
+                        Teléfono <span className="text-destructive">*</span>
+                      </Label>
+                      <div className="relative">
+                        <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          id="telefono"
+                          placeholder="Ej: 3001234567"
+                          value={direccion.telefono}
+                          onChange={(e) => setDireccion({ ...direccion, telefono: e.target.value })}
+                          className="pl-9"
+                        />
+                      </div>
+                    </div>
                   </div>
 
-                  {direccion.tipo === 'lote' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="direccion">
+                      Dirección completa <span className="text-destructive">*</span>
+                    </Label>
+                    <div className="relative">
+                      <Home className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="direccion"
+                        placeholder="Ej: Calle 12 #34-56, Vereda El Carmen"
+                        value={direccion.direccion}
+                        onChange={(e) => setDireccion({ ...direccion, direccion: e.target.value })}
+                        className="pl-9"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <Label>Seleccionar lote</Label>
+                      <Label htmlFor="ciudad">
+                        Ciudad / Municipio <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        id="ciudad"
+                        placeholder="Ej: Cali"
+                        value={direccion.ciudad}
+                        onChange={(e) => setDireccion({ ...direccion, ciudad: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="departamento">
+                        Departamento <span className="text-destructive">*</span>
+                      </Label>
                       <Select
-                        value={direccion.lote}
-                        onValueChange={(val) => setDireccion({ ...direccion, lote: val })}
+                        value={direccion.departamento}
+                        onValueChange={(val) => setDireccion({ ...direccion, departamento: val })}
                       >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecciona un lote" />
+                        <SelectTrigger id="departamento">
+                          <SelectValue placeholder="Selecciona un departamento" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="lote-1">Lote 1 - Norte</SelectItem>
-                          <SelectItem value="lote-2">Lote 2 - Sur</SelectItem>
-                          <SelectItem value="lote-3">Lote 3 - Este</SelectItem>
+                          {DEPARTAMENTOS.map((d) => (
+                            <SelectItem key={d} value={d}>{d}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
-                  )}
+                  </div>
 
                   <div className="space-y-2">
-                    <Label>Indicaciones adicionales</Label>
+                    <Label htmlFor="codigoPostal">Código postal (Opcional)</Label>
+                    <Input
+                      id="codigoPostal"
+                      placeholder="Ej: 760001"
+                      value={direccion.codigoPostal}
+                      onChange={(e) => setDireccion({ ...direccion, codigoPostal: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="indicaciones">Indicaciones adicionales (Opcional)</Label>
                     <Textarea
-                      placeholder="Ej: Dejar en bodega principal, llamar al llegar, etc."
+                      id="indicaciones"
+                      placeholder="Ej: Casa de dos pisos color blanco, rejas verdes. Llamar al llegar."
                       value={direccion.indicaciones}
-                      onChange={(e) =>
-                        setDireccion({ ...direccion, indicaciones: e.target.value })
-                      }
-                      rows={4}
+                      onChange={(e) => setDireccion({ ...direccion, indicaciones: e.target.value })}
+                      rows={3}
                     />
                   </div>
                 </div>
 
-                <Button onClick={() => setPaso(2)} className="w-full" size="lg">
+                <Button
+                  onClick={() => {
+                    if (
+                      !direccion.nombreCompleto ||
+                      !direccion.telefono ||
+                      !direccion.direccion ||
+                      !direccion.ciudad ||
+                      !direccion.departamento
+                    ) {
+                      toast.error('Por favor completa todos los campos obligatorios');
+                      return;
+                    }
+                    setPaso(2);
+                  }}
+                  className="w-full"
+                  size="lg"
+                >
                   Continuar a método de pago
                 </Button>
               </CardContent>
@@ -230,28 +375,7 @@ export default function Checkout() {
                 </div>
 
                 <div className="space-y-3">
-                  {[
-                    {
-                      id: 'pse',
-                      nombre: 'Pago con PSE',
-                      descripcion: 'Pago seguro desde tu cuenta bancaria',
-                    },
-                    {
-                      id: 'tarjeta',
-                      nombre: 'Tarjeta de Crédito',
-                      descripcion: 'Visa, Mastercard, American Express',
-                    },
-                    {
-                      id: 'efecty',
-                      nombre: 'Pago por Efecty',
-                      descripcion: 'Realiza el pago en cualquier punto Efecty',
-                    },
-                    {
-                      id: 'contraentrega',
-                      nombre: 'Pago Contra Entrega',
-                      descripcion: 'Paga en efectivo o con tarjeta al recibir',
-                    },
-                  ].map((metodo) => (
+                  {METODOS_PAGO.map((metodo) => (
                     <Card
                       key={metodo.id}
                       className={`cursor-pointer border-2 transition-all ${
@@ -265,9 +389,7 @@ export default function Checkout() {
                         <div className="flex items-center gap-3">
                           <div
                             className={`h-5 w-5 rounded-full border-2 flex items-center justify-center ${
-                              metodoPago === metodo.id
-                                ? 'border-primary'
-                                : 'border-muted-foreground'
+                              metodoPago === metodo.id ? 'border-primary' : 'border-muted-foreground'
                             }`}
                           >
                             {metodoPago === metodo.id && (
@@ -319,22 +441,34 @@ export default function Checkout() {
 
                 <div className="space-y-4">
                   <div className="p-4 bg-muted/30 rounded-lg">
-                    <h3 className="font-semibold mb-2 flex items-center gap-2">
+                    <h3 className="font-semibold mb-3 flex items-center gap-2">
                       <MapPin className="h-4 w-4" />
                       Dirección de entrega
                     </h3>
-                    <p className="text-sm">
-                      {direccion.tipo === 'finca'
-                        ? 'Finca Principal'
-                        : direccion.tipo === 'lote'
-                        ? `Lote: ${direccion.lote}`
-                        : 'Bodega'}
-                    </p>
-                    {direccion.indicaciones && (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {direccion.indicaciones}
-                      </p>
-                    )}
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-start gap-2">
+                        <User className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="font-medium">{direccion.nombreCompleto}</p>
+                          <p className="text-muted-foreground">{direccion.telefono}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <Home className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p>{direccion.direccion}</p>
+                          <p className="text-muted-foreground">
+                            {direccion.ciudad}, {direccion.departamento}
+                            {direccion.codigoPostal && ` - ${direccion.codigoPostal}`}
+                          </p>
+                        </div>
+                      </div>
+                      {direccion.indicaciones && (
+                        <div className="pt-2 border-t">
+                          <p className="text-muted-foreground italic">{direccion.indicaciones}</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="p-4 bg-muted/30 rounded-lg">
@@ -342,25 +476,20 @@ export default function Checkout() {
                       <CreditCard className="h-4 w-4" />
                       Método de pago
                     </h3>
-                    <p className="text-sm capitalize">
-                      {metodoPago === 'pse'
-                        ? 'Pago con PSE'
-                        : metodoPago === 'tarjeta'
-                        ? 'Tarjeta de Crédito'
-                        : metodoPago === 'efecty'
-                        ? 'Pago por Efecty'
-                        : metodoPago === 'contraentrega'
-                        ? 'Pago Contra Entrega'
-                        : metodoPago}
-                    </p>
+                    <p className="text-sm">{metodoPago}</p>
                   </div>
                 </div>
 
                 <div className="flex gap-3">
-                  <Button variant="outline" onClick={() => setPaso(2)} className="flex-1">
+                  <Button variant="outline" onClick={() => setPaso(2)} className="flex-1" disabled={enviando}>
                     Anterior
                   </Button>
-                  <Button onClick={confirmarPedido} className="flex-1 bg-success" size="lg">
+                  <Button onClick={confirmarPedido} className="flex-1 bg-success hover:bg-success/90" size="lg" disabled={enviando}>
+                    {enviando ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                    )}
                     Confirmar Pedido
                   </Button>
                 </div>
@@ -377,16 +506,16 @@ export default function Checkout() {
                 <h2 className="text-xl font-bold text-foreground">Resumen del Pedido</h2>
 
                 <div className="space-y-3">
-                  {items.map((item, index) => (
-                    <div key={index} className="flex justify-between text-sm pb-3 border-b border-border last:border-0 last:pb-0">
+                  {items.map((item) => (
+                    <div key={item.id} className="flex justify-between text-sm pb-3 border-b border-border last:border-0 last:pb-0">
                       <div>
-                        <p className="font-medium">{item.nombre}</p>
+                        <p className="font-medium">{item.producto.nombre}</p>
                         <p className="text-muted-foreground">
-                          {item.cantidad} × ${item.precio.toLocaleString()}
+                          {item.cantidad} × ${toNumber(item.precio_unitario).toLocaleString('es-CO')}
                         </p>
                       </div>
                       <p className="font-semibold">
-                        ${(item.precio * item.cantidad).toLocaleString()}
+                        ${toNumber(item.subtotal).toLocaleString('es-CO')}
                       </p>
                     </div>
                   ))}
@@ -397,11 +526,15 @@ export default function Checkout() {
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Subtotal</span>
-                    <span className="font-semibold">${subtotal.toLocaleString()}</span>
+                    <span className="font-semibold">${subtotal.toLocaleString('es-CO')}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Envío</span>
-                    <span className="font-semibold">${envio.toLocaleString()}</span>
+                    <span className="font-semibold">
+                      {toNumber(resumen.costo_envio) === 0
+                        ? 'Gratis'
+                        : `$${toNumber(resumen.costo_envio).toLocaleString('es-CO')}`}
+                    </span>
                   </div>
 
                   <div className="h-px bg-border my-3" />
@@ -409,7 +542,7 @@ export default function Checkout() {
                   <div className="flex justify-between">
                     <span className="text-lg font-semibold">Total</span>
                     <span className="text-2xl font-bold text-success">
-                      ${total.toLocaleString()}
+                      ${total.toLocaleString('es-CO')}
                     </span>
                   </div>
                 </div>
