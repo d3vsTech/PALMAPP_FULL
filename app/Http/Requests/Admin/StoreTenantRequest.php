@@ -85,6 +85,7 @@ class StoreTenantRequest extends FormRequest
             'modulo_viajes'         => true,
             'modulo_usuarios'       => true,
             'modulo_configuracion'  => true,
+            'modulo_market'         => true,
             'tipo_pago_nomina'      => 'QUINCENAL',
             'moneda'                => 'COP',
             'zona_horaria'          => 'America/Bogota',

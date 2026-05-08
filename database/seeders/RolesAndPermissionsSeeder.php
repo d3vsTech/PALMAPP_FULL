@@ -121,6 +121,11 @@ class RolesAndPermissionsSeeder extends Seeder
 
             // ── Configuración ──
             'configuracion.editar',
+
+            // ── Market (Módulo B2B) ──
+            'market.catalogo',
+            'market.carrito',
+            'market.pedidos',
         ];
 
         foreach ($permisos as $permiso) {
