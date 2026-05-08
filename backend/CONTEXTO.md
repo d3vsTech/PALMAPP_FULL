@@ -997,6 +997,7 @@ PUT|DELETE      /api/v1/tenant/nomina-conceptos/:id                             
 - Modelos de contratos y documentos del empleado: EmpleadoContrato, EmpleadoDocumento
 - **Modelo de Ausencias** (`Ausencia`): tabla `ausencias` reportada desde la operación diaria con `operacion_id` NOT NULL, rango `fecha_inicio`/`fecha_fin`, flujo PENDIENTE → APROBADA → LIQUIDADA, soporte offline (`sync_uuid`/`sync_estado`). Reutiliza permisos `operaciones.*` (no se crearon permisos `ausencias.*`). `nomina_empleado` extendida con `dias_ausencia_descontados`, `total_ausencias_descuento`, `total_ausencias_remunerado` para reflejar el efecto en nómina.
 - **Chat del Agente IA (solo tablas):** Migración `2026_04_15_000001_create_agro_chat_tables.php` crea `agro_chat_sessions` y `agro_chat_messages` con FKs cascade a `users` y `tenants`, `tool_calls` JSONB para auditar consultas SQL del agente y `TIMESTAMPTZ` en las fechas. Las tablas existen listas para que un agente IA externo persista conversaciones (4 operaciones de escritura, el resto del esquema es solo lectura). Aún no hay controllers ni modelos Eloquent — el agente se conecta directamente a PostgreSQL.
+- **Módulo Market — API Tenant (lado finca):** 11 rutas bajo `GET|POST|PUT|DELETE /api/v1/tenant/market/*`, protegidas con `check.modulo:modulo_market` + `check.permission:market.*`. Tres controllers en `app/Http/Controllers/Api/Market/`: **MarketCatalogoController** (categorias, index con filtros/paginación 12, show), **MarketCarritoController** (show con cálculo dinámico de precios por volumen, addItem upsert, updateItem, removeItem, clear), **MarketPedidoController** (index con stats cards, show con historial, store checkout). Tres FormRequests en `app/Http/Requests/Market/`. Permisos `market.catalogo`, `market.carrito`, `market.pedidos` creados en BD y asignados al rol ADMIN. El catálogo filtra: `estado=activo` + `stock_disponible>0` + `precio_unitario>0` + `proveedor.estado=activo`. El checkout agrupa ítems por proveedor y crea un pedido por proveedor en una única transacción (`DB::transaction`), con guard de concurrencia en el decremento de stock (`WHERE stock_disponible >= cantidad`). Precios por volumen calculados via `MarketProducto::getPrecioParaCantidad()`. (permiso: `market.catalogo`, `market.carrito`, `market.pedidos`)
 - **Bot de integraciones externas:**
   - `BotUserSeeder` provisiona un único usuario `bot@d3vs.tech` como super_admin desacoplado de tenants (cero provisionamiento por finca, válido para tenants futuros)
   - `BotTestController` con endpoint `POST /api/v1/tenant/bot/test` que escribe `BOT_TEST consumido` en `storage/logs/laravel.log`
@@ -1037,3 +1038,102 @@ PUT|DELETE      /api/v1/tenant/nomina-conceptos/:id                             
 | Colaboradores | `docs/API_COLABORADORES.md` | CRUD colaboradores con soft delete + restaurar + filtros `incluir_eliminados`/`solo_eliminados`, toggle estado, avatar (upload/delete), carga/descarga/preview/eliminación de documentos por categoría, categorías de documentos, reemplazo automático en `DATOS_BASE`, paramétricas (EPS/Pensiones/ARL/Bancos), guía de uso del frontend para descargas y previsualizaciones por blob |
 | Bot de Integraciones | `docs/API_BOT.md` | Guía completa para el desarrollador del bot Python: flujo de autenticación (login + select-tenant), headers obligatorios, endpoint de prueba, manejo de errores, cliente Python de referencia con cache de tokens por tenant, variables de entorno, checklist pre-producción |
 | Dashboard Tenant | `docs/API_DASHBOARD.md` | `GET /api/v1/tenant/dashboard`: contrato, headers, query params (presets de periodo + rango custom), estructura completa de la respuesta (indicadores, lotes, viajes, lluvias), reglas de negocio (solo APROBADAS / FINALIZADO), códigos de error y notas de consumo para el frontend |
+| Módulo Market — Arquitectura | `docs/MARKET_MODULE.md` | Arquitectura completa del marketplace: tablas, relaciones, flujo carrito→pedido, precios por volumen, imágenes, autenticación de proveedores |
+| Módulo Market — API Frontend | `docs/API_MARKET.md` | Guía de consumo para el frontend: todos los endpoints tenant (catálogo, carrito, pedidos), ejemplos JSON, tabla de códigos de error, flujo de checkout multi-proveedor |
+
+---
+
+## 15. Módulo Market (Marketplace AgroInsumos)
+
+### ¿Qué es?
+Un marketplace B2B integrado donde **proveedores** externos cargan productos agrícolas y las **fincas (tenants)** los compran directamente desde la app.
+
+### Entidades clave
+
+| Entidad | Tabla | tenant_id |
+|---------|-------|-----------|
+| Empresas vendedoras | `market_proveedores` | No (global) |
+| Pivot user↔proveedor | `market_proveedor_user` | No (global) |
+| Categorías de productos | `market_categorias` | No (global) |
+| Unidades de medida | `market_unidades_medida` | No (global) |
+| Catálogo de productos | `market_productos` | No (global) |
+| Imágenes adicionales | `market_producto_imagenes` | No |
+| Descuentos por volumen | `market_precios_volumen` | No |
+| Carrito (1 por finca) | `market_carritos` | Sí |
+| Ítems del carrito | `market_carrito_items` | Sí (vía carrito) |
+| Órdenes de compra | `market_pedidos` | Sí |
+| Líneas del pedido | `market_pedido_items` | Sí (vía pedido) |
+| Timeline de estados | `market_pedido_estados_historial` | Sí (vía pedido) |
+
+### Habilitación por tenant
+`tenant_config.modulo_market = true` habilita el módulo. El middleware `check.modulo:modulo_market` protege todas las rutas (retorna `403 MODULE_DISABLED` si está deshabilitado).
+
+### Modelos PHP
+Todos en `app/Models/Market/`. Métodos clave:
+- `MarketProducto::getPrecioParaCantidad(int $cantidad): float` — aplica descuentos escalonados de `market_precios_volumen`
+- `MarketProducto::scopeActivos()` — filtra `estado = 'activo'`
+- `MarketPedido::generarCodigo(): string` — genera PED-001, PED-002, etc.
+- `MarketCarrito::itemsConProducto()` — relación eager con producto + preciosVolumen + unidadMedida + proveedor
+
+### API Tenant implementada (lado finca)
+
+**Rutas base:** `GET|POST|PUT|DELETE /api/v1/tenant/market/*`
+**Middleware:** `auth:api` + `SetTenant` + `check.modulo:modulo_market` + `check.permission:market.*`
+**Controllers:** `app/Http/Controllers/Api/Market/`
+
+#### Catálogo (`market.catalogo`)
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/market/categorias` | Categorías activas con conteo de productos disponibles |
+| GET | `/market/productos` | Lista paginada (12/pág) con filtros: `categoria_id`, `buscar`, `ordenar`, `destacados` |
+| GET | `/market/productos/{id}` | Detalle con galería, especificaciones y precios por volumen |
+
+Condiciones de visibilidad en catálogo: `estado=activo` + `stock_disponible>0` + `precio_unitario>0` + `proveedor.estado=activo`.
+
+#### Carrito (`market.carrito`)
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/market/carrito` | Ver carrito (crea si no existe); calcula precios por volumen en tiempo real |
+| POST | `/market/carrito/items` | Agregar/actualizar ítem (upsert — SET cantidad, no acumulativo) |
+| PUT | `/market/carrito/items/{id}` | Cambiar cantidad; valida pertenencia al tenant |
+| DELETE | `/market/carrito/items/{id}` | Eliminar ítem |
+| DELETE | `/market/carrito` | Vaciar carrito (mantiene el registro) |
+
+#### Pedidos (`market.pedidos`)
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/market/pedidos` | Lista paginada (10/pág) + stats cards (activos, entregados, total gastado) |
+| POST | `/market/pedidos` | Checkout: crea 1 pedido por proveedor en una transacción atómica |
+| GET | `/market/pedidos/{codigo}` | Detalle completo con historial de estados y proveedor |
+
+### Flujo de checkout
+
+1. Carga carrito con ítems (eager load producto + proveedor + preciosVolumen)
+2. Valida carrito no vacío → `409 CARRITO_VACIO`
+3. Valida stock pre-transacción → `409 STOCK_INSUFICIENTE`
+4. Agrupa ítems por `proveedor_id`
+5. `DB::transaction`: por cada grupo crea `MarketPedido` + `MarketPedidoItem` (snapshot nombre + precio) + historial inicial + decrementa stock con `WHERE stock_disponible >= cantidad`
+6. Vacía el carrito
+7. Retorna array de pedidos creados
+
+Si el carrito tiene productos de 2 proveedores → 2 pedidos en la misma transacción.
+
+### Estados del pedido
+`pendiente → confirmado → preparando → en_transito → entregado`
+`cancelado` es alcanzable desde cualquier estado.
+
+### Permisos
+`market.catalogo`, `market.carrito`, `market.pedidos` — creados en BD, asignados al rol ADMIN.
+
+### Seeder demo
+`database/seeders/MarketSeeder.php` crea:
+- Proveedor: "AgroInsumos del Valle" → `admin@agroinsumosdelvalle.com` / `password`
+- 5 categorías, 5 unidades de medida, 6 productos con precios por volumen
+- 3 pedidos demo + carrito activo para Finca La Esperanza (`modulo_market = true`)
+
+### Pendiente (lado proveedor)
+Los endpoints `/api/v1/market/proveedor/*` (gestión de catálogo, actualización de estados de pedido, dashboard de ventas) aún no están implementados. Requieren el middleware `SetProveedor` que valide al usuario en `market_proveedor_user`.
+
+### Documentación
+- `docs/MARKET_MODULE.md` — arquitectura, tablas, flujos, estrategia de imágenes
+- `docs/API_MARKET.md` — guía completa de consumo para el frontend

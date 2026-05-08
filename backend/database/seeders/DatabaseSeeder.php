@@ -58,6 +58,7 @@ class DatabaseSeeder extends Seeder
             'modulo_nomina' => true,
             'modulo_operaciones' => true,
             'modulo_viajes' => true,
+            'modulo_market' => true,
             'modulo_usuarios' => true,
             'modulo_configuracion' => true,
             'tipo_pago_nomina' => 'QUINCENAL',
@@ -157,6 +158,9 @@ class DatabaseSeeder extends Seeder
         // ═══ 8. DATOS DEMO DE OPERACIONES (temporal para desarrollo) ═══
         $this->call(DemoOperacionSeeder::class);
 
+        // ═══ 9. MÓDULO MARKET ═══
+        $this->call(MarketSeeder::class);
+
         $this->command->info('');
         $this->command->info('══════════════════════════════════════════');
         $this->command->info(' AGRO CAMPO — Seeders ejecutados');
@@ -166,6 +170,7 @@ class DatabaseSeeder extends Seeder
         $this->command->info(" Usuario (ops):  carlos@laesperanza.com / password");
         $this->command->info(" Usuario (lect): maria@laesperanza.com / password");
         $this->command->info(" Tenant Demo:    {$tenantDemo->nombre} (ID: {$tenantDemo->id})");
+        $this->command->info(" Proveedor:      admin@agroinsumosdelvalle.com / password");
         $this->command->info('══════════════════════════════════════════');
     }
 }

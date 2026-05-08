@@ -50,6 +50,9 @@ use App\Http\Controllers\Api\Nomina\NominaEmpleadoController;
 use App\Http\Controllers\Api\TipoHoraExtraController;
 use App\Http\Controllers\Api\ViajeController;
 use App\Http\Controllers\Api\ViajeDocumentoBasculaController;
+use App\Http\Controllers\Api\Market\MarketCatalogoController;
+use App\Http\Controllers\Api\Market\MarketCarritoController;
+use App\Http\Controllers\Api\Market\MarketPedidoController;
 use App\Http\Middleware\SetTenant;
 use Illuminate\Support\Facades\Route;
 
@@ -598,5 +601,39 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
         // Route::post('sync/jornales', [SyncController::class, 'jornales']);
         // Route::post('sync/cosechas', [SyncController::class, 'cosechas']);
         // Route::get('sync/catalogs', [SyncController::class, 'catalogs']);
+    });
+
+    // ══════════════════════════════════════════════════════
+    // MARKET — Módulo B2B (requiere modulo_market habilitado)
+    // ══════════════════════════════════════════════════════
+    Route::prefix('market')->middleware('check.modulo:modulo_market')->group(function () {
+
+        // ── Catálogo ──────────────────────────────────────
+        Route::get('categorias', [MarketCatalogoController::class, 'categorias'])
+            ->middleware('check.permission:market.catalogo');
+        Route::get('productos', [MarketCatalogoController::class, 'index'])
+            ->middleware('check.permission:market.catalogo');
+        Route::get('productos/{id}', [MarketCatalogoController::class, 'show'])
+            ->middleware('check.permission:market.catalogo');
+
+        // ── Carrito ───────────────────────────────────────
+        Route::get('carrito', [MarketCarritoController::class, 'show'])
+            ->middleware('check.permission:market.carrito');
+        Route::post('carrito/items', [MarketCarritoController::class, 'addItem'])
+            ->middleware('check.permission:market.carrito');
+        Route::put('carrito/items/{itemId}', [MarketCarritoController::class, 'updateItem'])
+            ->middleware('check.permission:market.carrito');
+        Route::delete('carrito/items/{itemId}', [MarketCarritoController::class, 'removeItem'])
+            ->middleware('check.permission:market.carrito');
+        Route::delete('carrito', [MarketCarritoController::class, 'clear'])
+            ->middleware('check.permission:market.carrito');
+
+        // ── Pedidos ───────────────────────────────────────
+        Route::get('pedidos', [MarketPedidoController::class, 'index'])
+            ->middleware('check.permission:market.pedidos');
+        Route::post('pedidos', [MarketPedidoController::class, 'store'])
+            ->middleware('check.permission:market.pedidos');
+        Route::get('pedidos/{codigo}', [MarketPedidoController::class, 'show'])
+            ->middleware('check.permission:market.pedidos');
     });
 });
