@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
-import { requestConToken } from '../../../api/request';
+import { usuariosApi, type UpdateUsuarioPayload } from '../../../api/usuarios';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -32,11 +32,9 @@ export default function UsuarioNuevoEditar() {
     if (!esEdicion || !token) return;
     (async () => {
       try {
-        // La API no tiene GET /usuarios/{id} — usamos el listado y filtramos
-        const res = await requestConToken<{ data: any[] }>(
-          `/api/v1/tenant/usuarios`, { method: 'GET' }, token
-        );
-        const u = (res.data ?? []).find((u: any) => String(u.id) === String(id));
+        // GET /usuarios/{id} retorna { data: UsuarioTenant }
+        const res = await usuariosApi.getUsuario(Number(id));
+        const u = res.data;
         if (u) { setNombre(u.name ?? ''); setEmail(u.email ?? ''); }
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Error al cargar usuario');
@@ -61,18 +59,25 @@ export default function UsuarioNuevoEditar() {
     if (!validate()) return;
     setLoading(true);
     try {
-      const body: any = { name: nombre, email };
-      if (password) body.password = password;
       if (esEdicion) {
-        await requestConToken(`/api/v1/tenant/usuarios/${id}`, { method: 'PUT', body: JSON.stringify(body) }, token);
+        const payload: UpdateUsuarioPayload = { name: nombre, email };
+        if (password) payload.password = password;
+        await usuariosApi.updateUsuario(Number(id), payload);
         toast.success('Usuario actualizado correctamente');
       } else {
-        await requestConToken('/api/v1/tenant/usuarios', { method: 'POST', body: JSON.stringify(body) }, token);
+        await usuariosApi.createUsuario({ name: nombre, email, password });
         toast.success('Usuario creado correctamente');
       }
       navigate('/usuarios');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error al guardar usuario');
+    } catch (err: any) {
+      const code = err?.code;
+      if (code === 'USER_ALREADY_ASSIGNED') {
+        toast.error('El usuario ya está asignado a esta finca');
+      } else if (code === 'MAX_USERS_REACHED') {
+        toast.error('Se alcanzó el límite de usuarios del plan');
+      } else {
+        toast.error(err?.message ?? 'Error al guardar usuario');
+      }
     } finally { setLoading(false); }
   };
 

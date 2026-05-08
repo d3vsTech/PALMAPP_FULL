@@ -17,19 +17,19 @@
  */
 
 // URL base del backend del Agente IA (FastAPI).
-// En producción usamos un proxy de Netlify (`public/_redirects`) que reescribe
-// `/agro-api/*` → `http://31.97.7.50/agro-agente/api/*`. Esto evita el bloqueo
-// de "Mixed Content" del browser cuando el sitio se sirve por HTTPS.
-// En desarrollo, Vite proxea `/agro-agente/api` (ver vite.config.ts).
-// Para overridear, usar la env var VITE_AGRO_AGENTE_URL.
-const AGRO_API =
-  (import.meta.env.VITE_AGRO_AGENTE_URL as string | undefined)?.trim() ??
-  '/agro-api';
+// - En HTTPS (Netlify) usamos el proxy `/agro-api/*` definido en
+//   `public/_redirects` para evitar el bloqueo de "Mixed Content".
+// - En HTTP local (dev) llamamos directo al server: FastAPI tiene CORS
+//   abierto (allow_origins=["*"]) y no necesitamos proxy de Vite.
+// - Se puede sobreescribir con la env var VITE_AGRO_AGENTE_URL.
+const AGRO_API_DIRECT = 'http://31.97.7.50/agro-agente/api';
+const _envUrl = (import.meta.env.VITE_AGRO_AGENTE_URL as string | undefined)?.trim();
+const _isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+const AGRO_API = _envUrl ?? (_isHttps ? '/agro-api' : AGRO_API_DIRECT);
 
 /**
- * Prefijo HTTPS para los adjuntos del chat. En producción los servimos a
- * través del proxy de Netlify `/agro-uploads/*` (ver `public/_redirects`),
- * y en dev/local mantenemos compatibilidad con la URL absoluta tradicional.
+ * Prefijo para los adjuntos del chat. En HTTPS pasa por el proxy de Netlify
+ * (`/agro-uploads/*`); en HTTP local apunta directo al host de FastAPI.
  */
 const AGRO_UPLOADS =
   AGRO_API === '/agro-api'

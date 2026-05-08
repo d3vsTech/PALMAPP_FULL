@@ -24,11 +24,26 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
-      // Backend del Agente IA (FastAPI en otra máquina)
+      // Backend del Agente IA (FastAPI en otra máquina) — ruta legacy.
       '/agro-agente': {
         target: process.env.VITE_AGRO_AGENTE_TARGET ?? 'http://31.97.7.50',
         changeOrigin: true,
         secure: false,
+      },
+      // Proxy del Agente IA equivalente al de Netlify (`public/_redirects`):
+      // /agro-api/* → http://31.97.7.50/agro-agente/api/*
+      '/agro-api': {
+        target: process.env.VITE_AGRO_AGENTE_TARGET ?? 'http://31.97.7.50',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (p) => p.replace(/^\/agro-api/, '/agro-agente/api'),
+      },
+      // /agro-uploads/* → http://31.97.7.50/agro-agente/uploads/*
+      '/agro-uploads': {
+        target: process.env.VITE_AGRO_AGENTE_TARGET ?? 'http://31.97.7.50',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (p) => p.replace(/^\/agro-uploads/, '/agro-agente/uploads'),
       },
     },
   },

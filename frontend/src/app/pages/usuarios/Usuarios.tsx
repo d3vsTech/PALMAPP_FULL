@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
-import { requestConToken } from '../../../api/request';
+import { usuariosApi, type UsuarioTenant, type ResumenUsuarios } from '../../../api/usuarios';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -10,14 +10,11 @@ import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Badge } from '../../components/ui/badge';
-import { Users, UserCheck, UserX, Plus, Search, Eye, Edit, Shield, Trash2, TrendingUp, Loader2 } from 'lucide-react';
+import { Users, UserCheck, UserX, Plus, Search, Eye, Edit, Shield, Trash2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
-interface Usuario {
-  id: number; name: string; email: string;
-  status: boolean; is_admin: boolean; estado: boolean; asignado_at: string;
-}
-interface Resumen { total: number; activos: number; inactivos: number; }
+type Usuario = UsuarioTenant;
+type Resumen = ResumenUsuarios;
 
 export default function Usuarios() {
   const navigate = useNavigate();
@@ -33,10 +30,8 @@ export default function Usuarios() {
     if (!token) return;
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (search?.trim()) params.set('search', search.trim());
-      const res = await requestConToken<{ data: Usuario[]; resumen: Resumen }>(
-        `/api/v1/tenant/usuarios?${params}`, { method: 'GET' }, token
+      const res = await usuariosApi.getUsuarios(
+        search?.trim() ? { search: search.trim() } : undefined,
       );
       setUsuarios(res.data ?? []);
       setResumen(res.resumen ?? { total: 0, activos: 0, inactivos: 0 });
@@ -56,10 +51,18 @@ export default function Usuarios() {
     setUsuarioToggle({
       id: u.id, nombre: u.name, accion,
       onConfirm: async () => {
-        await requestConToken(`/api/v1/tenant/usuarios/${u.id}/toggle`, { method: 'PATCH' }, token);
-        toast.success(`Usuario ${accion}do correctamente`);
-        setAlertDialog(false); setUsuarioToggle(null);
-        await cargar(busqueda);
+        try {
+          await usuariosApi.toggleUsuario(u.id);
+          toast.success(`Usuario ${accion}do correctamente`);
+          setAlertDialog(false); setUsuarioToggle(null);
+          await cargar(busqueda);
+        } catch (err: any) {
+          if (err?.code === 'SELF_TOGGLE_DENIED') {
+            toast.error('No puedes desactivarte a ti mismo');
+          } else {
+            toast.error(err?.message ?? 'Error al cambiar estado del usuario');
+          }
+        }
       }
     });
     setAlertDialog(true);
@@ -69,12 +72,18 @@ export default function Usuarios() {
     setUsuarioToggle({
       id: u.id, nombre: u.name, accion: 'eliminar',
       onConfirm: async () => {
-        const res = await requestConToken<{ message?: string }>(
-          `/api/v1/tenant/usuarios/${u.id}`, { method: 'DELETE' }, token
-        );
-        toast.success(res.message ?? 'Usuario removido correctamente');
-        setAlertDialog(false); setUsuarioToggle(null);
-        await cargar(busqueda);
+        try {
+          const res = await usuariosApi.deleteUsuario(u.id);
+          toast.success(res.message ?? 'Usuario removido correctamente');
+          setAlertDialog(false); setUsuarioToggle(null);
+          await cargar(busqueda);
+        } catch (err: any) {
+          if (err?.code === 'SELF_REMOVE_DENIED') {
+            toast.error('No puedes removerte a ti mismo');
+          } else {
+            toast.error(err?.message ?? 'Error al eliminar usuario');
+          }
+        }
       }
     });
     setAlertDialog(true);

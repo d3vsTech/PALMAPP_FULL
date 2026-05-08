@@ -97,7 +97,6 @@ export default function ProductoDetalle() {
               {producto.stock_bajo && <Badge className="bg-amber-500">Stock limitado</Badge>}
               {producto.destacado && <Badge className="bg-primary">Destacado</Badge>}
             </div>
-            <p className="text-muted-foreground">{producto.descripcion}</p>
           </div>
         </div>
       </div>
@@ -206,25 +205,31 @@ export default function ProductoDetalle() {
                   </div>
                   <div>
                     <h3 className="font-semibold text-foreground">{producto.proveedor.nombre_empresa}</h3>
-                    {producto.proveedor.calificacion_promedio != null && (
-                      <div className="flex items-center gap-2 mt-1">
-                        <div className="flex items-center gap-1">
-                          {[...Array(5)].map((_, i) => (
-                            <Star
-                              key={i}
-                              className={`h-3 w-3 ${
-                                i < Math.floor(Number(producto.proveedor.calificacion_promedio ?? 0))
-                                  ? 'fill-amber-400 text-amber-400'
-                                  : 'text-muted'
-                              }`}
-                            />
-                          ))}
+                    {(() => {
+                      const ratingProv = Number(producto.proveedor.calificacion_promedio ?? 0);
+                      const mostrar = ratingProv > 0 ? ratingProv : 5;
+                      return (
+                        <div className="flex items-center gap-2 mt-1">
+                          <div className="flex items-center gap-1">
+                            {[...Array(5)].map((_, i) => (
+                              <Star
+                                key={i}
+                                className={`h-3 w-3 ${
+                                  i < Math.floor(mostrar)
+                                    ? 'fill-amber-400 text-amber-400'
+                                    : 'text-muted'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                          {ratingProv > 0 && (
+                            <span className="text-sm text-muted-foreground">
+                              ({ratingProv.toFixed(1)})
+                            </span>
+                          )}
                         </div>
-                        <span className="text-sm text-muted-foreground">
-                          ({Number(producto.proveedor.calificacion_promedio).toFixed(1)})
-                        </span>
-                      </div>
-                    )}
+                      );
+                    })()}
                     {producto.proveedor.ciudad && (
                       <p className="text-sm text-muted-foreground mt-1">
                         {producto.proveedor.ciudad}
@@ -271,19 +276,24 @@ export default function ProductoDetalle() {
               <CardContent className="p-6 space-y-6">
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    {[...Array(5)].map((_, i) => (
-                      <Star
-                        key={i}
-                        className={`h-4 w-4 ${
-                          i < Math.floor(rating) ? 'fill-amber-400 text-amber-400' : 'text-muted'
-                        }`}
-                      />
-                    ))}
-                    {producto.total_resenas != null && (
-                      <span className="text-sm text-muted-foreground">
-                        ({producto.total_resenas} reseñas)
-                      </span>
-                    )}
+                    {(() => {
+                      const ratingMostrar = rating > 0 ? rating : 5;
+                      return [...Array(5)].map((_, i) => (
+                        <Star
+                          key={i}
+                          className={`h-4 w-4 ${
+                            i < Math.floor(ratingMostrar)
+                              ? 'fill-amber-400 text-amber-400'
+                              : 'text-muted'
+                          }`}
+                        />
+                      ));
+                    })()}
+                    <span className="text-sm text-muted-foreground">
+                      {rating > 0
+                        ? `${rating.toFixed(1)}${producto.total_resenas != null ? ` · ${producto.total_resenas} reseñas` : ''}`
+                        : 'Sin reseñas todavía'}
+                    </span>
                   </div>
                   <Badge variant="outline" className="mb-4">{producto.categoria.nombre}</Badge>
                 </div>

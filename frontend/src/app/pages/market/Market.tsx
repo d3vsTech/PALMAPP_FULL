@@ -378,15 +378,17 @@ export default function Market() {
                           <Star
                             key={i}
                             className={`h-3 w-3 ${
-                              i < Math.floor(rating)
+                              i < Math.floor(rating > 0 ? rating : 5)
                                 ? 'fill-amber-400 text-amber-400'
                                 : 'text-muted'
                             }`}
                           />
                         ))}
-                        <span className="text-xs text-muted-foreground ml-1">
-                          ({rating.toFixed(1)})
-                        </span>
+                        {rating > 0 && (
+                          <span className="text-xs text-muted-foreground ml-1">
+                            ({rating.toFixed(1)})
+                          </span>
+                        )}
                       </div>
 
                       <div className="flex items-center justify-between">
@@ -457,15 +459,17 @@ export default function Market() {
                             <Star
                               key={i}
                               className={`h-3 w-3 ${
-                                i < Math.floor(rating)
+                                i < Math.floor(rating > 0 ? rating : 5)
                                   ? 'fill-amber-400 text-amber-400'
                                   : 'text-muted'
                               }`}
                             />
                           ))}
-                          <span className="text-xs text-muted-foreground ml-1">
-                            ({rating.toFixed(1)})
-                          </span>
+                          {rating > 0 && (
+                            <span className="text-xs text-muted-foreground ml-1">
+                              ({rating.toFixed(1)})
+                            </span>
+                          )}
                         </div>
 
                         <div className="flex items-center justify-between">
@@ -585,14 +589,14 @@ export default function Market() {
                         <Star
                           key={i}
                           className={`h-4 w-4 ${
-                            i < Math.floor(rating)
+                            i < Math.floor(rating > 0 ? rating : 5)
                               ? 'fill-amber-400 text-amber-400'
                               : 'text-muted'
                           }`}
                         />
                       ))}
                       <span className="text-sm text-muted-foreground ml-2">
-                        {rating.toFixed(1)}
+                        {rating > 0 ? rating.toFixed(1) : 'Sin reseñas'}
                       </span>
                     </div>
                     <Badge variant="outline">Stock: {productoSel.stock_disponible}</Badge>
