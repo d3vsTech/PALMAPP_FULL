@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -44,12 +44,46 @@ function getIconoCategoria(slug: string): any {
 export default function Market() {
   const navigate = useNavigate();
 
-  // ── Filtros y estado ─────────────────────────────────────────────────────
-  const [categoriaSlug, setCategoriaSlug] = useState<string>('todas');
-  const [busqueda, setBusqueda] = useState('');
-  const [ordenPrecio, setOrdenPrecio] = useState<'precio_asc' | 'precio_desc' | 'none'>('none');
-  const [vistaGrid, setVistaGrid] = useState(true);
-  const [page, setPage] = useState(1);
+  // ── Filtros y paginación sincronizados con la URL ────────────────────────
+  // Esto permite que al volver desde el detalle del producto (back del browser
+  // o navigate(-1)) la lista regrese a la misma página/filtro que estaba.
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const categoriaSlug = searchParams.get('categoria') ?? 'todas';
+  const busqueda      = searchParams.get('buscar') ?? '';
+  const ordenPrecio   = (searchParams.get('orden') ?? 'none') as 'precio_asc' | 'precio_desc' | 'none';
+  const vistaGrid     = searchParams.get('vista') !== 'list';
+  const page          = parseInt(searchParams.get('page') ?? '1', 10) || 1;
+
+  /** Helper: actualiza un sub-conjunto de params. Pasar `null` borra la key. */
+  const updateParams = (
+    patch: Record<string, string | number | null | undefined>,
+    opts?: { resetPage?: boolean },
+  ) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      Object.entries(patch).forEach(([k, v]) => {
+        if (v === null || v === undefined || v === '') next.delete(k);
+        else next.set(k, String(v));
+      });
+      if (opts?.resetPage) next.delete('page');
+      return next;
+    }, { replace: true });
+  };
+
+  const setCategoriaSlug = (slug: string) =>
+    updateParams({ categoria: slug === 'todas' ? null : slug }, { resetPage: true });
+  const setBusqueda = (v: string) =>
+    updateParams({ buscar: v || null }, { resetPage: true });
+  const setOrdenPrecio = (v: 'precio_asc' | 'precio_desc' | 'none') =>
+    updateParams({ orden: v === 'none' ? null : v }, { resetPage: true });
+  const setVistaGrid = (grid: boolean) =>
+    updateParams({ vista: grid ? null : 'list' });
+  const setPage = (next: number | ((p: number) => number)) => {
+    const value = typeof next === 'function' ? (next as (p: number) => number)(page) : next;
+    updateParams({ page: value <= 1 ? null : value });
+  };
+
   const [indiceCarrusel, setIndiceCarrusel] = useState(0);
 
   // ── Datos ────────────────────────────────────────────────────────────────
@@ -99,6 +133,30 @@ export default function Market() {
 
     return () => clearTimeout(t);
   }, [categoriaSlug, busqueda, ordenPrecio, page]);
+
+  // Al volver del detalle (back del browser), si la URL trae `#prod-123`
+  // hacemos scroll al card de ese producto.
+  useEffect(() => {
+    if (cargandoProds || productos.length === 0) return;
+    const hash = window.location.hash;
+    if (!hash.startsWith('#prod-')) return;
+    // Esperar al próximo frame para asegurar que las cards ya se renderizaron.
+    requestAnimationFrame(() => {
+      const el = document.getElementById(hash.slice(1));
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }, [cargandoProds, productos]);
+
+  /**
+   * Navegar al detalle de un producto guardando el ancla en la URL actual,
+   * para que `navigate(-1)` restaure scroll exacto a esa card.
+   */
+  const verProducto = (productoId: number) => {
+    const url = new URL(window.location.href);
+    url.hash = `prod-${productoId}`;
+    window.history.replaceState(window.history.state, '', url.toString());
+    navigate(`/market/productos/${productoId}`);
+  };
 
   // Construir lista de "categorías visibles" con "Todas" incluida
   const categoriasConTodas = useMemo(() => {
@@ -340,8 +398,9 @@ export default function Market() {
               return (
                 <Card
                   key={producto.id}
-                  className="glass-subtle border-border hover:shadow-lg transition-all duration-300 overflow-hidden group cursor-pointer"
-                  onClick={() => navigate(`/market/productos/${producto.id}`)}
+                  id={`prod-${producto.id}`}
+                  className="glass-subtle border-border hover:shadow-lg transition-all duration-300 overflow-hidden group cursor-pointer scroll-mt-24"
+                  onClick={() => verProducto(producto.id)}
                 >
                   <div className="aspect-square bg-muted relative overflow-hidden">
                     {producto.imagen_principal ? (
@@ -431,8 +490,9 @@ export default function Market() {
               return (
                 <Card
                   key={producto.id}
-                  className="glass-subtle border-border hover:shadow-lg transition-all duration-300 cursor-pointer"
-                  onClick={() => navigate(`/market/productos/${producto.id}`)}
+                  id={`prod-${producto.id}`}
+                  className="glass-subtle border-border hover:shadow-lg transition-all duration-300 cursor-pointer scroll-mt-24"
+                  onClick={() => verProducto(producto.id)}
                 >
                   <CardContent className="p-6">
                     <div className="flex gap-6">
@@ -491,7 +551,7 @@ export default function Market() {
                           <Button
                             onClick={(e) => {
                               e.stopPropagation();
-                              navigate(`/market/productos/${producto.id}`);
+                              verProducto(producto.id);
                             }}
                             variant="outline"
                             size="sm"

@@ -86,7 +86,12 @@ export default function ProductoDetalle() {
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <Button variant="ghost" size="sm" onClick={() => navigate('/market')} className="mb-4 gap-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate(-1)}
+          className="mb-4 gap-2"
+        >
           <ArrowLeft className="h-4 w-4" />
           Volver al catálogo
         </Button>
