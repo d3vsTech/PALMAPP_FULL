@@ -91,7 +91,9 @@ function messageFromBackend(m: any): Message {
 //  ChatMessage. El render usa esos campos directamente — ver messageFromBackend.)
 
 // ────────────────────────────────────────────────────────────
-// Markdown inline parser (negrita, itálica)
+// Markdown inline parser
+// Convención: tanto `**texto**` como `*texto*` se renderizan en negrita
+// (el bot envía nombres de productos con un solo asterisco al final).
 // ────────────────────────────────────────────────────────────
 const renderInline = (text: string): (string | JSX.Element)[] => {
   const parts: (string | JSX.Element)[] = [];
@@ -101,12 +103,12 @@ const renderInline = (text: string): (string | JSX.Element)[] => {
   let keyIdx = 0;
   while ((match = regex.exec(text)) !== null) {
     if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
-    const bold = match[2] ?? match[3];
-    const italic = match[4] ?? match[5];
-    if (bold !== undefined) {
-      parts.push(<strong key={`b${keyIdx++}`} className="font-semibold">{bold}</strong>);
-    } else if (italic !== undefined) {
-      parts.push(<em key={`i${keyIdx++}`}>{italic}</em>);
+    // Cualquier captura (doble o sencilla) la mostramos en negrita.
+    const contenido = match[2] ?? match[3] ?? match[4] ?? match[5];
+    if (contenido !== undefined) {
+      parts.push(
+        <strong key={`b${keyIdx++}`} className="font-semibold">{contenido}</strong>,
+      );
     }
     lastIndex = match.index + match[0].length;
   }

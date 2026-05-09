@@ -270,7 +270,7 @@ export default function Market() {
                           ? 'border-primary bg-primary/5 shadow-lg'
                           : 'border-border hover:border-primary/50 hover:shadow-md'
                       }`}
-                      onClick={() => { setCategoriaSlug(cat.slug); setPage(1); }}
+                      onClick={() => setCategoriaSlug(cat.slug)}
                     >
                       <CardContent className="p-4 flex flex-col items-center justify-center gap-3">
                         <div
@@ -322,7 +322,7 @@ export default function Market() {
                   <Input
                     placeholder="Nombre o descripción..."
                     value={busqueda}
-                    onChange={(e) => { setBusqueda(e.target.value); setPage(1); }}
+                    onChange={(e) => setBusqueda(e.target.value)}
                     className="pl-8"
                   />
                 </div>
@@ -330,7 +330,7 @@ export default function Market() {
 
               <div className="space-y-2">
                 <Label>Ordenar por precio</Label>
-                <Select value={ordenPrecio} onValueChange={(val: any) => { setOrdenPrecio(val); setPage(1); }}>
+                <Select value={ordenPrecio} onValueChange={(val: any) => setOrdenPrecio(val)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Sin ordenar" />
                   </SelectTrigger>
