@@ -2,12 +2,12 @@
 -- PostgreSQL database dump
 --
 
-\restrict aQftUlBolGnj0jJA2XxahdWK4trkgZBfpszLcIuvMIsmsojojgjcTEp9LCFh5J9
+\restrict x9fG6yyzwdiapIxkx9RzwyMl9KGwd5m4QppH1qzLloLgW8cKub99JVQAW7ylF6B
 
 -- Dumped from database version 16.13 (Ubuntu 16.13-0ubuntu0.24.04.1)
 -- Dumped by pg_dump version 18.3
 
--- Started on 2026-05-07 22:04:00
+-- Started on 2026-05-13 11:20:17
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -681,7 +681,7 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
--- TOC entry 326 (class 1259 OID 82835)
+-- TOC entry 326 (class 1259 OID 87100)
 -- Name: agro_chat_messages; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -700,7 +700,7 @@ CREATE TABLE public.agro_chat_messages (
 
 
 --
--- TOC entry 325 (class 1259 OID 82834)
+-- TOC entry 325 (class 1259 OID 87099)
 -- Name: agro_chat_messages_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -722,7 +722,7 @@ ALTER SEQUENCE public.agro_chat_messages_id_seq OWNED BY public.agro_chat_messag
 
 
 --
--- TOC entry 324 (class 1259 OID 82816)
+-- TOC entry 324 (class 1259 OID 87081)
 -- Name: agro_chat_sessions; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -737,7 +737,7 @@ CREATE TABLE public.agro_chat_sessions (
 
 
 --
--- TOC entry 323 (class 1259 OID 82815)
+-- TOC entry 323 (class 1259 OID 87080)
 -- Name: agro_chat_sessions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -759,7 +759,7 @@ ALTER SEQUENCE public.agro_chat_sessions_id_seq OWNED BY public.agro_chat_sessio
 
 
 --
--- TOC entry 352 (class 1259 OID 83240)
+-- TOC entry 352 (class 1259 OID 87503)
 -- Name: arl; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -774,7 +774,7 @@ CREATE TABLE public.arl (
 
 
 --
--- TOC entry 351 (class 1259 OID 83239)
+-- TOC entry 351 (class 1259 OID 87502)
 -- Name: arl_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -796,7 +796,7 @@ ALTER SEQUENCE public.arl_id_seq OWNED BY public.arl.id;
 
 
 --
--- TOC entry 235 (class 1259 OID 81658)
+-- TOC entry 235 (class 1259 OID 85923)
 -- Name: auditorias; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -819,7 +819,7 @@ CREATE TABLE public.auditorias (
 
 
 --
--- TOC entry 234 (class 1259 OID 81657)
+-- TOC entry 234 (class 1259 OID 85922)
 -- Name: auditorias_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -841,7 +841,7 @@ ALTER SEQUENCE public.auditorias_id_seq OWNED BY public.auditorias.id;
 
 
 --
--- TOC entry 322 (class 1259 OID 82725)
+-- TOC entry 322 (class 1259 OID 86990)
 -- Name: ausencias; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -882,7 +882,7 @@ CREATE TABLE public.ausencias (
 
 
 --
--- TOC entry 321 (class 1259 OID 82724)
+-- TOC entry 321 (class 1259 OID 86989)
 -- Name: ausencias_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -904,7 +904,7 @@ ALTER SEQUENCE public.ausencias_id_seq OWNED BY public.ausencias.id;
 
 
 --
--- TOC entry 223 (class 1259 OID 81557)
+-- TOC entry 223 (class 1259 OID 85822)
 -- Name: cache; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -916,7 +916,7 @@ CREATE TABLE public.cache (
 
 
 --
--- TOC entry 224 (class 1259 OID 81565)
+-- TOC entry 224 (class 1259 OID 85830)
 -- Name: cache_locks; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -928,7 +928,7 @@ CREATE TABLE public.cache_locks (
 
 
 --
--- TOC entry 263 (class 1259 OID 81925)
+-- TOC entry 263 (class 1259 OID 86190)
 -- Name: cargos; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -947,7 +947,7 @@ CREATE TABLE public.cargos (
 
 
 --
--- TOC entry 262 (class 1259 OID 81924)
+-- TOC entry 262 (class 1259 OID 86189)
 -- Name: cargos_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -969,7 +969,7 @@ ALTER SEQUENCE public.cargos_id_seq OWNED BY public.cargos.id;
 
 
 --
--- TOC entry 273 (class 1259 OID 82090)
+-- TOC entry 273 (class 1259 OID 86355)
 -- Name: cosecha_cuadrilla; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -987,7 +987,7 @@ CREATE TABLE public.cosecha_cuadrilla (
 
 
 --
--- TOC entry 272 (class 1259 OID 82089)
+-- TOC entry 272 (class 1259 OID 86354)
 -- Name: cosecha_cuadrilla_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -1009,7 +1009,7 @@ ALTER SEQUENCE public.cosecha_cuadrilla_id_seq OWNED BY public.cosecha_cuadrilla
 
 
 --
--- TOC entry 313 (class 1259 OID 82577)
+-- TOC entry 313 (class 1259 OID 86842)
 -- Name: departamentos; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1020,7 +1020,7 @@ CREATE TABLE public.departamentos (
 
 
 --
--- TOC entry 318 (class 1259 OID 82662)
+-- TOC entry 318 (class 1259 OID 86927)
 -- Name: empleado_contratos; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1043,7 +1043,7 @@ CREATE TABLE public.empleado_contratos (
 
 
 --
--- TOC entry 317 (class 1259 OID 82661)
+-- TOC entry 317 (class 1259 OID 86926)
 -- Name: empleado_contratos_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -1065,7 +1065,7 @@ ALTER SEQUENCE public.empleado_contratos_id_seq OWNED BY public.empleado_contrat
 
 
 --
--- TOC entry 320 (class 1259 OID 82697)
+-- TOC entry 320 (class 1259 OID 86962)
 -- Name: empleado_documentos; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1090,7 +1090,7 @@ CREATE TABLE public.empleado_documentos (
 
 
 --
--- TOC entry 319 (class 1259 OID 82696)
+-- TOC entry 319 (class 1259 OID 86961)
 -- Name: empleado_documentos_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -1112,7 +1112,7 @@ ALTER SEQUENCE public.empleado_documentos_id_seq OWNED BY public.empleado_docume
 
 
 --
--- TOC entry 265 (class 1259 OID 81945)
+-- TOC entry 265 (class 1259 OID 86210)
 -- Name: empleados; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1162,7 +1162,7 @@ CREATE TABLE public.empleados (
 
 
 --
--- TOC entry 264 (class 1259 OID 81944)
+-- TOC entry 264 (class 1259 OID 86209)
 -- Name: empleados_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -1184,7 +1184,7 @@ ALTER SEQUENCE public.empleados_id_seq OWNED BY public.empleados.id;
 
 
 --
--- TOC entry 334 (class 1259 OID 82968)
+-- TOC entry 334 (class 1259 OID 87233)
 -- Name: empresa_transportadora; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1206,7 +1206,7 @@ CREATE TABLE public.empresa_transportadora (
 
 
 --
--- TOC entry 333 (class 1259 OID 82967)
+-- TOC entry 333 (class 1259 OID 87232)
 -- Name: empresa_transportadora_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -1228,7 +1228,7 @@ ALTER SEQUENCE public.empresa_transportadora_id_seq OWNED BY public.empresa_tran
 
 
 --
--- TOC entry 354 (class 1259 OID 83256)
+-- TOC entry 354 (class 1259 OID 87519)
 -- Name: entidades_bancarias; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1243,7 +1243,7 @@ CREATE TABLE public.entidades_bancarias (
 
 
 --
--- TOC entry 353 (class 1259 OID 83255)
+-- TOC entry 353 (class 1259 OID 87518)
 -- Name: entidades_bancarias_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -1265,7 +1265,7 @@ ALTER SEQUENCE public.entidades_bancarias_id_seq OWNED BY public.entidades_banca
 
 
 --
--- TOC entry 348 (class 1259 OID 83208)
+-- TOC entry 348 (class 1259 OID 87471)
 -- Name: eps; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1280,7 +1280,7 @@ CREATE TABLE public.eps (
 
 
 --
--- TOC entry 347 (class 1259 OID 83207)
+-- TOC entry 347 (class 1259 OID 87470)
 -- Name: eps_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -1302,7 +1302,7 @@ ALTER SEQUENCE public.eps_id_seq OWNED BY public.eps.id;
 
 
 --
--- TOC entry 338 (class 1259 OID 83010)
+-- TOC entry 338 (class 1259 OID 87275)
 -- Name: extractoras; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1327,7 +1327,7 @@ CREATE TABLE public.extractoras (
 
 
 --
--- TOC entry 337 (class 1259 OID 83009)
+-- TOC entry 337 (class 1259 OID 87274)
 -- Name: extractoras_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -1349,7 +1349,7 @@ ALTER SEQUENCE public.extractoras_id_seq OWNED BY public.extractoras.id;
 
 
 --
--- TOC entry 231 (class 1259 OID 81622)
+-- TOC entry 231 (class 1259 OID 85887)
 -- Name: failed_jobs; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1365,7 +1365,7 @@ CREATE TABLE public.failed_jobs (
 
 
 --
--- TOC entry 230 (class 1259 OID 81621)
+-- TOC entry 230 (class 1259 OID 85886)
 -- Name: failed_jobs_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -1387,7 +1387,7 @@ ALTER SEQUENCE public.failed_jobs_id_seq OWNED BY public.failed_jobs.id;
 
 
 --
--- TOC entry 350 (class 1259 OID 83224)
+-- TOC entry 350 (class 1259 OID 87487)
 -- Name: fondos_pension; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1402,7 +1402,7 @@ CREATE TABLE public.fondos_pension (
 
 
 --
--- TOC entry 349 (class 1259 OID 83223)
+-- TOC entry 349 (class 1259 OID 87486)
 -- Name: fondos_pension_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -1424,7 +1424,7 @@ ALTER SEQUENCE public.fondos_pension_id_seq OWNED BY public.fondos_pension.id;
 
 
 --
--- TOC entry 342 (class 1259 OID 83094)
+-- TOC entry 342 (class 1259 OID 87359)
 -- Name: horas_extra; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1457,7 +1457,7 @@ CREATE TABLE public.horas_extra (
 
 
 --
--- TOC entry 341 (class 1259 OID 83093)
+-- TOC entry 341 (class 1259 OID 87358)
 -- Name: horas_extra_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -1479,7 +1479,7 @@ ALTER SEQUENCE public.horas_extra_id_seq OWNED BY public.horas_extra.id;
 
 
 --
--- TOC entry 255 (class 1259 OID 81855)
+-- TOC entry 255 (class 1259 OID 86120)
 -- Name: insumos; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1495,7 +1495,7 @@ CREATE TABLE public.insumos (
 
 
 --
--- TOC entry 254 (class 1259 OID 81854)
+-- TOC entry 254 (class 1259 OID 86119)
 -- Name: insumos_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -1517,7 +1517,7 @@ ALTER SEQUENCE public.insumos_id_seq OWNED BY public.insumos.id;
 
 
 --
--- TOC entry 229 (class 1259 OID 81614)
+-- TOC entry 229 (class 1259 OID 85879)
 -- Name: job_batches; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1536,7 +1536,7 @@ CREATE TABLE public.job_batches (
 
 
 --
--- TOC entry 228 (class 1259 OID 81605)
+-- TOC entry 228 (class 1259 OID 85870)
 -- Name: jobs; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1552,7 +1552,7 @@ CREATE TABLE public.jobs (
 
 
 --
--- TOC entry 227 (class 1259 OID 81604)
+-- TOC entry 227 (class 1259 OID 85869)
 -- Name: jobs_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -1574,7 +1574,7 @@ ALTER SEQUENCE public.jobs_id_seq OWNED BY public.jobs.id;
 
 
 --
--- TOC entry 330 (class 1259 OID 82882)
+-- TOC entry 330 (class 1259 OID 87147)
 -- Name: jornales; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1610,7 +1610,7 @@ CREATE TABLE public.jornales (
 
 
 --
--- TOC entry 329 (class 1259 OID 82881)
+-- TOC entry 329 (class 1259 OID 87146)
 -- Name: jornales_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -1632,7 +1632,7 @@ ALTER SEQUENCE public.jornales_id_seq OWNED BY public.jornales.id;
 
 
 --
--- TOC entry 259 (class 1259 OID 81888)
+-- TOC entry 259 (class 1259 OID 86153)
 -- Name: labores; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1648,7 +1648,7 @@ CREATE TABLE public.labores (
 
 
 --
--- TOC entry 258 (class 1259 OID 81887)
+-- TOC entry 258 (class 1259 OID 86152)
 -- Name: labores_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -1670,7 +1670,7 @@ ALTER SEQUENCE public.labores_id_seq OWNED BY public.labores.id;
 
 
 --
--- TOC entry 247 (class 1259 OID 81772)
+-- TOC entry 247 (class 1259 OID 86037)
 -- Name: lineas; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1687,7 +1687,7 @@ CREATE TABLE public.lineas (
 
 
 --
--- TOC entry 246 (class 1259 OID 81771)
+-- TOC entry 246 (class 1259 OID 86036)
 -- Name: lineas_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -1709,7 +1709,7 @@ ALTER SEQUENCE public.lineas_id_seq OWNED BY public.lineas.id;
 
 
 --
--- TOC entry 295 (class 1259 OID 82412)
+-- TOC entry 295 (class 1259 OID 86677)
 -- Name: liquidacion_detalle; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1732,7 +1732,7 @@ CREATE TABLE public.liquidacion_detalle (
 
 
 --
--- TOC entry 294 (class 1259 OID 82411)
+-- TOC entry 294 (class 1259 OID 86676)
 -- Name: liquidacion_detalle_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -1754,7 +1754,7 @@ ALTER SEQUENCE public.liquidacion_detalle_id_seq OWNED BY public.liquidacion_det
 
 
 --
--- TOC entry 293 (class 1259 OID 82369)
+-- TOC entry 293 (class 1259 OID 86634)
 -- Name: liquidaciones; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1790,7 +1790,7 @@ CREATE TABLE public.liquidaciones (
 
 
 --
--- TOC entry 292 (class 1259 OID 82368)
+-- TOC entry 292 (class 1259 OID 86633)
 -- Name: liquidaciones_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -1812,7 +1812,7 @@ ALTER SEQUENCE public.liquidaciones_id_seq OWNED BY public.liquidaciones.id;
 
 
 --
--- TOC entry 241 (class 1259 OID 81708)
+-- TOC entry 241 (class 1259 OID 85973)
 -- Name: lotes; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1830,7 +1830,7 @@ CREATE TABLE public.lotes (
 
 
 --
--- TOC entry 240 (class 1259 OID 81707)
+-- TOC entry 240 (class 1259 OID 85972)
 -- Name: lotes_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -1852,7 +1852,7 @@ ALTER SEQUENCE public.lotes_id_seq OWNED BY public.lotes.id;
 
 
 --
--- TOC entry 372 (class 1259 OID 83439)
+-- TOC entry 372 (class 1259 OID 87702)
 -- Name: market_carrito_items; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1867,7 +1867,7 @@ CREATE TABLE public.market_carrito_items (
 
 
 --
--- TOC entry 371 (class 1259 OID 83438)
+-- TOC entry 371 (class 1259 OID 87701)
 -- Name: market_carrito_items_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -1889,7 +1889,7 @@ ALTER SEQUENCE public.market_carrito_items_id_seq OWNED BY public.market_carrito
 
 
 --
--- TOC entry 370 (class 1259 OID 83425)
+-- TOC entry 370 (class 1259 OID 87688)
 -- Name: market_carritos; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1902,7 +1902,7 @@ CREATE TABLE public.market_carritos (
 
 
 --
--- TOC entry 369 (class 1259 OID 83424)
+-- TOC entry 369 (class 1259 OID 87687)
 -- Name: market_carritos_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -1924,7 +1924,7 @@ ALTER SEQUENCE public.market_carritos_id_seq OWNED BY public.market_carritos.id;
 
 
 --
--- TOC entry 360 (class 1259 OID 83335)
+-- TOC entry 360 (class 1259 OID 87598)
 -- Name: market_categorias; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1942,7 +1942,7 @@ CREATE TABLE public.market_categorias (
 
 
 --
--- TOC entry 359 (class 1259 OID 83334)
+-- TOC entry 359 (class 1259 OID 87597)
 -- Name: market_categorias_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -1964,7 +1964,7 @@ ALTER SEQUENCE public.market_categorias_id_seq OWNED BY public.market_categorias
 
 
 --
--- TOC entry 378 (class 1259 OID 83507)
+-- TOC entry 378 (class 1259 OID 87770)
 -- Name: market_pedido_estados_historial; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1981,7 +1981,7 @@ CREATE TABLE public.market_pedido_estados_historial (
 
 
 --
--- TOC entry 377 (class 1259 OID 83506)
+-- TOC entry 377 (class 1259 OID 87769)
 -- Name: market_pedido_estados_historial_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -2003,7 +2003,7 @@ ALTER SEQUENCE public.market_pedido_estados_historial_id_seq OWNED BY public.mar
 
 
 --
--- TOC entry 376 (class 1259 OID 83487)
+-- TOC entry 376 (class 1259 OID 87750)
 -- Name: market_pedido_items; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2021,7 +2021,7 @@ CREATE TABLE public.market_pedido_items (
 
 
 --
--- TOC entry 375 (class 1259 OID 83486)
+-- TOC entry 375 (class 1259 OID 87749)
 -- Name: market_pedido_items_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -2043,7 +2043,7 @@ ALTER SEQUENCE public.market_pedido_items_id_seq OWNED BY public.market_pedido_i
 
 
 --
--- TOC entry 374 (class 1259 OID 83458)
+-- TOC entry 374 (class 1259 OID 87721)
 -- Name: market_pedidos; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2069,7 +2069,7 @@ CREATE TABLE public.market_pedidos (
 
 
 --
--- TOC entry 373 (class 1259 OID 83457)
+-- TOC entry 373 (class 1259 OID 87720)
 -- Name: market_pedidos_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -2091,7 +2091,7 @@ ALTER SEQUENCE public.market_pedidos_id_seq OWNED BY public.market_pedidos.id;
 
 
 --
--- TOC entry 368 (class 1259 OID 83411)
+-- TOC entry 368 (class 1259 OID 87674)
 -- Name: market_precios_volumen; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2107,7 +2107,7 @@ CREATE TABLE public.market_precios_volumen (
 
 
 --
--- TOC entry 367 (class 1259 OID 83410)
+-- TOC entry 367 (class 1259 OID 87673)
 -- Name: market_precios_volumen_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -2129,7 +2129,7 @@ ALTER SEQUENCE public.market_precios_volumen_id_seq OWNED BY public.market_preci
 
 
 --
--- TOC entry 366 (class 1259 OID 83395)
+-- TOC entry 366 (class 1259 OID 87658)
 -- Name: market_producto_imagenes; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2144,7 +2144,7 @@ CREATE TABLE public.market_producto_imagenes (
 
 
 --
--- TOC entry 365 (class 1259 OID 83394)
+-- TOC entry 365 (class 1259 OID 87657)
 -- Name: market_producto_imagenes_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -2166,7 +2166,7 @@ ALTER SEQUENCE public.market_producto_imagenes_id_seq OWNED BY public.market_pro
 
 
 --
--- TOC entry 364 (class 1259 OID 83358)
+-- TOC entry 364 (class 1259 OID 87621)
 -- Name: market_productos; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2196,7 +2196,7 @@ CREATE TABLE public.market_productos (
 
 
 --
--- TOC entry 363 (class 1259 OID 83357)
+-- TOC entry 363 (class 1259 OID 87620)
 -- Name: market_productos_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -2218,7 +2218,7 @@ ALTER SEQUENCE public.market_productos_id_seq OWNED BY public.market_productos.i
 
 
 --
--- TOC entry 358 (class 1259 OID 83312)
+-- TOC entry 358 (class 1259 OID 87575)
 -- Name: market_proveedor_user; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2235,7 +2235,7 @@ CREATE TABLE public.market_proveedor_user (
 
 
 --
--- TOC entry 357 (class 1259 OID 83311)
+-- TOC entry 357 (class 1259 OID 87574)
 -- Name: market_proveedor_user_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -2257,7 +2257,7 @@ ALTER SEQUENCE public.market_proveedor_user_id_seq OWNED BY public.market_provee
 
 
 --
--- TOC entry 356 (class 1259 OID 83295)
+-- TOC entry 356 (class 1259 OID 87558)
 -- Name: market_proveedores; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2277,12 +2277,13 @@ CREATE TABLE public.market_proveedores (
     total_ventas integer DEFAULT 0 NOT NULL,
     created_at timestamp(0) without time zone,
     updated_at timestamp(0) without time zone,
+    deleted_at timestamp(0) without time zone,
     CONSTRAINT market_proveedores_estado_check CHECK (((estado)::text = ANY ((ARRAY['activo'::character varying, 'inactivo'::character varying, 'suspendido'::character varying])::text[])))
 );
 
 
 --
--- TOC entry 355 (class 1259 OID 83294)
+-- TOC entry 355 (class 1259 OID 87557)
 -- Name: market_proveedores_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -2304,7 +2305,7 @@ ALTER SEQUENCE public.market_proveedores_id_seq OWNED BY public.market_proveedor
 
 
 --
--- TOC entry 362 (class 1259 OID 83348)
+-- TOC entry 362 (class 1259 OID 87611)
 -- Name: market_unidades_medida; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2320,7 +2321,7 @@ CREATE TABLE public.market_unidades_medida (
 
 
 --
--- TOC entry 361 (class 1259 OID 83347)
+-- TOC entry 361 (class 1259 OID 87610)
 -- Name: market_unidades_medida_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -2377,7 +2378,7 @@ ALTER SEQUENCE public.migrations_id_seq OWNED BY public.migrations.id;
 
 
 --
--- TOC entry 261 (class 1259 OID 81911)
+-- TOC entry 261 (class 1259 OID 86176)
 -- Name: modalidad_contrato; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2393,7 +2394,7 @@ CREATE TABLE public.modalidad_contrato (
 
 
 --
--- TOC entry 260 (class 1259 OID 81910)
+-- TOC entry 260 (class 1259 OID 86175)
 -- Name: modalidad_contrato_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -2415,7 +2416,7 @@ ALTER SEQUENCE public.modalidad_contrato_id_seq OWNED BY public.modalidad_contra
 
 
 --
--- TOC entry 300 (class 1259 OID 82463)
+-- TOC entry 300 (class 1259 OID 86728)
 -- Name: model_has_permissions; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2428,7 +2429,7 @@ CREATE TABLE public.model_has_permissions (
 
 
 --
--- TOC entry 301 (class 1259 OID 82475)
+-- TOC entry 301 (class 1259 OID 86740)
 -- Name: model_has_roles; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2441,7 +2442,7 @@ CREATE TABLE public.model_has_roles (
 
 
 --
--- TOC entry 332 (class 1259 OID 82941)
+-- TOC entry 332 (class 1259 OID 87206)
 -- Name: motivos_ausencia; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2462,7 +2463,7 @@ CREATE TABLE public.motivos_ausencia (
 
 
 --
--- TOC entry 331 (class 1259 OID 82940)
+-- TOC entry 331 (class 1259 OID 87205)
 -- Name: motivos_ausencia_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -2484,7 +2485,7 @@ ALTER SEQUENCE public.motivos_ausencia_id_seq OWNED BY public.motivos_ausencia.i
 
 
 --
--- TOC entry 314 (class 1259 OID 82583)
+-- TOC entry 314 (class 1259 OID 86848)
 -- Name: municipios; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2496,7 +2497,7 @@ CREATE TABLE public.municipios (
 
 
 --
--- TOC entry 275 (class 1259 OID 82115)
+-- TOC entry 275 (class 1259 OID 86380)
 -- Name: nomina_concepto; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2526,7 +2527,7 @@ CREATE TABLE public.nomina_concepto (
 
 
 --
--- TOC entry 274 (class 1259 OID 82114)
+-- TOC entry 274 (class 1259 OID 86379)
 -- Name: nomina_concepto_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -2548,7 +2549,7 @@ ALTER SEQUENCE public.nomina_concepto_id_seq OWNED BY public.nomina_concepto.id;
 
 
 --
--- TOC entry 287 (class 1259 OID 82284)
+-- TOC entry 287 (class 1259 OID 86549)
 -- Name: nomina_cosecha_ref; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2565,7 +2566,7 @@ CREATE TABLE public.nomina_cosecha_ref (
 
 
 --
--- TOC entry 286 (class 1259 OID 82283)
+-- TOC entry 286 (class 1259 OID 86548)
 -- Name: nomina_cosecha_ref_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -2587,7 +2588,7 @@ ALTER SEQUENCE public.nomina_cosecha_ref_id_seq OWNED BY public.nomina_cosecha_r
 
 
 --
--- TOC entry 281 (class 1259 OID 82192)
+-- TOC entry 281 (class 1259 OID 86457)
 -- Name: nomina_empleado; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2626,7 +2627,7 @@ CREATE TABLE public.nomina_empleado (
 
 
 --
--- TOC entry 283 (class 1259 OID 82230)
+-- TOC entry 283 (class 1259 OID 86495)
 -- Name: nomina_empleado_concepto; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2648,7 +2649,7 @@ CREATE TABLE public.nomina_empleado_concepto (
 
 
 --
--- TOC entry 282 (class 1259 OID 82229)
+-- TOC entry 282 (class 1259 OID 86494)
 -- Name: nomina_empleado_concepto_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -2670,7 +2671,7 @@ ALTER SEQUENCE public.nomina_empleado_concepto_id_seq OWNED BY public.nomina_emp
 
 
 --
--- TOC entry 280 (class 1259 OID 82191)
+-- TOC entry 280 (class 1259 OID 86456)
 -- Name: nomina_empleado_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -2692,7 +2693,7 @@ ALTER SEQUENCE public.nomina_empleado_id_seq OWNED BY public.nomina_empleado.id;
 
 
 --
--- TOC entry 344 (class 1259 OID 83152)
+-- TOC entry 344 (class 1259 OID 87415)
 -- Name: nomina_hora_extra_ref; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2709,7 +2710,7 @@ CREATE TABLE public.nomina_hora_extra_ref (
 
 
 --
--- TOC entry 343 (class 1259 OID 83151)
+-- TOC entry 343 (class 1259 OID 87414)
 -- Name: nomina_hora_extra_ref_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -2731,7 +2732,7 @@ ALTER SEQUENCE public.nomina_hora_extra_ref_id_seq OWNED BY public.nomina_hora_e
 
 
 --
--- TOC entry 285 (class 1259 OID 82258)
+-- TOC entry 285 (class 1259 OID 86523)
 -- Name: nomina_jornal_ref; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2748,7 +2749,7 @@ CREATE TABLE public.nomina_jornal_ref (
 
 
 --
--- TOC entry 284 (class 1259 OID 82257)
+-- TOC entry 284 (class 1259 OID 86522)
 -- Name: nomina_jornal_ref_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -2770,7 +2771,7 @@ ALTER SEQUENCE public.nomina_jornal_ref_id_seq OWNED BY public.nomina_jornal_ref
 
 
 --
--- TOC entry 277 (class 1259 OID 82143)
+-- TOC entry 277 (class 1259 OID 86408)
 -- Name: nomina_tabla_legal; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2788,7 +2789,7 @@ CREATE TABLE public.nomina_tabla_legal (
 
 
 --
--- TOC entry 276 (class 1259 OID 82142)
+-- TOC entry 276 (class 1259 OID 86407)
 -- Name: nomina_tabla_legal_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -2810,7 +2811,7 @@ ALTER SEQUENCE public.nomina_tabla_legal_id_seq OWNED BY public.nomina_tabla_leg
 
 
 --
--- TOC entry 279 (class 1259 OID 82163)
+-- TOC entry 279 (class 1259 OID 86428)
 -- Name: nominas; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2840,7 +2841,7 @@ CREATE TABLE public.nominas (
 
 
 --
--- TOC entry 278 (class 1259 OID 82162)
+-- TOC entry 278 (class 1259 OID 86427)
 -- Name: nominas_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -2862,7 +2863,7 @@ ALTER SEQUENCE public.nominas_id_seq OWNED BY public.nominas.id;
 
 
 --
--- TOC entry 316 (class 1259 OID 82595)
+-- TOC entry 316 (class 1259 OID 86860)
 -- Name: operaciones; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2886,7 +2887,7 @@ CREATE TABLE public.operaciones (
 
 
 --
--- TOC entry 315 (class 1259 OID 82594)
+-- TOC entry 315 (class 1259 OID 86859)
 -- Name: operaciones_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -2908,7 +2909,7 @@ ALTER SEQUENCE public.operaciones_id_seq OWNED BY public.operaciones.id;
 
 
 --
--- TOC entry 249 (class 1259 OID 81794)
+-- TOC entry 249 (class 1259 OID 86059)
 -- Name: palmas; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2926,7 +2927,7 @@ CREATE TABLE public.palmas (
 
 
 --
--- TOC entry 248 (class 1259 OID 81793)
+-- TOC entry 248 (class 1259 OID 86058)
 -- Name: palmas_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -2948,7 +2949,7 @@ ALTER SEQUENCE public.palmas_id_seq OWNED BY public.palmas.id;
 
 
 --
--- TOC entry 221 (class 1259 OID 81541)
+-- TOC entry 221 (class 1259 OID 85806)
 -- Name: password_reset_tokens; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2960,7 +2961,7 @@ CREATE TABLE public.password_reset_tokens (
 
 
 --
--- TOC entry 297 (class 1259 OID 82441)
+-- TOC entry 297 (class 1259 OID 86706)
 -- Name: permissions; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2974,7 +2975,7 @@ CREATE TABLE public.permissions (
 
 
 --
--- TOC entry 296 (class 1259 OID 82440)
+-- TOC entry 296 (class 1259 OID 86705)
 -- Name: permissions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -2996,7 +2997,7 @@ ALTER SEQUENCE public.permissions_id_seq OWNED BY public.permissions.id;
 
 
 --
--- TOC entry 257 (class 1259 OID 81869)
+-- TOC entry 257 (class 1259 OID 86134)
 -- Name: precio_abono; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3013,7 +3014,7 @@ CREATE TABLE public.precio_abono (
 
 
 --
--- TOC entry 256 (class 1259 OID 81868)
+-- TOC entry 256 (class 1259 OID 86133)
 -- Name: precio_abono_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3035,7 +3036,7 @@ ALTER SEQUENCE public.precio_abono_id_seq OWNED BY public.precio_abono.id;
 
 
 --
--- TOC entry 253 (class 1259 OID 81835)
+-- TOC entry 253 (class 1259 OID 86100)
 -- Name: precio_cosecha; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3051,7 +3052,7 @@ CREATE TABLE public.precio_cosecha (
 
 
 --
--- TOC entry 252 (class 1259 OID 81834)
+-- TOC entry 252 (class 1259 OID 86099)
 -- Name: precio_cosecha_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3073,7 +3074,7 @@ ALTER SEQUENCE public.precio_cosecha_id_seq OWNED BY public.precio_cosecha.id;
 
 
 --
--- TOC entry 328 (class 1259 OID 82865)
+-- TOC entry 328 (class 1259 OID 87130)
 -- Name: precios_palma; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3090,7 +3091,7 @@ CREATE TABLE public.precios_palma (
 
 
 --
--- TOC entry 327 (class 1259 OID 82864)
+-- TOC entry 327 (class 1259 OID 87129)
 -- Name: precios_palma_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3112,7 +3113,7 @@ ALTER SEQUENCE public.precios_palma_id_seq OWNED BY public.precios_palma.id;
 
 
 --
--- TOC entry 237 (class 1259 OID 81680)
+-- TOC entry 237 (class 1259 OID 85945)
 -- Name: predios; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3131,7 +3132,7 @@ CREATE TABLE public.predios (
 
 
 --
--- TOC entry 236 (class 1259 OID 81679)
+-- TOC entry 236 (class 1259 OID 85944)
 -- Name: predios_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3153,7 +3154,7 @@ ALTER SEQUENCE public.predios_id_seq OWNED BY public.predios.id;
 
 
 --
--- TOC entry 251 (class 1259 OID 81815)
+-- TOC entry 251 (class 1259 OID 86080)
 -- Name: promedio_lote; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3169,7 +3170,7 @@ CREATE TABLE public.promedio_lote (
 
 
 --
--- TOC entry 250 (class 1259 OID 81814)
+-- TOC entry 250 (class 1259 OID 86079)
 -- Name: promedio_lote_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3191,7 +3192,7 @@ ALTER SEQUENCE public.promedio_lote_id_seq OWNED BY public.promedio_lote.id;
 
 
 --
--- TOC entry 312 (class 1259 OID 82563)
+-- TOC entry 312 (class 1259 OID 86828)
 -- Name: pulse_aggregates; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3209,7 +3210,7 @@ CREATE TABLE public.pulse_aggregates (
 
 
 --
--- TOC entry 311 (class 1259 OID 82562)
+-- TOC entry 311 (class 1259 OID 86827)
 -- Name: pulse_aggregates_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3231,7 +3232,7 @@ ALTER SEQUENCE public.pulse_aggregates_id_seq OWNED BY public.pulse_aggregates.i
 
 
 --
--- TOC entry 310 (class 1259 OID 82549)
+-- TOC entry 310 (class 1259 OID 86814)
 -- Name: pulse_entries; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3246,7 +3247,7 @@ CREATE TABLE public.pulse_entries (
 
 
 --
--- TOC entry 309 (class 1259 OID 82548)
+-- TOC entry 309 (class 1259 OID 86813)
 -- Name: pulse_entries_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3268,7 +3269,7 @@ ALTER SEQUENCE public.pulse_entries_id_seq OWNED BY public.pulse_entries.id;
 
 
 --
--- TOC entry 308 (class 1259 OID 82535)
+-- TOC entry 308 (class 1259 OID 86800)
 -- Name: pulse_values; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3283,7 +3284,7 @@ CREATE TABLE public.pulse_values (
 
 
 --
--- TOC entry 307 (class 1259 OID 82534)
+-- TOC entry 307 (class 1259 OID 86799)
 -- Name: pulse_values_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3305,7 +3306,7 @@ ALTER SEQUENCE public.pulse_values_id_seq OWNED BY public.pulse_values.id;
 
 
 --
--- TOC entry 269 (class 1259 OID 82037)
+-- TOC entry 269 (class 1259 OID 86302)
 -- Name: registro_cosecha; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3331,7 +3332,7 @@ CREATE TABLE public.registro_cosecha (
 
 
 --
--- TOC entry 268 (class 1259 OID 82036)
+-- TOC entry 268 (class 1259 OID 86301)
 -- Name: registro_cosecha_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3353,7 +3354,7 @@ ALTER SEQUENCE public.registro_cosecha_id_seq OWNED BY public.registro_cosecha.i
 
 
 --
--- TOC entry 302 (class 1259 OID 82487)
+-- TOC entry 302 (class 1259 OID 86752)
 -- Name: role_has_permissions; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3364,7 +3365,7 @@ CREATE TABLE public.role_has_permissions (
 
 
 --
--- TOC entry 299 (class 1259 OID 82452)
+-- TOC entry 299 (class 1259 OID 86717)
 -- Name: roles; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3379,7 +3380,7 @@ CREATE TABLE public.roles (
 
 
 --
--- TOC entry 298 (class 1259 OID 82451)
+-- TOC entry 298 (class 1259 OID 86716)
 -- Name: roles_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3401,7 +3402,7 @@ ALTER SEQUENCE public.roles_id_seq OWNED BY public.roles.id;
 
 
 --
--- TOC entry 243 (class 1259 OID 81728)
+-- TOC entry 243 (class 1259 OID 85993)
 -- Name: semilla_lote; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3416,7 +3417,7 @@ CREATE TABLE public.semilla_lote (
 
 
 --
--- TOC entry 242 (class 1259 OID 81727)
+-- TOC entry 242 (class 1259 OID 85992)
 -- Name: semilla_lote_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3438,7 +3439,7 @@ ALTER SEQUENCE public.semilla_lote_id_seq OWNED BY public.semilla_lote.id;
 
 
 --
--- TOC entry 239 (class 1259 OID 81694)
+-- TOC entry 239 (class 1259 OID 85959)
 -- Name: semillas; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3454,7 +3455,7 @@ CREATE TABLE public.semillas (
 
 
 --
--- TOC entry 238 (class 1259 OID 81693)
+-- TOC entry 238 (class 1259 OID 85958)
 -- Name: semillas_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3476,7 +3477,7 @@ ALTER SEQUENCE public.semillas_id_seq OWNED BY public.semillas.id;
 
 
 --
--- TOC entry 222 (class 1259 OID 81548)
+-- TOC entry 222 (class 1259 OID 85813)
 -- Name: sessions; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3491,7 +3492,7 @@ CREATE TABLE public.sessions (
 
 
 --
--- TOC entry 245 (class 1259 OID 81753)
+-- TOC entry 245 (class 1259 OID 86018)
 -- Name: sublotes; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3508,7 +3509,7 @@ CREATE TABLE public.sublotes (
 
 
 --
--- TOC entry 244 (class 1259 OID 81752)
+-- TOC entry 244 (class 1259 OID 86017)
 -- Name: sublotes_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3530,7 +3531,7 @@ ALTER SEQUENCE public.sublotes_id_seq OWNED BY public.sublotes.id;
 
 
 --
--- TOC entry 304 (class 1259 OID 82503)
+-- TOC entry 304 (class 1259 OID 86768)
 -- Name: telescope_entries; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3547,7 +3548,7 @@ CREATE TABLE public.telescope_entries (
 
 
 --
--- TOC entry 303 (class 1259 OID 82502)
+-- TOC entry 303 (class 1259 OID 86767)
 -- Name: telescope_entries_sequence_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3569,7 +3570,7 @@ ALTER SEQUENCE public.telescope_entries_sequence_seq OWNED BY public.telescope_e
 
 
 --
--- TOC entry 305 (class 1259 OID 82518)
+-- TOC entry 305 (class 1259 OID 86783)
 -- Name: telescope_entries_tags; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3580,7 +3581,7 @@ CREATE TABLE public.telescope_entries_tags (
 
 
 --
--- TOC entry 306 (class 1259 OID 82529)
+-- TOC entry 306 (class 1259 OID 86794)
 -- Name: telescope_monitoring; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3590,7 +3591,7 @@ CREATE TABLE public.telescope_monitoring (
 
 
 --
--- TOC entry 226 (class 1259 OID 81574)
+-- TOC entry 226 (class 1259 OID 85839)
 -- Name: tenant_config; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3622,7 +3623,7 @@ CREATE TABLE public.tenant_config (
 
 
 --
--- TOC entry 225 (class 1259 OID 81573)
+-- TOC entry 225 (class 1259 OID 85838)
 -- Name: tenant_config_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3644,7 +3645,7 @@ ALTER SEQUENCE public.tenant_config_id_seq OWNED BY public.tenant_config.id;
 
 
 --
--- TOC entry 233 (class 1259 OID 81636)
+-- TOC entry 233 (class 1259 OID 85901)
 -- Name: tenant_user; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3660,7 +3661,7 @@ CREATE TABLE public.tenant_user (
 
 
 --
--- TOC entry 232 (class 1259 OID 81635)
+-- TOC entry 232 (class 1259 OID 85900)
 -- Name: tenant_user_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3682,7 +3683,7 @@ ALTER SEQUENCE public.tenant_user_id_seq OWNED BY public.tenant_user.id;
 
 
 --
--- TOC entry 218 (class 1259 OID 81515)
+-- TOC entry 218 (class 1259 OID 85780)
 -- Name: tenants; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3714,7 +3715,7 @@ CREATE TABLE public.tenants (
 
 
 --
--- TOC entry 217 (class 1259 OID 81514)
+-- TOC entry 217 (class 1259 OID 85779)
 -- Name: tenants_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3736,7 +3737,7 @@ ALTER SEQUENCE public.tenants_id_seq OWNED BY public.tenants.id;
 
 
 --
--- TOC entry 340 (class 1259 OID 83073)
+-- TOC entry 340 (class 1259 OID 87338)
 -- Name: tipos_hora_extra; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3759,7 +3760,7 @@ CREATE TABLE public.tipos_hora_extra (
 
 
 --
--- TOC entry 339 (class 1259 OID 83072)
+-- TOC entry 339 (class 1259 OID 87337)
 -- Name: tipos_hora_extra_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3781,7 +3782,7 @@ ALTER SEQUENCE public.tipos_hora_extra_id_seq OWNED BY public.tipos_hora_extra.i
 
 
 --
--- TOC entry 336 (class 1259 OID 82986)
+-- TOC entry 336 (class 1259 OID 87251)
 -- Name: transportadores; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3807,7 +3808,7 @@ CREATE TABLE public.transportadores (
 
 
 --
--- TOC entry 335 (class 1259 OID 82985)
+-- TOC entry 335 (class 1259 OID 87250)
 -- Name: transportadores_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3829,7 +3830,7 @@ ALTER SEQUENCE public.transportadores_id_seq OWNED BY public.transportadores.id;
 
 
 --
--- TOC entry 220 (class 1259 OID 81531)
+-- TOC entry 220 (class 1259 OID 85796)
 -- Name: users; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3848,7 +3849,7 @@ CREATE TABLE public.users (
 
 
 --
--- TOC entry 219 (class 1259 OID 81530)
+-- TOC entry 219 (class 1259 OID 85795)
 -- Name: users_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3870,7 +3871,7 @@ ALTER SEQUENCE public.users_id_seq OWNED BY public.users.id;
 
 
 --
--- TOC entry 291 (class 1259 OID 82347)
+-- TOC entry 291 (class 1259 OID 86612)
 -- Name: vacacion_acumulado; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3889,7 +3890,7 @@ CREATE TABLE public.vacacion_acumulado (
 
 
 --
--- TOC entry 290 (class 1259 OID 82346)
+-- TOC entry 290 (class 1259 OID 86611)
 -- Name: vacacion_acumulado_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3911,7 +3912,7 @@ ALTER SEQUENCE public.vacacion_acumulado_id_seq OWNED BY public.vacacion_acumula
 
 
 --
--- TOC entry 289 (class 1259 OID 82310)
+-- TOC entry 289 (class 1259 OID 86575)
 -- Name: vacaciones; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3936,7 +3937,7 @@ CREATE TABLE public.vacaciones (
 
 
 --
--- TOC entry 288 (class 1259 OID 82309)
+-- TOC entry 288 (class 1259 OID 86574)
 -- Name: vacaciones_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3958,7 +3959,7 @@ ALTER SEQUENCE public.vacaciones_id_seq OWNED BY public.vacaciones.id;
 
 
 --
--- TOC entry 271 (class 1259 OID 82066)
+-- TOC entry 271 (class 1259 OID 86331)
 -- Name: viaje_detalle; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3977,7 +3978,7 @@ CREATE TABLE public.viaje_detalle (
 
 
 --
--- TOC entry 270 (class 1259 OID 82065)
+-- TOC entry 270 (class 1259 OID 86330)
 -- Name: viaje_detalle_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3999,7 +4000,7 @@ ALTER SEQUENCE public.viaje_detalle_id_seq OWNED BY public.viaje_detalle.id;
 
 
 --
--- TOC entry 346 (class 1259 OID 83179)
+-- TOC entry 346 (class 1259 OID 87442)
 -- Name: viaje_documento_bascula; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -4028,7 +4029,7 @@ CREATE TABLE public.viaje_documento_bascula (
 
 
 --
--- TOC entry 345 (class 1259 OID 83178)
+-- TOC entry 345 (class 1259 OID 87441)
 -- Name: viaje_documento_bascula_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -4050,7 +4051,7 @@ ALTER SEQUENCE public.viaje_documento_bascula_id_seq OWNED BY public.viaje_docum
 
 
 --
--- TOC entry 267 (class 1259 OID 82015)
+-- TOC entry 267 (class 1259 OID 86280)
 -- Name: viajes; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -4095,7 +4096,7 @@ CREATE TABLE public.viajes (
 
 
 --
--- TOC entry 266 (class 1259 OID 82014)
+-- TOC entry 266 (class 1259 OID 86279)
 -- Name: viajes_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -4117,7 +4118,7 @@ ALTER SEQUENCE public.viajes_id_seq OWNED BY public.viajes.id;
 
 
 --
--- TOC entry 3852 (class 2604 OID 82838)
+-- TOC entry 3852 (class 2604 OID 87103)
 -- Name: agro_chat_messages id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4125,7 +4126,7 @@ ALTER TABLE ONLY public.agro_chat_messages ALTER COLUMN id SET DEFAULT nextval('
 
 
 --
--- TOC entry 3850 (class 2604 OID 82819)
+-- TOC entry 3850 (class 2604 OID 87084)
 -- Name: agro_chat_sessions id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4133,7 +4134,7 @@ ALTER TABLE ONLY public.agro_chat_sessions ALTER COLUMN id SET DEFAULT nextval('
 
 
 --
--- TOC entry 3888 (class 2604 OID 83243)
+-- TOC entry 3888 (class 2604 OID 87506)
 -- Name: arl id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4141,7 +4142,7 @@ ALTER TABLE ONLY public.arl ALTER COLUMN id SET DEFAULT nextval('public.arl_id_s
 
 
 --
--- TOC entry 3708 (class 2604 OID 81661)
+-- TOC entry 3708 (class 2604 OID 85926)
 -- Name: auditorias id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4149,7 +4150,7 @@ ALTER TABLE ONLY public.auditorias ALTER COLUMN id SET DEFAULT nextval('public.a
 
 
 --
--- TOC entry 3842 (class 2604 OID 82728)
+-- TOC entry 3842 (class 2604 OID 86993)
 -- Name: ausencias id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4157,7 +4158,7 @@ ALTER TABLE ONLY public.ausencias ALTER COLUMN id SET DEFAULT nextval('public.au
 
 
 --
--- TOC entry 3734 (class 2604 OID 81928)
+-- TOC entry 3734 (class 2604 OID 86193)
 -- Name: cargos id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4165,7 +4166,7 @@ ALTER TABLE ONLY public.cargos ALTER COLUMN id SET DEFAULT nextval('public.cargo
 
 
 --
--- TOC entry 3751 (class 2604 OID 82093)
+-- TOC entry 3751 (class 2604 OID 86358)
 -- Name: cosecha_cuadrilla id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4173,7 +4174,7 @@ ALTER TABLE ONLY public.cosecha_cuadrilla ALTER COLUMN id SET DEFAULT nextval('p
 
 
 --
--- TOC entry 3837 (class 2604 OID 82665)
+-- TOC entry 3837 (class 2604 OID 86930)
 -- Name: empleado_contratos id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4181,7 +4182,7 @@ ALTER TABLE ONLY public.empleado_contratos ALTER COLUMN id SET DEFAULT nextval('
 
 
 --
--- TOC entry 3840 (class 2604 OID 82700)
+-- TOC entry 3840 (class 2604 OID 86965)
 -- Name: empleado_documentos id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4189,7 +4190,7 @@ ALTER TABLE ONLY public.empleado_documentos ALTER COLUMN id SET DEFAULT nextval(
 
 
 --
--- TOC entry 3736 (class 2604 OID 81948)
+-- TOC entry 3736 (class 2604 OID 86213)
 -- Name: empleados id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4197,7 +4198,7 @@ ALTER TABLE ONLY public.empleados ALTER COLUMN id SET DEFAULT nextval('public.em
 
 
 --
--- TOC entry 3865 (class 2604 OID 82971)
+-- TOC entry 3865 (class 2604 OID 87236)
 -- Name: empresa_transportadora id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4205,7 +4206,7 @@ ALTER TABLE ONLY public.empresa_transportadora ALTER COLUMN id SET DEFAULT nextv
 
 
 --
--- TOC entry 3890 (class 2604 OID 83259)
+-- TOC entry 3890 (class 2604 OID 87522)
 -- Name: entidades_bancarias id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4213,7 +4214,7 @@ ALTER TABLE ONLY public.entidades_bancarias ALTER COLUMN id SET DEFAULT nextval(
 
 
 --
--- TOC entry 3884 (class 2604 OID 83211)
+-- TOC entry 3884 (class 2604 OID 87474)
 -- Name: eps id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4221,7 +4222,7 @@ ALTER TABLE ONLY public.eps ALTER COLUMN id SET DEFAULT nextval('public.eps_id_s
 
 
 --
--- TOC entry 3869 (class 2604 OID 83013)
+-- TOC entry 3869 (class 2604 OID 87278)
 -- Name: extractoras id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4229,7 +4230,7 @@ ALTER TABLE ONLY public.extractoras ALTER COLUMN id SET DEFAULT nextval('public.
 
 
 --
--- TOC entry 3703 (class 2604 OID 81625)
+-- TOC entry 3703 (class 2604 OID 85890)
 -- Name: failed_jobs id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4237,7 +4238,7 @@ ALTER TABLE ONLY public.failed_jobs ALTER COLUMN id SET DEFAULT nextval('public.
 
 
 --
--- TOC entry 3886 (class 2604 OID 83227)
+-- TOC entry 3886 (class 2604 OID 87490)
 -- Name: fondos_pension id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4245,7 +4246,7 @@ ALTER TABLE ONLY public.fondos_pension ALTER COLUMN id SET DEFAULT nextval('publ
 
 
 --
--- TOC entry 3876 (class 2604 OID 83097)
+-- TOC entry 3876 (class 2604 OID 87362)
 -- Name: horas_extra id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4253,7 +4254,7 @@ ALTER TABLE ONLY public.horas_extra ALTER COLUMN id SET DEFAULT nextval('public.
 
 
 --
--- TOC entry 3725 (class 2604 OID 81858)
+-- TOC entry 3725 (class 2604 OID 86123)
 -- Name: insumos id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4261,7 +4262,7 @@ ALTER TABLE ONLY public.insumos ALTER COLUMN id SET DEFAULT nextval('public.insu
 
 
 --
--- TOC entry 3702 (class 2604 OID 81608)
+-- TOC entry 3702 (class 2604 OID 85873)
 -- Name: jobs id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4269,7 +4270,7 @@ ALTER TABLE ONLY public.jobs ALTER COLUMN id SET DEFAULT nextval('public.jobs_id
 
 
 --
--- TOC entry 3856 (class 2604 OID 82885)
+-- TOC entry 3856 (class 2604 OID 87150)
 -- Name: jornales id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4277,7 +4278,7 @@ ALTER TABLE ONLY public.jornales ALTER COLUMN id SET DEFAULT nextval('public.jor
 
 
 --
--- TOC entry 3729 (class 2604 OID 81891)
+-- TOC entry 3729 (class 2604 OID 86156)
 -- Name: labores id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4285,7 +4286,7 @@ ALTER TABLE ONLY public.labores ALTER COLUMN id SET DEFAULT nextval('public.labo
 
 
 --
--- TOC entry 3718 (class 2604 OID 81775)
+-- TOC entry 3718 (class 2604 OID 86040)
 -- Name: lineas id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4293,7 +4294,7 @@ ALTER TABLE ONLY public.lineas ALTER COLUMN id SET DEFAULT nextval('public.linea
 
 
 --
--- TOC entry 3821 (class 2604 OID 82415)
+-- TOC entry 3821 (class 2604 OID 86680)
 -- Name: liquidacion_detalle id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4301,7 +4302,7 @@ ALTER TABLE ONLY public.liquidacion_detalle ALTER COLUMN id SET DEFAULT nextval(
 
 
 --
--- TOC entry 3805 (class 2604 OID 82372)
+-- TOC entry 3805 (class 2604 OID 86637)
 -- Name: liquidaciones id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4309,7 +4310,7 @@ ALTER TABLE ONLY public.liquidaciones ALTER COLUMN id SET DEFAULT nextval('publi
 
 
 --
--- TOC entry 3713 (class 2604 OID 81711)
+-- TOC entry 3713 (class 2604 OID 85976)
 -- Name: lotes id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4317,7 +4318,7 @@ ALTER TABLE ONLY public.lotes ALTER COLUMN id SET DEFAULT nextval('public.lotes_
 
 
 --
--- TOC entry 3918 (class 2604 OID 83442)
+-- TOC entry 3918 (class 2604 OID 87705)
 -- Name: market_carrito_items id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4325,7 +4326,7 @@ ALTER TABLE ONLY public.market_carrito_items ALTER COLUMN id SET DEFAULT nextval
 
 
 --
--- TOC entry 3917 (class 2604 OID 83428)
+-- TOC entry 3917 (class 2604 OID 87691)
 -- Name: market_carritos id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4333,7 +4334,7 @@ ALTER TABLE ONLY public.market_carritos ALTER COLUMN id SET DEFAULT nextval('pub
 
 
 --
--- TOC entry 3899 (class 2604 OID 83338)
+-- TOC entry 3899 (class 2604 OID 87601)
 -- Name: market_categorias id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4341,7 +4342,7 @@ ALTER TABLE ONLY public.market_categorias ALTER COLUMN id SET DEFAULT nextval('p
 
 
 --
--- TOC entry 3927 (class 2604 OID 83510)
+-- TOC entry 3927 (class 2604 OID 87773)
 -- Name: market_pedido_estados_historial id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4349,7 +4350,7 @@ ALTER TABLE ONLY public.market_pedido_estados_historial ALTER COLUMN id SET DEFA
 
 
 --
--- TOC entry 3924 (class 2604 OID 83490)
+-- TOC entry 3924 (class 2604 OID 87753)
 -- Name: market_pedido_items id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4357,7 +4358,7 @@ ALTER TABLE ONLY public.market_pedido_items ALTER COLUMN id SET DEFAULT nextval(
 
 
 --
--- TOC entry 3919 (class 2604 OID 83461)
+-- TOC entry 3919 (class 2604 OID 87724)
 -- Name: market_pedidos id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4365,7 +4366,7 @@ ALTER TABLE ONLY public.market_pedidos ALTER COLUMN id SET DEFAULT nextval('publ
 
 
 --
--- TOC entry 3915 (class 2604 OID 83414)
+-- TOC entry 3915 (class 2604 OID 87677)
 -- Name: market_precios_volumen id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4373,7 +4374,7 @@ ALTER TABLE ONLY public.market_precios_volumen ALTER COLUMN id SET DEFAULT nextv
 
 
 --
--- TOC entry 3912 (class 2604 OID 83398)
+-- TOC entry 3912 (class 2604 OID 87661)
 -- Name: market_producto_imagenes id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4381,7 +4382,7 @@ ALTER TABLE ONLY public.market_producto_imagenes ALTER COLUMN id SET DEFAULT nex
 
 
 --
--- TOC entry 3904 (class 2604 OID 83361)
+-- TOC entry 3904 (class 2604 OID 87624)
 -- Name: market_productos id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4389,7 +4390,7 @@ ALTER TABLE ONLY public.market_productos ALTER COLUMN id SET DEFAULT nextval('pu
 
 
 --
--- TOC entry 3896 (class 2604 OID 83315)
+-- TOC entry 3896 (class 2604 OID 87578)
 -- Name: market_proveedor_user id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4397,7 +4398,7 @@ ALTER TABLE ONLY public.market_proveedor_user ALTER COLUMN id SET DEFAULT nextva
 
 
 --
--- TOC entry 3892 (class 2604 OID 83298)
+-- TOC entry 3892 (class 2604 OID 87561)
 -- Name: market_proveedores id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4405,7 +4406,7 @@ ALTER TABLE ONLY public.market_proveedores ALTER COLUMN id SET DEFAULT nextval('
 
 
 --
--- TOC entry 3902 (class 2604 OID 83351)
+-- TOC entry 3902 (class 2604 OID 87614)
 -- Name: market_unidades_medida id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4421,7 +4422,7 @@ ALTER TABLE ONLY public.migrations ALTER COLUMN id SET DEFAULT nextval('public.m
 
 
 --
--- TOC entry 3732 (class 2604 OID 81914)
+-- TOC entry 3732 (class 2604 OID 86179)
 -- Name: modalidad_contrato id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4429,7 +4430,7 @@ ALTER TABLE ONLY public.modalidad_contrato ALTER COLUMN id SET DEFAULT nextval('
 
 
 --
--- TOC entry 3859 (class 2604 OID 82944)
+-- TOC entry 3859 (class 2604 OID 87209)
 -- Name: motivos_ausencia id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4437,7 +4438,7 @@ ALTER TABLE ONLY public.motivos_ausencia ALTER COLUMN id SET DEFAULT nextval('pu
 
 
 --
--- TOC entry 3753 (class 2604 OID 82118)
+-- TOC entry 3753 (class 2604 OID 86383)
 -- Name: nomina_concepto id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4445,7 +4446,7 @@ ALTER TABLE ONLY public.nomina_concepto ALTER COLUMN id SET DEFAULT nextval('pub
 
 
 --
--- TOC entry 3792 (class 2604 OID 82287)
+-- TOC entry 3792 (class 2604 OID 86552)
 -- Name: nomina_cosecha_ref id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4453,7 +4454,7 @@ ALTER TABLE ONLY public.nomina_cosecha_ref ALTER COLUMN id SET DEFAULT nextval('
 
 
 --
--- TOC entry 3770 (class 2604 OID 82195)
+-- TOC entry 3770 (class 2604 OID 86460)
 -- Name: nomina_empleado id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4461,7 +4462,7 @@ ALTER TABLE ONLY public.nomina_empleado ALTER COLUMN id SET DEFAULT nextval('pub
 
 
 --
--- TOC entry 3787 (class 2604 OID 82233)
+-- TOC entry 3787 (class 2604 OID 86498)
 -- Name: nomina_empleado_concepto id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4469,7 +4470,7 @@ ALTER TABLE ONLY public.nomina_empleado_concepto ALTER COLUMN id SET DEFAULT nex
 
 
 --
--- TOC entry 3879 (class 2604 OID 83155)
+-- TOC entry 3879 (class 2604 OID 87418)
 -- Name: nomina_hora_extra_ref id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4477,7 +4478,7 @@ ALTER TABLE ONLY public.nomina_hora_extra_ref ALTER COLUMN id SET DEFAULT nextva
 
 
 --
--- TOC entry 3790 (class 2604 OID 82261)
+-- TOC entry 3790 (class 2604 OID 86526)
 -- Name: nomina_jornal_ref id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4485,7 +4486,7 @@ ALTER TABLE ONLY public.nomina_jornal_ref ALTER COLUMN id SET DEFAULT nextval('p
 
 
 --
--- TOC entry 3759 (class 2604 OID 82146)
+-- TOC entry 3759 (class 2604 OID 86411)
 -- Name: nomina_tabla_legal id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4493,7 +4494,7 @@ ALTER TABLE ONLY public.nomina_tabla_legal ALTER COLUMN id SET DEFAULT nextval('
 
 
 --
--- TOC entry 3762 (class 2604 OID 82166)
+-- TOC entry 3762 (class 2604 OID 86431)
 -- Name: nominas id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4501,7 +4502,7 @@ ALTER TABLE ONLY public.nominas ALTER COLUMN id SET DEFAULT nextval('public.nomi
 
 
 --
--- TOC entry 3834 (class 2604 OID 82598)
+-- TOC entry 3834 (class 2604 OID 86863)
 -- Name: operaciones id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4509,7 +4510,7 @@ ALTER TABLE ONLY public.operaciones ALTER COLUMN id SET DEFAULT nextval('public.
 
 
 --
--- TOC entry 3721 (class 2604 OID 81797)
+-- TOC entry 3721 (class 2604 OID 86062)
 -- Name: palmas id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4517,7 +4518,7 @@ ALTER TABLE ONLY public.palmas ALTER COLUMN id SET DEFAULT nextval('public.palma
 
 
 --
--- TOC entry 3824 (class 2604 OID 82444)
+-- TOC entry 3824 (class 2604 OID 86709)
 -- Name: permissions id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4525,7 +4526,7 @@ ALTER TABLE ONLY public.permissions ALTER COLUMN id SET DEFAULT nextval('public.
 
 
 --
--- TOC entry 3727 (class 2604 OID 81872)
+-- TOC entry 3727 (class 2604 OID 86137)
 -- Name: precio_abono id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4533,7 +4534,7 @@ ALTER TABLE ONLY public.precio_abono ALTER COLUMN id SET DEFAULT nextval('public
 
 
 --
--- TOC entry 3724 (class 2604 OID 81838)
+-- TOC entry 3724 (class 2604 OID 86103)
 -- Name: precio_cosecha id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4541,7 +4542,7 @@ ALTER TABLE ONLY public.precio_cosecha ALTER COLUMN id SET DEFAULT nextval('publ
 
 
 --
--- TOC entry 3854 (class 2604 OID 82868)
+-- TOC entry 3854 (class 2604 OID 87133)
 -- Name: precios_palma id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4549,7 +4550,7 @@ ALTER TABLE ONLY public.precios_palma ALTER COLUMN id SET DEFAULT nextval('publi
 
 
 --
--- TOC entry 3709 (class 2604 OID 81683)
+-- TOC entry 3709 (class 2604 OID 85948)
 -- Name: predios id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4557,7 +4558,7 @@ ALTER TABLE ONLY public.predios ALTER COLUMN id SET DEFAULT nextval('public.pred
 
 
 --
--- TOC entry 3723 (class 2604 OID 81818)
+-- TOC entry 3723 (class 2604 OID 86083)
 -- Name: promedio_lote id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4565,7 +4566,7 @@ ALTER TABLE ONLY public.promedio_lote ALTER COLUMN id SET DEFAULT nextval('publi
 
 
 --
--- TOC entry 3832 (class 2604 OID 82566)
+-- TOC entry 3832 (class 2604 OID 86831)
 -- Name: pulse_aggregates id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4573,7 +4574,7 @@ ALTER TABLE ONLY public.pulse_aggregates ALTER COLUMN id SET DEFAULT nextval('pu
 
 
 --
--- TOC entry 3830 (class 2604 OID 82552)
+-- TOC entry 3830 (class 2604 OID 86817)
 -- Name: pulse_entries id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4581,7 +4582,7 @@ ALTER TABLE ONLY public.pulse_entries ALTER COLUMN id SET DEFAULT nextval('publi
 
 
 --
--- TOC entry 3828 (class 2604 OID 82538)
+-- TOC entry 3828 (class 2604 OID 86803)
 -- Name: pulse_values id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4589,7 +4590,7 @@ ALTER TABLE ONLY public.pulse_values ALTER COLUMN id SET DEFAULT nextval('public
 
 
 --
--- TOC entry 3745 (class 2604 OID 82040)
+-- TOC entry 3745 (class 2604 OID 86305)
 -- Name: registro_cosecha id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4597,7 +4598,7 @@ ALTER TABLE ONLY public.registro_cosecha ALTER COLUMN id SET DEFAULT nextval('pu
 
 
 --
--- TOC entry 3825 (class 2604 OID 82455)
+-- TOC entry 3825 (class 2604 OID 86720)
 -- Name: roles id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4605,7 +4606,7 @@ ALTER TABLE ONLY public.roles ALTER COLUMN id SET DEFAULT nextval('public.roles_
 
 
 --
--- TOC entry 3715 (class 2604 OID 81731)
+-- TOC entry 3715 (class 2604 OID 85996)
 -- Name: semilla_lote id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4613,7 +4614,7 @@ ALTER TABLE ONLY public.semilla_lote ALTER COLUMN id SET DEFAULT nextval('public
 
 
 --
--- TOC entry 3711 (class 2604 OID 81697)
+-- TOC entry 3711 (class 2604 OID 85962)
 -- Name: semillas id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4621,7 +4622,7 @@ ALTER TABLE ONLY public.semillas ALTER COLUMN id SET DEFAULT nextval('public.sem
 
 
 --
--- TOC entry 3716 (class 2604 OID 81756)
+-- TOC entry 3716 (class 2604 OID 86021)
 -- Name: sublotes id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4629,7 +4630,7 @@ ALTER TABLE ONLY public.sublotes ALTER COLUMN id SET DEFAULT nextval('public.sub
 
 
 --
--- TOC entry 3826 (class 2604 OID 82506)
+-- TOC entry 3826 (class 2604 OID 86771)
 -- Name: telescope_entries sequence; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4637,7 +4638,7 @@ ALTER TABLE ONLY public.telescope_entries ALTER COLUMN sequence SET DEFAULT next
 
 
 --
--- TOC entry 3684 (class 2604 OID 81577)
+-- TOC entry 3684 (class 2604 OID 85842)
 -- Name: tenant_config id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4645,7 +4646,7 @@ ALTER TABLE ONLY public.tenant_config ALTER COLUMN id SET DEFAULT nextval('publi
 
 
 --
--- TOC entry 3705 (class 2604 OID 81639)
+-- TOC entry 3705 (class 2604 OID 85904)
 -- Name: tenant_user id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4653,7 +4654,7 @@ ALTER TABLE ONLY public.tenant_user ALTER COLUMN id SET DEFAULT nextval('public.
 
 
 --
--- TOC entry 3678 (class 2604 OID 81518)
+-- TOC entry 3678 (class 2604 OID 85783)
 -- Name: tenants id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4661,7 +4662,7 @@ ALTER TABLE ONLY public.tenants ALTER COLUMN id SET DEFAULT nextval('public.tena
 
 
 --
--- TOC entry 3871 (class 2604 OID 83076)
+-- TOC entry 3871 (class 2604 OID 87341)
 -- Name: tipos_hora_extra id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4669,7 +4670,7 @@ ALTER TABLE ONLY public.tipos_hora_extra ALTER COLUMN id SET DEFAULT nextval('pu
 
 
 --
--- TOC entry 3867 (class 2604 OID 82989)
+-- TOC entry 3867 (class 2604 OID 87254)
 -- Name: transportadores id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4677,7 +4678,7 @@ ALTER TABLE ONLY public.transportadores ALTER COLUMN id SET DEFAULT nextval('pub
 
 
 --
--- TOC entry 3681 (class 2604 OID 81534)
+-- TOC entry 3681 (class 2604 OID 85799)
 -- Name: users id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4685,7 +4686,7 @@ ALTER TABLE ONLY public.users ALTER COLUMN id SET DEFAULT nextval('public.users_
 
 
 --
--- TOC entry 3800 (class 2604 OID 82350)
+-- TOC entry 3800 (class 2604 OID 86615)
 -- Name: vacacion_acumulado id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4693,7 +4694,7 @@ ALTER TABLE ONLY public.vacacion_acumulado ALTER COLUMN id SET DEFAULT nextval('
 
 
 --
--- TOC entry 3794 (class 2604 OID 82313)
+-- TOC entry 3794 (class 2604 OID 86578)
 -- Name: vacaciones id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4701,7 +4702,7 @@ ALTER TABLE ONLY public.vacaciones ALTER COLUMN id SET DEFAULT nextval('public.v
 
 
 --
--- TOC entry 3748 (class 2604 OID 82069)
+-- TOC entry 3748 (class 2604 OID 86334)
 -- Name: viaje_detalle id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4709,7 +4710,7 @@ ALTER TABLE ONLY public.viaje_detalle ALTER COLUMN id SET DEFAULT nextval('publi
 
 
 --
--- TOC entry 3881 (class 2604 OID 83182)
+-- TOC entry 3881 (class 2604 OID 87445)
 -- Name: viaje_documento_bascula id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4717,7 +4718,7 @@ ALTER TABLE ONLY public.viaje_documento_bascula ALTER COLUMN id SET DEFAULT next
 
 
 --
--- TOC entry 3740 (class 2604 OID 82018)
+-- TOC entry 3740 (class 2604 OID 86283)
 -- Name: viajes id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4725,7 +4726,7 @@ ALTER TABLE ONLY public.viajes ALTER COLUMN id SET DEFAULT nextval('public.viaje
 
 
 --
--- TOC entry 4245 (class 2606 OID 82843)
+-- TOC entry 4245 (class 2606 OID 87108)
 -- Name: agro_chat_messages agro_chat_messages_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4734,7 +4735,7 @@ ALTER TABLE ONLY public.agro_chat_messages
 
 
 --
--- TOC entry 4242 (class 2606 OID 82822)
+-- TOC entry 4242 (class 2606 OID 87087)
 -- Name: agro_chat_sessions agro_chat_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4743,7 +4744,7 @@ ALTER TABLE ONLY public.agro_chat_sessions
 
 
 --
--- TOC entry 4314 (class 2606 OID 83246)
+-- TOC entry 4314 (class 2606 OID 87509)
 -- Name: arl arl_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4752,7 +4753,7 @@ ALTER TABLE ONLY public.arl
 
 
 --
--- TOC entry 4317 (class 2606 OID 83253)
+-- TOC entry 4317 (class 2606 OID 87516)
 -- Name: arl arl_tenant_id_nombre_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4761,7 +4762,7 @@ ALTER TABLE ONLY public.arl
 
 
 --
--- TOC entry 4018 (class 2606 OID 81665)
+-- TOC entry 4018 (class 2606 OID 85930)
 -- Name: auditorias auditorias_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4770,7 +4771,7 @@ ALTER TABLE ONLY public.auditorias
 
 
 --
--- TOC entry 4232 (class 2606 OID 82741)
+-- TOC entry 4232 (class 2606 OID 87006)
 -- Name: ausencias ausencias_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4779,7 +4780,7 @@ ALTER TABLE ONLY public.ausencias
 
 
 --
--- TOC entry 4234 (class 2606 OID 82778)
+-- TOC entry 4234 (class 2606 OID 87043)
 -- Name: ausencias ausencias_sync_uuid_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4788,7 +4789,7 @@ ALTER TABLE ONLY public.ausencias
 
 
 --
--- TOC entry 3996 (class 2606 OID 81571)
+-- TOC entry 3996 (class 2606 OID 85836)
 -- Name: cache_locks cache_locks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4797,7 +4798,7 @@ ALTER TABLE ONLY public.cache_locks
 
 
 --
--- TOC entry 3993 (class 2606 OID 81563)
+-- TOC entry 3993 (class 2606 OID 85828)
 -- Name: cache cache_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4806,7 +4807,7 @@ ALTER TABLE ONLY public.cache
 
 
 --
--- TOC entry 4076 (class 2606 OID 81932)
+-- TOC entry 4076 (class 2606 OID 86197)
 -- Name: cargos cargos_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4815,7 +4816,7 @@ ALTER TABLE ONLY public.cargos
 
 
 --
--- TOC entry 4108 (class 2606 OID 82096)
+-- TOC entry 4108 (class 2606 OID 86361)
 -- Name: cosecha_cuadrilla cosecha_cuadrilla_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4824,7 +4825,7 @@ ALTER TABLE ONLY public.cosecha_cuadrilla
 
 
 --
--- TOC entry 4211 (class 2606 OID 82582)
+-- TOC entry 4211 (class 2606 OID 86847)
 -- Name: departamentos departamentos_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4833,7 +4834,7 @@ ALTER TABLE ONLY public.departamentos
 
 
 --
--- TOC entry 4222 (class 2606 OID 82672)
+-- TOC entry 4222 (class 2606 OID 86937)
 -- Name: empleado_contratos empleado_contratos_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4842,7 +4843,7 @@ ALTER TABLE ONLY public.empleado_contratos
 
 
 --
--- TOC entry 4227 (class 2606 OID 82705)
+-- TOC entry 4227 (class 2606 OID 86970)
 -- Name: empleado_documentos empleado_documentos_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4851,7 +4852,7 @@ ALTER TABLE ONLY public.empleado_documentos
 
 
 --
--- TOC entry 4079 (class 2606 OID 81956)
+-- TOC entry 4079 (class 2606 OID 86221)
 -- Name: empleados empleados_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4860,7 +4861,7 @@ ALTER TABLE ONLY public.empleados
 
 
 --
--- TOC entry 4266 (class 2606 OID 82976)
+-- TOC entry 4266 (class 2606 OID 87241)
 -- Name: empresa_transportadora empresa_transportadora_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4869,7 +4870,7 @@ ALTER TABLE ONLY public.empresa_transportadora
 
 
 --
--- TOC entry 4269 (class 2606 OID 82983)
+-- TOC entry 4269 (class 2606 OID 87248)
 -- Name: empresa_transportadora empresa_transportadora_tenant_id_nit_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4878,7 +4879,7 @@ ALTER TABLE ONLY public.empresa_transportadora
 
 
 --
--- TOC entry 4319 (class 2606 OID 83262)
+-- TOC entry 4319 (class 2606 OID 87525)
 -- Name: entidades_bancarias entidades_bancarias_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4887,7 +4888,7 @@ ALTER TABLE ONLY public.entidades_bancarias
 
 
 --
--- TOC entry 4322 (class 2606 OID 83269)
+-- TOC entry 4322 (class 2606 OID 87532)
 -- Name: entidades_bancarias entidades_bancarias_tenant_id_nombre_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4896,7 +4897,7 @@ ALTER TABLE ONLY public.entidades_bancarias
 
 
 --
--- TOC entry 4304 (class 2606 OID 83214)
+-- TOC entry 4304 (class 2606 OID 87477)
 -- Name: eps eps_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4905,7 +4906,7 @@ ALTER TABLE ONLY public.eps
 
 
 --
--- TOC entry 4307 (class 2606 OID 83221)
+-- TOC entry 4307 (class 2606 OID 87484)
 -- Name: eps eps_tenant_id_nombre_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4914,7 +4915,7 @@ ALTER TABLE ONLY public.eps
 
 
 --
--- TOC entry 4277 (class 2606 OID 83018)
+-- TOC entry 4277 (class 2606 OID 87283)
 -- Name: extractoras extractoras_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4923,7 +4924,7 @@ ALTER TABLE ONLY public.extractoras
 
 
 --
--- TOC entry 4280 (class 2606 OID 83035)
+-- TOC entry 4280 (class 2606 OID 87300)
 -- Name: extractoras extractoras_tenant_id_nit_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4932,7 +4933,7 @@ ALTER TABLE ONLY public.extractoras
 
 
 --
--- TOC entry 4007 (class 2606 OID 81630)
+-- TOC entry 4007 (class 2606 OID 85895)
 -- Name: failed_jobs failed_jobs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4941,7 +4942,7 @@ ALTER TABLE ONLY public.failed_jobs
 
 
 --
--- TOC entry 4009 (class 2606 OID 81632)
+-- TOC entry 4009 (class 2606 OID 85897)
 -- Name: failed_jobs failed_jobs_uuid_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4950,7 +4951,7 @@ ALTER TABLE ONLY public.failed_jobs
 
 
 --
--- TOC entry 4309 (class 2606 OID 83230)
+-- TOC entry 4309 (class 2606 OID 87493)
 -- Name: fondos_pension fondos_pension_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4959,7 +4960,7 @@ ALTER TABLE ONLY public.fondos_pension
 
 
 --
--- TOC entry 4312 (class 2606 OID 83237)
+-- TOC entry 4312 (class 2606 OID 87500)
 -- Name: fondos_pension fondos_pension_tenant_id_nombre_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4968,7 +4969,7 @@ ALTER TABLE ONLY public.fondos_pension
 
 
 --
--- TOC entry 4287 (class 2606 OID 83105)
+-- TOC entry 4287 (class 2606 OID 87370)
 -- Name: horas_extra horas_extra_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4977,7 +4978,7 @@ ALTER TABLE ONLY public.horas_extra
 
 
 --
--- TOC entry 4289 (class 2606 OID 83148)
+-- TOC entry 4289 (class 2606 OID 87411)
 -- Name: horas_extra horas_extra_sync_uuid_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4986,7 +4987,7 @@ ALTER TABLE ONLY public.horas_extra
 
 
 --
--- TOC entry 4060 (class 2606 OID 81861)
+-- TOC entry 4060 (class 2606 OID 86126)
 -- Name: insumos insumos_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4995,7 +4996,7 @@ ALTER TABLE ONLY public.insumos
 
 
 --
--- TOC entry 4063 (class 2606 OID 83273)
+-- TOC entry 4063 (class 2606 OID 87536)
 -- Name: insumos insumos_tenant_id_nombre_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5004,7 +5005,7 @@ ALTER TABLE ONLY public.insumos
 
 
 --
--- TOC entry 4005 (class 2606 OID 81620)
+-- TOC entry 4005 (class 2606 OID 85885)
 -- Name: job_batches job_batches_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5013,7 +5014,7 @@ ALTER TABLE ONLY public.job_batches
 
 
 --
--- TOC entry 4002 (class 2606 OID 81612)
+-- TOC entry 4002 (class 2606 OID 85877)
 -- Name: jobs jobs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5022,7 +5023,7 @@ ALTER TABLE ONLY public.jobs
 
 
 --
--- TOC entry 4254 (class 2606 OID 82894)
+-- TOC entry 4254 (class 2606 OID 87159)
 -- Name: jornales jornales_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5031,7 +5032,7 @@ ALTER TABLE ONLY public.jornales
 
 
 --
--- TOC entry 4256 (class 2606 OID 82934)
+-- TOC entry 4256 (class 2606 OID 87199)
 -- Name: jornales jornales_sync_uuid_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5040,7 +5041,7 @@ ALTER TABLE ONLY public.jornales
 
 
 --
--- TOC entry 4068 (class 2606 OID 81898)
+-- TOC entry 4068 (class 2606 OID 86163)
 -- Name: labores labores_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5049,7 +5050,7 @@ ALTER TABLE ONLY public.labores
 
 
 --
--- TOC entry 4071 (class 2606 OID 82863)
+-- TOC entry 4071 (class 2606 OID 87128)
 -- Name: labores labores_tenant_nombre_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5058,7 +5059,7 @@ ALTER TABLE ONLY public.labores
 
 
 --
--- TOC entry 4039 (class 2606 OID 81779)
+-- TOC entry 4039 (class 2606 OID 86044)
 -- Name: lineas lineas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5067,7 +5068,7 @@ ALTER TABLE ONLY public.lineas
 
 
 --
--- TOC entry 4041 (class 2606 OID 81792)
+-- TOC entry 4041 (class 2606 OID 86057)
 -- Name: lineas lineas_sublote_id_numero_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5076,7 +5077,7 @@ ALTER TABLE ONLY public.lineas
 
 
 --
--- TOC entry 4156 (class 2606 OID 82423)
+-- TOC entry 4156 (class 2606 OID 86688)
 -- Name: liquidacion_detalle liquidacion_detalle_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5085,7 +5086,7 @@ ALTER TABLE ONLY public.liquidacion_detalle
 
 
 --
--- TOC entry 4152 (class 2606 OID 82393)
+-- TOC entry 4152 (class 2606 OID 86658)
 -- Name: liquidaciones liquidaciones_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5094,7 +5095,7 @@ ALTER TABLE ONLY public.liquidaciones
 
 
 --
--- TOC entry 4027 (class 2606 OID 81714)
+-- TOC entry 4027 (class 2606 OID 85979)
 -- Name: lotes lotes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5103,7 +5104,7 @@ ALTER TABLE ONLY public.lotes
 
 
 --
--- TOC entry 4359 (class 2606 OID 83456)
+-- TOC entry 4359 (class 2606 OID 87719)
 -- Name: market_carrito_items market_carrito_items_carrito_id_producto_id_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5112,7 +5113,7 @@ ALTER TABLE ONLY public.market_carrito_items
 
 
 --
--- TOC entry 4361 (class 2606 OID 83444)
+-- TOC entry 4361 (class 2606 OID 87707)
 -- Name: market_carrito_items market_carrito_items_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5121,7 +5122,7 @@ ALTER TABLE ONLY public.market_carrito_items
 
 
 --
--- TOC entry 4355 (class 2606 OID 83430)
+-- TOC entry 4355 (class 2606 OID 87693)
 -- Name: market_carritos market_carritos_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5130,7 +5131,7 @@ ALTER TABLE ONLY public.market_carritos
 
 
 --
--- TOC entry 4357 (class 2606 OID 83437)
+-- TOC entry 4357 (class 2606 OID 87700)
 -- Name: market_carritos market_carritos_tenant_id_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5139,7 +5140,7 @@ ALTER TABLE ONLY public.market_carritos
 
 
 --
--- TOC entry 4335 (class 2606 OID 83344)
+-- TOC entry 4335 (class 2606 OID 87607)
 -- Name: market_categorias market_categorias_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5148,7 +5149,7 @@ ALTER TABLE ONLY public.market_categorias
 
 
 --
--- TOC entry 4337 (class 2606 OID 83346)
+-- TOC entry 4337 (class 2606 OID 87609)
 -- Name: market_categorias market_categorias_slug_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5157,7 +5158,7 @@ ALTER TABLE ONLY public.market_categorias
 
 
 --
--- TOC entry 4374 (class 2606 OID 83516)
+-- TOC entry 4374 (class 2606 OID 87779)
 -- Name: market_pedido_estados_historial market_pedido_estados_historial_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5166,7 +5167,7 @@ ALTER TABLE ONLY public.market_pedido_estados_historial
 
 
 --
--- TOC entry 4371 (class 2606 OID 83494)
+-- TOC entry 4371 (class 2606 OID 87757)
 -- Name: market_pedido_items market_pedido_items_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5175,7 +5176,7 @@ ALTER TABLE ONLY public.market_pedido_items
 
 
 --
--- TOC entry 4363 (class 2606 OID 83485)
+-- TOC entry 4363 (class 2606 OID 87748)
 -- Name: market_pedidos market_pedidos_codigo_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5184,7 +5185,7 @@ ALTER TABLE ONLY public.market_pedidos
 
 
 --
--- TOC entry 4366 (class 2606 OID 83470)
+-- TOC entry 4366 (class 2606 OID 87733)
 -- Name: market_pedidos market_pedidos_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5193,7 +5194,7 @@ ALTER TABLE ONLY public.market_pedidos
 
 
 --
--- TOC entry 4352 (class 2606 OID 83417)
+-- TOC entry 4352 (class 2606 OID 87680)
 -- Name: market_precios_volumen market_precios_volumen_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5202,7 +5203,7 @@ ALTER TABLE ONLY public.market_precios_volumen
 
 
 --
--- TOC entry 4350 (class 2606 OID 83404)
+-- TOC entry 4350 (class 2606 OID 87667)
 -- Name: market_producto_imagenes market_producto_imagenes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5211,7 +5212,7 @@ ALTER TABLE ONLY public.market_producto_imagenes
 
 
 --
--- TOC entry 4345 (class 2606 OID 83373)
+-- TOC entry 4345 (class 2606 OID 87636)
 -- Name: market_productos market_productos_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5220,7 +5221,7 @@ ALTER TABLE ONLY public.market_productos
 
 
 --
--- TOC entry 4348 (class 2606 OID 83393)
+-- TOC entry 4348 (class 2606 OID 87656)
 -- Name: market_productos market_productos_sku_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5229,7 +5230,7 @@ ALTER TABLE ONLY public.market_productos
 
 
 --
--- TOC entry 4330 (class 2606 OID 83320)
+-- TOC entry 4330 (class 2606 OID 87583)
 -- Name: market_proveedor_user market_proveedor_user_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5238,7 +5239,7 @@ ALTER TABLE ONLY public.market_proveedor_user
 
 
 --
--- TOC entry 4332 (class 2606 OID 83332)
+-- TOC entry 4332 (class 2606 OID 87595)
 -- Name: market_proveedor_user market_proveedor_user_proveedor_id_user_id_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5247,7 +5248,7 @@ ALTER TABLE ONLY public.market_proveedor_user
 
 
 --
--- TOC entry 4324 (class 2606 OID 83310)
+-- TOC entry 4324 (class 2606 OID 87573)
 -- Name: market_proveedores market_proveedores_email_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5256,7 +5257,7 @@ ALTER TABLE ONLY public.market_proveedores
 
 
 --
--- TOC entry 4326 (class 2606 OID 83308)
+-- TOC entry 4326 (class 2606 OID 87571)
 -- Name: market_proveedores market_proveedores_nit_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5265,7 +5266,7 @@ ALTER TABLE ONLY public.market_proveedores
 
 
 --
--- TOC entry 4328 (class 2606 OID 83306)
+-- TOC entry 4328 (class 2606 OID 87569)
 -- Name: market_proveedores market_proveedores_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5274,7 +5275,7 @@ ALTER TABLE ONLY public.market_proveedores
 
 
 --
--- TOC entry 4339 (class 2606 OID 83356)
+-- TOC entry 4339 (class 2606 OID 87619)
 -- Name: market_unidades_medida market_unidades_medida_codigo_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5283,7 +5284,7 @@ ALTER TABLE ONLY public.market_unidades_medida
 
 
 --
--- TOC entry 4341 (class 2606 OID 83354)
+-- TOC entry 4341 (class 2606 OID 87617)
 -- Name: market_unidades_medida market_unidades_medida_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5301,7 +5302,7 @@ ALTER TABLE ONLY public.migrations
 
 
 --
--- TOC entry 4073 (class 2606 OID 81917)
+-- TOC entry 4073 (class 2606 OID 86182)
 -- Name: modalidad_contrato modalidad_contrato_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5310,7 +5311,7 @@ ALTER TABLE ONLY public.modalidad_contrato
 
 
 --
--- TOC entry 4169 (class 2606 OID 82474)
+-- TOC entry 4169 (class 2606 OID 86739)
 -- Name: model_has_permissions model_has_permissions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5319,7 +5320,7 @@ ALTER TABLE ONLY public.model_has_permissions
 
 
 --
--- TOC entry 4173 (class 2606 OID 82486)
+-- TOC entry 4173 (class 2606 OID 86751)
 -- Name: model_has_roles model_has_roles_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5328,7 +5329,7 @@ ALTER TABLE ONLY public.model_has_roles
 
 
 --
--- TOC entry 4261 (class 2606 OID 82951)
+-- TOC entry 4261 (class 2606 OID 87216)
 -- Name: motivos_ausencia motivos_ausencia_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5337,7 +5338,7 @@ ALTER TABLE ONLY public.motivos_ausencia
 
 
 --
--- TOC entry 4264 (class 2606 OID 82958)
+-- TOC entry 4264 (class 2606 OID 87223)
 -- Name: motivos_ausencia motivos_ausencia_tenant_id_nombre_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5346,7 +5347,7 @@ ALTER TABLE ONLY public.motivos_ausencia
 
 
 --
--- TOC entry 4214 (class 2606 OID 82593)
+-- TOC entry 4214 (class 2606 OID 86858)
 -- Name: municipios municipios_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5355,7 +5356,7 @@ ALTER TABLE ONLY public.municipios
 
 
 --
--- TOC entry 4112 (class 2606 OID 82133)
+-- TOC entry 4112 (class 2606 OID 86398)
 -- Name: nomina_concepto nomina_concepto_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5364,7 +5365,7 @@ ALTER TABLE ONLY public.nomina_concepto
 
 
 --
--- TOC entry 4115 (class 2606 OID 82140)
+-- TOC entry 4115 (class 2606 OID 86405)
 -- Name: nomina_concepto nomina_concepto_tenant_id_codigo_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5373,7 +5374,7 @@ ALTER TABLE ONLY public.nomina_concepto
 
 
 --
--- TOC entry 4140 (class 2606 OID 82308)
+-- TOC entry 4140 (class 2606 OID 86573)
 -- Name: nomina_cosecha_ref nomina_cosecha_ref_nomina_empleado_id_cosecha_cuadrilla_id_uniq; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5382,7 +5383,7 @@ ALTER TABLE ONLY public.nomina_cosecha_ref
 
 
 --
--- TOC entry 4142 (class 2606 OID 82290)
+-- TOC entry 4142 (class 2606 OID 86555)
 -- Name: nomina_cosecha_ref nomina_cosecha_ref_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5391,7 +5392,7 @@ ALTER TABLE ONLY public.nomina_cosecha_ref
 
 
 --
--- TOC entry 4132 (class 2606 OID 82240)
+-- TOC entry 4132 (class 2606 OID 86505)
 -- Name: nomina_empleado_concepto nomina_empleado_concepto_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5400,7 +5401,7 @@ ALTER TABLE ONLY public.nomina_empleado_concepto
 
 
 --
--- TOC entry 4126 (class 2606 OID 82228)
+-- TOC entry 4126 (class 2606 OID 86493)
 -- Name: nomina_empleado nomina_empleado_nomina_id_empleado_id_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5409,7 +5410,7 @@ ALTER TABLE ONLY public.nomina_empleado
 
 
 --
--- TOC entry 4128 (class 2606 OID 82209)
+-- TOC entry 4128 (class 2606 OID 86474)
 -- Name: nomina_empleado nomina_empleado_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5418,7 +5419,7 @@ ALTER TABLE ONLY public.nomina_empleado
 
 
 --
--- TOC entry 4295 (class 2606 OID 83176)
+-- TOC entry 4295 (class 2606 OID 87439)
 -- Name: nomina_hora_extra_ref nomina_hora_extra_ref_nomina_empleado_id_hora_extra_id_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5427,7 +5428,7 @@ ALTER TABLE ONLY public.nomina_hora_extra_ref
 
 
 --
--- TOC entry 4297 (class 2606 OID 83158)
+-- TOC entry 4297 (class 2606 OID 87421)
 -- Name: nomina_hora_extra_ref nomina_hora_extra_ref_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5436,7 +5437,7 @@ ALTER TABLE ONLY public.nomina_hora_extra_ref
 
 
 --
--- TOC entry 4135 (class 2606 OID 82282)
+-- TOC entry 4135 (class 2606 OID 86547)
 -- Name: nomina_jornal_ref nomina_jornal_ref_nomina_empleado_id_jornal_id_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5445,7 +5446,7 @@ ALTER TABLE ONLY public.nomina_jornal_ref
 
 
 --
--- TOC entry 4137 (class 2606 OID 82264)
+-- TOC entry 4137 (class 2606 OID 86529)
 -- Name: nomina_jornal_ref nomina_jornal_ref_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5454,7 +5455,7 @@ ALTER TABLE ONLY public.nomina_jornal_ref
 
 
 --
--- TOC entry 4117 (class 2606 OID 82150)
+-- TOC entry 4117 (class 2606 OID 86415)
 -- Name: nomina_tabla_legal nomina_tabla_legal_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5463,7 +5464,7 @@ ALTER TABLE ONLY public.nomina_tabla_legal
 
 
 --
--- TOC entry 4120 (class 2606 OID 82178)
+-- TOC entry 4120 (class 2606 OID 86443)
 -- Name: nominas nominas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5472,7 +5473,7 @@ ALTER TABLE ONLY public.nominas
 
 
 --
--- TOC entry 4124 (class 2606 OID 83281)
+-- TOC entry 4124 (class 2606 OID 87544)
 -- Name: nominas nominas_tenant_periodo_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5481,7 +5482,7 @@ ALTER TABLE ONLY public.nominas
 
 
 --
--- TOC entry 4216 (class 2606 OID 82605)
+-- TOC entry 4216 (class 2606 OID 86870)
 -- Name: operaciones operaciones_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5490,7 +5491,7 @@ ALTER TABLE ONLY public.operaciones
 
 
 --
--- TOC entry 4220 (class 2606 OID 82624)
+-- TOC entry 4220 (class 2606 OID 86889)
 -- Name: operaciones operaciones_tenant_id_fecha_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5499,7 +5500,7 @@ ALTER TABLE ONLY public.operaciones
 
 
 --
--- TOC entry 4045 (class 2606 OID 81800)
+-- TOC entry 4045 (class 2606 OID 86065)
 -- Name: palmas palmas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5508,7 +5509,7 @@ ALTER TABLE ONLY public.palmas
 
 
 --
--- TOC entry 4047 (class 2606 OID 81813)
+-- TOC entry 4047 (class 2606 OID 86078)
 -- Name: palmas palmas_sublote_id_codigo_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5517,7 +5518,7 @@ ALTER TABLE ONLY public.palmas
 
 
 --
--- TOC entry 3986 (class 2606 OID 81547)
+-- TOC entry 3986 (class 2606 OID 85812)
 -- Name: password_reset_tokens password_reset_tokens_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5526,7 +5527,7 @@ ALTER TABLE ONLY public.password_reset_tokens
 
 
 --
--- TOC entry 4159 (class 2606 OID 82450)
+-- TOC entry 4159 (class 2606 OID 86715)
 -- Name: permissions permissions_name_guard_name_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5535,7 +5536,7 @@ ALTER TABLE ONLY public.permissions
 
 
 --
--- TOC entry 4161 (class 2606 OID 82448)
+-- TOC entry 4161 (class 2606 OID 86713)
 -- Name: permissions permissions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5544,7 +5545,7 @@ ALTER TABLE ONLY public.permissions
 
 
 --
--- TOC entry 4065 (class 2606 OID 81875)
+-- TOC entry 4065 (class 2606 OID 86140)
 -- Name: precio_abono precio_abono_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5553,7 +5554,7 @@ ALTER TABLE ONLY public.precio_abono
 
 
 --
--- TOC entry 4055 (class 2606 OID 81852)
+-- TOC entry 4055 (class 2606 OID 86117)
 -- Name: precio_cosecha precio_cosecha_lote_id_anio_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5562,7 +5563,7 @@ ALTER TABLE ONLY public.precio_cosecha
 
 
 --
--- TOC entry 4057 (class 2606 OID 81840)
+-- TOC entry 4057 (class 2606 OID 86105)
 -- Name: precio_cosecha precio_cosecha_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5571,7 +5572,7 @@ ALTER TABLE ONLY public.precio_cosecha
 
 
 --
--- TOC entry 4249 (class 2606 OID 82872)
+-- TOC entry 4249 (class 2606 OID 87137)
 -- Name: precios_palma precios_palma_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5580,7 +5581,7 @@ ALTER TABLE ONLY public.precios_palma
 
 
 --
--- TOC entry 4252 (class 2606 OID 82879)
+-- TOC entry 4252 (class 2606 OID 87144)
 -- Name: precios_palma precios_palma_tenant_tipo_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5589,7 +5590,7 @@ ALTER TABLE ONLY public.precios_palma
 
 
 --
--- TOC entry 4021 (class 2606 OID 81686)
+-- TOC entry 4021 (class 2606 OID 85951)
 -- Name: predios predios_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5598,7 +5599,7 @@ ALTER TABLE ONLY public.predios
 
 
 --
--- TOC entry 4050 (class 2606 OID 81832)
+-- TOC entry 4050 (class 2606 OID 86097)
 -- Name: promedio_lote promedio_lote_lote_id_anio_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5607,7 +5608,7 @@ ALTER TABLE ONLY public.promedio_lote
 
 
 --
--- TOC entry 4052 (class 2606 OID 81820)
+-- TOC entry 4052 (class 2606 OID 86085)
 -- Name: promedio_lote promedio_lote_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5616,7 +5617,7 @@ ALTER TABLE ONLY public.promedio_lote
 
 
 --
--- TOC entry 4203 (class 2606 OID 82573)
+-- TOC entry 4203 (class 2606 OID 86838)
 -- Name: pulse_aggregates pulse_aggregates_bucket_period_type_aggregate_key_hash_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5625,7 +5626,7 @@ ALTER TABLE ONLY public.pulse_aggregates
 
 
 --
--- TOC entry 4207 (class 2606 OID 82571)
+-- TOC entry 4207 (class 2606 OID 86836)
 -- Name: pulse_aggregates pulse_aggregates_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5634,7 +5635,7 @@ ALTER TABLE ONLY public.pulse_aggregates
 
 
 --
--- TOC entry 4198 (class 2606 OID 82557)
+-- TOC entry 4198 (class 2606 OID 86822)
 -- Name: pulse_entries pulse_entries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5643,7 +5644,7 @@ ALTER TABLE ONLY public.pulse_entries
 
 
 --
--- TOC entry 4191 (class 2606 OID 82543)
+-- TOC entry 4191 (class 2606 OID 86808)
 -- Name: pulse_values pulse_values_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5652,7 +5653,7 @@ ALTER TABLE ONLY public.pulse_values
 
 
 --
--- TOC entry 4195 (class 2606 OID 82547)
+-- TOC entry 4195 (class 2606 OID 86812)
 -- Name: pulse_values pulse_values_type_key_hash_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5661,7 +5662,7 @@ ALTER TABLE ONLY public.pulse_values
 
 
 --
--- TOC entry 4097 (class 2606 OID 82045)
+-- TOC entry 4097 (class 2606 OID 86310)
 -- Name: registro_cosecha registro_cosecha_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5670,7 +5671,7 @@ ALTER TABLE ONLY public.registro_cosecha
 
 
 --
--- TOC entry 4099 (class 2606 OID 82064)
+-- TOC entry 4099 (class 2606 OID 86329)
 -- Name: registro_cosecha registro_cosecha_sync_uuid_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5679,7 +5680,7 @@ ALTER TABLE ONLY public.registro_cosecha
 
 
 --
--- TOC entry 4176 (class 2606 OID 82501)
+-- TOC entry 4176 (class 2606 OID 86766)
 -- Name: role_has_permissions role_has_permissions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5688,7 +5689,7 @@ ALTER TABLE ONLY public.role_has_permissions
 
 
 --
--- TOC entry 4163 (class 2606 OID 82459)
+-- TOC entry 4163 (class 2606 OID 86724)
 -- Name: roles roles_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5697,7 +5698,7 @@ ALTER TABLE ONLY public.roles
 
 
 --
--- TOC entry 4166 (class 2606 OID 82462)
+-- TOC entry 4166 (class 2606 OID 86727)
 -- Name: roles roles_tenant_id_name_guard_name_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5706,7 +5707,7 @@ ALTER TABLE ONLY public.roles
 
 
 --
--- TOC entry 4031 (class 2606 OID 81750)
+-- TOC entry 4031 (class 2606 OID 86015)
 -- Name: semilla_lote semilla_lote_lote_id_semilla_id_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5715,7 +5716,7 @@ ALTER TABLE ONLY public.semilla_lote
 
 
 --
--- TOC entry 4033 (class 2606 OID 81733)
+-- TOC entry 4033 (class 2606 OID 85998)
 -- Name: semilla_lote semilla_lote_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5724,7 +5725,7 @@ ALTER TABLE ONLY public.semilla_lote
 
 
 --
--- TOC entry 4024 (class 2606 OID 81700)
+-- TOC entry 4024 (class 2606 OID 85965)
 -- Name: semillas semillas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5733,7 +5734,7 @@ ALTER TABLE ONLY public.semillas
 
 
 --
--- TOC entry 3989 (class 2606 OID 81554)
+-- TOC entry 3989 (class 2606 OID 85819)
 -- Name: sessions sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5742,7 +5743,7 @@ ALTER TABLE ONLY public.sessions
 
 
 --
--- TOC entry 4036 (class 2606 OID 81759)
+-- TOC entry 4036 (class 2606 OID 86024)
 -- Name: sublotes sublotes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5751,7 +5752,7 @@ ALTER TABLE ONLY public.sublotes
 
 
 --
--- TOC entry 4181 (class 2606 OID 82511)
+-- TOC entry 4181 (class 2606 OID 86776)
 -- Name: telescope_entries telescope_entries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5760,7 +5761,7 @@ ALTER TABLE ONLY public.telescope_entries
 
 
 --
--- TOC entry 4186 (class 2606 OID 82522)
+-- TOC entry 4186 (class 2606 OID 86787)
 -- Name: telescope_entries_tags telescope_entries_tags_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5769,7 +5770,7 @@ ALTER TABLE ONLY public.telescope_entries_tags
 
 
 --
--- TOC entry 4184 (class 2606 OID 82513)
+-- TOC entry 4184 (class 2606 OID 86778)
 -- Name: telescope_entries telescope_entries_uuid_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5778,7 +5779,7 @@ ALTER TABLE ONLY public.telescope_entries
 
 
 --
--- TOC entry 4189 (class 2606 OID 82533)
+-- TOC entry 4189 (class 2606 OID 86798)
 -- Name: telescope_monitoring telescope_monitoring_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5787,7 +5788,7 @@ ALTER TABLE ONLY public.telescope_monitoring
 
 
 --
--- TOC entry 3998 (class 2606 OID 81596)
+-- TOC entry 3998 (class 2606 OID 85861)
 -- Name: tenant_config tenant_config_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5796,7 +5797,7 @@ ALTER TABLE ONLY public.tenant_config
 
 
 --
--- TOC entry 4000 (class 2606 OID 81603)
+-- TOC entry 4000 (class 2606 OID 85868)
 -- Name: tenant_config tenant_config_tenant_id_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5805,7 +5806,7 @@ ALTER TABLE ONLY public.tenant_config
 
 
 --
--- TOC entry 4011 (class 2606 OID 81643)
+-- TOC entry 4011 (class 2606 OID 85908)
 -- Name: tenant_user tenant_user_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5814,7 +5815,7 @@ ALTER TABLE ONLY public.tenant_user
 
 
 --
--- TOC entry 4013 (class 2606 OID 81655)
+-- TOC entry 4013 (class 2606 OID 85920)
 -- Name: tenant_user tenant_user_tenant_id_user_id_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5823,7 +5824,7 @@ ALTER TABLE ONLY public.tenant_user
 
 
 --
--- TOC entry 3978 (class 2606 OID 81529)
+-- TOC entry 3978 (class 2606 OID 85794)
 -- Name: tenants tenants_nit_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5832,7 +5833,7 @@ ALTER TABLE ONLY public.tenants
 
 
 --
--- TOC entry 3980 (class 2606 OID 81527)
+-- TOC entry 3980 (class 2606 OID 85792)
 -- Name: tenants tenants_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5841,7 +5842,7 @@ ALTER TABLE ONLY public.tenants
 
 
 --
--- TOC entry 4282 (class 2606 OID 83082)
+-- TOC entry 4282 (class 2606 OID 87347)
 -- Name: tipos_hora_extra tipos_hora_extra_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5850,7 +5851,7 @@ ALTER TABLE ONLY public.tipos_hora_extra
 
 
 --
--- TOC entry 4284 (class 2606 OID 83089)
+-- TOC entry 4284 (class 2606 OID 87354)
 -- Name: tipos_hora_extra tipos_hora_extra_tenant_id_codigo_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5859,7 +5860,7 @@ ALTER TABLE ONLY public.tipos_hora_extra
 
 
 --
--- TOC entry 4271 (class 2606 OID 82994)
+-- TOC entry 4271 (class 2606 OID 87259)
 -- Name: transportadores transportadores_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5868,7 +5869,7 @@ ALTER TABLE ONLY public.transportadores
 
 
 --
--- TOC entry 4275 (class 2606 OID 83006)
+-- TOC entry 4275 (class 2606 OID 87271)
 -- Name: transportadores transportadores_tenant_id_placa_vehiculo_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5877,7 +5878,7 @@ ALTER TABLE ONLY public.transportadores
 
 
 --
--- TOC entry 3982 (class 2606 OID 81540)
+-- TOC entry 3982 (class 2606 OID 85805)
 -- Name: users users_email_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5886,7 +5887,7 @@ ALTER TABLE ONLY public.users
 
 
 --
--- TOC entry 3984 (class 2606 OID 81538)
+-- TOC entry 3984 (class 2606 OID 85803)
 -- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5895,7 +5896,7 @@ ALTER TABLE ONLY public.users
 
 
 --
--- TOC entry 4149 (class 2606 OID 82356)
+-- TOC entry 4149 (class 2606 OID 86621)
 -- Name: vacacion_acumulado vacacion_acumulado_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5904,7 +5905,7 @@ ALTER TABLE ONLY public.vacacion_acumulado
 
 
 --
--- TOC entry 4145 (class 2606 OID 82323)
+-- TOC entry 4145 (class 2606 OID 86588)
 -- Name: vacaciones vacaciones_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5913,7 +5914,7 @@ ALTER TABLE ONLY public.vacaciones
 
 
 --
--- TOC entry 4104 (class 2606 OID 82072)
+-- TOC entry 4104 (class 2606 OID 86337)
 -- Name: viaje_detalle viaje_detalle_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5922,7 +5923,7 @@ ALTER TABLE ONLY public.viaje_detalle
 
 
 --
--- TOC entry 4300 (class 2606 OID 83188)
+-- TOC entry 4300 (class 2606 OID 87451)
 -- Name: viaje_documento_bascula viaje_documento_bascula_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5931,7 +5932,7 @@ ALTER TABLE ONLY public.viaje_documento_bascula
 
 
 --
--- TOC entry 4085 (class 2606 OID 82026)
+-- TOC entry 4085 (class 2606 OID 86291)
 -- Name: viajes viajes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5940,7 +5941,7 @@ ALTER TABLE ONLY public.viajes
 
 
 --
--- TOC entry 4087 (class 2606 OID 82035)
+-- TOC entry 4087 (class 2606 OID 86300)
 -- Name: viajes viajes_sync_uuid_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5949,7 +5950,7 @@ ALTER TABLE ONLY public.viajes
 
 
 --
--- TOC entry 4094 (class 2606 OID 83060)
+-- TOC entry 4094 (class 2606 OID 87325)
 -- Name: viajes viajes_tenant_id_remision_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5958,7 +5959,7 @@ ALTER TABLE ONLY public.viajes
 
 
 --
--- TOC entry 4315 (class 1259 OID 83254)
+-- TOC entry 4315 (class 1259 OID 87517)
 -- Name: arl_tenant_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -5966,7 +5967,7 @@ CREATE INDEX arl_tenant_id_estado_index ON public.arl USING btree (tenant_id, es
 
 
 --
--- TOC entry 4015 (class 1259 OID 81677)
+-- TOC entry 4015 (class 1259 OID 85942)
 -- Name: auditorias_accion_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -5974,7 +5975,7 @@ CREATE INDEX auditorias_accion_index ON public.auditorias USING btree (accion);
 
 
 --
--- TOC entry 4016 (class 1259 OID 81678)
+-- TOC entry 4016 (class 1259 OID 85943)
 -- Name: auditorias_modulo_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -5982,7 +5983,7 @@ CREATE INDEX auditorias_modulo_index ON public.auditorias USING btree (modulo);
 
 
 --
--- TOC entry 4019 (class 1259 OID 81676)
+-- TOC entry 4019 (class 1259 OID 85941)
 -- Name: auditorias_tenant_id_created_at_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -5990,7 +5991,7 @@ CREATE INDEX auditorias_tenant_id_created_at_index ON public.auditorias USING bt
 
 
 --
--- TOC entry 4235 (class 1259 OID 82773)
+-- TOC entry 4235 (class 1259 OID 87038)
 -- Name: ausencias_tenant_id_empleado_id_fecha_inicio_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -5998,7 +5999,7 @@ CREATE INDEX ausencias_tenant_id_empleado_id_fecha_inicio_index ON public.ausenc
 
 
 --
--- TOC entry 4236 (class 1259 OID 82775)
+-- TOC entry 4236 (class 1259 OID 87040)
 -- Name: ausencias_tenant_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6006,7 +6007,7 @@ CREATE INDEX ausencias_tenant_id_estado_index ON public.ausencias USING btree (t
 
 
 --
--- TOC entry 4237 (class 1259 OID 82774)
+-- TOC entry 4237 (class 1259 OID 87039)
 -- Name: ausencias_tenant_id_fecha_inicio_fecha_fin_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6014,7 +6015,7 @@ CREATE INDEX ausencias_tenant_id_fecha_inicio_fecha_fin_index ON public.ausencia
 
 
 --
--- TOC entry 4238 (class 1259 OID 82966)
+-- TOC entry 4238 (class 1259 OID 87231)
 -- Name: ausencias_tenant_id_motivo_ausencia_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6022,7 +6023,7 @@ CREATE INDEX ausencias_tenant_id_motivo_ausencia_id_index ON public.ausencias US
 
 
 --
--- TOC entry 4239 (class 1259 OID 82776)
+-- TOC entry 4239 (class 1259 OID 87041)
 -- Name: ausencias_tenant_id_nomina_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6030,7 +6031,7 @@ CREATE INDEX ausencias_tenant_id_nomina_id_index ON public.ausencias USING btree
 
 
 --
--- TOC entry 4240 (class 1259 OID 82772)
+-- TOC entry 4240 (class 1259 OID 87037)
 -- Name: ausencias_tenant_id_operacion_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6038,7 +6039,7 @@ CREATE INDEX ausencias_tenant_id_operacion_id_index ON public.ausencias USING bt
 
 
 --
--- TOC entry 3991 (class 1259 OID 81564)
+-- TOC entry 3991 (class 1259 OID 85829)
 -- Name: cache_expiration_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6046,7 +6047,7 @@ CREATE INDEX cache_expiration_index ON public.cache USING btree (expiration);
 
 
 --
--- TOC entry 3994 (class 1259 OID 81572)
+-- TOC entry 3994 (class 1259 OID 85837)
 -- Name: cache_locks_expiration_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6054,7 +6055,7 @@ CREATE INDEX cache_locks_expiration_index ON public.cache_locks USING btree (exp
 
 
 --
--- TOC entry 4077 (class 1259 OID 81943)
+-- TOC entry 4077 (class 1259 OID 86208)
 -- Name: cargos_tenant_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6062,7 +6063,7 @@ CREATE INDEX cargos_tenant_id_estado_index ON public.cargos USING btree (tenant_
 
 
 --
--- TOC entry 4109 (class 1259 OID 82112)
+-- TOC entry 4109 (class 1259 OID 86377)
 -- Name: cosecha_cuadrilla_tenant_id_cosecha_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6070,7 +6071,7 @@ CREATE INDEX cosecha_cuadrilla_tenant_id_cosecha_id_index ON public.cosecha_cuad
 
 
 --
--- TOC entry 4110 (class 1259 OID 82113)
+-- TOC entry 4110 (class 1259 OID 86378)
 -- Name: cosecha_cuadrilla_tenant_id_empleado_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6078,7 +6079,7 @@ CREATE INDEX cosecha_cuadrilla_tenant_id_empleado_id_index ON public.cosecha_cua
 
 
 --
--- TOC entry 4209 (class 1259 OID 82580)
+-- TOC entry 4209 (class 1259 OID 86845)
 -- Name: departamentos_nombre_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6086,7 +6087,7 @@ CREATE INDEX departamentos_nombre_index ON public.departamentos USING btree (nom
 
 
 --
--- TOC entry 4223 (class 1259 OID 82694)
+-- TOC entry 4223 (class 1259 OID 86959)
 -- Name: empleado_contratos_tenant_id_empleado_id_estado_contrato_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6094,7 +6095,7 @@ CREATE INDEX empleado_contratos_tenant_id_empleado_id_estado_contrato_index ON p
 
 
 --
--- TOC entry 4224 (class 1259 OID 82693)
+-- TOC entry 4224 (class 1259 OID 86958)
 -- Name: empleado_contratos_tenant_id_empleado_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6102,7 +6103,7 @@ CREATE INDEX empleado_contratos_tenant_id_empleado_id_index ON public.empleado_c
 
 
 --
--- TOC entry 4225 (class 1259 OID 82695)
+-- TOC entry 4225 (class 1259 OID 86960)
 -- Name: empleado_contratos_tenant_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6110,7 +6111,7 @@ CREATE INDEX empleado_contratos_tenant_id_estado_index ON public.empleado_contra
 
 
 --
--- TOC entry 4228 (class 1259 OID 82722)
+-- TOC entry 4228 (class 1259 OID 86987)
 -- Name: empleado_documentos_tenant_id_empleado_id_categoria_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6118,7 +6119,7 @@ CREATE INDEX empleado_documentos_tenant_id_empleado_id_categoria_index ON public
 
 
 --
--- TOC entry 4229 (class 1259 OID 82721)
+-- TOC entry 4229 (class 1259 OID 86986)
 -- Name: empleado_documentos_tenant_id_empleado_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6126,7 +6127,7 @@ CREATE INDEX empleado_documentos_tenant_id_empleado_id_index ON public.empleado_
 
 
 --
--- TOC entry 4230 (class 1259 OID 82723)
+-- TOC entry 4230 (class 1259 OID 86988)
 -- Name: empleado_documentos_tenant_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6134,7 +6135,7 @@ CREATE INDEX empleado_documentos_tenant_id_estado_index ON public.empleado_docum
 
 
 --
--- TOC entry 4080 (class 1259 OID 83271)
+-- TOC entry 4080 (class 1259 OID 87534)
 -- Name: empleados_tenant_doc_active_unique; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6142,7 +6143,7 @@ CREATE UNIQUE INDEX empleados_tenant_doc_active_unique ON public.empleados USING
 
 
 --
--- TOC entry 4081 (class 1259 OID 81969)
+-- TOC entry 4081 (class 1259 OID 86234)
 -- Name: empleados_tenant_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6150,7 +6151,7 @@ CREATE INDEX empleados_tenant_id_estado_index ON public.empleados USING btree (t
 
 
 --
--- TOC entry 4082 (class 1259 OID 82813)
+-- TOC entry 4082 (class 1259 OID 87078)
 -- Name: empleados_tenant_id_modalidad_pago_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6158,7 +6159,7 @@ CREATE INDEX empleados_tenant_id_modalidad_pago_index ON public.empleados USING 
 
 
 --
--- TOC entry 4083 (class 1259 OID 82814)
+-- TOC entry 4083 (class 1259 OID 87079)
 -- Name: empleados_tenant_id_predio_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6166,7 +6167,7 @@ CREATE INDEX empleados_tenant_id_predio_id_index ON public.empleados USING btree
 
 
 --
--- TOC entry 4267 (class 1259 OID 82984)
+-- TOC entry 4267 (class 1259 OID 87249)
 -- Name: empresa_transportadora_tenant_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6174,7 +6175,7 @@ CREATE INDEX empresa_transportadora_tenant_id_estado_index ON public.empresa_tra
 
 
 --
--- TOC entry 4320 (class 1259 OID 83270)
+-- TOC entry 4320 (class 1259 OID 87533)
 -- Name: entidades_bancarias_tenant_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6182,7 +6183,7 @@ CREATE INDEX entidades_bancarias_tenant_id_estado_index ON public.entidades_banc
 
 
 --
--- TOC entry 4305 (class 1259 OID 83222)
+-- TOC entry 4305 (class 1259 OID 87485)
 -- Name: eps_tenant_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6190,7 +6191,7 @@ CREATE INDEX eps_tenant_id_estado_index ON public.eps USING btree (tenant_id, es
 
 
 --
--- TOC entry 4278 (class 1259 OID 83036)
+-- TOC entry 4278 (class 1259 OID 87301)
 -- Name: extractoras_tenant_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6198,7 +6199,7 @@ CREATE INDEX extractoras_tenant_id_estado_index ON public.extractoras USING btre
 
 
 --
--- TOC entry 4310 (class 1259 OID 83238)
+-- TOC entry 4310 (class 1259 OID 87501)
 -- Name: fondos_pension_tenant_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6206,7 +6207,7 @@ CREATE INDEX fondos_pension_tenant_id_estado_index ON public.fondos_pension USIN
 
 
 --
--- TOC entry 4290 (class 1259 OID 83143)
+-- TOC entry 4290 (class 1259 OID 87407)
 -- Name: horas_extra_tenant_id_empleado_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6214,7 +6215,7 @@ CREATE INDEX horas_extra_tenant_id_empleado_id_index ON public.horas_extra USING
 
 
 --
--- TOC entry 4291 (class 1259 OID 83144)
+-- TOC entry 4291 (class 1259 OID 87408)
 -- Name: horas_extra_tenant_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6222,7 +6223,7 @@ CREATE INDEX horas_extra_tenant_id_estado_index ON public.horas_extra USING btre
 
 
 --
--- TOC entry 4292 (class 1259 OID 83146)
+-- TOC entry 4292 (class 1259 OID 87409)
 -- Name: horas_extra_tenant_id_nomina_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6230,7 +6231,7 @@ CREATE INDEX horas_extra_tenant_id_nomina_id_index ON public.horas_extra USING b
 
 
 --
--- TOC entry 4293 (class 1259 OID 83142)
+-- TOC entry 4293 (class 1259 OID 87406)
 -- Name: horas_extra_tenant_id_operacion_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6238,7 +6239,7 @@ CREATE INDEX horas_extra_tenant_id_operacion_id_index ON public.horas_extra USIN
 
 
 --
--- TOC entry 4246 (class 1259 OID 82859)
+-- TOC entry 4246 (class 1259 OID 87124)
 -- Name: idx_agro_chat_messages_session; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6246,7 +6247,7 @@ CREATE INDEX idx_agro_chat_messages_session ON public.agro_chat_messages USING b
 
 
 --
--- TOC entry 4247 (class 1259 OID 82860)
+-- TOC entry 4247 (class 1259 OID 87125)
 -- Name: idx_agro_chat_messages_user; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6254,7 +6255,7 @@ CREATE INDEX idx_agro_chat_messages_user ON public.agro_chat_messages USING btre
 
 
 --
--- TOC entry 4243 (class 1259 OID 82833)
+-- TOC entry 4243 (class 1259 OID 87098)
 -- Name: idx_agro_chat_sessions_user_tenant; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6262,7 +6263,7 @@ CREATE INDEX idx_agro_chat_sessions_user_tenant ON public.agro_chat_sessions USI
 
 
 --
--- TOC entry 4061 (class 1259 OID 81867)
+-- TOC entry 4061 (class 1259 OID 86132)
 -- Name: insumos_tenant_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6270,7 +6271,7 @@ CREATE INDEX insumos_tenant_id_estado_index ON public.insumos USING btree (tenan
 
 
 --
--- TOC entry 4003 (class 1259 OID 81613)
+-- TOC entry 4003 (class 1259 OID 85878)
 -- Name: jobs_queue_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6278,7 +6279,7 @@ CREATE INDEX jobs_queue_index ON public.jobs USING btree (queue);
 
 
 --
--- TOC entry 4257 (class 1259 OID 82931)
+-- TOC entry 4257 (class 1259 OID 87196)
 -- Name: jornales_tenant_id_categoria_tipo_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6286,7 +6287,7 @@ CREATE INDEX jornales_tenant_id_categoria_tipo_index ON public.jornales USING bt
 
 
 --
--- TOC entry 4258 (class 1259 OID 82932)
+-- TOC entry 4258 (class 1259 OID 87197)
 -- Name: jornales_tenant_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6294,7 +6295,7 @@ CREATE INDEX jornales_tenant_id_estado_index ON public.jornales USING btree (ten
 
 
 --
--- TOC entry 4259 (class 1259 OID 82930)
+-- TOC entry 4259 (class 1259 OID 87195)
 -- Name: jornales_tenant_id_operacion_id_empleado_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6302,7 +6303,7 @@ CREATE INDEX jornales_tenant_id_operacion_id_empleado_id_index ON public.jornale
 
 
 --
--- TOC entry 4069 (class 1259 OID 81909)
+-- TOC entry 4069 (class 1259 OID 86174)
 -- Name: labores_tenant_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6310,7 +6311,7 @@ CREATE INDEX labores_tenant_id_estado_index ON public.labores USING btree (tenan
 
 
 --
--- TOC entry 4042 (class 1259 OID 81790)
+-- TOC entry 4042 (class 1259 OID 86055)
 -- Name: lineas_tenant_id_sublote_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6318,7 +6319,7 @@ CREATE INDEX lineas_tenant_id_sublote_id_index ON public.lineas USING btree (ten
 
 
 --
--- TOC entry 4157 (class 1259 OID 82439)
+-- TOC entry 4157 (class 1259 OID 86704)
 -- Name: liquidacion_detalle_tenant_id_liquidacion_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6326,7 +6327,7 @@ CREATE INDEX liquidacion_detalle_tenant_id_liquidacion_id_index ON public.liquid
 
 
 --
--- TOC entry 4153 (class 1259 OID 82409)
+-- TOC entry 4153 (class 1259 OID 86674)
 -- Name: liquidaciones_tenant_id_empleado_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6334,7 +6335,7 @@ CREATE INDEX liquidaciones_tenant_id_empleado_id_index ON public.liquidaciones U
 
 
 --
--- TOC entry 4154 (class 1259 OID 82410)
+-- TOC entry 4154 (class 1259 OID 86675)
 -- Name: liquidaciones_tenant_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6342,7 +6343,7 @@ CREATE INDEX liquidaciones_tenant_id_estado_index ON public.liquidaciones USING 
 
 
 --
--- TOC entry 4028 (class 1259 OID 81726)
+-- TOC entry 4028 (class 1259 OID 85991)
 -- Name: lotes_tenant_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6350,7 +6351,7 @@ CREATE INDEX lotes_tenant_id_estado_index ON public.lotes USING btree (tenant_id
 
 
 --
--- TOC entry 4029 (class 1259 OID 81725)
+-- TOC entry 4029 (class 1259 OID 85990)
 -- Name: lotes_tenant_id_predio_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6358,7 +6359,7 @@ CREATE INDEX lotes_tenant_id_predio_id_index ON public.lotes USING btree (tenant
 
 
 --
--- TOC entry 4372 (class 1259 OID 83527)
+-- TOC entry 4372 (class 1259 OID 87790)
 -- Name: market_pedido_estados_historial_pedido_id_fecha_cambio_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6366,7 +6367,7 @@ CREATE INDEX market_pedido_estados_historial_pedido_id_fecha_cambio_index ON pub
 
 
 --
--- TOC entry 4369 (class 1259 OID 83505)
+-- TOC entry 4369 (class 1259 OID 87768)
 -- Name: market_pedido_items_pedido_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6374,7 +6375,7 @@ CREATE INDEX market_pedido_items_pedido_id_index ON public.market_pedido_items U
 
 
 --
--- TOC entry 4364 (class 1259 OID 83483)
+-- TOC entry 4364 (class 1259 OID 87746)
 -- Name: market_pedidos_fecha_pedido_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6382,7 +6383,7 @@ CREATE INDEX market_pedidos_fecha_pedido_index ON public.market_pedidos USING bt
 
 
 --
--- TOC entry 4367 (class 1259 OID 83482)
+-- TOC entry 4367 (class 1259 OID 87745)
 -- Name: market_pedidos_proveedor_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6390,7 +6391,7 @@ CREATE INDEX market_pedidos_proveedor_id_estado_index ON public.market_pedidos U
 
 
 --
--- TOC entry 4368 (class 1259 OID 83481)
+-- TOC entry 4368 (class 1259 OID 87744)
 -- Name: market_pedidos_tenant_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6398,7 +6399,7 @@ CREATE INDEX market_pedidos_tenant_id_estado_index ON public.market_pedidos USIN
 
 
 --
--- TOC entry 4353 (class 1259 OID 83423)
+-- TOC entry 4353 (class 1259 OID 87686)
 -- Name: market_precios_volumen_producto_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6406,7 +6407,7 @@ CREATE INDEX market_precios_volumen_producto_id_index ON public.market_precios_v
 
 
 --
--- TOC entry 4342 (class 1259 OID 83390)
+-- TOC entry 4342 (class 1259 OID 87653)
 -- Name: market_productos_categoria_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6414,7 +6415,7 @@ CREATE INDEX market_productos_categoria_id_index ON public.market_productos USIN
 
 
 --
--- TOC entry 4343 (class 1259 OID 83391)
+-- TOC entry 4343 (class 1259 OID 87654)
 -- Name: market_productos_nombre_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6422,7 +6423,7 @@ CREATE INDEX market_productos_nombre_index ON public.market_productos USING btre
 
 
 --
--- TOC entry 4346 (class 1259 OID 83389)
+-- TOC entry 4346 (class 1259 OID 87652)
 -- Name: market_productos_proveedor_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6430,7 +6431,7 @@ CREATE INDEX market_productos_proveedor_id_estado_index ON public.market_product
 
 
 --
--- TOC entry 4333 (class 1259 OID 83333)
+-- TOC entry 4333 (class 1259 OID 87596)
 -- Name: market_proveedor_user_user_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6438,7 +6439,7 @@ CREATE INDEX market_proveedor_user_user_id_estado_index ON public.market_proveed
 
 
 --
--- TOC entry 4074 (class 1259 OID 81923)
+-- TOC entry 4074 (class 1259 OID 86188)
 -- Name: modalidad_contrato_tenant_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6446,7 +6447,7 @@ CREATE INDEX modalidad_contrato_tenant_id_estado_index ON public.modalidad_contr
 
 
 --
--- TOC entry 4167 (class 1259 OID 82466)
+-- TOC entry 4167 (class 1259 OID 86731)
 -- Name: model_has_permissions_model_id_model_type_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6454,7 +6455,7 @@ CREATE INDEX model_has_permissions_model_id_model_type_index ON public.model_has
 
 
 --
--- TOC entry 4170 (class 1259 OID 82472)
+-- TOC entry 4170 (class 1259 OID 86737)
 -- Name: model_has_permissions_team_foreign_key_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6462,7 +6463,7 @@ CREATE INDEX model_has_permissions_team_foreign_key_index ON public.model_has_pe
 
 
 --
--- TOC entry 4171 (class 1259 OID 82478)
+-- TOC entry 4171 (class 1259 OID 86743)
 -- Name: model_has_roles_model_id_model_type_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6470,7 +6471,7 @@ CREATE INDEX model_has_roles_model_id_model_type_index ON public.model_has_roles
 
 
 --
--- TOC entry 4174 (class 1259 OID 82484)
+-- TOC entry 4174 (class 1259 OID 86749)
 -- Name: model_has_roles_team_foreign_key_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6478,7 +6479,7 @@ CREATE INDEX model_has_roles_team_foreign_key_index ON public.model_has_roles US
 
 
 --
--- TOC entry 4262 (class 1259 OID 82959)
+-- TOC entry 4262 (class 1259 OID 87224)
 -- Name: motivos_ausencia_tenant_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6486,7 +6487,7 @@ CREATE INDEX motivos_ausencia_tenant_id_estado_index ON public.motivos_ausencia 
 
 
 --
--- TOC entry 4212 (class 1259 OID 82591)
+-- TOC entry 4212 (class 1259 OID 86856)
 -- Name: municipios_departamento_codigo_nombre_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6494,7 +6495,7 @@ CREATE INDEX municipios_departamento_codigo_nombre_index ON public.municipios US
 
 
 --
--- TOC entry 4113 (class 1259 OID 82141)
+-- TOC entry 4113 (class 1259 OID 86406)
 -- Name: nomina_concepto_tenant_id_activo_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6502,7 +6503,7 @@ CREATE INDEX nomina_concepto_tenant_id_activo_index ON public.nomina_concepto US
 
 
 --
--- TOC entry 4143 (class 1259 OID 82306)
+-- TOC entry 4143 (class 1259 OID 86571)
 -- Name: nomina_cosecha_ref_tenant_id_nomina_empleado_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6510,7 +6511,7 @@ CREATE INDEX nomina_cosecha_ref_tenant_id_nomina_empleado_id_index ON public.nom
 
 
 --
--- TOC entry 4133 (class 1259 OID 82256)
+-- TOC entry 4133 (class 1259 OID 86521)
 -- Name: nomina_empleado_concepto_tenant_id_nomina_empleado_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6518,7 +6519,7 @@ CREATE INDEX nomina_empleado_concepto_tenant_id_nomina_empleado_id_index ON publ
 
 
 --
--- TOC entry 4129 (class 1259 OID 82226)
+-- TOC entry 4129 (class 1259 OID 86491)
 -- Name: nomina_empleado_tenant_id_empleado_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6526,7 +6527,7 @@ CREATE INDEX nomina_empleado_tenant_id_empleado_id_index ON public.nomina_emplea
 
 
 --
--- TOC entry 4130 (class 1259 OID 82225)
+-- TOC entry 4130 (class 1259 OID 86490)
 -- Name: nomina_empleado_tenant_id_nomina_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6534,7 +6535,7 @@ CREATE INDEX nomina_empleado_tenant_id_nomina_id_index ON public.nomina_empleado
 
 
 --
--- TOC entry 4298 (class 1259 OID 83174)
+-- TOC entry 4298 (class 1259 OID 87437)
 -- Name: nomina_hora_extra_ref_tenant_id_nomina_empleado_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6542,7 +6543,7 @@ CREATE INDEX nomina_hora_extra_ref_tenant_id_nomina_empleado_id_index ON public.
 
 
 --
--- TOC entry 4138 (class 1259 OID 82280)
+-- TOC entry 4138 (class 1259 OID 86545)
 -- Name: nomina_jornal_ref_tenant_id_nomina_empleado_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6550,7 +6551,7 @@ CREATE INDEX nomina_jornal_ref_tenant_id_nomina_empleado_id_index ON public.nomi
 
 
 --
--- TOC entry 4118 (class 1259 OID 82161)
+-- TOC entry 4118 (class 1259 OID 86426)
 -- Name: nomina_tabla_legal_tenant_id_concepto_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6558,7 +6559,7 @@ CREATE INDEX nomina_tabla_legal_tenant_id_concepto_id_index ON public.nomina_tab
 
 
 --
--- TOC entry 4121 (class 1259 OID 82190)
+-- TOC entry 4121 (class 1259 OID 86455)
 -- Name: nominas_tenant_id_anio_mes_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6566,7 +6567,7 @@ CREATE INDEX nominas_tenant_id_anio_mes_index ON public.nominas USING btree (ten
 
 
 --
--- TOC entry 4122 (class 1259 OID 82189)
+-- TOC entry 4122 (class 1259 OID 86454)
 -- Name: nominas_tenant_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6574,7 +6575,7 @@ CREATE INDEX nominas_tenant_id_estado_index ON public.nominas USING btree (tenan
 
 
 --
--- TOC entry 4217 (class 1259 OID 82622)
+-- TOC entry 4217 (class 1259 OID 86887)
 -- Name: operaciones_tenant_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6582,7 +6583,7 @@ CREATE INDEX operaciones_tenant_id_estado_index ON public.operaciones USING btre
 
 
 --
--- TOC entry 4218 (class 1259 OID 82621)
+-- TOC entry 4218 (class 1259 OID 86886)
 -- Name: operaciones_tenant_id_fecha_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6590,7 +6591,7 @@ CREATE INDEX operaciones_tenant_id_fecha_index ON public.operaciones USING btree
 
 
 --
--- TOC entry 4043 (class 1259 OID 82788)
+-- TOC entry 4043 (class 1259 OID 87053)
 -- Name: palmas_linea_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6598,7 +6599,7 @@ CREATE INDEX palmas_linea_id_index ON public.palmas USING btree (linea_id);
 
 
 --
--- TOC entry 4048 (class 1259 OID 81811)
+-- TOC entry 4048 (class 1259 OID 86076)
 -- Name: palmas_tenant_id_sublote_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6606,7 +6607,7 @@ CREATE INDEX palmas_tenant_id_sublote_id_index ON public.palmas USING btree (ten
 
 
 --
--- TOC entry 4066 (class 1259 OID 82658)
+-- TOC entry 4066 (class 1259 OID 86923)
 -- Name: precio_abono_tenant_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6614,7 +6615,7 @@ CREATE INDEX precio_abono_tenant_id_estado_index ON public.precio_abono USING bt
 
 
 --
--- TOC entry 4058 (class 1259 OID 81853)
+-- TOC entry 4058 (class 1259 OID 86118)
 -- Name: precio_cosecha_tenant_id_anio_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6622,7 +6623,7 @@ CREATE INDEX precio_cosecha_tenant_id_anio_index ON public.precio_cosecha USING 
 
 
 --
--- TOC entry 4250 (class 1259 OID 82880)
+-- TOC entry 4250 (class 1259 OID 87145)
 -- Name: precios_palma_tenant_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6630,7 +6631,7 @@ CREATE INDEX precios_palma_tenant_id_estado_index ON public.precios_palma USING 
 
 
 --
--- TOC entry 4022 (class 1259 OID 81692)
+-- TOC entry 4022 (class 1259 OID 85957)
 -- Name: predios_tenant_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6638,7 +6639,7 @@ CREATE INDEX predios_tenant_id_estado_index ON public.predios USING btree (tenan
 
 
 --
--- TOC entry 4053 (class 1259 OID 81833)
+-- TOC entry 4053 (class 1259 OID 86098)
 -- Name: promedio_lote_tenant_id_anio_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6646,7 +6647,7 @@ CREATE INDEX promedio_lote_tenant_id_anio_index ON public.promedio_lote USING bt
 
 
 --
--- TOC entry 4204 (class 1259 OID 82574)
+-- TOC entry 4204 (class 1259 OID 86839)
 -- Name: pulse_aggregates_period_bucket_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6654,7 +6655,7 @@ CREATE INDEX pulse_aggregates_period_bucket_index ON public.pulse_aggregates USI
 
 
 --
--- TOC entry 4205 (class 1259 OID 82576)
+-- TOC entry 4205 (class 1259 OID 86841)
 -- Name: pulse_aggregates_period_type_aggregate_bucket_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6662,7 +6663,7 @@ CREATE INDEX pulse_aggregates_period_type_aggregate_bucket_index ON public.pulse
 
 
 --
--- TOC entry 4208 (class 1259 OID 82575)
+-- TOC entry 4208 (class 1259 OID 86840)
 -- Name: pulse_aggregates_type_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6670,7 +6671,7 @@ CREATE INDEX pulse_aggregates_type_index ON public.pulse_aggregates USING btree 
 
 
 --
--- TOC entry 4196 (class 1259 OID 82560)
+-- TOC entry 4196 (class 1259 OID 86825)
 -- Name: pulse_entries_key_hash_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6678,7 +6679,7 @@ CREATE INDEX pulse_entries_key_hash_index ON public.pulse_entries USING btree (k
 
 
 --
--- TOC entry 4199 (class 1259 OID 82558)
+-- TOC entry 4199 (class 1259 OID 86823)
 -- Name: pulse_entries_timestamp_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6686,7 +6687,7 @@ CREATE INDEX pulse_entries_timestamp_index ON public.pulse_entries USING btree (
 
 
 --
--- TOC entry 4200 (class 1259 OID 82561)
+-- TOC entry 4200 (class 1259 OID 86826)
 -- Name: pulse_entries_timestamp_type_key_hash_value_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6694,7 +6695,7 @@ CREATE INDEX pulse_entries_timestamp_type_key_hash_value_index ON public.pulse_e
 
 
 --
--- TOC entry 4201 (class 1259 OID 82559)
+-- TOC entry 4201 (class 1259 OID 86824)
 -- Name: pulse_entries_type_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6702,7 +6703,7 @@ CREATE INDEX pulse_entries_type_index ON public.pulse_entries USING btree (type)
 
 
 --
--- TOC entry 4192 (class 1259 OID 82544)
+-- TOC entry 4192 (class 1259 OID 86809)
 -- Name: pulse_values_timestamp_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6710,7 +6711,7 @@ CREATE INDEX pulse_values_timestamp_index ON public.pulse_values USING btree ("t
 
 
 --
--- TOC entry 4193 (class 1259 OID 82545)
+-- TOC entry 4193 (class 1259 OID 86810)
 -- Name: pulse_values_type_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6718,7 +6719,7 @@ CREATE INDEX pulse_values_type_index ON public.pulse_values USING btree (type);
 
 
 --
--- TOC entry 4100 (class 1259 OID 82062)
+-- TOC entry 4100 (class 1259 OID 86327)
 -- Name: registro_cosecha_tenant_id_lote_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6726,7 +6727,7 @@ CREATE INDEX registro_cosecha_tenant_id_lote_id_index ON public.registro_cosecha
 
 
 --
--- TOC entry 4101 (class 1259 OID 82636)
+-- TOC entry 4101 (class 1259 OID 86901)
 -- Name: registro_cosecha_tenant_id_operacion_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6734,7 +6735,7 @@ CREATE INDEX registro_cosecha_tenant_id_operacion_id_index ON public.registro_co
 
 
 --
--- TOC entry 4164 (class 1259 OID 82460)
+-- TOC entry 4164 (class 1259 OID 86725)
 -- Name: roles_team_foreign_key_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6742,7 +6743,7 @@ CREATE INDEX roles_team_foreign_key_index ON public.roles USING btree (tenant_id
 
 
 --
--- TOC entry 4034 (class 1259 OID 81751)
+-- TOC entry 4034 (class 1259 OID 86016)
 -- Name: semilla_lote_tenant_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6750,7 +6751,7 @@ CREATE INDEX semilla_lote_tenant_id_index ON public.semilla_lote USING btree (te
 
 
 --
--- TOC entry 4025 (class 1259 OID 81706)
+-- TOC entry 4025 (class 1259 OID 85971)
 -- Name: semillas_tenant_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6758,7 +6759,7 @@ CREATE INDEX semillas_tenant_id_estado_index ON public.semillas USING btree (ten
 
 
 --
--- TOC entry 3987 (class 1259 OID 81556)
+-- TOC entry 3987 (class 1259 OID 85821)
 -- Name: sessions_last_activity_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6766,7 +6767,7 @@ CREATE INDEX sessions_last_activity_index ON public.sessions USING btree (last_a
 
 
 --
--- TOC entry 3990 (class 1259 OID 81555)
+-- TOC entry 3990 (class 1259 OID 85820)
 -- Name: sessions_user_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6774,7 +6775,7 @@ CREATE INDEX sessions_user_id_index ON public.sessions USING btree (user_id);
 
 
 --
--- TOC entry 4037 (class 1259 OID 81770)
+-- TOC entry 4037 (class 1259 OID 86035)
 -- Name: sublotes_tenant_id_lote_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6782,7 +6783,7 @@ CREATE INDEX sublotes_tenant_id_lote_id_index ON public.sublotes USING btree (te
 
 
 --
--- TOC entry 4177 (class 1259 OID 82514)
+-- TOC entry 4177 (class 1259 OID 86779)
 -- Name: telescope_entries_batch_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6790,7 +6791,7 @@ CREATE INDEX telescope_entries_batch_id_index ON public.telescope_entries USING 
 
 
 --
--- TOC entry 4178 (class 1259 OID 82516)
+-- TOC entry 4178 (class 1259 OID 86781)
 -- Name: telescope_entries_created_at_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6798,7 +6799,7 @@ CREATE INDEX telescope_entries_created_at_index ON public.telescope_entries USIN
 
 
 --
--- TOC entry 4179 (class 1259 OID 82515)
+-- TOC entry 4179 (class 1259 OID 86780)
 -- Name: telescope_entries_family_hash_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6806,7 +6807,7 @@ CREATE INDEX telescope_entries_family_hash_index ON public.telescope_entries USI
 
 
 --
--- TOC entry 4187 (class 1259 OID 82523)
+-- TOC entry 4187 (class 1259 OID 86788)
 -- Name: telescope_entries_tags_tag_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6814,7 +6815,7 @@ CREATE INDEX telescope_entries_tags_tag_index ON public.telescope_entries_tags U
 
 
 --
--- TOC entry 4182 (class 1259 OID 82517)
+-- TOC entry 4182 (class 1259 OID 86782)
 -- Name: telescope_entries_type_should_display_on_index_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6822,7 +6823,7 @@ CREATE INDEX telescope_entries_type_should_display_on_index_index ON public.tele
 
 
 --
--- TOC entry 4014 (class 1259 OID 81656)
+-- TOC entry 4014 (class 1259 OID 85921)
 -- Name: tenant_user_user_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6830,7 +6831,7 @@ CREATE INDEX tenant_user_user_id_estado_index ON public.tenant_user USING btree 
 
 
 --
--- TOC entry 4285 (class 1259 OID 83090)
+-- TOC entry 4285 (class 1259 OID 87355)
 -- Name: tipos_hora_extra_tenant_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6838,7 +6839,7 @@ CREATE INDEX tipos_hora_extra_tenant_id_estado_index ON public.tipos_hora_extra 
 
 
 --
--- TOC entry 4272 (class 1259 OID 83007)
+-- TOC entry 4272 (class 1259 OID 87272)
 -- Name: transportadores_tenant_id_empresa_transportadora_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6846,7 +6847,7 @@ CREATE INDEX transportadores_tenant_id_empresa_transportadora_id_index ON public
 
 
 --
--- TOC entry 4273 (class 1259 OID 83008)
+-- TOC entry 4273 (class 1259 OID 87273)
 -- Name: transportadores_tenant_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6854,7 +6855,7 @@ CREATE INDEX transportadores_tenant_id_estado_index ON public.transportadores US
 
 
 --
--- TOC entry 4150 (class 1259 OID 82367)
+-- TOC entry 4150 (class 1259 OID 86632)
 -- Name: vacacion_acumulado_tenant_id_empleado_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6862,7 +6863,7 @@ CREATE INDEX vacacion_acumulado_tenant_id_empleado_id_index ON public.vacacion_a
 
 
 --
--- TOC entry 4146 (class 1259 OID 82344)
+-- TOC entry 4146 (class 1259 OID 86609)
 -- Name: vacaciones_tenant_id_empleado_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6870,7 +6871,7 @@ CREATE INDEX vacaciones_tenant_id_empleado_id_index ON public.vacaciones USING b
 
 
 --
--- TOC entry 4147 (class 1259 OID 82345)
+-- TOC entry 4147 (class 1259 OID 86610)
 -- Name: vacaciones_tenant_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6878,7 +6879,7 @@ CREATE INDEX vacaciones_tenant_id_estado_index ON public.vacaciones USING btree 
 
 
 --
--- TOC entry 4102 (class 1259 OID 83071)
+-- TOC entry 4102 (class 1259 OID 87336)
 -- Name: viaje_detalle_cosecha_activa_unique; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6886,7 +6887,7 @@ CREATE UNIQUE INDEX viaje_detalle_cosecha_activa_unique ON public.viaje_detalle 
 
 
 --
--- TOC entry 4105 (class 1259 OID 83070)
+-- TOC entry 4105 (class 1259 OID 87335)
 -- Name: viaje_detalle_tenant_id_reconteo_aprobado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6894,7 +6895,7 @@ CREATE INDEX viaje_detalle_tenant_id_reconteo_aprobado_index ON public.viaje_det
 
 
 --
--- TOC entry 4106 (class 1259 OID 82088)
+-- TOC entry 4106 (class 1259 OID 86353)
 -- Name: viaje_detalle_tenant_id_viaje_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6902,7 +6903,7 @@ CREATE INDEX viaje_detalle_tenant_id_viaje_id_index ON public.viaje_detalle USIN
 
 
 --
--- TOC entry 4301 (class 1259 OID 83205)
+-- TOC entry 4301 (class 1259 OID 87468)
 -- Name: viaje_documento_bascula_tenant_id_estado_ocr_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6910,7 +6911,7 @@ CREATE INDEX viaje_documento_bascula_tenant_id_estado_ocr_index ON public.viaje_
 
 
 --
--- TOC entry 4302 (class 1259 OID 83204)
+-- TOC entry 4302 (class 1259 OID 87467)
 -- Name: viaje_documento_bascula_tenant_id_viaje_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6918,7 +6919,7 @@ CREATE INDEX viaje_documento_bascula_tenant_id_viaje_id_index ON public.viaje_do
 
 
 --
--- TOC entry 4088 (class 1259 OID 83061)
+-- TOC entry 4088 (class 1259 OID 87326)
 -- Name: viajes_tenant_id_estado_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6926,7 +6927,7 @@ CREATE INDEX viajes_tenant_id_estado_index ON public.viajes USING btree (tenant_
 
 
 --
--- TOC entry 4089 (class 1259 OID 83063)
+-- TOC entry 4089 (class 1259 OID 87328)
 -- Name: viajes_tenant_id_extractora_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6934,7 +6935,7 @@ CREATE INDEX viajes_tenant_id_extractora_id_index ON public.viajes USING btree (
 
 
 --
--- TOC entry 4090 (class 1259 OID 83275)
+-- TOC entry 4090 (class 1259 OID 87538)
 -- Name: viajes_tenant_id_fecha_llegada_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6942,7 +6943,7 @@ CREATE INDEX viajes_tenant_id_fecha_llegada_index ON public.viajes USING btree (
 
 
 --
--- TOC entry 4091 (class 1259 OID 82032)
+-- TOC entry 4091 (class 1259 OID 86297)
 -- Name: viajes_tenant_id_fecha_viaje_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6950,7 +6951,7 @@ CREATE INDEX viajes_tenant_id_fecha_viaje_index ON public.viajes USING btree (te
 
 
 --
--- TOC entry 4092 (class 1259 OID 83293)
+-- TOC entry 4092 (class 1259 OID 87556)
 -- Name: viajes_tenant_id_numero_remision_extractora_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6958,7 +6959,7 @@ CREATE INDEX viajes_tenant_id_numero_remision_extractora_index ON public.viajes 
 
 
 --
--- TOC entry 4095 (class 1259 OID 83062)
+-- TOC entry 4095 (class 1259 OID 87327)
 -- Name: viajes_tenant_id_transportador_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6966,7 +6967,7 @@ CREATE INDEX viajes_tenant_id_transportador_id_index ON public.viajes USING btre
 
 
 --
--- TOC entry 4475 (class 2606 OID 82844)
+-- TOC entry 4475 (class 2606 OID 87109)
 -- Name: agro_chat_messages agro_chat_messages_session_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -6975,7 +6976,7 @@ ALTER TABLE ONLY public.agro_chat_messages
 
 
 --
--- TOC entry 4476 (class 2606 OID 82854)
+-- TOC entry 4476 (class 2606 OID 87119)
 -- Name: agro_chat_messages agro_chat_messages_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -6984,7 +6985,7 @@ ALTER TABLE ONLY public.agro_chat_messages
 
 
 --
--- TOC entry 4477 (class 2606 OID 82849)
+-- TOC entry 4477 (class 2606 OID 87114)
 -- Name: agro_chat_messages agro_chat_messages_user_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -6993,7 +6994,7 @@ ALTER TABLE ONLY public.agro_chat_messages
 
 
 --
--- TOC entry 4473 (class 2606 OID 82828)
+-- TOC entry 4473 (class 2606 OID 87093)
 -- Name: agro_chat_sessions agro_chat_sessions_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7002,7 +7003,7 @@ ALTER TABLE ONLY public.agro_chat_sessions
 
 
 --
--- TOC entry 4474 (class 2606 OID 82823)
+-- TOC entry 4474 (class 2606 OID 87088)
 -- Name: agro_chat_sessions agro_chat_sessions_user_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7011,7 +7012,7 @@ ALTER TABLE ONLY public.agro_chat_sessions
 
 
 --
--- TOC entry 4509 (class 2606 OID 83247)
+-- TOC entry 4509 (class 2606 OID 87510)
 -- Name: arl arl_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7020,7 +7021,7 @@ ALTER TABLE ONLY public.arl
 
 
 --
--- TOC entry 4378 (class 2606 OID 81666)
+-- TOC entry 4378 (class 2606 OID 85931)
 -- Name: auditorias auditorias_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7029,7 +7030,7 @@ ALTER TABLE ONLY public.auditorias
 
 
 --
--- TOC entry 4379 (class 2606 OID 81671)
+-- TOC entry 4379 (class 2606 OID 85936)
 -- Name: auditorias auditorias_user_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7038,7 +7039,7 @@ ALTER TABLE ONLY public.auditorias
 
 
 --
--- TOC entry 4466 (class 2606 OID 82757)
+-- TOC entry 4466 (class 2606 OID 87022)
 -- Name: ausencias ausencias_aprobado_por_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7047,7 +7048,7 @@ ALTER TABLE ONLY public.ausencias
 
 
 --
--- TOC entry 4467 (class 2606 OID 82767)
+-- TOC entry 4467 (class 2606 OID 87032)
 -- Name: ausencias ausencias_creado_por_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7056,7 +7057,7 @@ ALTER TABLE ONLY public.ausencias
 
 
 --
--- TOC entry 4468 (class 2606 OID 82752)
+-- TOC entry 4468 (class 2606 OID 87017)
 -- Name: ausencias ausencias_empleado_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7065,7 +7066,7 @@ ALTER TABLE ONLY public.ausencias
 
 
 --
--- TOC entry 4469 (class 2606 OID 82961)
+-- TOC entry 4469 (class 2606 OID 87226)
 -- Name: ausencias ausencias_motivo_ausencia_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7074,7 +7075,7 @@ ALTER TABLE ONLY public.ausencias
 
 
 --
--- TOC entry 4470 (class 2606 OID 82762)
+-- TOC entry 4470 (class 2606 OID 87027)
 -- Name: ausencias ausencias_nomina_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7083,7 +7084,7 @@ ALTER TABLE ONLY public.ausencias
 
 
 --
--- TOC entry 4471 (class 2606 OID 82747)
+-- TOC entry 4471 (class 2606 OID 87012)
 -- Name: ausencias ausencias_operacion_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7092,7 +7093,7 @@ ALTER TABLE ONLY public.ausencias
 
 
 --
--- TOC entry 4472 (class 2606 OID 82742)
+-- TOC entry 4472 (class 2606 OID 87007)
 -- Name: ausencias ausencias_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7101,7 +7102,7 @@ ALTER TABLE ONLY public.ausencias
 
 
 --
--- TOC entry 4402 (class 2606 OID 81938)
+-- TOC entry 4402 (class 2606 OID 86203)
 -- Name: cargos cargos_modalidad_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7110,7 +7111,7 @@ ALTER TABLE ONLY public.cargos
 
 
 --
--- TOC entry 4403 (class 2606 OID 81933)
+-- TOC entry 4403 (class 2606 OID 86198)
 -- Name: cargos cargos_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7119,7 +7120,7 @@ ALTER TABLE ONLY public.cargos
 
 
 --
--- TOC entry 4419 (class 2606 OID 82102)
+-- TOC entry 4419 (class 2606 OID 86367)
 -- Name: cosecha_cuadrilla cosecha_cuadrilla_cosecha_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7128,7 +7129,7 @@ ALTER TABLE ONLY public.cosecha_cuadrilla
 
 
 --
--- TOC entry 4420 (class 2606 OID 82107)
+-- TOC entry 4420 (class 2606 OID 86372)
 -- Name: cosecha_cuadrilla cosecha_cuadrilla_empleado_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7137,7 +7138,7 @@ ALTER TABLE ONLY public.cosecha_cuadrilla
 
 
 --
--- TOC entry 4421 (class 2606 OID 82097)
+-- TOC entry 4421 (class 2606 OID 86362)
 -- Name: cosecha_cuadrilla cosecha_cuadrilla_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7146,7 +7147,7 @@ ALTER TABLE ONLY public.cosecha_cuadrilla
 
 
 --
--- TOC entry 4461 (class 2606 OID 82678)
+-- TOC entry 4461 (class 2606 OID 86943)
 -- Name: empleado_contratos empleado_contratos_empleado_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7155,7 +7156,7 @@ ALTER TABLE ONLY public.empleado_contratos
 
 
 --
--- TOC entry 4462 (class 2606 OID 82673)
+-- TOC entry 4462 (class 2606 OID 86938)
 -- Name: empleado_contratos empleado_contratos_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7164,7 +7165,7 @@ ALTER TABLE ONLY public.empleado_contratos
 
 
 --
--- TOC entry 4463 (class 2606 OID 82711)
+-- TOC entry 4463 (class 2606 OID 86976)
 -- Name: empleado_documentos empleado_documentos_empleado_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7173,7 +7174,7 @@ ALTER TABLE ONLY public.empleado_documentos
 
 
 --
--- TOC entry 4464 (class 2606 OID 82716)
+-- TOC entry 4464 (class 2606 OID 86981)
 -- Name: empleado_documentos empleado_documentos_subido_por_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7182,7 +7183,7 @@ ALTER TABLE ONLY public.empleado_documentos
 
 
 --
--- TOC entry 4465 (class 2606 OID 82706)
+-- TOC entry 4465 (class 2606 OID 86971)
 -- Name: empleado_documentos empleado_documentos_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7191,7 +7192,7 @@ ALTER TABLE ONLY public.empleado_documentos
 
 
 --
--- TOC entry 4404 (class 2606 OID 82790)
+-- TOC entry 4404 (class 2606 OID 87055)
 -- Name: empleados empleados_predio_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7200,7 +7201,7 @@ ALTER TABLE ONLY public.empleados
 
 
 --
--- TOC entry 4405 (class 2606 OID 81957)
+-- TOC entry 4405 (class 2606 OID 86222)
 -- Name: empleados empleados_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7209,7 +7210,7 @@ ALTER TABLE ONLY public.empleados
 
 
 --
--- TOC entry 4487 (class 2606 OID 82977)
+-- TOC entry 4487 (class 2606 OID 87242)
 -- Name: empresa_transportadora empresa_transportadora_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7218,7 +7219,7 @@ ALTER TABLE ONLY public.empresa_transportadora
 
 
 --
--- TOC entry 4510 (class 2606 OID 83263)
+-- TOC entry 4510 (class 2606 OID 87526)
 -- Name: entidades_bancarias entidades_bancarias_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7227,7 +7228,7 @@ ALTER TABLE ONLY public.entidades_bancarias
 
 
 --
--- TOC entry 4507 (class 2606 OID 83215)
+-- TOC entry 4507 (class 2606 OID 87478)
 -- Name: eps eps_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7236,7 +7237,7 @@ ALTER TABLE ONLY public.eps
 
 
 --
--- TOC entry 4490 (class 2606 OID 83024)
+-- TOC entry 4490 (class 2606 OID 87289)
 -- Name: extractoras extractoras_departamento_codigo_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7245,7 +7246,7 @@ ALTER TABLE ONLY public.extractoras
 
 
 --
--- TOC entry 4491 (class 2606 OID 83029)
+-- TOC entry 4491 (class 2606 OID 87294)
 -- Name: extractoras extractoras_municipio_codigo_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7254,7 +7255,7 @@ ALTER TABLE ONLY public.extractoras
 
 
 --
--- TOC entry 4492 (class 2606 OID 83019)
+-- TOC entry 4492 (class 2606 OID 87284)
 -- Name: extractoras extractoras_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7263,7 +7264,7 @@ ALTER TABLE ONLY public.extractoras
 
 
 --
--- TOC entry 4508 (class 2606 OID 83231)
+-- TOC entry 4508 (class 2606 OID 87494)
 -- Name: fondos_pension fondos_pension_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7272,7 +7273,7 @@ ALTER TABLE ONLY public.fondos_pension
 
 
 --
--- TOC entry 4494 (class 2606 OID 83127)
+-- TOC entry 4494 (class 2606 OID 87391)
 -- Name: horas_extra horas_extra_aprobado_por_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7281,7 +7282,7 @@ ALTER TABLE ONLY public.horas_extra
 
 
 --
--- TOC entry 4495 (class 2606 OID 83137)
+-- TOC entry 4495 (class 2606 OID 87401)
 -- Name: horas_extra horas_extra_creado_por_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7290,7 +7291,7 @@ ALTER TABLE ONLY public.horas_extra
 
 
 --
--- TOC entry 4496 (class 2606 OID 83117)
+-- TOC entry 4496 (class 2606 OID 87381)
 -- Name: horas_extra horas_extra_empleado_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7299,7 +7300,7 @@ ALTER TABLE ONLY public.horas_extra
 
 
 --
--- TOC entry 4497 (class 2606 OID 83132)
+-- TOC entry 4497 (class 2606 OID 87396)
 -- Name: horas_extra horas_extra_nomina_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7308,7 +7309,7 @@ ALTER TABLE ONLY public.horas_extra
 
 
 --
--- TOC entry 4498 (class 2606 OID 83112)
+-- TOC entry 4498 (class 2606 OID 87376)
 -- Name: horas_extra horas_extra_operacion_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7317,7 +7318,7 @@ ALTER TABLE ONLY public.horas_extra
 
 
 --
--- TOC entry 4499 (class 2606 OID 83107)
+-- TOC entry 4499 (class 2606 OID 87371)
 -- Name: horas_extra horas_extra_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7326,7 +7327,7 @@ ALTER TABLE ONLY public.horas_extra
 
 
 --
--- TOC entry 4500 (class 2606 OID 83122)
+-- TOC entry 4500 (class 2606 OID 87386)
 -- Name: horas_extra horas_extra_tipo_hora_extra_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7335,7 +7336,7 @@ ALTER TABLE ONLY public.horas_extra
 
 
 --
--- TOC entry 4398 (class 2606 OID 81862)
+-- TOC entry 4398 (class 2606 OID 86127)
 -- Name: insumos insumos_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7344,7 +7345,7 @@ ALTER TABLE ONLY public.insumos
 
 
 --
--- TOC entry 4479 (class 2606 OID 82905)
+-- TOC entry 4479 (class 2606 OID 87170)
 -- Name: jornales jornales_empleado_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7353,7 +7354,7 @@ ALTER TABLE ONLY public.jornales
 
 
 --
--- TOC entry 4480 (class 2606 OID 82925)
+-- TOC entry 4480 (class 2606 OID 87190)
 -- Name: jornales jornales_insumo_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7362,7 +7363,7 @@ ALTER TABLE ONLY public.jornales
 
 
 --
--- TOC entry 4481 (class 2606 OID 82910)
+-- TOC entry 4481 (class 2606 OID 87175)
 -- Name: jornales jornales_labor_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7371,7 +7372,7 @@ ALTER TABLE ONLY public.jornales
 
 
 --
--- TOC entry 4482 (class 2606 OID 82915)
+-- TOC entry 4482 (class 2606 OID 87180)
 -- Name: jornales jornales_lote_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7380,7 +7381,7 @@ ALTER TABLE ONLY public.jornales
 
 
 --
--- TOC entry 4483 (class 2606 OID 82900)
+-- TOC entry 4483 (class 2606 OID 87165)
 -- Name: jornales jornales_operacion_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7389,7 +7390,7 @@ ALTER TABLE ONLY public.jornales
 
 
 --
--- TOC entry 4484 (class 2606 OID 82920)
+-- TOC entry 4484 (class 2606 OID 87185)
 -- Name: jornales jornales_sublote_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7398,7 +7399,7 @@ ALTER TABLE ONLY public.jornales
 
 
 --
--- TOC entry 4485 (class 2606 OID 82895)
+-- TOC entry 4485 (class 2606 OID 87160)
 -- Name: jornales jornales_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7407,7 +7408,7 @@ ALTER TABLE ONLY public.jornales
 
 
 --
--- TOC entry 4400 (class 2606 OID 81899)
+-- TOC entry 4400 (class 2606 OID 86164)
 -- Name: labores labores_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7416,7 +7417,7 @@ ALTER TABLE ONLY public.labores
 
 
 --
--- TOC entry 4389 (class 2606 OID 81785)
+-- TOC entry 4389 (class 2606 OID 86050)
 -- Name: lineas lineas_sublote_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7425,7 +7426,7 @@ ALTER TABLE ONLY public.lineas
 
 
 --
--- TOC entry 4390 (class 2606 OID 81780)
+-- TOC entry 4390 (class 2606 OID 86045)
 -- Name: lineas lineas_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7434,7 +7435,7 @@ ALTER TABLE ONLY public.lineas
 
 
 --
--- TOC entry 4449 (class 2606 OID 82434)
+-- TOC entry 4449 (class 2606 OID 86699)
 -- Name: liquidacion_detalle liquidacion_detalle_concepto_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7443,7 +7444,7 @@ ALTER TABLE ONLY public.liquidacion_detalle
 
 
 --
--- TOC entry 4450 (class 2606 OID 82429)
+-- TOC entry 4450 (class 2606 OID 86694)
 -- Name: liquidacion_detalle liquidacion_detalle_liquidacion_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7452,7 +7453,7 @@ ALTER TABLE ONLY public.liquidacion_detalle
 
 
 --
--- TOC entry 4451 (class 2606 OID 82424)
+-- TOC entry 4451 (class 2606 OID 86689)
 -- Name: liquidacion_detalle liquidacion_detalle_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7461,7 +7462,7 @@ ALTER TABLE ONLY public.liquidacion_detalle
 
 
 --
--- TOC entry 4446 (class 2606 OID 82404)
+-- TOC entry 4446 (class 2606 OID 86669)
 -- Name: liquidaciones liquidaciones_aprobado_por_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7470,7 +7471,7 @@ ALTER TABLE ONLY public.liquidaciones
 
 
 --
--- TOC entry 4447 (class 2606 OID 82399)
+-- TOC entry 4447 (class 2606 OID 86664)
 -- Name: liquidaciones liquidaciones_empleado_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7479,7 +7480,7 @@ ALTER TABLE ONLY public.liquidaciones
 
 
 --
--- TOC entry 4448 (class 2606 OID 82394)
+-- TOC entry 4448 (class 2606 OID 86659)
 -- Name: liquidaciones liquidaciones_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7488,7 +7489,7 @@ ALTER TABLE ONLY public.liquidaciones
 
 
 --
--- TOC entry 4382 (class 2606 OID 81720)
+-- TOC entry 4382 (class 2606 OID 85985)
 -- Name: lotes lotes_predio_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7497,7 +7498,7 @@ ALTER TABLE ONLY public.lotes
 
 
 --
--- TOC entry 4383 (class 2606 OID 81715)
+-- TOC entry 4383 (class 2606 OID 85980)
 -- Name: lotes lotes_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7506,7 +7507,7 @@ ALTER TABLE ONLY public.lotes
 
 
 --
--- TOC entry 4519 (class 2606 OID 83445)
+-- TOC entry 4519 (class 2606 OID 87708)
 -- Name: market_carrito_items market_carrito_items_carrito_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7515,7 +7516,7 @@ ALTER TABLE ONLY public.market_carrito_items
 
 
 --
--- TOC entry 4520 (class 2606 OID 83450)
+-- TOC entry 4520 (class 2606 OID 87713)
 -- Name: market_carrito_items market_carrito_items_producto_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7524,7 +7525,7 @@ ALTER TABLE ONLY public.market_carrito_items
 
 
 --
--- TOC entry 4518 (class 2606 OID 83431)
+-- TOC entry 4518 (class 2606 OID 87694)
 -- Name: market_carritos market_carritos_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7533,7 +7534,7 @@ ALTER TABLE ONLY public.market_carritos
 
 
 --
--- TOC entry 4525 (class 2606 OID 83517)
+-- TOC entry 4525 (class 2606 OID 87780)
 -- Name: market_pedido_estados_historial market_pedido_estados_historial_pedido_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7542,7 +7543,7 @@ ALTER TABLE ONLY public.market_pedido_estados_historial
 
 
 --
--- TOC entry 4526 (class 2606 OID 83522)
+-- TOC entry 4526 (class 2606 OID 87785)
 -- Name: market_pedido_estados_historial market_pedido_estados_historial_user_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7551,7 +7552,7 @@ ALTER TABLE ONLY public.market_pedido_estados_historial
 
 
 --
--- TOC entry 4523 (class 2606 OID 83495)
+-- TOC entry 4523 (class 2606 OID 87758)
 -- Name: market_pedido_items market_pedido_items_pedido_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7560,7 +7561,7 @@ ALTER TABLE ONLY public.market_pedido_items
 
 
 --
--- TOC entry 4524 (class 2606 OID 83500)
+-- TOC entry 4524 (class 2606 OID 87763)
 -- Name: market_pedido_items market_pedido_items_producto_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7569,7 +7570,7 @@ ALTER TABLE ONLY public.market_pedido_items
 
 
 --
--- TOC entry 4521 (class 2606 OID 83476)
+-- TOC entry 4521 (class 2606 OID 87739)
 -- Name: market_pedidos market_pedidos_proveedor_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7578,7 +7579,7 @@ ALTER TABLE ONLY public.market_pedidos
 
 
 --
--- TOC entry 4522 (class 2606 OID 83471)
+-- TOC entry 4522 (class 2606 OID 87734)
 -- Name: market_pedidos market_pedidos_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7587,7 +7588,7 @@ ALTER TABLE ONLY public.market_pedidos
 
 
 --
--- TOC entry 4517 (class 2606 OID 83418)
+-- TOC entry 4517 (class 2606 OID 87681)
 -- Name: market_precios_volumen market_precios_volumen_producto_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7596,7 +7597,7 @@ ALTER TABLE ONLY public.market_precios_volumen
 
 
 --
--- TOC entry 4516 (class 2606 OID 83405)
+-- TOC entry 4516 (class 2606 OID 87668)
 -- Name: market_producto_imagenes market_producto_imagenes_producto_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7605,7 +7606,7 @@ ALTER TABLE ONLY public.market_producto_imagenes
 
 
 --
--- TOC entry 4513 (class 2606 OID 83379)
+-- TOC entry 4513 (class 2606 OID 87642)
 -- Name: market_productos market_productos_categoria_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7614,7 +7615,7 @@ ALTER TABLE ONLY public.market_productos
 
 
 --
--- TOC entry 4514 (class 2606 OID 83374)
+-- TOC entry 4514 (class 2606 OID 87637)
 -- Name: market_productos market_productos_proveedor_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7623,7 +7624,7 @@ ALTER TABLE ONLY public.market_productos
 
 
 --
--- TOC entry 4515 (class 2606 OID 83384)
+-- TOC entry 4515 (class 2606 OID 87647)
 -- Name: market_productos market_productos_unidad_medida_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7632,7 +7633,7 @@ ALTER TABLE ONLY public.market_productos
 
 
 --
--- TOC entry 4511 (class 2606 OID 83321)
+-- TOC entry 4511 (class 2606 OID 87584)
 -- Name: market_proveedor_user market_proveedor_user_proveedor_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7641,7 +7642,7 @@ ALTER TABLE ONLY public.market_proveedor_user
 
 
 --
--- TOC entry 4512 (class 2606 OID 83326)
+-- TOC entry 4512 (class 2606 OID 87589)
 -- Name: market_proveedor_user market_proveedor_user_user_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7650,7 +7651,7 @@ ALTER TABLE ONLY public.market_proveedor_user
 
 
 --
--- TOC entry 4401 (class 2606 OID 81918)
+-- TOC entry 4401 (class 2606 OID 86183)
 -- Name: modalidad_contrato modalidad_contrato_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7659,7 +7660,7 @@ ALTER TABLE ONLY public.modalidad_contrato
 
 
 --
--- TOC entry 4452 (class 2606 OID 82467)
+-- TOC entry 4452 (class 2606 OID 86732)
 -- Name: model_has_permissions model_has_permissions_permission_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7668,7 +7669,7 @@ ALTER TABLE ONLY public.model_has_permissions
 
 
 --
--- TOC entry 4453 (class 2606 OID 82479)
+-- TOC entry 4453 (class 2606 OID 86744)
 -- Name: model_has_roles model_has_roles_role_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7677,7 +7678,7 @@ ALTER TABLE ONLY public.model_has_roles
 
 
 --
--- TOC entry 4486 (class 2606 OID 82952)
+-- TOC entry 4486 (class 2606 OID 87217)
 -- Name: motivos_ausencia motivos_ausencia_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7686,7 +7687,7 @@ ALTER TABLE ONLY public.motivos_ausencia
 
 
 --
--- TOC entry 4457 (class 2606 OID 82586)
+-- TOC entry 4457 (class 2606 OID 86851)
 -- Name: municipios municipios_departamento_codigo_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7695,7 +7696,7 @@ ALTER TABLE ONLY public.municipios
 
 
 --
--- TOC entry 4422 (class 2606 OID 82134)
+-- TOC entry 4422 (class 2606 OID 86399)
 -- Name: nomina_concepto nomina_concepto_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7704,7 +7705,7 @@ ALTER TABLE ONLY public.nomina_concepto
 
 
 --
--- TOC entry 4437 (class 2606 OID 82301)
+-- TOC entry 4437 (class 2606 OID 86566)
 -- Name: nomina_cosecha_ref nomina_cosecha_ref_cosecha_cuadrilla_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7713,7 +7714,7 @@ ALTER TABLE ONLY public.nomina_cosecha_ref
 
 
 --
--- TOC entry 4438 (class 2606 OID 82296)
+-- TOC entry 4438 (class 2606 OID 86561)
 -- Name: nomina_cosecha_ref nomina_cosecha_ref_nomina_empleado_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7722,7 +7723,7 @@ ALTER TABLE ONLY public.nomina_cosecha_ref
 
 
 --
--- TOC entry 4439 (class 2606 OID 82291)
+-- TOC entry 4439 (class 2606 OID 86556)
 -- Name: nomina_cosecha_ref nomina_cosecha_ref_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7731,7 +7732,7 @@ ALTER TABLE ONLY public.nomina_cosecha_ref
 
 
 --
--- TOC entry 4431 (class 2606 OID 82251)
+-- TOC entry 4431 (class 2606 OID 86516)
 -- Name: nomina_empleado_concepto nomina_empleado_concepto_concepto_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7740,7 +7741,7 @@ ALTER TABLE ONLY public.nomina_empleado_concepto
 
 
 --
--- TOC entry 4432 (class 2606 OID 82246)
+-- TOC entry 4432 (class 2606 OID 86511)
 -- Name: nomina_empleado_concepto nomina_empleado_concepto_nomina_empleado_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7749,7 +7750,7 @@ ALTER TABLE ONLY public.nomina_empleado_concepto
 
 
 --
--- TOC entry 4433 (class 2606 OID 82241)
+-- TOC entry 4433 (class 2606 OID 86506)
 -- Name: nomina_empleado_concepto nomina_empleado_concepto_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7758,7 +7759,7 @@ ALTER TABLE ONLY public.nomina_empleado_concepto
 
 
 --
--- TOC entry 4427 (class 2606 OID 82220)
+-- TOC entry 4427 (class 2606 OID 86485)
 -- Name: nomina_empleado nomina_empleado_empleado_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7767,7 +7768,7 @@ ALTER TABLE ONLY public.nomina_empleado
 
 
 --
--- TOC entry 4428 (class 2606 OID 83286)
+-- TOC entry 4428 (class 2606 OID 87549)
 -- Name: nomina_empleado nomina_empleado_liquidado_por_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7776,7 +7777,7 @@ ALTER TABLE ONLY public.nomina_empleado
 
 
 --
--- TOC entry 4429 (class 2606 OID 82215)
+-- TOC entry 4429 (class 2606 OID 86480)
 -- Name: nomina_empleado nomina_empleado_nomina_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7785,7 +7786,7 @@ ALTER TABLE ONLY public.nomina_empleado
 
 
 --
--- TOC entry 4430 (class 2606 OID 82210)
+-- TOC entry 4430 (class 2606 OID 86475)
 -- Name: nomina_empleado nomina_empleado_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7794,7 +7795,7 @@ ALTER TABLE ONLY public.nomina_empleado
 
 
 --
--- TOC entry 4501 (class 2606 OID 83169)
+-- TOC entry 4501 (class 2606 OID 87432)
 -- Name: nomina_hora_extra_ref nomina_hora_extra_ref_hora_extra_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7803,7 +7804,7 @@ ALTER TABLE ONLY public.nomina_hora_extra_ref
 
 
 --
--- TOC entry 4502 (class 2606 OID 83164)
+-- TOC entry 4502 (class 2606 OID 87427)
 -- Name: nomina_hora_extra_ref nomina_hora_extra_ref_nomina_empleado_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7812,7 +7813,7 @@ ALTER TABLE ONLY public.nomina_hora_extra_ref
 
 
 --
--- TOC entry 4503 (class 2606 OID 83159)
+-- TOC entry 4503 (class 2606 OID 87422)
 -- Name: nomina_hora_extra_ref nomina_hora_extra_ref_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7821,7 +7822,7 @@ ALTER TABLE ONLY public.nomina_hora_extra_ref
 
 
 --
--- TOC entry 4434 (class 2606 OID 82935)
+-- TOC entry 4434 (class 2606 OID 87200)
 -- Name: nomina_jornal_ref nomina_jornal_ref_jornal_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7830,7 +7831,7 @@ ALTER TABLE ONLY public.nomina_jornal_ref
 
 
 --
--- TOC entry 4435 (class 2606 OID 82270)
+-- TOC entry 4435 (class 2606 OID 86535)
 -- Name: nomina_jornal_ref nomina_jornal_ref_nomina_empleado_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7839,7 +7840,7 @@ ALTER TABLE ONLY public.nomina_jornal_ref
 
 
 --
--- TOC entry 4436 (class 2606 OID 82265)
+-- TOC entry 4436 (class 2606 OID 86530)
 -- Name: nomina_jornal_ref nomina_jornal_ref_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7848,7 +7849,7 @@ ALTER TABLE ONLY public.nomina_jornal_ref
 
 
 --
--- TOC entry 4423 (class 2606 OID 82156)
+-- TOC entry 4423 (class 2606 OID 86421)
 -- Name: nomina_tabla_legal nomina_tabla_legal_concepto_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7857,7 +7858,7 @@ ALTER TABLE ONLY public.nomina_tabla_legal
 
 
 --
--- TOC entry 4424 (class 2606 OID 82151)
+-- TOC entry 4424 (class 2606 OID 86416)
 -- Name: nomina_tabla_legal nomina_tabla_legal_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7866,7 +7867,7 @@ ALTER TABLE ONLY public.nomina_tabla_legal
 
 
 --
--- TOC entry 4425 (class 2606 OID 82184)
+-- TOC entry 4425 (class 2606 OID 86449)
 -- Name: nominas nominas_cerrada_por_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7875,7 +7876,7 @@ ALTER TABLE ONLY public.nominas
 
 
 --
--- TOC entry 4426 (class 2606 OID 82179)
+-- TOC entry 4426 (class 2606 OID 86444)
 -- Name: nominas nominas_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7884,7 +7885,7 @@ ALTER TABLE ONLY public.nominas
 
 
 --
--- TOC entry 4458 (class 2606 OID 82616)
+-- TOC entry 4458 (class 2606 OID 86881)
 -- Name: operaciones operaciones_aprobado_por_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7893,7 +7894,7 @@ ALTER TABLE ONLY public.operaciones
 
 
 --
--- TOC entry 4459 (class 2606 OID 82611)
+-- TOC entry 4459 (class 2606 OID 86876)
 -- Name: operaciones operaciones_creado_por_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7902,7 +7903,7 @@ ALTER TABLE ONLY public.operaciones
 
 
 --
--- TOC entry 4460 (class 2606 OID 82606)
+-- TOC entry 4460 (class 2606 OID 86871)
 -- Name: operaciones operaciones_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7911,7 +7912,7 @@ ALTER TABLE ONLY public.operaciones
 
 
 --
--- TOC entry 4391 (class 2606 OID 82783)
+-- TOC entry 4391 (class 2606 OID 87048)
 -- Name: palmas palmas_linea_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7920,7 +7921,7 @@ ALTER TABLE ONLY public.palmas
 
 
 --
--- TOC entry 4392 (class 2606 OID 81806)
+-- TOC entry 4392 (class 2606 OID 86071)
 -- Name: palmas palmas_sublote_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7929,7 +7930,7 @@ ALTER TABLE ONLY public.palmas
 
 
 --
--- TOC entry 4393 (class 2606 OID 81801)
+-- TOC entry 4393 (class 2606 OID 86066)
 -- Name: palmas palmas_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7938,7 +7939,7 @@ ALTER TABLE ONLY public.palmas
 
 
 --
--- TOC entry 4399 (class 2606 OID 81876)
+-- TOC entry 4399 (class 2606 OID 86141)
 -- Name: precio_abono precio_abono_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7947,7 +7948,7 @@ ALTER TABLE ONLY public.precio_abono
 
 
 --
--- TOC entry 4396 (class 2606 OID 81846)
+-- TOC entry 4396 (class 2606 OID 86111)
 -- Name: precio_cosecha precio_cosecha_lote_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7956,7 +7957,7 @@ ALTER TABLE ONLY public.precio_cosecha
 
 
 --
--- TOC entry 4397 (class 2606 OID 81841)
+-- TOC entry 4397 (class 2606 OID 86106)
 -- Name: precio_cosecha precio_cosecha_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7965,7 +7966,7 @@ ALTER TABLE ONLY public.precio_cosecha
 
 
 --
--- TOC entry 4478 (class 2606 OID 82873)
+-- TOC entry 4478 (class 2606 OID 87138)
 -- Name: precios_palma precios_palma_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7974,7 +7975,7 @@ ALTER TABLE ONLY public.precios_palma
 
 
 --
--- TOC entry 4380 (class 2606 OID 81687)
+-- TOC entry 4380 (class 2606 OID 85952)
 -- Name: predios predios_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7983,7 +7984,7 @@ ALTER TABLE ONLY public.predios
 
 
 --
--- TOC entry 4394 (class 2606 OID 81826)
+-- TOC entry 4394 (class 2606 OID 86091)
 -- Name: promedio_lote promedio_lote_lote_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7992,7 +7993,7 @@ ALTER TABLE ONLY public.promedio_lote
 
 
 --
--- TOC entry 4395 (class 2606 OID 81821)
+-- TOC entry 4395 (class 2606 OID 86086)
 -- Name: promedio_lote promedio_lote_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8001,7 +8002,7 @@ ALTER TABLE ONLY public.promedio_lote
 
 
 --
--- TOC entry 4411 (class 2606 OID 82051)
+-- TOC entry 4411 (class 2606 OID 86316)
 -- Name: registro_cosecha registro_cosecha_lote_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8010,7 +8011,7 @@ ALTER TABLE ONLY public.registro_cosecha
 
 
 --
--- TOC entry 4412 (class 2606 OID 82653)
+-- TOC entry 4412 (class 2606 OID 86918)
 -- Name: registro_cosecha registro_cosecha_operacion_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8019,7 +8020,7 @@ ALTER TABLE ONLY public.registro_cosecha
 
 
 --
--- TOC entry 4413 (class 2606 OID 82056)
+-- TOC entry 4413 (class 2606 OID 86321)
 -- Name: registro_cosecha registro_cosecha_sublote_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8028,7 +8029,7 @@ ALTER TABLE ONLY public.registro_cosecha
 
 
 --
--- TOC entry 4414 (class 2606 OID 82046)
+-- TOC entry 4414 (class 2606 OID 86311)
 -- Name: registro_cosecha registro_cosecha_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8037,7 +8038,7 @@ ALTER TABLE ONLY public.registro_cosecha
 
 
 --
--- TOC entry 4454 (class 2606 OID 82490)
+-- TOC entry 4454 (class 2606 OID 86755)
 -- Name: role_has_permissions role_has_permissions_permission_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8046,7 +8047,7 @@ ALTER TABLE ONLY public.role_has_permissions
 
 
 --
--- TOC entry 4455 (class 2606 OID 82495)
+-- TOC entry 4455 (class 2606 OID 86760)
 -- Name: role_has_permissions role_has_permissions_role_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8055,25 +8056,25 @@ ALTER TABLE ONLY public.role_has_permissions
 
 
 --
--- TOC entry 4384 (class 2606 OID 81739)
+-- TOC entry 4384 (class 2606 OID 86004)
 -- Name: semilla_lote semilla_lote_lote_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.semilla_lote
-    ADD CONSTRAINT semilla_lote_lote_id_foreign FOREIGN KEY (lote_id) REFERENCES public.lotes(id);
+    ADD CONSTRAINT semilla_lote_lote_id_foreign FOREIGN KEY (lote_id) REFERENCES public.lotes(id) ON DELETE CASCADE;
 
 
 --
--- TOC entry 4385 (class 2606 OID 81744)
+-- TOC entry 4385 (class 2606 OID 86009)
 -- Name: semilla_lote semilla_lote_semilla_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.semilla_lote
-    ADD CONSTRAINT semilla_lote_semilla_id_foreign FOREIGN KEY (semilla_id) REFERENCES public.semillas(id);
+    ADD CONSTRAINT semilla_lote_semilla_id_foreign FOREIGN KEY (semilla_id) REFERENCES public.semillas(id) ON DELETE CASCADE;
 
 
 --
--- TOC entry 4386 (class 2606 OID 81734)
+-- TOC entry 4386 (class 2606 OID 85999)
 -- Name: semilla_lote semilla_lote_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8082,7 +8083,7 @@ ALTER TABLE ONLY public.semilla_lote
 
 
 --
--- TOC entry 4381 (class 2606 OID 81701)
+-- TOC entry 4381 (class 2606 OID 85966)
 -- Name: semillas semillas_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8091,7 +8092,7 @@ ALTER TABLE ONLY public.semillas
 
 
 --
--- TOC entry 4387 (class 2606 OID 81765)
+-- TOC entry 4387 (class 2606 OID 86030)
 -- Name: sublotes sublotes_lote_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8100,7 +8101,7 @@ ALTER TABLE ONLY public.sublotes
 
 
 --
--- TOC entry 4388 (class 2606 OID 81760)
+-- TOC entry 4388 (class 2606 OID 86025)
 -- Name: sublotes sublotes_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8109,7 +8110,7 @@ ALTER TABLE ONLY public.sublotes
 
 
 --
--- TOC entry 4456 (class 2606 OID 82524)
+-- TOC entry 4456 (class 2606 OID 86789)
 -- Name: telescope_entries_tags telescope_entries_tags_entry_uuid_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8118,7 +8119,7 @@ ALTER TABLE ONLY public.telescope_entries_tags
 
 
 --
--- TOC entry 4375 (class 2606 OID 81597)
+-- TOC entry 4375 (class 2606 OID 85862)
 -- Name: tenant_config tenant_config_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8127,7 +8128,7 @@ ALTER TABLE ONLY public.tenant_config
 
 
 --
--- TOC entry 4376 (class 2606 OID 81644)
+-- TOC entry 4376 (class 2606 OID 85909)
 -- Name: tenant_user tenant_user_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8136,7 +8137,7 @@ ALTER TABLE ONLY public.tenant_user
 
 
 --
--- TOC entry 4377 (class 2606 OID 81649)
+-- TOC entry 4377 (class 2606 OID 85914)
 -- Name: tenant_user tenant_user_user_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8145,7 +8146,7 @@ ALTER TABLE ONLY public.tenant_user
 
 
 --
--- TOC entry 4493 (class 2606 OID 83083)
+-- TOC entry 4493 (class 2606 OID 87348)
 -- Name: tipos_hora_extra tipos_hora_extra_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8154,7 +8155,7 @@ ALTER TABLE ONLY public.tipos_hora_extra
 
 
 --
--- TOC entry 4488 (class 2606 OID 83000)
+-- TOC entry 4488 (class 2606 OID 87265)
 -- Name: transportadores transportadores_empresa_transportadora_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8163,7 +8164,7 @@ ALTER TABLE ONLY public.transportadores
 
 
 --
--- TOC entry 4489 (class 2606 OID 82995)
+-- TOC entry 4489 (class 2606 OID 87260)
 -- Name: transportadores transportadores_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8172,7 +8173,7 @@ ALTER TABLE ONLY public.transportadores
 
 
 --
--- TOC entry 4444 (class 2606 OID 82362)
+-- TOC entry 4444 (class 2606 OID 86627)
 -- Name: vacacion_acumulado vacacion_acumulado_empleado_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8181,7 +8182,7 @@ ALTER TABLE ONLY public.vacacion_acumulado
 
 
 --
--- TOC entry 4445 (class 2606 OID 82357)
+-- TOC entry 4445 (class 2606 OID 86622)
 -- Name: vacacion_acumulado vacacion_acumulado_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8190,7 +8191,7 @@ ALTER TABLE ONLY public.vacacion_acumulado
 
 
 --
--- TOC entry 4440 (class 2606 OID 82334)
+-- TOC entry 4440 (class 2606 OID 86599)
 -- Name: vacaciones vacaciones_aprobado_por_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8199,7 +8200,7 @@ ALTER TABLE ONLY public.vacaciones
 
 
 --
--- TOC entry 4441 (class 2606 OID 82329)
+-- TOC entry 4441 (class 2606 OID 86594)
 -- Name: vacaciones vacaciones_empleado_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8208,7 +8209,7 @@ ALTER TABLE ONLY public.vacaciones
 
 
 --
--- TOC entry 4442 (class 2606 OID 82339)
+-- TOC entry 4442 (class 2606 OID 86604)
 -- Name: vacaciones vacaciones_nomina_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8217,7 +8218,7 @@ ALTER TABLE ONLY public.vacaciones
 
 
 --
--- TOC entry 4443 (class 2606 OID 82324)
+-- TOC entry 4443 (class 2606 OID 86589)
 -- Name: vacaciones vacaciones_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8226,7 +8227,7 @@ ALTER TABLE ONLY public.vacaciones
 
 
 --
--- TOC entry 4415 (class 2606 OID 82083)
+-- TOC entry 4415 (class 2606 OID 86348)
 -- Name: viaje_detalle viaje_detalle_cosecha_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8235,7 +8236,7 @@ ALTER TABLE ONLY public.viaje_detalle
 
 
 --
--- TOC entry 4416 (class 2606 OID 83065)
+-- TOC entry 4416 (class 2606 OID 87330)
 -- Name: viaje_detalle viaje_detalle_reconteo_aprobado_por_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8244,7 +8245,7 @@ ALTER TABLE ONLY public.viaje_detalle
 
 
 --
--- TOC entry 4417 (class 2606 OID 82073)
+-- TOC entry 4417 (class 2606 OID 86338)
 -- Name: viaje_detalle viaje_detalle_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8253,7 +8254,7 @@ ALTER TABLE ONLY public.viaje_detalle
 
 
 --
--- TOC entry 4418 (class 2606 OID 82078)
+-- TOC entry 4418 (class 2606 OID 86343)
 -- Name: viaje_detalle viaje_detalle_viaje_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8262,7 +8263,7 @@ ALTER TABLE ONLY public.viaje_detalle
 
 
 --
--- TOC entry 4504 (class 2606 OID 83199)
+-- TOC entry 4504 (class 2606 OID 87462)
 -- Name: viaje_documento_bascula viaje_documento_bascula_creado_por_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8271,7 +8272,7 @@ ALTER TABLE ONLY public.viaje_documento_bascula
 
 
 --
--- TOC entry 4505 (class 2606 OID 83189)
+-- TOC entry 4505 (class 2606 OID 87452)
 -- Name: viaje_documento_bascula viaje_documento_bascula_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8280,7 +8281,7 @@ ALTER TABLE ONLY public.viaje_documento_bascula
 
 
 --
--- TOC entry 4506 (class 2606 OID 83194)
+-- TOC entry 4506 (class 2606 OID 87457)
 -- Name: viaje_documento_bascula viaje_documento_bascula_viaje_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8289,7 +8290,7 @@ ALTER TABLE ONLY public.viaje_documento_bascula
 
 
 --
--- TOC entry 4406 (class 2606 OID 83052)
+-- TOC entry 4406 (class 2606 OID 87317)
 -- Name: viajes viajes_creado_por_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8298,7 +8299,7 @@ ALTER TABLE ONLY public.viajes
 
 
 --
--- TOC entry 4407 (class 2606 OID 83037)
+-- TOC entry 4407 (class 2606 OID 87302)
 -- Name: viajes viajes_empresa_transportadora_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8307,7 +8308,7 @@ ALTER TABLE ONLY public.viajes
 
 
 --
--- TOC entry 4408 (class 2606 OID 83047)
+-- TOC entry 4408 (class 2606 OID 87312)
 -- Name: viajes viajes_extractora_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8316,7 +8317,7 @@ ALTER TABLE ONLY public.viajes
 
 
 --
--- TOC entry 4409 (class 2606 OID 82027)
+-- TOC entry 4409 (class 2606 OID 86292)
 -- Name: viajes viajes_tenant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8325,7 +8326,7 @@ ALTER TABLE ONLY public.viajes
 
 
 --
--- TOC entry 4410 (class 2606 OID 83042)
+-- TOC entry 4410 (class 2606 OID 87307)
 -- Name: viajes viajes_transportador_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9858,11 +9859,11 @@ ALTER DEFAULT PRIVILEGES FOR ROLE agro_user IN SCHEMA public GRANT SELECT,INSERT
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLES TO agente_user;
 
 
--- Completed on 2026-05-07 22:04:09
+-- Completed on 2026-05-13 11:20:27
 
 --
 -- PostgreSQL database dump complete
 --
 
-\unrestrict aQftUlBolGnj0jJA2XxahdWK4trkgZBfpszLcIuvMIsmsojojgjcTEp9LCFh5J9
+\unrestrict x9fG6yyzwdiapIxkx9RzwyMl9KGwd5m4QppH1qzLloLgW8cKub99JVQAW7ylF6B
 
