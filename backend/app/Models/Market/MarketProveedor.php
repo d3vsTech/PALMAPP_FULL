@@ -6,9 +6,12 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class MarketProveedor extends Model
 {
+    use SoftDeletes;
+
     protected $table = 'market_proveedores';
 
     protected $fillable = [

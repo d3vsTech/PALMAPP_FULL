@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\Admin\AuditoriaController;
 use App\Http\Controllers\Api\Admin\DashboardController;
 use App\Http\Controllers\Api\Admin\DiagnosticController;
+use App\Http\Controllers\Api\Admin\MarketProveedorController;
 use App\Http\Controllers\Api\Admin\TenantController;
 use App\Http\Controllers\Api\Admin\UserController;
 use App\Http\Controllers\Api\AuthController;
@@ -136,6 +137,19 @@ Route::prefix('v1/admin')->middleware(['auth:api', 'super_admin'])->group(functi
     // ── Auditorías ──
     Route::get('auditorias', [AuditoriaController::class, 'index']);
     Route::get('auditorias/{auditoria}', [AuditoriaController::class, 'show']);
+
+    // ── Market: Proveedores (empresas vendedoras del marketplace) ──
+    Route::prefix('market')->group(function () {
+        Route::apiResource('proveedores', MarketProveedorController::class)
+            ->parameters(['proveedores' => 'proveedor']);
+        Route::patch('proveedores/{proveedor}/toggle', [MarketProveedorController::class, 'toggle']);
+
+        // Usuarios vinculados a un proveedor
+        Route::get   ('proveedores/{proveedor}/usuarios',        [MarketProveedorController::class, 'listUsers']);
+        Route::post  ('proveedores/{proveedor}/usuarios',        [MarketProveedorController::class, 'addUser']);
+        Route::put   ('proveedores/{proveedor}/usuarios/{user}', [MarketProveedorController::class, 'updateUser']);
+        Route::delete('proveedores/{proveedor}/usuarios/{user}', [MarketProveedorController::class, 'removeUser']);
+    });
 });
 
 // ═══════════════════════════════════════════════════════════

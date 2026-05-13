@@ -22,7 +22,7 @@ class Semilla extends Model
 
     public function lotes(): BelongsToMany
     {
-        return $this->belongsToMany(Lote::class, 'semilla_lote');
+        return $this->belongsToMany(Lote::class, 'semilla_lote')->withPivot('tenant_id');
     }
 
     public function scopeActivos($query)

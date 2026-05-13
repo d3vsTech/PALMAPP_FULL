@@ -140,9 +140,12 @@ class LoteController extends Controller
 
             $lote = Lote::create($request->validated());
 
-            // Sincronizar semillas si se enviaron
+            // Sincronizar semillas si se enviaron (tenant_id requerido en la pivote)
             if ($request->has('semillas_ids') && is_array($request->semillas_ids)) {
-                $lote->semillas()->sync($request->semillas_ids);
+                $pivotData = collect($request->semillas_ids)
+                    ->mapWithKeys(fn($id) => [$id => ['tenant_id' => $lote->tenant_id]])
+                    ->all();
+                $lote->semillas()->sync($pivotData);
             }
 
             DB::commit();
@@ -191,9 +194,12 @@ class LoteController extends Controller
 
             $lote->update($request->validated());
 
-            // Sincronizar semillas si se enviaron
+            // Sincronizar semillas si se enviaron (tenant_id requerido en la pivote)
             if ($request->has('semillas_ids')) {
-                $lote->semillas()->sync($request->semillas_ids ?? []);
+                $pivotData = collect($request->semillas_ids ?? [])
+                    ->mapWithKeys(fn($id) => [$id => ['tenant_id' => $lote->tenant_id]])
+                    ->all();
+                $lote->semillas()->sync($pivotData);
             }
 
             DB::commit();

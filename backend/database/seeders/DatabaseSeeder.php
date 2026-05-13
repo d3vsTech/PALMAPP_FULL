@@ -20,7 +20,7 @@ class DatabaseSeeder extends Seeder
         $this->call(DepartamentoMunicipioSeeder::class);
 
         // ═══ 0.2 BOT USER (super admin para integraciones) ═══
-        $this->call(BotUserSeeder::class);
+        //$this->call(BotUserSeeder::class);
 
         // ═══ 1. SUPER ADMIN ═══
         $superAdmin = User::create([
@@ -33,130 +33,136 @@ class DatabaseSeeder extends Seeder
         ]);
 
         // ═══ 2. TENANT DEMO ═══
-        $tenantDemo = Tenant::create([
-            'nombre' => 'Finca La Esperanza',
-            'nit' => '900123456-1',
-            'tipo_persona' => 'JURIDICA',
-            'razon_social' => 'Agrícola La Esperanza S.A.S',
-            'correo_contacto' => 'info@laesperanza.com',
-            'telefono' => '3001234567',
-            'direccion' => 'Vereda El Porvenir, Km 5',
-            'departamento' => 'Meta',
-            'municipio' => 'Acacías',
-            'estado' => 'ACTIVO',
-            'fecha_activacion' => now(),
-            'plan' => 'BASICO',
-            'max_empleados' => 100,
-            'max_usuarios' => 10,
-        ]);
+        // Aquí se crea la finca "Finca La Esperanza" como Tenant.
+        // El Tenant es el contenedor principal: todos los datos (predios, empleados,
+        // operaciones, etc.) pertenecen a este tenant via tenant_id.
+        // NOTA: el Predio físico ("Predio Principal") NO se crea aquí —
+        // se crea en DemoOperacionSeeder::seedPlantacion().
+        // $tenantDemo = Tenant::create([
+        //     'nombre' => 'Finca La Esperanza',
+        //     'nit' => '900123456-1',
+        //     'tipo_persona' => 'JURIDICA',
+        //     'razon_social' => 'Agrícola La Esperanza S.A.S',
+        //     'correo_contacto' => 'info@laesperanza.com',
+        //     'telefono' => '3001234567',
+        //     'direccion' => 'Vereda El Porvenir, Km 5',
+        //     'departamento' => 'Meta',
+        //     'municipio' => 'Acacías',
+        //     'estado' => 'ACTIVO',
+        //     'fecha_activacion' => now(),
+        //     'plan' => 'BASICO',
+        //     'max_empleados' => 100,
+        //     'max_usuarios' => 10,
+        // ]);
 
-        TenantConfig::create([
-            'tenant_id' => $tenantDemo->id,
-            'modulo_dashboard' => true,
-            'modulo_plantacion' => true,
-            'modulo_colaboradores' => true,
-            'modulo_nomina' => true,
-            'modulo_operaciones' => true,
-            'modulo_viajes' => true,
-            'modulo_market' => true,
-            'modulo_usuarios' => true,
-            'modulo_configuracion' => true,
-            'tipo_pago_nomina' => 'QUINCENAL',
-            'moneda' => 'COP',
-            'zona_horaria' => 'America/Bogota',
-            'pais' => 'CO',
-            'salario_minimo_vigente' => 1423500.00,
-            'auxilio_transporte' => 200000.00,
-            'divisor_jornada_mensual' => 240,
-            'sync_habilitado' => true,
-        ]);
+        // TenantConfig::create([
+        //     'tenant_id' => $tenantDemo->id,
+        //     'modulo_dashboard' => true,
+        //     'modulo_plantacion' => true,
+        //     'modulo_colaboradores' => true,
+        //     'modulo_nomina' => true,
+        //     'modulo_operaciones' => true,
+        //     'modulo_viajes' => true,
+        //     'modulo_market' => true,
+        //     'modulo_usuarios' => true,
+        //     'modulo_configuracion' => true,
+        //     'tipo_pago_nomina' => 'QUINCENAL',
+        //     'moneda' => 'COP',
+        //     'zona_horaria' => 'America/Bogota',
+        //     'pais' => 'CO',
+        //     'salario_minimo_vigente' => 1423500.00,
+        //     'auxilio_transporte' => 200000.00,
+        //     'divisor_jornada_mensual' => 240,
+        //     'sync_habilitado' => true,
+        // ]);
 
         // ═══ 3. ADMIN DE FINCA ═══
-        $adminFinca = User::create([
-            'name' => 'Juan Pérez',
-            'email' => 'juan@laesperanza.com',
-            'password' => Hash::make('password'),
-            'is_super_admin' => false,
-            'status' => true,
-        ]);
+        // $adminFinca = User::create([
+        //     'name' => 'Juan Pérez',
+        //     'email' => 'juan@laesperanza.com',
+        //     'password' => Hash::make('password'),
+        //     'is_super_admin' => false,
+        //     'status' => true,
+        // ]);
 
-        TenantUser::create([
-            'tenant_id' => $tenantDemo->id,
-            'user_id' => $adminFinca->id,
-            'rol' => 'ADMIN',
-            'estado' => true,
-        ]);
+        // TenantUser::create([
+        //     'tenant_id' => $tenantDemo->id,
+        //     'user_id' => $adminFinca->id,
+        //     'rol' => 'ADMIN',
+        //     'estado' => true,
+        // ]);
 
         // Asignar rol Spatie en el contexto del tenant
-        setPermissionsTeamId($tenantDemo->id);
-        $adminFinca->assignRole('ADMIN');
+        // setPermissionsTeamId($tenantDemo->id);
+        // $adminFinca->assignRole('ADMIN');
 
         // ═══ 4. USUARIO CON PERMISOS DE OPERACIONES (antes Líder de Campo) ═══
-        $operador = User::create([
-            'name' => 'Carlos Rodríguez',
-            'email' => 'carlos@laesperanza.com',
-            'password' => Hash::make('password'),
-            'is_super_admin' => false,
-            'status' => true,
-        ]);
+        // $operador = User::create([
+        //     'name' => 'Carlos Rodríguez',
+        //     'email' => 'carlos@laesperanza.com',
+        //     'password' => Hash::make('password'),
+        //     'is_super_admin' => false,
+        //     'status' => true,
+        // ]);
 
-        TenantUser::create([
-            'tenant_id' => $tenantDemo->id,
-            'user_id' => $operador->id,
-            'rol' => 'USUARIO',
-            'estado' => true,
-        ]);
+        // TenantUser::create([
+        //     'tenant_id' => $tenantDemo->id,
+        //     'user_id' => $operador->id,
+        //     'rol' => 'USUARIO',
+        //     'estado' => true,
+        // ]);
 
         // Asignar permisos directos (operaciones, viajes, colaboradores lectura)
-        $operador->givePermissionTo([
-            'dashboard.ver',
-            'operaciones.ver', 'operaciones.crear', 'operaciones.editar', 'operaciones.eliminar', 'operaciones.aprobar',
-            'cosecha.ver', 'cosecha.crear', 'cosecha.editar', 'cosecha.eliminar',
-            'jornales.ver', 'jornales.crear', 'jornales.editar', 'jornales.eliminar',
-            'auxiliares.ver', 'auxiliares.crear', 'auxiliares.editar', 'auxiliares.eliminar',
-            'viajes.ver', 'viajes.crear', 'viajes.editar', 'viajes.eliminar',
-            'colaboradores.ver',
-            'contratos.ver',
-        ]);
+        // $operador->givePermissionTo([
+        //     'dashboard.ver',
+        //     'operaciones.ver', 'operaciones.crear', 'operaciones.editar', 'operaciones.eliminar', 'operaciones.aprobar',
+        //     'cosecha.ver', 'cosecha.crear', 'cosecha.editar', 'cosecha.eliminar',
+        //     'jornales.ver', 'jornales.crear', 'jornales.editar', 'jornales.eliminar',
+        //     'auxiliares.ver', 'auxiliares.crear', 'auxiliares.editar', 'auxiliares.eliminar',
+        //     'viajes.ver', 'viajes.crear', 'viajes.editar', 'viajes.eliminar',
+        //     'colaboradores.ver',
+        //     'contratos.ver',
+        // ]);
 
         // ═══ 5. USUARIO SOLO LECTURA (antes Propietario) ═══
-        $lector = User::create([
-            'name' => 'María García',
-            'email' => 'maria@laesperanza.com',
-            'password' => Hash::make('password'),
-            'is_super_admin' => false,
-            'status' => true,
-        ]);
+        // $lector = User::create([
+        //     'name' => 'María García',
+        //     'email' => 'maria@laesperanza.com',
+        //     'password' => Hash::make('password'),
+        //     'is_super_admin' => false,
+        //     'status' => true,
+        // ]);
 
-        TenantUser::create([
-            'tenant_id' => $tenantDemo->id,
-            'user_id' => $lector->id,
-            'rol' => 'USUARIO',
-            'estado' => true,
-        ]);
+        // TenantUser::create([
+        //     'tenant_id' => $tenantDemo->id,
+        //     'user_id' => $lector->id,
+        //     'rol' => 'USUARIO',
+        //     'estado' => true,
+        // ]);
 
         // Asignar permisos directos (solo lectura)
-        $lector->givePermissionTo([
-            'dashboard.ver',
-            'lotes.ver', 'sublotes.ver', 'palmas.ver',
-            'colaboradores.ver', 'contratos.ver',
-            'operaciones.ver', 'cosecha.ver', 'jornales.ver', 'auxiliares.ver',
-            'viajes.ver',
-            'nomina.ver',
-        ]);
+        // $lector->givePermissionTo([
+        //     'dashboard.ver',
+        //     'lotes.ver', 'sublotes.ver', 'palmas.ver',
+        //     'colaboradores.ver', 'contratos.ver',
+        //     'operaciones.ver', 'cosecha.ver', 'jornales.ver', 'auxiliares.ver',
+        //     'viajes.ver',
+        //     'nomina.ver',
+        // ]);
 
         // ═══ 6. CATÁLOGOS PARAMÉTRICOS ═══
         $this->call(MotivoAusenciaSeeder::class);
         $this->call(TipoHoraExtraSeeder::class);
         $this->call(NominaConceptoSeeder::class);
-        $this->call(ViajesParametricasSeeder::class);
+        //$this->call(ViajesParametricasSeeder::class);
         $this->call(ParametricasColaboradorSeeder::class);
+        //$this->call(SemillaSeeder::class);
 
         // ═══ 7. EMPLEADOS DEMO (1 FIJO + 2 VARIABLE para probar nómina) ═══
-        $this->call(EmpleadoSeeder::class);
+        //$this->call(EmpleadoSeeder::class);
 
         // ═══ 8. DATOS DEMO DE OPERACIONES (temporal para desarrollo) ═══
-        $this->call(DemoOperacionSeeder::class);
+        //$this->call(DemoOperacionSeeder::class);
 
         // ═══ 9. MÓDULO MARKET ═══
         $this->call(MarketSeeder::class);
@@ -169,7 +175,7 @@ class DatabaseSeeder extends Seeder
         $this->command->info(" Admin Finca:    juan@laesperanza.com / password");
         $this->command->info(" Usuario (ops):  carlos@laesperanza.com / password");
         $this->command->info(" Usuario (lect): maria@laesperanza.com / password");
-        $this->command->info(" Tenant Demo:    {$tenantDemo->nombre} (ID: {$tenantDemo->id})");
+        // $this->command->info(" Tenant Demo:    {$tenantDemo->nombre} (ID: {$tenantDemo->id})");
         $this->command->info(" Proveedor:      admin@agroinsumosdelvalle.com / password");
         $this->command->info('══════════════════════════════════════════');
     }

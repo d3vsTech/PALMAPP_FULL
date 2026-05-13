@@ -62,6 +62,9 @@ class DemoOperacionSeeder extends Seeder
 
     private function seedPreciosAbono(int $tenantId): void
     {
+        // Precios por rango de gramos/palma para jornales de FERTILIZACION.
+        // Fórmula: valor_total = cantidad_palmas × precio_palma_del_rango
+        // Ejemplo: 500 palmas a 200 g/palma → rango 151-250 → 500 × $2.500 = $1.250.000
         $rangos = [
             ['gramos_min' => 0,   'gramos_max' => 150, 'precio_palma' => 2000.00],
             ['gramos_min' => 151, 'gramos_max' => 250, 'precio_palma' => 2500.00],
@@ -85,6 +88,10 @@ class DemoOperacionSeeder extends Seeder
 
     private function seedPreciosPalma(int $tenantId): void
     {
+        // Precio unitario por palma para jornales de tipo PALMA.
+        // PLATEO y PODA: valor_total = cantidad_palmas × precio_palma
+        // SANIDAD y OTROS: precio_palma es un valor plano (no se multiplica por cantidad).
+        //   Si es null, la tarifa queda sin definir y el jornal no calculará valor_total.
         $precios = [
             ['tipo' => PrecioPalma::TIPO_PLATEO,  'precio_palma' => 50.00],
             ['tipo' => PrecioPalma::TIPO_PODA,    'precio_palma' => 80.00],
@@ -102,6 +109,8 @@ class DemoOperacionSeeder extends Seeder
 
     private function seedLaboresFinca(int $tenantId): void
     {
+        // Labores de finca con tarifa diaria fija (categoría FINCA).
+        // Fórmula: valor_total = valor_base (sin cantidad ni palmas, tarifa plana por jornal).
         $labores = [
             ['nombre' => 'Reparación de portón',   'valor_base' => 45000.00],
             ['nombre' => 'Mantenimiento general',  'valor_base' => 30000.00],
@@ -118,6 +127,8 @@ class DemoOperacionSeeder extends Seeder
 
     private function seedPlantacion(int $tenantId): void
     {
+        // Crea el Predio físico "Predio Principal" con sus Lotes y Sublotes.
+        // Este es el único Predio demo asociado al tenant "Finca La Esperanza".
         if (Predio::where('tenant_id', $tenantId)->exists()) {
             return;
         }
@@ -152,11 +163,17 @@ class DemoOperacionSeeder extends Seeder
                     'tenant_id'       => $tenantId,
                     'lote_id'         => $lote->id,
                     'nombre'          => "{$loteData['nombre']}.{$s}",
+                    // Metadata de capacidad del sublote. NO entra en el cálculo del jornal;
+                    // el jornal usa la cantidad que el operario ingresa en la planilla.
                     'cantidad_palmas' => 0,
                     'estado'          => true,
                 ]);
             }
 
+            // PromedioLote y PrecioCosecha NO afectan jornales regulares (PLATEO, PODA, etc.).
+            // Solo los usa CosechaCalculationService:
+            //   valor_total_cosecha = peso_confirmado × PrecioCosecha.precio
+            // PromedioLote (12.50 kg/gajo) se guarda como snapshot informativo en RegistroCosecha.
             PromedioLote::updateOrCreate(
                 ['tenant_id' => $tenantId, 'lote_id' => $lote->id, 'anio' => $anio],
                 ['promedio' => 12.50],
