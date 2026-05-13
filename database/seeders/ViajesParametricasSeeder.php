@@ -20,6 +20,10 @@ class ViajesParametricasSeeder extends Seeder
 {
     public function run(): void
     {
+        // Siembra catálogos de logística para el módulo Viajes.
+        // No afecta cálculos de nómina ni jornales.
+        // Se aplica a TODOS los tenants activos (no sólo el demo).
+        // Crea: 3 empresas transportadoras, 7 conductores, 3 extractoras.
         $empresasBase = [
             [
                 'razon_social'    => 'Transportes del Llano S.A.S.',

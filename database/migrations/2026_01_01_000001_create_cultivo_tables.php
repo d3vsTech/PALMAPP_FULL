@@ -47,8 +47,8 @@ return new class extends Migration
         Schema::create('semilla_lote', function (Blueprint $table) {
             $table->id();
             $table->foreignId('tenant_id')->constrained('tenants');
-            $table->foreignId('lote_id')->constrained('lotes');
-            $table->foreignId('semilla_id')->constrained('semillas');
+            $table->foreignId('lote_id')->constrained('lotes')->cascadeOnDelete();
+            $table->foreignId('semilla_id')->constrained('semillas')->cascadeOnDelete();
             $table->timestamps();
             $table->unique(['lote_id', 'semilla_id']);
             $table->index('tenant_id');

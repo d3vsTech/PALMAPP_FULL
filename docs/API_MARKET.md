@@ -93,7 +93,7 @@ Solo aparecen productos con:
       "nombre": "Fertilizante NPK 15-15-15",
       "descripcion": "Fertilizante completo para palma de aceite",
       "sku": "NPK-15-50KG",
-      "imagen_principal": null,
+      "imagen_principal": "/assets/images/products/FERT-001.jpg",
       "precio_unitario": "95000.00",
       "stock_disponible": 450,
       "stock_minimo": 50,
@@ -137,20 +137,23 @@ Incluye galería de imágenes y especificaciones.
     "id": 1,
     "nombre": "Fertilizante NPK 15-15-15",
     "descripcion": "Fertilizante completo para palma de aceite",
-    "especificaciones": { "composicion": "15-15-15", "presentacion": "Bulto 50kg" },
-    "precio_unitario": "95000.00",
-    "stock_disponible": 450,
+    "especificaciones": null,
+    "imagen_principal": "/assets/images/products/FERT-001.jpg",
+    "precio_unitario": "175000.00",
+    "stock_disponible": 1200,
     "stock_bajo": false,
-    "calificacion_promedio": "4.5",
+    "calificacion_promedio": "4.70",
     "proveedor": {
       "id": 1,
       "nombre_empresa": "AgroInsumos del Valle",
-      "ciudad": "Bogotá",
+      "ciudad": "Villavicencio",
       "calificacion_promedio": "4.7"
     },
     "categoria": { "id": 1, "nombre": "Fertilizantes", "slug": "fertilizantes" },
-    "unidad_medida": { "id": 1, "codigo": "BLT", "nombre": "Bulto", "abreviatura": "BLT" },
-    "imagenes": [],
+    "unidad_medida": { "id": 1, "codigo": "BLT", "nombre": "bulto", "abreviatura": "bulto" },
+    "imagenes": [
+      { "id": 1, "url": "/assets/images/products/FERT-001.jpg", "orden": 1, "alt_text": "KCL CLORURO DE POTASIO 0-0-60" }
+    ],
     "precios_volumen": [
       { "cantidad_minima": 10, "precio_unidad": "92000.00", "activo": true },
       { "cantidad_minima": 50, "precio_unidad": "89000.00", "activo": true }
@@ -201,7 +204,7 @@ GET /api/v1/tenant/market/carrito
           "id": 1,
           "nombre": "Fertilizante NPK 15-15-15",
           "sku": "NPK-15-50KG",
-          "imagen_principal": null,
+          "imagen_principal": "/assets/images/products/FERT-001.jpg",
           "estado": "activo",
           "stock_disponible": 450,
           "stock_bajo": false,
@@ -514,8 +517,8 @@ Ejemplo: `GET /api/v1/tenant/market/pedidos/PED-001`
         "descuento": "0.00",
         "producto": {
           "id": 1,
-          "nombre": "Fertilizante NPK 15-15-15",
-          "imagen_principal": null
+          "nombre": "KCL CLORURO DE POTASIO 0-0-60",
+          "imagen_principal": "/assets/images/products/FERT-001.jpg"
         }
       }
     ],
@@ -606,8 +609,10 @@ El rol `ADMIN` los recibe todos automáticamente.
 Para mostrar el precio base tachado, usar `producto.precio_unitario` del producto.
 
 ### Imágenes de productos
-`imagen_principal` puede ser `null`. En ese caso mostrar un placeholder SVG.
-Imágenes adicionales están en el array `imagenes` del detalle de producto.
+`imagen_principal` contiene una ruta relativa al public folder (ej. `/assets/images/products/AGRO-001.jpg`).
+El frontend construye la URL completa: `${APP_URL}${imagen_principal}` → `http://dominio.com/assets/images/products/AGRO-001.jpg`.
+Si `imagen_principal` es `null`, mostrar un placeholder SVG.
+El array `imagenes` en el endpoint de detalle contiene la galería del producto con las mismas rutas relativas.
 
 ### Carrito y múltiples proveedores
 El carrito puede tener productos de distintos proveedores simultáneamente.

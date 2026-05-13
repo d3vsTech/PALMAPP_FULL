@@ -304,9 +304,23 @@ GET /api/v1/tenant/usuarios/{user_id}/permisos
   ],
   "permisos_disponibles": [
     "dashboard.ver",
-    "lotes.ver",
-    "lotes.crear",
-    "..."
+    "lotes.ver", "lotes.crear", "lotes.editar", "lotes.eliminar",
+    "sublotes.ver", "sublotes.crear", "sublotes.editar", "sublotes.eliminar",
+    "lineas.ver", "lineas.crear", "lineas.editar", "lineas.eliminar",
+    "palmas.ver", "palmas.crear", "palmas.editar", "palmas.eliminar",
+    "colaboradores.ver", "colaboradores.crear", "colaboradores.editar", "colaboradores.eliminar",
+    "contratos.ver", "contratos.crear", "contratos.editar", "contratos.eliminar",
+    "operaciones.ver", "operaciones.crear", "operaciones.editar", "operaciones.eliminar", "operaciones.aprobar",
+    "cosecha.ver", "cosecha.crear", "cosecha.editar", "cosecha.eliminar",
+    "jornales.ver", "jornales.crear", "jornales.editar", "jornales.eliminar",
+    "auxiliares.ver", "auxiliares.crear", "auxiliares.editar", "auxiliares.eliminar",
+    "viajes.ver", "viajes.crear", "viajes.editar", "viajes.eliminar",
+    "nomina.ver", "nomina.crear", "nomina.editar", "nomina.eliminar", "nomina.liquidar", "nomina.cerrar",
+    "nomina-conceptos.ver", "nomina-conceptos.gestionar",
+    "usuarios.ver", "usuarios.crear", "usuarios.editar", "usuarios.eliminar",
+    "usuarios.ver_permisos", "usuarios.editar_permisos", "usuarios.desactivar",
+    "configuracion.editar",
+    "market.catalogo", "market.carrito", "market.pedidos"
   ],
   "dependencias": {
     "colaboradores.ver": ["contratos.ver"],
@@ -326,7 +340,7 @@ GET /api/v1/tenant/usuarios/{user_id}/permisos
   "is_admin": true,
   "permisos_directos": [],
   "permisos_efectivos": ["dashboard.ver", "lotes.ver", "...todos los permisos..."],
-  "permisos_disponibles": ["dashboard.ver", "lotes.ver", "..."],
+  "permisos_disponibles": ["dashboard.ver", "lotes.ver", "... (todos los permisos del sistema)"],
   "dependencias": {
     "colaboradores.ver": ["contratos.ver"],
     "colaboradores.crear": ["contratos.crear"],
@@ -523,7 +537,26 @@ const agruparPorModulo = (permisos) => {
   return modulos
 }
 
-// Ejemplo: { dashboard: ['dashboard.ver'], lotes: ['lotes.ver', 'lotes.crear', ...], ... }
+// Resultado esperado con el catalogo actual:
+// {
+//   dashboard:        ['dashboard.ver'],
+//   lotes:            ['lotes.ver', 'lotes.crear', 'lotes.editar', 'lotes.eliminar'],
+//   sublotes:         ['sublotes.ver', ...],
+//   lineas:           ['lineas.ver', ...],
+//   palmas:           ['palmas.ver', ...],
+//   colaboradores:    ['colaboradores.ver', ...],
+//   contratos:        ['contratos.ver', ...],
+//   operaciones:      ['operaciones.ver', ..., 'operaciones.aprobar'],
+//   cosecha:          ['cosecha.ver', ...],
+//   jornales:         ['jornales.ver', ...],
+//   auxiliares:       ['auxiliares.ver', ...],
+//   viajes:           ['viajes.ver', ...],
+//   nomina:           ['nomina.ver', ..., 'nomina.liquidar', 'nomina.cerrar'],
+//   'nomina-conceptos': ['nomina-conceptos.ver', 'nomina-conceptos.gestionar'],
+//   usuarios:         ['usuarios.ver', ..., 'usuarios.ver_permisos', 'usuarios.editar_permisos', 'usuarios.desactivar'],
+//   configuracion:    ['configuracion.editar'],
+//   market:           ['market.catalogo', 'market.carrito', 'market.pedidos'],
+// }
 ```
 
 ### Mapa completo de permisos del modulo Usuarios
@@ -573,3 +606,95 @@ const agruparPorModulo = (permisos) => {
    → DELETE /api/v1/tenant/usuarios/{id}
    → Recargar tabla
 ```
+
+---
+
+## Apendice: Catalogo completo de permisos del sistema
+
+> Estos son todos los valores validos para el campo `permisos` en `PUT /permisos` y para `permisos_disponibles` en la respuesta de `GET /permisos`. Fuente: `RolesAndPermissionsSeeder`.
+
+### Dashboard
+
+| Permiso | Descripcion |
+|---------|-------------|
+| `dashboard.ver` | Acceso al panel principal |
+
+### Plantacion (Lotes, Sublotes, Lineas, Palmas)
+
+> Sin dependencias automaticas entre si. Cada modulo se asigna de forma independiente.
+
+| Permiso | Descripcion |
+|---------|-------------|
+| `lotes.ver` / `lotes.crear` / `lotes.editar` / `lotes.eliminar` | CRUD de lotes |
+| `sublotes.ver` / `sublotes.crear` / `sublotes.editar` / `sublotes.eliminar` | CRUD de sublotes |
+| `lineas.ver` / `lineas.crear` / `lineas.editar` / `lineas.eliminar` | CRUD de lineas |
+| `palmas.ver` / `palmas.crear` / `palmas.editar` / `palmas.eliminar` | CRUD de palmas |
+
+### Colaboradores y Contratos
+
+> **Dependencia automatica:** al asignar un permiso de colaboradores, el backend asigna automaticamente el permiso equivalente de contratos.
+
+| Permiso padre | Permiso que se agrega automaticamente |
+|---------------|--------------------------------------|
+| `colaboradores.ver` | `contratos.ver` |
+| `colaboradores.crear` | `contratos.crear` |
+| `colaboradores.editar` | `contratos.editar` |
+| `colaboradores.eliminar` | `contratos.eliminar` |
+
+### Operaciones (Planilla)
+
+| Permiso | Descripcion |
+|---------|-------------|
+| `operaciones.ver` | Ver registros de planilla |
+| `operaciones.crear` | Crear registros de planilla |
+| `operaciones.editar` | Editar registros de planilla |
+| `operaciones.eliminar` | Eliminar registros de planilla |
+| `operaciones.aprobar` | Aprobar planillas |
+| `cosecha.ver` / `cosecha.crear` / `cosecha.editar` / `cosecha.eliminar` | CRUD de cosecha |
+| `jornales.ver` / `jornales.crear` / `jornales.editar` / `jornales.eliminar` | CRUD de jornales |
+| `auxiliares.ver` / `auxiliares.crear` / `auxiliares.editar` / `auxiliares.eliminar` | CRUD de auxiliares |
+
+### Viajes
+
+| Permiso | Descripcion |
+|---------|-------------|
+| `viajes.ver` / `viajes.crear` / `viajes.editar` / `viajes.eliminar` | CRUD de viajes |
+
+### Nomina
+
+| Permiso | Descripcion |
+|---------|-------------|
+| `nomina.ver` | Ver nominas |
+| `nomina.crear` | Crear nominas |
+| `nomina.editar` | Editar nominas |
+| `nomina.eliminar` | Eliminar nominas |
+| `nomina.liquidar` | Liquidar nominas |
+| `nomina.cerrar` | Cerrar nominas |
+| `nomina-conceptos.ver` | Ver conceptos de nomina |
+| `nomina-conceptos.gestionar` | Crear/editar/eliminar conceptos de nomina |
+
+### Gestion de Usuarios
+
+| Permiso | Descripcion |
+|---------|-------------|
+| `usuarios.ver` | Ver lista de usuarios del tenant |
+| `usuarios.crear` | Crear o asignar usuarios al tenant |
+| `usuarios.editar` | Editar datos de un usuario |
+| `usuarios.eliminar` | Remover usuario del tenant |
+| `usuarios.desactivar` | Activar/desactivar usuario (`PATCH /toggle`) |
+| `usuarios.ver_permisos` | Ver pantalla de permisos de un usuario |
+| `usuarios.editar_permisos` | Guardar o revocar permisos de un usuario |
+
+### Configuracion
+
+| Permiso | Descripcion |
+|---------|-------------|
+| `configuracion.editar` | Editar configuracion general de la finca |
+
+### Market (Modulo B2B)
+
+| Permiso | Descripcion |
+|---------|-------------|
+| `market.catalogo` | Acceso al catalogo de productos del marketplace |
+| `market.carrito` | Gestionar carrito de compras |
+| `market.pedidos` | Ver y gestionar pedidos |

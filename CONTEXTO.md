@@ -829,6 +829,18 @@ DELETE /api/admin/tenants/:id         → Soft delete
 PATCH  /api/admin/tenants/:id/toggle  → Activar/suspender
 POST   /api/admin/tenants/:id/users   → Asignar usuario (ADMIN o USUARIO)
 DELETE /api/admin/tenants/:id/users/:userId → Remover usuario
+
+# Market — Proveedores (empresas vendedoras del marketplace)
+GET    /api/admin/market/proveedores             → Listar proveedores (paginado, filtros estado/ciudad/departamento/buscar)
+POST   /api/admin/market/proveedores             → Crear proveedor
+GET    /api/admin/market/proveedores/:id         → Detalle (con usuarios + conteos)
+PUT    /api/admin/market/proveedores/:id         → Editar proveedor
+DELETE /api/admin/market/proveedores/:id         → Soft delete (422 PROVIDER_ACTIVE si está activo)
+PATCH  /api/admin/market/proveedores/:id/toggle  → Activo ⇄ Suspendido
+GET    /api/admin/market/proveedores/:id/usuarios            → Listar usuarios del proveedor
+POST   /api/admin/market/proveedores/:id/usuarios            → Asignar user existente o crear nuevo (rol ADMIN|OPERADOR)
+PUT    /api/admin/market/proveedores/:id/usuarios/:userId    → Editar user + pivot (rol, estado)
+DELETE /api/admin/market/proveedores/:id/usuarios/:userId    → Desvincular user del proveedor
 ```
 
 ### Grupo 4: Negocio (JWT + X-Tenant-Id)
@@ -1040,6 +1052,7 @@ PUT|DELETE      /api/v1/tenant/nomina-conceptos/:id                             
 | Dashboard Tenant | `docs/API_DASHBOARD.md` | `GET /api/v1/tenant/dashboard`: contrato, headers, query params (presets de periodo + rango custom), estructura completa de la respuesta (indicadores, lotes, viajes, lluvias), reglas de negocio (solo APROBADAS / FINALIZADO), códigos de error y notas de consumo para el frontend |
 | Módulo Market — Arquitectura | `docs/MARKET_MODULE.md` | Arquitectura completa del marketplace: tablas, relaciones, flujo carrito→pedido, precios por volumen, imágenes, autenticación de proveedores |
 | Módulo Market — API Frontend | `docs/API_MARKET.md` | Guía de consumo para el frontend: todos los endpoints tenant (catálogo, carrito, pedidos), ejemplos JSON, tabla de códigos de error, flujo de checkout multi-proveedor |
+| Módulo Market — API Admin Proveedores | `docs/API_MARKET_PROVEEDORES_ADMIN.md` | Endpoints del superadmin para CRUD de proveedores y sus usuarios: validaciones, soft delete, toggle estado, modos de creación de usuario (existente vs nuevo), códigos de error |
 
 ---
 
@@ -1131,9 +1144,35 @@ Si el carrito tiene productos de 2 proveedores → 2 pedidos en la misma transac
 - 5 categorías, 5 unidades de medida, 6 productos con precios por volumen
 - 3 pedidos demo + carrito activo para Finca La Esperanza (`modulo_market = true`)
 
-### Pendiente (lado proveedor)
-Los endpoints `/api/v1/market/proveedor/*` (gestión de catálogo, actualización de estados de pedido, dashboard de ventas) aún no están implementados. Requieren el middleware `SetProveedor` que valide al usuario en `market_proveedor_user`.
+### API Admin implementada (gestión de proveedores desde superadmin)
+
+**Rutas base:** `/api/v1/admin/market/proveedores/*`
+**Middleware:** `auth:api` + `super_admin`
+**Controller:** `app/Http/Controllers/Api/Admin/MarketProveedorController.php`
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/proveedores` | Listar paginado (filtros `estado`, `ciudad`, `departamento`, `buscar`); incluye `total_usuarios`, `total_productos`, `total_pedidos` |
+| POST | `/proveedores` | Crear proveedor (sin usuario; el usuario se asigna después) |
+| GET | `/proveedores/:id` | Detalle con `proveedor_users.user` y conteos |
+| PUT | `/proveedores/:id` | Editar proveedor (validación con `sometimes`, unique-ignore del propio id) |
+| DELETE | `/proveedores/:id` | Soft delete; retorna `422 PROVIDER_ACTIVE` si está `activo` |
+| PATCH | `/proveedores/:id/toggle` | `activo` ⇄ `suspendido` (también recupera desde `inactivo`) |
+| GET | `/proveedores/:id/usuarios` | Lista usuarios vinculados con su `rol` y `estado` del pivot |
+| POST | `/proveedores/:id/usuarios` | Asignar `user_id` existente o crear nuevo con `name`+`email`+`password`; reusa usuario si el email ya existe; reactiva pivot si está en `estado=false`; `409 USER_ALREADY_ASSIGNED` si ya está activo |
+| PUT | `/proveedores/:id/usuarios/:userId` | Actualizar datos del user global (`name`, `email`, `password`) y/o del pivot (`rol`, `estado`) |
+| DELETE | `/proveedores/:id/usuarios/:userId` | Borra fila del pivot; el `User` global no se elimina |
+
+**Notas:**
+- `MarketProveedor` usa `SoftDeletes` (migración `2026_05_13_000001_add_soft_deletes_to_market_proveedores_table`) — preserva histórico de pedidos.
+- Estados del proveedor en minúsculas: `activo` | `inactivo` | `suspendido` (diferente a tenants que usa mayúsculas).
+- Roles del pivot: `ADMIN` | `OPERADOR` (default `ADMIN`).
+- Toda acción audita en módulos `MARKET_PROVEEDORES` y `MARKET_PROVEEDOR_USERS` (consultable vía `GET /api/v1/admin/auditorias`).
+
+### Pendiente (lado proveedor — panel del propio proveedor)
+Los endpoints `/api/v1/market/proveedor/*` (gestión de su catálogo de productos, actualización de estados de pedido, dashboard de ventas) aún no están implementados. Requieren el middleware `SetProveedor` que valide al usuario autenticado contra `market_proveedor_user`. La gestión de **la empresa proveedora en sí** (creación, suspensión, asignación de usuarios) ya está cubierta por el superadmin — ver sección anterior.
 
 ### Documentación
 - `docs/MARKET_MODULE.md` — arquitectura, tablas, flujos, estrategia de imágenes
-- `docs/API_MARKET.md` — guía completa de consumo para el frontend
+- `docs/API_MARKET.md` — guía completa de consumo para el frontend (lado finca)
+- `docs/API_MARKET_PROVEEDORES_ADMIN.md` — guía del frontend para el panel de superadmin (CRUD proveedores y sus usuarios)

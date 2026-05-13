@@ -39,7 +39,7 @@ class Lote extends Model
 
     public function semillas(): BelongsToMany
     {
-        return $this->belongsToMany(Semilla::class, 'semilla_lote');
+        return $this->belongsToMany(Semilla::class, 'semilla_lote')->withPivot('tenant_id');
     }
 
     public function promedios(): HasMany
