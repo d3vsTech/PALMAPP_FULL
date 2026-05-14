@@ -101,6 +101,7 @@ import SuperAdminLayout from './pages/super-admin/SuperAdminLayout';
 import SuperAdminDashboard from './pages/super-admin/SuperAdminDashboard';
 import Fincas from './pages/super-admin/Fincas';
 import UsuariosFinca from './pages/super-admin/UsuariosFinca';
+import ProveedoresAdmin from './pages/super-admin/Proveedores';
 import Actividad from './pages/super-admin/Actividad';
 import Diagnosticos from './pages/super-admin/Diagnosticos';
 import RecuperarPasswordSuperAdmin from './pages/super-admin/RecuperarPassword';
@@ -145,6 +146,7 @@ export const router = createBrowserRouter([
       { path: 'dashboard',                    Component: SuperAdminDashboard },
       { path: 'fincas',                       Component: Fincas },
       { path: 'fincas/:tenantId/usuarios',    Component: UsuariosFinca },
+      { path: 'proveedores',                  Component: ProveedoresAdmin },
       { path: 'actividad',                    Component: Actividad },
       { path: 'diagnosticos',                 Component: Diagnosticos },
     ],

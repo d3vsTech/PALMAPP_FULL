@@ -250,49 +250,75 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300} key="viajes-chart">
-              <BarChart data={data?.viajes ?? []}>
-                <CartesianGrid key="viajes-grid" strokeDasharray="3 3" opacity={0.3} />
-                <XAxis
-                  key="viajes-xaxis"
-                  dataKey="remision"
-                  tick={{ fill: 'hsl(var(--muted-foreground))' }}
-                />
-                <YAxis
-                  key="viajes-yaxis"
-                  tick={{ fill: 'hsl(var(--muted-foreground))' }}
-                  label={{
-                    value: 'kg',
-                    angle: -90,
-                    position: 'insideLeft',
-                    style: { fill: 'hsl(var(--muted-foreground))' },
-                  }}
-                />
-                <Tooltip
-                  key="viajes-tooltip"
-                  formatter={(value: number) => [`${Number(value).toLocaleString('es-CO')} kg`, 'Kilogramos']}
-                  contentStyle={{
-                    backgroundColor: 'hsl(var(--card))',
-                    border: '1px solid hsl(var(--border))',
-                    borderRadius: '8px',
-                    color: 'hsl(var(--foreground))',
-                  }}
-                  labelFormatter={(label) => {
-                    const v = data?.viajes.find(x => x.remision === label);
-                    if (!v) return label;
-                    try {
-                      return `${label} — ${format(new Date(v.fecha_viaje + 'T00:00:00'), 'd MMM yyyy', { locale: es })}`;
-                    } catch { return label; }
-                  }}
-                />
-                <Bar
-                  key="viajes-bar"
-                  dataKey="peso_viaje"
-                  fill="#1E5631"
-                  radius={[8, 8, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+            {(() => {
+              // Cuando aún no hay viajes registrados, mostramos un dataset
+              // placeholder de 6 entradas vacías para que los ejes X/Y se
+              // pinten igual y el usuario vea cómo se verá el gráfico.
+              const viajesReales = data?.viajes ?? [];
+              const sinDatos = viajesReales.length === 0;
+              const chartData = sinDatos
+                ? Array.from({ length: 6 }, () => ({ remision: '', peso_viaje: 0, fecha_viaje: '' }))
+                : viajesReales;
+
+              return (
+                <div className="relative">
+                  <ResponsiveContainer width="100%" height={300} key="viajes-chart">
+                    <BarChart data={chartData}>
+                      <CartesianGrid key="viajes-grid" strokeDasharray="3 3" opacity={0.3} />
+                      <XAxis
+                        key="viajes-xaxis"
+                        dataKey="remision"
+                        tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                      />
+                      <YAxis
+                        key="viajes-yaxis"
+                        domain={sinDatos ? [0, 1000] : [0, 'auto']}
+                        allowDecimals={false}
+                        tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                        label={{
+                          value: 'kg',
+                          angle: -90,
+                          position: 'insideLeft',
+                          style: { fill: 'hsl(var(--muted-foreground))' },
+                        }}
+                      />
+                      {!sinDatos && (
+                        <Tooltip
+                          key="viajes-tooltip"
+                          formatter={(value: number) => [`${Number(value).toLocaleString('es-CO')} kg`, 'Kilogramos']}
+                          contentStyle={{
+                            backgroundColor: 'hsl(var(--card))',
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '8px',
+                            color: 'hsl(var(--foreground))',
+                          }}
+                          labelFormatter={(label) => {
+                            const v = data?.viajes.find(x => x.remision === label);
+                            if (!v) return label;
+                            try {
+                              return `${label} — ${format(new Date(v.fecha_viaje + 'T00:00:00'), 'd MMM yyyy', { locale: es })}`;
+                            } catch { return label; }
+                          }}
+                        />
+                      )}
+                      <Bar
+                        key="viajes-bar"
+                        dataKey="peso_viaje"
+                        fill="#1E5631"
+                        radius={[8, 8, 0, 0]}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                  {sinDatos && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="bg-card/80 backdrop-blur-sm border border-border rounded-lg px-4 py-2 text-sm text-muted-foreground">
+                        No hay viajes registrados todavía
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
       </div>

@@ -2,11 +2,11 @@ import { Settings, Bell, Shield, Mail, Database, Zap } from 'lucide-react';
 
 export default function ConfiguracionGlobal() {
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 md:p-8 space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-white mb-2">Configuración Global</h1>
-        <p className="text-slate-400">Ajustes generales del sistema AGRO CAMPO</p>
+        <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Configuración Global</h1>
+        <p className="text-sm md:text-base text-slate-400">Ajustes generales del sistema AGRO CAMPO</p>
       </div>
 
       {/* Configuration Sections */}
@@ -103,11 +103,11 @@ export default function ConfiguracionGlobal() {
       </div>
 
       {/* Placeholder */}
-      <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-xl p-12">
+      <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-xl p-6 md:p-12">
         <div className="text-center">
-          <Settings className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold text-white mb-2">Configuraciones Avanzadas</h3>
-          <p className="text-slate-400">
+          <Settings className="w-12 h-12 md:w-16 md:h-16 text-slate-600 mx-auto mb-4" />
+          <h3 className="text-lg md:text-xl font-semibold text-white mb-2">Configuraciones Avanzadas</h3>
+          <p className="text-sm md:text-base text-slate-400">
             Las opciones de configuración detalladas estarán disponibles próximamente.
           </p>
         </div>

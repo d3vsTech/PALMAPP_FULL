@@ -149,7 +149,7 @@ export default function SuperAdminDashboard() {
 
   if (loading) {
     return (
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <div className="rounded-2xl border border-white/10 bg-white/5 p-10 text-center">
           <div className="inline-flex items-center gap-3 text-gray-400">
             <Loader2 className="w-5 h-5 animate-spin" />
@@ -161,19 +161,19 @@ export default function SuperAdminDashboard() {
   }
 
   return (
-    <div className="p-8 space-y-8">
+    <div className="p-4 md:p-8 space-y-6 md:space-y-8">
       {/* Header */}
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-2">
+          <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">
             Panel de Control Central
           </h1>
-          <p className="text-gray-400">
+          <p className="text-sm md:text-base text-gray-400">
             Vista general del sistema Devs Technology
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={() => void loadDashboard(true)}
             disabled={refreshing}
@@ -364,7 +364,8 @@ export default function SuperAdminDashboard() {
           </ResponsiveContainer>
         </div>
 
-        {/* Asignaciones por rol */}
+        {/* Asignaciones por rol — OCULTO temporalmente, descomentar para volver a mostrar */}
+        {/*
         <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
           <h3 className="text-lg font-bold text-white mb-4">Asignaciones por rol</h3>
 
@@ -398,6 +399,7 @@ export default function SuperAdminDashboard() {
             </ResponsiveContainer>
           )}
         </div>
+        */}
       </div>
 
       {/* Tenants Recientes */}

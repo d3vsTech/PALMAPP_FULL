@@ -221,7 +221,7 @@ export default function ProveedorProductos() {
                               <span className={producto.stock_disponible === 0 ? 'text-destructive' : ''}>
                                 Stock: {producto.stock_disponible}
                               </span>
-                              {producto.sku && <span>SKU: {producto.sku}</span>}
+                              {producto.sku && <span>Ref: {producto.sku}</span>}
                             </div>
                           </div>
 

@@ -62,15 +62,15 @@ const planesMock: Plan[] = [
 
 export default function Planes() {
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 md:p-8 space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-white mb-2">Planes del Sistema</h1>
-        <p className="text-slate-400">Configuración de planes y precios para las fincas</p>
+        <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Planes del Sistema</h1>
+        <p className="text-sm md:text-base text-slate-400">Configuración de planes y precios para las fincas</p>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-lg p-4">
           <p className="text-sm text-slate-400 mb-1">Básico</p>
           <p className="text-2xl font-bold text-white">12 fincas</p>
@@ -90,7 +90,7 @@ export default function Planes() {
       </div>
 
       {/* Plans Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {planesMock.map((plan) => (
           <div
             key={plan.id}

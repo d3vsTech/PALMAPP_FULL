@@ -120,15 +120,15 @@ export default function Actividad() {
   };
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 md:p-8 space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-white mb-2">Actividad del Sistema</h1>
-        <p className="text-slate-400">Registro completo de todas las acciones realizadas</p>
+        <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Actividad del Sistema</h1>
+        <p className="text-sm md:text-base text-slate-400">Registro completo de todas las acciones realizadas</p>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-4">
         <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-lg p-4">
           <p className="text-sm text-slate-400 mb-1">Total registros</p>
           <p className="text-2xl font-bold text-white">{total}</p>
@@ -140,8 +140,8 @@ export default function Actividad() {
       </div>
 
       {/* Filters */}
-      <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-xl p-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-xl p-4 md:p-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="relative">
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
             <select
@@ -198,7 +198,7 @@ export default function Actividad() {
       {/* Activity Log */}
       <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full min-w-[900px]">
             <thead>
               <tr className="border-b border-slate-700">
                 <th className="text-left px-6 py-4 text-sm font-semibold text-slate-300">Acción</th>

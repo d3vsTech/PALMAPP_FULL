@@ -62,8 +62,8 @@ export default function SuperAdminLogin() {
 
   return (
     <div className="min-h-screen bg-black flex">
-      {/* Lado izquierdo - Branding y características */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-[#1a1a1a] via-black to-black relative overflow-hidden">
+      {/* Lado izquierdo - Branding y características (sólo en pantallas anchas) */}
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-[#1a1a1a] via-black to-black relative overflow-hidden items-center">
         {/* Efectos de fondo */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute inset-0 bg-[linear-gradient(to_right,#9032F010_1px,transparent_1px),linear-gradient(to_bottom,#9032F010_1px,transparent_1px)] bg-[size:60px_60px]" />
@@ -71,11 +71,10 @@ export default function SuperAdminLogin() {
           <div className="absolute bottom-0 right-1/4 w-[600px] h-[600px] bg-[#6506FF]/15 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '10s' }} />
         </div>
 
-        <div className="relative z-10 flex flex-col justify-center px-16 py-12 w-full">
+        <div className="relative z-10 px-12 xl:px-16 py-12 w-full max-w-xl mx-auto">
           {/* Logo + título */}
-          <div className="mb-12">
+          <div className="mb-10">
             <div className="flex items-center gap-4 mb-4">
-              {/* Logo Devs Technology */}
               <div className="w-16 h-16 rounded-2xl overflow-hidden bg-black shadow-2xl shadow-[#9032F0]/50 flex-shrink-0">
                 <img
                   src={devsLogo}
@@ -88,14 +87,14 @@ export default function SuperAdminLogin() {
                 <div className="h-1 w-20 bg-gradient-to-r from-[#9032F0] to-[#6506FF] rounded-full mt-1" />
               </div>
             </div>
-            <p className="text-xl text-gray-300 font-medium leading-relaxed">
+            <p className="text-lg text-gray-300 font-medium leading-relaxed">
               El control de tu cultivo en la palma de tu mano
             </p>
           </div>
 
           {/* Características */}
-          <div className="space-y-6">
-            <h3 className="text-sm font-semibold text-[#9032F0] uppercase tracking-wider mb-6">
+          <div className="space-y-5">
+            <h3 className="text-sm font-semibold text-[#9032F0] uppercase tracking-wider">
               Características del Sistema
             </h3>
             {features.map((feature, index) => (
@@ -111,8 +110,8 @@ export default function SuperAdminLogin() {
             ))}
           </div>
 
-          {/* Footer */}
-          <div className="mt-auto pt-12">
+          {/* Footer dentro del bloque centrado */}
+          <div className="mt-10 pt-6 border-t border-white/5">
             <div className="flex items-center gap-2 text-xs text-gray-500">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-lg shadow-green-500/50" />
               <span>Sistema Activo • v1.0.0</span>

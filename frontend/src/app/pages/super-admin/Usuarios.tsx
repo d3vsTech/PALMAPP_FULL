@@ -409,11 +409,11 @@ export default function Usuarios() {
   const showingTo = Math.min(page * PAGE_SIZE, totalItems);
 
   return (
-    <div className="p-8 space-y-6">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+    <div className="p-4 md:p-8 space-y-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-2">Usuarios Globales</h1>
-          <p className="text-gray-400">
+          <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Usuarios Globales</h1>
+          <p className="text-sm md:text-base text-gray-400">
             CRUD de usuarios globales conectado con la API real
           </p>
         </div>
@@ -427,7 +427,7 @@ export default function Usuarios() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
           <p className="text-sm text-gray-400 mb-1">Total</p>
           <p className="text-3xl font-bold text-white">{stats.total}</p>
@@ -451,8 +451,8 @@ export default function Usuarios() {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-        <div className="grid grid-cols-1 xl:grid-cols-[1.6fr,0.8fr,0.8fr] gap-4">
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-4 md:p-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[1.6fr,0.8fr,0.8fr] gap-4">
           <div className="relative">
             <Search className="w-5 h-5 text-gray-500 absolute left-4 top-1/2 -translate-y-1/2" />
             <input

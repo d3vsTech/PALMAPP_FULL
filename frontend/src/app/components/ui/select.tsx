@@ -57,7 +57,20 @@ SelectTrigger.displayName = SelectPrimitive.Trigger.displayName;
 const SelectContent = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
->(({ className, children, position = "popper", ...props }, ref) => (
+>((
+  {
+    className,
+    children,
+    position = "popper",
+    // Defaults globales: TODOS los selects de la app abren hacia abajo.
+    // Si en algún lugar se necesita lo contrario, pueden sobreescribirse.
+    side = "bottom",
+    align = "start",
+    avoidCollisions = false,
+    ...props
+  },
+  ref,
+) => (
   <SelectPrimitive.Portal>
     <SelectPrimitive.Content
       ref={ref}
@@ -69,6 +82,9 @@ const SelectContent = React.forwardRef<
         className,
       )}
       position={position}
+      side={side}
+      align={align}
+      avoidCollisions={avoidCollisions}
       {...props}
     >
       <SelectScrollUpButton />

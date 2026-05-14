@@ -469,25 +469,25 @@ export default function UsuariosFinca() {
 
   if (!tenantId) {
     return (
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <p className="text-red-400">Tenant inválido.</p>
       </div>
     );
   }
 
   return (
-    <div className="p-8 space-y-6">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+    <div className="p-4 md:p-8 space-y-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-start gap-4">
           <button
             onClick={() => navigate('/super-admin/fincas')}
-            className="mt-1 p-2 rounded-lg border border-white/10 bg-white/5 text-white hover:bg-white/10 transition-all"
+            className="mt-1 p-2 rounded-lg border border-white/10 bg-white/5 text-white hover:bg-white/10 transition-all flex-shrink-0"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
 
           <div>
-            <h1 className="text-3xl font-bold text-white mb-2">
+            <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">
               Usuarios por Finca
             </h1>
 
@@ -521,7 +521,7 @@ export default function UsuariosFinca() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
           <p className="text-sm text-gray-400 mb-1">Total asignados</p>
           <p className="text-3xl font-bold text-white">{users.length}</p>

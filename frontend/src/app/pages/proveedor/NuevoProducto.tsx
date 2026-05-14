@@ -206,10 +206,10 @@ export default function NuevoProducto() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="sku">SKU</Label>
+                  <Label htmlFor="sku">Ref:</Label>
                   <Input
                     id="sku"
-                    placeholder="Opcional"
+                    placeholder="Opcional (código interno del producto)"
                     value={sku}
                     onChange={(e) => setSku(e.target.value)}
                   />
@@ -377,23 +377,6 @@ export default function NuevoProducto() {
                     </label>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-
-            {/* Estado */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Estado</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <Checkbox checked={activo} onCheckedChange={(v) => setActivo(!!v)} />
-                  <span className="text-sm">Producto activo</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <Checkbox checked={destacado} onCheckedChange={(v) => setDestacado(!!v)} />
-                  <span className="text-sm">Marcar como destacado</span>
-                </label>
               </CardContent>
             </Card>
 

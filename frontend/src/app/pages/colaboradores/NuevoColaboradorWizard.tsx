@@ -148,6 +148,34 @@ const FORM_INICIAL: FormData = {
   contactoEmergenciaNombre: '', contactoEmergenciaTelefono: '',
 };
 
+// ─── Persistencia local del borrador (solo en creación) ─────────────────────
+// Si el usuario sale a medio camino, conservamos lo escrito en localStorage
+// y al volver al wizard restauramos el formulario y la etapa.
+const DRAFT_KEY = 'palmapp_borrador_colaborador';
+const DRAFT_STEP_KEY = 'palmapp_borrador_colaborador_etapa';
+
+function leerBorrador(): FormData | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? { ...FORM_INICIAL, ...parsed } : null;
+  } catch { return null; }
+}
+function leerEtapaBorrador(): number {
+  try {
+    const raw = localStorage.getItem(DRAFT_STEP_KEY);
+    const n = raw ? parseInt(raw, 10) : 1;
+    return Number.isFinite(n) && n >= 1 && n <= 5 ? n : 1;
+  } catch { return 1; }
+}
+function limpiarBorrador() {
+  try {
+    localStorage.removeItem(DRAFT_KEY);
+    localStorage.removeItem(DRAFT_STEP_KEY);
+  } catch { /* ignorar */ }
+}
+
 // ─── Componente ─────────────────────────────────────────────────────────────────
 export default function NuevoColaboradorWizard() {
   const navigate = useNavigate();
@@ -156,8 +184,14 @@ export default function NuevoColaboradorWizard() {
 
   const ETAPAS = isEditMode ? [...ETAPAS_BASE, ETAPA_DOCUMENTOS] : ETAPAS_BASE;
 
-  const [etapaActual, setEtapaActual] = useState(1);
-  const [formData, setFormData] = useState<FormData>(FORM_INICIAL);
+  // En modo creación inicializamos con lo que haya en el borrador local;
+  // en edición no usamos borrador (datos vienen del backend).
+  const borradorInicial = !isEditMode ? leerBorrador() : null;
+  const etapaInicial    = !isEditMode ? leerEtapaBorrador() : 1;
+
+  const [etapaActual, setEtapaActual] = useState(etapaInicial);
+  const [formData, setFormData] = useState<FormData>(borradorInicial ?? FORM_INICIAL);
+  const [borradorRestaurado] = useState(!!borradorInicial);
   const [predios, setPredios] = useState<any[]>([]);
   const [guardando, setGuardando] = useState(false);
 
@@ -376,6 +410,29 @@ export default function NuevoColaboradorWizard() {
       .finally(() => setLoadingDocs(false));
   }, [id, isEditMode, etapaActual]);
 
+  // ─── Persistencia automática del borrador (solo creación) ──────────────────
+  useEffect(() => {
+    if (isEditMode) return;
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(formData));
+    } catch { /* cuota llena u otro error */ }
+  }, [formData, isEditMode]);
+
+  useEffect(() => {
+    if (isEditMode) return;
+    try {
+      localStorage.setItem(DRAFT_STEP_KEY, String(etapaActual));
+    } catch { /* ignorar */ }
+  }, [etapaActual, isEditMode]);
+
+  // Aviso al usuario cuando se restaura un borrador previo
+  useEffect(() => {
+    if (borradorRestaurado && !isEditMode) {
+      toast.info('Borrador restaurado. Puedes continuar donde lo dejaste.');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ─── Helpers ───────────────────────────────────────────────────────────────
   const handleInputChange = (field: keyof FormData, value: string | number) =>
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -389,11 +446,65 @@ export default function NuevoColaboradorWizard() {
     }
   };
 
+  /**
+   * Devuelve la lista de campos obligatorios que faltan en la etapa indicada.
+   * Si está vacía, la etapa es válida.
+   */
+  const camposFaltantes = (etapa: number): string[] => {
+    const faltan: string[] = [];
+    if (etapa === 1) {
+      if (!formData.primerNombre.trim())   faltan.push('Primer nombre');
+      if (!formData.primerApellido.trim()) faltan.push('Primer apellido');
+    } else if (etapa === 2) {
+      if (!formData.numeroDocumento.trim()) faltan.push('Número de documento');
+      if (!formData.fechaExpedicion)        faltan.push('Fecha de expedición');
+      if (!formData.fechaNacimiento)        faltan.push('Fecha de nacimiento');
+    } else if (etapa === 3) {
+      if (!formData.cargo.trim())                                              faltan.push('Cargo');
+      if (formData.modalidadPago !== 'VARIABLE' && formData.salarioBase <= 0)  faltan.push('Salario base');
+      if (!formData.fechaContratacion)                                         faltan.push('Fecha de ingreso');
+    }
+    return faltan;
+  };
+
+  /** Muestra toast con la lista de campos faltantes en la etapa actual. */
+  const avisarFaltantes = (etapa: number): boolean => {
+    const faltan = camposFaltantes(etapa);
+    if (faltan.length === 0) return true;
+    toast.error(
+      faltan.length === 1
+        ? `Falta completar: ${faltan[0]}`
+        : `Faltan campos obligatorios: ${faltan.join(', ')}`,
+    );
+    return false;
+  };
+
   const puedeAvanzar = validarEtapa(etapaActual);
-  const siguienteEtapa = () => etapaActual < ETAPAS.length && setEtapaActual(e => e + 1);
+
+  const siguienteEtapa = () => {
+    if (etapaActual >= ETAPAS.length) return;
+    // En modo edición no bloqueamos el avance — los campos pueden venir
+    // parcialmente vacíos del backend. Solo validamos al crear.
+    if (!isEditMode && !avisarFaltantes(etapaActual)) return;
+    setEtapaActual(e => e + 1);
+  };
+
   const etapaAnterior  = () => etapaActual > 1 && setEtapaActual(e => e - 1);
+
   const irAEtapa = (n: number) => {
-    if (isEditMode || n <= etapaActual) setEtapaActual(n);
+    if (n === etapaActual) return;
+    // Moverse hacia atrás siempre se permite
+    if (n < etapaActual) { setEtapaActual(n); return; }
+    // En modo edición se puede saltar a cualquier etapa
+    if (isEditMode) { setEtapaActual(n); return; }
+    // En creación, validar todas las etapas desde la actual hasta la objetivo
+    for (let e = etapaActual; e < n; e++) {
+      if (!avisarFaltantes(e)) {
+        if (e !== etapaActual) setEtapaActual(e);
+        return;
+      }
+    }
+    setEtapaActual(n);
   };
 
   // ─── Documentos ────────────────────────────────────────────────────────────
@@ -574,7 +685,10 @@ export default function NuevoColaboradorWizard() {
       body.fecha_nacimiento           = formData.fechaNacimiento;
       body.fecha_expedicion_documento = formData.fechaExpedicion;
       body.cargo                      = formData.cargo.trim();
-      body.salario_base               = formData.modalidadPago === 'VARIABLE' ? 0 : formData.salarioBase;
+      // Para modalidad VARIABLE el salario es opcional, pero si el usuario
+      // lo ingresó lo enviamos tal cual (no forzar 0). Para FIJO siempre
+      // se exige > 0 en la validación previa.
+      body.salario_base               = formData.salarioBase > 0 ? formData.salarioBase : 0;
       body.modalidad_pago             = formData.modalidadPago === 'VARIABLE' ? 'PRODUCCION' : formData.modalidadPago;
       body.fecha_ingreso              = formData.fechaContratacion;
     } else {
@@ -626,6 +740,8 @@ export default function NuevoColaboradorWizard() {
         const res = await colaboradoresApi.crear(body);
         toast.success(res.message ?? 'Colaborador creado correctamente');
         colaboradorId = res.data?.id ?? null;
+        // Colaborador creado: ya no necesitamos el borrador local
+        limpiarBorrador();
       }
       // En modo creación: subir el avatar después del POST si el usuario eligió uno
       if (!isEditMode && colaboradorId && avatarFile) {
@@ -650,13 +766,28 @@ export default function NuevoColaboradorWizard() {
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <div className="flex items-center gap-3 mb-2">
+        <div className="flex items-center gap-3 mb-2 flex-wrap">
           <Button variant="ghost" size="icon" onClick={() => navigate('/colaboradores')} className="rounded-xl">
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <h1 className="text-4xl font-bold text-foreground">
+          <h1 className="text-3xl md:text-4xl font-bold text-foreground">
             {isEditMode ? 'Editar Colaborador' : 'Nuevo Colaborador'}
           </h1>
+          {!isEditMode && borradorRestaurado && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground hover:text-destructive ml-auto"
+              onClick={() => {
+                limpiarBorrador();
+                setFormData(FORM_INICIAL);
+                setEtapaActual(1);
+                toast.success('Borrador descartado');
+              }}
+            >
+              Descartar borrador
+            </Button>
+          )}
         </div>
         <p className="text-muted-foreground ml-14">Completa la información paso a paso</p>
       </div>
@@ -1087,21 +1218,27 @@ export default function NuevoColaboradorWizard() {
                   <Label>Talla Camisa</Label>
                   <Select value={formData.tallaCamisa} onValueChange={v => handleInputChange('tallaCamisa', v)}>
                     <SelectTrigger><SelectValue placeholder="Selecciona talla" /></SelectTrigger>
-                    <SelectContent>{tallaCamisas.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                    <SelectContent side="bottom" align="start" avoidCollisions={false}>
+                      {tallaCamisas.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
                   <Label>Talla Pantalón</Label>
                   <Select value={formData.tallaPantalon} onValueChange={v => handleInputChange('tallaPantalon', v)}>
                     <SelectTrigger><SelectValue placeholder="Selecciona talla" /></SelectTrigger>
-                    <SelectContent>{tallaPantalones.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                    <SelectContent side="bottom" align="start" avoidCollisions={false}>
+                      {tallaPantalones.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
                   <Label>Talla Calzado</Label>
                   <Select value={formData.tallaCalzado} onValueChange={v => handleInputChange('tallaCalzado', v)}>
                     <SelectTrigger><SelectValue placeholder="Selecciona talla" /></SelectTrigger>
-                    <SelectContent>{tallaCalzados.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                    <SelectContent side="bottom" align="start" avoidCollisions={false}>
+                      {tallaCalzados.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    </SelectContent>
                   </Select>
                 </div>
               </CardContent>

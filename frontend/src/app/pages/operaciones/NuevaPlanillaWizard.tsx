@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
@@ -318,6 +318,32 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
   // Alerta de planilla duplicada (popup grande)
   const [alertaDuplicada, setAlertaDuplicada] = useState(false);
+
+  // ── Refs para auto-scroll a formularios inline al abrirlos ────────────────
+  const formRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const setFormRef = (key: string) => (el: HTMLDivElement | null) => {
+    formRefs.current[key] = el;
+  };
+  useEffect(() => {
+    // Toma el primer form en edición y hace scroll suave hacia él.
+    const open: string | null =
+      cosechaEnEdicion ? 'cosecha' :
+      plateoEnEdicion ? 'plateo' :
+      podaEnEdicion ? 'poda' :
+      fertilizacionEnEdicion ? 'fertilizacion' :
+      sanidadEnEdicion ? 'sanidad' :
+      otrosEnEdicion ? 'otros' :
+      auxiliarEnEdicion ? 'auxiliar' :
+      horaExtraEnEdicion ? 'horaExtra' :
+      null;
+    if (!open) return;
+    requestAnimationFrame(() => {
+      formRefs.current[open]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }, [
+    cosechaEnEdicion, plateoEnEdicion, podaEnEdicion, fertilizacionEnEdicion,
+    sanidadEnEdicion, otrosEnEdicion, auxiliarEnEdicion, horaExtraEnEdicion,
+  ]);
 
   // ── Prefill desde API en modo edición o lectura ─────────────────────────
   useEffect(() => {
@@ -1371,6 +1397,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
                       {/* Formulario de edición */}
                       {cosechaEnEdicion && (
+                        <div ref={setFormRef('cosecha')} className="scroll-mt-24">
                         <Card className="border-border border-2 border-primary/50">
                           <CardContent className="pt-6 space-y-4">
                             <div className="grid gap-4 md:grid-cols-2">
@@ -1498,6 +1525,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                             </div>
                           </CardContent>
                         </Card>
+                        </div>
                       )}
 
                       {/* Cards de cosechas guardadas */}
@@ -1596,6 +1624,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
                       {/* Formulario de edición */}
                       {plateoEnEdicion && (
+                        <div ref={setFormRef('plateo')} className="scroll-mt-24">
                         <Card className="border-border border-2 border-primary/50">
                           <CardContent className="pt-6 space-y-4">
                             <div className="grid gap-4 md:grid-cols-2">
@@ -1709,6 +1738,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                             </div>
                           </CardContent>
                         </Card>
+                        </div>
                       )}
 
                       {/* Cards de plateos guardados */}
@@ -1791,6 +1821,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
                       {/* Formulario de edición */}
                       {podaEnEdicion && (
+                        <div ref={setFormRef('poda')} className="scroll-mt-24">
                         <Card className="border-border border-2 border-primary/50">
                           <CardContent className="pt-6 space-y-4">
                             <div className="grid gap-4 md:grid-cols-2">
@@ -1904,6 +1935,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                             </div>
                           </CardContent>
                         </Card>
+                        </div>
                       )}
 
                       {/* Cards de podas guardadas */}
@@ -1986,6 +2018,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
                       {/* Formulario de edición */}
                       {fertilizacionEnEdicion && (
+                        <div ref={setFormRef('fertilizacion')} className="scroll-mt-24">
                         <Card className="border-border border-2 border-primary/50">
                           <CardContent className="pt-6 space-y-4">
                             <div className="grid gap-4 md:grid-cols-2">
@@ -2136,6 +2169,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                             </div>
                           </CardContent>
                         </Card>
+                        </div>
                       )}
 
                       {/* Cards de fertilizaciones guardadas */}
@@ -2224,6 +2258,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
                       {/* Formulario de edición */}
                       {sanidadEnEdicion && (
+                        <div ref={setFormRef('sanidad')} className="scroll-mt-24">
                         <Card className="border-primary/50 shadow-lg">
                           <CardContent className="pt-6 space-y-4">
                             <div className="grid gap-4 md:grid-cols-2">
@@ -2347,6 +2382,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                             </div>
                           </CardContent>
                         </Card>
+                        </div>
                       )}
 
                       {/* Lista de trabajos guardados */}
@@ -2435,6 +2471,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
                       {/* Formulario de edición */}
                       {otrosEnEdicion && (
+                        <div ref={setFormRef('otros')} className="scroll-mt-24">
                         <Card className="border-primary/50 shadow-lg">
                           <CardContent className="pt-6 space-y-4">
                             <div className="grid gap-4 md:grid-cols-2">
@@ -2568,6 +2605,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                             </div>
                           </CardContent>
                         </Card>
+                        </div>
                       )}
 
                       {/* Lista de trabajos guardados */}
@@ -2673,6 +2711,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                 <CardContent className="space-y-4">
                   {/* Formulario de edición */}
                   {auxiliarEnEdicion && (
+                    <div ref={setFormRef('auxiliar')} className="scroll-mt-24">
                     <Card className="border-border border-2 border-primary/50">
                       <CardContent className="pt-6 space-y-4">
                         <div className="grid gap-4 md:grid-cols-2">
@@ -2758,6 +2797,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         </div>
                       </CardContent>
                     </Card>
+                    </div>
                   )}
 
                   {/* Cards de labores guardadas */}
@@ -2829,6 +2869,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
                 {/* Formulario de edición */}
                 {horaExtraEnEdicion && (
+                  <div ref={setFormRef('horaExtra')} className="scroll-mt-24">
                   <Card className="border-primary/50 shadow-lg">
                     <CardHeader>
                       <div className="flex items-center gap-3">
@@ -2926,6 +2967,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                       </div>
                     </CardContent>
                   </Card>
+                  </div>
                 )}
 
                 {/* Lista de horas extras guardadas */}

@@ -487,12 +487,12 @@ export default function Fincas() {
   const showingTo = Math.min(page * PAGE_SIZE, totalItems);
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 md:p-8 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-2">Gestión de Fincas</h1>
-          <p className="text-slate-400">Administra todos los clientes del sistema</p>
+          <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Gestión de Fincas</h1>
+          <p className="text-sm md:text-base text-slate-400">Administra todos los clientes del sistema</p>
         </div>
         <div className="flex flex-wrap gap-3">
           <button

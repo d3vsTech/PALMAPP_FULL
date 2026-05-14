@@ -4,7 +4,7 @@ import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { Store, Lock, Mail, Sprout, AlertCircle } from 'lucide-react';
+import { Store, Lock, Mail, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 // Usuarios de prueba para proveedores
@@ -35,7 +35,7 @@ export default function ProveedorLogin() {
 
     // Validar credenciales
     const proveedor = PROVEEDORES_PRUEBA.find(
-      (p) => p.email === formData.email && p.password === formData.password
+      (p) => p.email === formData.email && p.password === formData.password,
     );
 
     if (proveedor) {

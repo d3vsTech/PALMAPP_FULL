@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
@@ -76,6 +76,16 @@ export default function ConteoCosecha() {
 
   // Cosecha en edición
   const [cosechaEnEdicion, setCosechaEnEdicion] = useState<CosechaEnEdicion | null>(null);
+
+  // Auto-scroll al form al abrirlo
+  const formCosechaRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (cosechaEnEdicion) {
+      requestAnimationFrame(() => {
+        formCosechaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }
+  }, [cosechaEnEdicion]);
 
   // Catálogos del API
   const [operaciones, setOperaciones] = useState<OperacionDisponible[]>([]);
@@ -457,6 +467,7 @@ export default function ConteoCosecha() {
 
                 {/* Formulario de edición */}
                 {cosechaEnEdicion && (
+                  <div ref={formCosechaRef} className="scroll-mt-24">
                   <Card className="border-primary/50 shadow-lg">
                     <CardHeader>
                       <div className="flex items-center gap-3">
@@ -614,6 +625,7 @@ export default function ConteoCosecha() {
                       </div>
                     </CardContent>
                   </Card>
+                  </div>
                 )}
 
                 {/* Lista de cosechas guardadas */}

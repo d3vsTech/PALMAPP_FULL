@@ -255,10 +255,10 @@ export default function EditarProducto() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="sku">SKU</Label>
+                  <Label htmlFor="sku">Referencia del producto</Label>
                   <Input
                     id="sku"
-                    placeholder="Opcional"
+                    placeholder="Opcional (código interno del producto)"
                     value={sku}
                     onChange={(e) => setSku(e.target.value)}
                   />

@@ -14,7 +14,7 @@
  *   Cada acción llama al API inmediatamente
  *   Panel: §1.6 GET /predios/{id}/resumen — se refresca tras cada operación
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
@@ -76,9 +76,14 @@ export default function NuevoPredioWizard() {
   const navigate      = useNavigate();
   const [sp]          = useSearchParams();
   const editId        = sp.get('edit');
+  const pasoUrl       = parseInt(sp.get('paso') ?? '1', 10);
   const { token }     = useAuth();
 
-  const [etapa, setEtapa] = useState(1);
+  // Inicializamos la etapa leyendo el query param `paso` para que al
+  // recargar o al regresar mediante `back` se restaure la posición.
+  const [etapa, setEtapa] = useState(
+    Number.isFinite(pasoUrl) && pasoUrl >= 1 && pasoUrl <= 5 ? pasoUrl : 1,
+  );
   const [guardando, setGuardando] = useState(false);
 
   // ── Estado paso 1: Predio ──────────────────────────────────────────────────
@@ -141,6 +146,51 @@ export default function NuevoPredioWizard() {
   const [wizardLineaOpen, setWizardLineaOpen] = useState<Record<string, string>>({});
   const [mostrandoFormPalmas, setMostrandoFormPalmas] = useState<string | null>(null);
   const [visiblePalmas, setVisiblePalmas] = useState<Record<string, number>>({});
+
+  // ── Refs para auto-scroll a formularios al abrirlos ────────────────────────
+  // Cuando el usuario tiene una lista larga de lotes/sublotes y abre el form
+  // de creación, queremos llevarlo automáticamente al formulario que aparece
+  // al final, en lugar de dejarlo viendo la lista.
+  const formLoteRef = useRef<HTMLDivElement>(null);
+  const formSubloteRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const formPalmasRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  useEffect(() => {
+    if (showFormLote) {
+      // Esperar al próximo frame para que el form ya esté renderizado
+      requestAnimationFrame(() => {
+        formLoteRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }
+  }, [showFormLote]);
+
+  useEffect(() => {
+    if (showFormSublote) {
+      requestAnimationFrame(() => {
+        const el = formSubloteRefs.current[showFormSublote];
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }
+  }, [showFormSublote]);
+
+  // Scroll al form de edición de sublote cuando el usuario hace click en lápiz
+  useEffect(() => {
+    if (editingSubloteId) {
+      requestAnimationFrame(() => {
+        const el = formSubloteRefs.current[`edit-${editingSubloteId}`];
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }
+  }, [editingSubloteId]);
+
+  useEffect(() => {
+    if (mostrandoFormPalmas) {
+      requestAnimationFrame(() => {
+        const el = formPalmasRefs.current[mostrandoFormPalmas];
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }
+  }, [mostrandoFormPalmas]);
 
   // ── Panel resumen: en edición usa API; en creación usa estado local ────────
   const [resumen, setResumen] = useState<any>(null);
@@ -343,7 +393,33 @@ export default function NuevoPredioWizard() {
   }, [etapa, editId, sublotes, lineas]);
 
   // ── Helpers locales (modo creación) ──────────────────────────────────────
-  const agregarLote = (lote: Omit<LoteLocal, 'id'>) => {
+  /**
+   * Agrega un lote.
+   *  - Si el wizard ya está en modo edición (`editId` viene en la URL), persistimos
+   *    el lote en backend para que sobreviva a refresh/back y aparezca en el
+   *    resumen detallado del API.
+   *  - Si todavía no hay predio creado (no debería pasar tras el paso 1), lo
+   *    guardamos en estado local hasta el "Guardar Plantación" final.
+   */
+  const agregarLote = async (lote: Omit<LoteLocal, 'id'>) => {
+    if (editId) {
+      try {
+        const body: any = { predio_id: Number(editId), nombre: lote.nombre };
+        if (lote.fechaSiembra)                  body.fecha_siembra        = lote.fechaSiembra;
+        if (lote.hectareasSembradas > 0)        body.hectareas_sembradas  = lote.hectareasSembradas;
+        if (lote.semillasIds && lote.semillasIds.length > 0) body.semillas_ids = lote.semillasIds;
+        const res = await lotesApi.crear(body);
+        const realId = res.data?.id;
+        if (!realId) throw new Error('No se recibió ID del lote');
+        setLotes(prev => [...prev, { ...lote, id: String(realId) }]);
+        setShowFormLote(false);
+        toast.success('Lote creado');
+        await refrescarResumen(editId);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Error al crear el lote');
+      }
+      return;
+    }
     setLotes(prev => [...prev, { ...lote, id: `l-${Date.now()}` }]);
     setShowFormLote(false);
   };
@@ -382,7 +458,23 @@ export default function NuevoPredioWizard() {
     setSublotes(prev => prev.filter(s => s.loteId !== id));
     setLineas(prev => prev.filter(ln => !subIds.includes(ln.subloteId)));
   };
-  const agregarSublote = (loteId: string, nombre: string) => {
+  const agregarSublote = async (loteId: string, nombre: string) => {
+    // Si estamos en modo edición y el lote tiene id real (no local "l-..."),
+    // persistir el sublote en backend inmediatamente.
+    if (editId && !loteId.startsWith('l-')) {
+      try {
+        const res = await sublotesApi.crear({ lote_id: Number(loteId), nombre });
+        const realId = res.data?.id;
+        if (!realId) throw new Error('No se recibió ID del sublote');
+        setSublotes(prev => [...prev, { id: String(realId), nombre, loteId, cantidadPalmas: 0 }]);
+        setShowFormSublote(null);
+        toast.success('Sublote creado');
+        await refrescarResumen(editId);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Error al crear el sublote');
+      }
+      return;
+    }
     setSublotes(prev => [...prev, { id: `s-${Date.now()}`, nombre, loteId, cantidadPalmas: 0 }]);
     setShowFormSublote(null);
   };
@@ -605,8 +697,10 @@ export default function NuevoPredioWizard() {
           await refrescarResumen(editId);
         }
 
-        toast.success('Plantación actualizada');
-        navigate('/plantacion');
+        toast.success('Cambios guardados');
+        // Refresco final para reflejar todo lo persistido y dejar al usuario
+        // en la misma etapa del wizard.
+        await refrescarResumen(editId);
         return;
       }
 
@@ -700,6 +794,49 @@ export default function NuevoPredioWizard() {
     true,  // palmas opcionales
   ][etapa - 1];
 
+  // ── Avance entre etapas con persistencia en backend ───────────────────────
+  // Cuando el usuario pasa del paso 1 (Predio) al 2 en modo creación,
+  // creamos el predio en backend y convertimos el wizard a modo edición
+  // mediante ?edit=<id>. Así, si el usuario regresa al paso 1 los datos
+  // siguen ahí y los pasos 2-5 ya pueden persistir contra el predio real.
+  const [avanzando, setAvanzando] = useState(false);
+  const siguienteEtapa = async () => {
+    if (avanzando) return;
+    if (!puedeSiguiente) return;
+
+    // Solo el paso 1 en modo creación requiere guardado previo.
+    if (etapa === 1 && !editId) {
+      // Validaciones (mismas que guardarTodo)
+      if (!predioNombre.trim())                       { toast.error('El nombre del predio es obligatorio'); return; }
+      if (!predioUbicacion.trim())                    { toast.error('La ubicación es obligatoria'); return; }
+      if (!predioHectareas || Number(predioHectareas) <= 0) { toast.error('Las hectáreas son obligatorias'); return; }
+
+      setAvanzando(true);
+      try {
+        const res = await prediosApi.crear({
+          nombre: predioNombre.trim().slice(0, 50),
+          ubicacion: predioUbicacion.trim().slice(0, 100),
+          hectareas_totales: Number(predioHectareas),
+        });
+        const nuevoId = res.data?.id;
+        if (!nuevoId) throw new Error('No se recibió ID del predio');
+        toast.success('Predio guardado. Continúa con los lotes.');
+        // Conmutar a modo edición y avanzar al paso 2. Ambos viajan en la URL
+        // para sobrevivir a refresh/back del navegador.
+        setEtapa(2);
+        navigate(`/plantacion/predio/nuevo?edit=${nuevoId}&paso=2`, { replace: true });
+        return;
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'No se pudo guardar el predio');
+        return;
+      } finally {
+        setAvanzando(false);
+      }
+    }
+
+    setEtapa(e => e + 1);
+  };
+
   // ── Panel resumen (derecha) ────────────────────────────────────────────────
   const PanelResumen = () => {
     // En modo edición con datos del API (§1.6)
@@ -761,12 +898,12 @@ export default function NuevoPredioWizard() {
                     <span className="text-xs text-muted-foreground">{Number(l.hectareas_sembradas ?? 0).toFixed(1)} ha</span>
                   </div>
                   {(l.sublotes ?? []).length > 0 ? (
-                    <div className="space-y-1 pl-3">
+                    <div className="space-y-1">
                       {(l.sublotes ?? []).map((s: any) => {
                         const linCount = s.totales?.lineas ?? lineas.filter(ln => ln.subloteId === String(s.id)).length;
                         return (
                           <div key={s.id} className="flex items-center justify-between py-1 text-xs">
-                            <span>{s.nombre}</span>
+                            <span className="text-left">{s.nombre}</span>
                             <div className="flex items-center gap-3 text-xs">
                               {linCount > 0 && (
                                 <span className="text-muted-foreground">{linCount} líneas</span>
@@ -778,7 +915,7 @@ export default function NuevoPredioWizard() {
                       })}
                     </div>
                   ) : (
-                    <p className="text-xs text-muted-foreground italic pl-3">Sin sublotes</p>
+                    <p className="text-xs text-muted-foreground italic">Sin sublotes</p>
                   )}
                   <div className="flex items-center justify-between pt-2 border-t border-border/50 text-xs">
                     <span className="font-medium">Totales del lote</span>
@@ -821,8 +958,9 @@ export default function NuevoPredioWizard() {
 
               {ls.length === 0 && (
                 <div className="text-center py-8 text-muted-foreground">
-                  <p className="text-sm">No hay información para mostrar</p>
-                  <p className="text-xs">Completa las etapas anteriores</p>
+                  <Grid3x3 className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">Aún no hay lotes registrados</p>
+                  <p className="text-xs">Agrega tu primer lote en el paso actual</p>
                 </div>
               )}
             </div>
@@ -906,13 +1044,13 @@ export default function NuevoPredioWizard() {
                   </div>
 
                   {sublotesDelLote.length > 0 ? (
-                    <div className="space-y-1 pl-3">
+                    <div className="space-y-1">
                       {sublotesDelLote.map(s => {
                         const linSub = lineas.filter(ln => ln.subloteId === s.id);
                         const palSub = totalPalmasSublote(s.id) || s.cantidadPalmas || 0;
                         return (
                           <div key={s.id} className="flex items-center justify-between py-1 text-xs">
-                            <span>{s.nombre}</span>
+                            <span className="text-left">{s.nombre}</span>
                             <div className="flex items-center gap-3 text-xs">
                               {linSub.length > 0 && (
                                 <span className="text-muted-foreground">{linSub.length} líneas</span>
@@ -924,7 +1062,7 @@ export default function NuevoPredioWizard() {
                       })}
                     </div>
                   ) : (
-                    <p className="text-xs text-muted-foreground italic pl-3">Sin sublotes</p>
+                    <p className="text-xs text-muted-foreground italic">Sin sublotes</p>
                   )}
 
                   <div className="flex items-center justify-between pt-2 border-t border-border/50 text-xs">
@@ -967,8 +1105,9 @@ export default function NuevoPredioWizard() {
 
             {lotes.length === 0 && (
               <div className="text-center py-8 text-muted-foreground">
-                <p className="text-sm">No hay información para mostrar</p>
-                <p className="text-xs">Completa las etapas anteriores</p>
+                <Grid3x3 className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                <p className="text-sm">Aún no hay lotes registrados</p>
+                <p className="text-xs">Agrega tu primer lote en el paso actual</p>
               </div>
             )}
           </div>
@@ -1175,11 +1314,13 @@ export default function NuevoPredioWizard() {
                   </div>
                 )}
                 {showFormLote && (
-                  <FormLote
-                    semillasCatalogo={semillasCatalogo}
-                    haDisponibles={haDisponibles}
-                    onGuardar={agregarLote}
-                    onCancelar={() => setShowFormLote(false)} />
+                  <div ref={formLoteRef} className="scroll-mt-24">
+                    <FormLote
+                      semillasCatalogo={semillasCatalogo}
+                      haDisponibles={haDisponibles}
+                      onGuardar={agregarLote}
+                      onCancelar={() => setShowFormLote(false)} />
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -1209,8 +1350,26 @@ export default function NuevoPredioWizard() {
                           Agregar Sublote
                         </Button>
                       </div>
+                      {/* Form de edición de sublote — ARRIBA del grid para no deformar las cards */}
+                      {(() => {
+                        const subEditando = subls.find(s => s.id === editingSubloteId);
+                        if (!subEditando) return null;
+                        return (
+                          <div
+                            ref={(el) => { formSubloteRefs.current[`edit-${subEditando.id}`] = el; }}
+                            className="scroll-mt-24"
+                          >
+                            <FormSublote
+                              nombreInicial={subEditando.nombre}
+                              onGuardar={nombre => actualizarSublote(subEditando.id, nombre)}
+                              onCancelar={() => setEditingSubloteId(null)} />
+                          </div>
+                        );
+                      })()}
                       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                        {subls.map(s => (
+                        {subls
+                          .filter(s => s.id !== editingSubloteId)
+                          .map(s => (
                           <div key={s.id} className="border border-border rounded-lg p-4 bg-card">
                             <div className="flex items-start justify-between mb-2">
                               <h4 className="font-semibold">{s.nombre}</h4>
@@ -1238,21 +1397,18 @@ export default function NuevoPredioWizard() {
                               </div>
                             )}
                             <Badge variant="default" className="mt-2 text-xs">Activo</Badge>
-                            {editingSubloteId === s.id && (
-                              <div className="mt-3">
-                                <FormSublote
-                                  nombreInicial={s.nombre}
-                                  onGuardar={nombre => actualizarSublote(s.id, nombre)}
-                                  onCancelar={() => setEditingSubloteId(null)} />
-                              </div>
-                            )}
                           </div>
                         ))}
                       </div>
                       {showFormSublote === lote.id && (
-                        <FormSublote
-                          onGuardar={nombre => agregarSublote(lote.id, nombre)}
-                          onCancelar={() => setShowFormSublote(null)} />
+                        <div
+                          ref={(el) => { formSubloteRefs.current[lote.id] = el; }}
+                          className="scroll-mt-24"
+                        >
+                          <FormSublote
+                            onGuardar={nombre => agregarSublote(lote.id, nombre)}
+                            onCancelar={() => setShowFormSublote(null)} />
+                        </div>
                       )}
                     </div>
                   );
@@ -1409,7 +1565,10 @@ export default function NuevoPredioWizard() {
 
                                   {/* Formulario inline: aparece DENTRO de la línea con linea_id ya conocida */}
                                   {formAbierto && (
-                                    <div className="bg-background border border-border rounded-lg p-3 space-y-3">
+                                    <div
+                                      ref={(el) => { formPalmasRefs.current[formKey] = el; }}
+                                      className="bg-background border border-border rounded-lg p-3 space-y-3 scroll-mt-24"
+                                    >
                                       <div className="text-xs font-medium text-primary">
                                         Agregando palmas a <span className="font-bold">Línea {ln.numero}</span>
                                       </div>
@@ -1789,9 +1948,11 @@ export default function NuevoPredioWizard() {
                 </Button>
               )}
               {etapa < ETAPAS.length ? (
-                <Button onClick={() => setEtapa(e => e + 1)}
-                  disabled={!puedeSiguiente} className="gap-2">
-                  Siguiente <ArrowRight className="h-4 w-4" />
+                <Button onClick={siguienteEtapa}
+                  disabled={!puedeSiguiente || avanzando} className="gap-2">
+                  {avanzando
+                    ? <><Loader2 className="h-4 w-4 animate-spin" />Guardando...</>
+                    : <>Siguiente <ArrowRight className="h-4 w-4" /></>}
                 </Button>
               ) : (
                 // En modo creación: el botón final crea la plantación.
@@ -1878,6 +2039,11 @@ function FormLote({
   const esOtros = semillaId === '__otros__';
   const variedadFinal = esOtros ? otraVariedad : (semillasCatalogo.find(s => String(s.id) === semillaId)?.nombre ?? semillaId);
 
+  // Validación: no permitir más hectáreas que las disponibles del predio.
+  const haNum = Number(ha);
+  const haInvalid = ha !== '' && (!Number.isFinite(haNum) || haNum <= 0 || haNum > haDisponibles);
+  const haExcede = ha !== '' && Number.isFinite(haNum) && haNum > haDisponibles;
+
   return (
     <div className="bg-muted/30 border border-border rounded-xl p-6 space-y-4">
       <h3 className="font-semibold text-lg">{isEditing ? 'Editar Lote' : 'Nuevo Lote'}</h3>
@@ -1904,11 +2070,14 @@ function FormLote({
           <Input
             type="number"
             placeholder="0"
+            min={0}
             max={haDisponibles}
+            step="0.01"
             value={ha}
             onChange={e => setHa(e.target.value)}
+            className={haExcede ? 'border-destructive focus-visible:ring-destructive/40' : ''}
           />
-          <p className="text-xs text-muted-foreground">
+          <p className={`text-xs ${haExcede ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
             Disponibles: {haDisponibles.toFixed(2)} ha
           </p>
         </div>
@@ -1946,10 +2115,23 @@ function FormLote({
       <div className="flex gap-2">
         <Button
           onClick={() => {
+            // Validar contra hectáreas disponibles del predio antes de guardar.
+            // Aplica tanto al crear como al editar (el caller suma de vuelta
+            // las hectáreas del lote en edición al pasar haDisponibles).
+            if (haNum > haDisponibles) {
+              toast.error(
+                `No puedes sembrar más de ${haDisponibles.toFixed(2)} ha disponibles en el predio.`,
+              );
+              return;
+            }
+            if (haNum <= 0) {
+              toast.error('Las hectáreas sembradas deben ser mayores a 0');
+              return;
+            }
             const semillasIds = semillaId && !isNaN(Number(semillaId)) ? [Number(semillaId)] : [];
-            onGuardar({ nombre, fechaSiembra: fecha, hectareasSembradas: Number(ha) || 0, semillasIds, variedad: variedadFinal });
+            onGuardar({ nombre, fechaSiembra: fecha, hectareasSembradas: haNum, semillasIds, variedad: variedadFinal });
           }}
-          disabled={!nombre || !ha || !semillaId || (esOtros && !otraVariedad.trim())}
+          disabled={!nombre || !ha || !semillaId || (esOtros && !otraVariedad.trim()) || haInvalid}
         >
           {isEditing ? 'Actualizar Lote' : 'Guardar Lote'}
         </Button>

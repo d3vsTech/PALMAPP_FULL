@@ -129,17 +129,17 @@ export default function Diagnosticos() {
   ];
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 md:p-8 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <div className="p-2.5 bg-gradient-to-br from-[#9032F0]/20 to-[#6506FF]/20 border border-[#9032F0]/30 rounded-xl">
+            <div className="p-2.5 bg-gradient-to-br from-[#9032F0]/20 to-[#6506FF]/20 border border-[#9032F0]/30 rounded-xl flex-shrink-0">
               <Settings className="h-6 w-6 text-[#9032F0]" />
             </div>
-            <h1 className="text-3xl font-bold text-white">Diagnósticos del Sistema</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-white">Diagnósticos del Sistema</h1>
           </div>
-          <p className="text-slate-400">
+          <p className="text-sm md:text-base text-slate-400">
             Información del servidor y estado del sistema en tiempo real
           </p>
         </div>
@@ -147,7 +147,7 @@ export default function Diagnosticos() {
         <button
           onClick={() => void cargarDiagnosticos()}
           disabled={cargando}
-          className="flex items-center gap-2 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#9032F0]/30 rounded-xl text-white transition-all duration-200 group disabled:opacity-50"
+          className="flex items-center gap-2 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#9032F0]/30 rounded-xl text-white transition-all duration-200 group disabled:opacity-50 self-start lg:self-auto"
         >
           <RefreshCw className={`h-4 w-4 transition-transform ${cargando ? 'animate-spin' : 'group-hover:rotate-180'}`} />
           <span className="text-sm font-medium">Actualizar</span>
