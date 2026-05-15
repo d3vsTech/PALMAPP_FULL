@@ -15,6 +15,8 @@
  *   Panel: §1.6 GET /predios/{id}/resumen — se refresca tras cada operación
  */
 import React, { useState, useEffect, useRef } from 'react';
+// @ts-expect-error react-dom no expone tipos a través del export "react-dom" en este setup
+import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
@@ -88,6 +90,23 @@ export default function NuevoPredioWizard() {
     Number.isFinite(pasoUrl) && pasoUrl >= 1 && pasoUrl <= 5 ? pasoUrl : 1,
   );
   const [guardando, setGuardando] = useState(false);
+  // Overlay de carga mientras se hidrata el predio en modo edición.
+  const [cargandoPredio, setCargandoPredio] = useState<boolean>(!!editId);
+
+  // Bloquear scroll global mientras el overlay esté visible.
+  useEffect(() => {
+    if (!cargandoPredio) return;
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtml = html.style.overflow;
+    const prevBody = body.style.overflow;
+    html.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+    return () => {
+      html.style.overflow = prevHtml;
+      body.style.overflow = prevBody;
+    };
+  }, [cargandoPredio]);
 
   // ── Estado paso 1: Predio ──────────────────────────────────────────────────
   const [predioNombre, setPredioNombre]     = useState('');
@@ -300,6 +319,7 @@ export default function NuevoPredioWizard() {
   // ── Cargar datos en modo edición ──────────────────────────────────────────
   useEffect(() => {
     if (!editId) return;
+    setCargandoPredio(true);
     const cargar = async () => {
       try {
         // §1.2 Ver predio
@@ -316,7 +336,6 @@ export default function NuevoPredioWizard() {
             setPendingMunicipio(partes[0]);
             setPendingDepto(partes[partes.length - 1]);
           } else if (partes.length === 1) {
-            // Solo departamento (sin municipio)
             setPendingDepto(partes[0]);
           }
         }
@@ -332,25 +351,38 @@ export default function NuevoPredioWizard() {
           variedad: (l.semillas ?? [])[0]?.nombre ?? '',
         })));
 
-        // §3.1 Sublotes + §5.1 Líneas
+        // §3.1 Sublotes — paralelizado por lote (antes secuencial)
+        const sublRespuestas = await Promise.all(
+          lotesData.map((l: any) => sublotesApi.listar({ lote_id: l.id, per_page: 100 }))
+        );
         const todosSubl: SubloteLocal[] = [];
-        const todasLineas: LineaLocal[] = [];
-        for (const l of lotesData) {
-          const sublRes = await sublotesApi.listar({ lote_id: l.id, per_page: 100 });
+        const sublotesPorLote: { sublote: any; loteId: any }[] = [];
+        sublRespuestas.forEach((sublRes, idx) => {
+          const lote = lotesData[idx];
           (sublRes.data ?? []).forEach((s: any) => {
             todosSubl.push({
               id: String(s.id), nombre: s.nombre,
-              loteId: String(l.id),
+              loteId: String(lote.id),
               cantidadPalmas: Number(s.cantidad_palmas ?? 0),
             });
+            sublotesPorLote.push({ sublote: s, loteId: lote.id });
           });
-          for (const s of (sublRes.data ?? [])) {
-            const linRes = await lineasApi.listar({ sublote_id: s.id, per_page: 100 });
-            (linRes.data ?? []).forEach((ln: any) => {
-              todasLineas.push({ id: String(ln.id), numero: ln.numero, subloteId: String(s.id) });
-            });
-          }
-        }
+        });
+
+        // §5.1 Líneas — paralelizado por sublote (antes secuencial)
+        const linRespuestas = await Promise.all(
+          sublotesPorLote.map(({ sublote }) =>
+            lineasApi.listar({ sublote_id: sublote.id, per_page: 100 })
+          )
+        );
+        const todasLineas: LineaLocal[] = [];
+        linRespuestas.forEach((linRes, idx) => {
+          const { sublote } = sublotesPorLote[idx];
+          (linRes.data ?? []).forEach((ln: any) => {
+            todasLineas.push({ id: String(ln.id), numero: ln.numero, subloteId: String(sublote.id) });
+          });
+        });
+
         setSublotes(todosSubl);
         setLineas(todasLineas);
 
@@ -358,6 +390,8 @@ export default function NuevoPredioWizard() {
         await refrescarResumen(editId);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Error al cargar plantación');
+      } finally {
+        setCargandoPredio(false);
       }
     };
     cargar();
@@ -903,6 +937,13 @@ export default function NuevoPredioWizard() {
                   {(l.sublotes ?? []).length > 0 ? (
                     <div className="space-y-1">
                       {(l.sublotes ?? []).map((s: any) => {
+                        // Palmas: backend a veces devuelve s.totales.palmas en 0.
+                        // Fallback: cantidad_palmas del propio sublote o el sublote local.
+                        const palmasSublote =
+                          s.totales?.palmas ??
+                          s.cantidad_palmas ??
+                          sublotes.find(loc => loc.id === String(s.id))?.cantidadPalmas ??
+                          0;
                         const linCount = s.totales?.lineas ?? lineas.filter(ln => ln.subloteId === String(s.id)).length;
                         return (
                           <div key={s.id} className="flex items-center justify-between py-1 text-xs">
@@ -911,7 +952,7 @@ export default function NuevoPredioWizard() {
                               {linCount > 0 && (
                                 <span className="text-muted-foreground">{linCount} líneas</span>
                               )}
-                              <span className="text-success font-semibold">{(s.totales?.palmas ?? 0).toLocaleString('es-CO')} palmas</span>
+                              <span className="text-success font-semibold">{Number(palmasSublote).toLocaleString('es-CO')} palmas</span>
                             </div>
                           </div>
                         );
@@ -920,44 +961,90 @@ export default function NuevoPredioWizard() {
                   ) : (
                     <p className="text-xs text-muted-foreground italic">Sin sublotes</p>
                   )}
-                  <div className="flex items-center justify-between pt-2 border-t border-border/50 text-xs">
-                    <span className="font-medium">Totales del lote</span>
-                    <div className="flex items-center gap-3">
-                      <span className="text-muted-foreground">{l.totales?.sublotes ?? 0} sublotes</span>
-                      {(l.totales?.lineas ?? 0) > 0 && (
-                        <span className="text-muted-foreground">{l.totales?.lineas} líneas</span>
-                      )}
-                      <span className="text-success font-semibold">{(l.totales?.palmas ?? 0).toLocaleString('es-CO')} palmas</span>
-                    </div>
-                  </div>
+                  {(() => {
+                    // Totales del lote: prioriza backend, sino suma localmente
+                    const subCount   = l.totales?.sublotes ?? (l.sublotes ?? []).length;
+                    const lineCount  = l.totales?.lineas ?? (l.sublotes ?? []).reduce(
+                      (acc: number, s: any) => acc + (s.totales?.lineas ?? lineas.filter(ln => ln.subloteId === String(s.id)).length),
+                      0,
+                    );
+                    const palmasLote = l.totales?.palmas ?? l.cantidad_palmas ?? (l.sublotes ?? []).reduce(
+                      (acc: number, s: any) => acc + Number(
+                        s.totales?.palmas ??
+                        s.cantidad_palmas ??
+                        sublotes.find(loc => loc.id === String(s.id))?.cantidadPalmas ??
+                        0,
+                      ),
+                      0,
+                    );
+                    return (
+                      <div className="flex items-center justify-between pt-2 border-t border-border/50 text-xs">
+                        <span className="font-medium">Totales del lote</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-muted-foreground">{subCount} sublotes</span>
+                          {lineCount > 0 && (
+                            <span className="text-muted-foreground">{lineCount} líneas</span>
+                          )}
+                          <span className="text-success font-semibold">{Number(palmasLote).toLocaleString('es-CO')} palmas</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               ))}
 
-              {ls.length > 0 && (
-                <div className="border-2 border-primary/30 rounded-lg p-3 bg-primary/5 space-y-2">
-                  <h5 className="font-semibold text-sm flex items-center gap-2">
-                    <Check className="h-4 w-4 text-primary" /> Totales Generales
-                  </h5>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="flex items-center justify-between p-2 rounded bg-background/50">
-                      <span className="text-muted-foreground">Lotes</span>
-                      <span className="font-bold">{tg.lotes ?? 0}</span>
-                    </div>
-                    <div className="flex items-center justify-between p-2 rounded bg-background/50">
-                      <span className="text-muted-foreground">Sublotes</span>
-                      <span className="font-bold">{tg.sublotes ?? 0}</span>
-                    </div>
-                    <div className="flex items-center justify-between p-2 rounded bg-background/50">
-                      <span className="text-muted-foreground">Líneas</span>
-                      <span className="font-bold">{tg.lineas ?? 0}</span>
-                    </div>
-                    <div className="flex items-center justify-between p-2 rounded bg-success/10">
-                      <span className="text-muted-foreground">Palmas</span>
-                      <span className="font-bold text-success">{(tg.palmas ?? 0).toLocaleString('es-CO')}</span>
+              {ls.length > 0 && (() => {
+                // Totales generales: prioriza backend, sino calcula desde los lotes.
+                const lotesTotal    = tg.lotes    ?? ls.length;
+                const sublotesTotal = tg.sublotes ?? ls.reduce(
+                  (acc: number, l: any) => acc + (l.totales?.sublotes ?? (l.sublotes ?? []).length),
+                  0,
+                );
+                const lineasTotal   = tg.lineas   ?? ls.reduce(
+                  (acc: number, l: any) => acc + (l.sublotes ?? []).reduce(
+                    (a2: number, s: any) => a2 + (s.totales?.lineas ?? lineas.filter(ln => ln.subloteId === String(s.id)).length),
+                    0,
+                  ),
+                  0,
+                );
+                const palmasTotal   = tg.palmas ?? ls.reduce(
+                  (acc: number, l: any) => acc + (l.totales?.palmas ?? l.cantidad_palmas ?? (l.sublotes ?? []).reduce(
+                    (a2: number, s: any) => a2 + Number(
+                      s.totales?.palmas ??
+                      s.cantidad_palmas ??
+                      sublotes.find(loc => loc.id === String(s.id))?.cantidadPalmas ??
+                      0,
+                    ),
+                    0,
+                  )),
+                  0,
+                );
+                return (
+                  <div className="border-2 border-primary/30 rounded-lg p-3 bg-primary/5 space-y-2">
+                    <h5 className="font-semibold text-sm flex items-center gap-2">
+                      <Check className="h-4 w-4 text-primary" /> Totales Generales
+                    </h5>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="flex items-center justify-between p-2 rounded bg-background/50">
+                        <span className="text-muted-foreground">Lotes</span>
+                        <span className="font-bold">{lotesTotal}</span>
+                      </div>
+                      <div className="flex items-center justify-between p-2 rounded bg-background/50">
+                        <span className="text-muted-foreground">Sublotes</span>
+                        <span className="font-bold">{sublotesTotal}</span>
+                      </div>
+                      <div className="flex items-center justify-between p-2 rounded bg-background/50">
+                        <span className="text-muted-foreground">Líneas</span>
+                        <span className="font-bold">{lineasTotal}</span>
+                      </div>
+                      <div className="flex items-center justify-between p-2 rounded bg-success/10">
+                        <span className="text-muted-foreground">Palmas</span>
+                        <span className="font-bold text-success">{Number(palmasTotal).toLocaleString('es-CO')}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {ls.length === 0 && (
                 <div className="text-center py-8 text-muted-foreground">
@@ -1120,7 +1207,28 @@ export default function NuevoPredioWizard() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 relative">
+      {/* Overlay de carga (solo edición) — montado en <body> vía portal para
+          que ignore cualquier transform/contexto de stacking de los padres. */}
+      {cargandoPredio && createPortal(
+        <div
+          className="flex items-center justify-center bg-background"
+          style={{
+            position: 'fixed',
+            top: 0, left: 0, right: 0, bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            zIndex: 99999,
+          }}
+        >
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-6 py-4 shadow-lg">
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            <span className="text-sm font-medium">Cargando datos de la plantación...</span>
+          </div>
+        </div>,
+        document.body,
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3 mb-2">

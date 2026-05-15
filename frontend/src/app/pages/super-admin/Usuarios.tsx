@@ -6,6 +6,7 @@ import {
   Plus,
   Edit2,
   Eye,
+  EyeOff,
   Power,
   Shield,
   Check,
@@ -188,6 +189,9 @@ export default function Usuarios() {
   const [formData, setFormData] = useState<UsuarioFormData>(
     buildUserFormData(),
   );
+  // Confirmar contraseña + toggle de visibilidad
+  const [passwordConfirm, setPasswordConfirm] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const loadStats = useCallback(async () => {
     if (!token) return;
@@ -268,6 +272,8 @@ export default function Usuarios() {
     setModalMode('create');
     setSelectedUsuario(null);
     setFormData(buildUserFormData());
+    setPasswordConfirm('');
+    setShowPassword(false);
     setShowModal(true);
   };
 
@@ -280,6 +286,8 @@ export default function Usuarios() {
     setModalMode(mode);
     setShowModal(true);
     setModalLoading(true);
+    setPasswordConfirm('');
+    setShowPassword(false);
 
     try {
       const result = await requestConToken<UserDetailResponse>(
@@ -327,6 +335,14 @@ export default function Usuarios() {
     }
 
     if (formData.password.trim()) {
+      if (formData.password.trim().length < 8) {
+        toast.error('La contraseña debe tener al menos 8 caracteres');
+        return;
+      }
+      if (formData.password !== passwordConfirm) {
+        toast.error('Las contraseñas no coinciden. Escríbela igual en ambos campos.');
+        return;
+      }
       payload.password = formData.password.trim();
     }
 
@@ -360,6 +376,8 @@ export default function Usuarios() {
       setShowModal(false);
       setSelectedUsuario(null);
       setFormData(buildUserFormData());
+      setPasswordConfirm('');
+      setShowPassword(false);
 
       await Promise.all([loadStats(), loadUsuarios()]);
     } catch (error) {
@@ -863,28 +881,81 @@ export default function Usuarios() {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      {modalMode === 'create'
-                        ? 'Contraseña *'
-                        : 'Contraseña nueva (opcional)'}
-                    </label>
-                    <input
-                      type="password"
-                      value={formData.password}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          password: e.target.value,
-                        }))
-                      }
-                      className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
-                      placeholder={
-                        modalMode === 'create'
-                          ? 'Mínimo 8 caracteres'
-                          : 'Déjalo vacío si no vas a cambiarla'
-                      }
-                    />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        {modalMode === 'create'
+                          ? 'Contraseña *'
+                          : 'Contraseña nueva (opcional)'}
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          value={formData.password}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              password: e.target.value,
+                            }))
+                          }
+                          className="w-full rounded-xl border border-white/10 bg-black/30 pl-4 pr-11 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
+                          placeholder={
+                            modalMode === 'create'
+                              ? 'Mínimo 8 caracteres'
+                              : 'Déjalo vacío si no vas a cambiarla'
+                          }
+                          autoComplete="new-password"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(v => !v)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                          tabIndex={-1}
+                          aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                        >
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        {modalMode === 'create'
+                          ? 'Confirmar contraseña *'
+                          : 'Confirmar contraseña nueva'}
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          value={passwordConfirm}
+                          onChange={(e) => setPasswordConfirm(e.target.value)}
+                          className={`w-full rounded-xl border bg-black/30 pl-4 pr-11 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-colors ${
+                            passwordConfirm && formData.password && passwordConfirm !== formData.password
+                              ? 'border-red-500/40 focus:ring-red-500/50'
+                              : 'border-white/10 focus:ring-[#9032F0]/50'
+                          }`}
+                          placeholder={
+                            modalMode === 'create'
+                              ? 'Repite la contraseña'
+                              : 'Repite la nueva contraseña'
+                          }
+                          autoComplete="new-password"
+                          disabled={!formData.password.trim()}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(v => !v)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                          tabIndex={-1}
+                          aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                        >
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                      {passwordConfirm && formData.password && passwordConfirm !== formData.password && (
+                        <p className="mt-1 text-xs text-red-400">Las contraseñas no coinciden</p>
+                      )}
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

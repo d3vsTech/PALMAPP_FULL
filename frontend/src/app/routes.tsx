@@ -110,6 +110,9 @@ import RestablecerPasswordSuperAdmin from './pages/super-admin/RestablecerPasswo
 
 // Proveedor (módulo independiente — cuenta separada)
 import ProveedorLogin from './pages/proveedor/ProveedorLogin';
+import ProveedorRecuperarPassword from './pages/proveedor/ProveedorRecuperarPassword';
+import ProveedorRestablecerPassword from './pages/proveedor/ProveedorRestablecerPassword';
+import SeleccionarProveedor from './pages/proveedor/SeleccionarProveedor';
 import ProveedorLayout from './pages/proveedor/ProveedorLayout';
 import ProveedorDashboard from './pages/proveedor/ProveedorDashboard';
 import ProveedorProductos from './pages/proveedor/ProveedorProductos';
@@ -155,7 +158,15 @@ export const router = createBrowserRouter([
   },
 
   // ─── Proveedor (cuenta separada, login propio) ────────────────────────────
-  { path: '/proveedor/login',                element: <ProveedorLogin /> },
+  { path: '/proveedor/login',                  element: <ProveedorLogin /> },
+  { path: '/proveedor/seleccionar',            element: <SeleccionarProveedor /> },
+  { path: '/proveedor/recuperar-password',     element: <ProveedorRecuperarPassword /> },
+  { path: '/proveedor/restablecer-password',   element: <ProveedorRestablecerPassword /> },
+  { path: '/proveedor/reset-password',         element: <ProveedorRestablecerPassword /> },
+  // El backend a veces arma el link como {FRONTEND_PROVEEDOR_URL}/reset-password
+  // donde FRONTEND_PROVEEDOR_URL = ".../proveedor/recuperar-password", lo que
+  // termina apuntando aquí. Mismo render que /proveedor/reset-password.
+  { path: '/proveedor/recuperar-password/reset-password', element: <ProveedorRestablecerPassword /> },
   { path: '/proveedor/configuracion-inicial', element: <ConfiguracionInicialWizard /> },
   {
     path: '/proveedor',

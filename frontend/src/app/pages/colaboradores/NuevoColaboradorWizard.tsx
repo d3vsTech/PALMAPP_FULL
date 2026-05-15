@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+// @ts-expect-error react-dom no expone tipos a través del export "react-dom" en este setup
+import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router';
 
 // Helper defensivo para fechas (evita "Invalid Date")
@@ -58,7 +60,6 @@ import {
 import { Switch } from '../../components/ui/switch';
 import { colaboradoresApi, buildAvatarUrl } from '../../../api/colaboradores';
 import { fetchConToken } from '../../../api/request';
-import { prediosApi } from '../../../api/plantacion';
 import { toast } from 'sonner';
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────────
@@ -196,6 +197,21 @@ export default function NuevoColaboradorWizard() {
   const [guardando, setGuardando] = useState(false);
   const [cargandoColaborador, setCargandoColaborador] = useState<boolean>(isEditMode);
 
+  // Bloquear scroll global mientras el overlay esté visible.
+  useEffect(() => {
+    if (!cargandoColaborador) return;
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtml = html.style.overflow;
+    const prevBody = body.style.overflow;
+    html.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+    return () => {
+      html.style.overflow = prevHtml;
+      body.style.overflow = prevBody;
+    };
+  }, [cargandoColaborador]);
+
   // ── Paramétricas desde API ───────────────────────────────────────────────
   const [epsOpciones,       setEpsOpciones]       = useState<string[]>([]);
   const [arlOpciones,       setArlOpciones]       = useState<string[]>([]);
@@ -233,105 +249,138 @@ export default function NuevoColaboradorWizard() {
   const [categoriasDocs, setCategoriasDocs] = useState<Record<string, CatDoc> | null>(null);
 
 
-  // Cargar predios (con caché de sesión)
+  // ── Bundle wizard-init: 1 sola petición reemplaza 5 fetches ────────────────
+  // Stale-while-revalidate: pinta desde sessionStorage al instante y revalida
+  // en background. La caché vive hasta cerrar la pestaña.
   useEffect(() => {
+    // 1) Pintar al instante desde la caché de sesión (si existe)
     try {
-      const raw = sessionStorage.getItem('cache_predios');
-      if (raw) setPredios(JSON.parse(raw));
+      const rawPredios = sessionStorage.getItem('cache_predios');
+      if (rawPredios) setPredios(JSON.parse(rawPredios));
+      const rawCats = sessionStorage.getItem('cache_categorias_docs');
+      if (rawCats) setCategoriasDocs(JSON.parse(rawCats));
+      const rawEps = sessionStorage.getItem('cache_eps');
+      if (rawEps) setEpsOpciones(JSON.parse(rawEps));
+      const rawArl = sessionStorage.getItem('cache_arl');
+      if (rawArl) setArlOpciones(JSON.parse(rawArl));
+      const rawPension = sessionStorage.getItem('cache_pension');
+      if (rawPension) setPensionOpciones(JSON.parse(rawPension));
+      const rawBancos = sessionStorage.getItem('cache_bancos');
+      if (rawBancos) setBancariasOpciones(JSON.parse(rawBancos));
+      const rawDeptos = sessionStorage.getItem('cache_departamentos');
+      if (rawDeptos) setDepartamentos(JSON.parse(rawDeptos));
     } catch { /* ignorar */ }
-    prediosApi.listar({ per_page: 100 })
-      .then(r => {
-        const lista = r.data ?? [];
-        setPredios(lista);
-        try { sessionStorage.setItem('cache_predios', JSON.stringify(lista)); } catch { /* */ }
-      })
-      .catch(() => {});
-  }, []);
 
-  // Cargar catálogo de categorías de documentos desde la API (fuente única de verdad)
-  useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem('cache_categorias_docs');
-      if (raw) setCategoriasDocs(JSON.parse(raw));
-    } catch { /* ignorar */ }
-    colaboradoresApi.getCategorias()
-      .then(res => {
-        setCategoriasDocs(res.data as Record<string, CatDoc>);
-        try { sessionStorage.setItem('cache_categorias_docs', JSON.stringify(res.data)); } catch { /* */ }
-      })
-      .catch(() => {
-        // Fallback al hardcoded actualizado si el endpoint falla
-        setCategoriasDocs({
-          DATOS_BASE:            { label: 'Datos base',                          unico_por_tipo: true,  tipos: { DOCUMENTO_DE_IDENTIDAD: 'Documento de identidad', HOJA_DE_VIDA: 'Hoja de vida', ANTECEDENTES: 'Antecedentes', AUTORIZACION_DATOS_PERSONALES: 'Autorización de datos personales' } },
-          CONTRATACION_LABORAL:  { label: 'Contratación laboral',                unico_por_tipo: false, tipos: { CONTRATO_DE_TRABAJO: 'Contrato de trabajo', ACUERDO_DE_CONFIDENCIALIDAD: 'Acuerdo de confidencialidad' } },
-          SST:                   { label: 'SST',                                 unico_por_tipo: false, tipos: { EXAMEN_DE_INGRESO: 'Examen de ingreso' } },
-          PERMISOS_LICENCIAS:    { label: 'Permisos, Licencias e Incapacidades', unico_por_tipo: false, permite_tipo_personalizado: true, tipos: {} },
-          FINALIZACION_CONTRATO: { label: 'Finalización de contrato',            unico_por_tipo: false, tipos: { FINALIZACION_CONTRATO: 'Finalización de contrato' } },
-          DESPRENDIBLES:         { label: 'Desprendibles',                       unico_por_tipo: false, tipos: { DESPRENDIBLES: 'Desprendibles' } },
-          OTROS:                 { label: 'Otros',                               unico_por_tipo: false, permite_tipo_personalizado: true, tipos: {} },
-        });
-      });
-  }, []);
-
-  // ── Cargar paramétricas desde API (con caché de sesión) ──────────────────────
-  // Las paramétricas son catálogos lentos del backend que casi no cambian dentro
-  // de una sesión. Las pintamos al instante desde sessionStorage y disparamos
-  // un revalidate en segundo plano para mantenerlas frescas.
-  useEffect(() => {
-    const aplicar = (key: string, setter: (v: string[]) => void) => {
-      try {
-        const raw = sessionStorage.getItem(key);
-        if (raw) setter(JSON.parse(raw) as string[]);
-      } catch { /* ignorar */ }
+    // Helpers para hidratar el form en modo edición
+    const toDateInput = (v: any): string => {
+      if (!v) return '';
+      const s = String(v);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+      const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+      return m ? m[1] : '';
     };
-    aplicar('cache_eps', setEpsOpciones);
-    aplicar('cache_arl', setArlOpciones);
-    aplicar('cache_pension', setPensionOpciones);
-    aplicar('cache_bancos', setBancariasOpciones);
+    const toNumber = (v: any): number => {
+      if (v === null || v === undefined || v === '') return 0;
+      const n = typeof v === 'number' ? v : parseFloat(String(v));
+      return Number.isFinite(n) ? n : 0;
+    };
 
-    const cargar = async () => {
-      try {
-        const [eps, arl, pension, bancos] = await Promise.all([
-          colaboradoresApi.getEPS(),
-          colaboradoresApi.getARL(),
-          colaboradoresApi.getFondosPension(),
-          colaboradoresApi.getEntidadesBancarias(),
-        ]);
-        const epsList     = (eps.data ?? []).map((e: any) => e.nombre);
-        const arlList     = (arl.data ?? []).map((e: any) => e.nombre);
-        const pensionList = (pension.data ?? []).map((e: any) => e.nombre);
-        const bancosList  = (bancos.data ?? []).map((e: any) => e.nombre);
+    // 2) Bundle init contra el servidor (1 sola request)
+    if (isEditMode) setCargandoColaborador(true);
+    let cancelled = false;
+    colaboradoresApi.wizardInit(isEditMode && id ? id : undefined)
+      .then(({ data }) => {
+        if (cancelled) return;
+        const { colaborador, parametricas } = data;
+
+        // Paramétricas → estado + caché
+        const epsList     = (parametricas.eps                 ?? []).map(e => e.nombre);
+        const arlList     = (parametricas.arl                 ?? []).map(e => e.nombre);
+        const pensionList = (parametricas.fondos_pension      ?? []).map(e => e.nombre);
+        const bancosList  = (parametricas.entidades_bancarias ?? []).map(e => e.nombre);
+
+        setPredios((parametricas.predios ?? []) as any[]);
         setEpsOpciones(epsList);
         setArlOpciones(arlList);
         setPensionOpciones(pensionList);
         setBancariasOpciones(bancosList);
-        try {
-          sessionStorage.setItem('cache_eps', JSON.stringify(epsList));
-          sessionStorage.setItem('cache_arl', JSON.stringify(arlList));
-          sessionStorage.setItem('cache_pension', JSON.stringify(pensionList));
-          sessionStorage.setItem('cache_bancos', JSON.stringify(bancosList));
-        } catch { /* cuota llena */ }
-      } catch { /* silencioso */ }
-    };
-    cargar();
-  }, []);
+        setDepartamentos(parametricas.departamentos ?? []);
+        setCategoriasDocs(parametricas.documento_categorias as unknown as Record<string, CatDoc>);
 
-  // Cargar departamentos (con caché de sesión)
-  useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem('cache_departamentos');
-      if (raw) setDepartamentos(JSON.parse(raw));
-    } catch { /* ignorar */ }
-    const token = localStorage.getItem('palmapp_token');
-    fetchConToken('/api/v1/auth/departamentos', token)
-      .then(r => r.json())
-      .then(d => {
-        const lista = d.data ?? [];
-        setDepartamentos(lista);
-        try { sessionStorage.setItem('cache_departamentos', JSON.stringify(lista)); } catch { /* */ }
+        try {
+          sessionStorage.setItem('cache_predios',         JSON.stringify(parametricas.predios ?? []));
+          sessionStorage.setItem('cache_eps',             JSON.stringify(epsList));
+          sessionStorage.setItem('cache_arl',             JSON.stringify(arlList));
+          sessionStorage.setItem('cache_pension',         JSON.stringify(pensionList));
+          sessionStorage.setItem('cache_bancos',          JSON.stringify(bancosList));
+          sessionStorage.setItem('cache_departamentos',   JSON.stringify(parametricas.departamentos ?? []));
+          sessionStorage.setItem('cache_categorias_docs', JSON.stringify(parametricas.documento_categorias ?? {}));
+        } catch { /* cuota llena */ }
+
+        // 3) Hidratar form si es edición
+        if (colaborador && isEditMode) {
+          const d = colaborador;
+          if (d.avatar_url) {
+            const fullUrl = buildAvatarUrl(d.avatar_url);
+            setAvatarUrlRemoto(fullUrl);
+            setImagePreview(fullUrl);
+          }
+          const predioId = d.predio?.id ?? d.predio_id ?? null;
+          const modalidadPagoForm =
+            d.modalidad_pago === 'PRODUCCION' ? 'VARIABLE' :
+            (d.modalidad_pago ?? 'FIJO');
+
+          setFormData({
+            estado: d.estado ?? true,
+            primerApellido: d.primer_apellido ?? '',
+            segundoApellido: d.segundo_apellido ?? '',
+            primerNombre: d.primer_nombre ?? '',
+            segundoNombre: d.segundo_nombre ?? '',
+            tipoDocumento: d.tipo_documento ?? 'CC',
+            numeroDocumento: d.documento ?? '',
+            fechaExpedicion: toDateInput(d.fecha_expedicion_documento),
+            fechaNacimiento: toDateInput(d.fecha_nacimiento),
+            lugarExpedicion: d.lugar_expedicion ?? '',
+            cargo: d.cargo ?? '',
+            predioAsignado: predioId ? String(predioId) : '',
+            modalidadPago: modalidadPagoForm,
+            salarioBase: toNumber(d.salario_base),
+            fechaContratacion: toDateInput(d.fecha_ingreso),
+            fechaFinalizacion: toDateInput(d.fecha_retiro),
+            eps: d.eps ?? '',
+            arl: d.arl ?? '',
+            fondoPension: d.fondo_pension ?? '',
+            cajaCompensacion: d.caja_compensacion ?? '',
+            tallaCamisa: d.talla_camisa ?? '',
+            tallaPantalon: d.talla_pantalon ?? '',
+            tallaCalzado: d.talla_calzado ?? '',
+            banco: d.entidad_bancaria ?? '',
+            tipoCuenta: d.tipo_cuenta ?? 'AHORROS',
+            numeroCuenta: d.numero_cuenta ?? '',
+            correo: d.correo_electronico ?? '',
+            telefono: d.telefono ?? '',
+            direccion: d.direccion ?? '',
+            // Municipio se aplica recién cuando municipios estén cargados (ver pendingMunicipio)
+            municipio: '',
+            departamento: d.departamento ?? '',
+            contactoEmergenciaNombre: d.contacto_emergencia_nombre ?? '',
+            contactoEmergenciaTelefono: d.contacto_emergencia_telefono ?? '',
+          });
+          if (d.municipio) setPendingMunicipio(d.municipio);
+        }
       })
-      .catch(() => {});
-  }, []);
+      .catch(() => {
+        if (cancelled) return;
+        toast.error(isEditMode
+          ? 'Error al cargar datos del colaborador'
+          : 'Error al cargar el formulario');
+      })
+      .finally(() => {
+        if (!cancelled) setCargandoColaborador(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [id, isEditMode]);
 
   // Cargar municipios cuando cambia departamento (con caché por departamento)
   useEffect(() => {
@@ -351,89 +400,6 @@ export default function NuevoColaboradorWizard() {
       })
       .catch(() => {});
   }, [deptoSel]);
-
-  // Cargar datos en modo edición — trae TODOS los campos existentes del colaborador
-  // y los precarga en el formulario para que el usuario solo edite lo que quiera.
-  useEffect(() => {
-    if (!isEditMode || !id) return;
-
-    // Helper: normaliza fechas que pueden venir como "2024-01-15T00:00:00.000Z" → "2024-01-15"
-    const toDateInput = (v: any): string => {
-      if (!v) return '';
-      const s = String(v);
-      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-      const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
-      return m ? m[1] : '';
-    };
-    // Helper: salario_base puede venir como "1500000.00" (string) o 1500000 (number)
-    const toNumber = (v: any): number => {
-      if (v === null || v === undefined || v === '') return 0;
-      const n = typeof v === 'number' ? v : parseFloat(String(v));
-      return Number.isFinite(n) ? n : 0;
-    };
-
-    setCargandoColaborador(true);
-    colaboradoresApi.ver(Number(id)).then(res => {
-      const d = res.data ?? {};
-
-      // Avatar remoto si existe
-      if (d.avatar_url) {
-        const fullUrl = buildAvatarUrl(d.avatar_url);
-        setAvatarUrlRemoto(fullUrl);
-        setImagePreview(fullUrl);
-      }
-
-      // Predio: API puede devolver { predio: {id, nombre} } o predio_id plano
-      const predioId = d.predio?.id ?? d.predio_id ?? null;
-
-      // Modalidad pago: backend usa 'PRODUCCION' pero el form usa 'VARIABLE'
-      const modalidadPagoForm =
-        d.modalidad_pago === 'PRODUCCION' ? 'VARIABLE' :
-        (d.modalidad_pago ?? 'FIJO');
-
-      setFormData({
-        estado: d.estado ?? true,
-        primerApellido: d.primer_apellido ?? '',
-        segundoApellido: d.segundo_apellido ?? '',
-        primerNombre: d.primer_nombre ?? '',
-        segundoNombre: d.segundo_nombre ?? '',
-        tipoDocumento: d.tipo_documento ?? 'CC',
-        numeroDocumento: d.documento ?? '',
-        fechaExpedicion: toDateInput(d.fecha_expedicion_documento),
-        fechaNacimiento: toDateInput(d.fecha_nacimiento),
-        lugarExpedicion: d.lugar_expedicion ?? '',
-        cargo: d.cargo ?? '',
-        predioAsignado: predioId ? String(predioId) : '',
-        modalidadPago: modalidadPagoForm,
-        salarioBase: toNumber(d.salario_base),
-        fechaContratacion: toDateInput(d.fecha_ingreso),
-        fechaFinalizacion: toDateInput(d.fecha_retiro),
-        eps: d.eps ?? '',
-        arl: d.arl ?? '',
-        fondoPension: d.fondo_pension ?? '',
-        cajaCompensacion: d.caja_compensacion ?? '',
-        tallaCamisa: d.talla_camisa ?? '',
-        tallaPantalon: d.talla_pantalon ?? '',
-        tallaCalzado: d.talla_calzado ?? '',
-        banco: d.entidad_bancaria ?? '',
-        tipoCuenta: d.tipo_cuenta ?? 'AHORROS',
-        numeroCuenta: d.numero_cuenta ?? '',
-        correo: d.correo_electronico ?? '',
-        telefono: d.telefono ?? '',
-        direccion: d.direccion ?? '',
-        // Municipio se aplica recién cuando municipios estén cargados (ver pendingMunicipio)
-        municipio: '',
-        departamento: d.departamento ?? '',
-        contactoEmergenciaNombre: d.contacto_emergencia_nombre ?? '',
-        contactoEmergenciaTelefono: d.contacto_emergencia_telefono ?? '',
-      });
-
-      // Marcar municipio para aplicar después de cargar la lista
-      if (d.municipio) setPendingMunicipio(d.municipio);
-    })
-      .catch(() => toast.error('Error al cargar datos del colaborador'))
-      .finally(() => setCargandoColaborador(false));
-  }, [id, isEditMode]);
 
   // Cuando ya tenemos la lista de departamentos Y los datos cargados,
   // hacer match por nombre → código y disparar la carga de municipios.
@@ -824,14 +790,25 @@ export default function NuevoColaboradorWizard() {
   // ─── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-8 relative">
-      {/* Overlay de carga (solo edición) */}
-      {cargandoColaborador && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-xl">
+      {/* Overlay de carga (solo edición) — montado en <body> vía portal para
+          que ignore cualquier transform/contexto de stacking de los padres. */}
+      {cargandoColaborador && createPortal(
+        <div
+          className="flex items-center justify-center bg-background"
+          style={{
+            position: 'fixed',
+            top: 0, left: 0, right: 0, bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            zIndex: 99999,
+          }}
+        >
           <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-6 py-4 shadow-lg">
             <Loader2 className="h-5 w-5 animate-spin text-primary" />
             <span className="text-sm font-medium">Cargando datos del colaborador...</span>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* Header */}

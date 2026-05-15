@@ -21,7 +21,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import {
   ArrowLeft, Users, Plus, Search, Edit2, Trash2, Shield, Check, X,
-  Loader2, UserPlus, Pause, Play, Store,
+  Loader2, UserPlus, Pause, Play, Store, Eye, EyeOff,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -41,6 +41,7 @@ const EMPTY_CREATE_FORM = {
   email: '',
   name: '',
   password: '',
+  password_confirmation: '',
   rol: 'ADMIN' as RolProveedorUser,
 };
 
@@ -48,6 +49,7 @@ const EMPTY_EDIT_FORM = {
   name: '',
   email: '',
   password: '',
+  password_confirmation: '',
   rol: 'ADMIN' as RolProveedorUser,
   estado: true,
 };
@@ -91,6 +93,7 @@ export default function UsuariosProveedor() {
   const [selectedUser, setSelectedUser] = useState<ProveedorUser | null>(null);
   const [createForm, setCreateForm] = useState(EMPTY_CREATE_FORM);
   const [editForm, setEditForm] = useState(EMPTY_EDIT_FORM);
+  const [showPassword, setShowPassword] = useState(false);
 
   const [globalUsers, setGlobalUsers] = useState<GlobalUserOption[]>([]);
   const [loadingGlobalUsers, setLoadingGlobalUsers] = useState(false);
@@ -167,6 +170,7 @@ export default function UsuariosProveedor() {
     setAssignmentMode('new');
     setCreateForm(EMPTY_CREATE_FORM);
     setSelectedUser(null);
+    setShowPassword(false);
     setShowModal(true);
     await loadGlobalUsers();
   };
@@ -178,9 +182,11 @@ export default function UsuariosProveedor() {
       name: user.name,
       email: user.email,
       password: '',
+      password_confirmation: '',
       rol: (user.rol as RolProveedorUser) ?? 'ADMIN',
       estado: user.estado,
     });
+    setShowPassword(false);
     setShowModal(true);
   };
 
@@ -229,6 +235,10 @@ export default function UsuariosProveedor() {
         toast.error('La contraseña debe tener al menos 8 caracteres');
         return;
       }
+      if (createForm.password !== createForm.password_confirmation) {
+        toast.error('Las contraseñas no coinciden. Escríbela igual en ambos campos.');
+        return;
+      }
       payload = {
         name: createForm.name.trim(),
         email: createForm.email.trim(),
@@ -267,6 +277,10 @@ export default function UsuariosProveedor() {
     if (editForm.password.trim()) {
       if (editForm.password.trim().length < 8) {
         toast.error('La contraseña debe tener al menos 8 caracteres');
+        return;
+      }
+      if (editForm.password !== editForm.password_confirmation) {
+        toast.error('Las contraseñas no coinciden. Escríbela igual en ambos campos.');
         return;
       }
       payload.password = editForm.password.trim();
@@ -574,15 +588,59 @@ export default function UsuariosProveedor() {
                           />
                         </div>
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">Contraseña *</label>
-                        <input
-                          type="password"
-                          value={createForm.password}
-                          onChange={e => setCreateForm(p => ({ ...p, password: e.target.value }))}
-                          className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
-                          placeholder="Mínimo 8 caracteres"
-                        />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">Contraseña *</label>
+                          <div className="relative">
+                            <input
+                              type={showPassword ? 'text' : 'password'}
+                              value={createForm.password}
+                              onChange={e => setCreateForm(p => ({ ...p, password: e.target.value }))}
+                              className="w-full rounded-xl border border-white/10 bg-black/30 pl-4 pr-11 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
+                              placeholder="Mínimo 8 caracteres"
+                              autoComplete="new-password"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword(v => !v)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                              tabIndex={-1}
+                              aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                            >
+                              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">Confirmar contraseña *</label>
+                          <div className="relative">
+                            <input
+                              type={showPassword ? 'text' : 'password'}
+                              value={createForm.password_confirmation}
+                              onChange={e => setCreateForm(p => ({ ...p, password_confirmation: e.target.value }))}
+                              className={`w-full rounded-xl border bg-black/30 pl-4 pr-11 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-colors ${
+                                createForm.password_confirmation && createForm.password && createForm.password_confirmation !== createForm.password
+                                  ? 'border-red-500/40 focus:ring-red-500/50'
+                                  : 'border-white/10 focus:ring-[#9032F0]/50'
+                              }`}
+                              placeholder="Repite la contraseña"
+                              autoComplete="new-password"
+                              disabled={!createForm.password.trim()}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword(v => !v)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                              tabIndex={-1}
+                              aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                            >
+                              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+                          {createForm.password_confirmation && createForm.password && createForm.password_confirmation !== createForm.password && (
+                            <p className="mt-1 text-xs text-red-400">Las contraseñas no coinciden</p>
+                          )}
+                        </div>
                       </div>
                     </>
                   ) : (
@@ -670,17 +728,63 @@ export default function UsuariosProveedor() {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Nueva contraseña (opcional)
-                    </label>
-                    <input
-                      type="password"
-                      value={editForm.password}
-                      onChange={e => setEditForm(p => ({ ...p, password: e.target.value }))}
-                      className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
-                      placeholder="Dejar en blanco para no cambiar"
-                    />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Nueva contraseña (opcional)
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          value={editForm.password}
+                          onChange={e => setEditForm(p => ({ ...p, password: e.target.value }))}
+                          className="w-full rounded-xl border border-white/10 bg-black/30 pl-4 pr-11 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
+                          placeholder="Dejar en blanco para no cambiar"
+                          autoComplete="new-password"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(v => !v)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                          tabIndex={-1}
+                          aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                        >
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Confirmar contraseña
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          value={editForm.password_confirmation}
+                          onChange={e => setEditForm(p => ({ ...p, password_confirmation: e.target.value }))}
+                          className={`w-full rounded-xl border bg-black/30 pl-4 pr-11 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-colors ${
+                            editForm.password_confirmation && editForm.password && editForm.password_confirmation !== editForm.password
+                              ? 'border-red-500/40 focus:ring-red-500/50'
+                              : 'border-white/10 focus:ring-[#9032F0]/50'
+                          }`}
+                          placeholder="Repite la nueva contraseña"
+                          autoComplete="new-password"
+                          disabled={!editForm.password.trim()}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(v => !v)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                          tabIndex={-1}
+                          aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                        >
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                      {editForm.password_confirmation && editForm.password && editForm.password_confirmation !== editForm.password && (
+                        <p className="mt-1 text-xs text-red-400">Las contraseñas no coinciden</p>
+                      )}
+                    </div>
                   </div>
 
                   <div>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet, useNavigate, useLocation, Link } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
@@ -14,6 +14,7 @@ import {
   X,
   User,
 } from 'lucide-react';
+import { proveedorAuthApi, proveedorAuthStorage } from '../../../api/proveedorAuth';
 
 const navigation = [
   { name: 'Dashboard', href: '/proveedor/dashboard', icon: LayoutDashboard },
@@ -28,11 +29,29 @@ export default function ProveedorLayout() {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const handleLogout = () => {
-    // Limpiar sesión del proveedor
-    localStorage.removeItem('proveedorSession');
-    navigate('/proveedor/login');
+  // Datos vivos de la sesión actual (proveedor seleccionado + usuario)
+  const [proveedor, setProveedor] = useState(proveedorAuthStorage.getProveedor());
+  const [user]                    = useState(proveedorAuthStorage.getUser());
+
+  // Si no hay sesión válida → mandar al login.
+  useEffect(() => {
+    if (!proveedorAuthStorage.getToken()) {
+      navigate('/proveedor/login', { replace: true });
+    }
+    // Reactivos por si el usuario seleccionó otro proveedor en otra pestaña.
+    const onStorage = () => setProveedor(proveedorAuthStorage.getProveedor());
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [navigate]);
+
+  const handleLogout = async () => {
+    try { await proveedorAuthApi.logout(); } catch { /* ignorar */ }
+    proveedorAuthStorage.clearAll();
+    navigate('/proveedor/login', { replace: true });
   };
+
+  const nombreEmpresa = proveedor?.nombre_empresa ?? 'Proveedor';
+  const nombreUsuario = user?.name ?? 'Usuario';
 
   const isActiveRoute = (href: string) => {
     return location.pathname === href || location.pathname.startsWith(href + '/');
@@ -53,7 +72,7 @@ export default function ProveedorLayout() {
                     <Store className="h-5 w-5 text-white" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold">AgroInsumos</p>
+                    <p className="text-sm font-semibold">{nombreEmpresa}</p>
                   </div>
                 </div>
                 <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)}>
@@ -113,7 +132,7 @@ export default function ProveedorLayout() {
               <Store className="h-5 w-5 text-white" />
             </div>
             <div>
-              <p className="font-semibold">AgroInsumos</p>
+              <p className="font-semibold">{nombreEmpresa}</p>
             </div>
           </div>
 
@@ -142,8 +161,8 @@ export default function ProveedorLayout() {
           {/* Footer del sidebar */}
           <div className="p-4 border-t border-border">
             <div className="mb-3 px-1">
-              <p className="text-sm font-medium">AgroInsumos del Valle</p>
-              <p className="text-xs text-muted-foreground">Portal de proveedor</p>
+              <p className="text-sm font-medium">{nombreEmpresa}</p>
+              <p className="text-xs text-muted-foreground truncate">{nombreUsuario}</p>
             </div>
             <Button
               variant="ghost"
@@ -177,8 +196,8 @@ export default function ProveedorLayout() {
                   <User className="h-4 w-4" />
                 </div>
                 <div className="hidden sm:block">
-                  <p className="text-sm font-medium">AgroInsumos</p>
-                  <p className="text-xs text-muted-foreground">Proveedor</p>
+                  <p className="text-sm font-medium">{nombreUsuario}</p>
+                  <p className="text-xs text-muted-foreground">{nombreEmpresa}</p>
                 </div>
               </div>
             </div>

@@ -76,7 +76,48 @@ async function del<T>(path: string): Promise<T> {
   return requestConToken<T>(`/api/v1/tenant/colaboradores${path}`, { method: 'DELETE' }, tkn());
 }
 
+// ─── Tipos del bundle wizard-init ──────────────────────────────────────────────
+export interface ParametricaItem    { id: number; nombre: string }
+export interface PredioParametrica  { id: number; nombre: string; estado: boolean }
+export interface DepartamentoItem   { codigo: string; nombre: string }
+
+export interface DocumentoCategoria {
+  label: string;
+  unico_por_tipo: boolean;
+  permite_tipo_personalizado?: boolean;
+  tipos: Record<string, string>;
+}
+
+export interface WizardParametricas {
+  predios:              PredioParametrica[];
+  eps:                  ParametricaItem[];
+  arl:                  ParametricaItem[];
+  fondos_pension:       ParametricaItem[];
+  entidades_bancarias:  ParametricaItem[];
+  departamentos:        DepartamentoItem[];
+  documento_categorias: Record<string, DocumentoCategoria>;
+}
+
+export interface WizardInitResponse {
+  /** `null` en modo creación */
+  colaborador: any | null;
+  parametricas: WizardParametricas;
+}
+
 export const colaboradoresApi = {
+  // ─── Bundle de inicialización del wizard ─────────────────────────────────
+  /**
+   * Reemplaza 8 fetches paralelos del wizard de colaboradores.
+   * - `id` presente → modo edición, devuelve colaborador + paramétricas.
+   * - `id` ausente  → modo creación, devuelve solo paramétricas (colaborador = null).
+   */
+  wizardInit: (id?: number | string) => {
+    const path = id != null
+      ? `/${id}/wizard-init`
+      : `/wizard-init`;
+    return get<{ data: WizardInitResponse }>(path);
+  },
+
   // ─── Listado / búsqueda ──────────────────────────────────────────────────
   listar: (p?: ColaboradorListadoParams) =>
     get<{ data: any[]; meta: any }>('', p as any),
