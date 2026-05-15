@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 import {
   Store, Plus, Edit2, Trash2, Pause, Play, Search, Filter,
-  RefreshCw, Loader2, Eye, Star,
+  RefreshCw, Loader2, Eye, Star, Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
@@ -68,6 +69,7 @@ function buildPayload(data: ProveedorFormData) {
 }
 
 export default function Proveedores() {
+  const navigate = useNavigate();
   const [proveedores, setProveedores] = useState<ProveedorAdmin[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingEditId, setLoadingEditId] = useState<number | null>(null);
@@ -432,6 +434,14 @@ export default function Proveedores() {
                           ) : (
                             <Eye className="w-4 h-4" />
                           )}
+                        </button>
+
+                        <button
+                          onClick={() => navigate(`/super-admin/proveedores/${p.id}/usuarios`)}
+                          className="p-2 hover:bg-cyan-500/10 text-cyan-400 rounded-lg transition-colors"
+                          title="Usuarios del proveedor"
+                        >
+                          <Users className="w-4 h-4" />
                         </button>
 
                         <button

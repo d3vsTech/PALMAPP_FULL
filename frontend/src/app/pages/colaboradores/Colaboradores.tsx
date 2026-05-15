@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -14,6 +14,9 @@ import {
 } from 'lucide-react';
 import { colaboradoresApi, buildAvatarUrl } from '../../../api/colaboradores';
 import { toast } from 'sonner';
+import ImportarColaboradoresDialog from '../../components/colaboradores/ImportarColaboradoresDialog';
+
+const MAX_IMPORT_SIZE_MB = 5;
 
 export default function Colaboradores() {
   const navigate = useNavigate();
@@ -24,6 +27,27 @@ export default function Colaboradores() {
   const [colaboradores, setColaboradores] = useState<any[]>([]);
   const [meta, setMeta] = useState<any>({});
   const [loading, setLoading] = useState(true);
+
+  // Importación masiva
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+
+  const elegirArchivoImport = () => importInputRef.current?.click();
+
+  const onArchivoImportChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] ?? null;
+    e.target.value = ''; // permite re-elegir el mismo archivo
+    if (!f) return;
+    const ok = /\.(xlsx|xls)$/i.test(f.name);
+    if (!ok) { toast.error('El archivo debe ser .xlsx o .xls'); return; }
+    if (f.size > MAX_IMPORT_SIZE_MB * 1024 * 1024) {
+      toast.error(`El archivo supera ${MAX_IMPORT_SIZE_MB} MB`);
+      return;
+    }
+    setImportFile(f);
+    setImportOpen(true);
+  };
 
   const cargar = useCallback(async (search?: string) => {
     setLoading(true);
@@ -86,6 +110,14 @@ export default function Colaboradores() {
 
   return (
     <div className="space-y-8">
+      {/* Importación masiva */}
+      <ImportarColaboradoresDialog
+        open={importOpen}
+        file={importFile}
+        onOpenChange={(o) => { setImportOpen(o); if (!o) setImportFile(null); }}
+        onFinalizado={() => cargar(searchTerm)}
+      />
+
       {/* Alert Dialog eliminar */}
       <AlertDialog open={alertDialog} onOpenChange={setAlertDialog}>
         <AlertDialogContent>
@@ -167,7 +199,14 @@ export default function Colaboradores() {
               className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20">
               <Plus className="h-5 w-5" /> Nuevo Colaborador
             </Button>
-            <Button onClick={() => navigate('/colaboradores/nuevo?import=1')}
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              className="hidden"
+              onChange={onArchivoImportChange}
+            />
+            <Button onClick={elegirArchivoImport}
               className="gap-2 bg-accent hover:bg-accent/90 shadow-lg shadow-accent/20">
               <FileSpreadsheet className="h-5 w-5" /> Importar Colaboradores
             </Button>

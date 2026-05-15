@@ -194,6 +194,7 @@ export default function NuevoColaboradorWizard() {
   const [borradorRestaurado] = useState(!!borradorInicial);
   const [predios, setPredios] = useState<any[]>([]);
   const [guardando, setGuardando] = useState(false);
+  const [cargandoColaborador, setCargandoColaborador] = useState<boolean>(isEditMode);
 
   // ── Paramétricas desde API ───────────────────────────────────────────────
   const [epsOpciones,       setEpsOpciones]       = useState<string[]>([]);
@@ -232,17 +233,32 @@ export default function NuevoColaboradorWizard() {
   const [categoriasDocs, setCategoriasDocs] = useState<Record<string, CatDoc> | null>(null);
 
 
-  // Cargar predios
+  // Cargar predios (con caché de sesión)
   useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('cache_predios');
+      if (raw) setPredios(JSON.parse(raw));
+    } catch { /* ignorar */ }
     prediosApi.listar({ per_page: 100 })
-      .then(r => setPredios(r.data ?? []))
+      .then(r => {
+        const lista = r.data ?? [];
+        setPredios(lista);
+        try { sessionStorage.setItem('cache_predios', JSON.stringify(lista)); } catch { /* */ }
+      })
       .catch(() => {});
   }, []);
 
   // Cargar catálogo de categorías de documentos desde la API (fuente única de verdad)
   useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('cache_categorias_docs');
+      if (raw) setCategoriasDocs(JSON.parse(raw));
+    } catch { /* ignorar */ }
     colaboradoresApi.getCategorias()
-      .then(res => setCategoriasDocs(res.data as Record<string, CatDoc>))
+      .then(res => {
+        setCategoriasDocs(res.data as Record<string, CatDoc>);
+        try { sessionStorage.setItem('cache_categorias_docs', JSON.stringify(res.data)); } catch { /* */ }
+      })
       .catch(() => {
         // Fallback al hardcoded actualizado si el endpoint falla
         setCategoriasDocs({
@@ -257,8 +273,22 @@ export default function NuevoColaboradorWizard() {
       });
   }, []);
 
-  // ── Cargar paramétricas desde API ────────────────────────────────────────────
+  // ── Cargar paramétricas desde API (con caché de sesión) ──────────────────────
+  // Las paramétricas son catálogos lentos del backend que casi no cambian dentro
+  // de una sesión. Las pintamos al instante desde sessionStorage y disparamos
+  // un revalidate en segundo plano para mantenerlas frescas.
   useEffect(() => {
+    const aplicar = (key: string, setter: (v: string[]) => void) => {
+      try {
+        const raw = sessionStorage.getItem(key);
+        if (raw) setter(JSON.parse(raw) as string[]);
+      } catch { /* ignorar */ }
+    };
+    aplicar('cache_eps', setEpsOpciones);
+    aplicar('cache_arl', setArlOpciones);
+    aplicar('cache_pension', setPensionOpciones);
+    aplicar('cache_bancos', setBancariasOpciones);
+
     const cargar = async () => {
       try {
         const [eps, arl, pension, bancos] = await Promise.all([
@@ -267,31 +297,58 @@ export default function NuevoColaboradorWizard() {
           colaboradoresApi.getFondosPension(),
           colaboradoresApi.getEntidadesBancarias(),
         ]);
-        setEpsOpciones((eps.data ?? []).map((e: any) => e.nombre));
-        setArlOpciones((arl.data ?? []).map((e: any) => e.nombre));
-        setPensionOpciones((pension.data ?? []).map((e: any) => e.nombre));
-        setBancariasOpciones((bancos.data ?? []).map((e: any) => e.nombre));
+        const epsList     = (eps.data ?? []).map((e: any) => e.nombre);
+        const arlList     = (arl.data ?? []).map((e: any) => e.nombre);
+        const pensionList = (pension.data ?? []).map((e: any) => e.nombre);
+        const bancosList  = (bancos.data ?? []).map((e: any) => e.nombre);
+        setEpsOpciones(epsList);
+        setArlOpciones(arlList);
+        setPensionOpciones(pensionList);
+        setBancariasOpciones(bancosList);
+        try {
+          sessionStorage.setItem('cache_eps', JSON.stringify(epsList));
+          sessionStorage.setItem('cache_arl', JSON.stringify(arlList));
+          sessionStorage.setItem('cache_pension', JSON.stringify(pensionList));
+          sessionStorage.setItem('cache_bancos', JSON.stringify(bancosList));
+        } catch { /* cuota llena */ }
       } catch { /* silencioso */ }
     };
     cargar();
   }, []);
 
-  // Cargar departamentos
+  // Cargar departamentos (con caché de sesión)
   useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('cache_departamentos');
+      if (raw) setDepartamentos(JSON.parse(raw));
+    } catch { /* ignorar */ }
     const token = localStorage.getItem('palmapp_token');
     fetchConToken('/api/v1/auth/departamentos', token)
       .then(r => r.json())
-      .then(d => setDepartamentos(d.data ?? []))
+      .then(d => {
+        const lista = d.data ?? [];
+        setDepartamentos(lista);
+        try { sessionStorage.setItem('cache_departamentos', JSON.stringify(lista)); } catch { /* */ }
+      })
       .catch(() => {});
   }, []);
 
-  // Cargar municipios cuando cambia departamento
+  // Cargar municipios cuando cambia departamento (con caché por departamento)
   useEffect(() => {
     if (!deptoSel) { setMunicipios([]); return; }
+    const cacheKey = `cache_municipios_${deptoSel}`;
+    try {
+      const raw = sessionStorage.getItem(cacheKey);
+      if (raw) setMunicipios(JSON.parse(raw));
+    } catch { /* ignorar */ }
     const token = localStorage.getItem('palmapp_token');
     fetchConToken(`/api/v1/auth/departamentos/${deptoSel}/municipios`, token)
       .then(r => r.json())
-      .then(d => setMunicipios(d.data ?? []))
+      .then(d => {
+        const lista = d.data ?? [];
+        setMunicipios(lista);
+        try { sessionStorage.setItem(cacheKey, JSON.stringify(lista)); } catch { /* */ }
+      })
       .catch(() => {});
   }, [deptoSel]);
 
@@ -315,6 +372,7 @@ export default function NuevoColaboradorWizard() {
       return Number.isFinite(n) ? n : 0;
     };
 
+    setCargandoColaborador(true);
     colaboradoresApi.ver(Number(id)).then(res => {
       const d = res.data ?? {};
 
@@ -372,7 +430,9 @@ export default function NuevoColaboradorWizard() {
 
       // Marcar municipio para aplicar después de cargar la lista
       if (d.municipio) setPendingMunicipio(d.municipio);
-    }).catch(() => toast.error('Error al cargar datos del colaborador'));
+    })
+      .catch(() => toast.error('Error al cargar datos del colaborador'))
+      .finally(() => setCargandoColaborador(false));
   }, [id, isEditMode]);
 
   // Cuando ya tenemos la lista de departamentos Y los datos cargados,
@@ -763,7 +823,17 @@ export default function NuevoColaboradorWizard() {
 
   // ─── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 relative">
+      {/* Overlay de carga (solo edición) */}
+      {cargandoColaborador && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-xl">
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-6 py-4 shadow-lg">
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            <span className="text-sm font-medium">Cargando datos del colaborador...</span>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div>
         <div className="flex items-center gap-3 mb-2 flex-wrap">

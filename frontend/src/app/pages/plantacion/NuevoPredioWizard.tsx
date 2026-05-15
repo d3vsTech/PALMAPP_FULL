@@ -22,6 +22,9 @@ import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Badge } from '../../components/ui/badge';
 import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '../../components/ui/select';
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -2083,24 +2086,27 @@ function FormLote({
         </div>
         <div className="space-y-2">
           <Label>Variedad / Semilla *</Label>
-          <select
-            className="w-full h-10 px-3 rounded-md border border-input bg-background text-foreground"
+          <Select
             value={semillaId}
-            onChange={e => { setSemillaId(e.target.value); setOtraVariedad(''); }}
+            onValueChange={(v) => { setSemillaId(v); setOtraVariedad(''); }}
           >
-            <option value="">Seleccionar variedad</option>
-            {semillasCatalogo.length > 0
-              ? semillasCatalogo.map(s => (
-                  <option key={s.id} value={String(s.id)}>
-                    {s.nombre}
-                  </option>
-                ))
-              : ['Elaeis Guineensis', 'Híbrido OxG', 'Compacta E3'].map(v => (
-                  <option key={v} value={v}>{v}</option>
-                ))
-            }
-            <option value="__otros__">Otros</option>
-          </select>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Seleccionar variedad" />
+            </SelectTrigger>
+            <SelectContent>
+              {semillasCatalogo.length > 0
+                ? semillasCatalogo.map(s => (
+                    <SelectItem key={s.id} value={String(s.id)}>
+                      {s.nombre}
+                    </SelectItem>
+                  ))
+                : ['Elaeis Guineensis', 'Híbrido OxG', 'Compacta E3'].map(v => (
+                    <SelectItem key={v} value={v}>{v}</SelectItem>
+                  ))
+              }
+              <SelectItem value="__otros__">Otros</SelectItem>
+            </SelectContent>
+          </Select>
           {esOtros && (
             <Input
               placeholder="Escribe la variedad..."

@@ -252,4 +252,65 @@ export const colaboradoresApi = {
     requestConToken<{ data: Array<{ id: number; nombre: string }> }>(
       '/api/v1/tenant/entidades-bancarias/select', { method: 'GET' }, tkn()
     ),
+
+  // ─── Importación masiva (Excel) ──────────────────────────────────────────
+  /**
+   * Inicia importación masiva. FormData con campo `archivo` (.xlsx/.xls, máx 5 MB).
+   * Devuelve `importacion_id` para consultar el estado por polling.
+   */
+  importar: (formData: FormData) =>
+    requestConToken<{
+      message: string;
+      data: { importacion_id: number; estado: EstadoImportacion };
+    }>(
+      '/api/v1/tenant/colaboradores/importar',
+      { method: 'POST', body: formData },
+      tkn()
+    ),
+
+  /**
+   * Estado y resultados de una importación. Polling cada 3-5 s mientras
+   * el estado sea PENDIENTE o PROCESANDO.
+   */
+  estadoImportacion: (id: number) =>
+    requestConToken<{ data: ImportacionColaboradores }>(
+      `/api/v1/tenant/colaboradores/importaciones/${id}`,
+      { method: 'GET' },
+      tkn()
+    ),
 };
+
+// ─── Tipos de importación masiva ─────────────────────────────────────────────
+export type EstadoImportacion =
+  | 'PENDIENTE'
+  | 'PROCESANDO'
+  | 'COMPLETADO'
+  | 'CON_ERRORES'
+  | 'FALLIDO';
+
+export const ESTADOS_IMPORTACION_FINALES: EstadoImportacion[] = [
+  'COMPLETADO',
+  'CON_ERRORES',
+  'FALLIDO',
+];
+
+export interface ImportacionResultadoFila {
+  fila: number;
+  estado: 'exitoso' | 'fallido';
+  documento: string | null;
+  mensaje: string;
+}
+
+export interface ImportacionColaboradores {
+  id: number;
+  estado: EstadoImportacion;
+  nombre_archivo_original: string;
+  total_filas: number;
+  filas_exitosas: number;
+  filas_fallidas: number;
+  error_fatal: string | null;
+  resultados: ImportacionResultadoFila[] | null;
+  iniciado_at: string | null;
+  finalizado_at: string | null;
+  created_at: string;
+}
