@@ -8,7 +8,17 @@ import { requestConToken, fetchConToken } from './request';
 
 const BASE = '/api/v1/market/proveedor';
 
-function tkn() { return localStorage.getItem('palmapp_token'); }
+/**
+ * Token del PORTAL PROVEEDOR (NO el de finca).
+ * El proveedor inicia sesión vía /api/v1/proveedor-auth/login y el token
+ * queda guardado por `proveedorAuthStorage` en `palmapp_proveedor_token`.
+ * Si por algún motivo no está, hacemos fallback al token global de finca
+ * para no romper compatibilidad con flujos legacy.
+ */
+function tkn() {
+  return localStorage.getItem('palmapp_proveedor_token')
+    ?? localStorage.getItem('palmapp_token');
+}
 
 function toQuery(p?: Record<string, unknown>): string {
   if (!p) return '';
@@ -35,12 +45,82 @@ function put<T>(path: string, body: unknown): Promise<T> {
 function del<T>(path: string): Promise<T> {
   return requestConToken<T>(`${BASE}${path}`, { method: 'DELETE' }, tkn());
 }
+function patch<T>(path: string, body?: unknown): Promise<T> {
+  return requestConToken<T>(`${BASE}${path}`, {
+    method: 'PATCH',
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  }, tkn());
+}
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
 export type EstadoPedidoProv =
   | 'pendiente' | 'confirmado' | 'preparando' | 'en_transito' | 'entregado' | 'cancelado';
 
+/** Dashboard del Portal Proveedor (API §1) */
+export interface IndicadoresProv {
+  productos_activos: number;
+  productos_total: number;
+  pedidos_pendientes: number;
+  pedidos_en_proceso: number;
+  pedidos_completados_mes: number;
+  ventas_mes_actual: number;
+  ventas_mes_anterior: number;
+  variacion_ventas_porcentaje: number | null;
+}
+
+export interface PedidoRecienteProv {
+  id: number;
+  codigo: string;
+  estado: EstadoPedidoProv;
+  total: string | number;
+  fecha_pedido: string;
+  tenant: { id: number; nombre: string };
+  primer_producto: {
+    nombre: string;
+    cantidad: number;
+    unidad: string | null;
+  };
+}
+
+export interface ProductoMasVendidoProv {
+  id: number;
+  nombre: string;
+  imagen_principal: string | null;
+  unidades_vendidas: number;
+  ingresos_acumulados: number;
+}
+
+export interface DashboardProveedorResponse {
+  indicadores: IndicadoresProv;
+  pedidos_recientes: PedidoRecienteProv[];
+  productos_mas_vendidos: ProductoMasVendidoProv[];
+}
+
+/** Wizard-init para crear/editar producto (§1 del API de Productos) */
+export interface WizardInitProductosResponse {
+  categorias: Array<{ id: number; nombre: string; slug: string; icono?: string | null }>;
+  unidades_medida: Array<{ id: number; codigo: string; nombre: string; abreviatura: string }>;
+}
+
+/** Imagen de la galería del producto (no la imagen_principal) */
+export interface ProductoImagenGaleria {
+  id: number;
+  producto_id?: number;
+  url: string;
+  orden: number;
+  alt_text?: string | null;
+  created_at?: string;
+}
+
+/** Estadísticas del listado de productos */
+export interface ProductosStats {
+  total_activos: number;
+  total_inactivos: number;
+  total_sin_stock: number;
+}
+
+/** Legacy — algunos consumidores aún la usan. Se conserva como alias del nuevo. */
 export interface DashboardProv {
   productos_activos: number;
   productos_total: number;
@@ -177,7 +257,12 @@ export interface ListarProductosParams {
   buscar?: string;
   categoria_id?: number;
   estado?: 'activo' | 'inactivo';
+  /** Solo productos destacados (se envía como `true`) */
+  destacados?: boolean;
+  /** Compat con código viejo */
   destacado?: boolean;
+  /** Orden de resultados (default backend: recientes) */
+  ordenar?: 'recientes' | 'nombre' | 'precio_asc' | 'precio_desc';
   page?: number;
   per_page?: number;
 }
@@ -190,65 +275,134 @@ export interface ListarPedidosParams {
 
 // ─── Endpoints ────────────────────────────────────────────────────────────────
 
+/**
+ * Construye FormData a partir de un payload de producto.
+ * Laravel parsea `array notation` (clave[0][campo]) directo como array PHP,
+ * por eso `precios_volumen` y `especificaciones` se serializan así en vez de
+ * como JSON string (el backend rechaza "must be an array" con JSON.stringify).
+ * `imagen_principal` (File) se incluye si está presente.
+ */
+function buildProductoFormData(
+  payload: ProductoCreatePayload | ProductoUpdatePayload,
+  imagen?: File | null,
+): FormData {
+  const fd = new FormData();
+  Object.entries(payload).forEach(([k, v]) => {
+    if (v === undefined || v === null) return;
+    if (k === 'precios_volumen' && Array.isArray(v)) {
+      v.forEach((item: any, i: number) => {
+        Object.entries(item ?? {}).forEach(([ik, iv]) => {
+          if (iv === undefined || iv === null) return;
+          fd.append(`precios_volumen[${i}][${ik}]`, String(iv));
+        });
+      });
+    } else if (k === 'especificaciones' && typeof v === 'object') {
+      Object.entries(v as Record<string, unknown>).forEach(([ek, ev]) => {
+        if (ev === undefined || ev === null) return;
+        fd.append(`especificaciones[${ek}]`, String(ev));
+      });
+    } else if (typeof v === 'boolean') {
+      fd.append(k, v ? '1' : '0');
+    } else {
+      fd.append(k, String(v));
+    }
+  });
+  if (imagen instanceof File) fd.append('imagen_principal', imagen);
+  return fd;
+}
+
+async function multipartConToken<T>(method: 'POST' | 'PUT', path: string, fd: FormData): Promise<T> {
+  // Laravel no procesa archivos en PUT con multipart estándar. El truco es
+  // hacer POST y mandar _method=PUT en el body.
+  if (method === 'PUT') fd.append('_method', 'PUT');
+  const res = await fetchConToken(`${BASE}${path}`, tkn(), { method: 'POST', body: fd });
+  let data: any;
+  try { data = await res.json(); } catch { data = null; }
+  if (!res.ok) {
+    const err: any = new Error(data?.message ?? `Error ${res.status}`);
+    err.status = res.status;
+    err.code = data?.code ?? null;
+    err.errors = data?.errors ?? null;
+    throw err;
+  }
+  return data as T;
+}
+
 export const proveedorApi = {
-  // ── Dashboard ────────────────────────────────────────────────────────────
+  // ── Dashboard (§ doc API_MARKET_PROVEEDOR_DASHBOARD) ─────────────────────
   dashboard: () =>
-    get<{ data: DashboardProv }>('/dashboard'),
+    get<{ data: DashboardProveedorResponse }>('/dashboard'),
+
+  // ── Productos: wizard-init (selects para el formulario) ──────────────────
+  wizardInitProductos: () =>
+    get<{ data: WizardInitProductosResponse }>('/wizard-init'),
 
   // ── Productos (CRUD) ─────────────────────────────────────────────────────
   productos: (p?: ListarProductosParams) =>
-    get<{ data: ProductoProv[]; meta: Paginacion }>('/productos', p as Record<string, unknown>),
+    get<{ data: ProductoProv[]; meta: Paginacion; stats?: ProductosStats }>(
+      '/productos', p as Record<string, unknown>),
 
   producto: (id: number) =>
     get<{ data: ProductoProv }>(`/productos/${id}`),
 
-  crearProducto: (payload: ProductoCreatePayload) =>
-    post<{ message: string; data: ProductoProv }>('/productos', payload),
+  /**
+   * Crea un producto. Soporta imagen principal (File). Si no se incluye archivo,
+   * se hace JSON normal.
+   */
+  crearProducto: (payload: ProductoCreatePayload, imagen?: File | null) => {
+    if (imagen instanceof File) {
+      return multipartConToken<{ data: ProductoProv }>('POST', '/productos',
+        buildProductoFormData(payload, imagen));
+    }
+    return post<{ message: string; data: ProductoProv }>('/productos', payload);
+  },
 
-  editarProducto: (id: number, payload: ProductoUpdatePayload) =>
-    put<{ message: string; data: ProductoProv }>(`/productos/${id}`, payload),
+  /**
+   * Actualiza un producto. Si se incluye archivo, hace multipart con _method=PUT.
+   */
+  editarProducto: (id: number, payload: ProductoUpdatePayload, imagen?: File | null) => {
+    if (imagen instanceof File) {
+      return multipartConToken<{ data: ProductoProv }>('PUT', `/productos/${id}`,
+        buildProductoFormData(payload, imagen));
+    }
+    return put<{ message: string; data: ProductoProv }>(`/productos/${id}`, payload);
+  },
 
   eliminarProducto: (id: number) =>
     del<{ message: string }>(`/productos/${id}`),
 
-  /**
-   * Sube imágenes adicionales a la galería del producto.
-   * Multipart con campo `imagenes[]` (array de archivos).
-   */
-  subirImagenes: async (id: number, archivos: File[]) => {
-    const fd = new FormData();
-    archivos.forEach((f) => fd.append('imagenes[]', f));
-    const res = await fetchConToken(
-      `${BASE}/productos/${id}/imagenes`,
-      tkn(),
-      { method: 'POST', body: fd },
-    );
-    if (!res.ok) {
-      let msg = 'Error al subir imágenes';
-      try { const j = await res.json(); msg = j.message ?? msg; } catch {}
-      throw new Error(msg);
-    }
-    return res.json() as Promise<{ message: string; data: ProductoImagenProv[] }>;
-  },
+  /** PATCH /productos/{id}/toggle — alterna activo/inactivo */
+  toggleProducto: (id: number) =>
+    patch<{ message: string; data: ProductoProv }>(`/productos/${id}/toggle`),
 
   /**
-   * Sube/reemplaza la imagen principal del producto.
-   * Multipart con campo `imagen`.
+   * Sube UNA imagen a la galería del producto.
+   * Multipart: campo `imagen` (file), `alt_text` (opcional), `orden` (opcional).
    */
-  subirImagenPrincipal: async (id: number, archivo: File) => {
+  subirImagenGaleria: async (id: number, archivo: File, opts?: { alt_text?: string; orden?: number }) => {
     const fd = new FormData();
     fd.append('imagen', archivo);
-    const res = await fetchConToken(
-      `${BASE}/productos/${id}/imagen-principal`,
-      tkn(),
-      { method: 'POST', body: fd },
-    );
-    if (!res.ok) {
-      let msg = 'Error al subir imagen principal';
-      try { const j = await res.json(); msg = j.message ?? msg; } catch {}
-      throw new Error(msg);
-    }
-    return res.json() as Promise<{ message: string; data: ProductoProv }>;
+    if (opts?.alt_text) fd.append('alt_text', opts.alt_text);
+    if (typeof opts?.orden === 'number') fd.append('orden', String(opts.orden));
+    return multipartConToken<{ data: ProductoImagenGaleria }>('POST',
+      `/productos/${id}/imagenes`, fd);
+  },
+
+  /** DELETE /productos/{id}/imagenes/{imgId} */
+  eliminarImagenGaleria: (id: number, imgId: number) =>
+    del<{ message: string }>(`/productos/${id}/imagenes/${imgId}`),
+
+  // ── Alias legacy (se mantiene para no romper código viejo) ───────────────
+  /** @deprecated usar subirImagenGaleria (1 archivo) */
+  subirImagenes: async (id: number, archivos: File[]) => {
+    const results = await Promise.all(archivos.map(f =>
+      proveedorApi.subirImagenGaleria(id, f),
+    ));
+    return { message: 'OK', data: results.map(r => r.data) };
+  },
+  /** @deprecated la imagen principal va dentro de crearProducto/editarProducto */
+  subirImagenPrincipal: async (id: number, archivo: File) => {
+    return proveedorApi.editarProducto(id, {}, archivo);
   },
 
   // ── Pedidos ──────────────────────────────────────────────────────────────
@@ -269,9 +423,10 @@ export const proveedorApi = {
     ),
 
   // ── Catálogos auxiliares (para forms) ────────────────────────────────────
+  /** @deprecated usar wizardInitProductos() que trae categorias + unidades en 1 call */
   categorias: () =>
     requestConToken<{ data: CategoriaRefProv[] }>(
-      `/api/v1/tenant/market/categorias`, // mismo endpoint público; el JWT vale
+      `/api/v1/tenant/market/categorias`,
       { method: 'GET' },
       tkn(),
     ),
@@ -283,10 +438,19 @@ export const proveedorApi = {
 // ─── Códigos de error ────────────────────────────────────────────────────────
 
 export const ProveedorErrorCodes = {
+  // Auth / acceso
+  PROVEEDOR_NOT_SELECTED: 'PROVEEDOR_NOT_SELECTED',
+  PROVEEDOR_NOT_FOUND: 'PROVEEDOR_NOT_FOUND',
+  PROVEEDOR_INACTIVE: 'PROVEEDOR_INACTIVE',
+  PROVEEDOR_ACCESS_DENIED: 'PROVEEDOR_ACCESS_DENIED',
   PROVEEDOR_INACTIVO: 'PROVEEDOR_INACTIVO',
   PERMISSION_DENIED: 'PERMISSION_DENIED',
+  // Productos
   PRODUCTO_NOT_FOUND: 'PRODUCTO_NOT_FOUND',
+  PRODUCTO_CON_ORDENES_ACTIVAS: 'PRODUCTO_CON_ORDENES_ACTIVAS',
   PRODUCTO_CON_PEDIDOS: 'PRODUCTO_CON_PEDIDOS',
+  IMAGEN_NOT_FOUND: 'IMAGEN_NOT_FOUND',
+  // Pedidos
   PEDIDO_NOT_FOUND: 'PEDIDO_NOT_FOUND',
   TRANSICION_INVALIDA: 'TRANSICION_INVALIDA',
   IMAGEN_INVALIDA: 'IMAGEN_INVALIDA',

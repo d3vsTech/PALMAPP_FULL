@@ -67,6 +67,8 @@ interface LineaLocal {
   id: string;
   numero: number;
   subloteId: string;
+  /** Total de palmas asignadas a la línea (viene del bundle wizard-init) */
+  cantidadPalmas?: number;
 }
 
 const ETAPAS = [
@@ -92,10 +94,34 @@ export default function NuevoPredioWizard() {
   const [guardando, setGuardando] = useState(false);
   // Overlay de carga mientras se hidrata el predio en modo edición.
   const [cargandoPredio, setCargandoPredio] = useState<boolean>(!!editId);
+  // Contador de mutaciones en curso (agregar/eliminar/editar). Cuando >0
+  // mostramos el overlay y bloqueamos toda interacción.
+  const [procesando, setProcesando] = useState(0);
+  const [procesandoMsg, setProcesandoMsg] = useState<string>('Procesando...');
+  /**
+   * Envuelve una operación asíncrona: incrementa el contador `procesando`
+   * (lo que dispara el overlay full-page), pone el mensaje y al final
+   * decrementa el contador. Pasa una función `update(msg)` para que la
+   * operación pueda ir actualizando el texto del overlay (ej. progreso).
+   */
+  const withProc = async <T,>(
+    msg: string,
+    fn: (update: (msg: string) => void) => Promise<T>,
+  ): Promise<T> => {
+    setProcesandoMsg(msg);
+    setProcesando(p => p + 1);
+    try {
+      return await fn(setProcesandoMsg);
+    } finally {
+      setProcesando(p => Math.max(0, p - 1));
+    }
+  };
 
-  // Bloquear scroll global mientras el overlay esté visible.
+  // Bloquear scroll global mientras el overlay esté visible (carga inicial,
+  // mutación en curso o guardado del wizard).
   useEffect(() => {
-    if (!cargandoPredio) return;
+    const overlayActivo = cargandoPredio || procesando > 0 || guardando;
+    if (!overlayActivo) return;
     const html = document.documentElement;
     const body = document.body;
     const prevHtml = html.style.overflow;
@@ -106,7 +132,7 @@ export default function NuevoPredioWizard() {
       html.style.overflow = prevHtml;
       body.style.overflow = prevBody;
     };
-  }, [cargandoPredio]);
+  }, [cargandoPredio, procesando, guardando]);
 
   // ── Estado paso 1: Predio ──────────────────────────────────────────────────
   const [predioNombre, setPredioNombre]     = useState('');
@@ -153,6 +179,13 @@ export default function NuevoPredioWizard() {
     | { tipo: 'linea'; id: string; numero: number }
     | { tipo: 'palma'; id: string; codigo: string; key: string; subloteId: string; lineaId: string; page: number };
   const [pendienteEliminar, setPendienteEliminar] = useState<PendienteEliminar | null>(null);
+  // Diálogo "Nueva línea": pregunta cuántas palmas asignar al crearla.
+  const [nuevaLineaPrompt, setNuevaLineaPrompt] = useState<{
+    subloteId: string;
+    subloteNombre: string;
+    disponibles: number;
+    cantidadInput: string;
+  } | null>(null);
   const [eliminandoItem, setEliminandoItem] = useState(false);
   // Índice de la entrada que se está editando por sublote (null = ninguna, formulario crea nueva)
   const [editingEntryIdx, setEditingEntryIdx] = useState<Record<string, number | null>>({});
@@ -217,16 +250,31 @@ export default function NuevoPredioWizard() {
   // ── Panel resumen: en edición usa API; en creación usa estado local ────────
   const [resumen, setResumen] = useState<any>(null);
 
-  // ── Cargar dept/municipios ─────────────────────────────────────────────────
+  // ── Departamentos: hidratación instantánea desde sessionStorage ───────────
+  // El catálogo real llega luego por wizard-init.
   useEffect(() => {
-    fetchConToken('/api/v1/auth/departamentos', token)
-      .then(r => r.json()).then(d => setDepartamentos(d.data ?? [])).catch(() => {});
-  }, [token]);
+    try {
+      const raw = sessionStorage.getItem('cache_departamentos');
+      if (raw) setDepartamentos(JSON.parse(raw));
+    } catch { /* ignorar */ }
+  }, []);
 
+  // ── Municipios condicional (cuando cambia deptoSel) ───────────────────────
   useEffect(() => {
     if (!deptoSel) { setMunicipios([]); setMunSel(''); return; }
+    const cacheKey = `cache_municipios_${deptoSel}`;
+    try {
+      const raw = sessionStorage.getItem(cacheKey);
+      if (raw) setMunicipios(JSON.parse(raw));
+    } catch { /* ignorar */ }
     fetchConToken(`/api/v1/auth/departamentos/${deptoSel}/municipios`, token)
-      .then(r => r.json()).then(d => setMunicipios(d.data ?? [])).catch(() => {});
+      .then(r => r.json())
+      .then(d => {
+        const lista = d.data ?? [];
+        setMunicipios(lista);
+        try { sessionStorage.setItem(cacheKey, JSON.stringify(lista)); } catch { /* */ }
+      })
+      .catch(() => {});
   }, [deptoSel, token]);
 
   // Sincronizar ubicacion con depto+municipio
@@ -272,9 +320,13 @@ export default function NuevoPredioWizard() {
     }
   }, [pendingMunicipio, municipios, munSel]);
 
-  // ── §2.0 Cargar semillas ───────────────────────────────────────────────────
+  // ── Semillas: hidratación instantánea desde sessionStorage ────────────────
+  // El catálogo real llega vía wizard-init.
   useEffect(() => {
-    lotesApi.semillas().then(r => setSemillasCatalogo(r.data ?? [])).catch(() => {});
+    try {
+      const raw = sessionStorage.getItem('cache_semillas');
+      if (raw) setSemillasCatalogo(JSON.parse(raw));
+    } catch { /* ignorar */ }
   }, []);
 
   // ── §1.6 Refrescar panel (solo edición) ────────────────────────────────────
@@ -283,6 +335,64 @@ export default function NuevoPredioWizard() {
       const r = await prediosApi.resumen(Number(predioId));
       setResumen(r.data);
     } catch { /* silent */ }
+  };
+
+  // ── Polling tolerante de batch (§4.7) con barra de progreso suavizada ─────
+  // Backend reporta `progress` típicamente binario (0 ó 100, porque la cola
+  // dispatch un Job con total_jobs=1). Para que el usuario vea movimiento real
+  // mezclamos backend con un estimado de tiempo (~1ms por palma).
+  //
+  // Detección de worker caído: si tras 2 min seguimos con processed_jobs=0
+  // y pending_jobs>0, asumimos que no hay queue worker corriendo (§6.6 doc).
+  //
+  // Tolerante a errores transitorios (red, 404 puntual): falla solo tras varios
+  // errores consecutivos. Distingue: ok / failed / timeout / no_worker.
+  const pollBatch = async (
+    batchId: string,
+    cantidad: number,
+    verbo: 'Creando' | 'Eliminando',
+    onProgress: (msg: string) => void,
+  ): Promise<'ok' | 'failed' | 'timeout' | 'no_worker'> => {
+    const start = Date.now();
+    const expectedMs = Math.max(5_000, Math.min(90_000, cantidad));
+    const TIMEOUT_MS = 600_000;
+    const NO_WORKER_MS = 120_000; // 2 min sin avance → worker probablemente caído
+    const MAX_ERR = 5;
+    let errores = 0;
+    let lastPct = 0;
+    onProgress(`${verbo} ${cantidad.toLocaleString('es-CO')} palmas... 0%`);
+
+    while (Date.now() - start < TIMEOUT_MS) {
+      await new Promise(r => setTimeout(r, 1000));
+      try {
+        const br = await palmasApi.getBatch(batchId);
+        errores = 0;
+        const elapsed = Date.now() - start;
+        const backendPct = Math.max(0, Math.min(100, Number(br.data.progress ?? 0)));
+        const tiempoPct = Math.min(95, (elapsed / expectedMs) * 100);
+        const pct = Math.max(lastPct, Math.round(Math.max(backendPct, tiempoPct)));
+        lastPct = pct;
+        onProgress(`${verbo} ${cantidad.toLocaleString('es-CO')} palmas... ${pct}%`);
+
+        if (br.data.finished) {
+          if (br.data.has_failures) return 'failed';
+          onProgress(`${verbo} ${cantidad.toLocaleString('es-CO')} palmas... 100%`);
+          return 'ok';
+        }
+
+        // Detección rápida de worker caído: nada procesado en 2 min y jobs
+        // siguen pendientes → cola apagada. Falla rápido en vez de esperar 10 min.
+        const procesados = Number(br.data.processed_jobs ?? 0);
+        const pendientes = Number(br.data.pending_jobs ?? 0);
+        if (elapsed > NO_WORKER_MS && procesados === 0 && pendientes > 0) {
+          return 'no_worker';
+        }
+      } catch {
+        errores++;
+        if (errores >= MAX_ERR) return 'failed';
+      }
+    }
+    return 'timeout';
   };
   // ── §4.1 Cargar palmas paginadas para paso 5 (edit mode) ─────────────────
   const cargarWizardPalmas = async (
@@ -316,85 +426,100 @@ export default function NuevoPredioWizard() {
     }
   };
 
-  // ── Cargar datos en modo edición ──────────────────────────────────────────
+  // ── §1.7 Bundle init: 1 sola petición reemplaza 14+ requests ──────────────
+  // Carga predio + lotes + sublotes + lineas + paramétricas (semillas, deptos).
+  // Sirve tanto modo edición como creación.
   useEffect(() => {
-    if (!editId) return;
-    setCargandoPredio(true);
-    const cargar = async () => {
-      try {
-        // §1.2 Ver predio
-        const predioRes = await prediosApi.ver(Number(editId));
-        const p = predioRes.data;
-        setPredioNombre(p.nombre ?? '');
-        setPredioUbicacion(p.ubicacion ?? '');
-        setPredioHectareas(p.hectareas_totales != null ? String(Number(p.hectareas_totales)) : '');
+    if (editId) setCargandoPredio(true);
+    let cancelled = false;
 
-        // Parsear "Municipio, Departamento" para pre-cargar dropdowns
-        if (p.ubicacion) {
-          const partes = String(p.ubicacion).split(',').map((s: string) => s.trim()).filter(Boolean);
-          if (partes.length >= 2) {
-            setPendingMunicipio(partes[0]);
-            setPendingDepto(partes[partes.length - 1]);
-          } else if (partes.length === 1) {
-            setPendingDepto(partes[0]);
+    prediosApi.wizardInit(editId ?? undefined)
+      .then(({ data }) => {
+        if (cancelled) return;
+
+        // 1) Paramétricas → estado + caché de sesión
+        const semillas = data.parametricas?.semillas ?? [];
+        const departamentos = data.parametricas?.departamentos ?? [];
+        setSemillasCatalogo(semillas);
+        setDepartamentos(departamentos);
+        try {
+          sessionStorage.setItem('cache_semillas', JSON.stringify(semillas));
+          sessionStorage.setItem('cache_departamentos', JSON.stringify(departamentos));
+        } catch { /* cuota llena */ }
+
+        // 2) Hidratar predio (solo edición)
+        if (data.predio) {
+          const p = data.predio;
+          setPredioNombre(p.nombre ?? '');
+          setPredioUbicacion(p.ubicacion ?? '');
+          setPredioHectareas(p.hectareas_totales != null ? String(Number(p.hectareas_totales)) : '');
+
+          if (p.ubicacion) {
+            const partes = String(p.ubicacion).split(',').map((s: string) => s.trim()).filter(Boolean);
+            if (partes.length >= 2) {
+              setPendingMunicipio(partes[0]);
+              setPendingDepto(partes[partes.length - 1]);
+            } else if (partes.length === 1) {
+              setPendingDepto(partes[0]);
+            }
           }
         }
 
-        // §2.1 Lotes del predio
-        const lotesRes = await lotesApi.listar({ predio_id: Number(editId), per_page: 100 });
-        const lotesData = lotesRes.data ?? [];
-        setLotes(lotesData.map((l: any) => ({
-          id: String(l.id), nombre: l.nombre,
-          fechaSiembra: (l.fecha_siembra ?? '').split('T')[0],
+        // 3) Lotes → LoteLocal
+        const lotesData = data.lotes ?? [];
+        setLotes(lotesData.map(l => ({
+          id: String(l.id),
+          nombre: l.nombre,
+          // El bundle no expone fecha_siembra. Si se necesita en algún flujo,
+          // se puede traer puntualmente con lotesApi.ver(id).
+          fechaSiembra: '',
           hectareasSembradas: Number(l.hectareas_sembradas ?? 0),
-          semillasIds: (l.semillas ?? []).map((s: any) => Number(s.id)),
+          semillasIds: (l.semillas ?? []).map(s => Number(s.id)),
           variedad: (l.semillas ?? [])[0]?.nombre ?? '',
         })));
 
-        // §3.1 Sublotes — paralelizado por lote (antes secuencial)
-        const sublRespuestas = await Promise.all(
-          lotesData.map((l: any) => sublotesApi.listar({ lote_id: l.id, per_page: 100 }))
-        );
+        // 4) Sublotes — bundle.sublotes está indexado por lote_id
         const todosSubl: SubloteLocal[] = [];
-        const sublotesPorLote: { sublote: any; loteId: any }[] = [];
-        sublRespuestas.forEach((sublRes, idx) => {
-          const lote = lotesData[idx];
-          (sublRes.data ?? []).forEach((s: any) => {
+        Object.entries(data.sublotes ?? {}).forEach(([loteId, lista]) => {
+          (lista ?? []).forEach(s => {
             todosSubl.push({
-              id: String(s.id), nombre: s.nombre,
-              loteId: String(lote.id),
+              id: String(s.id),
+              nombre: s.nombre,
+              loteId: String(loteId),
               cantidadPalmas: Number(s.cantidad_palmas ?? 0),
             });
-            sublotesPorLote.push({ sublote: s, loteId: lote.id });
           });
         });
-
-        // §5.1 Líneas — paralelizado por sublote (antes secuencial)
-        const linRespuestas = await Promise.all(
-          sublotesPorLote.map(({ sublote }) =>
-            lineasApi.listar({ sublote_id: sublote.id, per_page: 100 })
-          )
-        );
-        const todasLineas: LineaLocal[] = [];
-        linRespuestas.forEach((linRes, idx) => {
-          const { sublote } = sublotesPorLote[idx];
-          (linRes.data ?? []).forEach((ln: any) => {
-            todasLineas.push({ id: String(ln.id), numero: ln.numero, subloteId: String(sublote.id) });
-          });
-        });
-
         setSublotes(todosSubl);
+
+        // 5) Líneas — bundle.lineas está indexado por sublote_id
+        const todasLineas: LineaLocal[] = [];
+        Object.entries(data.lineas ?? {}).forEach(([subloteId, lista]) => {
+          (lista ?? []).forEach(ln => {
+            todasLineas.push({
+              id: String(ln.id),
+              numero: ln.numero,
+              subloteId: String(subloteId),
+              cantidadPalmas: Number(ln.cantidad_palmas ?? 0),
+            });
+          });
+        });
         setLineas(todasLineas);
 
-        // §1.6 Panel resumen
-        await refrescarResumen(editId);
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Error al cargar plantación');
-      } finally {
-        setCargandoPredio(false);
-      }
-    };
-    cargar();
+        // 6) Panel resumen (solo edición)
+        if (editId) {
+          refrescarResumen(editId).catch(() => { /* silent */ });
+        }
+      })
+      .catch(err => {
+        if (cancelled) return;
+        toast.error(err instanceof Error ? err.message : 'Error al cargar la plantación');
+      })
+      .finally(() => {
+        if (!cancelled) setCargandoPredio(false);
+      });
+
+    return () => { cancelled = true; };
   }, [editId]);
 
   // ── Auto-cargar palmas al entrar al paso 5 en modo edición ─────────────
@@ -438,7 +563,7 @@ export default function NuevoPredioWizard() {
    *  - Si todavía no hay predio creado (no debería pasar tras el paso 1), lo
    *    guardamos en estado local hasta el "Guardar Plantación" final.
    */
-  const agregarLote = async (lote: Omit<LoteLocal, 'id'>) => {
+  const agregarLote = async (lote: Omit<LoteLocal, 'id'>) => withProc('Creando lote...', async () => {
     if (editId) {
       try {
         const body: any = { predio_id: Number(editId), nombre: lote.nombre };
@@ -459,8 +584,8 @@ export default function NuevoPredioWizard() {
     }
     setLotes(prev => [...prev, { ...lote, id: `l-${Date.now()}` }]);
     setShowFormLote(false);
-  };
-  const actualizarLote = async (id: string, datos: Omit<LoteLocal, 'id'>) => {
+  });
+  const actualizarLote = async (id: string, datos: Omit<LoteLocal, 'id'>) => withProc('Actualizando lote...', async () => {
     // En modo edición y con id real (no local "l-..."): persistir via API.
     if (editId && !id.startsWith('l-')) {
       try {
@@ -478,8 +603,8 @@ export default function NuevoPredioWizard() {
     }
     setLotes(prev => prev.map(l => (l.id === id ? { ...l, ...datos } : l)));
     setEditingLoteId(null);
-  };
-  const eliminarLote = async (id: string) => {
+  });
+  const eliminarLote = async (id: string) => withProc('Eliminando lote...', async () => {
     if (editId && !id.startsWith('lt-')) {
       try {
         await lotesApi.eliminar(Number(id));
@@ -494,8 +619,8 @@ export default function NuevoPredioWizard() {
     const subIds = sublotes.filter(s => s.loteId === id).map(s => s.id);
     setSublotes(prev => prev.filter(s => s.loteId !== id));
     setLineas(prev => prev.filter(ln => !subIds.includes(ln.subloteId)));
-  };
-  const agregarSublote = async (loteId: string, nombre: string) => {
+  });
+  const agregarSublote = async (loteId: string, nombre: string) => withProc('Creando sublote...', async () => {
     // Si estamos en modo edición y el lote tiene id real (no local "l-..."),
     // persistir el sublote en backend inmediatamente.
     if (editId && !loteId.startsWith('l-')) {
@@ -514,8 +639,8 @@ export default function NuevoPredioWizard() {
     }
     setSublotes(prev => [...prev, { id: `s-${Date.now()}`, nombre, loteId, cantidadPalmas: 0 }]);
     setShowFormSublote(null);
-  };
-  const actualizarSublote = async (id: string, nombre: string) => {
+  });
+  const actualizarSublote = async (id: string, nombre: string) => withProc('Actualizando sublote...', async () => {
     // En modo edición y con id real (no local "s-..."): persistir via API.
     if (editId && !id.startsWith('s-')) {
       try {
@@ -529,8 +654,8 @@ export default function NuevoPredioWizard() {
     }
     setSublotes(prev => prev.map(s => (s.id === id ? { ...s, nombre } : s)));
     setEditingSubloteId(null);
-  };
-  const eliminarSublote = async (id: string) => {
+  });
+  const eliminarSublote = async (id: string) => withProc('Eliminando sublote...', async () => {
     if (editId && !id.startsWith('s-')) {
       try {
         await sublotesApi.eliminar(Number(id));
@@ -543,60 +668,146 @@ export default function NuevoPredioWizard() {
     }
     setSublotes(prev => prev.filter(s => s.id !== id));
     setLineas(prev => prev.filter(ln => ln.subloteId !== id));
-  };
+  });
 
   const confirmarEliminarItem = async () => {
     if (!pendienteEliminar) return;
     setEliminandoItem(true);
-    try {
-      if (pendienteEliminar.tipo === 'lote') {
-        await eliminarLote(pendienteEliminar.id);
-      } else if (pendienteEliminar.tipo === 'sublote') {
-        await eliminarSublote(pendienteEliminar.id);
-      } else if (pendienteEliminar.tipo === 'linea') {
-        await eliminarLinea(pendienteEliminar.id);
-      } else if (pendienteEliminar.tipo === 'palma') {
-        try {
-          await palmasApi.eliminar([Number(pendienteEliminar.id)]);
-          await cargarWizardPalmas(
-            pendienteEliminar.key,
-            { sublote_id: Number(pendienteEliminar.subloteId), linea_id: Number(pendienteEliminar.lineaId) },
-            pendienteEliminar.page,
-          );
-          setSublotes(prev => prev.map(s =>
-            s.id === pendienteEliminar.subloteId ? { ...s, cantidadPalmas: Math.max(0, s.cantidadPalmas - 1) } : s
-          ));
-          if (editId) refrescarResumen(editId);
-          toast.success('Palma eliminada');
-        } catch (e) {
-          toast.error(e instanceof Error ? e.message : 'Error al eliminar palma');
+    await withProc('Eliminando...', async () => {
+      try {
+        if (pendienteEliminar.tipo === 'lote') {
+          await eliminarLote(pendienteEliminar.id);
+        } else if (pendienteEliminar.tipo === 'sublote') {
+          await eliminarSublote(pendienteEliminar.id);
+        } else if (pendienteEliminar.tipo === 'linea') {
+          await eliminarLinea(pendienteEliminar.id);
+        } else if (pendienteEliminar.tipo === 'palma') {
+          try {
+            await palmasApi.eliminar([Number(pendienteEliminar.id)]);
+            await cargarWizardPalmas(
+              pendienteEliminar.key,
+              { sublote_id: Number(pendienteEliminar.subloteId), linea_id: Number(pendienteEliminar.lineaId) },
+              pendienteEliminar.page,
+            );
+            setSublotes(prev => prev.map(s =>
+              s.id === pendienteEliminar.subloteId ? { ...s, cantidadPalmas: Math.max(0, s.cantidadPalmas - 1) } : s
+            ));
+            if (editId) refrescarResumen(editId);
+            toast.success('Palma eliminada');
+          } catch (e) {
+            toast.error(e instanceof Error ? e.message : 'Error al eliminar palma');
+          }
         }
+      } finally {
+        setEliminandoItem(false);
+        setPendienteEliminar(null);
       }
-    } finally {
-      setEliminandoItem(false);
-      setPendienteEliminar(null);
-    }
+    });
   };
 
   // ── Líneas: en edición llama API; en creación guarda local ────────────────
-  const agregarLinea = async (subloteId: string) => {
-    const existentes = lineas.filter(ln => ln.subloteId === subloteId).map(ln => ln.numero);
-    let nuevoNumero = 1;
-    while (existentes.includes(nuevoNumero)) nuevoNumero++;
+  /**
+   * Crea una línea en el sublote. Si `cantidadAsignar > 0`, reasigna ese
+   * número de palmas existentes (sin línea) a la nueva línea via §4.5.
+   * Esto se llama desde el diálogo "Nueva línea" que pregunta la cantidad.
+   */
+  const agregarLinea = async (subloteId: string, cantidadAsignar: number = 0) =>
+    withProc('Creando línea...', async (update) => {
+      const existentes = lineas.filter(ln => ln.subloteId === subloteId).map(ln => ln.numero);
+      let nuevoNumero = 1;
+      while (existentes.includes(nuevoNumero)) nuevoNumero++;
 
-    if (editId) {
-      try {
-        // §5.3 POST /lineas
-        const res = await lineasApi.crear({ sublote_id: Number(subloteId), numero: nuevoNumero });
-        setLineas(prev => [...prev, { id: String(res.data?.id), numero: nuevoNumero, subloteId }]);
-        toast.success(res.message ?? 'Línea creada');
-        await refrescarResumen(editId);
-      } catch (err) { toast.error(err instanceof Error ? err.message : 'Error'); }
-    } else {
-      setLineas(prev => [...prev, { id: `ln-${Date.now()}`, numero: nuevoNumero, subloteId }]);
-    }
-  };
-  const eliminarLinea = async (id: string) => {
+      if (editId) {
+        try {
+          // §5.3 POST /lineas
+          const res = await lineasApi.crear({ sublote_id: Number(subloteId), numero: nuevoNumero });
+          const nuevaLineaId = String(res.data?.id);
+          let asignadas = 0;
+
+          // Reasignar palmas existentes sin línea a esta nueva línea (§4.5).
+          // Optimización por API:
+          // - Si cantidadAsignar >= sin_linea total → omitir palmas_ids
+          //   (un solo UPDATE WHERE en backend, ~10ms incluso para 100k palmas).
+          // - Si es parcial → fetch específico de IDs y mandarlos.
+          if (cantidadAsignar > 0 && nuevaLineaId) {
+            update(`Asignando ${cantidadAsignar.toLocaleString('es-CO')} palmas a la línea...`);
+            try {
+              const probe = await palmasApi.listar({
+                sublote_id: Number(subloteId),
+                sin_linea: true,
+                per_page: 1,
+              });
+              const sinLineaTotal = probe.meta?.total ?? 0;
+
+              if (cantidadAsignar >= sinLineaTotal && sinLineaTotal > 0) {
+                // §4.5 sin palmas_ids → asigna todas las sin línea del sublote
+                const asig = await palmasApi.asignarLineaMasivo({
+                  sublote_id: Number(subloteId),
+                  linea_id: Number(nuevaLineaId),
+                });
+                asignadas = asig.cantidad_asignadas ?? sinLineaTotal;
+              } else if (cantidadAsignar > 0 && sinLineaTotal > 0) {
+                // Parcial: traer solo los IDs que necesitamos
+                const PER = 1000;
+                const totalPaginas = Math.ceil(cantidadAsignar / PER);
+                const fetches = Array.from({ length: totalPaginas }, (_, i) =>
+                  palmasApi.listar({
+                    sublote_id: Number(subloteId),
+                    sin_linea: true,
+                    per_page: PER,
+                    page: i + 1,
+                  }),
+                );
+                const listados = await Promise.all(fetches);
+                const palmas_ids = listados
+                  .flatMap(r => r.data ?? [])
+                  .slice(0, cantidadAsignar)
+                  .map((p: any) => Number(p.id))
+                  .filter((n: number) => Number.isFinite(n));
+
+                if (palmas_ids.length > 0) {
+                  const asig = await palmasApi.asignarLineaMasivo({
+                    sublote_id: Number(subloteId),
+                    linea_id: Number(nuevaLineaId),
+                    palmas_ids,
+                  });
+                  asignadas = asig.cantidad_asignadas ?? palmas_ids.length;
+                }
+              }
+            } catch (err) {
+              toast.warning(
+                err instanceof Error
+                  ? `Línea creada pero falló asignación: ${err.message}`
+                  : 'Línea creada pero falló la asignación de palmas',
+              );
+            }
+          }
+
+          setLineas(prev => [
+            ...prev,
+            {
+              id: nuevaLineaId,
+              numero: nuevoNumero,
+              subloteId,
+              cantidadPalmas: asignadas,
+            },
+          ]);
+          if (asignadas > 0) {
+            toast.success(
+              `Línea ${nuevoNumero} creada con ${asignadas.toLocaleString('es-CO')} palmas asignadas`,
+            );
+          } else {
+            toast.success(res.message ?? 'Línea creada');
+          }
+          await refrescarResumen(editId);
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : 'Error');
+        }
+      } else {
+        setLineas(prev => [...prev, { id: `ln-${Date.now()}`, numero: nuevoNumero, subloteId }]);
+      }
+    });
+  const eliminarLinea = async (id: string) => withProc('Eliminando línea...', async () => {
     if (editId && !id.startsWith('ln-')) {
       try {
         // §5.5 DELETE /lineas/{id}
@@ -606,70 +817,179 @@ export default function NuevoPredioWizard() {
       } catch (err) { toast.error(err instanceof Error ? err.message : 'Error'); return; }
     }
     setLineas(prev => prev.filter(ln => ln.id !== id));
-  };
+  });
 
   // ── Palmas (paso 5, solo modo edición): §4.3 POST /palmas ─────────────────
   // §4.3 POST /palmas — cant y lineaId vienen del formulario del paso 5
-  const agregarPalmas = async (subloteId: string, cant: number, lineaId: string | undefined) => {
+  /**
+   * Crea palmas para un sublote (o línea). Maneja sync (<= 5000) y async (> 5000).
+   * En el path async ESPERA el polling antes de resolver, de modo que el caller
+   * (guardarTodo/Finalizar) pueda navegar con seguridad cuando todas las palmas
+   * existan realmente en el backend.
+   */
+  const agregarPalmas = async (subloteId: string, cant: number, lineaId: string | undefined) => withProc(`Procesando ${cant.toLocaleString('es-CO')} palmas...`, async (update) => {
     try {
-      const body: any = { sublote_id: Number(subloteId), cantidad_palmas: cant };
-      if (lineaId) body.linea_id = Number(lineaId);
-      const res = await palmasApi.crear(body);
+      // ── Si se eligió una línea: reasignar primero las palmas existentes
+      //    sin línea de ese sublote (§4.5). Sólo crear las que falten.
+      //    Esto evita que el contador del sublote crezca cuando solo se quiere
+      //    organizar palmas ya existentes en una línea recién creada.
+      let reasignadas = 0;
+      let aCrear = cant;
+      if (lineaId) {
+        update('Buscando palmas sin línea...');
+        const probe = await palmasApi.listar({
+          sublote_id: Number(subloteId),
+          sin_linea: true,
+          per_page: 1,
+        });
+        const sinLineaTotal = probe.meta?.total ?? 0;
+        const aReasignar = Math.min(cant, sinLineaTotal);
 
-      if (res.async === true) {
-        // >5000 palmas → async, polling §4.6
-        toast.info('Palmas creándose en segundo plano...');
-        const poll = async (batchId: string) => {
-          const start = Date.now();
-          while (Date.now() - start < 600_000) {
-            await new Promise(r => setTimeout(r, 3000));
-            try {
-              const br = await palmasApi.getBatch(batchId);
-              if (br.data.finished) {
-                if (!br.data.has_failures) {
-                  toast.success('Palmas creadas');
-                  setSublotes(prev => prev.map(s =>
-                    s.id === subloteId ? { ...s, cantidadPalmas: s.cantidadPalmas + cant } : s
-                  ));
-                  if (editId) await refrescarResumen(editId);
-                  // Refrescar la línea si corresponde
-                  if (lineaId) {
-                    setWizardPag(prev => { const n = {...prev}; delete n[`linea_${lineaId}`]; return n; });
-                  }
-                } else toast.error('Error creando palmas en segundo plano');
-                return;
-              }
-            } catch { break; }
+        if (aReasignar > 0) {
+          update(`Asignando ${aReasignar.toLocaleString('es-CO')} palmas a la línea...`);
+          // §4.5: si reasignamos TODAS las sin_linea del sublote, podemos omitir
+          // palmas_ids (un solo UPDATE WHERE en backend). Si es parcial, fetch IDs.
+          if (aReasignar >= sinLineaTotal) {
+            const asig = await palmasApi.asignarLineaMasivo({
+              sublote_id: Number(subloteId),
+              linea_id: Number(lineaId),
+            });
+            reasignadas = asig.cantidad_asignadas ?? sinLineaTotal;
+          } else {
+            const PER = 1000;
+            const totalPaginas = Math.ceil(aReasignar / PER);
+            const fetches = Array.from({ length: totalPaginas }, (_, i) =>
+              palmasApi.listar({
+                sublote_id: Number(subloteId),
+                sin_linea: true,
+                per_page: PER,
+                page: i + 1,
+              })
+            );
+            const listados = await Promise.all(fetches);
+            const palmas_ids = listados
+              .flatMap(r => r.data ?? [])
+              .slice(0, aReasignar)
+              .map((p: any) => Number(p.id))
+              .filter((n: number) => Number.isFinite(n));
+
+            if (palmas_ids.length > 0) {
+              const asig = await palmasApi.asignarLineaMasivo({
+                sublote_id: Number(subloteId),
+                linea_id: Number(lineaId),
+                palmas_ids,
+              });
+              reasignadas = asig.cantidad_asignadas ?? palmas_ids.length;
+            }
           }
-        };
-        poll(res.batch_id);
-      } else {
-        // <=5000 → sync
-        const creadas = res.cantidad_creada ?? cant;
-        toast.success(res.message ?? `${creadas} palmas creadas`);
-        setSublotes(prev => prev.map(s =>
-          s.id === subloteId ? { ...s, cantidadPalmas: s.cantidadPalmas + creadas } : s
-        ));
-        if (editId) await refrescarResumen(editId);
-        // Refrescar palmas de la línea afectada para que se vean inmediatamente
-        if (lineaId) {
-          cargarWizardPalmas(`linea_${lineaId}`, {
-            sublote_id: Number(subloteId),
-            linea_id: Number(lineaId),
-          });
+          if (reasignadas > 0) {
+            aCrear = Math.max(0, cant - reasignadas);
+            // El total del sublote NO cambia (solo se reasigna), pero el de la
+            // línea SÍ. Actualizamos local para que el resumen lo refleje YA.
+            setLineas(prev => prev.map(ln =>
+              ln.id === lineaId
+                ? { ...ln, cantidadPalmas: (ln.cantidadPalmas ?? 0) + reasignadas }
+                : ln,
+            ));
+          }
         }
       }
+
+      // ── Crear nuevas palmas sólo si quedan después de reasignar (o si no hay línea)
+      if (aCrear > 0) {
+        const body: any = { sublote_id: Number(subloteId), cantidad_palmas: aCrear };
+        if (lineaId) body.linea_id = Number(lineaId);
+        const res = await palmasApi.crear(body);
+
+        if (res.async === true) {
+          // >5000 palmas → async, polling §4.7 con progreso suavizado.
+          // Optimismo: actualizamos el contador local AL INSTANTE para que la
+          // UI no quede congelada en el valor viejo durante el polling.
+          setSublotes(prev => prev.map(s =>
+            s.id === subloteId ? { ...s, cantidadPalmas: s.cantidadPalmas + aCrear } : s
+          ));
+
+          const resultado = await pollBatch(res.batch_id, aCrear, 'Creando', update);
+          if (resultado !== 'ok') {
+            // Revertir optimismo local.
+            setSublotes(prev => prev.map(s =>
+              s.id === subloteId ? { ...s, cantidadPalmas: Math.max(0, s.cantidadPalmas - aCrear) } : s
+            ));
+            const errMsg =
+              resultado === 'no_worker'
+                ? 'El servidor no está procesando trabajos en segundo plano. Contacta al administrador (queue worker apagado).'
+                : resultado === 'timeout'
+                  ? 'El proceso tardó demasiado. Puede seguir en segundo plano; recarga en unos minutos.'
+                  : 'No se pudieron crear las palmas. Intenta de nuevo.';
+            toast.error(errMsg);
+            // Lanzamos para que el caller (guardarTodo) sepa que falló y no
+            // muestre "Cambios guardados" engañosamente.
+            throw new Error(errMsg);
+          }
+          // Actualizar contador de la línea (si aplica) tras éxito del job
+          if (lineaId) {
+            setLineas(prev => prev.map(ln =>
+              ln.id === lineaId
+                ? { ...ln, cantidadPalmas: (ln.cantidadPalmas ?? 0) + aCrear }
+                : ln,
+            ));
+          }
+        } else {
+          // <=5000 → sync
+          const creadas = res.cantidad_creada ?? aCrear;
+          setSublotes(prev => prev.map(s =>
+            s.id === subloteId ? { ...s, cantidadPalmas: s.cantidadPalmas + creadas } : s
+          ));
+          // Contador de la línea también
+          if (lineaId) {
+            setLineas(prev => prev.map(ln =>
+              ln.id === lineaId
+                ? { ...ln, cantidadPalmas: (ln.cantidadPalmas ?? 0) + creadas }
+                : ln,
+            ));
+          }
+        }
+      }
+
+      // ── Mensaje final unificado ──────────────────────────────────────────
+      if (reasignadas > 0 && aCrear > 0) {
+        toast.success(
+          `${reasignadas.toLocaleString('es-CO')} palmas reasignadas + ${aCrear.toLocaleString('es-CO')} creadas en la línea`,
+        );
+      } else if (reasignadas > 0) {
+        toast.success(`${reasignadas.toLocaleString('es-CO')} palmas asignadas a la línea`);
+      } else {
+        toast.success(`${aCrear.toLocaleString('es-CO')} palmas creadas`);
+      }
+
+      if (editId) await refrescarResumen(editId);
+      if (lineaId) {
+        setWizardPag(prev => { const n = { ...prev }; delete n[`linea_${lineaId}`]; return n; });
+        // Refrescar palmas de la línea afectada para que se vean inmediatamente
+        cargarWizardPalmas(`linea_${lineaId}`, {
+          sublote_id: Number(subloteId),
+          linea_id: Number(lineaId),
+        });
+      }
+
       // Limpiar input
       if (lineaId) {
         setCantPalmasForm(prev => ({ ...prev, [`${subloteId}_${lineaId}`]: '' }));
       } else {
         setCantPalmasForm(prev => ({ ...prev, [subloteId]: '' }));
       }
-    } catch (err) { toast.error(err instanceof Error ? err.message : 'Error al crear palmas'); }
-  };
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al asignar/crear palmas');
+    }
+  });
 
   // ── Guardar todo (modo creación) ──────────────────────────────────────────
-  const guardarTodo = async () => {
+  /**
+   * Guarda todos los cambios.
+   * - `redirigir = false` (default) → permanece en el wizard (botón "Guardar cambios").
+   * - `redirigir = true`            → navega a `/plantacion` al terminar (botón "Finalizar").
+   */
+  const guardarTodo = async (redirigir = false) => {
     if (guardando) return;
     if (!predioNombre.trim()) { toast.error('El nombre del predio es obligatorio'); return; }
     if (!predioUbicacion.trim()) { toast.error('La ubicación es obligatoria'); return; }
@@ -706,21 +1026,62 @@ export default function NuevoPredioWizard() {
             delta:  parseInt(cantPalmasForm[sub.id] ?? '') - sub.cantidadPalmas,
           }));
 
-        const haReducciones = sublotesPendientes.some(p => p.delta < 0);
-        if (haReducciones) {
-          toast.error(
-            'Para reducir el número de palmas debes hacerlo desde la grilla individual (sublote con líneas). No se puede bajar el total directamente.'
-          );
-          // No cancelamos el guardado: ya se guardó el predio. Solo no procesamos los deltas negativos.
-        }
+        // Procesa cada sublote pendiente: incrementos crean palmas, reducciones
+        // ajustan el total vía PUT /sublotes/{id} (el backend elimina las palmas
+        // con los códigos más altos — ver API §3.4).
+        let fallosBatch = 0;
+        for (const { sub, target, delta } of sublotesPendientes) {
+          if (delta === 0) continue;
+          if (delta > 0) {
+            try {
+              await agregarPalmas(sub.id, delta, undefined);
+            } catch {
+              fallosBatch++;
+              // agregarPalmas ya mostró su propio toast de error específico.
+            }
+          } else {
+            // Reducción: PUT /sublotes/{id} con target = nuevo total.
+            // El backend (§3.4) elimina las palmas con los códigos más altos.
+            // - <= 5.000 → sync (rápido).
+            // - >  5.000 → async (respuesta trae palmas_async + batch_id).
+            //   Polling con palmasApi.getBatch hasta finished.
+            const aEliminar = Math.abs(delta);
+            setProcesando(p => p + 1);
+            setProcesandoMsg(`Eliminando ${aEliminar.toLocaleString('es-CO')} palmas de "${sub.nombre}"...`);
+            try {
+              const res = await sublotesApi.editar(Number(sub.id), { cantidad_palmas: target });
 
-        // Crear las palmas faltantes en serie (cada llamada respeta el async/sync interno)
-        for (const { sub, delta } of sublotesPendientes) {
-          if (delta <= 0) continue;
-          try {
-            await agregarPalmas(sub.id, delta, undefined);
-          } catch {
-            toast.error(`No se pudieron crear las palmas del sublote "${sub.nombre}"`);
+              if (res.palmas_async && res.batch_id) {
+                // Path async: polling tolerante con barra de progreso suavizada.
+                const resultado = await pollBatch(
+                  res.batch_id, aEliminar, 'Eliminando', setProcesandoMsg,
+                );
+                if (resultado !== 'ok') {
+                  toast.error(
+                    resultado === 'no_worker'
+                      ? 'El servidor no está procesando trabajos en segundo plano. Contacta al administrador (queue worker apagado).'
+                      : resultado === 'timeout'
+                        ? `Tardó demasiado en "${sub.nombre}". Puede seguir en segundo plano.`
+                        : `No se pudieron eliminar palmas en "${sub.nombre}". Intenta de nuevo.`,
+                  );
+                  throw new Error('Batch fallido');
+                }
+              }
+
+              setSublotes(prev => prev.map(s =>
+                s.id === sub.id ? { ...s, cantidadPalmas: target } : s,
+              ));
+              toast.success(`${aEliminar.toLocaleString('es-CO')} palmas eliminadas en "${sub.nombre}"`);
+            } catch (err: any) {
+              fallosBatch++;
+              if (err?.code === 'BATCH_EN_CURSO') {
+                toast.error(`Hay un proceso en curso en "${sub.nombre}". Espera unos segundos.`);
+              } else if (err?.message !== 'Batch fallido') {
+                toast.error(err instanceof Error ? err.message : `No se pudieron eliminar palmas del sublote "${sub.nombre}"`);
+              }
+            } finally {
+              setProcesando(p => Math.max(0, p - 1));
+            }
           }
         }
 
@@ -734,10 +1095,19 @@ export default function NuevoPredioWizard() {
           await refrescarResumen(editId);
         }
 
-        toast.success('Cambios guardados');
+        if (fallosBatch === 0) {
+          toast.success('Cambios guardados');
+        } else {
+          toast.error(`Algunos cambios fallaron (${fallosBatch}). Revisa los mensajes anteriores.`);
+        }
         // Refresco final para reflejar todo lo persistido y dejar al usuario
         // en la misma etapa del wizard.
         await refrescarResumen(editId);
+
+        // Si vino del botón "Finalizar" y todo salió bien, salimos al listado.
+        if (redirigir && fallosBatch === 0) {
+          navigate('/plantacion');
+        }
         return;
       }
 
@@ -875,12 +1245,16 @@ export default function NuevoPredioWizard() {
   };
 
   // ── Panel resumen (derecha) ────────────────────────────────────────────────
+  // SIEMPRE se calcula desde el estado local (lotes, sublotes, lineas) para
+  // que cualquier cambio del wizard (crear/editar/eliminar/agregar palmas)
+  // se refleje al instante sin esperar al cache del backend.
   const PanelResumen = () => {
-    // En modo edición con datos del API (§1.6)
-    if (editId && resumen) {
-      const pr = resumen.predio ?? {};
-      const tg = resumen.totales_generales ?? {};
-      const ls = resumen.lotes ?? [];
+    if (false as boolean) {
+      // Dead code (era la rama que leía del backend resumen). Se conserva
+      // para no romper el cierre del componente; el render real está abajo.
+      const pr: any = resumen?.predio ?? {};
+      const tg: any = resumen?.totales_generales ?? {};
+      const ls: any[] = resumen?.lotes ?? [];
       return (
         <div className="space-y-6">
           {/* Progreso */}
@@ -1208,9 +1582,13 @@ export default function NuevoPredioWizard() {
 
   return (
     <div className="space-y-8 relative">
-      {/* Overlay de carga (solo edición) — montado en <body> vía portal para
-          que ignore cualquier transform/contexto de stacking de los padres. */}
-      {cargandoPredio && createPortal(
+      {/* Overlay full-page con pill centrada (estilo toast loading).
+          Bloquea toda la pantalla para:
+            - carga inicial del predio,
+            - mutaciones puntuales (lote/sublote/línea),
+            - agregar/eliminar palmas con progreso en vivo,
+            - guardar/finalizar el wizard. */}
+      {(cargandoPredio || procesando > 0 || guardando) && createPortal(
         <div
           className="flex items-center justify-center bg-background"
           style={{
@@ -1221,9 +1599,13 @@ export default function NuevoPredioWizard() {
             zIndex: 99999,
           }}
         >
-          <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-6 py-4 shadow-lg">
-            <Loader2 className="h-5 w-5 animate-spin text-primary" />
-            <span className="text-sm font-medium">Cargando datos de la plantación...</span>
+          <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card px-5 py-3 shadow-xl">
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            <span className="text-sm font-medium">
+              {cargandoPredio
+                ? 'Cargando datos de la plantación...'
+                : (procesando > 0 ? procesandoMsg : 'Guardando cambios...')}
+            </span>
           </div>
         </div>,
         document.body,
@@ -1559,7 +1941,29 @@ export default function NuevoPredioWizard() {
                           <h3 className="font-semibold text-lg">{sub.nombre}</h3>
                           <p className="text-sm text-muted-foreground">{lote?.nombre} • {linSub.length} líneas</p>
                         </div>
-                        <Button variant="outline" size="sm" onClick={() => agregarLinea(sub.id)} className="gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            // En edición con palmas → preguntar cuántas asignar.
+                            const palmasEnLineas = linSub.reduce(
+                              (s, ln) => s + (ln.cantidadPalmas ?? 0), 0,
+                            );
+                            const disponibles = Math.max(0, sub.cantidadPalmas - palmasEnLineas);
+                            if (editId && disponibles > 0) {
+                              setNuevaLineaPrompt({
+                                subloteId: sub.id,
+                                subloteNombre: sub.nombre,
+                                disponibles,
+                                cantidadInput: '',
+                              });
+                            } else {
+                              // En creación o sin palmas para asignar → línea vacía
+                              agregarLinea(sub.id, 0);
+                            }
+                          }}
+                          className="gap-2"
+                        >
                           <Plus className="h-4 w-4" />
                           Agregar Línea
                         </Button>
@@ -1610,9 +2014,6 @@ export default function NuevoPredioWizard() {
             <Card className="border-border">
               <CardHeader>
                 <CardTitle>Registrar Palmas</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Total de palmas: {sublotes.reduce((s, sub) => s + (totalPalmasSublote(sub.id) || sub.cantidadPalmas || 0), 0).toLocaleString('es-CO')}
-                </p>
               </CardHeader>
               <CardContent className="space-y-6">
                 {sublotes.map(sub => {
@@ -1621,32 +2022,161 @@ export default function NuevoPredioWizard() {
                   const tieneLineas = linSub.length > 0;
                   const PER = 50;
 
+                  // Form a nivel de sublote (modo edición con líneas).
+                  // Permite elegir cantidad + línea desde un único botón en la
+                  // cabecera del sublote, en lugar de uno por línea.
+                  const subFormKey = `sub_form_${sub.id}`;
+                  const subFormAbierto = mostrandoFormPalmas === subFormKey;
+                  const cantField = `edit_${subFormKey}`;
+                  const lineaField = `edit_${subFormKey}_linea`;
+                  const cantValue = cantPalmasForm[cantField] ?? '';
+                  const lineaSel = cantPalmasForm[lineaField] ?? '';
+                  // Cuántas palmas del sublote NO están asignadas a ninguna línea.
+                  // Estas son las que se pueden "asignar" (reusar) a una línea.
+                  const palmasEnLineas = linSub.reduce(
+                    (s, ln) => s + (ln.cantidadPalmas ?? 0), 0,
+                  );
+                  const disponiblesSinLinea = Math.max(0, sub.cantidadPalmas - palmasEnLineas);
+
                   return (
                     <div key={sub.id} className="border border-border rounded-xl p-6 space-y-4">
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
                         <div>
                           <h3 className="font-semibold text-lg">{sub.nombre}</h3>
                           <p className="text-sm text-muted-foreground">
-                            {lote?.nombre} • {(totalPalmasSublote(sub.id) || sub.cantidadPalmas || 0).toLocaleString('es-CO')} palmas
+                            {lote?.nombre}
                           </p>
                         </div>
+                        {editId && tieneLineas && (
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              setMostrandoFormPalmas(subFormAbierto ? null : subFormKey);
+                              setCantPalmasForm(prev => ({
+                                ...prev,
+                                [cantField]: '',
+                                [lineaField]: '',
+                              }));
+                            }}
+                            className="gap-1 bg-success hover:bg-success/90 text-primary hover:text-primary"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            Agregar Palmas
+                          </Button>
+                        )}
                       </div>
+
+                      {/* Form de "Agregar palmas" a nivel de sublote (cantidad + línea) */}
+                      {editId && tieneLineas && subFormAbierto && (
+                        <div
+                          ref={(el) => { formPalmasRefs.current[subFormKey] = el; }}
+                          className="bg-muted/10 border border-border rounded-lg p-4 space-y-3 scroll-mt-24"
+                        >
+                          <div className="space-y-2">
+                            <Label className="text-sm">Cantidad de palmas</Label>
+                            <Input
+                              type="number"
+                              placeholder="Ej: 50"
+                              min="0"
+                              max={disponiblesSinLinea > 0 ? disponiblesSinLinea : undefined}
+                              value={cantValue}
+                              onChange={e => {
+                                const v = e.target.value;
+                                const safe = v === '' ? '' : (Number(v) < 0 ? '0' : v);
+                                setCantPalmasForm(prev => ({ ...prev, [cantField]: safe }));
+                              }}
+                              autoFocus
+                            />
+                            {disponiblesSinLinea > 0 ? (
+                              <p className="text-xs text-muted-foreground">
+                                Disponibles sin línea: <span className="font-semibold text-foreground">{disponiblesSinLinea.toLocaleString('es-CO')}</span> palmas.
+                                Se reasignarán de las ya existentes en el sublote.
+                              </p>
+                            ) : (
+                              <p className="text-xs text-muted-foreground">
+                                No hay palmas sin línea. Las que ingreses se crearán nuevas.
+                              </p>
+                            )}
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-sm">Línea</Label>
+                            <select
+                              value={lineaSel}
+                              onChange={e => setCantPalmasForm(prev => ({ ...prev, [lineaField]: e.target.value }))}
+                              className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                            >
+                              <option value="">Seleccionar línea...</option>
+                              {linSub.map(ln => (
+                                <option key={ln.id} value={ln.id}>Línea {ln.numero}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                const cant = parseInt(cantValue);
+                                if (!cant || cant < 1) { toast.error('Ingresa una cantidad válida'); return; }
+                                if (!lineaSel) { toast.error('Selecciona una línea'); return; }
+                                // Si hay palmas sin línea, NO permitir crear nuevas:
+                                // sólo reasignar de las ya existentes.
+                                if (disponiblesSinLinea > 0 && cant > disponiblesSinLinea) {
+                                  toast.error(
+                                    `No pueden ser más de ${disponiblesSinLinea.toLocaleString('es-CO')} (palmas disponibles sin línea en este sublote)`,
+                                  );
+                                  return;
+                                }
+                                agregarPalmas(sub.id, cant, lineaSel);
+                                setCantPalmasForm(prev => {
+                                  const n = { ...prev };
+                                  delete n[cantField];
+                                  delete n[lineaField];
+                                  return n;
+                                });
+                                setMostrandoFormPalmas(null);
+                              }}
+                              disabled={!cantValue || parseInt(cantValue || '0') <= 0 || !lineaSel}
+                            >
+                              Agregar
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setMostrandoFormPalmas(null);
+                                setCantPalmasForm(prev => {
+                                  const n = { ...prev };
+                                  delete n[cantField];
+                                  delete n[lineaField];
+                                  return n;
+                                });
+                              }}
+                            >
+                              Cancelar
+                            </Button>
+                          </div>
+                        </div>
+                      )}
 
                       <div className="space-y-4">
 
                         {/* ── MODO EDICIÓN: palmas agrupadas POR LÍNEA (cuando el sublote tiene líneas) ──
-                             Cada línea tiene su propia sección:
-                              - Header: "Línea N · X palmas"
-                              - Grilla con las palmas de esa línea
-                              - Botón "Agregar palmas" que abre el form pre-seleccionando esa línea */}
+                             Cada línea muestra su contador y su grilla de palmas.
+                             El botón "Agregar Palmas" vive en el header del sublote
+                             y deja al usuario elegir cantidad + línea de una vez. */}
                         {editId && tieneLineas && (
                           <div className="space-y-5">
-                            {linSub.map(ln => {
+                            {linSub
+                              // Solo mostrar líneas que ya tienen palmas asignadas.
+                              // Si está cargando aún (ps undefined) usamos el contador del bundle.
+                              .filter(ln => {
+                                const ps = wizardPag[`linea_${ln.id}`];
+                                const total = ps?.total ?? ln.cantidadPalmas ?? 0;
+                                return total > 0;
+                              })
+                              .map(ln => {
                               const key = `linea_${ln.id}`;
                               const ps  = wizardPag[key];
-                              // Identificador único del form abierto: "{subId}__{lineaId}"
-                              const formKey = `${sub.id}__${ln.id}`;
-                              const formAbierto = mostrandoFormPalmas === formKey;
                               return (
                                 <div key={ln.id} className="border border-border/50 rounded-lg p-4 bg-muted/10 space-y-3">
                                   <div className="flex items-center justify-between">
@@ -1654,85 +2184,10 @@ export default function NuevoPredioWizard() {
                                       <GitBranch className="h-4 w-4 text-accent" />
                                       <span className="font-semibold text-sm">Línea {ln.numero}</span>
                                       <Badge variant="secondary" className="text-xs">
-                                        {(ps?.total ?? 0).toLocaleString('es-CO')} palmas
+                                        {(ps?.total ?? ln.cantidadPalmas ?? 0).toLocaleString('es-CO')} palmas
                                       </Badge>
                                     </div>
-                                    <Button
-                                      size="sm"
-                                      onClick={() => {
-                                        setMostrandoFormPalmas(formAbierto ? null : formKey);
-                                        // Pre-llenar campos del form de esta línea
-                                        setCantPalmasForm(prev => ({
-                                          ...prev,
-                                          [`edit_${formKey}`]: '',
-                                        }));
-                                      }}
-                                      className="gap-1 bg-success hover:bg-success/90 text-primary hover:text-primary"
-                                    >
-                                      <Plus className="h-3.5 w-3.5" />
-                                      Agregar palmas
-                                    </Button>
                                   </div>
-
-                                  {/* Formulario inline: aparece DENTRO de la línea con linea_id ya conocida */}
-                                  {formAbierto && (
-                                    <div
-                                      ref={(el) => { formPalmasRefs.current[formKey] = el; }}
-                                      className="bg-background border border-border rounded-lg p-3 space-y-3 scroll-mt-24"
-                                    >
-                                      <div className="text-xs font-medium text-primary">
-                                        Agregando palmas a <span className="font-bold">Línea {ln.numero}</span>
-                                      </div>
-                                      <div className="space-y-2">
-                                        <Label className="text-xs">Cantidad de palmas</Label>
-                                        <Input
-                                          type="number"
-                                          placeholder="Ej: 50"
-                                          min="0"
-                                          value={cantPalmasForm[`edit_${formKey}`] ?? ''}
-                                          onChange={e => {
-                                            const v = e.target.value;
-                                            const safe = v === '' ? '' : (Number(v) < 0 ? '0' : v);
-                                            setCantPalmasForm(prev => ({ ...prev, [`edit_${formKey}`]: safe }));
-                                          }}
-                                          autoFocus
-                                        />
-                                      </div>
-                                      <div className="flex gap-2">
-                                        <Button
-                                          size="sm"
-                                          onClick={() => {
-                                            const cant = parseInt(cantPalmasForm[`edit_${formKey}`] ?? '');
-                                            if (!cant || cant < 1) { toast.error('Ingresa una cantidad válida'); return; }
-                                            agregarPalmas(sub.id, cant, ln.id);
-                                            setCantPalmasForm(prev => {
-                                              const n = { ...prev };
-                                              delete n[`edit_${formKey}`];
-                                              return n;
-                                            });
-                                            setMostrandoFormPalmas(null);
-                                          }}
-                                          disabled={!cantPalmasForm[`edit_${formKey}`] || parseInt(cantPalmasForm[`edit_${formKey}`] ?? '0') <= 0}
-                                        >
-                                          Agregar
-                                        </Button>
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={() => {
-                                            setMostrandoFormPalmas(null);
-                                            setCantPalmasForm(prev => {
-                                              const n = { ...prev };
-                                              delete n[`edit_${formKey}`];
-                                              return n;
-                                            });
-                                          }}
-                                        >
-                                          Cancelar
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  )}
 
                                   {!ps || ps.loading ? (
                                     <div className="flex items-center justify-center py-6 gap-2 text-muted-foreground text-sm">
@@ -1800,13 +2255,8 @@ export default function NuevoPredioWizard() {
                              "Guardar Cambios" (bulk save) en el botón inferior del wizard. */}
                         {editId && !tieneLineas && (
                           <div className="bg-muted/10 border border-border/50 rounded-lg p-4">
-                            <div className="space-y-3">
-                              <div>
-                                <Label className="text-sm font-medium">Número de Palmas</Label>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  Sin líneas definidas — Total de palmas en el sublote
-                                </p>
-                              </div>
+                            <div className="space-y-2">
+                              <Label className="text-sm font-medium">Número de palmas</Label>
                               <Input
                                 type="number"
                                 placeholder="Ej: 170"
@@ -2051,12 +2501,20 @@ export default function NuevoPredioWizard() {
                    en todas las etapas, para no obligar al usuario a navegar
                    hasta el final si solo modificó info del predio. */}
               {editId && (
-                <Button onClick={guardarTodo} disabled={guardando}
-                  variant="outline" className="gap-2">
-                  {guardando
-                    ? <><Loader2 className="h-4 w-4 animate-spin" />Guardando...</>
-                    : <><Save className="h-4 w-4" />Guardar cambios</>}
-                </Button>
+                <>
+                  <Button onClick={() => guardarTodo(false)} disabled={guardando}
+                    variant="outline" className="gap-2">
+                    {guardando
+                      ? <><Loader2 className="h-4 w-4 animate-spin" />Guardando...</>
+                      : <><Save className="h-4 w-4" />Guardar cambios</>}
+                  </Button>
+                  <Button onClick={() => guardarTodo(true)} disabled={guardando}
+                    className="gap-2 bg-success hover:bg-success/90">
+                    {guardando
+                      ? <><Loader2 className="h-4 w-4 animate-spin" />Guardando...</>
+                      : <><Check className="h-4 w-4" />Finalizar</>}
+                  </Button>
+                </>
               )}
               {etapa < ETAPAS.length ? (
                 <Button onClick={siguienteEtapa}
@@ -2068,7 +2526,7 @@ export default function NuevoPredioWizard() {
               ) : (
                 // En modo creación: el botón final crea la plantación.
                 !editId && (
-                  <Button onClick={guardarTodo} disabled={guardando}
+                  <Button onClick={() => guardarTodo(false)} disabled={guardando}
                     className="gap-2 bg-success hover:bg-success/90">
                     {guardando
                       ? <><Loader2 className="h-4 w-4 animate-spin" />Guardando...</>
@@ -2119,6 +2577,63 @@ export default function NuevoPredioWizard() {
               className="bg-destructive text-white hover:bg-destructive/90"
             >
               {eliminandoItem ? 'Eliminando...' : 'Eliminar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Diálogo "Nueva línea": pregunta cuántas palmas asignar a la línea
+          que se va a crear. Solo aparece en modo edición y cuando hay palmas
+          sin asignar en el sublote. */}
+      <AlertDialog
+        open={!!nuevaLineaPrompt}
+        onOpenChange={(o) => { if (!o) setNuevaLineaPrompt(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Nueva línea en {nuevaLineaPrompt?.subloteNombre}</AlertDialogTitle>
+            <AlertDialogDescription>
+              Hay <strong>{nuevaLineaPrompt?.disponibles.toLocaleString('es-CO')}</strong> palmas
+              sin línea en este sublote. ¿Cuántas quieres asignar a esta nueva línea?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2 py-2">
+            <Label className="text-sm">Cantidad de palmas</Label>
+            <Input
+              type="number"
+              min={0}
+              max={nuevaLineaPrompt?.disponibles ?? 0}
+              placeholder={`Máx ${nuevaLineaPrompt?.disponibles ?? 0}`}
+              value={nuevaLineaPrompt?.cantidadInput ?? ''}
+              onChange={(e) => {
+                const v = e.target.value;
+                const safe = v === '' ? '' : (Number(v) < 0 ? '0' : v);
+                setNuevaLineaPrompt(p => p ? { ...p, cantidadInput: safe } : p);
+              }}
+              autoFocus
+            />
+            <p className="text-xs text-muted-foreground">
+              Puedes dejar 0 para crear la línea vacía y asignar palmas después.
+            </p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                const p = nuevaLineaPrompt;
+                if (!p) return;
+                const cant = parseInt(p.cantidadInput || '0', 10) || 0;
+                if (cant < 0) { toast.error('La cantidad no puede ser negativa'); return; }
+                if (cant > p.disponibles) {
+                  toast.error(`No pueden ser más de ${p.disponibles.toLocaleString('es-CO')} palmas`);
+                  return;
+                }
+                agregarLinea(p.subloteId, cant);
+                setNuevaLineaPrompt(null);
+              }}
+            >
+              Crear línea
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

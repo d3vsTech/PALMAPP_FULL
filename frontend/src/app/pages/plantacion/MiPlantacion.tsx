@@ -35,7 +35,25 @@ export default function MiPlantacion() {
     setLoading(true);
     try {
       const res = await prediosApi.listar({ search: q?.trim() || undefined, per_page: 50 });
-      setPredios(res.data ?? []);
+      const lista = res.data ?? [];
+      // El listado a veces reporta `palmas_count` desincronizado (sobre todo tras
+      // creaciones async de >5000 palmas). Enriquecemos con el resumen real de
+      // cada predio (endpoint cacheado en backend a 60s, barato).
+      setPredios(lista);
+
+      const enriquecidos = await Promise.all(
+        lista.map(async (p: any) => {
+          try {
+            const r = await prediosApi.resumen(p.id);
+            const totalPalmas = Number(r.data?.totales_generales?.palmas ?? p.palmas_count ?? 0);
+            const totalLotes  = Number(r.data?.totales_generales?.lotes   ?? p.lotes_count  ?? 0);
+            return { ...p, palmas_count: totalPalmas, lotes_count: totalLotes };
+          } catch {
+            return p;
+          }
+        }),
+      );
+      setPredios(enriquecidos);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al cargar predios');
     } finally { setLoading(false); }

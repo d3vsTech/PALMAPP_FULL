@@ -24,6 +24,17 @@ interface PrecioVolumenLocal {
   precio_unidad: number;
 }
 
+// ── Formato moneda COP (puntos como separadores de miles) ───────────────────
+const formatCOP = (n: number | string): string => {
+  const num = typeof n === 'number' ? n : parseFloat(String(n));
+  if (!Number.isFinite(num) || num === 0) return '';
+  return Math.trunc(num).toLocaleString('es-CO');
+};
+const parseCOP = (s: string): number => {
+  const cleaned = String(s).replace(/[^\d]/g, '');
+  return parseInt(cleaned, 10) || 0;
+};
+
 export default function EditarProducto() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -55,10 +66,9 @@ export default function EditarProducto() {
     setCargando(true);
     Promise.all([
       proveedorApi.producto(productoId),
-      proveedorApi.categorias(),
-      proveedorApi.unidadesMedida(),
+      proveedorApi.wizardInitProductos(),
     ])
-      .then(([prodRes, catsRes, udsRes]) => {
+      .then(([prodRes, wiz]) => {
         const p = prodRes.data;
         setProducto(p);
         setNombre(p.nombre);
@@ -66,7 +76,7 @@ export default function EditarProducto() {
         setSku(p.sku ?? '');
         setCategoriaId(String(p.categoria_id));
         setUnidadId(String(p.unidad_medida_id));
-        setPrecio(String(toNumber(p.precio_unitario)));
+        setPrecio(formatCOP(toNumber(p.precio_unitario)));
         setStock(String(p.stock_disponible));
         setStockMin(String(p.stock_minimo ?? 0));
         setDestacado(!!p.destacado);
@@ -77,8 +87,8 @@ export default function EditarProducto() {
             precio_unidad: toNumber(pv.precio_unidad),
           })),
         );
-        setCategorias(catsRes.data);
-        setUnidades(udsRes.data);
+        setCategorias(wiz.data.categorias as any);
+        setUnidades(wiz.data.unidades_medida as any);
       })
       .catch((e: any) => {
         toast.error(e?.message ?? 'Producto no encontrado');
@@ -102,7 +112,7 @@ export default function EditarProducto() {
     e.preventDefault();
     if (!productoId) return;
 
-    const precioNum = Number(precio);
+    const precioNum = parseCOP(precio);
     const stockNum = Number(stock);
     const stockMinNum = Number(stockMin) || 0;
 
@@ -130,15 +140,8 @@ export default function EditarProducto() {
         estado: activo ? 'activo' : 'inactivo',
         precios_volumen: precVolumen,
       };
-      await proveedorApi.editarProducto(productoId, payload);
-
-      if (imagenNueva) {
-        try {
-          await proveedorApi.subirImagenPrincipal(productoId, imagenNueva);
-        } catch (err: any) {
-          toast.warning(`Producto guardado, pero falló la imagen: ${err?.message ?? ''}`);
-        }
-      }
+      // Imagen incluida en el mismo multipart (API §5: campo imagen_principal).
+      await proveedorApi.editarProducto(productoId, payload, imagenNueva || null);
 
       toast.success('Producto actualizado exitosamente');
       navigate('/proveedor/productos');
@@ -281,12 +284,12 @@ export default function EditarProducto() {
                       <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
                       <Input
                         id="precio"
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
                         placeholder="0"
                         value={precio}
-                        onChange={(e) => setPrecio(e.target.value)}
+                        onChange={(e) => setPrecio(formatCOP(parseCOP(e.target.value)))}
                         className="pl-6"
-                        min="0"
                         required
                       />
                     </div>
@@ -360,12 +363,12 @@ export default function EditarProducto() {
                           <div className="relative">
                             <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">$</span>
                             <Input
-                              type="number"
+                              type="text"
+                              inputMode="numeric"
                               placeholder="0"
-                              value={pv.precio_unidad}
-                              onChange={(e) => actualizarPV(index, 'precio_unidad', parseInt(e.target.value) || 0)}
+                              value={formatCOP(pv.precio_unidad)}
+                              onChange={(e) => actualizarPV(index, 'precio_unidad', parseCOP(e.target.value))}
                               className="pl-6"
-                              min="0"
                             />
                           </div>
                         </div>

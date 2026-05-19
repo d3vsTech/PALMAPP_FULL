@@ -23,6 +23,17 @@ interface PrecioVolumenLocal {
   precio_unidad: number;
 }
 
+// ── Formato moneda COP (puntos como separadores de miles) ───────────────────
+const formatCOP = (n: number | string): string => {
+  const num = typeof n === 'number' ? n : parseFloat(String(n));
+  if (!Number.isFinite(num) || num === 0) return '';
+  return Math.trunc(num).toLocaleString('es-CO');
+};
+const parseCOP = (s: string): number => {
+  const cleaned = String(s).replace(/[^\d]/g, '');
+  return parseInt(cleaned, 10) || 0;
+};
+
 export default function NuevoProducto() {
   const navigate = useNavigate();
 
@@ -45,10 +56,11 @@ export default function NuevoProducto() {
   const [enviando, setEnviando] = useState(false);
 
   useEffect(() => {
-    Promise.all([proveedorApi.categorias(), proveedorApi.unidadesMedida()])
-      .then(([cats, uds]) => {
-        setCategorias(cats.data);
-        setUnidades(uds.data);
+    // wizard-init trae categorías + unidades_medida en 1 sola petición.
+    proveedorApi.wizardInitProductos()
+      .then(({ data }) => {
+        setCategorias(data.categorias as any);
+        setUnidades(data.unidades_medida as any);
       })
       .catch((e: any) => toast.error(e?.message ?? 'Error al cargar catálogos'));
   }, []);
@@ -67,7 +79,7 @@ export default function NuevoProducto() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const precioNum = Number(precio);
+    const precioNum = parseCOP(precio);
     const stockNum = Number(stock);
     const stockMinNum = Number(stockMin) || 0;
 
@@ -99,16 +111,8 @@ export default function NuevoProducto() {
         estado: activo ? 'activo' : 'inactivo',
         precios_volumen: precVolumen,
       };
-      const res = await proveedorApi.crearProducto(payload);
-      const nuevoId = res.data?.id;
-
-      if (imagen && nuevoId) {
-        try {
-          await proveedorApi.subirImagenPrincipal(nuevoId, imagen);
-        } catch (err: any) {
-          toast.warning(`Producto creado, pero falló la imagen: ${err?.message ?? ''}`);
-        }
-      }
+      // Imagen incluida en el mismo multipart (API §4: campo imagen_principal).
+      await proveedorApi.crearProducto(payload, imagen || null);
 
       toast.success('Producto creado exitosamente');
       navigate('/proveedor/productos');
@@ -232,12 +236,12 @@ export default function NuevoProducto() {
                       <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
                       <Input
                         id="precio"
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
                         placeholder="0"
                         value={precio}
-                        onChange={(e) => setPrecio(e.target.value)}
+                        onChange={(e) => setPrecio(formatCOP(parseCOP(e.target.value)))}
                         className="pl-6"
-                        min="0"
                         required
                       />
                     </div>
@@ -311,12 +315,12 @@ export default function NuevoProducto() {
                           <div className="relative">
                             <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">$</span>
                             <Input
-                              type="number"
+                              type="text"
+                              inputMode="numeric"
                               placeholder="0"
-                              value={pv.precio_unidad}
-                              onChange={(e) => actualizarPV(index, 'precio_unidad', parseInt(e.target.value) || 0)}
+                              value={formatCOP(pv.precio_unidad)}
+                              onChange={(e) => actualizarPV(index, 'precio_unidad', parseCOP(e.target.value))}
                               className="pl-6"
-                              min="0"
                             />
                           </div>
                         </div>

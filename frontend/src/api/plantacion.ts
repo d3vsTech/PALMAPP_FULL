@@ -55,6 +55,42 @@ export const getMunicipios = (codigo: string) =>
 /** §1.4 PUT /predios/{id} — todos opcionales + estado? */
 /** §1.5 DELETE /predios/{id} — recursivo: elimina lotes + sublotes + palmas */
 /** §1.6 GET /predios/{id}/resumen — jerarquía completa para panel wizard */
+/** §1.7 GET /predios/{id}/wizard-init — bundle predio + lotes + sublotes + lineas + paramétricas */
+export interface PredioWizardLote {
+  id: number;
+  nombre: string;
+  hectareas_sembradas: string | number | null;
+  semillas: Array<{ id: number; nombre: string }>;
+}
+export interface PredioWizardSublote {
+  id: number;
+  nombre: string;
+  cantidad_palmas: number;
+  cantidad_lineas: number;
+}
+export interface PredioWizardLinea {
+  id: number;
+  numero: number;
+  cantidad_palmas: number;
+}
+export interface PredioWizardInitResponse {
+  predio: {
+    id: number;
+    nombre: string;
+    ubicacion: string | null;
+    hectareas_totales: string | number;
+  } | null;
+  lotes: PredioWizardLote[];
+  /** Sublotes indexados por lote_id (string numérico) */
+  sublotes: Record<string, PredioWizardSublote[]>;
+  /** Líneas indexadas por sublote_id (string numérico) */
+  lineas: Record<string, PredioWizardLinea[]>;
+  parametricas: {
+    semillas: Array<{ id: number; tipo: string; nombre: string }>;
+    departamentos: Array<{ codigo: string; nombre: string }>;
+  };
+}
+
 export const prediosApi = {
   listar: (p?: { search?: string; estado?: boolean; per_page?: number; page?: number }) =>
     get<{ data: any[]; meta: any }>('/predios', p as any),
@@ -64,6 +100,17 @@ export const prediosApi = {
 
   resumen: (id: number) =>
     get<{ data: any }>(`/predios/${id}/resumen`),
+
+  /**
+   * Bundle del wizard. Reemplaza 14+ requests (predio + lotes + sublotes + lineas
+   * + semillas + departamentos) por 1 sola petición.
+   * - id presente → modo edición.
+   * - id ausente  → modo creación (predio/lotes/sublotes/lineas vienen vacíos).
+   */
+  wizardInit: (id?: number | string) =>
+    get<{ data: PredioWizardInitResponse }>(
+      id != null ? `/predios/${id}/wizard-init` : '/predios/wizard-init',
+    ),
 
   crear: (b: { nombre: string; ubicacion: string; latitud?: number; longitud?: number; hectareas_totales?: number }) =>
     post<{ message: string; data: any }>('/predios', b),
@@ -110,9 +157,11 @@ export const lotesApi = {
 // ──────────────────────────────────────────────────────────────────────────────
 
 /** §3.3 POST /sublotes y §3.4 PUT /sublotes/{id}:
- *  - cantidad_palmas <= 5000 → sync (201, sin palmas_async)
- *  - cantidad_palmas > 5000  → async (201 con palmas_async:true y batch_id)
- *  - PUT con batch activo    → 409 {code: BATCH_EN_CURSO}
+ *  - Diferencia (crear o eliminar) <= 5000 → sync (sin palmas_async).
+ *  - Diferencia > 5000 → async: respuesta trae palmas_async:true y batch_id.
+ *    Tanto la creación como la eliminación de palmas se hacen en segundo plano.
+ *  - PUT con un batch (creación o eliminación) en curso → 409 {code: BATCH_EN_CURSO}.
+ *  - Polling vía palmasApi.getBatch(batch_id).
  */
 export interface SubloteResponse {
   message: string;
@@ -163,7 +212,26 @@ export interface PalmasAsyncResponse {
 
 export type PalmasCreateResponse = PalmasSyncResponse | PalmasAsyncResponse;
 
-/** §4.6 Estado de batch */
+/** §4.5 Asignar palmas a línea (masivo) — sync siempre */
+export interface AsignarLineaMasivoPayload {
+  sublote_id: number;
+  /** ID de la línea destino. `null` para desasignar. */
+  linea_id: number | null;
+  /**
+   * IDs explícitos a reasignar.
+   * Si se omite y `linea_id` es número → asigna todas las palmas SIN LÍNEA del sublote.
+   * Si se omite y `linea_id` es null   → desasigna todas las palmas del sublote.
+   */
+  palmas_ids?: number[];
+}
+export interface AsignarLineaMasivoResponse {
+  message: string;
+  cantidad_asignadas: number;
+  sublote_id: number;
+  linea_id: number | null;
+}
+
+/** §4.7 Estado de batch */
 export interface BatchStatus {
   id: string;
   name: string;
@@ -217,11 +285,21 @@ export const palmasApi = {
   editar: (id: number, b: Partial<{ descripcion: string; estado: boolean; linea_id: number | null }>) =>
     put<{ message: string; data: any }>(`/palmas/${id}`, b),
 
-  /** §4.5 DELETE /palmas/masivo — body: { palmas_ids: number[] } */
+  /**
+   * §4.5 PUT /palmas/masivo/asignar-linea — asocia/desasocia en bulk palmas a una línea.
+   * - `palmas_ids` presente   → reasigna esas palmas a `linea_id`.
+   * - `palmas_ids` omitido + `linea_id` numérico → asigna todas las SIN LÍNEA del sublote.
+   * - `palmas_ids` omitido + `linea_id: null`     → desasigna TODAS las del sublote.
+   * Siempre sync, incluso con 100k palmas (es un solo UPDATE WHERE).
+   */
+  asignarLineaMasivo: (payload: AsignarLineaMasivoPayload) =>
+    put<AsignarLineaMasivoResponse>('/palmas/masivo/asignar-linea', payload),
+
+  /** §4.6 DELETE /palmas/masivo — body: { palmas_ids: number[] } */
   eliminar: (palmas_ids: number[]) =>
     del<{ message: string }>('/palmas/masivo', { palmas_ids }),
 
-  /** §4.6 GET /palmas/batch/{batchId} — polling de estado */
+  /** §4.7 GET /palmas/batch/{batchId} — polling de estado */
   getBatch: (batchId: string) =>
     get<{ data: BatchStatus }>(`/palmas/batch/${batchId}`),
 };

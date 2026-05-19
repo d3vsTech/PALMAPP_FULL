@@ -1,78 +1,81 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Link } from 'react-router';
-import { Plus } from 'lucide-react';
+import { Plus, Loader2, ShoppingBag, Package } from 'lucide-react';
+import { toast } from 'sonner';
+import {
+  proveedorApi,
+  toNumber,
+  buildImagenUrl,
+  type DashboardProveedorResponse,
+  type EstadoPedidoProv,
+} from '../../../api/proveedor';
+import { proveedorAuthStorage } from '../../../api/proveedorAuth';
 
-// Mock data (lo mismo que V.9 — el login del proveedor todavía no tiene API real)
-const estadisticas = {
-  totalProductos: 24,
-  productosActivos: 22,
-  productosAgotados: 2,
-  pedidosPendientes: 8,
-  pedidosEnProceso: 5,
-  pedidosCompletados: 47,
-  ventasMes: 4_850_000,
-  ventasMesAnterior: 4_200_000,
+const ESTADO_LABELS: Record<EstadoPedidoProv, { label: string; cls: string }> = {
+  pendiente:   { label: 'Pendiente',    cls: 'bg-amber-500/10 text-amber-600 border-amber-500/20' },
+  confirmado:  { label: 'Confirmado',   cls: 'bg-blue-500/10 text-blue-600 border-blue-500/20' },
+  preparando:  { label: 'En Preparación', cls: 'bg-purple-500/10 text-purple-600 border-purple-500/20' },
+  en_transito: { label: 'En Camino',    cls: 'bg-blue-800/10 text-blue-800 border-blue-800/20' },
+  entregado:   { label: 'Entregado',    cls: 'bg-success/10 text-success border-success/20' },
+  cancelado:   { label: 'Cancelado',    cls: 'bg-destructive/10 text-destructive border-destructive/20' },
 };
 
-const pedidosRecientes = [
-  {
-    id: 'ped1',
-    cliente: 'Finca La Esperanza',
-    producto: 'Fertilizante NPK 15-15-15',
-    cantidad: 20,
-    unidad: 'bultos',
-    total: 1_840_000,
-    estado: 'Pendiente',
-    fecha: '2026-04-15',
-  },
-  {
-    id: 'ped2',
-    cliente: 'Palma del Norte',
-    producto: 'Glifosato 48% SL',
-    cantidad: 15,
-    unidad: 'litros',
-    total: 630_000,
-    estado: 'En Proceso',
-    fecha: '2026-04-14',
-  },
-  {
-    id: 'ped3',
-    cliente: 'AgroSur',
-    producto: 'Machete Palero 24"',
-    cantidad: 10,
-    unidad: 'unidades',
-    total: 350_000,
-    estado: 'Completado',
-    fecha: '2026-04-13',
-  },
-];
+function formatCOP(v: number | string): string {
+  const n = typeof v === 'number' ? v : parseFloat(String(v)) || 0;
+  return `$${n.toLocaleString('es-CO')}`;
+}
 
-const productosPopulares = [
-  { nombre: 'Fertilizante NPK 15-15-15', ventas: 156, ingresos: 14_820_000 },
-  { nombre: 'Glifosato 48% SL', ventas: 98, ingresos: 4_116_000 },
-  { nombre: 'Machete Palero 24"', ventas: 87, ingresos: 3_045_000 },
-];
+function formatFecha(iso: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? iso : d.toLocaleDateString('es-CO');
+}
 
 export default function ProveedorDashboard() {
-  const [nombreProveedor, setNombreProveedor] = useState('Proveedor');
+  const proveedor = proveedorAuthStorage.getProveedor();
+  const user = proveedorAuthStorage.getUser();
+  const nombreProveedor = proveedor?.nombre_empresa ?? user?.name ?? 'Proveedor';
+
+  const [data, setData] = useState<DashboardProveedorResponse | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('proveedorSession');
-      if (raw) {
-        const sesion = JSON.parse(raw);
-        if (sesion?.nombre) setNombreProveedor(sesion.nombre);
-      }
-    } catch {
-      /* sesión malformada, ignorar */
-    }
+    proveedorApi.dashboard()
+      .then(res => setData(res.data))
+      .catch((err: any) => {
+        toast.error(err?.message ?? 'No se pudo cargar el dashboard');
+      })
+      .finally(() => setLoading(false));
   }, []);
 
-  const cambioVentas =
-    ((estadisticas.ventasMes - estadisticas.ventasMesAnterior) / estadisticas.ventasMesAnterior) * 100;
+  const variacion = data?.indicadores?.variacion_ventas_porcentaje;
+  const variacionColor = useMemo(() => {
+    if (variacion == null) return 'text-muted-foreground';
+    if (variacion > 0) return 'text-success';
+    if (variacion < 0) return 'text-destructive';
+    return 'text-muted-foreground';
+  }, [variacion]);
+  const variacionLabel = useMemo(() => {
+    if (variacion == null) return 'Sin datos del mes anterior';
+    const signo = variacion > 0 ? '+' : '';
+    return `${signo}${variacion}% vs mes anterior`;
+  }, [variacion]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20 gap-3 text-muted-foreground">
+        <Loader2 className="h-5 w-5 animate-spin" />
+        <span>Cargando dashboard...</span>
+      </div>
+    );
+  }
+
+  const indicadores = data?.indicadores;
+  const pedidos    = data?.pedidos_recientes ?? [];
+  const productos  = data?.productos_mas_vendidos ?? [];
 
   return (
     <div className="space-y-6">
@@ -99,9 +102,9 @@ export default function ProveedorDashboard() {
           <Card>
             <CardContent className="p-6">
               <p className="text-sm text-muted-foreground mb-1">Productos Activos</p>
-              <p className="text-4xl font-bold">{estadisticas.productosActivos}</p>
+              <p className="text-4xl font-bold">{indicadores?.productos_activos ?? 0}</p>
               <p className="text-xs text-muted-foreground mt-1">
-                de {estadisticas.totalProductos} totales
+                de {indicadores?.productos_total ?? 0} totales
               </p>
             </CardContent>
           </Card>
@@ -109,9 +112,9 @@ export default function ProveedorDashboard() {
           <Card>
             <CardContent className="p-6">
               <p className="text-sm text-muted-foreground mb-1">Pedidos Pendientes</p>
-              <p className="text-4xl font-bold">{estadisticas.pedidosPendientes}</p>
+              <p className="text-4xl font-bold">{indicadores?.pedidos_pendientes ?? 0}</p>
               <p className="text-xs text-muted-foreground mt-1">
-                {estadisticas.pedidosEnProceso} en proceso
+                {indicadores?.pedidos_en_proceso ?? 0} en proceso
               </p>
             </CardContent>
           </Card>
@@ -119,7 +122,7 @@ export default function ProveedorDashboard() {
           <Card>
             <CardContent className="p-6">
               <p className="text-sm text-muted-foreground mb-1">Pedidos Completados</p>
-              <p className="text-4xl font-bold">{estadisticas.pedidosCompletados}</p>
+              <p className="text-4xl font-bold">{indicadores?.pedidos_completados_mes ?? 0}</p>
               <p className="text-xs text-muted-foreground mt-1">este mes</p>
             </CardContent>
           </Card>
@@ -128,11 +131,9 @@ export default function ProveedorDashboard() {
             <CardContent className="p-6">
               <p className="text-sm text-muted-foreground mb-1">Ventas del Mes</p>
               <p className="text-4xl font-bold">
-                ${(estadisticas.ventasMes / 1_000_000).toFixed(1)}M
+                ${((indicadores?.ventas_mes_actual ?? 0) / 1_000_000).toFixed(1)}M
               </p>
-              <p className="text-xs text-success mt-1">
-                +{cambioVentas.toFixed(1)}% vs mes anterior
-              </p>
+              <p className={`text-xs mt-1 ${variacionColor}`}>{variacionLabel}</p>
             </CardContent>
           </Card>
         </div>
@@ -148,68 +149,99 @@ export default function ProveedorDashboard() {
             </Button>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {pedidosRecientes.map((pedido) => (
-                <div
-                  key={pedido.id}
-                  className="flex items-start justify-between pb-3 border-b last:border-0 last:pb-0"
-                >
-                  <div className="space-y-1 flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-medium text-sm">{pedido.cliente}</p>
-                      <Badge
-                        variant="outline"
-                        className={
-                          pedido.estado === 'Pendiente'
-                            ? 'bg-amber-500/10 text-amber-600 border-amber-500/20'
-                            : pedido.estado === 'En Proceso'
-                              ? 'bg-blue-500/10 text-blue-600 border-blue-500/20'
-                              : 'bg-success/10 text-success border-success/20'
-                        }
-                      >
-                        {pedido.estado}
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">{pedido.producto}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {pedido.cantidad} {pedido.unidad} · {pedido.fecha}
-                    </p>
-                  </div>
-                  <div className="text-right ml-4 shrink-0">
-                    <p className="font-semibold text-sm">${pedido.total.toLocaleString('es-CO')}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            {pedidos.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
+                <ShoppingBag className="h-8 w-8 opacity-40" />
+                <span className="text-sm">Aún no tienes pedidos</span>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {pedidos.map((pedido) => {
+                  const estilo = ESTADO_LABELS[pedido.estado] ?? ESTADO_LABELS.pendiente;
+                  return (
+                    <Link
+                      key={pedido.id}
+                      to={`/proveedor/pedidos/${pedido.codigo}`}
+                      className="flex items-start justify-between pb-3 border-b last:border-0 last:pb-0 hover:bg-muted/30 rounded-md transition-colors -mx-2 px-2"
+                    >
+                      <div className="space-y-1 flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-medium text-sm">{pedido.tenant?.nombre ?? '—'}</p>
+                          <Badge variant="outline" className={estilo.cls}>
+                            {estilo.label}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground truncate">
+                          {pedido.primer_producto?.nombre ?? '—'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {pedido.primer_producto?.cantidad ?? 0}
+                          {pedido.primer_producto?.unidad ? ` ${pedido.primer_producto.unidad}` : ''}
+                          {' · '}{formatFecha(pedido.fecha_pedido)}
+                        </p>
+                      </div>
+                      <div className="text-right ml-4 shrink-0">
+                        <p className="font-semibold text-sm">{formatCOP(pedido.total)}</p>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* Productos populares */}
+        {/* Productos más vendidos */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-lg font-semibold">Productos Más Vendidos</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {productosPopulares.map((producto, index) => (
-                <div key={index} className="pb-3 border-b last:border-0 last:pb-0">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm mb-1">{producto.nombre}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {producto.ventas} unidades vendidas
-                      </p>
+            {productos.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
+                <Package className="h-8 w-8 opacity-40" />
+                <span className="text-sm">Aún no hay ventas registradas</span>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {productos.map((producto) => {
+                  const img = buildImagenUrl(producto.imagen_principal);
+                  return (
+                    <div key={producto.id} className="pb-3 border-b last:border-0 last:pb-0">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-3 flex-1 min-w-0">
+                          {img ? (
+                            <img
+                              src={img}
+                              alt={producto.nombre}
+                              className="h-10 w-10 rounded-md object-cover border border-border flex-shrink-0"
+                            />
+                          ) : (
+                            <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
+                              <Package className="h-5 w-5 text-muted-foreground/50" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm mb-1 truncate" title={producto.nombre}>
+                              {producto.nombre}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {producto.unidades_vendidas.toLocaleString('es-CO')} unidades vendidas
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="font-semibold text-sm">
+                            ${(toNumber(producto.ingresos_acumulados) / 1_000_000).toFixed(1)}M
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5">ingresos</p>
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-right shrink-0">
-                      <p className="font-semibold text-sm">
-                        ${(producto.ingresos / 1_000_000).toFixed(1)}M
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-0.5">ingresos</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

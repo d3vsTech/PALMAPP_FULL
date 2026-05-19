@@ -17,14 +17,16 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  proveedorApi, toNumber, buildImagenUrl,
+  proveedorApi, toNumber, buildImagenUrl, ProveedorErrorCodes,
   type ProductoProv, type CategoriaRefProv, type ListarProductosParams,
+  type ProductosStats,
 } from '../../../api/proveedor';
 
 export default function ProveedorProductos() {
   const [productos, setProductos] = useState<ProductoProv[]>([]);
   const [categorias, setCategorias] = useState<CategoriaRefProv[]>([]);
   const [meta, setMeta] = useState<{ current_page: number; last_page: number; total: number } | null>(null);
+  const [stats, setStats] = useState<ProductosStats | null>(null);
 
   const [busqueda, setBusqueda] = useState('');
   const [categoriaFiltro, setCategoriaFiltro] = useState<string>('todas');
@@ -42,14 +44,19 @@ export default function ProveedorProductos() {
     if (categoriaFiltro !== 'todas') params.categoria_id = parseInt(categoriaFiltro);
     if (estadoFiltro !== 'todos') params.estado = estadoFiltro;
     proveedorApi.productos(params)
-      .then((res) => { setProductos(res.data); setMeta(res.meta); })
+      .then((res) => {
+        setProductos(res.data);
+        setMeta(res.meta);
+        if (res.stats) setStats(res.stats);
+      })
       .catch((e: any) => toast.error(e?.message ?? 'Error al cargar productos'))
       .finally(() => setCargando(false));
   };
 
   useEffect(() => {
-    proveedorApi.categorias()
-      .then((res) => setCategorias(res.data))
+    // wizard-init trae categorías + unidades en 1 sola petición.
+    proveedorApi.wizardInitProductos()
+      .then((res) => setCategorias(res.data.categorias as any))
       .catch(() => {});
   }, []);
 
@@ -69,8 +76,9 @@ export default function ProveedorProductos() {
       cargar();
     } catch (e: any) {
       const code = e?.code;
-      if (code === 'PRODUCTO_CON_PEDIDOS') {
-        toast.error('No se puede eliminar: el producto tiene pedidos asociados. Inactívalo en lugar de eliminarlo.');
+      if (code === ProveedorErrorCodes.PRODUCTO_CON_ORDENES_ACTIVAS
+          || code === ProveedorErrorCodes.PRODUCTO_CON_PEDIDOS) {
+        toast.error('No se puede eliminar: el producto tiene órdenes activas. Inactívalo en lugar de eliminarlo.');
       } else {
         toast.error(e?.message ?? 'Error al eliminar producto');
       }
@@ -91,7 +99,7 @@ export default function ProveedorProductos() {
     if (producto.estado === 'inactivo') {
       return (
         <Badge variant="outline" className="bg-muted text-muted-foreground border-muted">
-          Pausado
+          Inactivo
         </Badge>
       );
     }
@@ -128,6 +136,30 @@ export default function ProveedorProductos() {
           </Button>
         </div>
       </div>
+
+      {/* Stats del catálogo del proveedor */}
+      {stats && (
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Card>
+            <CardContent className="p-5">
+              <p className="text-sm text-muted-foreground mb-1">Activos</p>
+              <p className="text-3xl font-bold text-success">{stats.total_activos}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5">
+              <p className="text-sm text-muted-foreground mb-1">Inactivos</p>
+              <p className="text-3xl font-bold text-muted-foreground">{stats.total_inactivos}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5">
+              <p className="text-sm text-muted-foreground mb-1">Sin stock</p>
+              <p className="text-3xl font-bold text-destructive">{stats.total_sin_stock}</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Filtros */}
       <Card>
@@ -237,13 +269,13 @@ export default function ProveedorProductos() {
                       </div>
 
                       <div className="flex gap-2 flex-shrink-0">
-                        <Button variant="ghost" size="sm" asChild>
-                          <Link to={`/proveedor/productos/${producto.id}`}>
+                        <Button variant="ghost" size="sm" asChild title="Ver detalle">
+                          <Link to={`/proveedor/productos/${producto.id}`} aria-label="Ver detalle">
                             <Eye className="h-4 w-4" />
                           </Link>
                         </Button>
-                        <Button variant="ghost" size="sm" asChild>
-                          <Link to={`/proveedor/productos/editar/${producto.id}`}>
+                        <Button variant="ghost" size="sm" asChild title="Editar">
+                          <Link to={`/proveedor/productos/editar/${producto.id}`} aria-label="Editar">
                             <Edit className="h-4 w-4" />
                           </Link>
                         </Button>
@@ -252,6 +284,8 @@ export default function ProveedorProductos() {
                           size="sm"
                           className="text-destructive hover:text-destructive"
                           onClick={() => setProductoAEliminar(producto)}
+                          title="Eliminar"
+                          aria-label="Eliminar"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
