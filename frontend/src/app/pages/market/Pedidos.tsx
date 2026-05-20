@@ -16,6 +16,7 @@ import {
   type Pedido, type EstadoPedido, type PedidoStats,
 } from '../../../api/market';
 import { formatFecha } from '../../utils/fecha';
+import { useAutoRefresh } from '../../hooks/useAutoRefresh';
 
 const estadoConfig: Record<EstadoPedido, {
   label: string;
@@ -42,8 +43,13 @@ export default function Pedidos() {
   const [page, setPage] = useState(1);
   const [cargando, setCargando] = useState(true);
 
-  useEffect(() => {
-    setCargando(true);
+  /**
+   * Carga la página actual. Aceptamos `silent=true` para los refrescos en
+   * segundo plano (polling / focus): no mostramos el spinner, así la lista
+   * no parpadea cuando el proveedor cambia un estado del otro lado.
+   */
+  const cargar = (silent = false) => {
+    if (!silent) setCargando(true);
     marketApi.pedidos({
       estado: filtroEstado === 'todos' ? undefined : filtroEstado,
       page,
@@ -53,9 +59,20 @@ export default function Pedidos() {
         setStats(res.stats);
         setMeta(res.meta);
       })
-      .catch((e: any) => toast.error(e?.message ?? 'Error al cargar pedidos'))
-      .finally(() => setCargando(false));
+      .catch((e: any) => {
+        if (!silent) toast.error(e?.message ?? 'Error al cargar pedidos');
+      })
+      .finally(() => { if (!silent) setCargando(false); });
+  };
+
+  useEffect(() => {
+    cargar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtroEstado, page]);
+
+  // Auto-sincronización: refresca cada 20s y al volver a la pestaña,
+  // así los cambios de estado hechos por el proveedor aparecen solos.
+  useAutoRefresh(() => cargar(true), 20_000);
 
   return (
     <div className="space-y-8">

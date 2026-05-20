@@ -13,14 +13,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { marketApi, toNumber, type Carrito as CarritoT } from '../../../api/market';
-
-const DEPARTAMENTOS = [
-  'Amazonas', 'Antioquia', 'Arauca', 'Atlántico', 'Bolívar', 'Boyacá', 'Caldas',
-  'Caquetá', 'Casanare', 'Cauca', 'Cesar', 'Chocó', 'Córdoba', 'Cundinamarca',
-  'Guainía', 'Guaviare', 'Huila', 'La Guajira', 'Magdalena', 'Meta', 'Nariño',
-  'Norte de Santander', 'Putumayo', 'Quindío', 'Risaralda', 'San Andrés y Providencia',
-  'Santander', 'Sucre', 'Tolima', 'Valle del Cauca', 'Vaupés', 'Vichada',
-];
+import { getDepartamentos, getMunicipios } from '../../../api/plantacion';
 
 const METODOS_PAGO = [
   { id: 'PSE', nombre: 'Pago con PSE', descripcion: 'Pago seguro desde tu cuenta bancaria' },
@@ -47,6 +40,48 @@ export default function Checkout() {
     indicaciones: '',
   });
   const [metodoPago, setMetodoPago] = useState('');
+
+  // Departamentos / municipios desde el backend (mismo patrón que el wizard
+  // de predios y colaboradores). Departamento guarda el código; el nombre se
+  // resuelve cuando se manda el pedido. Municipios cargan por demanda.
+  const [departamentos, setDepartamentos] = useState<{ codigo: string; nombre: string }[]>([]);
+  const [municipios, setMunicipios] = useState<{ codigo: string; nombre: string }[]>([]);
+  const [deptoSel, setDeptoSel] = useState(''); // código del departamento
+  const [cargandoMunicipios, setCargandoMunicipios] = useState(false);
+
+  useEffect(() => {
+    // Caché por sesión para evitar pedir lo mismo cada vez que se abre el checkout.
+    try {
+      const cached = sessionStorage.getItem('cache_departamentos');
+      if (cached) { setDepartamentos(JSON.parse(cached)); return; }
+    } catch { /* ignorar */ }
+    getDepartamentos()
+      .then((r) => {
+        const ds = r.data ?? [];
+        setDepartamentos(ds);
+        try { sessionStorage.setItem('cache_departamentos', JSON.stringify(ds)); } catch { /* cuota */ }
+      })
+      .catch(() => { /* silencioso: usuario aún puede tipear si falla */ });
+  }, []);
+
+  // Cargar municipios cuando cambia el departamento. Caché por código.
+  useEffect(() => {
+    if (!deptoSel) { setMunicipios([]); return; }
+    const cacheKey = `cache_municipios_${deptoSel}`;
+    try {
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) { setMunicipios(JSON.parse(cached)); return; }
+    } catch { /* ignorar */ }
+    setCargandoMunicipios(true);
+    getMunicipios(deptoSel)
+      .then((r) => {
+        const ms = r.data ?? [];
+        setMunicipios(ms);
+        try { sessionStorage.setItem(cacheKey, JSON.stringify(ms)); } catch { /* cuota */ }
+      })
+      .catch(() => setMunicipios([]))
+      .finally(() => setCargandoMunicipios(false));
+  }, [deptoSel]);
 
   useEffect(() => {
     setCargando(true);
@@ -281,32 +316,57 @@ export default function Checkout() {
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="ciudad">
-                        Ciudad / Municipio <span className="text-destructive">*</span>
-                      </Label>
-                      <Input
-                        id="ciudad"
-                        placeholder="Ej: Cali"
-                        value={direccion.ciudad}
-                        onChange={(e) => setDireccion({ ...direccion, ciudad: e.target.value })}
-                      />
-                    </div>
-
+                    {/* Departamento (1º): trae los municipios cuando cambia */}
                     <div className="space-y-2">
                       <Label htmlFor="departamento">
                         Departamento <span className="text-destructive">*</span>
                       </Label>
                       <Select
-                        value={direccion.departamento}
-                        onValueChange={(val) => setDireccion({ ...direccion, departamento: val })}
+                        value={deptoSel}
+                        onValueChange={(codigo) => {
+                          setDeptoSel(codigo);
+                          const nombre = departamentos.find(d => d.codigo === codigo)?.nombre ?? '';
+                          // Cambiar de departamento limpia el municipio anterior.
+                          setDireccion({ ...direccion, departamento: nombre, ciudad: '' });
+                        }}
                       >
                         <SelectTrigger id="departamento">
-                          <SelectValue placeholder="Selecciona un departamento" />
+                          <SelectValue placeholder={
+                            departamentos.length === 0
+                              ? 'Cargando departamentos...'
+                              : 'Selecciona un departamento'
+                          } />
                         </SelectTrigger>
                         <SelectContent>
-                          {DEPARTAMENTOS.map((d) => (
-                            <SelectItem key={d} value={d}>{d}</SelectItem>
+                          {departamentos.map(d => (
+                            <SelectItem key={d.codigo} value={d.codigo}>{d.nombre}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Ciudad/Municipio (2º): depende del departamento */}
+                    <div className="space-y-2">
+                      <Label htmlFor="ciudad">
+                        Ciudad / Municipio <span className="text-destructive">*</span>
+                      </Label>
+                      <Select
+                        value={direccion.ciudad}
+                        onValueChange={(nombre) => setDireccion({ ...direccion, ciudad: nombre })}
+                        disabled={!deptoSel || cargandoMunicipios}
+                      >
+                        <SelectTrigger id="ciudad">
+                          <SelectValue placeholder={
+                            !deptoSel
+                              ? 'Primero elige departamento'
+                              : cargandoMunicipios
+                                ? 'Cargando municipios...'
+                                : 'Selecciona un municipio'
+                          } />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {municipios.map(m => (
+                            <SelectItem key={m.codigo} value={m.nombre}>{m.nombre}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>

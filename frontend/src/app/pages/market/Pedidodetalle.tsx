@@ -13,6 +13,7 @@ import {
   type Pedido, type EstadoPedido,
 } from '../../../api/market';
 import { formatFecha, formatFechaHora } from '../../utils/fecha';
+import { useAutoRefresh } from '../../hooks/useAutoRefresh';
 
 const estadoConfig: Record<EstadoPedido, {
   label: string;
@@ -36,17 +37,33 @@ export default function PedidoDetalle() {
   const [pedido, setPedido] = useState<Pedido | null>(null);
   const [cargando, setCargando] = useState(true);
 
-  useEffect(() => {
+  /**
+   * `silent=true` cuando viene de polling/focus: no muestra spinner ni
+   * redirige al listado si hay error transitorio, así no pierde el contexto
+   * del usuario que está viendo el pedido.
+   */
+  const cargar = (silent = false) => {
     if (!codigo) return;
-    setCargando(true);
+    if (!silent) setCargando(true);
     marketApi.pedido(codigo)
       .then((res) => setPedido(res.data))
       .catch((e: any) => {
-        toast.error(e?.message ?? 'Pedido no encontrado');
-        navigate('/market/pedidos');
+        if (!silent) {
+          toast.error(e?.message ?? 'Pedido no encontrado');
+          navigate('/market/pedidos');
+        }
       })
-      .finally(() => setCargando(false));
+      .finally(() => { if (!silent) setCargando(false); });
+  };
+
+  useEffect(() => {
+    cargar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [codigo, navigate]);
+
+  // Auto-sincronización: el proveedor puede cambiar el estado mientras la
+  // finca tiene esta pantalla abierta. Polling 20s + al volver a la pestaña.
+  useAutoRefresh(() => cargar(true), 20_000);
 
   if (cargando) {
     return (

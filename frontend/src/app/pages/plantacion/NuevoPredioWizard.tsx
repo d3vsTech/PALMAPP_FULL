@@ -342,21 +342,21 @@ export default function NuevoPredioWizard() {
   // dispatch un Job con total_jobs=1). Para que el usuario vea movimiento real
   // mezclamos backend con un estimado de tiempo (~1ms por palma).
   //
-  // Detección de worker caído: si tras 2 min seguimos con processed_jobs=0
-  // y pending_jobs>0, asumimos que no hay queue worker corriendo (§6.6 doc).
+  // No intentamos detectar "worker caído" por contadores: con total_jobs=1, los
+  // valores processed=0/pending=1 son indistinguibles entre "job corriendo" y
+  // "worker apagado". Solo confiamos en `finished` y en el timeout final.
   //
   // Tolerante a errores transitorios (red, 404 puntual): falla solo tras varios
-  // errores consecutivos. Distingue: ok / failed / timeout / no_worker.
+  // errores consecutivos. Distingue: ok / failed / timeout.
   const pollBatch = async (
     batchId: string,
     cantidad: number,
     verbo: 'Creando' | 'Eliminando',
     onProgress: (msg: string) => void,
-  ): Promise<'ok' | 'failed' | 'timeout' | 'no_worker'> => {
+  ): Promise<'ok' | 'failed' | 'timeout'> => {
     const start = Date.now();
     const expectedMs = Math.max(5_000, Math.min(90_000, cantidad));
     const TIMEOUT_MS = 600_000;
-    const NO_WORKER_MS = 120_000; // 2 min sin avance → worker probablemente caído
     const MAX_ERR = 5;
     let errores = 0;
     let lastPct = 0;
@@ -378,14 +378,6 @@ export default function NuevoPredioWizard() {
           if (br.data.has_failures) return 'failed';
           onProgress(`${verbo} ${cantidad.toLocaleString('es-CO')} palmas... 100%`);
           return 'ok';
-        }
-
-        // Detección rápida de worker caído: nada procesado en 2 min y jobs
-        // siguen pendientes → cola apagada. Falla rápido en vez de esperar 10 min.
-        const procesados = Number(br.data.processed_jobs ?? 0);
-        const pendientes = Number(br.data.pending_jobs ?? 0);
-        if (elapsed > NO_WORKER_MS && procesados === 0 && pendientes > 0) {
-          return 'no_worker';
         }
       } catch {
         errores++;
@@ -915,12 +907,9 @@ export default function NuevoPredioWizard() {
             setSublotes(prev => prev.map(s =>
               s.id === subloteId ? { ...s, cantidadPalmas: Math.max(0, s.cantidadPalmas - aCrear) } : s
             ));
-            const errMsg =
-              resultado === 'no_worker'
-                ? 'El servidor no está procesando trabajos en segundo plano. Contacta al administrador (queue worker apagado).'
-                : resultado === 'timeout'
-                  ? 'El proceso tardó demasiado. Puede seguir en segundo plano; recarga en unos minutos.'
-                  : 'No se pudieron crear las palmas. Intenta de nuevo.';
+            const errMsg = resultado === 'timeout'
+              ? 'El proceso tardó demasiado. Puede seguir en segundo plano; recarga en unos minutos.'
+              : 'No se pudieron crear las palmas. Intenta de nuevo.';
             toast.error(errMsg);
             // Lanzamos para que el caller (guardarTodo) sepa que falló y no
             // muestre "Cambios guardados" engañosamente.
@@ -979,7 +968,20 @@ export default function NuevoPredioWizard() {
         setCantPalmasForm(prev => ({ ...prev, [subloteId]: '' }));
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error al asignar/crear palmas');
+      // Si el error vino del polling (ya mostró su propio toast), no duplicar.
+      // Errores de otro origen sí necesitan toast genérico.
+      const mensajeYaMostrado =
+        err instanceof Error && (
+          err.message.includes('procesando trabajos') ||
+          err.message.includes('tardó demasiado') ||
+          err.message.includes('No se pudieron crear')
+        );
+      if (!mensajeYaMostrado) {
+        toast.error(err instanceof Error ? err.message : 'Error al asignar/crear palmas');
+      }
+      // CRÍTICO: re-lanzar para que el caller (guardarTodo) cuente el fallo
+      // y no muestre "Cambios guardados" engañosamente.
+      throw err;
     }
   });
 
@@ -1058,11 +1060,9 @@ export default function NuevoPredioWizard() {
                 );
                 if (resultado !== 'ok') {
                   toast.error(
-                    resultado === 'no_worker'
-                      ? 'El servidor no está procesando trabajos en segundo plano. Contacta al administrador (queue worker apagado).'
-                      : resultado === 'timeout'
-                        ? `Tardó demasiado en "${sub.nombre}". Puede seguir en segundo plano.`
-                        : `No se pudieron eliminar palmas en "${sub.nombre}". Intenta de nuevo.`,
+                    resultado === 'timeout'
+                      ? `Tardó demasiado en "${sub.nombre}". Puede seguir en segundo plano.`
+                      : `No se pudieron eliminar palmas en "${sub.nombre}". Intenta de nuevo.`,
                   );
                   throw new Error('Batch fallido');
                 }
@@ -1590,13 +1590,16 @@ export default function NuevoPredioWizard() {
             - guardar/finalizar el wizard. */}
       {(cargandoPredio || procesando > 0 || guardando) && createPortal(
         <div
-          className="flex items-center justify-center bg-background"
+          className="flex items-center justify-center"
           style={{
             position: 'fixed',
             top: 0, left: 0, right: 0, bottom: 0,
             width: '100vw',
             height: '100vh',
             zIndex: 99999,
+            backgroundColor: 'rgba(0, 0, 0, 0.35)',
+            backdropFilter: 'blur(2px)',
+            WebkitBackdropFilter: 'blur(2px)',
           }}
         >
           <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card px-5 py-3 shadow-xl">

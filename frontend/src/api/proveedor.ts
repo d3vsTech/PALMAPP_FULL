@@ -57,6 +57,28 @@ function patch<T>(path: string, body?: unknown): Promise<T> {
 export type EstadoPedidoProv =
   | 'pendiente' | 'confirmado' | 'preparando' | 'en_transito' | 'entregado' | 'cancelado';
 
+/** Prioridad del pedido (API_MARKET_PROVEEDOR_PEDIDOS §9) */
+export type PrioridadPedidoProv = 'normal' | 'alta' | 'urgente';
+
+/** Estado de pago manual (API_MARKET_PROVEEDOR_PEDIDOS §10) */
+export type EstadoPagoPedidoProv = 'pendiente' | 'pagado';
+
+/** Acciones devueltas en `acciones_disponibles` por el backend */
+export type AccionPedidoProv =
+  | 'confirmar' | 'rechazar' | 'preparar' | 'despachar' | 'entregar';
+
+/** Vistas (tabs) del listado de pedidos del proveedor (§3 query `tab`) */
+export type TabPedidosProv = 'todos' | 'por_confirmar' | 'activos' | 'completados';
+
+/** Stats agregados que devuelve el listado (no se calculan en cliente) */
+export interface PedidosStatsProv {
+  por_confirmar: number;
+  activos: number;
+  en_transito: number;
+  completados: number;
+  ventas_mes: number;
+}
+
 /** Dashboard del Portal Proveedor (API §1) */
 export interface IndicadoresProv {
   productos_activos: number;
@@ -211,12 +233,22 @@ export interface PedidoItemProv {
   producto?: { id: number; nombre: string; imagen_principal?: string | null };
 }
 
+/**
+ * Tenant del lado pedido. En `index` viene compacto (nombre/telefono/email).
+ * En `show` viene completo con NIT y dirección.
+ */
 export interface TenantRefProv {
   id: number;
   nombre: string;
   ciudad?: string | null;
   email?: string | null;
   telefono?: string | null;
+  /** Solo en detalle */
+  nit?: string | null;
+  /** Solo en detalle */
+  correo_contacto?: string | null;
+  /** Solo en detalle */
+  direccion?: string | null;
 }
 
 export interface PedidoEstadoHistorialProv {
@@ -232,6 +264,9 @@ export interface PedidoProv {
   id: number;
   codigo: string;
   estado: EstadoPedidoProv;
+  prioridad?: PrioridadPedidoProv;
+  estado_pago?: EstadoPagoPedidoProv;
+  numero_guia?: string | null;
   subtotal: string | number;
   costo_envio: string | number;
   total: string | number;
@@ -242,8 +277,13 @@ export interface PedidoProv {
   fecha_entrega_estimada?: string | null;
   fecha_entrega_real?: string | null;
   tenant?: TenantRefProv;
+  /** En el listado puede venir vacío y solo `productos_resumen`. */
   items: PedidoItemProv[];
+  /** Resumen textual en el listado (ej. "20 Fertilizante NPK 15-15-15 y 1 producto(s) más"). */
+  productos_resumen?: string;
   historial?: PedidoEstadoHistorialProv[];
+  /** Acciones que el frontend debe renderizar como CTAs (§13). */
+  acciones_disponibles?: AccionPedidoProv[];
 }
 
 export interface Paginacion {
@@ -268,9 +308,25 @@ export interface ListarProductosParams {
 }
 
 export interface ListarPedidosParams {
+  /** Tab del portal proveedor (server-side filter) */
+  tab?: TabPedidosProv;
+  /** Estado específico (independiente del tab) */
   estado?: EstadoPedidoProv;
+  /** Búsqueda por código o nombre de finca (server-side) */
+  buscar?: string;
   page?: number;
   per_page?: number;
+}
+
+/** Body de `PUT /pedidos/{id}/estado` (§5) */
+export interface CambiarEstadoPedidoPayload {
+  estado: EstadoPedidoProv;
+  comentario?: string;
+  prioridad?: PrioridadPedidoProv;
+  estado_pago?: EstadoPagoPedidoProv;
+  numero_guia?: string | null;
+  /** YYYY-MM-DD */
+  fecha_entrega_estimada?: string | null;
 }
 
 // ─── Endpoints ────────────────────────────────────────────────────────────────
@@ -405,22 +461,80 @@ export const proveedorApi = {
     return proveedorApi.editarProducto(id, {}, archivo);
   },
 
-  // ── Pedidos ──────────────────────────────────────────────────────────────
+  // ── Pedidos (API_MARKET_PROVEEDOR_PEDIDOS §3-§7) ─────────────────────────
+  /**
+   * Listado paginado. Devuelve `stats` agregado (no calcular en cliente).
+   * Filtros: tab (vista), estado, buscar.
+   */
   pedidos: (p?: ListarPedidosParams) =>
-    get<{ data: PedidoProv[]; meta: Paginacion }>('/pedidos', p as Record<string, unknown>),
+    get<{ data: PedidoProv[]; meta: Paginacion; stats: PedidosStatsProv }>(
+      '/pedidos', p as Record<string, unknown>),
 
+  /** Detalle por código (PED-001). Incluye items, historial y acciones_disponibles. */
   pedido: (codigo: string) =>
     get<{ data: PedidoProv }>(`/pedidos/${codigo}`),
 
   /**
-   * Cambia el estado de un pedido. Acepta cualquier transición válida del modelo.
-   * El backend registra entrada en market_pedido_estados_historial.
+   * Cambia el estado de un pedido. La máquina de estados la valida el backend.
+   * Acepta también `prioridad`, `estado_pago`, `numero_guia`, `fecha_entrega_estimada`
+   * para actualizarlos en el mismo request.
+   * Error 409 con `code: TRANSICION_INVALIDA` si la transición no es válida.
    */
-  cambiarEstadoPedido: (codigo: string, estado: EstadoPedidoProv, comentario?: string) =>
-    put<{ message: string; data: PedidoProv }>(
+  cambiarEstadoPedido: (
+    codigo: string,
+    payload: CambiarEstadoPedidoPayload | EstadoPedidoProv,
+    comentario?: string,
+  ) => {
+    // Compatibilidad: si se pasó solo el estado (firma vieja), envolverlo.
+    const body: CambiarEstadoPedidoPayload = typeof payload === 'string'
+      ? { estado: payload, comentario }
+      : payload;
+    return put<{ message: string; data: PedidoProv }>(
       `/pedidos/${codigo}/estado`,
-      { estado, comentario },
-    ),
+      body,
+    );
+  },
+
+  /**
+   * Descarga la factura PDF del pedido. Devuelve un Blob para hacer
+   * `URL.createObjectURL()` y forzar download.
+   */
+  descargarFactura: async (codigo: string): Promise<Blob> => {
+    const res = await fetchConToken(
+      `${BASE}/pedidos/${codigo}/factura`,
+      tkn(),
+      { method: 'GET' },
+    );
+    if (!res.ok) {
+      let msg = `Error ${res.status}`;
+      try { const j = await res.json(); msg = j?.message ?? msg; } catch { /* no json */ }
+      const err: any = new Error(msg);
+      err.status = res.status;
+      throw err;
+    }
+    return res.blob();
+  },
+
+  /**
+   * Exportar pedidos a Excel (.xlsx). Acepta los mismos filtros del listado.
+   * Máximo 1000 pedidos por exportación.
+   */
+  exportarPedidos: async (p?: ListarPedidosParams): Promise<Blob> => {
+    const q = toQuery(p as Record<string, unknown>);
+    const res = await fetchConToken(
+      `${BASE}/pedidos/exportar${q}`,
+      tkn(),
+      { method: 'GET' },
+    );
+    if (!res.ok) {
+      let msg = `Error ${res.status}`;
+      try { const j = await res.json(); msg = j?.message ?? msg; } catch { /* no json */ }
+      const err: any = new Error(msg);
+      err.status = res.status;
+      throw err;
+    }
+    return res.blob();
+  },
 
   // ── Catálogos auxiliares (para forms) ────────────────────────────────────
   /** @deprecated usar wizardInitProductos() que trae categorias + unidades en 1 call */
@@ -465,6 +579,22 @@ export function toNumber(v: string | number | null | undefined): number {
 }
 
 export { buildImagenUrl } from './market';
+
+/**
+ * Dispara la descarga de un Blob en el navegador con un nombre dado.
+ * Útil para los endpoints `factura` y `exportar` del portal proveedor.
+ */
+export function descargarBlob(blob: Blob, nombreArchivo: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nombreArchivo;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  // Liberar memoria; pequeño delay para que Safari/Firefox alcancen a iniciar.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
 /** Transiciones permitidas por estado actual (para deshabilitar botones inválidos). */
 export const TRANSICIONES_VALIDAS: Record<EstadoPedidoProv, EstadoPedidoProv[]> = {
