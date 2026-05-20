@@ -79,6 +79,92 @@ export interface PedidosStatsProv {
   ventas_mes: number;
 }
 
+// ─── Estadísticas (API_MARKET_PROVEEDOR_ESTADISTICAS) ─────────────────────────
+
+/** Presets de periodo aceptados por el backend (§3) */
+export type PeriodoEstadisticasProv =
+  | 'ultimos_7_dias'
+  | 'ultimos_30_dias'
+  | 'ultimos_3_meses'
+  | 'ultimos_6_meses'
+  | 'este_anio'
+  | 'personalizado';
+
+export interface ParamsEstadisticasProv {
+  periodo?: PeriodoEstadisticasProv;
+  /** YYYY-MM-DD. Obligatorio si periodo='personalizado'. */
+  fecha_desde?: string;
+  /** YYYY-MM-DD. Obligatorio si periodo='personalizado'. */
+  fecha_hasta?: string;
+}
+
+/** Forma común de cada KPI (§5.2) */
+export interface KpiEstadisticasProv {
+  actual: number;
+  anterior: number;
+  /** null cuando anterior=0 (división por cero evitada) */
+  variacion_porcentaje: number | null;
+}
+
+export interface EvolucionPuntoProv {
+  /** YYYY-MM */
+  mes: string;
+  /** Etiqueta corta español: Dic, Ene, Feb, ... */
+  label: string;
+  total: number;
+}
+
+export interface ProductoTopProv {
+  rank: number;
+  producto_id: number;
+  nombre: string;
+  categoria: string | null;
+  unidades_vendidas: number;
+  ingresos: number;
+  tendencia: 'up' | 'down' | 'flat';
+}
+
+export interface ClienteTopProv {
+  rank: number;
+  tenant_id: number;
+  nombre: string;
+  total_pedidos: number;
+  total_gastado: number;
+  /** YYYY-MM-DD o null */
+  ultimo_pedido: string | null;
+}
+
+export interface EstadisticasProveedorResponse {
+  periodo: {
+    preset: PeriodoEstadisticasProv;
+    fecha_desde: string;
+    fecha_hasta: string;
+    fecha_desde_comparacion: string;
+    fecha_hasta_comparacion: string;
+    dias: number;
+  };
+  kpis: {
+    ventas_totales: KpiEstadisticasProv;
+    pedidos_completados: KpiEstadisticasProv;
+    productos_vendidos: KpiEstadisticasProv;
+    clientes_activos: KpiEstadisticasProv;
+  };
+  evolucion_ventas: {
+    /** Siempre 6 puntos, meses sin ventas vienen con total:0 */
+    puntos: EvolucionPuntoProv[];
+    /** null si el primer mes = 0 */
+    variacion_porcentaje_vs_6_meses: number | null;
+  };
+  productos_mas_vendidos: ProductoTopProv[];
+  mejores_clientes: ClienteTopProv[];
+  metricas_adicionales: {
+    /** null si no hubo pedidos creados en el periodo */
+    tasa_conversion_porcentaje: number | null;
+    ticket_promedio: number;
+    productos_activos: number;
+  };
+}
+
 /** Dashboard del Portal Proveedor (API §1) */
 export interface IndicadoresProv {
   productos_activos: number;
@@ -547,6 +633,57 @@ export const proveedorApi = {
 
   unidadesMedida: () =>
     get<{ data: UnidadMedidaProv[] }>('/unidades-medida'),
+
+  // ── Estadísticas (API_MARKET_PROVEEDOR_ESTADISTICAS §4) ──────────────────
+  /**
+   * Bundle único de estadísticas: KPIs comparados, evolución 6 meses,
+   * top productos/clientes y métricas adicionales. NO cacheado en backend.
+   */
+  estadisticas: (p?: ParamsEstadisticasProv) =>
+    get<{ data: EstadisticasProveedorResponse }>(
+      '/estadisticas', p as Record<string, unknown>),
+
+  /** §6.1 Detalle de pedidos en Excel — una fila por item. */
+  reporteVentas: async (p?: ParamsEstadisticasProv): Promise<Blob> => {
+    const q = toQuery({ ...(p as Record<string, unknown>), formato: 'excel' });
+    const res = await fetchConToken(`${BASE}/reportes/ventas${q}`, tkn(), { method: 'GET' });
+    if (!res.ok) {
+      let msg = `Error ${res.status}`;
+      try { const j = await res.json(); msg = j?.message ?? msg; } catch { /* no json */ }
+      const err: any = new Error(msg);
+      err.status = res.status;
+      throw err;
+    }
+    return res.blob();
+  },
+
+  /** §6.2 Productos con métricas del periodo en Excel. */
+  reporteProductos: async (p?: ParamsEstadisticasProv): Promise<Blob> => {
+    const q = toQuery({ ...(p as Record<string, unknown>), formato: 'excel' });
+    const res = await fetchConToken(`${BASE}/reportes/productos${q}`, tkn(), { method: 'GET' });
+    if (!res.ok) {
+      let msg = `Error ${res.status}`;
+      try { const j = await res.json(); msg = j?.message ?? msg; } catch { /* no json */ }
+      const err: any = new Error(msg);
+      err.status = res.status;
+      throw err;
+    }
+    return res.blob();
+  },
+
+  /** §6.3 Clientes con métricas del periodo en Excel. */
+  reporteClientes: async (p?: ParamsEstadisticasProv): Promise<Blob> => {
+    const q = toQuery({ ...(p as Record<string, unknown>), formato: 'excel' });
+    const res = await fetchConToken(`${BASE}/reportes/clientes${q}`, tkn(), { method: 'GET' });
+    if (!res.ok) {
+      let msg = `Error ${res.status}`;
+      try { const j = await res.json(); msg = j?.message ?? msg; } catch { /* no json */ }
+      const err: any = new Error(msg);
+      err.status = res.status;
+      throw err;
+    }
+    return res.blob();
+  },
 };
 
 // ─── Códigos de error ────────────────────────────────────────────────────────
