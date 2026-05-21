@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Outlet, useNavigate, useLocation, Link } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
@@ -13,6 +13,7 @@ import {
   Menu,
   X,
   User,
+  ChevronDown,
 } from 'lucide-react';
 import { proveedorAuthApi, proveedorAuthStorage } from '../../../api/proveedorAuth';
 
@@ -31,17 +32,27 @@ export default function ProveedorLayout() {
 
   // Datos vivos de la sesión actual (proveedor seleccionado + usuario)
   const [proveedor, setProveedor] = useState(proveedorAuthStorage.getProveedor());
-  const [user]                    = useState(proveedorAuthStorage.getUser());
+  const [user, setUser]           = useState(proveedorAuthStorage.getUser());
 
   // Si no hay sesión válida → mandar al login.
   useEffect(() => {
     if (!proveedorAuthStorage.getToken()) {
       navigate('/proveedor/login', { replace: true });
     }
-    // Reactivos por si el usuario seleccionó otro proveedor en otra pestaña.
-    const onStorage = () => setProveedor(proveedorAuthStorage.getProveedor());
+    // `storage` cubre cambios desde OTRA pestaña (ej. seleccionar otro proveedor).
+    const onStorage = () => {
+      setProveedor(proveedorAuthStorage.getProveedor());
+      setUser(proveedorAuthStorage.getUser());
+    };
+    // `proveedor-user-changed` cubre cambios desde la MISMA pestaña — lo dispara
+    // la pantalla Mi Perfil al guardar nombre/email.
+    const onUserChanged = () => setUser(proveedorAuthStorage.getUser());
     window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    window.addEventListener('proveedor-user-changed', onUserChanged);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('proveedor-user-changed', onUserChanged);
+    };
   }, [navigate]);
 
   const handleLogout = async () => {
@@ -52,6 +63,25 @@ export default function ProveedorLayout() {
 
   const nombreEmpresa = proveedor?.nombre_empresa ?? 'Proveedor';
   const nombreUsuario = user?.name ?? 'Usuario';
+  const emailUsuario  = user?.email ?? '';
+  const rolUsuario    = proveedorAuthStorage.getRol();
+  const rolLabel = rolUsuario === 'ADMIN'
+    ? 'Administrador'
+    : rolUsuario === 'OPERADOR' ? 'Operador' : '';
+  const inicialUsuario = nombreUsuario.charAt(0).toUpperCase();
+
+  // Dropdown del avatar (igual al Topbar de finca, sin "Cerrar sesión").
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    if (dropdownOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [dropdownOpen]);
 
   const isActiveRoute = (href: string) => {
     return location.pathname === href || location.pathname.startsWith(href + '/');
@@ -191,14 +221,53 @@ export default function ProveedorLayout() {
             </Button>
 
             <div className="flex items-center gap-4 ml-auto">
-              <div className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
-                  <User className="h-4 w-4" />
-                </div>
-                <div className="hidden sm:block">
-                  <p className="text-sm font-medium">{nombreUsuario}</p>
-                  <p className="text-xs text-muted-foreground">{nombreEmpresa}</p>
-                </div>
+              {/* Dropdown del usuario (réplica del Topbar de finca sin
+                  "Cerrar sesión" — el logout vive en el footer del sidebar). */}
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  onClick={() => setDropdownOpen(!dropdownOpen)}
+                  className="flex items-center gap-3 px-3 py-2 rounded-xl bg-muted hover:bg-muted/80 transition-colors"
+                >
+                  <div className="w-9 h-9 bg-primary rounded-full flex items-center justify-center text-primary-foreground font-bold">
+                    {inicialUsuario}
+                  </div>
+                  <div className="hidden md:flex flex-col items-start">
+                    <span className="font-medium text-foreground text-sm">{nombreUsuario}</span>
+                    {rolLabel && (
+                      <span className="text-xs text-muted-foreground">{rolLabel}</span>
+                    )}
+                  </div>
+                  <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {dropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-64 bg-card border border-border rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 z-50">
+                    {/* Datos del usuario */}
+                    <div className="p-4 border-b border-border">
+                      <p className="font-bold text-foreground truncate">{nombreUsuario}</p>
+                      {emailUsuario && (
+                        <p className="text-sm text-muted-foreground truncate">{emailUsuario}</p>
+                      )}
+                      {rolLabel && (
+                        <p className="text-xs text-muted-foreground mt-1">{rolLabel}</p>
+                      )}
+                    </div>
+
+                    {/* Acciones — solo "Mi perfil", sin Cerrar sesión */}
+                    <div className="py-2">
+                      <button
+                        onClick={() => {
+                          setDropdownOpen(false);
+                          navigate('/proveedor/perfil');
+                        }}
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted transition-colors text-left"
+                      >
+                        <User className="h-5 w-5 text-muted-foreground" strokeWidth={2.5} />
+                        <span className="font-medium text-foreground">Mi perfil</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

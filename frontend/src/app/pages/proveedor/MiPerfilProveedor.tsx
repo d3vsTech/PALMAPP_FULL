@@ -1,22 +1,36 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
-import { requestConToken } from '../../../api/request';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Button } from '../../components/ui/button';
 import {
-  User, Lock, Eye, EyeOff, Save, Loader2, CheckCircle2, Mail,
+  User, Lock, Eye, EyeOff, Save, Loader2, Mail,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { proveedorAuthStorage } from '../../../api/proveedorAuth';
+import { proveedorApi } from '../../../api/proveedor';
 
-export default function MiPerfil() {
-  const { user, token, updateUser } = useAuth();
+/**
+ * Mi Perfil del Portal Proveedor.
+ * Réplica visual exacta de `pages/perfil/MiPerfil.tsx` (lado finca) — misma
+ * estructura de cards y campos, pero usando el usuario y endpoints del
+ * proveedorAuthApi (token de proveedor, no de finca).
+ */
+export default function MiPerfilProveedor() {
+  const userInicial = proveedorAuthStorage.getUser();
+  const proveedor   = proveedorAuthStorage.getProveedor();
+  const rol         = proveedorAuthStorage.getRol();
+
+  // Mantenemos copia local mutable para reflejar cambios al guardar sin
+  // tener que recargar la página.
+  const [user, setUser] = useState(userInicial);
 
   // ─── Datos personales ─────────────────────────────────────────────────────
   const [nombre, setNombre]       = useState('');
   const [email, setEmail]         = useState('');
   const [savingPerfil, setSavingPerfil] = useState(false);
+  /** Error inline en el campo email (validación 422). */
+  const [errorEmail, setErrorEmail] = useState<string | null>(null);
 
   // ─── Contraseña ───────────────────────────────────────────────────────────
   const [passwordActual,  setPasswordActual]  = useState('');
@@ -25,22 +39,27 @@ export default function MiPerfil() {
   const [showActual, setShowActual] = useState(false);
   const [showNueva,  setShowNueva]  = useState(false);
   const [savingPass,  setSavingPass]  = useState(false);
+  /** Errores inline por campo para el form de password. */
+  const [errorPassActual,  setErrorPassActual]  = useState<string | null>(null);
+  const [errorPassNueva,   setErrorPassNueva]   = useState<string | null>(null);
+  const [errorPassConfirm, setErrorPassConfirm] = useState<string | null>(null);
 
   // Prellenar con datos actuales del usuario
   useEffect(() => {
     if (user) {
-      setNombre(user.nombre ?? '');
-      setEmail(user.email  ?? '');
+      setNombre(user.name  ?? '');
+      setEmail(user.email ?? '');
     }
   }, [user]);
 
   // ─── Guardar perfil ───────────────────────────────────────────────────────
   const handleGuardarPerfil = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorEmail(null);
 
-    const cambios: Record<string, string> = {};
-    if (nombre.trim() !== (user?.nombre ?? '')) cambios.name  = nombre.trim();
-    if (email.trim()  !== (user?.email  ?? '')) cambios.email = email.trim();
+    const cambios: { name?: string; email?: string } = {};
+    if (nombre.trim() !== (user?.name  ?? '')) cambios.name  = nombre.trim();
+    if (email.trim()  !== (user?.email ?? '')) cambios.email = email.trim();
 
     if (Object.keys(cambios).length === 0) {
       toast.info('No hay cambios para guardar');
@@ -49,20 +68,31 @@ export default function MiPerfil() {
 
     setSavingPerfil(true);
     try {
-      const res = await requestConToken<{ message?: string; data?: any }>(
-        '/api/v1/tenant/perfil',
-        { method: 'PUT', body: JSON.stringify(cambios) },
-        token,
-      );
-      // Sincronizar AuthContext + localStorage. updateUser hace ambas cosas
-      // y dispara el re-render del Topbar para que el nombre cambie de una.
-      const patch: any = {};
-      if (cambios.name)  patch.nombre = cambios.name;
-      if (cambios.email) patch.email  = cambios.email;
-      if (Object.keys(patch).length > 0) updateUser(patch);
+      const res = await proveedorApi.actualizarPerfil(cambios);
+      // Merge optimista: estado local + lo que envié + lo que devolvió el
+      // backend (la `data` del backend gana si vino).
+      const base = user ?? { id: 0, name: '', email: '' };
+      const actualizado = {
+        ...base,
+        ...(cambios.name  ? { name:  cambios.name  } : {}),
+        ...(cambios.email ? { email: cambios.email } : {}),
+        ...(res.data ?? {}),
+      };
+      // `setUser` del storage dispara `proveedor-user-changed` para que el
+      // header del layout refresque sin recargar.
+      proveedorAuthStorage.setUser(actualizado);
+      setUser(actualizado);
       toast.success(res.message ?? 'Perfil actualizado correctamente');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error al actualizar el perfil');
+    } catch (err: any) {
+      // Códigos específicos del doc §4
+      if (err?.code === 'NO_DATA') {
+        toast.info('No hay cambios para guardar');
+      } else if (err?.errors?.email?.[0]) {
+        // Error de validación inline en el campo email
+        setErrorEmail(err.errors.email[0]);
+      } else {
+        toast.error(err instanceof Error ? err.message : 'Error al actualizar el perfil');
+      }
     } finally {
       setSavingPerfil(false);
     }
@@ -71,45 +101,56 @@ export default function MiPerfil() {
   // ─── Cambiar contraseña ───────────────────────────────────────────────────
   const handleCambiarPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorPassActual(null);
+    setErrorPassNueva(null);
+    setErrorPassConfirm(null);
 
     if (passwordNueva !== passwordConfirm) {
-      toast.error('Las contraseñas no coinciden');
+      setErrorPassConfirm('Las contraseñas no coinciden');
       return;
     }
     if (passwordNueva.length < 8) {
-      toast.error('La contraseña debe tener al menos 8 caracteres');
+      setErrorPassNueva('La contraseña debe tener al menos 8 caracteres');
       return;
     }
 
     setSavingPass(true);
     try {
-      const res = await requestConToken<{ message?: string }>(
-        '/api/v1/tenant/perfil/password',
-        {
-          method: 'PUT',
-          body: JSON.stringify({
-            current_password:      passwordActual,
-            password:              passwordNueva,
-            password_confirmation: passwordConfirm,
-          }),
-        },
-        token,
-      );
+      const res = await proveedorApi.cambiarPassword({
+        current_password:      passwordActual,
+        password:              passwordNueva,
+        password_confirmation: passwordConfirm,
+      });
       toast.success(res.message ?? 'Contraseña actualizada correctamente');
       setPasswordActual('');
       setPasswordNueva('');
       setPasswordConfirm('');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error al cambiar la contraseña');
+    } catch (err: any) {
+      // Mapeo de códigos específicos del doc §4 → input correspondiente.
+      if (err?.code === 'INVALID_CURRENT_PASSWORD') {
+        setErrorPassActual(err.message ?? 'La contraseña actual es incorrecta');
+      } else if (err?.code === 'SAME_PASSWORD') {
+        setErrorPassNueva(err.message ?? 'La nueva contraseña debe ser diferente a la actual');
+      } else if (err?.errors?.password?.[0]) {
+        setErrorPassNueva(err.errors.password[0]);
+      } else {
+        toast.error(err instanceof Error ? err.message : 'Error al cambiar la contraseña');
+      }
     } finally {
       setSavingPass(false);
     }
   };
 
   // ─── UI ───────────────────────────────────────────────────────────────────
-  const iniciales = user?.nombre
-    ? user.nombre.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()
+  const iniciales = user?.name
+    ? user.name.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()
     : '?';
+
+  // Texto de subrol: rol del proveedor (ADMIN/OPERADOR) + nombre de la empresa.
+  const subtitulo = [
+    rol === 'ADMIN' ? 'Administrador' : rol === 'OPERADOR' ? 'Operador' : null,
+    proveedor?.nombre_empresa,
+  ].filter(Boolean).join(' · ');
 
   return (
     <div className="space-y-6">
@@ -127,12 +168,11 @@ export default function MiPerfil() {
               {iniciales}
             </div>
             <div>
-              <p className="font-semibold text-lg">{user?.nombre}</p>
+              <p className="font-semibold text-lg">{user?.name}</p>
               <p className="text-sm text-muted-foreground">{user?.email}</p>
-              <p className="text-xs text-muted-foreground mt-0.5 capitalize">
-                {user?.rol === 'administrador' ? 'Administrador' : user?.rol}
-                {user?.fincaActual ? ` · ${user.fincaActual.nombre}` : ''}
-              </p>
+              {subtitulo && (
+                <p className="text-xs text-muted-foreground mt-0.5">{subtitulo}</p>
+              )}
             </div>
           </div>
         </CardContent>
@@ -175,12 +215,15 @@ export default function MiPerfil() {
                     id="email"
                     type="email"
                     value={email}
-                    onChange={e => setEmail(e.target.value)}
+                    onChange={e => { setEmail(e.target.value); setErrorEmail(null); }}
                     placeholder="tu@correo.com"
                     required
-                    className="pl-10"
+                    className={`pl-10 ${errorEmail ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                   />
                 </div>
+                {errorEmail && (
+                  <p className="text-xs text-destructive">{errorEmail}</p>
+                )}
               </div>
             </div>
 
@@ -217,16 +260,19 @@ export default function MiPerfil() {
                   id="pass_actual"
                   type={showActual ? 'text' : 'password'}
                   value={passwordActual}
-                  onChange={e => setPasswordActual(e.target.value)}
+                  onChange={e => { setPasswordActual(e.target.value); setErrorPassActual(null); }}
                   placeholder="Tu contraseña actual"
                   required
-                  className="pl-10 pr-10"
+                  className={`pl-10 pr-10 ${errorPassActual ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                 />
                 <button type="button" onClick={() => setShowActual(v => !v)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                   {showActual ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+              {errorPassActual && (
+                <p className="text-xs text-destructive">{errorPassActual}</p>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -238,17 +284,20 @@ export default function MiPerfil() {
                     id="pass_nueva"
                     type={showNueva ? 'text' : 'password'}
                     value={passwordNueva}
-                    onChange={e => setPasswordNueva(e.target.value)}
+                    onChange={e => { setPasswordNueva(e.target.value); setErrorPassNueva(null); }}
                     placeholder="Mínimo 8 caracteres"
                     required
                     minLength={8}
-                    className="pl-10 pr-10"
+                    className={`pl-10 pr-10 ${errorPassNueva ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                   />
                   <button type="button" onClick={() => setShowNueva(v => !v)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                     {showNueva ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
+                {errorPassNueva && (
+                  <p className="text-xs text-destructive">{errorPassNueva}</p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -259,17 +308,20 @@ export default function MiPerfil() {
                     id="pass_confirm"
                     type={showNueva ? 'text' : 'password'}
                     value={passwordConfirm}
-                    onChange={e => setPasswordConfirm(e.target.value)}
+                    onChange={e => { setPasswordConfirm(e.target.value); setErrorPassConfirm(null); }}
                     placeholder="Repite la nueva contraseña"
                     required
                     minLength={8}
-                    className="pl-10"
+                    className={`pl-10 ${errorPassConfirm ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                   />
                   <button type="button" onClick={() => setShowNueva(v => !v)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                     {showNueva ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
+                {errorPassConfirm && (
+                  <p className="text-xs text-destructive">{errorPassConfirm}</p>
+                )}
               </div>
             </div>
 

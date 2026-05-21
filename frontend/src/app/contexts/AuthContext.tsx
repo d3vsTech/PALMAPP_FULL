@@ -39,6 +39,12 @@ interface AuthContextType {
   selectFinca: (tenantId: number) => Promise<void>;
   hasPermiso: (permiso: string) => boolean;
   hasModulo: (modulo: string) => boolean;
+  /**
+   * Aplica un parche al usuario actual (merge superficial). Lo usa la
+   * pantalla "Mi Perfil" para reflejar el nuevo nombre/email en el header
+   * sin necesidad de recargar la página.
+   */
+  updateUser: (patch: Partial<User>) => void;
 }
 
 // ─── Storage keys ─────────────────────────────────────────────────────────────
@@ -313,6 +319,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return user?.modulos?.[modulo] === true;
   };
 
+  /**
+   * Merge superficial sobre el usuario actual + sincronización con localStorage.
+   * Usado por "Mi Perfil" tras un guardado exitoso para que el header lo refleje
+   * sin recargar.
+   */
+  const updateUser = (patch: Partial<User>) => {
+    setUser(prev => {
+      if (!prev) return prev;
+      const merged = { ...prev, ...patch };
+      try { localStorage.setItem(USER_KEY, JSON.stringify(merged)); }
+      catch { /* cuota llena */ }
+      return merged;
+    });
+  };
+
   // ─── Value ────────────────────────────────────────────────────────────────
 
   return (
@@ -329,6 +350,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       selectFinca,
       hasPermiso,
       hasModulo,
+      updateUser,
     }}>
       {children}
     </AuthContext.Provider>

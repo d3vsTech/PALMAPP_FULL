@@ -79,6 +79,121 @@ export interface PedidosStatsProv {
   ventas_mes: number;
 }
 
+// ─── Configuración (API_MARKET_PROVEEDOR_CONFIGURACION) ──────────────────────
+
+/** Catálogo de banco para el dropdown del tab Bancario. */
+export interface BancoCatalogoProv {
+  id: number;
+  nombre: string;
+  codigo: string;
+}
+
+/** Catálogo de transportadora para el dropdown del tab Envíos. */
+export interface TransportadoraCatalogoProv {
+  id: number;
+  nombre: string;
+  codigo: string;
+}
+
+export type TipoCuentaProv = 'ahorros' | 'corriente';
+
+export interface ConfigGeneralProv {
+  nombre_empresa: string;
+  nit: string | null;
+  telefono: string;
+  email: string;
+  direccion: string;
+  ciudad: string;
+  departamento: string;
+  descripcion: string | null;
+  logo_url: string | null;
+}
+
+export interface ConfigBancarioProv {
+  banco_id: number | null;
+  banco: BancoCatalogoProv | null;
+  tipo_cuenta: TipoCuentaProv | null;
+  numero_cuenta: string;
+  titular_cuenta: string;
+}
+
+export interface ConfigEnviosProv {
+  transportadora_id: number | null;
+  transportadora: TransportadoraCatalogoProv | null;
+  tiempo_preparacion_horas: number;
+  monto_envio_gratis: string | null;
+  permitir_recoger_tienda: boolean;
+}
+
+export interface ConfigNotificacionesProv {
+  nuevos_pedidos: boolean;
+  cambios_estado: boolean;
+  mensajes_clientes: boolean;
+  reportes_diarios: boolean;
+  reportes_semanales: boolean;
+}
+
+export interface ConfiguracionProveedorResponse {
+  general: ConfigGeneralProv;
+  bancario: ConfigBancarioProv;
+  envios: ConfigEnviosProv;
+  notificaciones: ConfigNotificacionesProv;
+}
+
+export interface ResumenConfigProv {
+  empresa: { nombre_empresa: string; nit: string | null } | null;
+  cuenta_bancaria: {
+    banco: string;
+    tipo_cuenta: TipoCuentaProv;
+    numero_cuenta_mask: string;
+  } | null;
+  envios: {
+    transportadora: string | null;
+    tiempo_preparacion_horas: number;
+    monto_envio_gratis: string | null;
+    permitir_recoger_tienda: boolean;
+  } | null;
+  notificaciones_activas: number;
+  notificaciones_total: number;
+  progreso: {
+    etapas_completadas: number;
+    etapas_total: number;
+    porcentaje: number;
+  };
+}
+
+/** Body de PUT /configuracion/general — todos opcionales. */
+export interface UpdateConfigGeneralPayload {
+  nombre_empresa?: string;
+  nit?: string | null;
+  telefono?: string;
+  email?: string;
+  direccion?: string;
+  ciudad?: string;
+  departamento?: string;
+  descripcion?: string | null;
+  logo_url?: string | null;
+}
+
+/** Body de PUT /configuracion/bancario — todos requeridos. */
+export interface UpdateConfigBancarioPayload {
+  banco_id: number;
+  tipo_cuenta: TipoCuentaProv;
+  numero_cuenta: string;
+  titular_cuenta: string;
+}
+
+/** Body de PUT /configuracion/envios. */
+export interface UpdateConfigEnviosPayload {
+  transportadora_id: number | null;
+  tiempo_preparacion_horas: number;
+  monto_envio_gratis: number | null;
+  permitir_recoger_tienda: boolean;
+}
+
+/** Body de PUT /configuracion/notificaciones — todos booleanos requeridos. */
+export type UpdateConfigNotificacionesPayload = ConfigNotificacionesProv;
+
 // ─── Estadísticas (API_MARKET_PROVEEDOR_ESTADISTICAS) ─────────────────────────
 
 /** Presets de periodo aceptados por el backend (§3) */
@@ -633,6 +748,63 @@ export const proveedorApi = {
 
   unidadesMedida: () =>
     get<{ data: UnidadMedidaProv[] }>('/unidades-medida'),
+
+  // ── Configuración (API_MARKET_PROVEEDOR_CONFIGURACION) ───────────────────
+  /** §2 Catálogo de bancos (cacheado backend 1h). */
+  catalogoBancos: () =>
+    get<{ data: BancoCatalogoProv[] }>('/catalogos/bancos'),
+
+  /** §2 Catálogo de transportadoras (cacheado backend 1h). */
+  catalogoTransportadoras: () =>
+    get<{ data: TransportadoraCatalogoProv[] }>('/catalogos/transportadoras'),
+
+  /** §3 Configuración completa (bundle de las 4 secciones). */
+  configuracion: () =>
+    get<{ data: ConfiguracionProveedorResponse }>('/configuracion'),
+
+  /** §3 Resumen para el panel derecho + porcentaje de progreso. */
+  configuracionResumen: () =>
+    get<{ data: ResumenConfigProv }>('/configuracion/resumen'),
+
+  /** §3 Update tab General. Solo ADMIN — OPERADOR recibe 403 PERMISSION_DENIED. */
+  updateConfigGeneral: (body: UpdateConfigGeneralPayload) =>
+    put<{ message: string; data: ConfigGeneralProv }>('/configuracion/general', body),
+
+  /** §3 Update tab Bancario. Atómico: requiere los 4 campos. */
+  updateConfigBancario: (body: UpdateConfigBancarioPayload) =>
+    put<{ message: string; data: ConfigBancarioProv }>('/configuracion/bancario', body),
+
+  /** §3 Update tab Envíos. */
+  updateConfigEnvios: (body: UpdateConfigEnviosPayload) =>
+    put<{ message: string; data: ConfigEnviosProv }>('/configuracion/envios', body),
+
+  /** §3 Update tab Notificaciones — mandar JSON completo, no parche parcial. */
+  updateConfigNotificaciones: (body: UpdateConfigNotificacionesPayload) =>
+    put<{ message: string; data: ConfigNotificacionesProv }>('/configuracion/notificaciones', body),
+
+  // ── Perfil del usuario (API_MARKET_PROVEEDOR_PERFIL) ─────────────────────
+  /**
+   * §2 PUT /perfil — Edita nombre y/o email del usuario autenticado.
+   * Disponible para ADMIN y OPERADOR (cada quien edita su propia cuenta).
+   * Errores específicos: `NO_DATA` (body vacío) y `errors.email` (validación).
+   */
+  actualizarPerfil: (payload: { name?: string; email?: string }) =>
+    put<{ message: string; data: { id: number; name: string; email: string } }>(
+      '/perfil', payload),
+
+  /**
+   * §3 PUT /perfil/password — Cambia la contraseña del usuario autenticado.
+   * Errores específicos:
+   *   INVALID_CURRENT_PASSWORD → current_password incorrecta.
+   *   SAME_PASSWORD            → nueva contraseña igual a la actual.
+   *   errors.password          → confirmación no coincide / longitud / etc.
+   */
+  cambiarPassword: (payload: {
+    current_password: string;
+    password: string;
+    password_confirmation: string;
+  }) =>
+    put<{ message: string }>('/perfil/password', payload),
 
   // ── Estadísticas (API_MARKET_PROVEEDOR_ESTADISTICAS §4) ──────────────────
   /**

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
@@ -26,8 +26,21 @@ import {
   ArrowRight,
   ArrowLeft,
   Info,
+  Loader2,
+  Save,
+  Lock,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  proveedorApi,
+  type BancoCatalogoProv,
+  type TransportadoraCatalogoProv,
+  type ConfiguracionProveedorResponse,
+  type ResumenConfigProv,
+  type TipoCuentaProv,
+} from '../../../api/proveedor';
+import { proveedorAuthStorage } from '../../../api/proveedorAuth';
+import { getDepartamentos, getMunicipios } from '../../../api/plantacion';
 
 const ETAPAS = [
   { numero: 1, nombre: 'General', descripcion: 'Información básica', icon: Store },
@@ -36,85 +49,310 @@ const ETAPAS = [
   { numero: 4, nombre: 'Notificaciones', descripcion: 'Preferencias', icon: Bell },
 ];
 
+/** Estado local de los 4 formularios. Inicializa con strings vacíos. */
+interface FormState {
+  general: {
+    nombre_empresa: string;
+    nit: string;
+    telefono: string;
+    email: string;
+    direccion: string;
+    ciudad: string;
+    departamento: string;
+    descripcion: string;
+    logo_url: string;
+  };
+  bancario: {
+    banco_id: string; // string para Select
+    tipo_cuenta: TipoCuentaProv | '';
+    numero_cuenta: string;
+    titular_cuenta: string;
+  };
+  envios: {
+    transportadora_id: string; // string para Select; '' = sin transportadora
+    tiempo_preparacion_horas: string;
+    monto_envio_gratis: string;
+    permitir_recoger_tienda: boolean;
+  };
+  notificaciones: {
+    nuevos_pedidos: boolean;
+    cambios_estado: boolean;
+    mensajes_clientes: boolean;
+    reportes_diarios: boolean;
+    reportes_semanales: boolean;
+  };
+}
+
+const formVacio = (): FormState => ({
+  general: {
+    nombre_empresa: '',
+    nit: '',
+    telefono: '',
+    email: '',
+    direccion: '',
+    ciudad: '',
+    departamento: '',
+    descripcion: '',
+    logo_url: '',
+  },
+  bancario: {
+    banco_id: '',
+    tipo_cuenta: '',
+    numero_cuenta: '',
+    titular_cuenta: '',
+  },
+  envios: {
+    transportadora_id: '',
+    tiempo_preparacion_horas: '24',
+    monto_envio_gratis: '',
+    permitir_recoger_tienda: false,
+  },
+  notificaciones: {
+    nuevos_pedidos: true,
+    cambios_estado: true,
+    mensajes_clientes: true,
+    reportes_diarios: false,
+    reportes_semanales: false,
+  },
+});
+
+const aplicarBundle = (data: ConfiguracionProveedorResponse): FormState => ({
+  general: {
+    nombre_empresa: data.general.nombre_empresa ?? '',
+    nit: data.general.nit ?? '',
+    telefono: data.general.telefono ?? '',
+    email: data.general.email ?? '',
+    direccion: data.general.direccion ?? '',
+    ciudad: data.general.ciudad ?? '',
+    departamento: data.general.departamento ?? '',
+    descripcion: data.general.descripcion ?? '',
+    logo_url: data.general.logo_url ?? '',
+  },
+  bancario: {
+    banco_id: data.bancario.banco_id != null ? String(data.bancario.banco_id) : '',
+    tipo_cuenta: data.bancario.tipo_cuenta ?? '',
+    numero_cuenta: data.bancario.numero_cuenta ?? '',
+    titular_cuenta: data.bancario.titular_cuenta ?? '',
+  },
+  envios: {
+    transportadora_id: data.envios.transportadora_id != null ? String(data.envios.transportadora_id) : '',
+    tiempo_preparacion_horas: data.envios.tiempo_preparacion_horas != null
+      ? String(data.envios.tiempo_preparacion_horas)
+      : '24',
+    monto_envio_gratis: data.envios.monto_envio_gratis ?? '',
+    permitir_recoger_tienda: !!data.envios.permitir_recoger_tienda,
+  },
+  notificaciones: { ...data.notificaciones },
+});
+
 export default function ProveedorConfiguracion() {
   const navigate = useNavigate();
+  const rol = proveedorAuthStorage.getRol();
+  const esAdmin = rol === 'ADMIN';
+
   const [etapaActual, setEtapaActual] = useState(1);
+  const [form, setForm] = useState<FormState>(formVacio);
 
-  // Datos del formulario
-  const [datosGenerales, setDatosGenerales] = useState({
-    nombreEmpresa: 'AgroInsumos del Valle',
-    nit: '900.123.456-7',
-    telefono: '(602) 555-1234',
-    email: 'info@agroinsumos.com',
-    direccion: 'Calle 12 #34-56',
-    ciudad: 'Cali',
-    departamento: 'Valle del Cauca',
-    descripcion: 'Proveedor líder de insumos agrícolas para el sector palmero',
-  });
+  // Catálogos
+  const [bancos, setBancos] = useState<BancoCatalogoProv[]>([]);
+  const [transportadoras, setTransportadoras] = useState<TransportadoraCatalogoProv[]>([]);
+  const [departamentos, setDepartamentos] = useState<{ codigo: string; nombre: string }[]>([]);
+  const [municipios, setMunicipios] = useState<{ codigo: string; nombre: string }[]>([]);
+  const [deptoSel, setDeptoSel] = useState(''); // código del departamento
+  const [cargandoMunicipios, setCargandoMunicipios] = useState(false);
 
-  const [datosBancarios, setDatosBancarios] = useState({
-    banco: 'Bancolombia',
-    tipoCuenta: 'Ahorros',
-    numeroCuenta: '1234567890',
-    titular: 'AgroInsumos del Valle S.A.S',
-  });
+  // Resumen
+  const [resumen, setResumen] = useState<ResumenConfigProv | null>(null);
 
-  const [configuracionEnvios, setConfiguracionEnvios] = useState({
-    tr9yMnTm4NSzvG9rrwjM2ec8xZgh1cafXH8: 'Servientrega',
-    tiempoPreparacion: '24',
-    costoEnvioGratis: '500000',
-    aceptaRecogerTienda: true,
-  });
+  const [cargandoBundle, setCargandoBundle] = useState(true);
+  const [guardando, setGuardando] = useState(false);
 
-  const [notificaciones, setNotificaciones] = useState({
-    nuevosPedidos: true,
-    cambiosEstado: true,
-    mensajesClientes: true,
-    reportesDiarios: false,
-    reportesSemanales: true,
-  });
+  // ── Carga inicial: bundle + catálogos en paralelo ─────────────────────────
+  useEffect(() => {
+    let cancelado = false;
 
-  const siguientePaso = () => {
-    if (etapaActual < ETAPAS.length) {
-      setEtapaActual(etapaActual + 1);
+    const cargar = async () => {
+      setCargandoBundle(true);
+      try {
+        const [bundle, bancosRes, transRes, deptosRes, resumenRes] = await Promise.all([
+          proveedorApi.configuracion(),
+          proveedorApi.catalogoBancos().catch(() => ({ data: [] })),
+          proveedorApi.catalogoTransportadoras().catch(() => ({ data: [] })),
+          getDepartamentos().catch(() => ({ data: [] })),
+          proveedorApi.configuracionResumen().catch(() => null),
+        ]);
+        if (cancelado) return;
+
+        setForm(aplicarBundle(bundle.data));
+        setBancos(bancosRes.data ?? []);
+        setTransportadoras(transRes.data ?? []);
+        const deptos = deptosRes.data ?? [];
+        setDepartamentos(deptos);
+        if (resumenRes) setResumen(resumenRes.data);
+
+        // Resolver código del departamento por nombre (los selects encadenados
+        // del checkout también usan este patrón).
+        const nombreDepto = bundle.data.general.departamento;
+        if (nombreDepto) {
+          const match = deptos.find(
+            d => d.nombre.toLowerCase() === nombreDepto.toLowerCase(),
+          );
+          if (match) setDeptoSel(match.codigo);
+        }
+      } catch (e: any) {
+        if (!cancelado) toast.error(e?.message ?? 'Error al cargar la configuración');
+      } finally {
+        if (!cancelado) setCargandoBundle(false);
+      }
+    };
+
+    cargar();
+    return () => { cancelado = true; };
+  }, []);
+
+  // ── Cargar municipios cuando cambia el departamento ───────────────────────
+  useEffect(() => {
+    if (!deptoSel) { setMunicipios([]); return; }
+    const cacheKey = `cache_municipios_${deptoSel}`;
+    try {
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) { setMunicipios(JSON.parse(cached)); return; }
+    } catch { /* ignorar */ }
+    setCargandoMunicipios(true);
+    getMunicipios(deptoSel)
+      .then((r) => {
+        const ms = r.data ?? [];
+        setMunicipios(ms);
+        try { sessionStorage.setItem(cacheKey, JSON.stringify(ms)); } catch { /* cuota */ }
+      })
+      .catch(() => setMunicipios([]))
+      .finally(() => setCargandoMunicipios(false));
+  }, [deptoSel]);
+
+  // ── Refrescar resumen tras cada save exitoso ──────────────────────────────
+  const refrescarResumen = async () => {
+    try {
+      const r = await proveedorApi.configuracionResumen();
+      setResumen(r.data);
+    } catch { /* no es crítico */ }
+  };
+
+  // ── Validación + Save por tab ─────────────────────────────────────────────
+  /** Devuelve true si se guardó (o no había nada que guardar). False = error. */
+  const guardarTab = async (tab: number): Promise<boolean> => {
+    if (!esAdmin) {
+      // OPERADOR no puede modificar nada; simulamos éxito para que pueda
+      // navegar entre tabs sin trabar el wizard.
+      return true;
+    }
+    setGuardando(true);
+    try {
+      if (tab === 1) {
+        const g = form.general;
+        if (!g.nombre_empresa.trim() || !g.telefono.trim() || !g.email.trim()
+          || !g.direccion.trim() || !g.ciudad.trim() || !g.departamento.trim()) {
+          toast.error('Completa los campos obligatorios de la sección General');
+          return false;
+        }
+        const res = await proveedorApi.updateConfigGeneral({
+          nombre_empresa: g.nombre_empresa.trim(),
+          nit: g.nit.trim() || null,
+          telefono: g.telefono.trim(),
+          email: g.email.trim(),
+          direccion: g.direccion.trim(),
+          ciudad: g.ciudad.trim(),
+          departamento: g.departamento.trim(),
+          descripcion: g.descripcion.trim() || null,
+          logo_url: g.logo_url.trim() || null,
+        });
+        toast.success(res.message);
+      } else if (tab === 2) {
+        const b = form.bancario;
+        if (!b.banco_id || !b.tipo_cuenta || !b.numero_cuenta.trim() || !b.titular_cuenta.trim()) {
+          toast.error('Completa todos los datos bancarios');
+          return false;
+        }
+        const res = await proveedorApi.updateConfigBancario({
+          banco_id: Number(b.banco_id),
+          tipo_cuenta: b.tipo_cuenta,
+          numero_cuenta: b.numero_cuenta.trim(),
+          titular_cuenta: b.titular_cuenta.trim(),
+        });
+        toast.success(res.message);
+      } else if (tab === 3) {
+        const e = form.envios;
+        const horas = parseInt(e.tiempo_preparacion_horas || '0', 10);
+        if (!Number.isFinite(horas) || horas < 1 || horas > 720) {
+          toast.error('El tiempo de preparación debe estar entre 1 y 720 horas');
+          return false;
+        }
+        const monto = e.monto_envio_gratis.trim()
+          ? parseFloat(e.monto_envio_gratis)
+          : null;
+        const res = await proveedorApi.updateConfigEnvios({
+          transportadora_id: e.transportadora_id ? Number(e.transportadora_id) : null,
+          tiempo_preparacion_horas: horas,
+          monto_envio_gratis: monto,
+          permitir_recoger_tienda: e.permitir_recoger_tienda,
+        });
+        toast.success(res.message);
+      } else if (tab === 4) {
+        const res = await proveedorApi.updateConfigNotificaciones(form.notificaciones);
+        toast.success(res.message);
+      }
+      refrescarResumen();
+      return true;
+    } catch (err: any) {
+      if (err?.code === 'PERMISSION_DENIED') {
+        toast.error('No tienes permisos para modificar la configuración. Pide acceso de Administrador.');
+      } else if (err?.errors) {
+        // Errores de validación 422 — mostrar el primer mensaje.
+        const primero = Object.values(err.errors).flat()[0];
+        toast.error(typeof primero === 'string' ? primero : 'Error de validación');
+      } else {
+        toast.error(err?.message ?? 'Error al guardar');
+      }
+      return false;
+    } finally {
+      setGuardando(false);
     }
   };
 
+  const handleSiguiente = async () => {
+    const ok = await guardarTab(etapaActual);
+    if (ok && etapaActual < ETAPAS.length) setEtapaActual(etapaActual + 1);
+  };
+  const handleFinalizar = async () => {
+    const ok = await guardarTab(etapaActual);
+    if (ok) toast.success('Configuración completa');
+  };
   const pasoAnterior = () => {
-    if (etapaActual > 1) {
-      setEtapaActual(etapaActual - 1);
-    }
+    if (etapaActual > 1) setEtapaActual(etapaActual - 1);
   };
+  const irAEtapa = (n: number) => setEtapaActual(n);
 
-  const irAEtapa = (numero: number) => {
-    setEtapaActual(numero);
-  };
+  // ── Render ─────────────────────────────────────────────────────────────────
+  if (cargandoBundle) {
+    return (
+      <div className="flex items-center justify-center py-20 gap-2 text-muted-foreground">
+        <Loader2 className="h-5 w-5 animate-spin" />
+        Cargando configuración...
+      </div>
+    );
+  }
 
-  const guardarConfiguracion = () => {
-    toast.success('Configuración guardada exitosamente');
-  };
+  const setGeneral = (campo: keyof FormState['general'], valor: string) =>
+    setForm(f => ({ ...f, general: { ...f.general, [campo]: valor } }));
+  const setBancario = <K extends keyof FormState['bancario']>(campo: K, valor: FormState['bancario'][K]) =>
+    setForm(f => ({ ...f, bancario: { ...f.bancario, [campo]: valor } }));
+  const setEnvios = <K extends keyof FormState['envios']>(campo: K, valor: FormState['envios'][K]) =>
+    setForm(f => ({ ...f, envios: { ...f.envios, [campo]: valor } }));
+  const setNotif = (campo: keyof FormState['notificaciones'], valor: boolean) =>
+    setForm(f => ({ ...f, notificaciones: { ...f.notificaciones, [campo]: valor } }));
 
-  const validarPasoActual = () => {
-    if (etapaActual === 1) {
-      if (!datosGenerales.nombreEmpresa || !datosGenerales.nit || !datosGenerales.telefono || !datosGenerales.email) {
-        toast.error('Por favor completa todos los campos obligatorios');
-        return false;
-      }
-    }
-    if (etapaActual === 2) {
-      if (!datosBancarios.banco || !datosBancarios.numeroCuenta || !datosBancarios.titular) {
-        toast.error('Por favor completa todos los datos bancarios');
-        return false;
-      }
-    }
-    return true;
-  };
-
-  const handleSiguiente = () => {
-    if (validarPasoActual()) {
-      siguientePaso();
-    }
-  };
+  const inputsDisabled = !esAdmin;
+  const porcentajeProgreso = resumen?.progreso?.porcentaje
+    ?? Math.round(((etapaActual - 1) / ETAPAS.length) * 100);
 
   return (
     <div className="space-y-8">
@@ -138,6 +376,19 @@ export default function ProveedorConfiguracion() {
         </div>
       </div>
 
+      {/* Banner de OPERADOR (solo-lectura) */}
+      {!esAdmin && (
+        <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/20 flex gap-3">
+          <Lock className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-amber-700">Vista de solo lectura</p>
+            <p className="text-sm text-amber-700">
+              Tu rol es <strong>Operador</strong>. Solo el Administrador del proveedor puede modificar esta configuración.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Layout principal: 2 columnas */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Columna izquierda: Wizard (2/3) */}
@@ -153,7 +404,6 @@ export default function ProveedorConfiguracion() {
 
                   return (
                     <div key={etapa.numero} className="flex items-center flex-1">
-                      {/* Círculo de etapa */}
                       <button
                         onClick={() => irAEtapa(etapa.numero)}
                         className="flex flex-col items-center gap-2 cursor-pointer"
@@ -163,8 +413,8 @@ export default function ProveedorConfiguracion() {
                             estaCompleta
                               ? 'bg-primary border-primary text-white'
                               : estaActiva
-                              ? 'bg-primary/10 border-primary text-primary'
-                              : 'bg-muted border-border text-muted-foreground'
+                                ? 'bg-primary/10 border-primary text-primary'
+                                : 'bg-muted border-border text-muted-foreground'
                           }`}
                         >
                           {estaCompleta ? (
@@ -184,7 +434,6 @@ export default function ProveedorConfiguracion() {
                         </div>
                       </button>
 
-                      {/* Línea conectora */}
                       {index < ETAPAS.length - 1 && (
                         <div className="flex-1 h-0.5 mx-2 bg-border relative">
                           <div
@@ -214,30 +463,28 @@ export default function ProveedorConfiguracion() {
 
                   <div className="grid gap-6 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="nombreEmpresa">
+                      <Label htmlFor="nombre_empresa">
                         Nombre de la empresa <span className="text-destructive">*</span>
                       </Label>
                       <div className="relative">
                         <Building2 className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                         <Input
-                          id="nombreEmpresa"
-                          value={datosGenerales.nombreEmpresa}
-                          onChange={(e) =>
-                            setDatosGenerales({ ...datosGenerales, nombreEmpresa: e.target.value })
-                          }
+                          id="nombre_empresa"
+                          value={form.general.nombre_empresa}
+                          onChange={(e) => setGeneral('nombre_empresa', e.target.value)}
+                          disabled={inputsDisabled}
                           className="pl-9"
                         />
                       </div>
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="nit">
-                        NIT <span className="text-destructive">*</span>
-                      </Label>
+                      <Label htmlFor="nit">NIT</Label>
                       <Input
                         id="nit"
-                        value={datosGenerales.nit}
-                        onChange={(e) => setDatosGenerales({ ...datosGenerales, nit: e.target.value })}
+                        value={form.general.nit}
+                        onChange={(e) => setGeneral('nit', e.target.value)}
+                        disabled={inputsDisabled}
                       />
                     </div>
 
@@ -249,10 +496,9 @@ export default function ProveedorConfiguracion() {
                         <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                         <Input
                           id="telefono"
-                          value={datosGenerales.telefono}
-                          onChange={(e) =>
-                            setDatosGenerales({ ...datosGenerales, telefono: e.target.value })
-                          }
+                          value={form.general.telefono}
+                          onChange={(e) => setGeneral('telefono', e.target.value)}
+                          disabled={inputsDisabled}
                           className="pl-9"
                         />
                       </div>
@@ -267,10 +513,9 @@ export default function ProveedorConfiguracion() {
                         <Input
                           id="email"
                           type="email"
-                          value={datosGenerales.email}
-                          onChange={(e) =>
-                            setDatosGenerales({ ...datosGenerales, email: e.target.value })
-                          }
+                          value={form.general.email}
+                          onChange={(e) => setGeneral('email', e.target.value)}
+                          disabled={inputsDisabled}
                           className="pl-9"
                         />
                       </div>
@@ -284,49 +529,78 @@ export default function ProveedorConfiguracion() {
                         <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                         <Input
                           id="direccion"
-                          value={datosGenerales.direccion}
-                          onChange={(e) =>
-                            setDatosGenerales({ ...datosGenerales, direccion: e.target.value })
-                          }
+                          value={form.general.direccion}
+                          onChange={(e) => setGeneral('direccion', e.target.value)}
+                          disabled={inputsDisabled}
                           className="pl-9"
                         />
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="ciudad">
-                        Ciudad <span className="text-destructive">*</span>
-                      </Label>
-                      <Input
-                        id="ciudad"
-                        value={datosGenerales.ciudad}
-                        onChange={(e) =>
-                          setDatosGenerales({ ...datosGenerales, ciudad: e.target.value })
-                        }
-                      />
-                    </div>
-
+                    {/* Departamento (selects encadenados con auth/departamentos) */}
                     <div className="space-y-2">
                       <Label htmlFor="departamento">
                         Departamento <span className="text-destructive">*</span>
                       </Label>
-                      <Input
-                        id="departamento"
-                        value={datosGenerales.departamento}
-                        onChange={(e) =>
-                          setDatosGenerales({ ...datosGenerales, departamento: e.target.value })
-                        }
-                      />
+                      <Select
+                        value={deptoSel}
+                        onValueChange={(codigo) => {
+                          setDeptoSel(codigo);
+                          const nombre = departamentos.find(d => d.codigo === codigo)?.nombre ?? '';
+                          // Cambiar de departamento limpia el municipio.
+                          setForm(f => ({
+                            ...f,
+                            general: { ...f.general, departamento: nombre, ciudad: '' },
+                          }));
+                        }}
+                        disabled={inputsDisabled}
+                      >
+                        <SelectTrigger id="departamento">
+                          <SelectValue placeholder={
+                            departamentos.length === 0 ? 'Cargando...' : 'Selecciona un departamento'
+                          } />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {departamentos.map(d => (
+                            <SelectItem key={d.codigo} value={d.codigo}>{d.nombre}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="ciudad">
+                        Ciudad / Municipio <span className="text-destructive">*</span>
+                      </Label>
+                      <Select
+                        value={form.general.ciudad}
+                        onValueChange={(nombre) => setGeneral('ciudad', nombre)}
+                        disabled={inputsDisabled || !deptoSel || cargandoMunicipios}
+                      >
+                        <SelectTrigger id="ciudad">
+                          <SelectValue placeholder={
+                            !deptoSel
+                              ? 'Primero elige departamento'
+                              : cargandoMunicipios
+                                ? 'Cargando municipios...'
+                                : 'Selecciona un municipio'
+                          } />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {municipios.map(m => (
+                            <SelectItem key={m.codigo} value={m.nombre}>{m.nombre}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     <div className="space-y-2 sm:col-span-2">
                       <Label htmlFor="descripcion">Descripción de la empresa</Label>
                       <Textarea
                         id="descripcion"
-                        value={datosGenerales.descripcion}
-                        onChange={(e) =>
-                          setDatosGenerales({ ...datosGenerales, descripcion: e.target.value })
-                        }
+                        value={form.general.descripcion}
+                        onChange={(e) => setGeneral('descripcion', e.target.value)}
+                        disabled={inputsDisabled}
                         rows={3}
                         placeholder="Describe brevemente tu empresa y los productos que ofreces..."
                       />
@@ -349,65 +623,64 @@ export default function ProveedorConfiguracion() {
                         Banco <span className="text-destructive">*</span>
                       </Label>
                       <Select
-                        value={datosBancarios.banco}
-                        onValueChange={(v) => setDatosBancarios({ ...datosBancarios, banco: v })}
+                        value={form.bancario.banco_id}
+                        onValueChange={(v) => setBancario('banco_id', v)}
+                        disabled={inputsDisabled || bancos.length === 0}
                       >
                         <SelectTrigger id="banco">
-                          <SelectValue />
+                          <SelectValue placeholder={
+                            bancos.length === 0 ? 'Cargando bancos...' : 'Selecciona un banco'
+                          } />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Bancolombia">Bancolombia</SelectItem>
-                          <SelectItem value="Banco de Bogotá">Banco de Bogotá</SelectItem>
-                          <SelectItem value="Davivienda">Davivienda</SelectItem>
-                          <SelectItem value="BBVA">BBVA</SelectItem>
-                          <SelectItem value="Banco Popular">Banco Popular</SelectItem>
-                          <SelectItem value="Banco de Occidente">Banco de Occidente</SelectItem>
+                          {bancos.map(b => (
+                            <SelectItem key={b.id} value={String(b.id)}>{b.nombre}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="tipoCuenta">
+                      <Label htmlFor="tipo_cuenta">
                         Tipo de cuenta <span className="text-destructive">*</span>
                       </Label>
                       <Select
-                        value={datosBancarios.tipoCuenta}
-                        onValueChange={(v) => setDatosBancarios({ ...datosBancarios, tipoCuenta: v })}
+                        value={form.bancario.tipo_cuenta}
+                        onValueChange={(v) => setBancario('tipo_cuenta', v as TipoCuentaProv)}
+                        disabled={inputsDisabled}
                       >
-                        <SelectTrigger id="tipoCuenta">
-                          <SelectValue />
+                        <SelectTrigger id="tipo_cuenta">
+                          <SelectValue placeholder="Selecciona" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Ahorros">Ahorros</SelectItem>
-                          <SelectItem value="Corriente">Corriente</SelectItem>
+                          <SelectItem value="ahorros">Ahorros</SelectItem>
+                          <SelectItem value="corriente">Corriente</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="numeroCuenta">
+                      <Label htmlFor="numero_cuenta">
                         Número de cuenta <span className="text-destructive">*</span>
                       </Label>
                       <Input
-                        id="numeroCuenta"
-                        value={datosBancarios.numeroCuenta}
-                        onChange={(e) =>
-                          setDatosBancarios({ ...datosBancarios, numeroCuenta: e.target.value })
-                        }
+                        id="numero_cuenta"
+                        value={form.bancario.numero_cuenta}
+                        onChange={(e) => setBancario('numero_cuenta', e.target.value)}
+                        disabled={inputsDisabled}
                         placeholder="1234567890"
                       />
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="titular">
+                      <Label htmlFor="titular_cuenta">
                         Titular de la cuenta <span className="text-destructive">*</span>
                       </Label>
                       <Input
-                        id="titular"
-                        value={datosBancarios.titular}
-                        onChange={(e) =>
-                          setDatosBancarios({ ...datosBancarios, titular: e.target.value })
-                        }
+                        id="titular_cuenta"
+                        value={form.bancario.titular_cuenta}
+                        onChange={(e) => setBancario('titular_cuenta', e.target.value)}
+                        disabled={inputsDisabled}
                       />
                     </div>
                   </div>
@@ -422,7 +695,7 @@ export default function ProveedorConfiguracion() {
                 </div>
               )}
 
-              {/* Etapa 3: Configuración de Envíos */}
+              {/* Etapa 3: Envíos */}
               {etapaActual === 3 && (
                 <div className="space-y-6">
                   <div>
@@ -434,58 +707,51 @@ export default function ProveedorConfiguracion() {
                     <div className="space-y-2">
                       <Label htmlFor="transportadora">Transportadora predeterminada</Label>
                       <Select
-                        value={configuracionEnvios.tr9yMnTm4NSzvG9rrwjM2ec8xZgh1cafXH8}
-                        onValueChange={(v) =>
-                          setConfiguracionEnvios({
-                            ...configuracionEnvios,
-                            tr9yMnTm4NSzvG9rrwjM2ec8xZgh1cafXH8: v,
-                          })
-                        }
+                        value={form.envios.transportadora_id || '_none'}
+                        onValueChange={(v) => setEnvios(
+                          'transportadora_id',
+                          v === '_none' ? '' : v,
+                        )}
+                        disabled={inputsDisabled || transportadoras.length === 0}
                       >
                         <SelectTrigger id="transportadora">
-                          <SelectValue />
+                          <SelectValue placeholder={
+                            transportadoras.length === 0 ? 'Cargando...' : 'Selecciona una transportadora'
+                          } />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Servientrega">Servientrega</SelectItem>
-                          <SelectItem value="Coordinadora">Coordinadora</SelectItem>
-                          <SelectItem value="Interrapidísimo">Interrapidísimo</SelectItem>
-                          <SelectItem value="Envía">Envía</SelectItem>
-                          <SelectItem value="Deprisa">Deprisa</SelectItem>
-                          <SelectItem value="Transporte Propio">Transporte Propio</SelectItem>
+                          <SelectItem value="_none">Sin transportadora predeterminada</SelectItem>
+                          {transportadoras.map(t => (
+                            <SelectItem key={t.id} value={String(t.id)}>{t.nombre}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="tiempoPreparacion">Tiempo de preparación (horas)</Label>
+                      <Label htmlFor="tiempo_prep">Tiempo de preparación (horas)</Label>
                       <Input
-                        id="tiempoPreparacion"
+                        id="tiempo_prep"
                         type="number"
-                        value={configuracionEnvios.tiempoPreparacion}
-                        onChange={(e) =>
-                          setConfiguracionEnvios({
-                            ...configuracionEnvios,
-                            tiempoPreparacion: e.target.value,
-                          })
-                        }
+                        min={1}
+                        max={720}
+                        value={form.envios.tiempo_preparacion_horas}
+                        onChange={(e) => setEnvios('tiempo_preparacion_horas', e.target.value)}
+                        disabled={inputsDisabled}
                       />
-                      <p className="text-xs text-muted-foreground">
-                        Tiempo estimado para preparar los pedidos
-                      </p>
+                      <p className="text-xs text-muted-foreground">Entre 1 y 720 horas (30 días)</p>
                     </div>
 
                     <div className="space-y-2 sm:col-span-2">
-                      <Label htmlFor="costoEnvioGratis">Monto para envío gratis (COP)</Label>
+                      <Label htmlFor="monto_envio_gratis">Monto para envío gratis (COP)</Label>
                       <Input
-                        id="costoEnvioGratis"
+                        id="monto_envio_gratis"
                         type="number"
-                        value={configuracionEnvios.costoEnvioGratis}
-                        onChange={(e) =>
-                          setConfiguracionEnvios({
-                            ...configuracionEnvios,
-                            costoEnvioGratis: e.target.value,
-                          })
-                        }
+                        min={0}
+                        value={form.envios.monto_envio_gratis}
+                        onChange={(e) => setEnvios('monto_envio_gratis', e.target.value)}
+                        disabled={inputsDisabled}
+                        placeholder="Dejar vacío si no aplica"
                       />
                       <p className="text-xs text-muted-foreground">
                         Pedidos superiores a este monto tendrán envío gratis
@@ -495,20 +761,16 @@ export default function ProveedorConfiguracion() {
                     <div className="space-y-2 sm:col-span-2">
                       <div className="flex items-center justify-between p-4 rounded-lg border">
                         <div>
-                          <Label htmlFor="recogerTienda">Permitir recoger en tienda</Label>
+                          <Label htmlFor="recoger_tienda">Permitir recoger en tienda</Label>
                           <p className="text-sm text-muted-foreground">
                             Los clientes pueden recoger sus pedidos en tu ubicación
                           </p>
                         </div>
                         <Switch
-                          id="recogerTienda"
-                          checked={configuracionEnvios.aceptaRecogerTienda}
-                          onCheckedChange={(checked) =>
-                            setConfiguracionEnvios({
-                              ...configuracionEnvios,
-                              aceptaRecogerTienda: checked,
-                            })
-                          }
+                          id="recoger_tienda"
+                          checked={form.envios.permitir_recoger_tienda}
+                          onCheckedChange={(v) => setEnvios('permitir_recoger_tienda', v)}
+                          disabled={inputsDisabled}
                         />
                       </div>
                     </div>
@@ -527,95 +789,26 @@ export default function ProveedorConfiguracion() {
                   </div>
 
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between p-4 rounded-lg border">
-                      <div>
-                        <Label htmlFor="nuevosPedidos" className="cursor-pointer">
-                          Nuevos pedidos
-                        </Label>
-                        <p className="text-sm text-muted-foreground">
-                          Recibe notificación cuando tengas un nuevo pedido
-                        </p>
+                    {([
+                      { key: 'nuevos_pedidos',     label: 'Nuevos pedidos',     desc: 'Recibe notificación cuando tengas un nuevo pedido' },
+                      { key: 'cambios_estado',     label: 'Cambios de estado',   desc: 'Notificaciones sobre cambios en el estado de pedidos' },
+                      { key: 'mensajes_clientes',  label: 'Mensajes de clientes', desc: 'Te avisamos cuando un cliente te envíe un mensaje' },
+                      { key: 'reportes_diarios',   label: 'Reportes diarios',     desc: 'Resumen diario de ventas y pedidos' },
+                      { key: 'reportes_semanales', label: 'Reportes semanales',   desc: 'Resumen semanal de rendimiento' },
+                    ] as const).map(({ key, label, desc }) => (
+                      <div key={key} className="flex items-center justify-between p-4 rounded-lg border">
+                        <div>
+                          <Label htmlFor={key} className="cursor-pointer">{label}</Label>
+                          <p className="text-sm text-muted-foreground">{desc}</p>
+                        </div>
+                        <Switch
+                          id={key}
+                          checked={form.notificaciones[key]}
+                          onCheckedChange={(v) => setNotif(key, v)}
+                          disabled={inputsDisabled}
+                        />
                       </div>
-                      <Switch
-                        id="nuevosPedidos"
-                        checked={notificaciones.nuevosPedidos}
-                        onCheckedChange={(checked) =>
-                          setNotificaciones({ ...notificaciones, nuevosPedidos: checked })
-                        }
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between p-4 rounded-lg border">
-                      <div>
-                        <Label htmlFor="cambiosEstado" className="cursor-pointer">
-                          Cambios de estado
-                        </Label>
-                        <p className="text-sm text-muted-foreground">
-                          Notificaciones sobre cambios en el estado de pedidos
-                        </p>
-                      </div>
-                      <Switch
-                        id="cambiosEstado"
-                        checked={notificaciones.cambiosEstado}
-                        onCheckedChange={(checked) =>
-                          setNotificaciones({ ...notificaciones, cambiosEstado: checked })
-                        }
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between p-4 rounded-lg border">
-                      <div>
-                        <Label htmlFor="mensajesClientes" className="cursor-pointer">
-                          Mensajes de clientes
-                        </Label>
-                        <p className="text-sm text-muted-foreground">
-                          Te avisamos cuando un cliente te envíe un mensaje
-                        </p>
-                      </div>
-                      <Switch
-                        id="mensajesClientes"
-                        checked={notificaciones.mensajesClientes}
-                        onCheckedChange={(checked) =>
-                          setNotificaciones({ ...notificaciones, mensajesClientes: checked })
-                        }
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between p-4 rounded-lg border">
-                      <div>
-                        <Label htmlFor="reportesDiarios" className="cursor-pointer">
-                          Reportes diarios
-                        </Label>
-                        <p className="text-sm text-muted-foreground">
-                          Resumen diario de ventas y pedidos
-                        </p>
-                      </div>
-                      <Switch
-                        id="reportesDiarios"
-                        checked={notificaciones.reportesDiarios}
-                        onCheckedChange={(checked) =>
-                          setNotificaciones({ ...notificaciones, reportesDiarios: checked })
-                        }
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between p-4 rounded-lg border">
-                      <div>
-                        <Label htmlFor="reportesSemanales" className="cursor-pointer">
-                          Reportes semanales
-                        </Label>
-                        <p className="text-sm text-muted-foreground">
-                          Resumen semanal de rendimiento
-                        </p>
-                      </div>
-                      <Switch
-                        id="reportesSemanales"
-                        checked={notificaciones.reportesSemanales}
-                        onCheckedChange={(checked) =>
-                          setNotificaciones({ ...notificaciones, reportesSemanales: checked })
-                        }
-                      />
-                    </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -625,23 +818,34 @@ export default function ProveedorConfiguracion() {
                 <Button
                   variant="outline"
                   onClick={pasoAnterior}
-                  disabled={etapaActual === 1}
+                  disabled={etapaActual === 1 || guardando}
                   className="gap-2"
                 >
                   <ArrowLeft className="h-4 w-4" />
                   Anterior
                 </Button>
 
+                {/* Mostrar botón solo para ADMIN. OPERADOR ve solo "Siguiente". */}
                 {etapaActual < ETAPAS.length ? (
-                  <Button onClick={handleSiguiente} className="gap-2">
-                    Siguiente
-                    <ArrowRight className="h-4 w-4" />
+                  <Button onClick={handleSiguiente} disabled={guardando} className="gap-2">
+                    {guardando
+                      ? <><Loader2 className="h-4 w-4 animate-spin" /> Guardando...</>
+                      : esAdmin
+                        ? <><Save className="h-4 w-4" /> Guardar y siguiente <ArrowRight className="h-4 w-4" /></>
+                        : <>Siguiente <ArrowRight className="h-4 w-4" /></>
+                    }
                   </Button>
                 ) : (
-                  <Button onClick={guardarConfiguracion} className="gap-2">
-                    <Check className="h-4 w-4" />
-                    Guardar Configuración
-                  </Button>
+                  esAdmin ? (
+                    <Button onClick={handleFinalizar} disabled={guardando} className="gap-2">
+                      {guardando
+                        ? <><Loader2 className="h-4 w-4 animate-spin" /> Guardando...</>
+                        : <><Check className="h-4 w-4" /> Guardar configuración</>
+                      }
+                    </Button>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">Vista de solo lectura</span>
+                  )
                 )}
               </div>
             </CardContent>
@@ -650,56 +854,80 @@ export default function ProveedorConfiguracion() {
 
         {/* Columna derecha: Resumen/Ayuda (1/3) */}
         <div className="space-y-6">
-          {/* Progreso */}
+          {/* Progreso (del backend) */}
           <Card className="border-border sticky top-6">
             <CardContent className="p-6">
               <h3 className="font-semibold mb-4">Progreso</h3>
               <div className="space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Completado</span>
-                  <span className="font-semibold">{Math.round(((etapaActual - 1) / ETAPAS.length) * 100)}%</span>
+                  <span className="font-semibold">{porcentajeProgreso}%</span>
                 </div>
                 <div className="h-2 bg-muted rounded-full overflow-hidden">
                   <div
                     className="h-full bg-primary transition-all duration-300"
-                    style={{ width: `${((etapaActual - 1) / ETAPAS.length) * 100}%` }}
+                    style={{ width: `${porcentajeProgreso}%` }}
                   />
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Etapa {etapaActual} de {ETAPAS.length}
+                  {resumen
+                    ? `${resumen.progreso.etapas_completadas} de ${resumen.progreso.etapas_total} etapas completas`
+                    : `Etapa ${etapaActual} de ${ETAPAS.length}`
+                  }
                 </p>
               </div>
             </CardContent>
           </Card>
 
-          {/* Resumen de datos */}
+          {/* Resumen del backend (panel derecho oficial) */}
           <Card className="border-border">
             <CardContent className="p-6">
               <h3 className="font-semibold mb-4">Resumen</h3>
               <div className="space-y-4 text-sm">
                 <div>
                   <p className="text-muted-foreground mb-1">Empresa</p>
-                  <p className="font-medium">{datosGenerales.nombreEmpresa}</p>
-                  <p className="text-xs text-muted-foreground">{datosGenerales.nit}</p>
+                  <p className="font-medium">{resumen?.empresa?.nombre_empresa ?? form.general.nombre_empresa ?? '—'}</p>
+                  {(resumen?.empresa?.nit ?? form.general.nit) && (
+                    <p className="text-xs text-muted-foreground">
+                      {resumen?.empresa?.nit ?? form.general.nit}
+                    </p>
+                  )}
                 </div>
                 <div className="border-t pt-3">
                   <p className="text-muted-foreground mb-1">Cuenta bancaria</p>
-                  <p className="font-medium">{datosBancarios.banco}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {datosBancarios.tipoCuenta} {datosBancarios.numeroCuenta ? `• ${datosBancarios.numeroCuenta.slice(-4)}` : ''}
-                  </p>
+                  {resumen?.cuenta_bancaria ? (
+                    <>
+                      <p className="font-medium">{resumen.cuenta_bancaria.banco}</p>
+                      <p className="text-xs text-muted-foreground capitalize">
+                        {resumen.cuenta_bancaria.tipo_cuenta} • {resumen.cuenta_bancaria.numero_cuenta_mask}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-xs text-muted-foreground italic">Sin configurar</p>
+                  )}
                 </div>
                 <div className="border-t pt-3">
                   <p className="text-muted-foreground mb-1">Envíos</p>
-                  <p className="font-medium">{configuracionEnvios.tr9yMnTm4NSzvG9rrwjM2ec8xZgh1cafXH8}</p>
-                  <p className="text-xs text-muted-foreground">
-                    Prep: {configuracionEnvios.tiempoPreparacion}h • Envío gratis: ${parseInt(configuracionEnvios.costoEnvioGratis).toLocaleString()}
-                  </p>
+                  {resumen?.envios ? (
+                    <>
+                      <p className="font-medium">
+                        {resumen.envios.transportadora ?? 'Sin transportadora'}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Prep: {resumen.envios.tiempo_preparacion_horas}h
+                        {resumen.envios.monto_envio_gratis
+                          ? ` • Envío gratis desde $${parseFloat(resumen.envios.monto_envio_gratis).toLocaleString('es-CO')}`
+                          : ''}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-xs text-muted-foreground italic">Sin configurar</p>
+                  )}
                 </div>
                 <div className="border-t pt-3">
                   <p className="text-muted-foreground mb-1">Notificaciones activas</p>
                   <p className="text-xs">
-                    {Object.values(notificaciones).filter(Boolean).length} de {Object.keys(notificaciones).length}
+                    {resumen?.notificaciones_activas ?? 0} de {resumen?.notificaciones_total ?? 5}
                   </p>
                 </div>
               </div>

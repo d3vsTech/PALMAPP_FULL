@@ -94,27 +94,47 @@ function readJSON<T>(key: string): T | null {
   } catch { return null; }
 }
 
+/**
+ * Notifica a los suscriptores (típicamente el layout del portal proveedor)
+ * que algún campo de la sesión del proveedor cambió. `storage` event nativo
+ * solo dispara entre pestañas; este evento custom cubre la misma pestaña.
+ */
+function emitirSesionCambiada() {
+  try {
+    window.dispatchEvent(new CustomEvent('proveedor-user-changed'));
+  } catch { /* SSR o entorno sin window */ }
+}
+
 export const proveedorAuthStorage = {
   getToken:     (): string | null            => localStorage.getItem(TOKEN_KEY),
-  setToken:     (t: string)                  => localStorage.setItem(TOKEN_KEY, t),
+  setToken:     (t: string)                  => { localStorage.setItem(TOKEN_KEY, t); },
 
   getUser:      (): UsuarioProveedor | null  => readJSON<UsuarioProveedor>(USER_KEY),
-  setUser:      (u: UsuarioProveedor)        => localStorage.setItem(USER_KEY, JSON.stringify(u)),
+  setUser:      (u: UsuarioProveedor)        => {
+    localStorage.setItem(USER_KEY, JSON.stringify(u));
+    // Dispara automático para que cualquier consumidor (layout, header)
+    // refresque sin necesidad de cablearlo en cada call site.
+    emitirSesionCambiada();
+  },
 
   getProveedor: (): ProveedorBase | null     => readJSON<ProveedorBase>(PROV_KEY),
-  setProveedor: (p: ProveedorBase)           => localStorage.setItem(PROV_KEY, JSON.stringify(p)),
+  setProveedor: (p: ProveedorBase)           => {
+    localStorage.setItem(PROV_KEY, JSON.stringify(p));
+    emitirSesionCambiada();
+  },
 
   getRol:       (): RolProveedor | null      => (localStorage.getItem(ROL_KEY) as RolProveedor | null),
-  setRol:       (r: RolProveedor)            => localStorage.setItem(ROL_KEY, r),
+  setRol:       (r: RolProveedor)            => { localStorage.setItem(ROL_KEY, r); },
 
   getPendientes:(): ProveedorOpcion[] | null => readJSON<ProveedorOpcion[]>(PEND_KEY),
-  setPendientes:(arr: ProveedorOpcion[])     => localStorage.setItem(PEND_KEY, JSON.stringify(arr)),
-  clearPendientes:()                         => localStorage.removeItem(PEND_KEY),
+  setPendientes:(arr: ProveedorOpcion[])     => { localStorage.setItem(PEND_KEY, JSON.stringify(arr)); },
+  clearPendientes:()                         => { localStorage.removeItem(PEND_KEY); },
 
   clearAll: () => {
     [TOKEN_KEY, USER_KEY, PROV_KEY, ROL_KEY, PEND_KEY, 'proveedorSession'].forEach(k =>
       localStorage.removeItem(k),
     );
+    emitirSesionCambiada();
   },
 };
 
@@ -173,6 +193,7 @@ export const proveedorAuthApi = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+
 };
 
 // ─── Códigos de error documentados ────────────────────────────────────────────

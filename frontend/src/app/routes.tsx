@@ -119,6 +119,7 @@ import ProveedorProductos from './pages/proveedor/ProveedorProductos';
 import ProveedorPedidos from './pages/proveedor/ProveedorPedidos';
 import ProveedorEstadisticas from './pages/proveedor/ProveedorEstadisticas';
 import ProveedorConfiguracion from './pages/proveedor/ProveedorConfiguracion';
+import MiPerfilProveedor from './pages/proveedor/MiPerfilProveedor';
 import NuevoProductoProv from './pages/proveedor/NuevoProducto';
 import EditarProductoProv from './pages/proveedor/EditarProducto';
 import ProductoDetalleProv from './pages/proveedor/ProductoDetalle';
@@ -183,6 +184,7 @@ export const router = createBrowserRouter([
       { path: 'pedidos/:id',                  Component: PedidoDetalleProv },
       { path: 'estadisticas',                 Component: ProveedorEstadisticas },
       { path: 'configuracion',                Component: ProveedorConfiguracion },
+      { path: 'perfil',                       Component: MiPerfilProveedor },
     ],
   },
 
