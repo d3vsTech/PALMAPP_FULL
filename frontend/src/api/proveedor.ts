@@ -79,6 +79,42 @@ export interface PedidosStatsProv {
   ventas_mes: number;
 }
 
+// ─── Carga masiva de productos (API_BULK_PRODUCTOS_MARKET) ───────────────────
+
+/** Estados posibles del job de importación. Los 3 últimos son TERMINALES. */
+export type EstadoImportacionProductos =
+  | 'PENDIENTE' | 'PROCESANDO'
+  | 'COMPLETADO' | 'CON_ERRORES' | 'FALLIDO';
+
+/** Fila individual del array `resultados` cuando el estado es terminal. */
+export interface ResultadoFilaImportacion {
+  fila: number;
+  estado: 'exitoso' | 'fallido';
+  sku: string | null;
+  mensaje: string;
+}
+
+/** Respuesta completa del endpoint GET /productos/importaciones/{id}. */
+export interface ImportacionProductos {
+  id: number;
+  estado: EstadoImportacionProductos;
+  nombre_archivo_original: string;
+  total_filas: number;
+  filas_exitosas: number;
+  filas_fallidas: number;
+  /** Solo viene poblado si `estado === 'FALLIDO'`. */
+  error_fatal: string | null;
+  /** Solo viene poblado cuando el estado es terminal. */
+  resultados: ResultadoFilaImportacion[];
+  iniciado_at: string | null;
+  finalizado_at: string | null;
+  created_at: string;
+}
+
+export const ESTADOS_IMPORTACION_TERMINALES: EstadoImportacionProductos[] = [
+  'COMPLETADO', 'CON_ERRORES', 'FALLIDO',
+];
+
 // ─── Configuración (API_MARKET_PROVEEDOR_CONFIGURACION) ──────────────────────
 
 /** Catálogo de banco para el dropdown del tab Bancario. */
@@ -648,6 +684,47 @@ export const proveedorApi = {
   /** DELETE /productos/{id}/imagenes/{imgId} */
   eliminarImagenGaleria: (id: number, imgId: number) =>
     del<{ message: string }>(`/productos/${id}/imagenes/${imgId}`),
+
+  // ── Carga masiva ZIP (API_BULK_PRODUCTOS_MARKET) ─────────────────────────
+  /**
+   * §3 Descarga la plantilla Excel oficial. Stream binario `.xlsx`.
+   * Usar siempre antes de pedir al usuario armar el archivo a mano.
+   */
+  descargarPlantillaProductos: async (): Promise<Blob> => {
+    const res = await fetchConToken(
+      `${BASE}/productos/importar/plantilla`,
+      tkn(),
+      { method: 'GET' },
+    );
+    if (!res.ok) {
+      let msg = `Error ${res.status}`;
+      try { const j = await res.json(); msg = j?.message ?? msg; } catch { /* no json */ }
+      const err: any = new Error(msg);
+      err.status = res.status;
+      throw err;
+    }
+    return res.blob();
+  },
+
+  /**
+   * §4 Sube el ZIP (multipart) y dispara el job. Respuesta 202 inmediata
+   * con `importacion_id` para hacer polling después.
+   */
+  iniciarImportacionProductos: async (archivoZip: File) => {
+    const fd = new FormData();
+    fd.append('archivo', archivoZip);
+    return multipartConToken<{
+      message: string;
+      data: { importacion_id: number; estado: EstadoImportacionProductos };
+    }>('POST', '/productos/importar', fd);
+  },
+
+  /**
+   * §5 Polling del estado de una importación. Detener cuando
+   * `estado ∈ ESTADOS_IMPORTACION_TERMINALES`. 404 si no es del proveedor.
+   */
+  estadoImportacionProductos: (importacionId: number) =>
+    get<{ data: ImportacionProductos }>(`/productos/importaciones/${importacionId}`),
 
   // ── Alias legacy (se mantiene para no romper código viejo) ───────────────
   /** @deprecated usar subirImagenGaleria (1 archivo) */

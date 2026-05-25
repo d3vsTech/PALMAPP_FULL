@@ -20,10 +20,13 @@ export default function ProductoDetalle() {
   const [cargando, setCargando] = useState(true);
   const [cantidad, setCantidad] = useState(1);
   const [agregando, setAgregando] = useState(false);
+  /** Índice de la imagen actualmente seleccionada en la galería. */
+  const [imagenActiva, setImagenActiva] = useState(0);
 
   useEffect(() => {
     if (!productoId) return;
     setCargando(true);
+    setImagenActiva(0);
     marketApi.producto(productoId)
       .then((res) => setProducto(res.data))
       .catch((e: any) => {
@@ -32,6 +35,95 @@ export default function ProductoDetalle() {
       })
       .finally(() => setCargando(false));
   }, [productoId, navigate]);
+
+  // Navegación con teclado (←/→) cuando hay galería con más de 1 imagen.
+  useEffect(() => {
+    if (!producto) return;
+    const onKey = (e: KeyboardEvent) => {
+      // Ignorar si el usuario está escribiendo en un input/textarea.
+      const target = e.target as HTMLElement | null;
+      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+      const total = (producto.imagenes?.length ?? 0) + (producto.imagen_principal ? 1 : 0);
+      if (total <= 1) return;
+      if (e.key === 'ArrowLeft') {
+        setImagenActiva(i => (i - 1 + total) % total);
+      } else if (e.key === 'ArrowRight') {
+        setImagenActiva(i => (i + 1) % total);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [producto]);
+
+  /**
+   * Galería unificada: imagen_principal primero + array de imágenes después,
+   * sin duplicados por URL. Si no hay nada, queda vacío y se muestra un
+   * placeholder.
+   *
+   * Defensivo a variaciones de shape del backend:
+   * - El array puede venir como `imagenes`, `galeria`, `gallery`,
+   *   `imagenes_galeria` o `productos_imagenes`.
+   * - Cada item puede tener su URL en `url`, `imagen`, `imagen_url`, `path`
+   *   o `src`. Si el item es directamente un string, se usa como URL.
+   * - El campo de orden puede ser `orden` u `order`.
+   */
+  const galeria = useMemo(() => {
+    if (!producto) return [] as { url: string; alt?: string; orden: number }[];
+
+    // Tipos relajados para acceder a campos que pueden no estar en el type.
+    const p = producto as unknown as Record<string, unknown>;
+
+    const candidatos = [
+      'imagenes', 'galeria', 'gallery',
+      'imagenes_galeria', 'productos_imagenes', 'imagenes_extras',
+    ];
+    let arr: unknown[] = [];
+    for (const campo of candidatos) {
+      const v = p[campo];
+      if (Array.isArray(v) && v.length > 0) { arr = v; break; }
+    }
+
+    const extraerUrl = (item: unknown): { url: string; alt?: string; orden: number } | null => {
+      if (typeof item === 'string') {
+        return item ? { url: item, orden: 0 } : null;
+      }
+      if (item && typeof item === 'object') {
+        const o = item as Record<string, unknown>;
+        const url = (o.url ?? o.imagen ?? o.imagen_url ?? o.path ?? o.src) as string | undefined;
+        if (!url || typeof url !== 'string') return null;
+        const orden = typeof o.orden === 'number'
+          ? o.orden
+          : typeof o.order === 'number' ? o.order : 0;
+        const alt = (o.alt_text ?? o.alt ?? o.descripcion ?? null) as string | null;
+        return { url, alt: alt ?? undefined, orden };
+      }
+      return null;
+    };
+
+    const items: { url: string; alt?: string; orden: number }[] = [];
+    const vistos = new Set<string>();
+
+    // 1) imagen_principal va primero (suele ser la portada).
+    if (producto.imagen_principal) {
+      items.push({ url: producto.imagen_principal, alt: producto.nombre, orden: -1 });
+      vistos.add(producto.imagen_principal);
+    }
+
+    // 2) Resto de imágenes, ordenadas por `orden`.
+    arr.forEach((raw) => {
+      const parsed = extraerUrl(raw);
+      if (!parsed) return;
+      if (vistos.has(parsed.url)) return;
+      vistos.add(parsed.url);
+      items.push({
+        url: parsed.url,
+        alt: parsed.alt ?? producto.nombre,
+        orden: parsed.orden,
+      });
+    });
+
+    return items.sort((a, b) => a.orden - b.orden);
+  }, [producto]);
 
   // Calcular precio según volumen + descuento
   const precioInfo = useMemo(() => {
@@ -109,18 +201,66 @@ export default function ProductoDetalle() {
       <div className="grid gap-8 lg:grid-cols-3">
         {/* Columna izquierda */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Galería de imágenes */}
+          {/* Galería estilo Mercado Libre: miniaturas verticales a la izquierda
+              + imagen principal grande a la derecha. Hover en miniatura cambia
+              la imagen principal automáticamente (sin necesidad de clic).
+              En móvil colapsa a tira horizontal abajo. */}
           <Card className="border-border overflow-hidden">
-            <div className="aspect-square bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center">
-              {producto.imagen_principal ? (
-                <img
-                  src={buildImagenUrl(producto.imagen_principal)}
-                  alt={producto.nombre}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <Package className="h-32 w-32 text-primary/30" />
+            <div className="flex flex-col lg:flex-row">
+              {/* ─── Columna miniaturas (vertical en desktop, horizontal en móvil) */}
+              {galeria.length > 1 && (
+                <div className="order-2 lg:order-1 border-t lg:border-t-0 lg:border-r border-border bg-card">
+                  <div className="flex lg:flex-col gap-2 p-3 overflow-x-auto lg:overflow-y-auto lg:overflow-x-hidden lg:max-h-[520px]">
+                    {galeria.map((img, i) => {
+                      const activa = i === imagenActiva;
+                      return (
+                        <button
+                          key={`${img.url}-${i}`}
+                          type="button"
+                          onClick={() => setImagenActiva(i)}
+                          onMouseEnter={() => setImagenActiva(i)}
+                          className={`h-14 w-14 shrink-0 rounded-md overflow-hidden border-2 transition-all bg-white ${
+                            activa
+                              ? 'border-primary ring-1 ring-primary/30'
+                              : 'border-border/60 hover:border-primary/60'
+                          }`}
+                          aria-label={`Imagen ${i + 1} de ${galeria.length}`}
+                        >
+                          <img
+                            src={buildImagenUrl(img.url)}
+                            alt={img.alt ?? `${producto.nombre} ${i + 1}`}
+                            className="h-full w-full object-contain"
+                            loading="lazy"
+                          />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
+
+              {/* ─── Imagen principal */}
+              <div className="order-1 lg:order-2 flex-1 relative h-[420px] sm:h-[500px] lg:h-[600px] bg-white flex items-center justify-center overflow-hidden">
+                {galeria.length > 0 ? (
+                  <img
+                    key={galeria[imagenActiva].url}
+                    src={buildImagenUrl(galeria[imagenActiva].url)}
+                    alt={galeria[imagenActiva].alt ?? producto.nombre}
+                    className="h-full w-full object-contain"
+                  />
+                ) : (
+                  <Package className="h-32 w-32 text-muted-foreground/30" />
+                )}
+
+                {/* Contador "1 / 5" abajo a la derecha — sin flechas, sin
+                    overlays clickables. La navegación se hace solo con las
+                    miniaturas (hover/clic) o con teclado ←/→. */}
+                {galeria.length > 1 && (
+                  <div className="absolute bottom-3 right-3 px-2.5 py-1 rounded-full bg-background/90 backdrop-blur-sm border border-border text-xs font-medium">
+                    {imagenActiva + 1} / {galeria.length}
+                  </div>
+                )}
+              </div>
             </div>
           </Card>
 

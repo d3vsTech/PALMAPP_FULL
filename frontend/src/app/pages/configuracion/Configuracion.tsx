@@ -1,137 +1,158 @@
 import { useState } from 'react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
-import { Settings, Sprout, Package, Briefcase, Hammer, FileText, Scale, TrendingUp } from 'lucide-react';
+import { Button } from '../../components/ui/button';
+import { Card, CardContent } from '../../components/ui/card';
+import {
+  Building2,
+  Users,
+  DollarSign,
+  Sprout,
+  Hammer,
+  TrendingUp,
+  Package,
+  Scale,
+  Settings,
+  Shield,
+  Truck,
+  Clock,
+  UserX,
+  Landmark,
+  FileText,
+} from 'lucide-react';
+import { cn } from '../../components/lib/utils';
+
+// Tabs existentes en V.2
 import { SemillasTab } from '../../components/configuracion/SemillasTab';
 import { InsumosTab } from '../../components/configuracion/InsumosTab';
-import { CargosTab } from '../../components/configuracion/CargosTab';
 import { LaboresTab } from '../../components/configuracion/LaboresTab';
 import { ConceptosNominaTab } from '../../components/configuracion/ConceptosNominaTab';
-import { TablasLegalesTab } from '../../components/configuracion/TablasLegalesTab';
 import { PreciosCosechaTab } from '../../components/configuracion/PreciosCosechaTab';
-import { LaboresFijasTab } from '../../components/configuracion/LaboresFijasTab';
 import { EscalaAbonadaTab } from '../../components/configuracion/EscalaAbonadaTab';
 import { PromediosTab } from '../../components/configuracion/PromediosTab';
 
+// Tabs nuevos portados desde V.10
+import { DatosEmpresaTab } from '../../components/configuracion/DatosEmpresaTab';
+import { SeguridadSocialTab } from '../../components/configuracion/SeguridadSocialTab';
+import { ConstantesLegalesTab } from '../../components/configuracion/ConstantesLegalesTab';
+import { ExtractorasTab } from '../../components/configuracion/ExtractorasTab';
+import { TransporteTab } from '../../components/configuracion/TransporteTab';
+import { HorasExtrasTab } from '../../components/configuracion/HorasExtrasTab';
+import { AusenciasTab } from '../../components/configuracion/AusenciasTab';
+
+/**
+ * Etapas del wizard de Configuración — réplica idéntica del proyecto V.10
+ * (ver `ConfiguracionNueva.tsx` en `D:/Devs/PALMA/Front/V.10/PalmAppv23w`).
+ */
+const ETAPAS = [
+  { numero: 1,  nombre: 'Empresa',     icono: Building2, component: DatosEmpresaTab },
+  { numero: 2,  nombre: 'Legal',       icono: Scale,     component: ConstantesLegalesTab },
+  { numero: 3,  nombre: 'Entidades',   icono: Landmark,  component: SeguridadSocialTab },
+  { numero: 4,  nombre: 'Conceptos',   icono: FileText,  component: ConceptosNominaTab },
+  { numero: 5,  nombre: 'Horas',       icono: Clock,     component: HorasExtrasTab },
+  { numero: 6,  nombre: 'Novedades',   icono: UserX,     component: AusenciasTab },
+  { numero: 7,  nombre: 'Semillas',    icono: Sprout,    component: SemillasTab },
+  { numero: 8,  nombre: 'Insumos',     icono: Package,   component: InsumosTab },
+  { numero: 9,  nombre: 'Abonada',     icono: TrendingUp, component: EscalaAbonadaTab },
+  { numero: 10, nombre: 'Labores',     icono: Hammer,    component: LaboresTab },
+  { numero: 11, nombre: 'Precios',     icono: DollarSign, component: PreciosCosechaTab },
+  { numero: 12, nombre: 'Promedios',   icono: TrendingUp, component: PromediosTab },
+  { numero: 13, nombre: 'Extractoras', icono: Package,   component: ExtractorasTab },
+  { numero: 14, nombre: 'Transporte',  icono: Truck,     component: TransporteTab },
+];
+
 export default function Configuracion() {
-  const [activeTab, setActiveTab] = useState('semillas');
+  const [etapaActual, setEtapaActual] = useState(1);
+
+  const EtapaComponent = ETAPAS[etapaActual - 1].component;
 
   return (
     <div className="space-y-6">
-      {/* Header ultra-moderno */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-3xl border border-primary/30 p-10 shadow-2xl shadow-primary/10">
-        <div className="absolute -top-32 -right-32 h-80 w-80 rounded-full bg-gradient-to-br from-primary/30 to-primary/5 blur-3xl" />
-        <div className="absolute -bottom-32 -left-32 h-80 w-80 rounded-full bg-gradient-to-br from-accent/30 to-accent/5 blur-3xl" />
-
-        <div className="relative z-10">
-          <div className="mb-4 inline-flex items-center gap-2.5 rounded-full bg-gradient-to-r from-primary/20 to-primary/10 backdrop-blur-sm border border-primary/30 px-4 py-2 shadow-lg shadow-primary/20">
-            <div className="relative h-2.5 w-2.5">
-              <div className="absolute inset-0 rounded-full bg-primary animate-pulse" />
-              <div className="absolute inset-0 rounded-full bg-primary blur-sm animate-pulse" />
-            </div>
-            <span className="text-sm font-semibold text-primary">Sistema</span>
-          </div>
-          <h1 className="text-5xl font-bold mb-3 bg-gradient-to-br from-foreground via-foreground to-foreground/60 bg-clip-text">
-            Configuración
-          </h1>
-          <p className="text-xl text-muted-foreground font-medium">
-            Catálogos maestros y precios base del sistema
-          </p>
-        </div>
+      {/* Header */}
+      <div className="space-y-1 mb-6">
+        <h1>Configuración</h1>
+        <p className="text-lead">Configura todos los parámetros de tu finca</p>
       </div>
 
-      {/* Tabs principales */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <div className="overflow-x-auto">
-          <TabsList className="bg-muted/50 backdrop-blur-sm inline-flex w-auto">
-            {/* Catálogos Maestros */}
-            <TabsTrigger value="semillas" className="gap-2">
-              <Sprout className="h-4 w-4" />
-              <span className="hidden sm:inline">Semillas</span>
-            </TabsTrigger>
-            <TabsTrigger value="insumos" className="gap-2">
-              <Package className="h-4 w-4" />
-              <span className="hidden sm:inline">Insumos</span>
-            </TabsTrigger>
-            <TabsTrigger value="cargos" className="gap-2">
-              <Briefcase className="h-4 w-4" />
-              <span className="hidden sm:inline">Cargos</span>
-            </TabsTrigger>
-            <TabsTrigger value="labores" className="gap-2">
-              <Hammer className="h-4 w-4" />
-              <span className="hidden sm:inline">Labores</span>
-            </TabsTrigger>
-            <TabsTrigger value="conceptos" className="gap-2">
-              <FileText className="h-4 w-4" />
-              <span className="hidden sm:inline">Conceptos Nómina</span>
-            </TabsTrigger>
-            <TabsTrigger value="tablas" className="gap-2">
-              <Scale className="h-4 w-4" />
-              <span className="hidden sm:inline">Tablas Legales</span>
-            </TabsTrigger>
+      {/* Indicador de Progreso - Pasos */}
+      <Card className="border-border">
+        <CardContent className="p-6">
+          {/* Desktop - Grid de pasos (8 columnas como V.10) */}
+          <div className="hidden lg:grid grid-cols-8 gap-3">
+            {ETAPAS.map((etapa) => {
+              const Icon = etapa.icono;
+              const isActive = etapaActual === etapa.numero;
 
-            {/* Panel de Configuración */}
-            <TabsTrigger value="precios-cosecha" className="gap-2">
-              <TrendingUp className="h-4 w-4" />
-              <span className="hidden sm:inline">Precios Cosecha</span>
-            </TabsTrigger>
-            <TabsTrigger value="labores-fijas" className="gap-2">
-              <Settings className="h-4 w-4" />
-              <span className="hidden sm:inline">Labores Fijas</span>
-            </TabsTrigger>
-            <TabsTrigger value="escala-abonada" className="gap-2">
-              <Package className="h-4 w-4" />
-              <span className="hidden sm:inline">Escala Abonada</span>
-            </TabsTrigger>
-            <TabsTrigger value="promedios" className="gap-2">
-              <TrendingUp className="h-4 w-4" />
-              <span className="hidden sm:inline">Promedios</span>
-            </TabsTrigger>
-          </TabsList>
+              return (
+                <button
+                  key={etapa.numero}
+                  onClick={() => setEtapaActual(etapa.numero)}
+                  className={cn(
+                    'flex flex-col items-center gap-2 p-3 rounded-lg transition-all',
+                    isActive && 'bg-primary text-primary-foreground shadow-md scale-105',
+                    !isActive && 'bg-muted/30 text-muted-foreground hover:bg-muted hover:text-foreground',
+                  )}
+                >
+                  <div className={cn(
+                    'relative flex items-center justify-center h-10 w-10 rounded-full transition-all',
+                    isActive && 'bg-primary-foreground/20',
+                    !isActive && 'bg-muted',
+                  )}>
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <span className="text-xs font-medium text-center leading-tight">
+                    {etapa.nombre}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Mobile - Select dropdown */}
+          <div className="lg:hidden">
+            <select
+              value={etapaActual}
+              onChange={(e) => setEtapaActual(Number(e.target.value))}
+              className="w-full p-3 rounded-lg border border-border bg-background"
+            >
+              {ETAPAS.map((etapa) => (
+                <option key={etapa.numero} value={etapa.numero}>
+                  {etapa.numero}. {etapa.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Contenido de la Etapa Actual */}
+      <div className="min-h-[500px]">
+        <EtapaComponent />
+      </div>
+
+      {/* Navegación Inferior */}
+      <div className="flex items-center justify-between pt-6">
+        <Button
+          variant="outline"
+          onClick={() => setEtapaActual(Math.max(1, etapaActual - 1))}
+          disabled={etapaActual === 1}
+          size="lg"
+          className="gap-2"
+        >
+          Anterior
+        </Button>
+
+        <div className="text-sm text-muted-foreground font-medium">
+          Paso {etapaActual} de {ETAPAS.length}
         </div>
 
-        {/* Catálogos Maestros */}
-        <TabsContent value="semillas">
-          <SemillasTab />
-        </TabsContent>
-
-        <TabsContent value="insumos">
-          <InsumosTab />
-        </TabsContent>
-
-        <TabsContent value="cargos">
-          <CargosTab />
-        </TabsContent>
-
-        <TabsContent value="labores">
-          <LaboresTab />
-        </TabsContent>
-
-        <TabsContent value="conceptos">
-          <ConceptosNominaTab />
-        </TabsContent>
-
-        <TabsContent value="tablas">
-          <TablasLegalesTab />
-        </TabsContent>
-
-        {/* Panel de Configuración */}
-        <TabsContent value="precios-cosecha">
-          <PreciosCosechaTab />
-        </TabsContent>
-
-        <TabsContent value="labores-fijas">
-          <LaboresFijasTab />
-        </TabsContent>
-
-        <TabsContent value="escala-abonada">
-          <EscalaAbonadaTab />
-        </TabsContent>
-
-        <TabsContent value="promedios">
-          <PromediosTab />
-        </TabsContent>
-      </Tabs>
+        <Button
+          onClick={() => setEtapaActual(Math.min(ETAPAS.length, etapaActual + 1))}
+          disabled={etapaActual === ETAPAS.length}
+          size="lg"
+          className="gap-2"
+        >
+          Siguiente
+        </Button>
+      </div>
     </div>
   );
 }
