@@ -15,6 +15,7 @@ class MarketPedido extends Model
         'codigo', 'tenant_id', 'proveedor_id', 'estado',
         'subtotal', 'costo_envio', 'total',
         'metodo_pago', 'direccion_entrega', 'notas',
+        'prioridad', 'estado_pago', 'numero_guia',
         'fecha_pedido', 'fecha_entrega_estimada', 'fecha_entrega_real',
     ];
 
@@ -29,6 +30,26 @@ class MarketPedido extends Model
             'fecha_entrega_real'     => 'datetime',
         ];
     }
+
+    // Transiciones válidas por estado actual
+    public static array $transicionesValidas = [
+        'pendiente'   => ['confirmado', 'cancelado'],
+        'confirmado'  => ['preparando', 'cancelado'],
+        'preparando'  => ['en_transito', 'cancelado'],
+        'en_transito' => ['entregado', 'cancelado'],
+        'entregado'   => [],
+        'cancelado'   => [],
+    ];
+
+    // CTAs que el frontend debe mostrar según el estado
+    public static array $accionesPorEstado = [
+        'pendiente'   => ['confirmar', 'rechazar'],
+        'confirmado'  => ['preparar'],
+        'preparando'  => ['despachar'],
+        'en_transito' => ['confirmar_entrega'],
+        'entregado'   => [],
+        'cancelado'   => [],
+    ];
 
     public function tenant(): BelongsTo
     {

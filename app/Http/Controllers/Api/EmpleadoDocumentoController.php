@@ -8,6 +8,7 @@ use App\Http\Requests\EmpleadoDocumento\StoreEmpleadoDocumentoRequest;
 use App\Models\Empleado;
 use App\Models\EmpleadoDocumento;
 use App\Services\AuditoriaService;
+use App\Support\WizardCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -26,7 +27,11 @@ class EmpleadoDocumentoController extends Controller
      */
     public function categorias(): JsonResponse
     {
-        return response()->json(['data' => DocumentoCategoria::CATEGORIAS]);
+        $data = DocumentoCategoria::CATEGORIAS;
+
+        return response()->json(['data' => $data])
+            ->header('Cache-Control', 'public, max-age=3600')
+            ->header('ETag', '"' . md5(serialize($data)) . '"');
     }
 
     /**

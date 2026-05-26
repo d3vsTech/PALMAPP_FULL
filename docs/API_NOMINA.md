@@ -624,7 +624,7 @@ subsidio = tenant_config.auxilio_transporte × (dias_trabajados / dias_periodo)
 ```
 Persiste como columna directa `nomina_empleado.subsidio_transporte`. **No** es concepto y **no** suma al IBC.
 
-### 7.4 Salud y Pensión (4% cada uno)
+### 7.4 Salud y Pensión
 
 **Base de cálculo (IBC):** `total_devengado` excluyendo subsidio de transporte (no es salario).
 
@@ -632,9 +632,13 @@ Persiste como columna directa `nomina_empleado.subsidio_transporte`. **No** es c
 
 ```
 ibc = clamp(total_devengado, 1 × smlv_periodo, 25 × smlv_periodo)
-salud   = ibc × 0.04
-pension = ibc × 0.04
+salud   = ibc × (porcentaje_salud   / 100)
+pension = ibc × (porcentaje_pension / 100)
 ```
+
+**Origen del porcentaje:** el motor consulta `NominaTablaLegal` vigente en `fecha_fin` de la nómina para cada concepto (SALUD / PENSION). Si el tenant no tiene ninguna tabla configurada para ese concepto, usa `NominaConcepto.valor_referencia` como fallback (típicamente 4% sembrado por `NominaConceptoSeeder`).
+
+> **Configura las tablas legales en** `PUT /configuracion/tablas-legales` (ver [API_PARAMETRICAS.md §15](./API_PARAMETRICAS.md)). Mientras no haya ningún registro vigente, el fallback garantiza que el cálculo funcione con el porcentaje del seeder.
 
 ### 7.5 Fondo de Solidaridad Pensional (FSP)
 

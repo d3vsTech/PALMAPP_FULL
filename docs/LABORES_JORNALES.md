@@ -271,9 +271,21 @@ GROUP BY j.empleado_id;
 - `/labores/select` acepta cualquiera de: `configuracion.editar`, `operaciones.crear`, `operaciones.editar` — para que un operador del wizard pueda poblar el dropdown sin tener permiso admin.
 - Los demás verbos CRUD (`index`, `show`, `store`, `update`, `destroy`) requieren `configuracion.editar`.
 
-### 8.2 Precios de Palma (CRUD pendiente)
+### 8.2 Precios de Palma (CRUD implementado)
 
-`precios_palma` requiere un `PrecioPalmaController` pendiente para configurar PLATEO/PODA/SANIDAD/OTROS desde la UI.
+> **Base URL:** `{{host}}/api/v1/tenant/precios-palma`
+
+Los 4 registros se crean automáticamente al provisionar el tenant (`precio_palma = 0`). El admin solo los actualiza.
+
+| Método | Endpoint | Descripción |
+|---|---|---|
+| `GET` | `/precios-palma` | Listar los 4 tipos con sus precios (sin paginación) |
+| `GET` | `/precios-palma/{id}` | Ver detalle de un tipo |
+| `PUT` | `/precios-palma/{id}` | Actualizar `precio_palma` y/o `estado` |
+
+**Permisos:** `configuracion.editar`.
+
+Documentación completa con payloads y ejemplos: [API_PARAMETRICAS.md §4b](./API_PARAMETRICAS.md).
 
 ### 8.3 Operaciones, Cosechas y Jornales (implementados)
 

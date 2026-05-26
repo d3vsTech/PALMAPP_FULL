@@ -9,6 +9,8 @@
 
 | Método | Ruta | Permiso | Descripción |
 |--------|------|---------|-------------|
+| GET | `/colaboradores/wizard-init` | `colaboradores.crear` | Bundle para el wizard de **creación** (paramétricas) |
+| GET | `/colaboradores/{id}/wizard-init` | `colaboradores.ver` | Bundle para el wizard de **edición** (colaborador + paramétricas) |
 | GET | `/colaboradores/select` | `colaboradores.ver` o `operaciones.crear` u `operaciones.editar` | Listado liviano para dropdowns (wizard) |
 | GET | `/colaboradores` | `colaboradores.ver` | Listar colaboradores (paginado) |
 | GET | `/colaboradores/{id}` | `colaboradores.ver` | Detalle de un colaborador |
@@ -19,6 +21,74 @@
 | PATCH | `/colaboradores/{id}/toggle` | `colaboradores.editar` | Activar/Desactivar |
 | POST | `/colaboradores/{id}/avatar` | `colaboradores.editar` | Subir avatar del colaborador |
 | DELETE | `/colaboradores/{id}/avatar` | `colaboradores.editar` | Eliminar avatar del colaborador |
+
+---
+
+## 0. Wizard Init — Bundle de inicialización
+
+Endpoint diseñado para **reemplazar las 8 peticiones paralelas** que el frontend hace al montar el wizard de creación/edición de colaboradores. Devuelve en una sola respuesta el colaborador (si aplica) más todas las paramétricas necesarias. Internamente cada paramétrica está cacheada en el servidor (TTL 15 min las del tenant, 6 h las ubicaciones); por lo general la respuesta es prácticamente instantánea después del primer hit.
+
+### Modo edición
+
+```
+GET /api/v1/tenant/colaboradores/{id}/wizard-init
+```
+
+**Permiso:** `colaboradores.ver`
+
+### Modo creación
+
+```
+GET /api/v1/tenant/colaboradores/wizard-init
+```
+
+**Permiso:** `colaboradores.crear`
+
+En modo creación no hay colaborador que cargar; `data.colaborador` viene `null`.
+
+### Response 200
+
+```json
+{
+  "data": {
+    "colaborador": {
+      "id": 18,
+      "primer_nombre": "Juan",
+      "segundo_nombre": "Carlos",
+      "primer_apellido": "Pérez",
+      "segundo_apellido": "López",
+      "tipo_documento": "CC",
+      "documento": "1098765432",
+      "...": "... resto del colaborador igual que GET /colaboradores/{id} ...",
+      "predio": { "id": 1, "nombre": "Finca El Palmar" },
+      "contrato_vigente": { "...": "..." }
+    },
+    "parametricas": {
+      "predios": [
+        { "id": 1, "nombre": "Finca El Palmar", "estado": true }
+      ],
+      "eps":                  [ { "id": 1, "nombre": "Sura" } ],
+      "arl":                  [ { "id": 1, "nombre": "Positiva" } ],
+      "fondos_pension":       [ { "id": 1, "nombre": "Porvenir" } ],
+      "entidades_bancarias":  [ { "id": 1, "nombre": "Bancolombia" } ],
+      "departamentos":        [ { "codigo": "68", "nombre": "Santander" } ],
+      "documento_categorias": {
+        "DATOS_BASE":          { "label": "Datos base", "unico_por_tipo": true, "tipos": { "...": "..." } },
+        "CONTRATACION_LABORAL":{ "label": "Contratación laboral", "...": "..." },
+        "...": "..."
+      }
+    }
+  }
+}
+```
+
+### Notas para el frontend
+
+- **Reemplaza estas 8 peticiones individuales** (ver `consultas-editar-colaborador.md`): `predios?per_page=100`, `documento-categorias`, `eps/select`, `arl/select`, `fondos-pension/select`, `entidades-bancarias/select`, `auth/departamentos` y `colaboradores/{id}`.
+- **NO incluye** municipios (se cargan condicionalmente cuando cambia el departamento) ni documentos del colaborador (se cargan al llegar al paso 7). Esos endpoints siguen igual.
+- Los selects de paramétricas pueden recibir valores legacy que ya no existen en el catálogo (ej. una EPS retirada). El frontend debe seguir el patrón actual: mostrar el valor pre-cargado aunque no esté en la lista.
+- El header `Cache-Control: private, max-age=0, must-revalidate` indica al navegador que NO cachee la respuesta — el caché vive en el servidor a nivel de paramétricas, no en el cliente, para no servir datos del colaborador desactualizados.
+- Endpoints legacy individuales (`/predios`, `/eps/select`, etc.) siguen funcionando y soportados — otros consumidores (paneles de configuración, dashboards) los siguen usando.
 
 ---
 
@@ -95,6 +165,7 @@ GET /api/v1/tenant/colaboradores
       "lugar_expedicion": "Bucaramanga",
       "cargo": "Jornalero",
       "salario_base": "1423500.00",
+      "subsidio_transporte": true,
       "modalidad_pago": "PRODUCCION",
       "correo_electronico": "juan@email.com",
       "telefono": "3001234567",
@@ -168,6 +239,7 @@ GET /api/v1/tenant/colaboradores/{id}
     "lugar_expedicion": "Bucaramanga",
     "cargo": "Jornalero",
     "salario_base": "1423500.00",
+    "subsidio_transporte": true,
     "modalidad_pago": "PRODUCCION",
     "correo_electronico": "juan@email.com",
     "telefono": "3001234567",
@@ -234,6 +306,7 @@ POST /api/v1/tenant/colaboradores
   "lugar_expedicion": "Bucaramanga",
   "cargo": "Jornalero",
   "salario_base": 1423500,
+  "subsidio_transporte": true,
   "modalidad_pago": "PRODUCCION",
   "predio_id": 1,
   "fecha_ingreso": "2025-01-15",
@@ -285,6 +358,7 @@ POST /api/v1/tenant/colaboradores
 | `eps` | string | Máx. 50 |
 | `fondo_pension` | string | Máx. 50 |
 | `arl` | string | Máx. 50 |
+| `subsidio_transporte` | boolean | Default `true`. Indica si el colaborador recibe subsidio de transporte. |
 | `caja_compensacion` | string | Máx. 50 |
 | `talla_camisa` | string | Máx. 10 |
 | `talla_pantalon` | string | Máx. 10 |
@@ -491,7 +565,7 @@ Invierte el estado actual del colaborador (activo ↔ inactivo).
 - `tipo_documento`, `documento`, `fecha_nacimiento`, `fecha_expedicion_documento`, `lugar_expedicion`
 
 ### Sección 3: Contratación
-- `cargo` (texto libre), `salario_base` (decimal), `modalidad_pago` (`FIJO` / `VARIABLE`), `predio_id` (select de predios)
+- `cargo` (texto libre), `salario_base` (decimal), `subsidio_transporte` (boolean), `modalidad_pago` (`FIJO` / `PRODUCCION`), `predio_id` (select de predios)
 
 ### Sección 4: Fechas Laborales
 - `fecha_ingreso`, `fecha_retiro`

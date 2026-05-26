@@ -14,7 +14,9 @@ class Tenant extends Model
     use HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'nombre', 'tipo_persona', 'nit', 'razon_social', 'correo_contacto', 'telefono',
+        'nombre', 'tipo_persona', 'nit', 'razon_social', 'actividad_economica',
+        'correo_contacto', 'telefono', 'telefono_fijo', 'sitio_web',
+        'representante_nombre', 'representante_cedula', 'representante_cargo',
         'direccion', 'departamento', 'municipio', 'logo_url',
         'estado', 'fecha_activacion', 'fecha_suspension',
         'plan', 'max_empleados', 'max_usuarios',

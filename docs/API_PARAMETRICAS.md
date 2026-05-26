@@ -43,30 +43,59 @@ Catálogo de variedades de palma (híbrido, ténera, dura).
 
 ### Endpoints
 
-| Método   | URL                      | Descripción |
-|----------|--------------------------|-------------|
-| `GET`    | `/semillas`              | Listar semillas |
-| `GET`    | `/semillas/{id}`         | Ver detalle |
-| `POST`   | `/semillas`              | Crear semilla |
-| `PUT`    | `/semillas/{id}`         | Editar semilla |
-| `DELETE` | `/semillas/{id}`         | Eliminar semilla |
+| Método   | URL                      | Permiso | Descripción |
+|----------|--------------------------|---------|-------------|
+| `GET`    | `/semillas/select`       | `configuracion.editar` **o** `lotes.{ver\|crear\|editar}` | Dropdown sin paginación (solo activas) |
+| `GET`    | `/semillas`              | `configuracion.editar` | Listar semillas (paginado) |
+| `GET`    | `/semillas/{id}`         | `configuracion.editar` | Ver detalle |
+| `POST`   | `/semillas`              | `configuracion.editar` | Crear semilla |
+| `PUT`    | `/semillas/{id}`         | `configuracion.editar` | Editar semilla |
+| `DELETE` | `/semillas/{id}`         | `configuracion.editar` | Eliminar semilla |
+
+### Tipos válidos
+
+| Valor | Descripción |
+|-------|-------------|
+| `Africana` | Elaeis guineensis africana |
+| `Híbrido` | Híbrido interespecífico OxG |
+| `Compacta` | Variedad compacta |
+| `Americana` | Elaeis oleifera americana |
 
 ### Crear / Editar
 
 ```json
 // POST /semillas
 {
-  "tipo": "HIBRIDO",
-  "nombre": "Deli x Ghana"
+  "tipo": "Africana",
+  "nombre": "Elaeis Guineensis"
 }
 
 // PUT /semillas/{id}
 {
-  "tipo": "TENERA",
-  "nombre": "Deli x Ghana v2",
+  "tipo": "Híbrido",
+  "nombre": "Híbrido OxG",
   "estado": false
 }
 ```
+
+### Respuesta del select
+
+```json
+{
+  "data": [
+    { "id": 1, "tipo": "Africana", "nombre": "Elaeis Guineensis" },
+    { "id": 2, "tipo": "Híbrido", "nombre": "Híbrido OxG" }
+  ]
+}
+```
+
+> Sin paginación. Devuelve solo activas. Ordenado alfabéticamente por `nombre`.
+
+### Errores específicos
+
+| Código HTTP | code | Descripción |
+|-------------|------|-------------|
+| 409 | `SEMILLA_CON_LOTES` | No se puede eliminar porque está asignada a uno o más lotes |
 
 ---
 
@@ -159,70 +188,122 @@ Trabajador abona 150 palmas a 200g/palma:
 
 ---
 
-## 4. Labores
+## 4. Labores de Finca
 
-Tipos de trabajo en campo con 3 formas de pago.
+Catálogo editable de trabajos manuales de mantenimiento de la finca (reparaciones, transporte interno, etc.). **No confundir con las Labores de Palma** (PLATEO, PODA, FERTILIZACION, SANIDAD, OTROS) — estas son tipos fijos cuyos precios se configuran en la sección §4b de este documento.
 
 ### Endpoints
 
-| Método   | URL                      | Descripción |
-|----------|--------------------------|-------------|
-| `GET`    | `/labores`               | Listar labores (filtrable por `tipo_pago`) |
-| `GET`    | `/labores/{id}`          | Ver detalle (incluye insumo asociado) |
-| `POST`   | `/labores`               | Crear labor |
-| `PUT`    | `/labores/{id}`          | Editar labor |
-| `DELETE` | `/labores/{id}`          | Eliminar labor (falla si tiene jornales) |
+| Método   | URL                      | Permiso | Descripción |
+|----------|--------------------------|---------|-------------|
+| `GET`    | `/labores/select`        | `configuracion.editar` **o** `operaciones.crear` **o** `operaciones.editar` | Dropdown sin paginación para el wizard (incluye `valor_base`). Filtros: `?estado=false` para inactivas. |
+| `GET`    | `/labores`               | `configuracion.editar` | Listar labores (paginado, filtrable por `search`, `estado`) |
+| `GET`    | `/labores/{id}`          | `configuracion.editar` | Ver detalle |
+| `POST`   | `/labores`               | `configuracion.editar` | Crear labor |
+| `PUT`    | `/labores/{id}`          | `configuracion.editar` | Editar labor |
+| `DELETE` | `/labores/{id}`          | `configuracion.editar` | Eliminar labor |
 
-### Filtros adicionales
+### Crear / Editar
 
-| Parámetro   | Valores posibles |
-|-------------|-----------------|
-| `tipo_pago` | `JORNAL_FIJO`, `POR_PALMA_INSUMO`, `POR_PALMA_SIMPLE` |
-
-### Tipos de pago y campos requeridos
-
-#### JORNAL_FIJO — Pago fijo por día
 ```json
+// POST /labores
 {
-  "nombre": "Guadaña",
-  "tipo_pago": "JORNAL_FIJO",
-  "valor_base": 55000.00,
-  "unidad_medida": "JORNAL"
+  "nombre": "Reparación de portón",
+  "valor_base": 45000.00
+}
+
+// PUT /labores/{id}
+{
+  "nombre": "Mantenimiento portón norte",
+  "valor_base": 50000.00,
+  "estado": false
 }
 ```
-- `valor_base`: tarifa diaria (obligatorio)
-- `insumo_id`: **NO** debe enviarse
 
-#### POR_PALMA_INSUMO — Pago por palma según escalas de abono
+| Campo | Tipo | Requerido al crear | Descripción |
+|---|---|---|---|
+| `nombre` | string(100) | ✔ | Único por tenant. |
+| `valor_base` | decimal | ✔ | Precio fijo que gana el empleado por esta labor. |
+| `estado` | boolean | — | Default `true`. |
+
+### Respuesta del select
+
 ```json
 {
-  "nombre": "Fertilización con Urea",
-  "tipo_pago": "POR_PALMA_INSUMO",
-  "insumo_id": 1,
-  "unidad_medida": "PALMAS"
+  "data": [
+    { "id": 7, "nombre": "Reparación de portón", "valor_base": "45000.00" },
+    { "id": 8, "nombre": "Transporte interno", "valor_base": "50000.00" }
+  ]
 }
 ```
-- `insumo_id`: obligatorio (indica qué producto se entrega, pero **NO determina el precio**)
-- `valor_base`: no se usa — el precio viene de la tabla genérica `precios-abono` según los gramos aplicados
-- Al registrar un jornal de esta labor, el sistema busca en `precios-abono` el rango de gramos y multiplica × palmas
-
-#### POR_PALMA_SIMPLE — Pago fijo por palma, sin insumo
-```json
-{
-  "nombre": "Plateo",
-  "tipo_pago": "POR_PALMA_SIMPLE",
-  "valor_base": 120.00,
-  "unidad_medida": "PALMAS"
-}
-```
-- `valor_base`: precio por palma (obligatorio)
-- `insumo_id`: **NO** debe enviarse
 
 ### Errores específicos
 
 | Código HTTP | code | Descripción |
 |-------------|------|-------------|
-| 409 | `LABOR_CON_JORNALES` | No se puede eliminar porque tiene jornales asociados |
+| 409 | `LABOR_CON_JORNALES` | No se puede eliminar porque tiene jornales de Finca asociados |
+
+---
+
+## 4b. Precios de Palma (PLATEO, PODA, SANIDAD, OTROS)
+
+Precios configurables por tenant para las 4 labores de palma de precio fijo. Los registros se crean automáticamente con `precio_palma = 0` al provisionar un nuevo tenant — el admin solo los **actualiza** desde Configuración.
+
+> COSECHA usa `precios_cosecha` (§9). FERTILIZACION usa `precios-abono` (§3). Solo PLATEO, PODA, SANIDAD y OTROS usan esta tabla.
+
+### Endpoints
+
+| Método | URL | Permiso | Descripción |
+|---|---|---|---|
+| `GET` | `/precios-palma` | `configuracion.editar` | Listar los 4 tipos con sus precios actuales (sin paginación). |
+| `GET` | `/precios-palma/{id}` | `configuracion.editar` | Ver detalle de un tipo. |
+| `PUT` | `/precios-palma/{id}` | `configuracion.editar` | Actualizar el precio de un tipo. |
+
+No hay `POST` ni `DELETE` — los 4 registros son inmutables en estructura (solo cambia `precio_palma`).
+
+### Respuesta (GET index)
+
+```json
+{
+  "data": [
+    { "id": 1, "tipo": "OTROS",   "precio_palma": null,    "estado": true },
+    { "id": 2, "tipo": "PLATEO",  "precio_palma": "50.00", "estado": true },
+    { "id": 3, "tipo": "PODA",    "precio_palma": "80.00", "estado": true },
+    { "id": 4, "tipo": "SANIDAD", "precio_palma": null,    "estado": true }
+  ]
+}
+```
+
+### Editar (PUT)
+
+```json
+// PUT /precios-palma/{id}
+{ "precio_palma": 60.00 }
+
+// Respuesta 200
+{
+  "message": "Precio actualizado correctamente",
+  "data": { "id": 2, "tipo": "PLATEO", "precio_palma": "60.00", "estado": true }
+}
+```
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `precio_palma` | decimal \| null | Precio por palma (PLATEO/PODA) o valor plano (SANIDAD/OTROS). `null` = no configurado. |
+| `estado` | boolean | Activar/desactivar el tipo. |
+
+### Comportamiento de `precio_palma = null`
+
+Para SANIDAD y OTROS, `precio_palma` puede ser `null` (no configurado). En ese caso:
+- El jornal se registra normalmente en la planilla.
+- `valor_total` se guarda como `null` — pendiente de precio.
+- Al configurar el precio luego, los jornales históricos con `valor_total = null` **no se recalculan** automáticamente.
+
+### Errores específicos
+
+| Código HTTP | Descripción |
+|---|---|
+| 422 | `precio_palma` fuera de rango o tipo de dato inválido. |
 
 ---
 
@@ -263,11 +344,13 @@ Promedio de kg/gajo por lote por año. Usado en el cálculo de cosecha.
 }
 ```
 
+> Al editar, si se envía `anio`, se valida que no exista otro registro con el mismo `lote_id` + `anio` (excluyendo el registro actual). Si existe, retorna 409 `PROMEDIO_DUPLICADO`.
+
 ### Errores específicos
 
 | Código HTTP | code | Descripción |
 |-------------|------|-------------|
-| 409 | `PROMEDIO_DUPLICADO` | Ya existe un promedio para ese lote en ese año |
+| 409 | `PROMEDIO_DUPLICADO` | Ya existe un promedio para ese lote en ese año (aplica en POST y en PUT al cambiar `anio`) |
 
 ---
 
@@ -685,6 +768,205 @@ php artisan db:seed --class=ParametricasColaboradorSeeder
 ### Nota documental
 
 El consumo desde el formulario del colaborador (qué select va con qué campo del payload) está documentado en [API_COLABORADORES.md § Paramétricas del Colaborador](./API_COLABORADORES.md).
+
+---
+
+## 13. Info Empresa
+
+Datos de identificación de la empresa, representante legal y ubicación/contacto. Corresponde a la sección **Configuración → Info Empresa** del frontend.
+
+### Endpoints
+
+| Método | URL | Descripción |
+|--------|-----|-------------|
+| `GET`  | `/configuracion/info-empresa` | Ver datos actuales de la empresa |
+| `PUT`  | `/configuracion/info-empresa` | Editar datos de la empresa |
+
+> El endpoint legacy `PUT /configuracion/finca` sigue activo como alias.
+
+### Respuesta (GET)
+
+```json
+{
+  "data": {
+    "id": 1,
+    "nombre": "AGRO CAMPO S.A.S.",
+    "tipo_persona": "JURIDICA",
+    "nit": "900.123.456-7",
+    "razon_social": "AGRO CAMPO S.A.S.",
+    "actividad_economica": "Cultivo de palma para aceite",
+    "representante_nombre": "Juan Carlos Pérez Gómez",
+    "representante_cedula": "16.123.456",
+    "representante_cargo": "Gerente General",
+    "direccion": "Km 5 Vía Palmira - Candelaria",
+    "departamento": "Valle del Cauca",
+    "municipio": "Palmira",
+    "correo_contacto": "contacto@agrocampo.com",
+    "telefono": "+57 300 123 4567",
+    "telefono_fijo": "+57 (2) 123 4567",
+    "sitio_web": "www.agrocampo.com",
+    "logo_url": "https://..."
+  }
+}
+```
+
+### Editar (PUT)
+
+Todos los campos son opcionales (`sometimes`). Logo se envía como `multipart/form-data`.
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `nombre` | string(100) | Nombre de la empresa |
+| `tipo_persona` | string | `NATURAL` o `JURIDICA` |
+| `nit` | string(20) | NIT único por tenant |
+| `razon_social` | string(200) | Razón social |
+| `actividad_economica` | string(200) | Actividad económica principal |
+| `representante_nombre` | string(200) | Nombre completo del representante legal |
+| `representante_cedula` | string(20) | Cédula del representante legal |
+| `representante_cargo` | string(100) | Cargo del representante legal |
+| `direccion` | string(200) | Dirección física |
+| `departamento` | string(100) | Departamento |
+| `municipio` | string(100) | Municipio |
+| `correo_contacto` | email(100) | Correo electrónico de contacto |
+| `telefono` | string(20) | Celular |
+| `telefono_fijo` | string(20) | Teléfono fijo |
+| `sitio_web` | string(200) | Sitio web |
+| `logo` | file | Imagen del logo (jpeg/jpg/png/webp, máx 2MB) |
+
+### Errores específicos
+
+| Código HTTP | code | Descripción |
+|-------------|------|-------------|
+| 422 | `NIT_DUPLICATED` | Ya existe otra finca con el mismo NIT |
+
+---
+
+## 14. Constantes Legales
+
+Parámetros legales colombianos por tenant: año fiscal, SMMLV, auxilio de transporte, cesantías, primas de servicio, vacaciones y días comerciales. Corresponde a la sub-sección **Configuración → Legal → Constantes Legales**.
+
+### Endpoints
+
+| Método | URL | Descripción |
+|--------|-----|-------------|
+| `GET`  | `/configuracion/constantes-legales` | Ver constantes actuales |
+| `PUT`  | `/configuracion/constantes-legales` | Editar constantes |
+
+### Respuesta (GET)
+
+```json
+{
+  "data": {
+    "anio_vigente": 2026,
+    "salario_minimo_vigente": "1750905.00",
+    "auxilio_transporte": "249095.00",
+    "tasa_interes_cesantias": "12.00",
+    "fecha_limite_consignacion_cesantias": "14 de febrero",
+    "fecha_limite_pago_intereses_cesantias": "31 de enero",
+    "fecha_limite_prima_primer_semestre": "30 de junio",
+    "fecha_limite_prima_segundo_semestre": "20 de diciembre",
+    "dias_vacaciones_anuales": 15,
+    "dias_anio_comercial": 360,
+    "dias_mes_comercial": 30
+  }
+}
+```
+
+### Editar (PUT)
+
+Todos los campos son opcionales (`sometimes`).
+
+| Campo | Tipo | Valores / Rango | Descripción |
+|-------|------|-----------------|-------------|
+| `anio_vigente` | integer | 2020–2100 | Año fiscal activo del tenant |
+| `salario_minimo_vigente` | decimal | min:0 | SMMLV vigente (COP) |
+| `auxilio_transporte` | decimal | min:0 | Auxilio de transporte mensual (COP) |
+| `tasa_interes_cesantias` | decimal | 0–100 | Tasa de interés anual sobre cesantías (%) |
+| `fecha_limite_consignacion_cesantias` | string(50) | — | Fecha límite de consignación de cesantías (ej: "14 de febrero") |
+| `fecha_limite_pago_intereses_cesantias` | string(50) | — | Fecha límite de pago de intereses de cesantías (ej: "31 de enero") |
+| `fecha_limite_prima_primer_semestre` | string(50) | — | Fecha límite prima 1er semestre (ej: "30 de junio") |
+| `fecha_limite_prima_segundo_semestre` | string(50) | — | Fecha límite prima 2do semestre (ej: "20 de diciembre") |
+| `dias_vacaciones_anuales` | integer | 1–365 | Días de vacaciones remuneradas anuales (CST: 15) |
+| `dias_anio_comercial` | integer | 1–999 | Días del año comercial para cálculos (estándar: 360) |
+| `dias_mes_comercial` | integer | 1–99 | Días del mes comercial para cálculos (estándar: 30) |
+
+> **Valores default al crear un tenant:** `anio_vigente = año_actual`, `tasa_interes_cesantias = 12`, fechas con los valores legales colombianos estándar, `dias_vacaciones_anuales = 15`, `dias_anio_comercial = 360`, `dias_mes_comercial = 30`.
+
+---
+
+## 15. Tablas Legales
+
+Historial de porcentajes de aportes a seguridad social (Salud, Pensión, ARL) por vigencia. Corresponde a la sub-sección **Configuración → Legal → Tablas Legales**.
+
+### Endpoints
+
+| Método   | URL | Descripción |
+|----------|-----|-------------|
+| `GET`    | `/configuracion/tablas-legales` | Listar registros (sin paginación) |
+| `GET`    | `/configuracion/tablas-legales/conceptos-select` | Dropdown de conceptos disponibles (Salud, Pensión, ARL) |
+| `POST`   | `/configuracion/tablas-legales` | Crear nuevo registro |
+| `PUT`    | `/configuracion/tablas-legales/{id}` | Editar registro |
+| `DELETE` | `/configuracion/tablas-legales/{id}` | Eliminar registro |
+
+### Respuesta del listado (GET)
+
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "concepto_id": 3,
+      "concepto": {
+        "id": 3,
+        "nombre": "Salud",
+        "subtipo": "SALUD"
+      },
+      "porcentaje_empleado": "4.00",
+      "porcentaje_empresa": "8.50",
+      "vigente_desde": "31/12/2022",
+      "vigente_hasta": null
+    }
+  ]
+}
+```
+
+> `vigente_hasta: null` significa que el registro está actualmente vigente.
+
+### Respuesta del select de conceptos
+
+```json
+{
+  "data": [
+    { "id": 1, "nombre": "ARL", "subtipo": "ARL" },
+    { "id": 2, "nombre": "Pensión", "subtipo": "PENSION" },
+    { "id": 3, "nombre": "Salud", "subtipo": "SALUD" }
+  ]
+}
+```
+
+### Crear (POST)
+
+```json
+{
+  "concepto_id": 3,
+  "porcentaje_empleado": 4.00,
+  "porcentaje_empresa": 8.50,
+  "vigente_desde": "01/01/2026",
+  "vigente_hasta": null
+}
+```
+
+| Campo | Tipo | Requerido | Validación |
+|-------|------|-----------|------------|
+| `concepto_id` | integer | **Sí** | Debe existir en `nomina_concepto` del tenant con `subtipo` en SALUD/PENSION/ARL |
+| `porcentaje_empleado` | decimal | **Sí** | 0–100 |
+| `porcentaje_empresa` | decimal | **Sí** | 0–100 |
+| `vigente_desde` | date | **Sí** | Formato `dd/mm/yyyy` |
+| `vigente_hasta` | date | No | Formato `dd/mm/yyyy`. `null` = vigente indefinidamente |
+
+### Editar (PUT)
+
+Todos los campos son opcionales (`sometimes`). Mismas validaciones que el POST.
 
 ---
 

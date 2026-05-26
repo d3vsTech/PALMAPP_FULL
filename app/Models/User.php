@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Market\MarketProveedor;
+use App\Models\Market\MarketProveedorUser;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -105,6 +107,46 @@ class User extends Authenticatable implements JWTSubject
     {
         $pivot = $this->tenantUsers()
             ->where('tenant_id', $tenantId)
+            ->where('estado', true)
+            ->first();
+
+        return $pivot?->rol;
+    }
+
+    // ─── Relaciones Marketplace (Proveedor) ─────────
+
+    public function proveedores(): BelongsToMany
+    {
+        return $this->belongsToMany(MarketProveedor::class, 'market_proveedor_user', 'user_id', 'proveedor_id')
+            ->withPivot(['rol', 'estado'])
+            ->withTimestamps();
+    }
+
+    public function proveedorUsers(): HasMany
+    {
+        return $this->hasMany(MarketProveedorUser::class, 'user_id');
+    }
+
+    public function activeProveedores(): BelongsToMany
+    {
+        return $this->proveedores()
+            ->wherePivot('estado', true)
+            ->where('market_proveedores.estado', 'activo')
+            ->whereNull('market_proveedores.deleted_at');
+    }
+
+    public function hasAccessToProveedor(int $proveedorId): bool
+    {
+        return $this->proveedorUsers()
+            ->where('proveedor_id', $proveedorId)
+            ->where('estado', true)
+            ->exists();
+    }
+
+    public function getRoleInProveedor(int $proveedorId): ?string
+    {
+        $pivot = $this->proveedorUsers()
+            ->where('proveedor_id', $proveedorId)
             ->where('estado', true)
             ->first();
 

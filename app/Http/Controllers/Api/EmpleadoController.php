@@ -2,14 +2,23 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Constants\DocumentoCategoria;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Empleado\StoreEmpleadoAvatarRequest;
 use App\Http\Requests\Empleado\StoreEmpleadoRequest;
 use App\Http\Requests\Empleado\UpdateEmpleadoRequest;
+use App\Models\Arl;
+use App\Models\Departamento;
 use App\Models\Empleado;
+use App\Models\EntidadBancaria;
+use App\Models\Eps;
+use App\Models\FondoPension;
+use App\Models\Predio;
 use App\Services\AuditoriaService;
+use App\Support\WizardCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -109,6 +118,82 @@ class EmpleadoController extends Controller
         }
     }
 
+    /**
+     * Bundle para inicializar el wizard de edición de colaborador en una sola petición.
+     * Reemplaza las 8 llamadas paralelas que hacía el frontend al montar el wizard.
+     *
+     * Modo edición: GET /colaboradores/{empleado}/wizard-init
+     * Modo creación: GET /colaboradores/wizard-init (sin model binding)
+     */
+    public function wizardInit(Request $request, ?Empleado $empleado = null): JsonResponse
+    {
+        try {
+            $tenantId = (int) app('current_tenant_id');
+
+            $colaborador = null;
+            if ($empleado !== null && $empleado->exists) {
+                $empleado->load('predio:id,nombre', 'contratoVigente');
+                $colaborador = $empleado;
+            }
+
+            $parametricas = [
+                'predios' => Cache::remember(
+                    WizardCache::predios($tenantId) . ':wizard',
+                    WizardCache::TTL_PARAMETRICA,
+                    fn () => Predio::query()
+                        ->when($request->has('estado_predio'), fn ($q) => $q->where('estado', true))
+                        ->orderBy('nombre')
+                        ->get(['id', 'nombre', 'estado']),
+                ),
+
+                'eps' => Cache::remember(
+                    WizardCache::eps($tenantId),
+                    WizardCache::TTL_PARAMETRICA,
+                    fn () => Eps::query()->activos()->orderBy('nombre')->get(['id', 'nombre']),
+                ),
+
+                'arl' => Cache::remember(
+                    WizardCache::arl($tenantId),
+                    WizardCache::TTL_PARAMETRICA,
+                    fn () => Arl::query()->activos()->orderBy('nombre')->get(['id', 'nombre']),
+                ),
+
+                'fondos_pension' => Cache::remember(
+                    WizardCache::fondosPension($tenantId),
+                    WizardCache::TTL_PARAMETRICA,
+                    fn () => FondoPension::query()->activos()->orderBy('nombre')->get(['id', 'nombre']),
+                ),
+
+                'entidades_bancarias' => Cache::remember(
+                    WizardCache::entidadesBancarias($tenantId),
+                    WizardCache::TTL_PARAMETRICA,
+                    fn () => EntidadBancaria::query()->activos()->orderBy('nombre')->get(['id', 'nombre']),
+                ),
+
+                'departamentos' => Cache::remember(
+                    WizardCache::departamentos(),
+                    WizardCache::TTL_UBICACIONES,
+                    fn () => Departamento::orderBy('nombre')->get(['codigo', 'nombre']),
+                ),
+
+                'documento_categorias' => DocumentoCategoria::CATEGORIAS,
+            ];
+
+            return response()->json([
+                'data' => [
+                    'colaborador'  => $colaborador,
+                    'parametricas' => $parametricas,
+                ],
+            ])->header('Cache-Control', 'private, max-age=0, must-revalidate');
+        } catch (\Throwable $e) {
+            Log::error('Error en wizard-init de colaborador: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Error al inicializar el wizard',
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
+    }
+
     public function store(StoreEmpleadoRequest $request): JsonResponse
     {
         try {
@@ -174,15 +259,22 @@ class EmpleadoController extends Controller
                     ]);
                 }
 
-                // Si cambia fecha_retiro (sin cambio de fecha_ingreso): actualizar contrato vigente
+                // Si cambia fecha_retiro (sin cambio de fecha_ingreso): actualizar contrato
                 if ($fechaRetiroCambio && ! $fechaIngresoCambio) {
                     $contratoVigente = $empleado->contratoVigente;
 
                     if ($contratoVigente && $empleado->fecha_retiro) {
+                        // Tenía contrato vigente → se establece fecha de retiro
                         $contratoVigente->update([
                             'fecha_terminacion' => $empleado->fecha_retiro,
                             'estado_contrato'   => 'TERMINADO',
                         ]);
+                    } elseif (! $contratoVigente && $empleado->fecha_retiro) {
+                        // Contrato ya era TERMINADO y se corrige la fecha de retiro
+                        $empleado->contratos()->terminados()
+                            ->latest('fecha_inicio')
+                            ->first()
+                            ?->update(['fecha_terminacion' => $empleado->fecha_retiro]);
                     } elseif (! $contratoVigente && ! $empleado->fecha_retiro) {
                         // Se quitó fecha_retiro (reingreso): crear nuevo contrato vigente
                         $empleado->contratos()->create([

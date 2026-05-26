@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Palma\AsignarLineaMasivaPalmaRequest;
 use App\Http\Requests\Palma\DestroyMasivoPalmaRequest;
 use App\Http\Requests\Palma\StorePalmaRequest;
 use App\Http\Requests\Palma\UpdatePalmaRequest;
@@ -273,6 +274,111 @@ class PalmaController extends Controller
 
             return response()->json([
                 'message' => 'Error al actualizar la palma',
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * PUT /api/v1/tenant/palmas/masivo/asignar-linea
+     * Asignación masiva de palmas a una línea (o desasignación si linea_id = null).
+     * Si no se envía palmas_ids, asigna todas las palmas sin línea del sublote.
+     */
+    public function asignarLineaMasivo(AsignarLineaMasivaPalmaRequest $request): JsonResponse
+    {
+        try {
+            $sublote = Sublote::find($request->sublote_id);
+            if (!$sublote) {
+                return response()->json([
+                    'message' => 'El sublote no pertenece a esta finca',
+                    'code'    => 'SUBLOTE_NOT_FOUND',
+                ], 404);
+            }
+
+            $lineaId  = $request->linea_id;
+            $palmasIds = $request->palmas_ids ?? null;
+
+            // Validar que la línea pertenezca al sublote
+            if ($lineaId) {
+                $lineaValida = Linea::where('id', $lineaId)
+                    ->where('sublote_id', $sublote->id)
+                    ->exists();
+
+                if (!$lineaValida) {
+                    return response()->json([
+                        'message' => 'Error de validación',
+                        'errors'  => ['linea_id' => ['La línea no pertenece a este sublote.']],
+                    ], 422);
+                }
+            }
+
+            // Validar que las palmas_ids pertenezcan al sublote
+            if ($palmasIds) {
+                $conteoSublote = Palma::whereIn('id', $palmasIds)
+                    ->where('sublote_id', $sublote->id)
+                    ->count();
+
+                if ($conteoSublote !== count($palmasIds)) {
+                    return response()->json([
+                        'message' => 'Error de validación',
+                        'errors'  => ['palmas_ids' => ['Una o más palmas no pertenecen al sublote indicado.']],
+                    ], 422);
+                }
+            }
+
+            DB::beginTransaction();
+
+            // Recoger líneas anteriores afectadas para actualizar sus contadores
+            $lineasAnteriores = DB::table('palmas')
+                ->where('sublote_id', $sublote->id)
+                ->when($palmasIds, fn($q) => $q->whereIn('id', $palmasIds))
+                ->whereNotNull('linea_id')
+                ->distinct()
+                ->pluck('linea_id');
+
+            // UPDATE masivo en una sola query
+            $query = DB::table('palmas')->where('sublote_id', $sublote->id);
+
+            if ($palmasIds) {
+                // Modo explícito: solo las palmas indicadas
+                $query->whereIn('id', $palmasIds);
+            } elseif ($lineaId) {
+                // Modo automático: solo las que no tienen línea
+                $query->whereNull('linea_id');
+            }
+            // Si linea_id es null y no hay palmas_ids: desasignar todas las palmas del sublote
+
+            $cantidadAsignadas = $query->update(['linea_id' => $lineaId, 'updated_at' => now()]);
+
+            // Actualizar contadores de todas las líneas afectadas
+            $todasLineas = $lineasAnteriores->when($lineaId, fn($c) => $c->push($lineaId))->unique()->filter();
+
+            foreach (Linea::whereIn('id', $todasLineas)->get() as $linea) {
+                $linea->update(['cantidad_palmas' => $linea->palmas()->count()]);
+            }
+
+            DB::commit();
+
+            $this->auditoria->registrar(
+                request: $request,
+                accion: 'EDITAR',
+                modulo: 'PALMAS',
+                observaciones: "Asignación masiva: {$cantidadAsignadas} palma(s) del sublote '{$sublote->nombre}'"
+                    . ($lineaId ? " → línea {$lineaId}" : ' → desasignadas'),
+            );
+
+            return response()->json([
+                'message'           => "{$cantidadAsignadas} palma(s) asignadas correctamente",
+                'cantidad_asignadas' => $cantidadAsignadas,
+                'sublote_id'        => $sublote->id,
+                'linea_id'          => $lineaId,
+            ]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error('Error al asignar palmas a línea: ' . $e->getMessage());
+
+            return response()->json([
+                'message' => 'Error al asignar las palmas',
                 'error'   => $e->getMessage(),
             ], 500);
         }

@@ -11,6 +11,7 @@ use App\Models\Nomina;
 use App\Models\NominaConcepto;
 use App\Models\NominaEmpleado;
 use App\Models\NominaEmpleadoConcepto;
+use App\Models\NominaTablaLegal;
 use App\Models\Operacion;
 use App\Models\TenantConfig;
 use Illuminate\Support\Carbon;
@@ -114,7 +115,8 @@ class NominaCalculationService
             $ne->salario_tipo,
             $totalDevengado,
             (float) $config->salario_minimo_vigente,
-            $diasPeriodo
+            $diasPeriodo,
+            $fin
         );
 
         $totalDeduccionesLegales = array_sum(array_column($conceptosLegales, 'valor'));
@@ -181,7 +183,8 @@ class NominaCalculationService
                     $ne->salario_tipo,
                     $totalDevengado,
                     (float) $config->salario_minimo_vigente,
-                    $preview['dias_periodo']
+                    $preview['dias_periodo'],
+                    Carbon::parse($nomina->fecha_fin)
                 );
                 $totalDeduccionesLegales = array_sum(array_column($conceptosLegales, 'valor'));
             } else {
@@ -499,6 +502,10 @@ class NominaCalculationService
      * IBC = total_devengado del período (excluye subsidio transporte).
      * Topes: mínimo 1 SMLV proporcional, máximo 25 SMLV proporcional.
      *
+     * El porcentaje se obtiene de NominaTablaLegal vigente en $fechaReferencia.
+     * Si no existe tabla legal para el concepto, se usa valor_referencia del concepto
+     * como fallback (útil durante migración o tenants sin tablas configuradas).
+     *
      * @return array<int,array{concepto_id:int,codigo:string,nombre:string,porcentaje:float,base:float,valor:float}>
      */
     private function calcularConceptosLegales(
@@ -506,12 +513,13 @@ class NominaCalculationService
         string $salarioTipo,
         float $totalDevengado,
         float $smlv,
-        int $diasPeriodo
+        int $diasPeriodo,
+        Carbon $fechaReferencia
     ): array {
-        $smlvPeriodo  = $smlv * ($diasPeriodo / 30);
-        $topeMin      = $smlvPeriodo;            // 1 SMLV proporcional
-        $topeMax      = 25 * $smlvPeriodo;        // 25 SMLV proporcional
-        $ibc          = max($topeMin, min($topeMax, $totalDevengado));
+        $smlvPeriodo = $smlv * ($diasPeriodo / 30);
+        $topeMin     = $smlvPeriodo;
+        $topeMax     = 25 * $smlvPeriodo;
+        $ibc         = max($topeMin, min($topeMax, $totalDevengado));
 
         $aplicaA = $salarioTipo === NominaEmpleado::SALARIO_FIJO
             ? ['FIJO', 'AMBOS']
@@ -528,7 +536,7 @@ class NominaCalculationService
             ->get();
 
         foreach ($obligatorios as $c) {
-            $porcentaje = (float) $c->valor_referencia;
+            $porcentaje = $this->resolverPorcentaje($c, $fechaReferencia);
             $resultado[] = [
                 'concepto_id' => $c->id,
                 'codigo'      => $c->codigo,
@@ -549,7 +557,7 @@ class NominaCalculationService
                 ->where('activo', true)
                 ->first();
             if ($fsp) {
-                $porcentaje = (float) $fsp->valor_referencia;
+                $porcentaje = $this->resolverPorcentaje($fsp, $fechaReferencia);
                 $resultado[] = [
                     'concepto_id' => $fsp->id,
                     'codigo'      => $fsp->codigo,
@@ -562,6 +570,21 @@ class NominaCalculationService
         }
 
         return $resultado;
+    }
+
+    /**
+     * Resuelve el porcentaje del empleado para un concepto en una fecha dada.
+     * Prioriza NominaTablaLegal vigente; cae a valor_referencia si no hay tabla configurada.
+     */
+    private function resolverPorcentaje(NominaConcepto $concepto, Carbon $fecha): float
+    {
+        $tabla = NominaTablaLegal::where('concepto_id', $concepto->id)
+            ->vigente($fecha->toDateString())
+            ->first();
+
+        return $tabla !== null
+            ? (float) $tabla->porcentaje_empleado
+            : (float) $concepto->valor_referencia;
     }
 
     /**

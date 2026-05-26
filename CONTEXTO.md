@@ -18,6 +18,7 @@ El sistema está diseñado como plataforma multi-tenant, lo que significa que un
 - **Monitoreo:** Laravel Pulse (dashboard en /pulse, accesible solo para super-admin)
 - **Debugging:** Laravel Telescope (solo en entorno local)
 - **Colas:** Database queue (QUEUE_CONNECTION=database)
+- **Caché:** Driver `file` (`CACHE_STORE=file`) — claves canónicas y TTLs en `App\Support\WizardCache`. Ver §13 para la estrategia completa.
 
 ### Frontend (proyecto separado, por construir)
 - Recomendado: Vue 3 + Nuxt 3, o React con Next.js
@@ -123,6 +124,16 @@ Respuesta JSON con empleados SOLO del tenant 5
 
 El sistema usa JWT (JSON Web Tokens) en lugar de sesiones. No hay cookies ni estado en el servidor. El frontend guarda el token y lo envía en cada request.
 
+Hay **tres flujos de login independientes**, cada uno para un tipo de actor distinto. Comparten el modelo `User`, el broker de password reset y JWT, pero tienen prefijos de ruta y reglas de elegibilidad diferentes:
+
+| Prefijo | Quién entra | Claims JWT al seleccionar contexto |
+|---------|-------------|------------------------------------|
+| `/api/v1/auth`           | Super-admins (`users.is_super_admin = true`) | sin claims extra |
+| `/api/v1/tenant-auth`    | Usuarios de finca (filas en `tenant_user`)   | `tenant_id`, `tenant_role` |
+| `/api/v1/proveedor-auth` | Usuarios del marketplace (filas en `market_proveedor_user`) | `proveedor_id`, `proveedor_role` |
+
+Cada login bloquea a los actores que no le corresponden (p. ej. el `tenant-auth/login` y el `proveedor-auth/login` devuelven `403 USE_ADMIN_LOGIN` cuando reciben a un super-admin). Detalles del portal proveedor en §15.
+
 **Login:** `POST /api/v1/auth/login` con email y password. Retorna un token JWT que expira en 60 minutos, más datos del usuario.
 
 **Refresh:** `POST /api/v1/auth/refresh` con el token actual. Genera un nuevo token antes de que expire el anterior. El frontend debe implementar auto-refresh.
@@ -173,6 +184,8 @@ El sistema usa JWT (JSON Web Tokens) en lugar de sesiones. No hay cookies ni est
 **Migración 10 — Contratos y Documentos del Empleado (2 tablas nuevas + alter empleados):** Agrega `fecha_expedicion_documento` y `lugar_expedicion` a `empleados`. Crea `empleado_contratos` (historial de contratos laborales con salario snapshot, estado VIGENTE/TERMINADO y adjunto PDF). Crea `empleado_documentos` (documentos digitales organizados por categoría: DATOS_BASE, CONTRATACION_LABORAL, SST, PERMISOS_LICENCIAS, FINALIZACION_CONTRATO, DESPRENDIBLES, OTROS).
 
 **Migración 12 — Refactoring Colaboradores:** Separa `nombres`→`primer_nombre`+`segundo_nombre` y `apellidos`→`primer_apellido`+`segundo_apellido`. Desacopla cargo del modelo relacional: quita `cargo_id` FK de `empleados` y agrega campos directos `cargo` (string), `salario_base` (decimal) y `modalidad_pago` (FIJO/PRODUCCION). Agrega `predio_id` (FK nullable a `predios`). Hace `fecha_expedicion_documento` obligatorio. Quita `modalidad_id` y `cargo_id` de `empleado_contratos`. Reestructura categorías de documentos.
+
+**Migración 21 — Subsidio de Transporte en Empleado (alter empleados):** Agrega `subsidio_transporte` (boolean, default `true`) directamente a la tabla `empleados`. Este campo indica si el colaborador tiene derecho a recibir el auxilio de transporte y es configurable desde el wizard de creación/edición. La nómina lo lee al momento de liquidar para determinar si aplica el cálculo del auxilio.
 
 **Migración 11 — Ausencias (1 tabla nueva + alter nomina_empleado):** Crea `ausencias` (registros de incapacidades, licencias, permisos y faltas reportados desde la operación diaria; `operacion_id` NOT NULL, rango `fecha_inicio`/`fecha_fin`, flujo PENDIENTE → APROBADA → LIQUIDADA, soporte offline con `sync_uuid`/`sync_estado`). Agrega a `nomina_empleado` las columnas `dias_ausencia_descontados`, `total_ausencias_descuento` y `total_ausencias_remunerado` para reflejar el efecto de las ausencias en la liquidación.
 
@@ -231,9 +244,13 @@ Predio (finca/hacienda)
               └── Palma (planta individual, sublote_id + linea_id nullable)
 ```
 
-Un **predio** (finca) contiene varios **lotes** (divisiones del terreno), cada lote tiene uno o más **sublotes**, y dentro de cada sublote están las **palmas** individuales. Opcionalmente, un sublote puede tener **líneas** (filas de palmas): si existen, las palmas se asignan a una línea específica (`linea_id`); si no existen, las palmas cuelgan directamente del sublote. Los lotes se asocian con tipos de **semilla** (híbrido, ténera, dura). Cada lote tiene un **promedio** de kg/gajo por año y un **precio de cosecha** por año. Los campos `fecha_siembra` y `hectareas_sembradas` del lote son opcionales.
+Un **predio** (finca) contiene varios **lotes** (divisiones del terreno), cada lote tiene uno o más **sublotes**, y dentro de cada sublote están las **palmas** individuales. Opcionalmente, un sublote puede tener **líneas** (filas de palmas): si existen, las palmas se asignan a una línea específica (`linea_id`); si no existen, las palmas cuelgan directamente del sublote. Los lotes se asocian con tipos de **semilla** (Africana, Híbrido, Compacta, Americana). Cada lote tiene un **promedio** de kg/gajo por año y un **precio de cosecha** por año. Los campos `fecha_siembra` y `hectareas_sembradas` del lote son opcionales.
 
 Los lotes pueden asociarse con una o más **semillas** (variedades de palma) a través de la tabla pivot `semilla_lote` y el modelo `SemillaLote`. Al crear o editar un lote, se puede enviar un array `semillas_ids` para vincular las variedades plantadas.
+
+**Catálogo de Semillas:** Gestionado por `SemillaController` con CRUD completo (`/semillas`). El campo `tipo` acepta exclusivamente los valores: `Africana`, `Híbrido`, `Compacta`, `Americana`. Protección en eliminación: si la semilla está asignada a un lote retorna 409 `SEMILLA_CON_LOTES`. Endpoint `/semillas/select` (sin paginación, solo activas) disponible para dropdowns con permiso `configuracion.editar` o `lotes.{ver|crear|editar}`.
+
+**Promedios por Lote:** Gestionado por `PromedioLoteController` con CRUD completo (`/promedios-lote`). Registra el kg/gajo promedio por lote y año. Unicidad: no puede existir más de un promedio por `lote_id + anio` — esta validación aplica tanto al crear (`POST`) como al actualizar el año en un `PUT` existente (retorna 409 `PROMEDIO_DUPLICADO`).
 
 **Validación de hectáreas:** Al crear/editar un lote, se valida que `hectareas_sembradas` no exceda las `hectareas_totales` disponibles del predio padre (considerando las hectáreas ya usadas por otros lotes). Al editar un predio, se valida que `hectareas_totales` no sea menor que la suma de `hectareas_sembradas` de sus lotes.
 
@@ -243,9 +260,11 @@ Los lotes pueden asociarse con una o más **semillas** (variedades de palma) a t
 
 **CRUD implementado:** Predios, Lotes, Sublotes, Líneas y Palmas tienen controllers con auditoría y permisos. Los permisos `lotes.*` cubren predios y lotes; `sublotes.*`, `lineas.*` y `palmas.*` son independientes. Palmas incluye eliminación masiva (`DELETE palmas/masivo`).
 
-**Resumen del predio:** `GET /predios/{id}/resumen` devuelve la jerarquía completa (lotes → sublotes con cantidad_palmas) más totales agregados (lotes/sublotes/palmas, hectáreas sembradas/disponibles). Alimenta el panel "Resumen" del wizard "Crear Nueva Plantación".
+**Resumen del predio:** `GET /predios/{id}/resumen` devuelve la jerarquía completa (lotes → sublotes con cantidad_palmas) más totales agregados (lotes/sublotes/palmas, hectáreas sembradas/disponibles). Alimenta el panel "Resumen" del wizard "Crear Nueva Plantación". Respuesta servida desde caché aplicativa (TTL 60 s, invalidada en mutaciones de lotes/sublotes — ver §13).
 
 **Listado de predios:** `GET /predios` ahora incluye `lotes_count` y `palmas_count` (suma de `cantidad_palmas` de todos los sublotes del predio vía relación HasManyThrough).
+
+**Wizard init (bundle de inicialización del wizard de predios):** `GET /predios/wizard-init` (modo creación, permiso `lotes.crear`) y `GET /predios/{id}/wizard-init` (modo edición, permiso `lotes.ver`) retornan en una sola respuesta la estructura completa del predio: predio + lotes (con semillas) + sublotes indexados por `lote_id` (con `cantidad_palmas` y `cantidad_lineas`) + líneas indexadas por `sublote_id` (con `cantidad_palmas`) + paramétricas (semillas y departamentos). **Las palmas NO se incluyen** — con >10.000 palmas por sublote, el payload sería de MB; el frontend las carga paginadas (`per_page=50`) al entrar al paso 5. Esta respuesta colapsa los 14+ fetches secuenciales del `for await` anidado a 2 round-trips (bundle + municipios condicional). La guía para el frontend está en [docs/FRONTEND_WIZARD_PREDIO_MIGRACION.md](docs/FRONTEND_WIZARD_PREDIO_MIGRACION.md); el diagnóstico y plan consolidado en [docs/OPTIMIZACION_WIZARD_PREDIO.md](docs/OPTIMIZACION_WIZARD_PREDIO.md).
 
 > **Líneas:** son una agrupación organizacional **opcional** dentro del sublote (`numero` único + `cantidad_palmas`). Las palmas pueden asignarse a una línea mediante `linea_id` (FK nullable con `nullOnDelete`). **Si el sublote tiene líneas**, al crear palmas se debe especificar la línea; al eliminar una línea las palmas quedan sin línea asignada (`linea_id = null`) pero no se eliminan. **Si el sublote no tiene líneas**, el flujo de palmas es directo (solo sublote_id + cantidad). Endpoints expuestos en `/api/v1/tenant/lineas`.
 
@@ -271,7 +290,7 @@ Modelos: Insumo, PrecioAbono, PrecioPalma, Labor.
 
 **Cargos (`cargos`):** Catálogo de puestos de trabajo con modalidad de contrato asociada y tipo de salario (`FIJO`/`VARIABLE`). Se mantiene como tabla paramétrica independiente, **sin relación FK con empleados** — el cargo se escribe directamente en el registro del empleado.
 
-**Empleados:** Registro completo con nombre desagregado en 4 campos (`primer_nombre`, `segundo_nombre`, `primer_apellido`, `segundo_apellido`). Incluye datos de identificación (tipo de documento: CC, TI, PASAPORTE, CE, PPT; número, fecha de expedición obligatoria, lugar de expedición), cargo directo (`cargo` string, `salario_base` decimal, `modalidad_pago` FIJO/VARIABLE), predio asignado (`predio_id` nullable FK a `predios`), fechas laborales (`fecha_ingreso` obligatoria, `fecha_retiro` nullable), seguridad social colombiana (EPS, ARL, pensión, caja de compensación), datos bancarios (tipo de cuenta, entidad, número — como VARCHAR para soportar ceros iniciales), tallas de dotación, contacto de emergencia y avatar opcional (`avatar_path`). La unicidad del documento es por tenant **y solo entre empleados activos** — la columna `documento` tiene un índice único parcial `WHERE deleted_at IS NULL`, lo que permite recrear un colaborador con el mismo documento después de un soft delete.
+**Empleados:** Registro completo con nombre desagregado en 4 campos (`primer_nombre`, `segundo_nombre`, `primer_apellido`, `segundo_apellido`). Incluye datos de identificación (tipo de documento: CC, TI, PASAPORTE, CE, PPT; número, fecha de expedición obligatoria, lugar de expedición), cargo directo (`cargo` string, `salario_base` decimal, `subsidio_transporte` boolean default `true`, `modalidad_pago` FIJO/PRODUCCION), predio asignado (`predio_id` nullable FK a `predios`), fechas laborales (`fecha_ingreso` obligatoria, `fecha_retiro` nullable), seguridad social colombiana (EPS, ARL, pensión, caja de compensación), datos bancarios (tipo de cuenta, entidad, número — como VARCHAR para soportar ceros iniciales), tallas de dotación, contacto de emergencia y avatar opcional (`avatar_path`). La unicidad del documento es por tenant **y solo entre empleados activos** — la columna `documento` tiene un índice único parcial `WHERE deleted_at IS NULL`, lo que permite recrear un colaborador con el mismo documento después de un soft delete.
 
 **Regla de `salario_base` por modalidad (Store/Update):** `salario_base` es obligatorio solo cuando `modalidad_pago = FIJO` (regla `required_if`). Cuando es `PRODUCCION`, si no se envía, el FormRequest auto-completa con `tenant_config.salario_minimo_vigente` vía `prepareForValidation()`. Si es PRODUCCION y el tenant no tiene SMLV configurado, devuelve 422 con mensaje descriptivo pidiendo configurar el SMLV primero. El contrato vigente creado junto con el empleado hereda el salario ya resuelto.
 
@@ -296,7 +315,11 @@ Las categorías y sus tipos predefinidos están centralizados en `App\Constants\
 - `GET /colaboradores/{id}/documentos/{docId}/descargar` → `Content-Disposition: attachment` (fuerza diálogo "Guardar como"), funciona con cualquier mime type.
 - `GET /colaboradores/{id}/documentos/{docId}/visualizar` → `Content-Disposition: inline` para renderizar en `<iframe>` (PDF) o `<img>` (imágenes). Solo acepta mimes `application/pdf`, `image/jpeg`, `image/png`, `image/webp`; otros responden 415 `MIME_NOT_PREVIEWABLE` y el frontend debe redirigir a `/descargar`. Como ambos endpoints requieren `Authorization` y `X-Tenant-Id`, **el frontend nunca debe usar la URL directa en `<iframe src>` ni `<a href>`**: tiene que pedir el blob por JS y construir un `URL.createObjectURL()`.
 
-Modelos: ModalidadContrato, Cargo, Empleado, EmpleadoContrato, EmpleadoDocumento.
+**Importación masiva de colaboradores (`importaciones_empleados`):** Permite cargar múltiples empleados desde un archivo `.xlsx` o `.xls` (máx. 5 MB / 1.000 filas). El flujo es asíncrono: el endpoint `POST /colaboradores/importar` almacena el archivo en disco local privado, crea un registro `ImportacionEmpleados` con estado `PENDIENTE` y despacha `ProcesarImportacionEmpleadosJob`. El Job procesa las filas en chunks de 100 dentro de una transacción por chunk — los fallos de fila individual no revierten el chunk, solo se omiten. Cada fila recibe las mismas validaciones que `StoreEmpleadoRequest` (documento único por tenant, edad ≥ 14 años, SMLV auto-relleno para PRODUCCION, etc.). Al crearse un colaborador se genera su contrato vigente igual que en el store individual. El progreso se puede consultar en `GET /colaboradores/importaciones/{id}` (campo `resultados` con detalle fila a fila). Estados: `PENDIENTE → PROCESANDO → COMPLETADO | CON_ERRORES | FALLIDO`. La auditoría usa inserción directa en `Auditoria::create()` (sin Request object) con acción `IMPORTACION_MASIVA`, módulo `COLABORADORES`. El archivo físico queda en `tenants/{id}/importaciones/empleados/` del disco `local` (privado). **No se cargan** `predio_id` ni avatar por importación masiva. Ver [docs/API_IMPORTACION_COLABORADORES.md](docs/API_IMPORTACION_COLABORADORES.md).
+
+**Wizard init (bundle de inicialización del wizard de creación/edición):** El frontend del wizard solía disparar 8 GET paralelos al montar (predios, eps/arl/fondos/bancos, departamentos, categorías de documentos, colaborador) y eso tardaba hasta 10 s. Para mitigarlo se expone `GET /colaboradores/{id}/wizard-init` (modo edición, permiso `colaboradores.ver`) y `GET /colaboradores/wizard-init` (modo creación, permiso `colaboradores.crear`), que retornan en una sola respuesta el colaborador (o `null` en creación) más todas las paramétricas, cada una servida desde caché aplicativa (ver §13). Los endpoints individuales legacy (`/eps/select`, `/predios`, `/auth/departamentos`, etc.) siguen vivos y soportados — otros consumidores los siguen usando. La guía para el frontend está en [docs/FRONTEND_WIZARD_COLABORADOR_MIGRACION.md](docs/FRONTEND_WIZARD_COLABORADOR_MIGRACION.md); el diagnóstico y plan consolidado en [docs/OPTIMIZACION_WIZARD_COLABORADOR.md](docs/OPTIMIZACION_WIZARD_COLABORADOR.md).
+
+Modelos: ModalidadContrato, Cargo, Empleado, EmpleadoContrato, EmpleadoDocumento, ImportacionEmpleados.
 
 ### 6.4 Módulo de Jornales
 
@@ -351,6 +374,7 @@ Modelos: Jornal, Labor, PrecioPalma, PrecioAbono. Servicios: JornalCalculationSe
 - `RegistroCosechaController`: `POST /operaciones/{id}/cosechas`, `PUT|DELETE /cosechas/{id}`. Usa `CosechaCalculationService` para calcular cabecera (`valor_total = peso_confirmado × precios_cosecha.precio`) y distribuir `valor_total / N` en partes iguales en `cosecha_cuadrilla`. El cálculo se dispara tanto en POST (si viene `peso_confirmado`) como en PUT (al hidratar el peso posteriormente). Si llega `peso_confirmado` y no hay `precios_cosecha` configurado para el (lote, año), devuelve 422 `CALC_ERROR`. El snapshot `precio_cosecha` en la fila se preserva entre ediciones (solo se refresca si era NULL y llega peso por primera vez). Usa `StoreRegistroCosechaRequest` y `UpdateRegistroCosechaRequest` (FormRequests dedicados).
 - `JornalController`: `POST /operaciones/{id}/jornales`, `PUT|DELETE /jornales/{id}`. Invoca `JornalCalculationService` para hidratar `valor_unitario`, `precio_insumo_snapshot` y `valor_total`. Soporta tanto Labores de Palma (Paso 2, `categoria=PALMA`) como Labores de Finca (Paso 3, `categoria=FINCA` con `labor_id` → `valor_total = labor.valor_base`).
 - `LaborController`: CRUD paramétrico de `labores` bajo `configuracion.editar` + `GET /labores/select` abierto a operadores (`operaciones.crear|editar`) para poblar el dropdown "Labor" del Paso 3. El select devuelve `{id, nombre, valor_base}` sin paginación y filtra `estado=true` por default.
+- `PrecioPalmaController`: Gestiona los precios de las Labores de Palma fijas (PLATEO, PODA, SANIDAD, OTROS) bajo `configuracion.editar`. Expone `GET /precios-palma` (los 4 registros del tenant, siempre presentes — se siembran con `precio_palma=0` al crear el tenant), `GET /precios-palma/{id}` y `PUT /precios-palma/{id}` (actualiza `precio_palma` y/o `estado`). No tiene POST ni DELETE — los registros son inmutables en estructura. El `precio_palma` acepta `null` para SANIDAD/OTROS (señala "no configurado"; los jornales de esos tipos quedan con `valor_total=NULL` hasta que se establezca un precio). Audita vía `AuditoriaService::registrarEdicion('PRECIOS_PALMA', ...)`.
 - Selects de Lote/Sublote para el wizard: existen **dos pares de endpoints separados**, no se mezclan permisos.
   - `GET /lotes/select` y `GET /sublotes/select`: del módulo de Plantación. Conservan sus permisos originales (`lotes.ver` / `sublotes.ver` + `operaciones.crear|editar` vía OR-logic). Los usa el CRUD admin de Plantación.
   - `GET /operaciones/lotes/select` y `GET /operaciones/sublotes/select`: **nuevos**, dedicados al Paso 2 (Labores de Palma) del wizard. Solo requieren `operaciones.crear|editar` (mismo patrón que los demás selects auxiliares del wizard). Reutilizan los mismos métodos de controlador. El payload de `/operaciones/sublotes/select` incluye `cantidad_palmas`, que el frontend usa para **auto-rellenar** el input "Número de Palmas" al elegir un sublote en las tarjetas de PLATEO/PODA/FERTILIZACION (el campo sigue editable). No aplica a SANIDAD/OTROS.
@@ -423,7 +447,7 @@ Es el módulo más complejo del sistema. Opera en períodos (quincenas o meses),
 - **Devengado FIJO:** `salario_base × (dias_trabajados / dias_periodo) + total_incapacidades_remuneradas + total_horas_extra + total_recargos`. `dias_trabajados = dias_periodo - dias_ausencia_no_remunerada`.
 - **Devengado VARIABLE:** `Σ jornales.valor_total + Σ cosecha_cuadrilla.valor_calculado + ...` (solo operaciones APROBADAS). `dias_trabajados = count(distinct DATE(operacion.fecha))`.
 - **Subsidio de transporte:** columna directa en `nomina_empleado.subsidio_transporte` (NO es concepto). Aplica si `salario_base ≤ 2 × SMLV`. Monto: `tenant_config.auxilio_transporte × (dias_trabajados / dias_periodo)`. No suma al IBC (no es salario).
-- **Salud y Pensión (4% cada uno):** sobre IBC = `total_devengado` (sin subsidio). Topes: mínimo 1 SMLV proporcional, máximo 25 SMLV proporcional al período.
+- **Salud y Pensión:** sobre IBC = `total_devengado` (sin subsidio). Topes: mínimo 1 SMLV proporcional, máximo 25 SMLV proporcional al período. El porcentaje se obtiene de `NominaTablaLegal` vigente en `fecha_fin` de la nómina (`resolverPorcentaje()`); si el tenant no tiene tabla configurada para ese concepto, se usa `NominaConcepto.valor_referencia` como fallback (típicamente 4% cada uno, sembrado por `NominaConceptoSeeder`).
 - **Fondo de Solidaridad Pensional:** un único tramo según IBC mensualizado en SMLV — FSP_1 (1.0% si >4 SMLV) hasta FSP_6 (2.0% si >20 SMLV). Ley 100/1993 art. 27, modif. Ley 797/2003.
 - **Ausencias:** ya documentado en §6.9. EPS días 1-2 al 100%, días 3+ al 66.67%; ARL al 100%; permisos no remunerados/injustificadas descuentan `(salario/30) × dias × (1 − %pago/100)`.
 - **Horas extras y recargos:** ya snapshotteados en `horas_extra.valor_calculado` (boot logic con divisor por tenant). El service de nómina solo agrega los APROBADOS del rango, separados en `total_horas_extra` (es_extra=true) y `total_recargos` (es_extra=false) — la separación es necesaria para reportes legales (UGPP/DIAN).
@@ -698,6 +722,7 @@ agro-campo/
 │   │   │       ├── TenantUserController.php ← Gestión usuarios del tenant
 │   │   │       ├── UserPermissionController.php ← Permisos de usuarios
 │   │   │       ├── EmpleadoController.php   ← CRUD colaboradores + toggle
+│   │   │       ├── EmpleadoImportacionController.php ← Importación masiva (importar + estado)
 │   │   │       ├── TenantSettingsController.php ← Configuración de la finca
 │   │   │       ├── ProfileController.php   ← Perfil y cambio de contraseña
 │   │   │       ├── PasswordResetController.php ← Recuperación de contraseña
@@ -717,8 +742,9 @@ agro-campo/
 │   │   │   │   ├── UpdatePalmaRequest.php  ← Validación editar palma (descripcion, estado)
 │   │   │   │   └── DestroyMasivoPalmaRequest.php ← Validación eliminación masiva (palmas_ids)
 │   │   │   └── Empleado/
-│   │   │       ├── StoreEmpleadoRequest.php  ← Validación crear colaborador (edad ≥ 14)
-│   │   │       └── UpdateEmpleadoRequest.php ← Validación editar colaborador
+│   │   │       ├── StoreEmpleadoRequest.php        ← Validación crear colaborador (edad ≥ 14)
+│   │   │       ├── UpdateEmpleadoRequest.php       ← Validación editar colaborador
+│   │   │       └── ImportarEmpleadosRequest.php    ← Validación archivo Excel (xlsx/xls, máx 5 MB)
 │   │   └── Middleware/
 │   │       ├── SetTenant.php               ← Resuelve y valida tenant por request
 │   │       ├── CheckPermission.php         ← Verifica permiso Spatie por ruta
@@ -748,6 +774,7 @@ agro-campo/
 │   │   ├── Empleado.php                    ← Trabajador completo
 │   │   ├── EmpleadoContrato.php            ← Historial de contratos laborales
 │   │   ├── EmpleadoDocumento.php           ← Documentos digitales del empleado
+│   │   ├── ImportacionEmpleados.php        ← Registro/estado de importación masiva xlsx
 │   │   ├── Jornal.php                      ← Registro diario de trabajo
 │   │   ├── Viaje.php                       ← Transporte de fruto
 │   │   ├── RegistroCosecha.php             ← Producción por sublote
@@ -773,7 +800,8 @@ agro-campo/
 │   │   ├── DocumentoCategoria.php          ← Categorías y tipos de documentos del empleado
 │   │   └── ViajeEstado.php                 ← Máquina de estados del viaje (CREADO/EN_CAMINO/EN_PLANTA/FINALIZADO)
 │   ├── Jobs/
-│   │   └── CrearPalmasJob.php              ← Job async para bulk de palmas (> 5.000). ShouldBeUnique por sublote, timeout 300s, 1 try
+│   │   ├── CrearPalmasJob.php              ← Job async para bulk de palmas (> 5.000). ShouldBeUnique por sublote, timeout 300s, 1 try
+│   │   └── ProcesarImportacionEmpleadosJob.php ← Job importación masiva colaboradores (chunks 100, timeout 300s, 1 try)
 │   ├── Services/
 │   │   ├── AuditoriaService.php            ← Registra acciones CRUD, login, logout
 │   │   └── PalmaCreationService.php        ← Lógica sync/async de creación de palmas (chunking + dispatch Bus::batch)
@@ -792,8 +820,9 @@ agro-campo/
 ├── routes/
 │   └── api.php                             ← 3 grupos: auth, admin, negocio
 ├── docs/
-│   ├── API_PLANTACION.md                   ← Doc endpoints Predios, Lotes, Sublotes, Líneas, Palmas
-│   ├── API_COLABORADORES.md                ← Doc colaboradores + documentos
+│   ├── API_PLANTACION.md                        ← Doc endpoints Predios, Lotes, Sublotes, Líneas, Palmas
+│   ├── API_COLABORADORES.md                     ← Doc colaboradores + documentos
+│   ├── API_IMPORTACION_COLABORADORES.md         ← Estructura Excel + endpoints importación masiva
 │   ├── API_USUARIOS_TENANT.md              ← Doc gestión usuarios del tenant
 │   ├── API_BOT.md                          ← Guía de integración del bot Python (auth, flujo, errores, cliente)
 │   └── API_VIAJES.md                       ← Contrato del módulo de Viajes (paramétricas, máquina de estados, KPIs)
@@ -807,16 +836,40 @@ agro-campo/
 
 ### Grupo 1: Autenticación (público, sin JWT)
 ```
-POST   /api/v1/auth/login             → Token JWT
-POST   /api/v1/auth/register          → Crear usuario + token
+# Super-admin
+POST   /api/v1/auth/login                       → Token JWT (bloquea no super-admins)
+POST   /api/v1/auth/register                    → Crear usuario + token
+POST   /api/v1/auth/forgot-password             → Enlace de reset (PasswordResetController)
+POST   /api/v1/auth/reset-password              → Restablecer contraseña
+
+# Finca (tenant)
+POST   /api/v1/tenant-auth/login                → Login users de finca (bloquea super-admins)
+
+# Portal Proveedor (marketplace)
+POST   /api/v1/proveedor-auth/login             → Login users-proveedor (bloquea super-admins; requiere market_proveedor_user activo)
+POST   /api/v1/proveedor-auth/forgot-password   → Enlace de reset; respuesta genérica anti-enumeración; URL apunta a FRONTEND_PROVEEDOR_URL
+POST   /api/v1/proveedor-auth/reset-password    → Restablecer contraseña
 ```
 
 ### Grupo 2: Autenticación (requiere JWT)
 ```
-POST   /api/v1/auth/logout            → Invalidar token
-POST   /api/v1/auth/refresh           → Renovar token
-GET    /api/v1/auth/me                → Usuario + tenants
-POST   /api/v1/auth/select-tenant     → Token con tenant en claims
+# Super-admin
+POST   /api/v1/auth/logout                      → Invalidar token
+POST   /api/v1/auth/refresh                     → Renovar token
+GET    /api/v1/auth/me                          → Usuario + tenants
+POST   /api/v1/auth/select-tenant               → Token con tenant en claims
+
+# Finca (tenant)
+POST   /api/v1/tenant-auth/select-tenant        → Token con tenant_id + tenant_role en claims
+GET    /api/v1/tenant-auth/me                   → Usuario + tenants activos
+POST   /api/v1/tenant-auth/logout
+POST   /api/v1/tenant-auth/refresh
+
+# Portal Proveedor (marketplace)
+POST   /api/v1/proveedor-auth/select-proveedor  → Token con proveedor_id + proveedor_role en claims
+GET    /api/v1/proveedor-auth/me                → Usuario + proveedores activos
+POST   /api/v1/proveedor-auth/logout
+POST   /api/v1/proveedor-auth/refresh
 ```
 
 ### Grupo 3: Super Admin (JWT + is_super_admin)
@@ -863,6 +916,11 @@ GET|PUT|DELETE  /api/v1/tenant/entidades-bancarias/:id → Ver / Editar / Elimin
 GET|POST        /api/v1/tenant/predios              → Listar (con palmas_count) / Crear predio  (lotes.ver / lotes.crear)
 GET             /api/v1/tenant/predios/:id/resumen  → Jerarquía completa + totales para wizard  (lotes.ver)
 GET|PUT|DELETE  /api/v1/tenant/predios/:id          → Ver / Editar / Eliminar   (lotes.ver / lotes.editar / lotes.eliminar)
+GET             /api/v1/tenant/semillas/select      → Dropdown semillas activas (configuracion.editar O lotes.{ver|crear|editar})
+GET|POST        /api/v1/tenant/semillas             → Listar / Crear semilla (tipo: Africana|Híbrido|Compacta|Americana) (configuracion.editar)
+GET|PUT|DELETE  /api/v1/tenant/semillas/:id         → Ver / Editar / Eliminar (409 SEMILLA_CON_LOTES si está en uso) (configuracion.editar)
+GET|POST        /api/v1/tenant/promedios-lote       → Listar / Crear promedio kg/gajo por lote+año (configuracion.editar)
+GET|PUT|DELETE  /api/v1/tenant/promedios-lote/:id   → Ver / Editar / Eliminar (409 PROMEDIO_DUPLICADO si lote+año duplicado) (configuracion.editar)
 GET             /api/v1/tenant/lotes/semillas       → Listar semillas activas   (lotes.ver)
 GET|POST        /api/v1/tenant/lotes                → Listar / Crear lote       (lotes.ver / lotes.crear)
 GET             /api/v1/tenant/lotes/select         → Dropdown lotes del módulo Plantación (lotes.ver O operaciones.{crear|editar})
@@ -884,15 +942,26 @@ PUT|DELETE      /api/v1/tenant/usuarios/:id         → Editar / Eliminar usuari
 PATCH           /api/v1/tenant/usuarios/:id/toggle  → Activar/Desactivar        (usuarios.desactivar)
 GET|PUT         /api/v1/tenant/usuarios/:id/permisos → Ver / Editar permisos    (usuarios.ver_permisos / usuarios.editar_permisos)
 DELETE          /api/v1/tenant/usuarios/:id/permisos → Resetear permisos        (usuarios.editar_permisos)
-PUT             /api/v1/tenant/configuracion/finca  → Editar config finca       (configuracion.editar)
+GET|PUT         /api/v1/tenant/configuracion/info-empresa       → Ver / Editar datos de la empresa (nombre, NIT, rep. legal, contacto, logo) (configuracion.editar)
+PUT             /api/v1/tenant/configuracion/finca             → Alias legacy de PUT /configuracion/info-empresa (configuracion.editar)
+GET|PUT         /api/v1/tenant/configuracion/nomina            → Ver / Editar configuración de nómina del tenant (tipo_pago_nomina, SMLV, auxilio, divisor_jornada) (configuracion.editar)
+GET|PUT         /api/v1/tenant/configuracion/constantes-legales → Ver / Editar constantes legales colombianas (anio_vigente, cesantías, prima, vacaciones, días comerciales) (configuracion.editar)
+GET             /api/v1/tenant/configuracion/tablas-legales/conceptos-select → Dropdown conceptos de SS (Salud, Pensión, ARL) (configuracion.editar)
+GET             /api/v1/tenant/configuracion/tablas-legales    → Listar porcentajes de aportes SS por vigencia (sin paginación) (configuracion.editar)
+POST            /api/v1/tenant/configuracion/tablas-legales    → Crear registro de aportes SS (concepto + porcentajes + vigencia) (configuracion.editar)
+PUT|DELETE      /api/v1/tenant/configuracion/tablas-legales/:id → Editar / Eliminar registro de aportes SS (configuracion.editar)
 PUT             /api/v1/tenant/perfil               → Editar perfil propio
 PUT             /api/v1/tenant/perfil/password      → Cambiar contraseña propia
 GET|POST        /api/v1/tenant/precios-cosecha      → Listar / Crear precio cosecha (configuracion.editar)
 GET|PUT|DELETE  /api/v1/tenant/precios-cosecha/:id → Ver / Editar / Eliminar      (configuracion.editar)
+GET             /api/v1/tenant/precios-palma       → Listar los 4 tipos de Labor de Palma con sus precios (sin paginación) (configuracion.editar)
+GET|PUT         /api/v1/tenant/precios-palma/:id   → Ver / Actualizar precio_palma de un tipo (configuracion.editar) — sin POST/DELETE (registros pre-sembrados)
 GET             /api/v1/tenant/auditorias           → Listar auditoría del tenant (configuracion.editar)
 GET             /api/v1/tenant/auditorias/:id       → Detalle de auditoría       (configuracion.editar)
 GET             /api/v1/tenant/colaboradores/select → Dropdown colaboradores (colaboradores.ver O operaciones.{crear|editar})
 GET|POST        /api/v1/tenant/colaboradores        → Listar (con `?incluir_eliminados` y `?solo_eliminados`) / Crear colaborador (colaboradores.ver / colaboradores.crear)
+POST            /api/v1/tenant/colaboradores/importar → Importación masiva xlsx (async, retorna importacion_id) (colaboradores.crear)
+GET             /api/v1/tenant/colaboradores/importaciones/:id → Estado y resultados de una importación masiva (colaboradores.ver)
 GET|PUT|DELETE  /api/v1/tenant/colaboradores/:id    → Ver / Editar / Eliminar (soft delete) (colaboradores.ver / colaboradores.editar / colaboradores.eliminar)
 PATCH           /api/v1/tenant/colaboradores/:id/toggle    → Activar/Desactivar     (colaboradores.editar)
 POST            /api/v1/tenant/colaboradores/:id/restaurar → Restaurar colaborador eliminado (colaboradores.crear)
@@ -935,6 +1004,56 @@ PUT|DELETE      /api/v1/tenant/nomina-conceptos/:id                             
 /api/v1/tenant/liquidaciones, /api/v1/tenant/liquidaciones/:id/calcular, /api/v1/tenant/liquidaciones/:id/aprobar
 /api/v1/tenant/sync/jornales, /api/v1/tenant/sync/cosechas, /api/v1/tenant/sync/catalogs
 ```
+
+### Grupo 5: Portal Proveedor — Negocio (JWT con proveedor_id claims, sin X-Tenant-Id)
+
+**Middleware:** `auth:api` + `SetProveedor` (lee `proveedor_id`+`proveedor_role` de los claims JWT)
+**Controllers:** `app/Http/Controllers/Api/Market/MarketProveedorDashboardController.php`, `MarketProveedorProductoController.php`, `MarketProveedorPedidoController.php`, `MarketProveedorEstadisticasController.php`, `MarketProveedorReportesController.php`, `MarketProveedorCatalogoController.php`, `MarketProveedorConfiguracionController.php`, `MarketProveedorPerfilController.php`
+
+```
+# Market — Dashboard del Proveedor
+GET    /api/v1/market/proveedor/dashboard                 → KPIs (productos activos, pedidos pendientes/en proceso/completados mes, ventas mes actual+anterior+variación%), últimos 5 pedidos recientes, top 5 productos más vendidos
+
+# Market — Catálogo del Proveedor
+GET    /api/v1/market/proveedor/wizard-init               → Categorías + unidades de medida para selects del formulario
+GET    /api/v1/market/proveedor/productos                 → Listar productos propios (filtros: estado, categoria_id, destacados, buscar, ordenar; paginado + stats)
+POST   /api/v1/market/proveedor/productos                 → Crear producto (multipart/form-data; SKU autogenerado PROV{id}-{timestamp} si se omite)
+GET    /api/v1/market/proveedor/productos/:id             → Detalle (incluye precios volumen activos e inactivos, unidades vendidas, ingresos acumulados)
+PUT    /api/v1/market/proveedor/productos/:id             → Actualizar producto (campos opcionales con sometimes; precios_volumen: omitir=sin cambio, []=borrar todos, [{...}]=reemplazar todos)
+DELETE /api/v1/market/proveedor/productos/:id             → Eliminar (409 PRODUCTO_CON_ORDENES_ACTIVAS si hay órdenes pendiente/confirmado/preparando/en_transito)
+PATCH  /api/v1/market/proveedor/productos/:id/toggle      → Activo ⇄ Inactivo
+POST   /api/v1/market/proveedor/productos/:id/imagenes    → Añadir imagen a la galería (jpg/png/webp/jpeg, máx 3MB; orden autocalculado)
+DELETE /api/v1/market/proveedor/productos/:id/imagenes/:imgId → Eliminar imagen de galería
+
+# Market — Pedidos del Proveedor
+GET    /api/v1/market/proveedor/pedidos/exportar          → Exportar Excel (mismos filtros que listado, máx 1000 registros)
+GET    /api/v1/market/proveedor/pedidos                   → Listado paginado (15/pág) + stats (por_confirmar, activos, en_transito, completados, ventas_mes); filtros: tab, estado, buscar
+GET    /api/v1/market/proveedor/pedidos/:codigo           → Detalle con items, historial, datos del tenant comprador y acciones_disponibles
+PUT    /api/v1/market/proveedor/pedidos/:id/estado        → Cambiar estado (409 TRANSICION_INVALIDA si no es válida); registra historial + auditoría
+GET    /api/v1/market/proveedor/pedidos/:codigo/factura   → Descargar factura PDF (DomPDF, template resources/views/market/factura.blade.php)
+
+# Market — Estadísticas y Reportes del Proveedor
+GET    /api/v1/market/proveedor/estadisticas              → KPIs + evolución + top productos/clientes + métricas adicionales
+GET    /api/v1/market/proveedor/reportes/ventas           → Reporte Excel de ventas
+GET    /api/v1/market/proveedor/reportes/productos        → Reporte Excel de productos
+GET    /api/v1/market/proveedor/reportes/clientes         → Reporte Excel de clientes
+
+# Market — Catálogos paramétricos (read-only) y Configuración del Proveedor
+GET    /api/v1/market/proveedor/catalogos/bancos          → Lista global de bancos (cache 1h)
+GET    /api/v1/market/proveedor/catalogos/transportadoras → Lista global de transportadoras (cache 1h)
+GET    /api/v1/market/proveedor/configuracion             → Configuración completa (general, bancario, envíos, notificaciones)  — ADMIN u OPERADOR
+GET    /api/v1/market/proveedor/configuracion/resumen     → Resumen + progreso de wizard (4 etapas) — ADMIN u OPERADOR
+PUT    /api/v1/market/proveedor/configuracion/general         → Editar datos generales del proveedor — solo ADMIN (403 PERMISSION_DENIED a OPERADOR)
+PUT    /api/v1/market/proveedor/configuracion/bancario        → Editar datos bancarios — solo ADMIN
+PUT    /api/v1/market/proveedor/configuracion/envios          → Editar configuración de envíos — solo ADMIN
+PUT    /api/v1/market/proveedor/configuracion/notificaciones  → Editar preferencias de notificaciones (jsonb) — solo ADMIN
+
+# Market — Perfil del Usuario de Proveedor (edita su propio User global)
+PUT    /api/v1/market/proveedor/perfil                    → Editar nombre/correo del usuario autenticado (cualquier rol; 422 NO_DATA si body vacío)
+PUT    /api/v1/market/proveedor/perfil/password           → Cambiar contraseña (current_password + password + password_confirmation; 422 INVALID_CURRENT_PASSWORD / SAME_PASSWORD)
+```
+
+**Notas de seguridad:** Un proveedor solo puede ver/modificar sus propios productos; intentar acceder a productos ajenos retorna `404` (no `403`) para no revelar existencia. SKU único global entre todos los proveedores.
 
 ---
 
@@ -984,11 +1103,13 @@ PUT|DELETE      /api/v1/tenant/nomina-conceptos/:id                             
 - AuthController completo (login, register, logout, refresh, me, select-tenant)
 - TenantAuthController (login para usuarios de tenant, select-tenant, me)
 - PasswordResetController (forgot-password, reset-password)
+- **ProveedorAuthController** — auth del Portal Proveedor del Marketplace (login, select-proveedor, me, logout, refresh, forgot-password, reset-password). Bloquea super-admins (`USE_ADMIN_LOGIN`) y exige al menos una fila `market_proveedor_user.estado=true` con `market_proveedores.estado='activo'`. Auto-selecciona si el user tiene un solo proveedor activo (token con claims `proveedor_id`+`proveedor_role`); si tiene varios, devuelve la lista y `requires_proveedor_selection: true`. `forgot-password` siempre responde 200 con mensaje genérico (anti-enumeración) y solo envía email cuando el user es proveedor activo; el link apunta a `FRONTEND_PROVEEDOR_URL/reset-password`. Notification dedicada `ResetPasswordProveedorNotification`. Auditoría con `tenant_id=null` y módulo `AUTH`. Documentación: [docs/API_MARKET_PROVEEDORES_AUTH.md](docs/API_MARKET_PROVEEDORES_AUTH.md).
 - TenantController completo (CRUD + toggle + gestión de usuarios)
 - TenantUserController (CRUD usuarios dentro de un tenant)
 - UserPermissionController (ver, editar, resetear permisos por usuario)
 - TenantSettingsController (configuración de la finca)
-- ProfileController (editar perfil, cambiar contraseña)
+- ProfileController (editar perfil, cambiar contraseña — tenant)
+- **MarketProveedorPerfilController** — `PUT /api/v1/market/proveedor/perfil` y `PUT /api/v1/market/proveedor/perfil/password` para que el usuario logueado en el portal proveedor (cualquier rol) edite su `User` global. Mismo patrón que `ProfileController` tenant: validación inline en español, `Hash::check` para validar la contraseña actual + prohibir reutilizarla (`422 INVALID_CURRENT_PASSWORD` / `422 SAME_PASSWORD`), `422 NO_DATA` si el body de `update` viene vacío. Auditoría vía `AuditoriaService::registrar` con módulo `MARKET_PROVEEDOR_PERFIL` (acciones `EDITAR` y `CAMBIO_PASSWORD`; los hashes NUNCA se loguean). Documentación: [docs/API_MARKET_PROVEEDOR_PERFIL.md](docs/API_MARKET_PROVEEDOR_PERFIL.md).
 - **PredioController** — CRUD + `resumen()` (jerarquía completa con totales para wizard) + listado con `lotes_count`/`palmas_count`. Eliminación en cascada (permiso: `lotes.*`)
 - **LoteController** — CRUD completo con auditoría, validación de hectáreas, gestión de semillas y eliminación en cascada (permiso: `lotes.*`)
 - **SubloteController** — CRUD completo con auditoría y eliminación en cascada. Usa `PalmaCreationService` para crear palmas (sync/async según umbral). `update()` rechaza con 409 si hay batch activo para el sublote (permiso: `sublotes.*`)
@@ -999,12 +1120,15 @@ PUT|DELETE      /api/v1/tenant/nomina-conceptos/:id                             
 - **EmpleadoDocumentoController** — Carga, listado, descarga, **previsualización inline** y eliminación de documentos del colaborador. Almacena archivos en disco privado (`local`), acceso por endpoint autenticado. `download()` envía `Content-Disposition: attachment` (cualquier mime); `visualizar()` envía `Content-Disposition: inline` (solo `application/pdf`, `image/jpeg`, `image/png`, `image/webp` — otros mimes responden 415 `MIME_NOT_PREVIEWABLE`). Categorías con `unico_por_tipo: true` reemplazan el documento existente al subir uno nuevo del mismo tipo; **solo `DATOS_BASE` tiene este comportamiento**, el resto (`CONTRATACION_LABORAL`, `SST`, `PERMISOS_LICENCIAS`, `FINALIZACION_CONTRATO`, `DESPRENDIBLES`, `OTROS`) acumula múltiples documentos. Auditoría en todas las acciones de escritura (permiso: `colaboradores.ver` lectura, `colaboradores.editar` escritura)
 - **DashboardTenantController + DashboardService** — `GET /api/v1/tenant/dashboard` devuelve en una sola respuesta: indicadores principales (`produccion_total_kg`, `promedio_kg_gajo`), promedio kg por lote (todos los lotes activos, 0 si sin producción), viajes finalizados en el rango y lluvias (semana actual / anterior / mes actual / promedio mensual histórico — fijo, no depende del filtro). Filtros: `periodo=semanal|quincenal|mensual|personalizado` + `fecha_inicio`/`fecha_fin` cuando es personalizado. Solo cuenta cosechas activas de operaciones APROBADAS y viajes con estado FINALIZADO. Read-only sin auditoría (permiso: `dashboard.ver`). FormRequest: `DashboardFilterRequest`
 - **Paramétricas del Colaborador (EPS, Fondos de Pensión, ARL, Entidades Bancarias)** — 4 catálogos paramétricos por tenant con schema idéntico (`id`, `tenant_id`, `nombre`, `estado`, timestamps + `unique(['tenant_id','nombre'])`). Cada uno expone CRUD completo bajo `configuracion.editar` con auditoría (`AuditoriaService`) y un endpoint `/select` accesible además con `colaboradores.{ver|crear|editar}` para alimentar los dropdowns del formulario de colaboradores. **El empleado guarda el `nombre`** (string), no el `id` — preserva histórico al renombrar/eliminar entradas del catálogo. Listas iniciales colombianas en constantes `INICIALES` de cada modelo (17 EPS, 5 fondos, 9 ARLs, 23 bancos). Provisionamiento automático al crear tenant vía `Admin\TenantController::seedParametricasColaborador()` y seeder global idempotente `ParametricasColaboradorSeeder` para fincas existentes. Modelos: `Eps`, `FondoPension`, `Arl`, `EntidadBancaria`. Controllers: `EpsController`, `FondoPensionController`, `ArlController`, `EntidadBancariaController`
+- **InfoEmpresaController** — `GET|PUT /configuracion/info-empresa`. Gestiona los datos de identificación de la empresa: `nombre`, `tipo_persona` (NATURAL/JURIDICA), `nit` (único por tenant, error 422 `NIT_DUPLICATED`), `razon_social`, `actividad_economica`, representante legal (`representante_nombre`, `representante_cedula`, `representante_cargo`), y datos de contacto/ubicación (`direccion`, `departamento`, `municipio`, `correo_contacto`, `telefono`, `telefono_fijo`, `sitio_web`). Soporta carga de logo vía `multipart/form-data` (jpeg/jpg/png/webp, máx 2MB). Todos los campos son opcionales en el PUT (`sometimes`). Auditoría en edición. El endpoint legacy `PUT /configuracion/finca` sigue activo como alias. (permiso: `configuracion.editar`)
+- **ConstantesLegalesController** — `GET|PUT /configuracion/constantes-legales`. Almacena en `tenant_config` los parámetros legales colombianos por tenant: `anio_vigente` (año fiscal, 2020–2100), `salario_minimo_vigente`, `auxilio_transporte`, `tasa_interes_cesantias` (%), fechas límite de cesantías, prima primer/segundo semestre, `dias_vacaciones_anuales` (CST: 15), `dias_anio_comercial` (360), `dias_mes_comercial` (30). Todos los campos son opcionales en el PUT (`sometimes`). Valores default al crear tenant: año actual, 12% cesantías, fechas legales colombianas estándar. (permiso: `configuracion.editar`)
+- **TablasLegalesController** — `GET|GET /conceptos-select|POST|PUT|DELETE /configuracion/tablas-legales`. Historial de porcentajes de aportes a seguridad social (Salud, Pensión, ARL) por vigencia (`vigente_desde`/`vigente_hasta`, formato `dd/mm/yyyy`; `null` = vigente indefinidamente). Devuelve listado sin paginación. Endpoint `/conceptos-select` retorna los 3 conceptos disponibles (Salud, Pensión, ARL) desde `nomina_concepto` del tenant, filtrados por `subtipo` en `SALUD|PENSION|ARL`. (permiso: `configuracion.editar`)
 - FormRequest validations para Predios, Lotes (con validación de hectáreas y semillas_ids), Sublotes, Líneas, Palmas, Empleados (con validación de edad y `unique` parcial sobre `whereNull('deleted_at')` para soft delete), EmpleadoAvatar (image, máx 3 MB) y EmpleadoDocumento (con validación de categoría/tipo via DocumentoCategoria)
 - AuditoriaService (registrar, registrarCreacion, registrarEdicion, registrarEliminacion)
 - Rol ADMIN (con todos los permisos) + usuarios con permisos directos (sin roles intermedios)
 - Seeder con datos de prueba + RolesAndPermissionsSeeder
 - AppServiceProvider con gate para Pulse
-- Documentación API: `docs/API_PLANTACION.md` (Predios, Lotes, Sublotes, Líneas, Palmas), `docs/API_COLABORADORES.md` (Colaboradores), `docs/API_BOT.md` (Bot de integraciones)
+- Documentación API: `docs/API_PLANTACION.md` (Predios, Lotes, Sublotes, Líneas, Palmas), `docs/API_COLABORADORES.md` (Colaboradores), `docs/API_IMPORTACION_COLABORADORES.md` (Importación masiva xlsx), `docs/API_BOT.md` (Bot de integraciones)
 - Constantes de categorías de documentos: `App\Constants\DocumentoCategoria`
 - Modelos de contratos y documentos del empleado: EmpleadoContrato, EmpleadoDocumento
 - **Modelo de Ausencias** (`Ausencia`): tabla `ausencias` reportada desde la operación diaria con `operacion_id` NOT NULL, rango `fecha_inicio`/`fecha_fin`, flujo PENDIENTE → APROBADA → LIQUIDADA, soporte offline (`sync_uuid`/`sync_estado`). Reutiliza permisos `operaciones.*` (no se crearon permisos `ausencias.*`). `nomina_empleado` extendida con `dias_ausencia_descontados`, `total_ausencias_descuento`, `total_ausencias_remunerado` para reflejar el efecto en nómina.
@@ -1045,14 +1169,22 @@ PUT|DELETE      /api/v1/tenant/nomina-conceptos/:id                             
 
 | Documento | Ruta | Contenido |
 |---|---|---|
+| Tablas Paramétricas de Configuración | `docs/API_PARAMETRICAS.md` | Todos los catálogos paramétricos del tenant: Semillas, Insumos, Precios de Abono, Labores, Promedios por Lote, Cargos, Modalidades de Contrato, Config Nómina, Precios de Cosecha, Auditoría, Tipos de Hora Extra, EPS/Pensión/ARL/Bancos, Info Empresa, Constantes Legales, Tablas Legales |
 | Plantación (Predios, Lotes, Sublotes, Líneas, Palmas) | `docs/API_PLANTACION.md` | Endpoints CRUD con ejemplos de request/response, permisos, validación de hectáreas, semillas, códigos de palma y errores |
 | Usuarios del Tenant | `docs/API_USUARIOS_TENANT.md` | CRUD usuarios, activar/desactivar, gestión de permisos directos, guía de implementación frontend |
-| Colaboradores | `docs/API_COLABORADORES.md` | CRUD colaboradores con soft delete + restaurar + filtros `incluir_eliminados`/`solo_eliminados`, toggle estado, avatar (upload/delete), carga/descarga/preview/eliminación de documentos por categoría, categorías de documentos, reemplazo automático en `DATOS_BASE`, paramétricas (EPS/Pensiones/ARL/Bancos), guía de uso del frontend para descargas y previsualizaciones por blob |
+| Colaboradores | `docs/API_COLABORADORES.md` | CRUD colaboradores con soft delete + restaurar + filtros `incluir_eliminados`/`solo_eliminados`, toggle estado, campo `subsidio_transporte` (boolean, default `true`), avatar (upload/delete), carga/descarga/preview/eliminación de documentos por categoría, categorías de documentos, reemplazo automático en `DATOS_BASE`, paramétricas (EPS/Pensiones/ARL/Bancos), guía de uso del frontend para descargas y previsualizaciones por blob |
+| Importación masiva colaboradores | `docs/API_IMPORTACION_COLABORADORES.md` | Estructura del Excel (columnas A–AE), endpoints POST /importar y GET /importaciones/{id}, estados de la importación, comportamiento por fila, auditoría, ejemplo de consumo JS con polling |
 | Bot de Integraciones | `docs/API_BOT.md` | Guía completa para el desarrollador del bot Python: flujo de autenticación (login + select-tenant), headers obligatorios, endpoint de prueba, manejo de errores, cliente Python de referencia con cache de tokens por tenant, variables de entorno, checklist pre-producción |
 | Dashboard Tenant | `docs/API_DASHBOARD.md` | `GET /api/v1/tenant/dashboard`: contrato, headers, query params (presets de periodo + rango custom), estructura completa de la respuesta (indicadores, lotes, viajes, lluvias), reglas de negocio (solo APROBADAS / FINALIZADO), códigos de error y notas de consumo para el frontend |
 | Módulo Market — Arquitectura | `docs/MARKET_MODULE.md` | Arquitectura completa del marketplace: tablas, relaciones, flujo carrito→pedido, precios por volumen, imágenes, autenticación de proveedores |
 | Módulo Market — API Frontend | `docs/API_MARKET.md` | Guía de consumo para el frontend: todos los endpoints tenant (catálogo, carrito, pedidos), ejemplos JSON, tabla de códigos de error, flujo de checkout multi-proveedor |
 | Módulo Market — API Admin Proveedores | `docs/API_MARKET_PROVEEDORES_ADMIN.md` | Endpoints del superadmin para CRUD de proveedores y sus usuarios: validaciones, soft delete, toggle estado, modos de creación de usuario (existente vs nuevo), códigos de error |
+| Módulo Market — API Portal Proveedor Auth | `docs/API_MARKET_PROVEEDORES_AUTH.md` | Guía del frontend del portal proveedor: login, select-proveedor, forgot/reset password, claims del JWT, reglas de elegibilidad |
+| Módulo Market — API Portal Proveedor Productos | `docs/API_MARKET_PROVEEDOR_PRODUCTOS.md` | Guía del frontend del portal proveedor: wizard-init, CRUD productos (multipart/form-data), galería de imágenes, precios por volumen (sincronización completa), toggle estado, eliminación con guard de órdenes activas |
+| Módulo Market — API Dashboard Proveedor | `docs/API_MARKET_PROVEEDOR_DASHBOARD.md` | Endpoint único `GET /dashboard`: KPIs de productos y pedidos del mes, ventas con variación porcentual vs mes anterior, últimos 5 pedidos recientes con datos de la finca compradora, top 5 productos más vendidos |
+| Módulo Market — API Pedidos Proveedor | `docs/API_MARKET_PROVEEDOR.md` | Guía del frontend del portal proveedor para gestión de pedidos: listado con stats/tabs, detalle, cambio de estado (máquina de estados + CTAs), factura PDF, exportación Excel, campos `prioridad`/`estado_pago`/`numero_guia` |
+| Módulo Market — API Configuración del Proveedor | `docs/API_MARKET_PROVEEDOR_CONFIGURACION.md` | 4 tabs (General/Bancario/Envíos/Notificaciones) + resumen con cuenta enmascarada y progreso de wizard. Lectura ADMIN u OPERADOR, escritura solo ADMIN (`403 PERMISSION_DENIED`). Catálogos paramétricos cacheados (bancos, transportadoras). Auditoría por tab (`MARKET_PROVEEDOR_CONFIG_GENERAL`, `_BANCARIO`, `_ENVIOS`, `_NOTIFICACIONES`) |
+| Módulo Market — API Perfil del Usuario de Proveedor | `docs/API_MARKET_PROVEEDOR_PERFIL.md` | Edición del `User` global del usuario logueado en el portal: `PUT /perfil` (name/email, 422 NO_DATA si body vacío) y `PUT /perfil/password` (current_password + password confirmed, 422 INVALID_CURRENT_PASSWORD / SAME_PASSWORD). Disponible para cualquier rol (ADMIN u OPERADOR); auditoría con módulo `MARKET_PROVEEDOR_PERFIL` — el cambio de password no guarda hashes |
 
 ---
 
@@ -1086,7 +1218,14 @@ Todos en `app/Models/Market/`. Métodos clave:
 - `MarketProducto::getPrecioParaCantidad(int $cantidad): float` — aplica descuentos escalonados de `market_precios_volumen`
 - `MarketProducto::scopeActivos()` — filtra `estado = 'activo'`
 - `MarketPedido::generarCodigo(): string` — genera PED-001, PED-002, etc.
+- `MarketPedido::$transicionesValidas` — array estático con las transiciones permitidas por estado (pendiente→confirmado|cancelado, confirmado→preparando|cancelado, preparando→en_transito|cancelado, en_transito→entregado|cancelado)
+- `MarketPedido::$accionesPorEstado` — array estático con los CTAs disponibles por estado (devuelto en responses para que el frontend no reimplemente la lógica de estados)
 - `MarketCarrito::itemsConProducto()` — relación eager con producto + preciosVolumen + unidadMedida + proveedor
+
+**Campos nuevos en `market_pedidos`** (migración `2026_05_19_000010`):
+- `prioridad` — enum `normal|alta|urgente`, default `normal`
+- `estado_pago` — enum `pendiente|pagado`, default `pendiente` (el proveedor lo marca manualmente; el pago no se procesa en la plataforma)
+- `numero_guia` — string nullable (número de tracking del transportista, se asigna al pasar a `en_transito`)
 
 ### API Tenant implementada (lado finca)
 
@@ -1169,10 +1308,222 @@ Si el carrito tiene productos de 2 proveedores → 2 pedidos en la misma transac
 - Roles del pivot: `ADMIN` | `OPERADOR` (default `ADMIN`).
 - Toda acción audita en módulos `MARKET_PROVEEDORES` y `MARKET_PROVEEDOR_USERS` (consultable vía `GET /api/v1/admin/auditorias`).
 
-### Pendiente (lado proveedor — panel del propio proveedor)
-Los endpoints `/api/v1/market/proveedor/*` (gestión de su catálogo de productos, actualización de estados de pedido, dashboard de ventas) aún no están implementados. Requieren el middleware `SetProveedor` que valide al usuario autenticado contra `market_proveedor_user`. La gestión de **la empresa proveedora en sí** (creación, suspensión, asignación de usuarios) ya está cubierta por el superadmin — ver sección anterior.
+### Portal Proveedor — Auth (implementado)
+
+El proveedor entra al marketplace por un **portal propio** (`/api/v1/proveedor-auth/*`), independiente del panel super-admin y del panel finca. Estructura espejo del `TenantAuthController`:
+
+**Rutas base:** `/api/v1/proveedor-auth/*`
+**Middleware:** público en login/forgot/reset; `auth:api` en select/me/logout/refresh
+**Controller:** `app/Http/Controllers/Api/ProveedorAuthController.php`
+**Variable de entorno:** `FRONTEND_PROVEEDOR_URL` (default `http://localhost:3001`) — usada en el link del email de reset
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| POST | `/proveedor-auth/login` | Email+password. Auto-selecciona proveedor si el user tiene uno solo activo (token con claims). Si tiene varios, devuelve `requires_proveedor_selection: true` + lista. |
+| POST | `/proveedor-auth/select-proveedor` | `proveedor_id` → token nuevo con claims `proveedor_id`+`proveedor_role` |
+| GET | `/proveedor-auth/me` | Usuario actual + lista de proveedores activos vinculados |
+| POST | `/proveedor-auth/logout` | Invalida el token JWT |
+| POST | `/proveedor-auth/refresh` | Renueva el token (sin preservar claims de proveedor) |
+| POST | `/proveedor-auth/forgot-password` | Anti-enumeración: siempre 200; solo envía email si el user es proveedor activo |
+| POST | `/proveedor-auth/reset-password` | Estándar (usa `Password::broker()` de Laravel) |
+
+**Reglas de elegibilidad para login (todas deben cumplirse):**
+1. `users.email` y `users.password` coinciden
+2. `users.status = true`
+3. `users.is_super_admin = false` (los super-admins reciben `403 USE_ADMIN_LOGIN`)
+4. Existe al menos una fila `market_proveedor_user.estado = true` cuyo proveedor relacionado tiene `estado = 'activo'` y `deleted_at IS NULL`
+
+Si la condición 4 falla → `403 NO_PROVEEDORES_ACTIVOS`.
+
+**Claims del JWT después de seleccionar proveedor:**
+```json
+{ "sub": 5, "proveedor_id": 1, "proveedor_role": "ADMIN" }
+```
+
+**Relaciones agregadas a `User` model** (`app/Models/User.php`):
+- `proveedores()` — BelongsToMany via `market_proveedor_user`
+- `proveedorUsers()` — HasMany de `MarketProveedorUser`
+- `activeProveedores()` — proveedores activos (pivot estado=true + proveedor estado='activo' + no soft-deleted)
+- `hasAccessToProveedor(int)` / `getRoleInProveedor(int)` — helpers análogos a los de tenant
+
+**Auditoría:** registra eventos `LOGIN_EXITOSO`/`LOGIN_FALLIDO`/`LOGOUT`/`CAMBIO_PASSWORD` en módulo `AUTH` con `tenant_id = null`.
+
+### Portal Proveedor — Gestión de Productos (implementado)
+
+**Rutas base:** `/api/v1/market/proveedor/*`
+**Middleware:** `auth:api` + `SetProveedor` (middleware análogo a `SetTenant`; lee `proveedor_id`+`proveedor_role` de los claims JWT; retorna `422 PROVEEDOR_NOT_SELECTED`, `404 PROVEEDOR_NOT_FOUND`, `403 PROVEEDOR_INACTIVE`, `403 PROVEEDOR_ACCESS_DENIED` según el caso)
+**Controllers:** `app/Http/Controllers/Api/Market/MarketProveedorDashboardController.php`, `MarketProveedorProductoController.php`
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/dashboard` | KPIs del proveedor en una sola llamada: `indicadores` (productos activos/total, pedidos pendientes/en_proceso/completados_mes, ventas_mes_actual, ventas_mes_anterior, variacion_ventas_porcentaje), `pedidos_recientes` (últimos 5 con tenant + primer producto), `productos_mas_vendidos` (top 5 por `unidades_vendidas`) |
+| GET | `/wizard-init` | Categorías activas + unidades de medida activas para selects |
+| GET | `/productos` | Lista paginada (default 15/pág) + stats (`total_activos`, `total_inactivos`, `total_sin_stock`); filtros: `estado`, `categoria_id`, `destacados`, `buscar`, `ordenar` |
+| POST | `/productos` | Crear producto (multipart/form-data; SKU autogenerado `PROV{id}-{timestamp}` si se omite; `precios_volumen` como JSON string en FormData) |
+| GET | `/productos/{id}` | Detalle con galería, especificaciones, `unidades_vendidas`, `ingresos_acumulados`, todos los precios por volumen incluyendo inactivos |
+| PUT | `/productos/{id}` | Actualizar (todos los campos con `sometimes`); `precios_volumen` omitido = sin cambio, `[]` = borrar todos, `[{...}]` = replace completo |
+| DELETE | `/productos/{id}` | Eliminar; `409 PRODUCTO_CON_ORDENES_ACTIVAS` si tiene órdenes en estado activo |
+| PATCH | `/productos/{id}/toggle` | Alterna `activo` ⇄ `inactivo` |
+| POST | `/productos/{id}/imagenes` | Añadir imagen a galería (jpg/jpeg/png/webp, máx 3MB); `orden` autocalculado |
+| DELETE | `/productos/{id}/imagenes/{imgId}` | Eliminar imagen de galería |
+
+**Notas de implementación:**
+- Scope de seguridad: `404` (no `403`) al acceder a producto de otro proveedor — no revela si existe.
+- `imagen_principal` (campo de texto en `market_productos`) y galería (`market_producto_imagenes`) son conceptos separados. El PUT de producto con `imagen_principal` nuevo elimina la imagen anterior automáticamente.
+- SKU único global entre todos los proveedores del marketplace.
+
+### Portal Proveedor — Carga masiva de productos (implementado)
+
+**Rutas base:** `/api/v1/market/proveedor/productos/*`
+**Middleware:** `auth:api` + `SetProveedor`
+**Controller:** `app/Http/Controllers/Api/Market/MarketProveedorProductoImportController.php`
+**Request:** `app/Http/Requests/Market/ImportarProductosRequest.php`
+**Job:** `app/Jobs/ProcesarImportacionProductosJob.php` (background, timeout 600s)
+**Modelo:** `app/Models/Market/ImportacionProductos.php`
+**Migración:** `database/migrations/2026_05_22_113200_create_importaciones_productos_table.php` (tabla `importaciones_productos`, FK a `market_proveedores` y `users`)
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/productos/importar/plantilla` | Descarga `plantilla_productos.xlsx` con 13 cabeceras + 1 fila de ejemplo (PhpSpreadsheet) |
+| POST | `/productos/importar` | Recibe ZIP (`archivo` multipart, máx 50 MB), guarda en disco `local`, dispara job, retorna `202` con `importacion_id` y `estado: PENDIENTE` |
+| GET | `/productos/importaciones/{id}` | Estado actual: `estado`, `total_filas`, `filas_exitosas`, `filas_fallidas`, `error_fatal`, `resultados[]`, timestamps |
+
+**Estructura del ZIP:** `productos.xlsx` en la raíz + carpeta `imagenes/` con todas las fotos. El Excel referencia los archivos por nombre en las columnas `IMAGEN_PRINCIPAL` (string) e `IMAGENES_GALERIA` (lista separada por `|`).
+
+**Columnas del Excel (13, A→M):** `NOMBRE`, `DESCRIPCION`, `CATEGORIA_ID`, `UNIDAD_MEDIDA_ID`, `PRECIO_UNITARIO`, `STOCK_DISPONIBLE`, `STOCK_MINIMO`, `SKU`, `ESTADO`, `DESTACADO`, `ESPECIFICACIONES` (formato `clave:valor|clave:valor`), `IMAGEN_PRINCIPAL`, `IMAGENES_GALERIA`. SKU vacío se autogenera con el helper `generarSku()` del controller de productos; SKU duplicado rechaza la fila.
+
+**Estados del job:** `PENDIENTE` → `PROCESANDO` → `COMPLETADO` (todas OK) | `CON_ERRORES` (parcial) | `FALLIDO` (error fatal — ZIP corrupto, falta `productos.xlsx` o `imagenes/`, > 500 filas, extensión PHP `zip` no habilitada).
+
+**Pipeline del job:**
+1. Marca `PROCESANDO` + `iniciado_at`.
+2. Extrae ZIP a `storage/app/private/market/importaciones/{proveedorId}/tmp_{uuid}/`.
+3. Valida estructura (existe `productos.xlsx` + carpeta `imagenes/`).
+4. Carga Excel con `IOFactory::load()`, descarta cabecera y filas vacías.
+5. Valida límite de 500 filas.
+6. Procesa en chunks de 50: por fila → `validate()` → copiar imágenes a `storage/app/public/market/productos/{proveedorId}/{uuid}.{ext}` → `DB::transaction` crea `MarketProducto` + N `MarketProductoImagen`. Si la transacción falla, hace cleanup manual de las imágenes ya copiadas (storage no es transaccional).
+7. Estado final + `AuditoriaService` (`accion=IMPORTACION_MASIVA`, `modulo=MARKET_PRODUCTOS`).
+8. Borra el directorio temporal en `finally`.
+
+**Límites:** ZIP 50 MB · 500 filas/importación · 3 MB por imagen · formatos `jpg/jpeg/png/webp` · timeout job 600s · sin reintentos.
+
+**Reportes legibles para UI:** cada entrada de `resultados[]` tiene shape `{fila, estado: "exitoso"|"fallido", sku, mensaje}` con mensajes listos para pintar tal cual (ej. `"El SKU 'TOMATE-001' ya existe en el catálogo."`, `"La imagen 'foto.bmp' tiene un formato inválido."`).
+
+**Notas:**
+- Solo CREA productos — no es upsert. SKU duplicado falla la fila.
+- Ownership: el endpoint de estado retorna `404 IMPORTACION_NOT_FOUND` si la importación es de otro proveedor (no `403`, para no filtrar existencia).
+- ZIP fuente se conserva en disco privado para auditar/reprocesar (considerar limpieza > 30 días).
+- No hay endpoint de historial de importaciones todavía (mencionado como follow-up).
+
+### Portal Proveedor — Gestión de Pedidos (implementado)
+
+**Rutas base:** `/api/v1/market/proveedor/pedidos/*`
+**Middleware:** `auth:api` + `SetProveedor`
+**Controller:** `app/Http/Controllers/Api/Market/MarketProveedorPedidoController.php`
+**Request:** `app/Http/Requests/Market/Proveedor/UpdateMarketPedidoEstadoRequest.php`
+**Service:** `app/Services/Market/MarketFacturaService.php` (PDF con DomPDF)
+**Vista:** `resources/views/market/factura.blade.php`
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/pedidos/exportar` | Exporta a Excel (.xlsx) los pedidos filtrados (máx 1000, PhpSpreadsheet) |
+| GET | `/pedidos` | Lista paginada (15/pág) + stats cards: `por_confirmar`, `activos`, `en_transito`, `completados`, `ventas_mes` |
+| GET | `/pedidos/{codigo}` | Detalle completo con items, historial y datos del tenant comprador |
+| PUT | `/pedidos/{id}/estado` | Cambia estado con validación de máquina de estados; registra historial; audita vía `AuditoriaService` |
+| GET | `/pedidos/{codigo}/factura` | Descarga PDF de la factura del pedido |
+
+**Filtros en `GET /pedidos`:** `?tab=por_confirmar|activos|completados|todos` + `?estado=` + `?buscar=` (código o nombre finca) + `?page=`
+
+**Máquina de estados:**
+```
+pendiente → confirmado | cancelado
+confirmado → preparando | cancelado
+preparando → en_transito | cancelado
+en_transito → entregado | cancelado
+entregado / cancelado → (sin transiciones)
+```
+Transición inválida → `409 TRANSICION_INVALIDA`.
+
+**Campo `acciones_disponibles`** — devuelto en `index` y `show`; mapea el estado actual a los CTAs que el frontend debe renderizar (`["confirmar","rechazar"]`, `["preparar"]`, `["despachar"]`, `["confirmar_entrega"]`, `[]`).
+
+**Notas:**
+- Scope de seguridad: `delProveedor($id)` en todas las queries — un proveedor nunca accede a pedidos de otro.
+- `fecha_entrega_real` se asigna automáticamente a `now()` al transicionar a `entregado`.
+- La ruta `exportar` se registra **antes** de `{codigo}` en `routes/api.php` para evitar que Laravel capture "exportar" como código de pedido.
+- Los nuevos campos `prioridad`, `estado_pago` y `numero_guia` también aparecen en los responses del lado tenant (`GET /tenant/market/pedidos`) sin cambios adicionales.
 
 ### Documentación
 - `docs/MARKET_MODULE.md` — arquitectura, tablas, flujos, estrategia de imágenes
 - `docs/API_MARKET.md` — guía completa de consumo para el frontend (lado finca)
 - `docs/API_MARKET_PROVEEDORES_ADMIN.md` — guía del frontend para el panel de superadmin (CRUD proveedores y sus usuarios)
+- `docs/API_MARKET_PROVEEDORES_AUTH.md` — guía del frontend del Portal Proveedor (login, select, forgot/reset, claims del JWT, reglas de elegibilidad)
+- `docs/API_MARKET_PROVEEDOR_PRODUCTOS.md` — guía del frontend del Portal Proveedor (gestión de catálogo: wizard-init, CRUD productos, galería de imágenes, precios por volumen)
+- `docs/API_MARKET_PROVEEDOR_DASHBOARD.md` — guía del frontend del Portal Proveedor (dashboard: KPIs, pedidos recientes, top productos)
+- `docs/API_MARKET_PROVEEDOR.md` — guía del frontend del Portal Proveedor (gestión de pedidos: listado con stats, cambio de estado, factura PDF, exportación Excel)
+- `docs/API_MARKET_PROVEEDOR_CONFIGURACION.md` — guía del frontend del Portal Proveedor (configuración del proveedor: 4 tabs General/Bancario/Envíos/Notificaciones + resumen con cuenta enmascarada; lectura ADMIN u OPERADOR, escritura solo ADMIN)
+- `docs/API_MARKET_PROVEEDOR_PERFIL.md` — guía del frontend del Portal Proveedor (perfil del usuario logueado: `PUT /perfil` y `PUT /perfil/password`, disponible para cualquier rol; reglas de validación de contraseña actual y no-reutilización)
+- `docs/PLAN_BULK_PRODUCTOS_MARKET.md` — plan de implementación de la carga masiva de productos (decisiones de diseño, columnas del Excel, pipeline del job, verificación end-to-end)
+- `docs/API_BULK_PRODUCTOS_MARKET.md` — guía del frontend del Portal Proveedor (carga masiva: descargar plantilla, subir ZIP, polling de estado, mensajes de error, ejemplos JS)
+- `docs/ESTRUCTURA_EXCEL_BULK_PRODUCTOS.md` — referencia detallada de las 13 columnas del Excel de carga masiva, ejemplos por campo, errores comunes
+
+---
+
+## 13. Estrategia de Caché y Performance
+
+### 13.1 Driver y filosofía
+
+El driver de caché es `file` (`CACHE_STORE=file`), almacenado en `storage/framework/cache/data/`. Se eligió sobre `database` (que tenía contención con escrituras concurrentes en la tabla `cache` de PostgreSQL) y sobre `redis` (no disponible localmente; configurado en `.env` pero no activo). Para escalar a >50 tenants concurrentes, migrar a `redis` es un solo cambio en `.env`.
+
+**Las claves y TTLs canónicos viven en [`App\Support\WizardCache`](app/Support/WizardCache.php).** Nunca se construyen strings de caché ad-hoc en controllers — todo pasa por el helper para que la invalidación quede centralizada.
+
+### 13.2 Capas de caché
+
+Hay dos niveles de caché operando juntos:
+
+1. **Caché aplicativa (servidor)** — `Cache::remember` envolviendo los reads de paramétricas. La invalidación se dispara explícitamente desde los controllers en `store/update/destroy`. TTLs:
+   - Paramétricas del tenant (EPS, ARL, fondos pensión, bancos, predios, semillas): **15 min**.
+   - Bundle de predio (lotes + sublotes + líneas por predio específico): **60 s** — TTL corto porque cambia con CRUD del wizard; invalidación explícita en Lote/Sublote/Línea.
+   - Resumen del predio: **60 s** — misma clave que el bundle, invalidación compartida.
+   - Ubicaciones (departamentos, municipios): **6 h** — son catálogos prácticamente inmutables.
+   - Tenant + tenant_user en `SetTenant` middleware: **60 s** — acota la ventana de inconsistencia si un super-admin desactiva un usuario sin invalidar explícitamente. Follow-up: añadir `WizardCache::forgetTenantUser()` en `TenantUserController`.
+
+2. **Caché HTTP (cliente)** — Headers `Cache-Control` + `ETag` en los responses de paramétricas (`max-age=600` privado para selects del tenant, `max-age=21600` público para ubicaciones, `max-age=3600` para categorías de documentos). El navegador devuelve 304 sin que el front lo gestione manualmente.
+
+El endpoint `wizard-init` retorna `Cache-Control: private, max-age=0, must-revalidate` deliberadamente — el navegador NO debe cachearlo (el colaborador puede cambiar entre peticiones); la caché vive en el servidor.
+
+### 13.3 Endpoints con caché aplicativa
+
+| Endpoint | TTL | Invalidación |
+|----------|-----|--------------|
+| `GET /eps/select` | 15 min | `store/update/destroy` de `EpsController` |
+| `GET /arl/select` | 15 min | `store/update/destroy` de `ArlController` |
+| `GET /fondos-pension/select` | 15 min | `store/update/destroy` de `FondoPensionController` |
+| `GET /entidades-bancarias/select` | 15 min | `store/update/destroy` de `EntidadBancariaController` |
+| `GET /predios` (solo sin `search` ni `estado`) | 15 min | `store/update/destroy` de `PredioController` |
+| `GET /lotes/semillas` | 15 min | n/a (catálogo del tenant, invalidar si se crea/edita semilla) |
+| `GET /auth/departamentos` | 6 h | n/a (estático) |
+| `GET /auth/departamentos/{codigo}/municipios` | 6 h | n/a (estático) |
+| `GET /colaboradores/{id}/wizard-init` y `/colaboradores/wizard-init` | hereda TTLs de sus paramétricas | hereda invalidaciones |
+| `GET /predios/{id}/wizard-init` y `/predios/wizard-init` | 60 s (bundle) + TTLs de paramétricas | `WizardCache::forgetPredioBundle()` en `store/update/destroy` de `LoteController`, `SubloteController`, `LineaController` |
+| `GET /predios/{id}/resumen` | 60 s | `WizardCache::forgetPredioBundle()` (misma clave) |
+| `SetTenant` middleware (`tenant:{id}` y `tenant_user:{tid}:{uid}`) | 60 s | TTL solamente — follow-up: invalidar en `TenantUserController` |
+
+### 13.4 Regla operacional
+
+> **Cualquier endpoint nuevo que sirva una paramétrica o configuración debe pasar por `App\Support\WizardCache`** — registrar la clave y el TTL ahí, no inventar strings en el controller. Cualquier mutación de esa paramétrica debe invalidar la caché correspondiente en el mismo método (store/update/destroy).
+
+### 13.5 Diagnóstico
+
+**Wizard de colaborador lento:**
+1. `php artisan cache:clear` para descartar caché corrupto.
+2. DevTools → Network → confirmar 1 GET a `colaboradores/wizard-init` (no 8 GET legacy).
+3. Revisar `storage/framework/cache/data/` — si tiene cientos de MB es signo de claves fuera del helper.
+
+Ver [docs/OPTIMIZACION_WIZARD_COLABORADOR.md](docs/OPTIMIZACION_WIZARD_COLABORADOR.md).
+
+**Wizard de predios lento:**
+1. `php artisan cache:clear`.
+2. DevTools → Network → confirmar 1 GET a `predios/{id}/wizard-init` (no 14+ GET legacy).
+3. Si el resumen del panel tarda, verificar que la clave `wizard:predio_resumen:t:{tid}:p:{pid}` existe en caché tras la primera carga.
+4. Si las palmas en el paso 5 saturan la red, verificar que el frontend pide `per_page=50` y solo la primera página — no debe intentar cargar todo.
+
+Ver [docs/OPTIMIZACION_WIZARD_PREDIO.md](docs/OPTIMIZACION_WIZARD_PREDIO.md).

@@ -9,8 +9,10 @@ use App\Models\Lote;
 use App\Models\Predio;
 use App\Models\Semilla;
 use App\Services\AuditoriaService;
+use App\Support\WizardCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -109,7 +111,13 @@ class LoteController extends Controller
     public function semillas(): JsonResponse
     {
         try {
-            $semillas = Semilla::activos()->orderBy('nombre')->get(['id', 'tipo', 'nombre']);
+            $tenantId = (int) app('current_tenant_id');
+
+            $semillas = Cache::remember(
+                WizardCache::semillas($tenantId),
+                WizardCache::TTL_PARAMETRICA,
+                fn() => Semilla::activos()->orderBy('nombre')->get(['id', 'tipo', 'nombre'])->toArray(),
+            );
 
             return response()->json(['data' => $semillas]);
         } catch (\Throwable $e) {
@@ -149,6 +157,8 @@ class LoteController extends Controller
             }
 
             DB::commit();
+
+            WizardCache::forgetPredioBundle((int) app('current_tenant_id'), $lote->predio_id);
 
             $this->auditoria->registrarCreacion(
                 $request,
@@ -204,6 +214,8 @@ class LoteController extends Controller
 
             DB::commit();
 
+            WizardCache::forgetPredioBundle((int) app('current_tenant_id'), $lote->predio_id);
+
             $this->auditoria->registrarEdicion(
                 $request,
                 'LOTES',
@@ -253,9 +265,12 @@ class LoteController extends Controller
                 "Se eliminó el lote '{$lote->nombre}' con todos sus sublotes y palmas",
             );
 
+            $predioId = $lote->predio_id;
             $lote->delete();
 
             DB::commit();
+
+            WizardCache::forgetPredioBundle((int) app('current_tenant_id'), $predioId);
 
             return response()->json([
                 'message' => "Lote '{$lote->nombre}' eliminado correctamente",

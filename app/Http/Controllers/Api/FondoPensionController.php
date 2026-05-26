@@ -7,8 +7,10 @@ use App\Http\Requests\FondoPension\StoreFondoPensionRequest;
 use App\Http\Requests\FondoPension\UpdateFondoPensionRequest;
 use App\Models\FondoPension;
 use App\Services\AuditoriaService;
+use App\Support\WizardCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class FondoPensionController extends Controller
@@ -18,12 +20,20 @@ class FondoPensionController extends Controller
     public function select(Request $request): JsonResponse
     {
         try {
-            $items = FondoPension::query()
-                ->activos()
-                ->orderBy('nombre')
-                ->get(['id', 'nombre']);
+            $tenantId = (int) app('current_tenant_id');
 
-            return response()->json(['data' => $items]);
+            $items = Cache::remember(
+                WizardCache::fondosPension($tenantId),
+                WizardCache::TTL_PARAMETRICA,
+                fn () => FondoPension::query()
+                    ->activos()
+                    ->orderBy('nombre')
+                    ->get(['id', 'nombre']),
+            );
+
+            return response()->json(['data' => $items])
+                ->header('Cache-Control', 'private, max-age=600')
+                ->header('ETag', '"' . md5(serialize($items)) . '"');
         } catch (\Throwable $e) {
             Log::error('Error en fondos-pension/select: ' . $e->getMessage());
             return response()->json(['message' => 'Error al listar fondos de pensión', 'error' => $e->getMessage()], 500);
@@ -64,6 +74,8 @@ class FondoPensionController extends Controller
         try {
             $fondo = FondoPension::create($request->validated());
 
+            WizardCache::forgetParametricasTenant((int) app('current_tenant_id'), 'fondos_pension');
+
             $this->auditoria->registrarCreacion(
                 $request, 'FONDOS_PENSION', $fondo,
                 "Se creó el fondo de pensión '{$fondo->nombre}'"
@@ -84,6 +96,8 @@ class FondoPensionController extends Controller
         try {
             $datosAnteriores = $fondoPension->toArray();
             $fondoPension->update($request->validated());
+
+            WizardCache::forgetParametricasTenant((int) app('current_tenant_id'), 'fondos_pension');
 
             $this->auditoria->registrarEdicion(
                 $request, 'FONDOS_PENSION', $fondoPension, $datosAnteriores,
@@ -110,6 +124,8 @@ class FondoPensionController extends Controller
                 "Se eliminó el fondo de pensión '{$nombre}'"
             );
             $fondoPension->delete();
+
+            WizardCache::forgetParametricasTenant((int) app('current_tenant_id'), 'fondos_pension');
 
             return response()->json(['message' => "Fondo de pensión '{$nombre}' eliminado correctamente"]);
         } catch (\Throwable $e) {

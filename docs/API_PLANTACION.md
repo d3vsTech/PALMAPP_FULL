@@ -221,6 +221,8 @@ GET /predios/{id}/resumen
 
 **Permiso:** `lotes.ver`
 
+**Caché:** TTL 60 s por tenant+predio. Se invalida automáticamente tras cualquier mutación de lote, sublote o línea del predio. La segunda llamada dentro del TTL no ejecuta queries a BD (~0 ms).
+
 Devuelve la jerarquía completa del predio (`lotes → sublotes`) más los totales agregados, en una sola llamada. Pensado para alimentar el panel **"Resumen"** del wizard *"Crear Nueva Plantación"* y cualquier vista que necesite la foto completa de un predio sin hacer múltiples requests.
 
 **Respuesta 200:**
@@ -283,6 +285,108 @@ Devuelve la jerarquía completa del predio (`lotes → sublotes`) más los total
 
 ---
 
+### 1.7 Inicialización del wizard (bundle)
+
+Endpoint bundle que reemplaza 14+ requests secuenciales al montar el wizard de predios por **1 sola petición**. Devuelve la estructura completa (predio + lotes + sublotes + líneas) junto con las paramétricas (semillas, departamentos).
+
+> **Latencia esperada:** < 300 ms en cold cache, < 50 ms en segunda visita dentro del TTL del bundle.
+
+#### Modo edición
+
+```
+GET /predios/{id}/wizard-init
+```
+
+**Permiso:** `lotes.ver`
+
+#### Modo creación
+
+```
+GET /predios/wizard-init
+```
+
+**Permiso:** `lotes.crear`
+
+La respuesta es idéntica salvo que `data.predio`, `data.lotes`, `data.sublotes` y `data.lineas` vienen vacíos / `null`.
+
+> **Nota de rutas:** la ruta sin `{id}` está declarada **antes** de `predios/{predio}` para que Laravel no interprete `wizard-init` como un ID.
+
+**Respuesta 200:**
+```json
+{
+  "data": {
+    "predio": {
+      "id": 6,
+      "nombre": "Finca El Palmar",
+      "ubicacion": "Acacías, Meta",
+      "hectareas_totales": "150.00"
+    },
+    "lotes": [
+      {
+        "id": 10,
+        "nombre": "Lote A",
+        "hectareas_sembradas": "30.50",
+        "semillas": [{ "id": 2, "nombre": "Híbrido OxG" }]
+      }
+    ],
+    "sublotes": {
+      "10": [
+        {
+          "id": 21,
+          "nombre": "Sublote A-1",
+          "cantidad_palmas": 12000,
+          "cantidad_lineas": 20
+        }
+      ]
+    },
+    "lineas": {
+      "21": [
+        { "id": 101, "numero": 1, "cantidad_palmas": 600 },
+        { "id": 102, "numero": 2, "cantidad_palmas": 600 }
+      ]
+    },
+    "parametricas": {
+      "semillas": [
+        { "id": 1, "tipo": "HIBRIDO", "nombre": "Híbrido OxG" },
+        { "id": 2, "tipo": "TENERA",  "nombre": "Ténera Deli" }
+      ],
+      "departamentos": [
+        { "codigo": "50", "nombre": "Meta" },
+        { "codigo": "68", "nombre": "Santander" }
+      ]
+    }
+  }
+}
+```
+
+**Puntos clave de la estructura:**
+
+| Campo | Descripción |
+|-------|-------------|
+| `sublotes` | Objeto indexado por `lote_id` (string numérico) — lookup directo sin `.find()` |
+| `lineas` | Objeto indexado por `sublote_id` |
+| `sublote.cantidad_palmas` | Total de palmas del sublote (contador). Las palmas individuales **no se incluyen** |
+| `sublote.cantidad_lineas` | Si es `0`, el sublote no tiene líneas (flujo directo) |
+| `linea.cantidad_palmas` | Palmas teóricas asignadas a la línea |
+| `parametricas.departamentos` | Catálogo completo — municipios se cargan en fetch condicional posterior |
+
+> **Las palmas NO se incluyen en el bundle.** Un sublote puede tener > 10.000 palmas — incluirlas haría el payload de MB. Usar los contadores (`cantidad_palmas`) como totales de cabecera y cargar palmas paginadas en el paso 5 (ver §6).
+
+**Caché:**
+- El bundle estructural (lotes + sublotes + líneas) tiene TTL 60 s por tenant+predio. Se invalida automáticamente tras cualquier mutación en `LoteController`, `SubloteController` o `LineaController`.
+- Semillas: TTL 15 min por tenant.
+- Departamentos: TTL 6 h.
+
+**Impacto:**
+
+| Escenario | Requests antes | Requests ahora |
+|-----------|---------------|----------------|
+| 3 lotes / 6 sublotes / 12 líneas | 14 | **2** (bundle + municipios condicional) |
+| 10 lotes / 30 sublotes / 200 líneas | 241 | **2** |
+| Segunda visita (sessionStorage frontend) | igual | **1** |
+
+---
+
 ## 2. Lotes
 
 ### 2.0 Listar lotes activos (para select del wizard)
@@ -323,6 +427,8 @@ GET /lotes/semillas
 ```
 
 **Permiso:** `lotes.ver`
+
+**Caché:** TTL 15 min por tenant. La segunda llamada dentro del TTL no ejecuta query a BD.
 
 **Respuesta 200:**
 ```json
@@ -776,8 +882,10 @@ PUT /sublotes/{id}
 > - Si el nuevo valor es **mayor** que el actual: se crean palmas adicionales (continuando el contador secuencial).
 >   - Si la **diferencia a crear** es `> 5000`, la creación se hace **async** (Job en cola) — la respuesta incluye `palmas_async: true` y `batch_id`.
 >   - Si es `<= 5000`, se crean de forma **sync**.
-> - Si el nuevo valor es **menor** que el actual: se eliminan las palmas con los códigos más altos (siempre sync).
-> - **Concurrencia:** Si ya hay un batch de creación de palmas en curso para este sublote, la petición se rechaza con **409 Conflict**. Espere a que finalice (consultar `GET /palmas/batch/{batchId}`) antes de reintentar.
+> - Si el nuevo valor es **menor** que el actual: se eliminan las palmas con los códigos más altos.
+>   - Si la **diferencia a eliminar** es `> 5000`, la eliminación se hace **async** (Job en cola) — la respuesta incluye `palmas_async: true` y `batch_id`.
+>   - Si es `<= 5000`, se eliminan de forma **sync**.
+> - **Concurrencia:** Si ya hay un batch de creación **o eliminación** de palmas en curso para este sublote, la petición se rechaza con **409 Conflict**. Espere a que finalice (consultar `GET /palmas/batch/{batchId}`) antes de reintentar.
 
 **Ejemplo (agregar palmas):**
 ```json
@@ -798,6 +906,16 @@ PUT /sublotes/{id}
 ```json
 {
   "message": "Sublote actualizado. 8000 palma(s) adicional(es) se crearán en segundo plano.",
+  "data": { ... },
+  "palmas_async": true,
+  "batch_id": "9b8e2f34-1a0c-4f6d-9b2e-8e1b2a3c4d5e"
+}
+```
+
+**Respuesta 200 (async, diferencia a eliminar > 5000):**
+```json
+{
+  "message": "Sublote actualizado. 80000 palma(s) se eliminarán en segundo plano.",
   "data": { ... },
   "palmas_async": true,
   "batch_id": "9b8e2f34-1a0c-4f6d-9b2e-8e1b2a3c4d5e"
@@ -1074,7 +1192,80 @@ PUT /palmas/{id}
 
 ---
 
-### 4.5 Eliminar palmas (masivo)
+### 4.5 Asignar palmas a línea (masivo)
+
+```
+PUT /palmas/masivo/asignar-linea
+```
+
+**Permiso:** `palmas.editar`
+
+Permite asociar en lote palmas ya existentes a una línea. Útil cuando el sublote fue creado primero sin líneas y luego se añadieron líneas.
+
+**Body:**
+
+| Campo | Tipo | Requerido | Descripción |
+|---|---|---|---|
+| `sublote_id` | integer | **Sí** | Sublote al que pertenecen las palmas |
+| `linea_id` | integer\|null | **Sí** (puede ser null) | Línea destino. Enviar `null` para desasignar |
+| `palmas_ids` | array | No | IDs explícitos a reasignar. Si se omite → asigna todas las palmas **sin línea** del sublote a `linea_id` |
+
+> **Comportamiento según combinación:**
+> - `palmas_ids` presente + `linea_id` = ID → reasigna esas palmas a la línea (aunque ya tuvieran otra)
+> - `palmas_ids` ausente + `linea_id` = ID → asigna **todas las palmas sin línea** del sublote a la línea
+> - `palmas_ids` ausente + `linea_id` = null → desasigna (`linea_id → null`) todas las palmas del sublote
+> - Siempre **sync** (un `UPDATE` masivo es rápido incluso para 100k filas)
+> - Actualiza automáticamente `cantidad_palmas` de las líneas afectadas (origen y destino)
+> - El `cantidad_palmas` del sublote **no cambia** (el total de palmas no varía)
+
+**Ejemplo (asignar todas las sin línea a la línea 3):**
+```json
+{
+  "sublote_id": 1,
+  "linea_id": 3
+}
+```
+
+**Ejemplo (reasignar palmas específicas a la línea 2):**
+```json
+{
+  "sublote_id": 1,
+  "linea_id": 2,
+  "palmas_ids": [101, 102, 103, 250]
+}
+```
+
+**Ejemplo (desasignar todas las palmas del sublote):**
+```json
+{
+  "sublote_id": 1,
+  "linea_id": null
+}
+```
+
+**Respuesta 200:**
+```json
+{
+  "message": "120 palma(s) asignadas correctamente",
+  "cantidad_asignadas": 120,
+  "sublote_id": 1,
+  "linea_id": 3
+}
+```
+
+**Respuesta 422 (línea no pertenece al sublote):**
+```json
+{
+  "message": "Error de validación",
+  "errors": {
+    "linea_id": ["La línea no pertenece a este sublote."]
+  }
+}
+```
+
+---
+
+### 4.6 Eliminar palmas (masivo)
 
 ```
 DELETE /palmas/masivo
@@ -1108,7 +1299,7 @@ DELETE /palmas/masivo
 
 ---
 
-### 4.6 Estado de batch de palmas (async)
+### 4.7 Estado de batch de palmas (async)
 
 ```
 GET /palmas/batch/{batchId}
@@ -1373,11 +1564,11 @@ Predio (finca/hacienda)
   └── Lote (división del terreno)
         ├── Semillas (relación many-to-many via semilla_lote)
         └── Sublote (subdivisión del lote)
-              ├── Línea (opcional, metadata por sublote — independiente de palmas)
-              └── Palma (planta individual, FK directo a sublote_id)
+              ├── Línea (agrupación opcional de palmas dentro del sublote)
+              └── Palma (planta individual — FK a sublote_id, FK opcional a linea_id)
 ```
 
-> Las **líneas** no se relacionan con las palmas: son metadata informativa por sublote (numero + cantidad_palmas teóricas). Las palmas siguen colgando solo del sublote, sin importar si la finca usa líneas o no.
+Las **palmas** tienen FK directo a `sublote_id` y FK opcional a `linea_id`. Si el sublote tiene líneas, `linea_id` es **obligatorio** al crear palmas. Eliminar una línea desasocia sus palmas (`linea_id → null`) pero no las elimina.
 
 ## Formato de código de palmas
 
@@ -1398,8 +1589,11 @@ Ejemplo: Sublote A1-001
 | Sublotes  | `sublotes.ver`  | `sublotes.crear`  | `sublotes.editar`  | `sublotes.eliminar`  |
 | Líneas    | `lineas.ver`    | `lineas.crear`    | `lineas.editar`    | `lineas.eliminar`    |
 | Palmas    | `palmas.ver`    | `palmas.crear`    | `palmas.editar`    | `palmas.eliminar`    |
+| Asignar palmas a línea (masivo) | — | — | `palmas.editar` | — |
+| Wizard Init (edición) | `lotes.ver` | — | — | — |
+| Wizard Init (creación) | — | `lotes.crear` | — | — |
 
-> Los permisos `lotes.*` cubren predios y lotes. Los permisos `sublotes.*`, `lineas.*` y `palmas.*` son independientes entre sí.
+> Los permisos `lotes.*` cubren predios, lotes y el wizard-init. Los permisos `sublotes.*`, `lineas.*` y `palmas.*` son independientes entre sí.
 
 ## Notas sobre eliminación
 
@@ -1417,7 +1611,21 @@ Todas las eliminaciones son **recursivas**:
 
 ## Flujo recomendado para el wizard "Crear Nueva Plantación"
 
-El wizard tiene 5 pasos. Cada paso usa los endpoints CRUD existentes — **no requiere endpoints nuevos**, salvo `GET /predios/{id}/resumen` para refrescar el panel lateral.
+### Fase de montaje — 1 sola petición
+
+Al abrir el wizard (modo edición o creación) usar **§1.7 wizard-init** en lugar de múltiples fetches individuales:
+
+```
+# Modo edición
+GET /predios/{id}/wizard-init
+
+# Modo creación
+GET /predios/wizard-init
+```
+
+Esta única respuesta provee semillas, departamentos, lotes, sublotes y líneas. Evita 14–241 requests según el tamaño del predio. Ver §1.7 para la forma completa de la respuesta.
+
+### Pasos del wizard (mutaciones)
 
 | Paso | Acción del usuario | Endpoint |
 |------|---------------------|----------|
@@ -1425,23 +1633,36 @@ El wizard tiene 5 pasos. Cada paso usa los endpoints CRUD existentes — **no re
 | **2. Lotes** | Crea N lotes dentro del predio (con `hectareas_sembradas`, `fecha_siembra`, `semillas_ids`) | `POST /lotes` (uno por lote) |
 | **3. Sublotes** | Crea N sublotes dentro de cada lote. Si pasa `cantidad_palmas > 0`, se crean palmas automáticamente. | `POST /sublotes` |
 | **4. Líneas** *(opcional)* | Crea las líneas de cada sublote. **Este paso es 100% saltable** — si la finca no organiza por líneas, el frontend simplemente avanza al paso 5. | `POST /lineas` |
-| **5. Palmas** | Ajustar/agregar palmas individuales si no se crearon automáticamente en el paso 3, o eliminar palmas en lote. | `POST /palmas` y `DELETE /palmas/masivo` |
+| **5. Palmas** | Cargar palmas de forma **paginada y lazy** al entrar al paso. Ajustar/agregar o eliminar palmas. | `GET /palmas?sublote_id=X&per_page=50`, `POST /palmas`, `DELETE /palmas/masivo` |
+
+### Paso 5 — Palmas: carga paginada (crítico con > 10.000 palmas)
+
+El bundle del wizard-init **no incluye palmas** — solo los contadores. Al entrar al paso 5 cargar únicamente la primera página del sublote/línea activa:
+
+```
+GET /palmas?sublote_id={id}&per_page=50&page=1
+GET /palmas?sublote_id={id}&linea_id={lid}&per_page=50&page=1
+```
+
+- Mostrar el total desde `sublote.cantidad_palmas` (del bundle), no desde `meta.total` de la primera página.
+- Implementar "cargar más" o infinite scroll — no cargar todo automáticamente.
+- Para sublotes **sin líneas**: paginar por `sublote_id`.
+- Para sublotes **con líneas**: paginar por `sublote_id + linea_id`. Cambiar de línea carga la primera página de esa línea.
 
 ### Refresco del panel "Resumen"
 
-Tras completar cualquier paso, llamar:
+Tras cada mutación exitosa (crear/editar/eliminar lote, sublote, línea o palma), llamar:
 
 ```
 GET /predios/{id}/resumen
 ```
 
-Esto devuelve la jerarquía completa con totales (`lotes`, `sublotes`, `palmas`) y los datos del predio (`hectareas_totales`, `hectareas_sembradas`, `hectareas_disponibles`). El frontend renderiza el panel lateral con esa única respuesta — no necesita mantener estado local.
+Este endpoint está cacheado (TTL 60 s, invalidado en cada mutación), por lo que la segunda llamada típicamente se sirve sin queries a BD. Ver §1.6.
 
 ### Notas
 
-- Las **líneas no afectan a las palmas**. Saltar el paso 4 no rompe nada en el paso 5.
-- Eliminar líneas posteriormente tampoco afecta a las palmas existentes.
-- El cálculo de `palmas` en el resumen usa siempre el campo cacheado `sublotes.cantidad_palmas`, que se mantiene sincronizado por los endpoints de sublotes y palmas.
+- Saltar el paso 4 (líneas) no rompe el paso 5. Eliminar líneas desasocia sus palmas pero no las elimina.
+- El cálculo de `palmas` en el resumen usa el campo cacheado `sublotes.cantidad_palmas`, que se sincroniza automáticamente en cada operación de palmas/sublotes.
 
 ---
 
@@ -1457,7 +1678,8 @@ Esto devuelve la jerarquía completa con totales (`lotes`, `sublotes`, `palmas`)
 | Respuesta sync de `POST /palmas` | `{ message, data: [...palmas] }` | `{ message, async: false, cantidad_creada, sublote_id, linea_id }` — **ya NO devuelve el array `data`** |
 | Respuesta async de `POST /palmas` | — (no existía) | **Nuevo:** status `202` + `{ async: true, batch_id, ... }` |
 | `POST /sublotes` y `PUT /sublotes/{id}` | Siempre sync | Puede ser sync o async (si la creación de palmas asociada supera 5.000) |
-| Editar sublote mientras hay batch activo | Se ejecutaba | **409 Conflict** con `code: BATCH_EN_CURSO` |
+| `PUT /sublotes/{id}` al reducir `cantidad_palmas` | Siempre sync (lento con >5k) | Sync si diferencia ≤ 5.000; **async** si diferencia > 5.000 |
+| Editar sublote mientras hay batch activo | Se ejecutaba | **409 Conflict** con `code: BATCH_EN_CURSO` (cubre batches de creación y eliminación) |
 
 ### 6.2 Umbrales y reglas
 

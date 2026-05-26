@@ -6,8 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\Linea;
 use App\Models\Sublote;
 use App\Services\AuditoriaService;
+use App\Support\WizardCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
@@ -16,6 +18,14 @@ class LineaController extends Controller
     public function __construct(
         protected AuditoriaService $auditoria,
     ) {}
+
+    private function predioIdDeSublote(int $subloteId): ?int
+    {
+        return DB::table('lotes')
+            ->join('sublotes', 'sublotes.lote_id', '=', 'lotes.id')
+            ->where('sublotes.id', $subloteId)
+            ->value('lotes.predio_id');
+    }
 
     /**
      * GET /api/v1/tenant/lineas
@@ -115,6 +125,11 @@ class LineaController extends Controller
                 'estado'          => true,
             ]);
 
+            $predioId = $this->predioIdDeSublote($sublote->id);
+            if ($predioId) {
+                WizardCache::forgetPredioBundle((int) app('current_tenant_id'), $predioId);
+            }
+
             $this->auditoria->registrarCreacion(
                 $request,
                 'LINEAS',
@@ -164,6 +179,11 @@ class LineaController extends Controller
 
             $linea->update($request->only(['numero', 'cantidad_palmas', 'estado']));
 
+            $predioId = $this->predioIdDeSublote($linea->sublote_id);
+            if ($predioId) {
+                WizardCache::forgetPredioBundle((int) app('current_tenant_id'), $predioId);
+            }
+
             $this->auditoria->registrarEdicion(
                 $request,
                 'LINEAS',
@@ -197,7 +217,8 @@ class LineaController extends Controller
     public function destroy(Request $request, Linea $linea): JsonResponse
     {
         try {
-            $numero = $linea->numero;
+            $numero   = $linea->numero;
+            $predioId = $this->predioIdDeSublote($linea->sublote_id);
 
             $this->auditoria->registrarEliminacion(
                 $request,
@@ -207,6 +228,10 @@ class LineaController extends Controller
             );
 
             $linea->delete();
+
+            if ($predioId) {
+                WizardCache::forgetPredioBundle((int) app('current_tenant_id'), $predioId);
+            }
 
             return response()->json([
                 'message' => "Línea {$numero} eliminada correctamente",
