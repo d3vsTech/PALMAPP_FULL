@@ -27,6 +27,8 @@ return [
 
     'frontend_url' => env('FRONTEND_URL', 'http://localhost:3000'),
 
+    'frontend_proveedor_url' => env('FRONTEND_PROVEEDOR_URL', 'http://localhost:3001'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Environment

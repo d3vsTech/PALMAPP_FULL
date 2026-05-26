@@ -13,7 +13,10 @@ use App\Http\Controllers\Api\BotTestController;
 use App\Http\Controllers\Api\CargoController;
 use App\Http\Controllers\Api\EmpleadoController;
 use App\Http\Controllers\Api\EmpleadoDocumentoController;
+use App\Http\Controllers\Api\EmpleadoImportacionController;
 use App\Http\Controllers\Api\ConfiguracionNominaController;
+use App\Http\Controllers\Api\ConfiguracionConstantesLegalesController;
+use App\Http\Controllers\Api\NominaTablaLegalController;
 use App\Http\Controllers\Api\TenantAuditoriaController;
 use App\Http\Controllers\Api\InsumoController;
 use App\Http\Controllers\Api\JornalController;
@@ -27,12 +30,14 @@ use App\Http\Controllers\Api\ModalidadContratoController;
 use App\Http\Controllers\Api\MotivoAusenciaController;
 use App\Http\Controllers\Api\PalmaController;
 use App\Http\Controllers\Api\PrecioCosechaController;
+use App\Http\Controllers\Api\PrecioPalmaController;
 use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\PredioController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\PromedioLoteController;
 use App\Http\Controllers\Api\SemillaController;
 use App\Http\Controllers\Api\SubloteController;
+use App\Http\Controllers\Api\ProveedorAuthController;
 use App\Http\Controllers\Api\TenantAuthController;
 use App\Http\Controllers\Api\TenantSettingsController;
 use App\Http\Controllers\Api\TenantUserController;
@@ -54,6 +59,16 @@ use App\Http\Controllers\Api\ViajeDocumentoBasculaController;
 use App\Http\Controllers\Api\Market\MarketCatalogoController;
 use App\Http\Controllers\Api\Market\MarketCarritoController;
 use App\Http\Controllers\Api\Market\MarketPedidoController;
+use App\Http\Controllers\Api\Market\MarketProveedorCatalogoController;
+use App\Http\Controllers\Api\Market\MarketProveedorConfiguracionController;
+use App\Http\Controllers\Api\Market\MarketProveedorDashboardController;
+use App\Http\Controllers\Api\Market\MarketProveedorEstadisticasController;
+use App\Http\Controllers\Api\Market\MarketProveedorProductoController;
+use App\Http\Controllers\Api\Market\MarketProveedorProductoImportController;
+use App\Http\Controllers\Api\Market\MarketProveedorPedidoController;
+use App\Http\Controllers\Api\Market\MarketProveedorPerfilController;
+use App\Http\Controllers\Api\Market\MarketProveedorReportesController;
+use App\Http\Middleware\SetProveedor;
 use App\Http\Middleware\SetTenant;
 use Illuminate\Support\Facades\Route;
 
@@ -98,6 +113,22 @@ Route::prefix('v1/tenant-auth')->group(function () {
         Route::get('me', [TenantAuthController::class, 'me']);
         Route::post('logout', [AuthController::class, 'logout']);
         Route::post('refresh', [AuthController::class, 'refresh']);
+    });
+});
+
+// ═══════════════════════════════════════════════════════════
+// AUTH PORTAL PROVEEDOR (Marketplace)
+// ═══════════════════════════════════════════════════════════
+Route::prefix('v1/proveedor-auth')->group(function () {
+    Route::post('login',           [ProveedorAuthController::class, 'login']);
+    Route::post('forgot-password', [ProveedorAuthController::class, 'forgotPassword']);
+    Route::post('reset-password',  [ProveedorAuthController::class, 'resetPassword']);
+
+    Route::middleware('auth:api')->group(function () {
+        Route::post('select-proveedor', [ProveedorAuthController::class, 'selectProveedor']);
+        Route::get ('me',               [ProveedorAuthController::class, 'me']);
+        Route::post('logout',           [ProveedorAuthController::class, 'logout']);
+        Route::post('refresh',          [ProveedorAuthController::class, 'refresh']);
     });
 });
 
@@ -166,6 +197,8 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
     });
 
     // ── Predios ──
+    Route::get('predios/wizard-init', [PredioController::class, 'wizardInit'])->middleware('check.permission:lotes.crear');
+    Route::get('predios/{predio}/wizard-init', [PredioController::class, 'wizardInit'])->middleware('check.permission:lotes.ver');
     Route::get('predios', [PredioController::class, 'index'])->middleware('check.permission:lotes.ver');
     Route::get('predios/{predio}/resumen', [PredioController::class, 'resumen'])->middleware('check.permission:lotes.ver');
     Route::get('predios/{predio}', [PredioController::class, 'show'])->middleware('check.permission:lotes.ver');
@@ -202,6 +235,7 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
     // ── Palmas ──
     Route::get('palmas/batch/{batchId}', [PalmaController::class, 'batchStatus'])->middleware('check.permission:palmas.ver');
     Route::delete('palmas/masivo', [PalmaController::class, 'destroyMasivo'])->middleware('check.permission:palmas.eliminar');
+    Route::put('palmas/masivo/asignar-linea', [PalmaController::class, 'asignarLineaMasivo'])->middleware('check.permission:palmas.editar');
     Route::get('palmas', [PalmaController::class, 'index'])->middleware('check.permission:palmas.ver');
     Route::get('palmas/{palma}', [PalmaController::class, 'show'])->middleware('check.permission:palmas.ver');
     Route::post('palmas', [PalmaController::class, 'store'])->middleware('check.permission:palmas.crear');
@@ -212,6 +246,18 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
         ->middleware('check.permission:colaboradores.ver,operaciones.crear,operaciones.editar');
     Route::get('colaboradores', [EmpleadoController::class, 'index'])
         ->middleware('check.permission:colaboradores.ver');
+    // ── Importación Masiva de Colaboradores ──
+    Route::post('colaboradores/importar', [EmpleadoImportacionController::class, 'importar'])
+        ->middleware('check.permission:colaboradores.crear');
+    Route::get('colaboradores/importaciones/{importacion}', [EmpleadoImportacionController::class, 'estado'])
+        ->middleware('check.permission:colaboradores.ver');
+
+    // ── Wizard init bundle (consolida 8 endpoints en 1) ──
+    Route::get('colaboradores/wizard-init', [EmpleadoController::class, 'wizardInit'])
+        ->middleware('check.permission:colaboradores.crear');
+    Route::get('colaboradores/{empleado}/wizard-init', [EmpleadoController::class, 'wizardInit'])
+        ->middleware('check.permission:colaboradores.ver');
+
     Route::get('colaboradores/{empleado}', [EmpleadoController::class, 'show'])
         ->middleware('check.permission:colaboradores.ver');
     Route::post('colaboradores', [EmpleadoController::class, 'store'])
@@ -442,9 +488,18 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
     Route::delete('usuarios/{user}/permisos', [UserPermissionController::class, 'destroy'])
         ->middleware('check.permission:usuarios.editar_permisos');
 
-    // ── Configuración de la Finca ──
+    // ── Configuración — Info Empresa ──
+    Route::get('configuracion/info-empresa', [TenantSettingsController::class, 'showInfoEmpresa'])
+        ->middleware('check.permission:configuracion.editar');
+    Route::put('configuracion/info-empresa', [TenantSettingsController::class, 'updateFinca'])
+        ->middleware('check.permission:configuracion.editar');
+    // Alias legacy
     Route::put('configuracion/finca', [TenantSettingsController::class, 'updateFinca'])
         ->middleware('check.permission:configuracion.editar');
+
+    // ── Semillas select (dropdown del formulario de Lotes) ──
+    Route::get('semillas/select', [SemillaController::class, 'select'])
+        ->middleware('check.permission:configuracion.editar,lotes.ver,lotes.crear,lotes.editar');
 
     // ── Insumos select (dropdown del wizard de Operaciones) ──
     // Fuera del grupo configuracion.editar para que operadores con permiso de
@@ -520,6 +575,11 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
         Route::post('precios-abono', [PrecioAbonoController::class, 'store']);
         Route::put('precios-abono/{precioAbono}', [PrecioAbonoController::class, 'update']);
         Route::delete('precios-abono/{precioAbono}', [PrecioAbonoController::class, 'destroy']);
+
+        // ── Precios de Palma (PLATEO, PODA, SANIDAD, OTROS — registros pre-sembrados) ──
+        Route::get('precios-palma', [PrecioPalmaController::class, 'index']);
+        Route::get('precios-palma/{precioPalma}', [PrecioPalmaController::class, 'show']);
+        Route::put('precios-palma/{precioPalma}', [PrecioPalmaController::class, 'update']);
 
         // ── Labores ──
         Route::get('labores', [LaborController::class, 'index']);
@@ -598,6 +658,17 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
         Route::get('configuracion/nomina', [ConfiguracionNominaController::class, 'show']);
         Route::put('configuracion/nomina', [ConfiguracionNominaController::class, 'update']);
 
+        // ── Configuración — Constantes Legales ──
+        Route::get('configuracion/constantes-legales', [ConfiguracionConstantesLegalesController::class, 'show']);
+        Route::put('configuracion/constantes-legales', [ConfiguracionConstantesLegalesController::class, 'update']);
+
+        // ── Configuración — Tablas Legales ──
+        Route::get('configuracion/tablas-legales/conceptos-select', [NominaTablaLegalController::class, 'conceptosSelect']);
+        Route::get('configuracion/tablas-legales', [NominaTablaLegalController::class, 'index']);
+        Route::post('configuracion/tablas-legales', [NominaTablaLegalController::class, 'store']);
+        Route::put('configuracion/tablas-legales/{tablaLegal}', [NominaTablaLegalController::class, 'update']);
+        Route::delete('configuracion/tablas-legales/{tablaLegal}', [NominaTablaLegalController::class, 'destroy']);
+
         // ── Auditoría del Tenant ──
         Route::get('auditorias', [TenantAuditoriaController::class, 'index']);
         Route::get('auditorias/{auditoria}', [TenantAuditoriaController::class, 'show']);
@@ -650,4 +721,67 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
         Route::get('pedidos/{codigo}', [MarketPedidoController::class, 'show'])
             ->middleware('check.permission:market.pedidos');
     });
+});
+
+// ═══════════════════════════════════════════════════════════
+// PORTAL PROVEEDOR — Gestión de productos del marketplace
+// JWT con claims proveedor_id + proveedor_role (SetProveedor)
+// ═══════════════════════════════════════════════════════════
+Route::prefix('v1/market/proveedor')->middleware(['auth:api', SetProveedor::class])->group(function () {
+
+    // Dashboard — KPIs, pedidos recientes y productos más vendidos
+    Route::get('dashboard', [MarketProveedorDashboardController::class, 'index']);
+
+    // Datos para los selects del formulario de producto
+    Route::get('wizard-init', [MarketProveedorProductoController::class, 'wizardInit']);
+
+    // Importación masiva de productos (rutas estáticas ANTES de productos/{id} para evitar colisión con el parámetro)
+    Route::get ('productos/importar/plantilla',          [MarketProveedorProductoImportController::class, 'descargarPlantilla']);
+    Route::post('productos/importar',                    [MarketProveedorProductoImportController::class, 'importar']);
+    Route::get ('productos/importaciones/{importacion}', [MarketProveedorProductoImportController::class, 'estado']);
+
+    // CRUD de productos
+    Route::get   ('productos',               [MarketProveedorProductoController::class, 'index']);
+    Route::post  ('productos',               [MarketProveedorProductoController::class, 'store']);
+    Route::get   ('productos/{id}',          [MarketProveedorProductoController::class, 'show']);
+    Route::put   ('productos/{id}',          [MarketProveedorProductoController::class, 'update']);
+    Route::delete('productos/{id}',          [MarketProveedorProductoController::class, 'destroy']);
+    Route::patch ('productos/{id}/toggle',   [MarketProveedorProductoController::class, 'toggle']);
+
+    // Gestión de imágenes de galería
+    Route::post  ('productos/{id}/imagenes',          [MarketProveedorProductoController::class, 'storeImagen']);
+    Route::delete('productos/{id}/imagenes/{imgId}',  [MarketProveedorProductoController::class, 'destroyImagen']);
+
+    // Gestión de pedidos del proveedor
+    // exportar ANTES que {codigo} para evitar que Laravel capture "exportar" como código
+    Route::get('pedidos/exportar',         [MarketProveedorPedidoController::class, 'exportar']);
+    Route::get('pedidos',                  [MarketProveedorPedidoController::class, 'index']);
+    Route::get('pedidos/{codigo}',         [MarketProveedorPedidoController::class, 'show']);
+    Route::put('pedidos/{codigo}/estado',  [MarketProveedorPedidoController::class, 'updateEstado']);
+    Route::get('pedidos/{codigo}/factura', [MarketProveedorPedidoController::class, 'factura']);
+
+    // Estadísticas — KPIs + evolución + top productos/clientes + métricas adicionales
+    Route::get('estadisticas', [MarketProveedorEstadisticasController::class, 'index']);
+
+    // Reportes descargables (Excel)
+    Route::get('reportes/ventas',    [MarketProveedorReportesController::class, 'ventas']);
+    Route::get('reportes/productos', [MarketProveedorReportesController::class, 'productos']);
+    Route::get('reportes/clientes',  [MarketProveedorReportesController::class, 'clientes']);
+
+    // Catálogos (read-only) — alimentan los selects de la pantalla de configuración
+    Route::get('catalogos/bancos',          [MarketProveedorCatalogoController::class, 'bancos']);
+    Route::get('catalogos/transportadoras', [MarketProveedorCatalogoController::class, 'transportadoras']);
+
+    // Configuración del proveedor (4 tabs + resumen)
+    // Lectura: ADMIN u OPERADOR | Escritura: solo ADMIN (autorización en cada FormRequest)
+    Route::get('configuracion',                [MarketProveedorConfiguracionController::class, 'index']);
+    Route::get('configuracion/resumen',        [MarketProveedorConfiguracionController::class, 'resumen']);
+    Route::put('configuracion/general',        [MarketProveedorConfiguracionController::class, 'updateGeneral']);
+    Route::put('configuracion/bancario',       [MarketProveedorConfiguracionController::class, 'updateBancario']);
+    Route::put('configuracion/envios',         [MarketProveedorConfiguracionController::class, 'updateEnvios']);
+    Route::put('configuracion/notificaciones', [MarketProveedorConfiguracionController::class, 'updateNotificaciones']);
+
+    // Perfil del usuario de proveedor (cualquier rol, solo autenticado en el portal)
+    Route::put('perfil',          [MarketProveedorPerfilController::class, 'update']);
+    Route::put('perfil/password', [MarketProveedorPerfilController::class, 'changePassword']);
 });

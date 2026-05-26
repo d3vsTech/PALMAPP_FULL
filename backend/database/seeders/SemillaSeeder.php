@@ -11,27 +11,30 @@ class SemillaSeeder extends Seeder
     public function run(): void
     {
         $semillas = [
-            // ── HÍBRIDO TENERA (principal en Colombia) ──────────────────────
-            ['tipo' => 'HIBRIDO_TENERA', 'nombre' => 'ASD Costa Rica'],
-            ['tipo' => 'HIBRIDO_TENERA', 'nombre' => 'Deli x Nigeria (AVROS)'],
-            ['tipo' => 'HIBRIDO_TENERA', 'nombre' => 'Deli x Ghana'],
-            ['tipo' => 'HIBRIDO_TENERA', 'nombre' => 'IRHO Compacta'],
-            ['tipo' => 'HIBRIDO_TENERA', 'nombre' => 'Coari x La Mé'],
-            ['tipo' => 'HIBRIDO_TENERA', 'nombre' => 'Palmaceite Colombia'],
+            // ── GRUPO 1 — Ténera DxP (Elaeis guineensis) ────────────────────
+            ['tipo' => 'HIBRIDO_TENERA', 'nombre' => 'Deli x La Mé'],           // CIRAD / PalmElit (Francia)
+            ['tipo' => 'HIBRIDO_TENERA', 'nombre' => 'Deli x Yangambi'],        // CIRAD / PalmElit (Francia)
+            ['tipo' => 'HIBRIDO_TENERA', 'nombre' => 'Deli x AVROS'],           // ASD Costa Rica
+            ['tipo' => 'HIBRIDO_TENERA', 'nombre' => 'Deli x Nigeria (NIFOR)'], // MPOB Malasia / ASD
+            ['tipo' => 'HIBRIDO_TENERA', 'nombre' => 'Deli x Ghana (Calabar)'], // ASD Costa Rica
+            ['tipo' => 'HIBRIDO_TENERA', 'nombre' => 'Deli x Ekona'],           // ASD Costa Rica
+            ['tipo' => 'HIBRIDO_TENERA', 'nombre' => 'DxP Unipalma'],           // Unipalma S.A. (Colombia)
+            ['tipo' => 'HIBRIDO_TENERA', 'nombre' => 'DxP Indupalma'],          // Indupalma Ltda. (Colombia)
 
-            // ── HÍBRIDO INTERESPECÍFICO OxG ─────────────────────────────────
+            // ── GRUPO 2 — Híbridos OxG con registro ICA ─────────────────────
             // Elaeis oleifera × Elaeis guineensis — tolerante a Pudrición del cogollo
-            ['tipo' => 'HIBRIDO_OXG',    'nombre' => 'OxG Cirad (Corpoica)'],
-            ['tipo' => 'HIBRIDO_OXG',    'nombre' => 'OxG Indupalma'],
-            ['tipo' => 'HIBRIDO_OXG',    'nombre' => 'OxG ASD'],
-
-            // ── DURA ─────────────────────────────────────────────────────────
-            ['tipo' => 'DURA',           'nombre' => 'Deli Dura'],
-            ['tipo' => 'DURA',           'nombre' => 'Angola Dura'],
-
-            // ── PISIFERA ─────────────────────────────────────────────────────
-            ['tipo' => 'PISIFERA',       'nombre' => 'AVROS Pisifera'],
-            ['tipo' => 'PISIFERA',       'nombre' => 'La Mé Pisifera'],
+            ['tipo' => 'HIBRIDO_OXG', 'nombre' => 'OxG AGROSAVIA El Mira (F1)'],        // AGROSAVIA (Colombia)
+            ['tipo' => 'HIBRIDO_OXG', 'nombre' => 'OxG Pacífico RC1'],                  // AGROSAVIA (Colombia)
+            ['tipo' => 'HIBRIDO_OXG', 'nombre' => 'OxG Tumaco RC1'],                    // AGROSAVIA (Colombia)
+            ['tipo' => 'HIBRIDO_OXG', 'nombre' => 'OxG Amazon'],                        // ASD Costa Rica / Rebiotec
+            ['tipo' => 'HIBRIDO_OXG', 'nombre' => 'OxG Compacta x Ghana'],              // ASD Costa Rica
+            ['tipo' => 'HIBRIDO_OXG', 'nombre' => 'OxG Semillas Unipalma'],             // Unipalma S.A. (Colombia)
+            ['tipo' => 'HIBRIDO_OXG', 'nombre' => 'OxG Indupalma'],                     // Indupalma Ltda. (Colombia)
+            ['tipo' => 'HIBRIDO_OXG', 'nombre' => 'OxG Taisha'],                        // Red Gold Seeds / Disingtec
+            ['tipo' => 'HIBRIDO_OXG', 'nombre' => 'OxG PDR-Taisha'],                    // Negcorpbis / Disingtec
+            ['tipo' => 'HIBRIDO_OXG', 'nombre' => 'OxG Coarí x La Mé'],                // PalmElit / CIRAD (Francia)
+            ['tipo' => 'HIBRIDO_OXG', 'nombre' => 'OxG Colombia (Coarí x La Mé)'],     // Promotora Herrera Vargas / CIRAD
+            ['tipo' => 'HIBRIDO_OXG', 'nombre' => 'OxG Guineensis RI'],                 // PalmElit / CIRAD (Francia)
         ];
 
         $tenants = Tenant::where('estado', 'ACTIVO')->get();

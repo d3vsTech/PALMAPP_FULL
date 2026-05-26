@@ -90,9 +90,19 @@ class StoreTenantRequest extends FormRequest
             'moneda'                => 'COP',
             'zona_horaria'          => 'America/Bogota',
             'pais'                  => 'CO',
-            'salario_minimo_vigente' => 1750905.00,
-            'auxilio_transporte'    => 249095.00,
+            'salario_minimo_vigente'  => 1750905.00,
+            'auxilio_transporte'      => 249095.00,
             'divisor_jornada_mensual' => 240,
+            // Constantes legales colombianas
+            'anio_vigente'                           => now()->year,
+            'tasa_interes_cesantias'                 => 12.00,
+            'fecha_limite_consignacion_cesantias'    => '14 de febrero',
+            'fecha_limite_pago_intereses_cesantias'  => '31 de enero',
+            'fecha_limite_prima_primer_semestre'     => '30 de junio',
+            'fecha_limite_prima_segundo_semestre'    => '20 de diciembre',
+            'dias_vacaciones_anuales'                => 15,
+            'dias_anio_comercial'                    => 360,
+            'dias_mes_comercial'                     => 30,
             'sync_habilitado'       => false,
         ];
     }

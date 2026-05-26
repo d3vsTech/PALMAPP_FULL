@@ -1,6 +1,7 @@
 <?php
 use App\Http\Middleware\CheckModulo;
 use App\Http\Middleware\CheckPermission;
+use App\Http\Middleware\SetProveedor;
 use App\Http\Middleware\SetTenant;
 use App\Http\Middleware\SuperAdmin;
 use Illuminate\Foundation\Application;
@@ -15,9 +16,10 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->alias([
-            'tenant' => SetTenant::class,
-            'super_admin' => SuperAdmin::class,
-            'check.modulo' => CheckModulo::class,
+            'tenant'           => SetTenant::class,
+            'proveedor'        => SetProveedor::class,
+            'super_admin'      => SuperAdmin::class,
+            'check.modulo'     => CheckModulo::class,
             'check.permission' => CheckPermission::class,
         ]);
     })

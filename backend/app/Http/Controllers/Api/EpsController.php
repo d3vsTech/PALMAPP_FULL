@@ -7,8 +7,10 @@ use App\Http\Requests\Eps\StoreEpsRequest;
 use App\Http\Requests\Eps\UpdateEpsRequest;
 use App\Models\Eps;
 use App\Services\AuditoriaService;
+use App\Support\WizardCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class EpsController extends Controller
@@ -18,12 +20,20 @@ class EpsController extends Controller
     public function select(Request $request): JsonResponse
     {
         try {
-            $items = Eps::query()
-                ->activos()
-                ->orderBy('nombre')
-                ->get(['id', 'nombre']);
+            $tenantId = (int) app('current_tenant_id');
 
-            return response()->json(['data' => $items]);
+            $items = Cache::remember(
+                WizardCache::eps($tenantId),
+                WizardCache::TTL_PARAMETRICA,
+                fn () => Eps::query()
+                    ->activos()
+                    ->orderBy('nombre')
+                    ->get(['id', 'nombre']),
+            );
+
+            return response()->json(['data' => $items])
+                ->header('Cache-Control', 'private, max-age=600')
+                ->header('ETag', '"' . md5(serialize($items)) . '"');
         } catch (\Throwable $e) {
             Log::error('Error en eps/select: ' . $e->getMessage());
             return response()->json(['message' => 'Error al listar EPS', 'error' => $e->getMessage()], 500);
@@ -64,6 +74,8 @@ class EpsController extends Controller
         try {
             $eps = Eps::create($request->validated());
 
+            WizardCache::forgetParametricasTenant((int) app('current_tenant_id'), 'eps');
+
             $this->auditoria->registrarCreacion(
                 $request, 'EPS', $eps,
                 "Se creó la EPS '{$eps->nombre}'"
@@ -84,6 +96,8 @@ class EpsController extends Controller
         try {
             $datosAnteriores = $ep->toArray();
             $ep->update($request->validated());
+
+            WizardCache::forgetParametricasTenant((int) app('current_tenant_id'), 'eps');
 
             $this->auditoria->registrarEdicion(
                 $request, 'EPS', $ep, $datosAnteriores,
@@ -110,6 +124,8 @@ class EpsController extends Controller
                 "Se eliminó la EPS '{$nombre}'"
             );
             $ep->delete();
+
+            WizardCache::forgetParametricasTenant((int) app('current_tenant_id'), 'eps');
 
             return response()->json(['message' => "EPS '{$nombre}' eliminada correctamente"]);
         } catch (\Throwable $e) {

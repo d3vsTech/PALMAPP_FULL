@@ -5,11 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Sublote\StoreSubloteRequest;
 use App\Http\Requests\Sublote\UpdateSubloteRequest;
-use App\Models\Linea;
 use App\Models\Lote;
 use App\Models\Sublote;
 use App\Services\AuditoriaService;
 use App\Services\PalmaCreationService;
+use App\Support\WizardCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -23,15 +23,16 @@ class SubloteController extends Controller
     ) {}
 
     /**
-     * Verifica si hay un batch activo de creación de palmas para un sublote.
-     * Evita operaciones concurrentes que generen códigos duplicados.
+     * Verifica si hay un batch activo de creación o eliminación de palmas para un sublote.
+     * Evita operaciones concurrentes que generen códigos duplicados o contadores inconsistentes.
      */
     private function hayBatchActivoParaSublote(int $subloteId): bool
     {
-        $nombre = "crear-palmas-sublote-{$subloteId}";
-
         return DB::table('job_batches')
-            ->where('name', $nombre)
+            ->whereIn('name', [
+                "crear-palmas-sublote-{$subloteId}",
+                "eliminar-palmas-sublote-{$subloteId}",
+            ])
             ->whereNull('finished_at')
             ->whereNull('cancelled_at')
             ->exists();
@@ -162,6 +163,8 @@ class SubloteController extends Controller
                 );
             }
 
+            WizardCache::forgetPredioBundle((int) app('current_tenant_id'), $lote->predio_id);
+
             $this->auditoria->registrarCreacion(
                 $request,
                 'SUBLOTES',
@@ -213,10 +216,11 @@ class SubloteController extends Controller
                 }
             }
 
-            $datosAnteriores = $sublote->toArray();
-            $ajustarPalmas   = $request->has('cantidad_palmas');
-            $diferenciaAsync = 0;
-            $batchId         = null;
+            $datosAnteriores     = $sublote->toArray();
+            $ajustarPalmas       = $request->has('cantidad_palmas');
+            $diferenciaAsync     = 0;
+            $diferenciaDeleteAsync = 0;
+            $batchId             = null;
 
             // Si se van a ajustar palmas, rechazar si hay un batch activo
             if ($ajustarPalmas && $this->hayBatchActivoParaSublote($sublote->id)) {
@@ -243,18 +247,13 @@ class SubloteController extends Controller
                     }
                 } elseif ($nuevaCantidad < $cantidadActual) {
                     $diferencia = $cantidadActual - $nuevaCantidad;
-                    $palmasAEliminar = $sublote->palmas()
-                        ->orderBy('codigo', 'desc')
-                        ->take($diferencia)
-                        ->get();
 
-                    $lineasAfectadas = $palmasAEliminar->pluck('linea_id')->filter()->unique();
-
-                    $palmasAEliminar->each->delete();
-
-                    // Sincronizar contadores de líneas afectadas
-                    foreach (Linea::whereIn('id', $lineasAfectadas)->get() as $linea) {
-                        $linea->update(['cantidad_palmas' => $linea->palmas()->count()]);
+                    if ($diferencia > PalmaCreationService::SYNC_THRESHOLD) {
+                        // Async: el job elimina las palmas en background después del commit
+                        $diferenciaDeleteAsync = $diferencia;
+                    } else {
+                        // Sync optimizado: DELETE WHERE IN en lugar de each->delete()
+                        $this->palmaService->deleteSync($sublote, $diferencia);
                     }
                 }
             }
@@ -263,7 +262,7 @@ class SubloteController extends Controller
 
             DB::commit();
 
-            // Despachar job async después del commit
+            // Despachar jobs async después del commit
             if ($diferenciaAsync > 0) {
                 $batchId = $this->palmaService->createAsync(
                     sublote:  $sublote,
@@ -272,6 +271,25 @@ class SubloteController extends Controller
                     tenantId: $sublote->tenant_id,
                     userId:   $request->user()->id,
                 );
+            } elseif ($diferenciaDeleteAsync > 0) {
+                $batchId = $this->palmaService->deleteAsync(
+                    sublote:  $sublote,
+                    cantidad: $diferenciaDeleteAsync,
+                    tenantId: $sublote->tenant_id,
+                    userId:   $request->user()->id,
+                );
+            }
+
+            $predioId = DB::table('lotes')->where('id', $sublote->lote_id)->value('predio_id');
+            if ($predioId) {
+                WizardCache::forgetPredioBundle((int) app('current_tenant_id'), $predioId);
+            }
+
+            $auditoriaExtra = '';
+            if ($diferenciaAsync > 0 && $batchId) {
+                $auditoriaExtra = " — encoladas {$diferenciaAsync} palmas a crear (batch: {$batchId})";
+            } elseif ($diferenciaDeleteAsync > 0 && $batchId) {
+                $auditoriaExtra = " — encolada eliminación de {$diferenciaDeleteAsync} palmas (batch: {$batchId})";
             }
 
             $this->auditoria->registrarEdicion(
@@ -279,8 +297,7 @@ class SubloteController extends Controller
                 'SUBLOTES',
                 $sublote,
                 $datosAnteriores,
-                "Se editó el sublote '{$sublote->nombre}'"
-                    . ($batchId ? " — encoladas {$diferenciaAsync} palmas (batch: {$batchId})" : ''),
+                "Se editó el sublote '{$sublote->nombre}'" . $auditoriaExtra,
             );
 
             $respuesta = [
@@ -288,10 +305,14 @@ class SubloteController extends Controller
                 'data'    => $sublote->fresh()->load('lote:id,nombre'),
             ];
 
-            if ($batchId) {
+            if ($diferenciaAsync > 0 && $batchId) {
                 $respuesta['palmas_async'] = true;
                 $respuesta['batch_id']     = $batchId;
                 $respuesta['message']      = "Sublote actualizado. {$diferenciaAsync} palma(s) adicional(es) se crearán en segundo plano.";
+            } elseif ($diferenciaDeleteAsync > 0 && $batchId) {
+                $respuesta['palmas_async'] = true;
+                $respuesta['batch_id']     = $batchId;
+                $respuesta['message']      = "Sublote actualizado. {$diferenciaDeleteAsync} palma(s) se eliminarán en segundo plano.";
             }
 
             return response()->json($respuesta);
@@ -314,6 +335,7 @@ class SubloteController extends Controller
         try {
             DB::beginTransaction();
 
+            $loteId = $sublote->lote_id;
             $sublote->palmas()->delete();
             $sublote->lineas()->delete();
 
@@ -327,6 +349,11 @@ class SubloteController extends Controller
             $sublote->delete();
 
             DB::commit();
+
+            $predioId = DB::table('lotes')->where('id', $loteId)->value('predio_id');
+            if ($predioId) {
+                WizardCache::forgetPredioBundle((int) app('current_tenant_id'), $predioId);
+            }
 
             return response()->json([
                 'message' => "Sublote '{$sublote->nombre}' eliminado correctamente",

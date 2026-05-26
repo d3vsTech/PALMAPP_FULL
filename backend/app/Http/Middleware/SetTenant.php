@@ -4,8 +4,10 @@ namespace App\Http\Middleware;
 
 use App\Models\Tenant;
 use App\Models\TenantUser;
+use App\Support\WizardCache;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Symfony\Component\HttpFoundation\Response;
 
 class SetTenant
@@ -32,7 +34,11 @@ class SetTenant
             ], 422);
         }
 
-        $tenant = Tenant::find($tenantId);
+        $tenant = Cache::remember(
+            WizardCache::tenant((int) $tenantId),
+            WizardCache::TTL_TENANT,
+            fn () => Tenant::find($tenantId),
+        );
 
         if (!$tenant) {
             return response()->json([
@@ -49,10 +55,14 @@ class SetTenant
         }
 
         if (!$user->is_super_admin) {
-            $pivot = TenantUser::where('tenant_id', $tenantId)
-                ->where('user_id', $user->id)
-                ->where('estado', true)
-                ->first();
+            $pivot = Cache::remember(
+                WizardCache::tenantUser((int) $tenantId, (int) $user->id),
+                WizardCache::TTL_TENANT,
+                fn () => TenantUser::where('tenant_id', $tenantId)
+                    ->where('user_id', $user->id)
+                    ->where('estado', true)
+                    ->first(),
+            );
 
             if (!$pivot) {
                 return response()->json([

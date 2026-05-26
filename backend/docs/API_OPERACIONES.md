@@ -827,6 +827,8 @@ Tras aprobar:
 
 Los dropdowns del wizard usan **endpoints `/select` dedicados** — livianos (solo campos necesarios), sin paginación y con permisos compatibles con un operador de campo (no requieren `*.ver` del módulo específico; basta con `operaciones.crear` u `operaciones.editar`).
 
+> **No confundir con `predios/wizard-init`:** el endpoint bundle del wizard de Plantación (`GET /predios/{id}/wizard-init`) devuelve la jerarquía completa de un predio (lotes → sublotes → líneas) para el wizard de creación/edición de predios. El wizard de Operaciones **no debe usarlo** — los endpoints `/operaciones/lotes/select` y `/operaciones/sublotes/select` abajo son los correctos para el contexto de planillas, tienen permisos distintos y devuelven solo los campos necesarios para el dropdown.
+
 | Dropdown | Endpoint | Filtros útiles |
 |---|---|---|
 | Colaboradores | `GET /colaboradores/select` | `?modalidad_pago=PRODUCCION`, `?predio_id={id}` |

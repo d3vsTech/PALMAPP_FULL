@@ -12,6 +12,7 @@
         "laravel/pulse": "^1.6",
         "laravel/tinker": "^2.10.1",
         "php-open-source-saver/jwt-auth": "^2.8",
+        "phpoffice/phpspreadsheet": "^5.7",
         "spatie/laravel-permission": "^7.2"
     },
     "require-dev": {

@@ -18,7 +18,7 @@ class Empleado extends Model
     protected $fillable = [
         'tenant_id', 'primer_nombre', 'segundo_nombre', 'primer_apellido', 'segundo_apellido',
         'tipo_documento', 'documento', 'fecha_expedicion_documento', 'lugar_expedicion',
-        'cargo', 'salario_base', 'modalidad_pago', 'predio_id',
+        'cargo', 'salario_base', 'subsidio_transporte', 'modalidad_pago', 'predio_id',
         'correo_electronico', 'telefono',
         'fecha_nacimiento', 'fecha_ingreso', 'fecha_retiro',
         'direccion', 'municipio', 'departamento',
@@ -41,6 +41,7 @@ class Empleado extends Model
             'fecha_ingreso' => 'date',
             'fecha_retiro' => 'date',
             'salario_base' => 'decimal:2',
+            'subsidio_transporte' => 'boolean',
             'estado' => 'boolean',
         ];
     }

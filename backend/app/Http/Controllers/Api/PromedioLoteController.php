@@ -96,6 +96,20 @@ class PromedioLoteController extends Controller
                 'anio'     => 'sometimes|integer|min:2000|max:2100',
             ]);
 
+            if ($request->has('anio')) {
+                $duplicado = PromedioLote::where('lote_id', $promedioLote->lote_id)
+                    ->where('anio', $validated['anio'])
+                    ->where('id', '!=', $promedioLote->id)
+                    ->exists();
+
+                if ($duplicado) {
+                    return response()->json([
+                        'message' => 'Ya existe un promedio para este lote en el año indicado',
+                        'code'    => 'PROMEDIO_DUPLICADO',
+                    ], 409);
+                }
+            }
+
             $datosAnteriores = $promedioLote->toArray();
             $promedioLote->update($validated);
 

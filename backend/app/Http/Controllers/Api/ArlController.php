@@ -7,8 +7,10 @@ use App\Http\Requests\Arl\StoreArlRequest;
 use App\Http\Requests\Arl\UpdateArlRequest;
 use App\Models\Arl;
 use App\Services\AuditoriaService;
+use App\Support\WizardCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class ArlController extends Controller
@@ -18,12 +20,20 @@ class ArlController extends Controller
     public function select(Request $request): JsonResponse
     {
         try {
-            $items = Arl::query()
-                ->activos()
-                ->orderBy('nombre')
-                ->get(['id', 'nombre']);
+            $tenantId = (int) app('current_tenant_id');
 
-            return response()->json(['data' => $items]);
+            $items = Cache::remember(
+                WizardCache::arl($tenantId),
+                WizardCache::TTL_PARAMETRICA,
+                fn () => Arl::query()
+                    ->activos()
+                    ->orderBy('nombre')
+                    ->get(['id', 'nombre']),
+            );
+
+            return response()->json(['data' => $items])
+                ->header('Cache-Control', 'private, max-age=600')
+                ->header('ETag', '"' . md5(serialize($items)) . '"');
         } catch (\Throwable $e) {
             Log::error('Error en arl/select: ' . $e->getMessage());
             return response()->json(['message' => 'Error al listar ARL', 'error' => $e->getMessage()], 500);
@@ -64,6 +74,8 @@ class ArlController extends Controller
         try {
             $arl = Arl::create($request->validated());
 
+            WizardCache::forgetParametricasTenant((int) app('current_tenant_id'), 'arl');
+
             $this->auditoria->registrarCreacion(
                 $request, 'ARL', $arl,
                 "Se creó la ARL '{$arl->nombre}'"
@@ -84,6 +96,8 @@ class ArlController extends Controller
         try {
             $datosAnteriores = $arl->toArray();
             $arl->update($request->validated());
+
+            WizardCache::forgetParametricasTenant((int) app('current_tenant_id'), 'arl');
 
             $this->auditoria->registrarEdicion(
                 $request, 'ARL', $arl, $datosAnteriores,
@@ -110,6 +124,8 @@ class ArlController extends Controller
                 "Se eliminó la ARL '{$nombre}'"
             );
             $arl->delete();
+
+            WizardCache::forgetParametricasTenant((int) app('current_tenant_id'), 'arl');
 
             return response()->json(['message' => "ARL '{$nombre}' eliminada correctamente"]);
         } catch (\Throwable $e) {

@@ -55,8 +55,9 @@ class StoreEmpleadoRequest extends FormRequest
 
             // Contratación (directo en empleado)
             'cargo'          => 'required|string|max:100',
-            'salario_base'   => 'required_if:modalidad_pago,FIJO|nullable|numeric|min:0|max:999999999999.99',
-            'modalidad_pago' => 'required|in:FIJO,PRODUCCION',
+            'salario_base'        => 'required_if:modalidad_pago,FIJO|nullable|numeric|min:0|max:999999999999.99',
+            'subsidio_transporte' => 'nullable|boolean',
+            'modalidad_pago'      => 'required|in:FIJO,PRODUCCION',
             'predio_id'      => 'nullable|exists:predios,id',
 
             // Fechas laborales

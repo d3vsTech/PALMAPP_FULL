@@ -39,6 +39,21 @@ class SemillaController extends Controller
         }
     }
 
+    public function select(): JsonResponse
+    {
+        try {
+            $semillas = Semilla::query()
+                ->where('estado', true)
+                ->orderBy('nombre')
+                ->get(['id', 'tipo', 'nombre']);
+
+            return response()->json(['data' => $semillas]);
+        } catch (\Throwable $e) {
+            Log::error('Error en semillas/select: ' . $e->getMessage());
+            return response()->json(['message' => 'Error al listar semillas', 'error' => $e->getMessage()], 500);
+        }
+    }
+
     public function show(Semilla $semilla): JsonResponse
     {
         try {
@@ -53,7 +68,7 @@ class SemillaController extends Controller
     {
         try {
             $validated = $request->validate([
-                'tipo'   => 'required|string|max:50',
+                'tipo'   => 'required|in:Africana,Híbrido,Compacta,Americana',
                 'nombre' => 'required|string|max:100',
             ]);
 
@@ -74,7 +89,7 @@ class SemillaController extends Controller
     {
         try {
             $validated = $request->validate([
-                'tipo'   => 'sometimes|string|max:50',
+                'tipo'   => 'sometimes|in:Africana,Híbrido,Compacta,Americana',
                 'nombre' => 'sometimes|string|max:100',
                 'estado' => 'sometimes|boolean',
             ]);
@@ -96,6 +111,13 @@ class SemillaController extends Controller
     public function destroy(Request $request, Semilla $semilla): JsonResponse
     {
         try {
+            if ($semilla->lotes()->exists()) {
+                return response()->json([
+                    'message' => 'No se puede eliminar la semilla porque está asignada a uno o más lotes',
+                    'code'    => 'SEMILLA_CON_LOTES',
+                ], 409);
+            }
+
             $this->auditoria->registrarEliminacion($request, 'SEMILLAS', $semilla, "Se eliminó la semilla '{$semilla->nombre}'");
             $semilla->delete();
 

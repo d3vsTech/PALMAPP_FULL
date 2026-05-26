@@ -6,9 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Predio\StorePredioRequest;
 use App\Http\Requests\Predio\UpdatePredioRequest;
 use App\Models\Predio;
+use App\Models\Semilla;
 use App\Services\AuditoriaService;
+use App\Support\WizardCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -19,34 +22,163 @@ class PredioController extends Controller
     ) {}
 
     /**
+     * GET /api/v1/tenant/predios/wizard-init
+     * GET /api/v1/tenant/predios/{predio}/wizard-init
+     *
+     * Bundle para el wizard de creación/edición de predios.
+     * Reemplaza ~14 fetches secuenciales por 1 sola request.
+     * Las palmas NO se incluyen; se cargan paginadas al llegar al paso 5.
+     */
+    public function wizardInit(Request $request, ?Predio $predio = null): JsonResponse
+    {
+        try {
+            $tenantId = (int) app('current_tenant_id');
+
+            $semillas = Cache::remember(
+                WizardCache::semillas($tenantId),
+                WizardCache::TTL_PARAMETRICA,
+                fn() => Semilla::activos()->orderBy('nombre')->get(['id', 'tipo', 'nombre'])->toArray(),
+            );
+
+            $departamentos = Cache::remember(
+                WizardCache::departamentos(),
+                WizardCache::TTL_UBICACIONES,
+                fn() => DB::table('departamentos')->orderBy('nombre')->get(['codigo', 'nombre'])->toArray(),
+            );
+
+            if ($predio === null) {
+                return response()->json([
+                    'data' => [
+                        'predio'       => null,
+                        'lotes'        => [],
+                        'sublotes'     => [],
+                        'lineas'       => [],
+                        'parametricas' => compact('semillas', 'departamentos'),
+                    ],
+                ]);
+            }
+
+            $bundle = Cache::remember(
+                WizardCache::predioBundle($tenantId, $predio->id),
+                WizardCache::TTL_PREDIO_BUNDLE,
+                function () use ($predio) {
+                    $predio->load([
+                        'lotes'                 => fn($q) => $q->orderBy('nombre'),
+                        'lotes.semillas',
+                        'lotes.sublotes'        => fn($q) => $q->orderBy('nombre'),
+                        'lotes.sublotes.lineas' => fn($q) => $q->orderBy('numero'),
+                    ]);
+
+                    $lotes    = [];
+                    $sublotes = [];
+                    $lineas   = [];
+
+                    foreach ($predio->lotes as $lote) {
+                        $lotes[] = [
+                            'id'                  => $lote->id,
+                            'nombre'              => $lote->nombre,
+                            'hectareas_sembradas' => $lote->hectareas_sembradas,
+                            'semillas'            => $lote->semillas->map(fn($s) => ['id' => $s->id, 'nombre' => $s->nombre])->values(),
+                        ];
+
+                        $sublotes[$lote->id] = [];
+
+                        foreach ($lote->sublotes as $sublote) {
+                            $sublotes[$lote->id][] = [
+                                'id'              => $sublote->id,
+                                'nombre'          => $sublote->nombre,
+                                'cantidad_palmas' => (int) $sublote->cantidad_palmas,
+                                'cantidad_lineas' => $sublote->lineas->count(),
+                            ];
+
+                            $lineas[$sublote->id] = $sublote->lineas->map(fn($l) => [
+                                'id'              => $l->id,
+                                'numero'          => $l->numero,
+                                'cantidad_palmas' => (int) ($l->cantidad_palmas ?? 0),
+                            ])->values()->toArray();
+                        }
+                    }
+
+                    return compact('lotes', 'sublotes', 'lineas');
+                },
+            );
+
+            return response()->json([
+                'data' => [
+                    'predio' => [
+                        'id'                => $predio->id,
+                        'nombre'            => $predio->nombre,
+                        'ubicacion'         => $predio->ubicacion,
+                        'hectareas_totales' => $predio->hectareas_totales,
+                    ],
+                    'lotes'        => $bundle['lotes'],
+                    'sublotes'     => $bundle['sublotes'],
+                    'lineas'       => $bundle['lineas'],
+                    'parametricas' => compact('semillas', 'departamentos'),
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error en predios wizard-init: ' . $e->getMessage());
+
+            return response()->json([
+                'message' => 'Error al inicializar el wizard de predio',
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * GET /api/v1/tenant/predios
      */
     public function index(Request $request): JsonResponse
     {
         try {
-            $predios = Predio::query()
-                ->when($request->search, fn($q, $s) => $q->where('nombre', 'ilike', "%{$s}%"))
-                ->when($request->has('estado'), fn($q) => $q->where('estado', filter_var($request->estado, FILTER_VALIDATE_BOOLEAN)))
-                ->withCount('lotes')
-                ->withSum('sublotes as palmas_count', 'cantidad_palmas')
-                ->orderBy('nombre')
-                ->paginate($request->per_page ?? 15);
+            $perPage = (int) ($request->per_page ?? 15);
+            $cacheable = !$request->filled('search') && !$request->has('estado');
+            $tenantId = (int) app('current_tenant_id');
 
-            // withSum devuelve null cuando no hay sublotes; normalizar a 0
-            $predios->getCollection()->transform(function ($predio) {
-                $predio->palmas_count = (int) ($predio->palmas_count ?? 0);
-                return $predio;
-            });
+            $build = function () use ($request, $perPage) {
+                $predios = Predio::query()
+                    ->when($request->search, fn($q, $s) => $q->where('nombre', 'ilike', "%{$s}%"))
+                    ->when($request->has('estado'), fn($q) => $q->where('estado', filter_var($request->estado, FILTER_VALIDATE_BOOLEAN)))
+                    ->withCount('lotes')
+                    ->withSum('sublotes as palmas_count', 'cantidad_palmas')
+                    ->orderBy('nombre')
+                    ->paginate($perPage);
 
-            return response()->json([
-                'data' => $predios->items(),
-                'meta' => [
-                    'current_page' => $predios->currentPage(),
-                    'last_page'    => $predios->lastPage(),
-                    'per_page'     => $predios->perPage(),
-                    'total'        => $predios->total(),
-                ],
-            ]);
+                $predios->getCollection()->transform(function ($predio) {
+                    $predio->palmas_count = (int) ($predio->palmas_count ?? 0);
+                    return $predio;
+                });
+
+                return [
+                    'data' => $predios->items(),
+                    'meta' => [
+                        'current_page' => $predios->currentPage(),
+                        'last_page'    => $predios->lastPage(),
+                        'per_page'     => $predios->perPage(),
+                        'total'        => $predios->total(),
+                    ],
+                ];
+            };
+
+            $payload = $cacheable
+                ? Cache::remember(
+                    WizardCache::predios($tenantId) . ":p:{$perPage}",
+                    WizardCache::TTL_PARAMETRICA,
+                    $build,
+                )
+                : $build();
+
+            $response = response()->json($payload);
+
+            if ($cacheable) {
+                $response
+                    ->header('Cache-Control', 'private, max-age=600')
+                    ->header('ETag', '"' . md5(serialize($payload)) . '"');
+            }
+
+            return $response;
         } catch (\Throwable $e) {
             Log::error('Error al listar predios: ' . $e->getMessage());
 
@@ -54,6 +186,19 @@ class PredioController extends Controller
                 'message' => 'Error al listar los predios',
                 'error'   => $e->getMessage(),
             ], 500);
+        }
+    }
+
+    /**
+     * Forget cached predios listings for the current tenant.
+     * The cache is keyed by per_page; clear the values used in practice
+     * (default admin list and wizard load).
+     */
+    protected function forgetPrediosCache(int $tenantId): void
+    {
+        $base = WizardCache::predios($tenantId);
+        foreach ([15, 100] as $perPage) {
+            Cache::forget("{$base}:p:{$perPage}");
         }
     }
 
@@ -68,59 +213,67 @@ class PredioController extends Controller
     public function resumen(Predio $predio): JsonResponse
     {
         try {
-            $predio->load([
-                'lotes' => fn($q) => $q->orderBy('nombre'),
-                'lotes.sublotes' => fn($q) => $q->orderBy('nombre'),
-            ]);
+            $tenantId = (int) app('current_tenant_id');
 
-            $hectareasSembradas = (float) $predio->lotes->sum('hectareas_sembradas');
-            $hectareasTotales   = (float) $predio->hectareas_totales;
-            $hectareasDisponibles = $hectareasTotales - $hectareasSembradas;
+            $data = Cache::remember(
+                WizardCache::predioResumen($tenantId, $predio->id),
+                WizardCache::TTL_PREDIO_BUNDLE,
+                function () use ($predio) {
+                    $predio->load([
+                        'lotes'          => fn($q) => $q->orderBy('nombre'),
+                        'lotes.sublotes' => fn($q) => $q->orderBy('nombre'),
+                    ]);
 
-            $totalSublotes = 0;
-            $totalPalmas   = 0;
+                    $hectareasSembradas   = (float) $predio->lotes->sum('hectareas_sembradas');
+                    $hectareasTotales     = (float) $predio->hectareas_totales;
+                    $hectareasDisponibles = $hectareasTotales - $hectareasSembradas;
 
-            $lotes = $predio->lotes->map(function ($lote) use (&$totalSublotes, &$totalPalmas) {
-                $sublotesPalmas = (int) $lote->sublotes->sum('cantidad_palmas');
-                $sublotesCount  = $lote->sublotes->count();
+                    $totalSublotes = 0;
+                    $totalPalmas   = 0;
 
-                $totalSublotes += $sublotesCount;
-                $totalPalmas   += $sublotesPalmas;
+                    $lotes = $predio->lotes->map(function ($lote) use (&$totalSublotes, &$totalPalmas) {
+                        $sublotesPalmas = (int) $lote->sublotes->sum('cantidad_palmas');
+                        $sublotesCount  = $lote->sublotes->count();
 
-                return [
-                    'id'                  => $lote->id,
-                    'nombre'              => $lote->nombre,
-                    'hectareas_sembradas' => $lote->hectareas_sembradas,
-                    'sublotes' => $lote->sublotes->map(fn($s) => [
-                        'id'              => $s->id,
-                        'nombre'          => $s->nombre,
-                        'cantidad_palmas' => (int) $s->cantidad_palmas,
-                    ])->values(),
-                    'totales' => [
-                        'sublotes' => $sublotesCount,
-                        'palmas'   => $sublotesPalmas,
-                    ],
-                ];
-            })->values();
+                        $totalSublotes += $sublotesCount;
+                        $totalPalmas   += $sublotesPalmas;
 
-            return response()->json([
-                'data' => [
-                    'predio' => [
-                        'id'                    => $predio->id,
-                        'nombre'                => $predio->nombre,
-                        'ubicacion'             => $predio->ubicacion,
-                        'hectareas_totales'     => $predio->hectareas_totales,
-                        'hectareas_sembradas'   => number_format($hectareasSembradas, 2, '.', ''),
-                        'hectareas_disponibles' => number_format($hectareasDisponibles, 2, '.', ''),
-                    ],
-                    'lotes' => $lotes,
-                    'totales_generales' => [
-                        'lotes'    => $predio->lotes->count(),
-                        'sublotes' => $totalSublotes,
-                        'palmas'   => $totalPalmas,
-                    ],
-                ],
-            ]);
+                        return [
+                            'id'                  => $lote->id,
+                            'nombre'              => $lote->nombre,
+                            'hectareas_sembradas' => $lote->hectareas_sembradas,
+                            'sublotes'            => $lote->sublotes->map(fn($s) => [
+                                'id'              => $s->id,
+                                'nombre'          => $s->nombre,
+                                'cantidad_palmas' => (int) $s->cantidad_palmas,
+                            ])->values(),
+                            'totales' => [
+                                'sublotes' => $sublotesCount,
+                                'palmas'   => $sublotesPalmas,
+                            ],
+                        ];
+                    })->values();
+
+                    return [
+                        'predio' => [
+                            'id'                    => $predio->id,
+                            'nombre'                => $predio->nombre,
+                            'ubicacion'             => $predio->ubicacion,
+                            'hectareas_totales'     => $predio->hectareas_totales,
+                            'hectareas_sembradas'   => number_format($hectareasSembradas, 2, '.', ''),
+                            'hectareas_disponibles' => number_format($hectareasDisponibles, 2, '.', ''),
+                        ],
+                        'lotes'              => $lotes,
+                        'totales_generales'  => [
+                            'lotes'    => $predio->lotes->count(),
+                            'sublotes' => $totalSublotes,
+                            'palmas'   => $totalPalmas,
+                        ],
+                    ];
+                },
+            );
+
+            return response()->json(['data' => $data]);
         } catch (\Throwable $e) {
             Log::error('Error al obtener resumen del predio: ' . $e->getMessage());
 
@@ -157,6 +310,8 @@ class PredioController extends Controller
     {
         try {
             $predio = Predio::create($request->validated());
+
+            $this->forgetPrediosCache((int) app('current_tenant_id'));
 
             $this->auditoria->registrarCreacion(
                 $request,
@@ -204,6 +359,8 @@ class PredioController extends Controller
             $datosAnteriores = $predio->toArray();
 
             $predio->update($request->validated());
+
+            $this->forgetPrediosCache((int) app('current_tenant_id'));
 
             $this->auditoria->registrarEdicion(
                 $request,
@@ -255,6 +412,8 @@ class PredioController extends Controller
             );
 
             $predio->delete();
+
+            $this->forgetPrediosCache((int) app('current_tenant_id'));
 
             DB::commit();
 

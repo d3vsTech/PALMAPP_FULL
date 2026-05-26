@@ -11,13 +11,13 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class CrearPalmasJob implements ShouldQueue, ShouldBeUnique
 {
     use Batchable, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $timeout = 300;
+    public int $timeout = 600;
     public int $tries   = 1;
 
     public function __construct(
@@ -37,9 +37,20 @@ class CrearPalmasJob implements ShouldQueue, ShouldBeUnique
     {
         app()->instance('current_tenant_id', $this->tenantId);
 
-        DB::transaction(function () use ($service) {
-            $sublote = Sublote::withoutTenant()->findOrFail($this->subloteId);
-            $service->createSync($sublote, $this->cantidad, $this->lineaId);
-        });
+        $sublote = Sublote::withoutTenant()->findOrFail($this->subloteId);
+        // createSync: inserta chunk a chunk (sin transaccion global) y
+        // llama updateCounters al final fuera de cualquier lock de insercion.
+        $service->createSync($sublote, $this->cantidad, $this->lineaId);
+    }
+
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('CrearPalmasJob falló', [
+            'sublote_id' => $this->subloteId,
+            'linea_id'   => $this->lineaId,
+            'cantidad'   => $this->cantidad,
+            'tenant_id'  => $this->tenantId,
+            'error'      => $exception->getMessage(),
+        ]);
     }
 }
