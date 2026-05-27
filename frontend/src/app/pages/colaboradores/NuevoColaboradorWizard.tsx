@@ -81,6 +81,7 @@ interface FormData {
   predioAsignado: string;
   modalidadPago: string;
   salarioBase: number;
+  aplicaSubsidioTransporte: boolean;
   fechaContratacion: string;
   fechaFinalizacion: string;
   // Seguridad Social
@@ -141,7 +142,7 @@ const FORM_INICIAL: FormData = {
   estado: true,
   primerApellido: '', segundoApellido: '', primerNombre: '', segundoNombre: '',
   tipoDocumento: 'CC', numeroDocumento: '', fechaExpedicion: '', fechaNacimiento: '', lugarExpedicion: '',
-  cargo: '', predioAsignado: '', modalidadPago: 'FIJO', salarioBase: 0, fechaContratacion: '', fechaFinalizacion: '',
+  cargo: '', predioAsignado: '', modalidadPago: 'FIJO', salarioBase: 0, aplicaSubsidioTransporte: false, fechaContratacion: '', fechaFinalizacion: '',
   eps: '', arl: '', fondoPension: '', cajaCompensacion: '',
   tallaCamisa: '', tallaPantalon: '', tallaCalzado: '',
   banco: '', tipoCuenta: 'AHORROS', numeroCuenta: '',
@@ -345,6 +346,15 @@ export default function NuevoColaboradorWizard() {
             predioAsignado: predioId ? String(predioId) : '',
             modalidadPago: modalidadPagoForm,
             salarioBase: toNumber(d.salario_base),
+            // Subsidio de transporte: el doc API_COLABORADORES dice que el
+            // campo se llama `subsidio_transporte` (boolean, default true).
+            // Aceptamos también el legacy `aplica_subsidio_transporte` por si
+            // algún backend viejo sigue mandándolo con ese nombre.
+            aplicaSubsidioTransporte: d.subsidio_transporte != null
+              ? !!d.subsidio_transporte
+              : (d.aplica_subsidio_transporte != null
+                ? !!d.aplica_subsidio_transporte
+                : false),
             fechaContratacion: toDateInput(d.fecha_ingreso),
             fechaFinalizacion: toDateInput(d.fecha_retiro),
             eps: d.eps ?? '',
@@ -717,6 +727,11 @@ export default function NuevoColaboradorWizard() {
       body.salario_base               = formData.salarioBase > 0 ? formData.salarioBase : 0;
       body.modalidad_pago             = formData.modalidadPago === 'VARIABLE' ? 'PRODUCCION' : formData.modalidadPago;
       body.fecha_ingreso              = formData.fechaContratacion;
+      // Subsidio de transporte: enviamos el campo nombre actual del doc
+      // (`subsidio_transporte`) y también el legacy por si el backend aún no
+      // está actualizado. El que no exista, lo ignora silenciosamente.
+      body.subsidio_transporte        = formData.aplicaSubsidioTransporte;
+      body.aplica_subsidio_transporte = formData.aplicaSubsidioTransporte;
     } else {
       // En edición enviar solo los que tienen valor
       if (formData.primerNombre.trim())    body.primer_nombre              = formData.primerNombre.trim();
@@ -729,6 +744,10 @@ export default function NuevoColaboradorWizard() {
       if (formData.salarioBase > 0)        body.salario_base               = formData.salarioBase;
       if (formData.modalidadPago)          body.modalidad_pago             = formData.modalidadPago === 'VARIABLE' ? 'PRODUCCION' : formData.modalidadPago;
       if (formData.fechaContratacion)      body.fecha_ingreso              = formData.fechaContratacion;
+      // Subsidio: en edición lo mandamos siempre (es booleano, no string vacío).
+      // Doble nombre por compat con backends que aún no migraron.
+      body.subsidio_transporte             = formData.aplicaSubsidioTransporte;
+      body.aplica_subsidio_transporte      = formData.aplicaSubsidioTransporte;
       body.estado = formData.estado;
     }
 
@@ -1108,6 +1127,12 @@ export default function NuevoColaboradorWizard() {
           )}
 
           {/* ── ETAPA 3: CONTRATACIÓN ── */}
+          {/* ── ETAPA 3: CONTRATACIÓN — diseño tomado de V.10 exactamente ──
+              Cargo · Predio · Modalidad · Salario Base · grid 3-col
+              (Subsidio Transporte | Fecha Contratación | Fecha Finalización).
+              El Switch de "Estado del colaborador" se mantiene solo en modo
+              edición como fila extra al final (V.10 no lo tiene porque no
+              tiene conexión a backend; nosotros sí necesitamos editarlo). */}
           {etapaActual === 3 && (
             <Card className="border-border">
               <CardHeader>
@@ -1123,68 +1148,125 @@ export default function NuevoColaboradorWizard() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-2">
-                  <Label>Cargo <span className="text-destructive">*</span></Label>
-                  <Input placeholder="Ej: Operario de Campo" value={formData.cargo} onChange={e => handleInputChange('cargo', e.target.value)} />
+                  <Label htmlFor="cargo">
+                    Cargo <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="cargo"
+                    placeholder="Ej: Operario de Campo"
+                    value={formData.cargo}
+                    onChange={(e) => handleInputChange('cargo', e.target.value)}
+                  />
                 </div>
+
                 <div className="space-y-2">
-                  <Label>Predio Asignado</Label>
-                  <Select value={formData.predioAsignado} onValueChange={v => handleInputChange('predioAsignado', v === 'none' ? '' : v)}>
-                    <SelectTrigger><SelectValue placeholder="Sin predio asignado" /></SelectTrigger>
+                  <Label htmlFor="predioAsignado">Predio Asignado</Label>
+                  <Select
+                    value={formData.predioAsignado || 'none'}
+                    onValueChange={(v) => handleInputChange('predioAsignado', v === 'none' ? '' : v)}
+                  >
+                    <SelectTrigger id="predioAsignado">
+                      <SelectValue placeholder="Selecciona un predio" />
+                    </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Sin predio</SelectItem>
-                      {predios.map(p => <SelectItem key={p.id} value={String(p.id)}>{p.nombre}</SelectItem>)}
+                      <SelectItem value="none">Sin predio asignado</SelectItem>
+                      {predios.map((p) => (
+                        <SelectItem key={p.id} value={String(p.id)}>
+                          {p.nombre}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
+
                 <div className="space-y-2">
-                  <Label>Modalidad de Pago <span className="text-destructive">*</span></Label>
-                  <Select value={formData.modalidadPago} onValueChange={v => handleInputChange('modalidadPago', v)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                  <Label htmlFor="modalidadPago">
+                    Modalidad de Pago <span className="text-destructive">*</span>
+                  </Label>
+                  <Select
+                    value={formData.modalidadPago}
+                    onValueChange={(v) => handleInputChange('modalidadPago', v)}
+                  >
+                    <SelectTrigger id="modalidadPago">
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
-                      {modalidadesPago.map(m => <SelectItem key={m.codigo} value={m.codigo}>{m.label}</SelectItem>)}
+                      {modalidadesPago.map((m) => (
+                        <SelectItem key={m.codigo} value={m.codigo}>
+                          {m.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
+
                 <div className="space-y-2">
-                  <Label>Salario Base (COP) {formData.modalidadPago === 'FIJO' && <span className="text-destructive">*</span>}</Label>
+                  <Label htmlFor="salarioBase">
+                    Salario Base{' '}
+                    {formData.modalidadPago === 'FIJO' && (
+                      <span className="text-destructive">*</span>
+                    )}
+                  </Label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">$</span>
                     <Input
+                      id="salarioBase"
                       type="text"
+                      inputMode="numeric"
                       placeholder={formData.modalidadPago === 'VARIABLE' ? 'Opcional' : '1.300.000'}
                       className="pl-7"
                       value={formData.salarioBase > 0 ? formData.salarioBase.toLocaleString('es-CO') : ''}
-                      onChange={e => {
+                      onChange={(e) => {
                         const raw = e.target.value.replace(/[^0-9]/g, '');
                         handleInputChange('salarioBase', parseInt(raw) || 0);
                       }}
                     />
                   </div>
                 </div>
-                {isEditMode && (
-                  <div className="flex items-center justify-between p-4 border border-border rounded-lg">
-                    <div>
-                      <p className="text-sm font-medium">Estado del colaborador</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formData.estado ? 'Activo — puede ser incluido en nómina' : 'Inactivo — no aparece en operaciones'}
-                      </p>
-                    </div>
-                    <Switch
-                      checked={formData.estado}
-                      onCheckedChange={v => handleInputChange('estado', v as any)}
+
+                {/* Grid 3 columnas (V.10) — Subsidio · Fecha Contratación · Fecha Finalización */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="aplicaSubsidioTransporte">Subsidio de Transporte</Label>
+                    <Select
+                      value={formData.aplicaSubsidioTransporte ? 'si' : 'no'}
+                      onValueChange={(v) =>
+                        handleInputChange('aplicaSubsidioTransporte', (v === 'si') as any)
+                      }
+                    >
+                      <SelectTrigger id="aplicaSubsidioTransporte">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="si">Sí</SelectItem>
+                        <SelectItem value="no">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="fechaContratacion">
+                      Fecha de Contratación <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="fechaContratacion"
+                      type="date"
+                      value={formData.fechaContratacion}
+                      onChange={(e) => handleInputChange('fechaContratacion', e.target.value)}
                     />
                   </div>
-                )}
-                <div className="grid gap-6 md:grid-cols-2">
+
                   <div className="space-y-2">
-                    <Label>Fecha de Contratación<span className="text-destructive">*</span></Label>
-                    <Input type="date" value={formData.fechaContratacion} onChange={e => handleInputChange('fechaContratacion', e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Fecha de Finalización</Label>
-                    <Input type="date" value={formData.fechaFinalizacion} onChange={e => handleInputChange('fechaFinalizacion', e.target.value)} />
+                    <Label htmlFor="fechaFinalizacion">Fecha de Finalización</Label>
+                    <Input
+                      id="fechaFinalizacion"
+                      type="date"
+                      value={formData.fechaFinalizacion}
+                      onChange={(e) => handleInputChange('fechaFinalizacion', e.target.value)}
+                    />
                   </div>
                 </div>
+
               </CardContent>
             </Card>
           )}

@@ -23,14 +23,18 @@ export type { UsuarioTenant, CreateUsuarioPayload, UpdateUsuarioPayload } from '
 export { colaboradoresApi } from './colaboradores';
 export type { Colaborador, ColaboradorPayload, Contrato } from './colaboradores';
 
-export { nominaApi } from './nomina';
+export { nominaApi, NominaErrorCodes } from './nomina';
 export type {
   Nomina,
   NominaEmpleado,
+  NominaEmpleadoConcepto,
   NominaIndicadores,
   EmpleadoDisponible,
   PreviewLiquidacion,
+  ConceptoLegalPreview,
   ResumenTrabajo,
+  CategoriaResumenTrabajo,
+  FilaResumenTrabajo,
   DesprendibleData,
   NominaConcepto,
   EstadoNomina,
@@ -38,22 +42,62 @@ export type {
   Periodicidad,
   SalarioTipo,
   TipoConcepto,
+  SubtipoConcepto,
   AplicaA,
   LiquidarPayload,
   BonificacionInput,
   DeduccionVoluntariaInput,
+  NominaErrorCode,
 } from './nomina';
 
 export { operacionesApi } from './operaciones';
 export type { Planilla, PlanillaPayload, LineaPlanilla } from './operaciones';
 
-export { viajesApi } from './viajes';
-export type { Viaje, ViajePayload } from './viajes';
-
-export { configuracionApi } from './configuracion';
+export {
+  viajesApi,
+  // Paramétricas §16 (Configuración → Viajes). Permiso CRUD: configuracion.editar.
+  // Permiso /select y /transportadoresDe: configuracion.editar o viajes.crear.
+  extractorasApi,
+  empresasTransportadorasApi,
+  transportadoresApi,
+} from './viajes';
 export type {
-  Semilla, Insumo, Cargo, Labor, ConceptoNomina,
-  EditarFincaPayload, EditarPerfilPayload,
+  Viaje, ViajePayload,
+  // Tipos de las paramétricas de viajes
+  Extractora, ExtractoraSelect,
+  EmpresaTransportadora, EmpresaTransportadoraSelect,
+  Transportador, TransportadorSelect,
+} from './viajes';
+
+export { configuracionApi, ConfiguracionErrorCodes } from './configuracion';
+export type {
+  // Paramétricas básicas
+  Semilla, SemillaPayload, TipoSemilla, SemillaSelectItem,
+  Insumo, InsumoPayload,
+  PrecioAbono, PrecioAbonoPayload,
+  Labor, LaborPayload, LaborSelectItem,
+  PrecioPalma, PrecioPalmaPayload, TipoPalmaPrecio,
+  PromedioLote, PromedioLotePayload,
+  Cargo, CargoPayload, SalarioTipoCargo,
+  ModalidadContrato, ModalidadContratoPayload,
+  // Configuraciones agregadas
+  ConfiguracionNomina, ConfiguracionNominaPayload, TipoPagoNomina,
+  PrecioCosecha, PrecioCosechaPayload, PrecioCosechaParams,
+  InfoEmpresa, InfoEmpresaPayload, TipoPersona,
+  ConstantesLegales, ConstantesLegalesPayload,
+  TablaLegal, TablaLegalPayload, TablaLegalConcepto,
+  // Catálogos del colaborador
+  ParametricaColaborador, ParametricaColaboradorPayload,
+  EntidadBancaria, EntidadBancariaPayload, EntidadBancariaSelectItem,
+  // §17 Motivos de Ausencia (Tipos de Novedades)
+  MotivoAusencia, MotivoAusenciaPayload, MotivoAusenciaSelectItem,
+  MotivoAusenciaListadoParams, TipoBaseAusencia,
+  // Horas extra
+  TipoHoraExtra, TipoHoraExtraPayload, CodigoHoraExtra, FranjaHoraria,
+  // Auditoría
+  AuditoriaRegistro, AuditoriaAccion, AuditoriaListadoParams, AuditoriaListadoResponse,
+  // Compartido
+  ParametricaParams,
 } from './configuracion';
 
 export { superAdminApi } from './superAdmin';

@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Plus, Trash2, Edit, Building2, User } from 'lucide-react';
+import { Switch } from '../ui/switch';
+import { Textarea } from '../ui/textarea';
+import { Plus, Trash2, Edit, Building2, User, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Select,
@@ -20,111 +22,183 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../ui/dialog';
+import { ConfirmDeleteDialog } from '../ui/confirm-delete-dialog';
+import {
+  empresasTransportadorasApi,
+  transportadoresApi,
+  type EmpresaTransportadora,
+  type Transportador,
+} from '../../../api/viajes';
 
-type EmpresaTransporte = {
-  id: string;
-  nombre: string;
-  nit: string;
-  contacto: string;
+type EmpresaConContador = EmpresaTransportadora & { transportadores_count?: number };
+
+const FORM_EMPRESA_VACIO = {
+  tipo_persona: 'JURIDICA' as 'JURIDICA' | 'NATURAL',
+  razon_social: '',
+  nit: '',
+  telefono: '',
+  direccion: '',
+  ciudad: '',
+  email: '',
+  contacto_nombre: '',
+  observaciones: '',
 };
 
-type Conductor = {
-  id: string;
-  nombre: string;
-  cedula: string;
-  telefono: string;
-  placa: string;
-  empresaId: string;
+const FORM_CONDUCTOR_VACIO = {
+  empresa_transportadora_id: '',
+  nombre: '',
+  tipo_documento: 'CC' as 'CC' | 'CE' | 'PPT' | 'PASAPORTE',
+  numero_documento: '',
+  telefono: '',
+  placa_vehiculo: '',
+  tipo_vehiculo: '',
+  capacidad_kg: '',
+  licencia_conduccion: '',
+  licencia_vencimiento: '',
+  observaciones: '',
 };
+
+const TIPOS_DOCUMENTO: Array<'CC' | 'CE' | 'PPT' | 'PASAPORTE'> = ['CC', 'CE', 'PPT', 'PASAPORTE'];
 
 export function TransporteTab() {
-  const [empresas, setEmpresas] = useState<EmpresaTransporte[]>([
-    { id: '1', nombre: 'Transportes del Valle S.A.S.', nit: '900.111.222-1', contacto: '+57 300 444 5555' },
-    { id: '2', nombre: 'Logística Palmera', nit: '900.222.333-2', contacto: '+57 300 555 6666' }
-  ]);
-
-  const [conductores, setConductores] = useState<Conductor[]>([
-    { id: '1', nombre: 'Carlos Martínez', cedula: '16.123.456', telefono: '+57 300 777 8888', placa: 'ABC-123', empresaId: '1' },
-    { id: '2', nombre: 'Pedro González', cedula: '16.234.567', telefono: '+57 300 888 9999', placa: 'DEF-456', empresaId: '2' },
-    { id: '3', nombre: 'Luis Rodríguez', cedula: '16.345.678', telefono: '+57 300 999 0000', placa: 'GHI-789', empresaId: '1' }
-  ]);
+  const [empresas, setEmpresas] = useState<EmpresaConContador[]>([]);
+  const [conductores, setConductores] = useState<Transportador[]>([]);
+  const [cargandoEmpresas, setCargandoEmpresas] = useState(true);
+  const [cargandoConductores, setCargandoConductores] = useState(true);
 
   const [openModalEmpresa, setOpenModalEmpresa] = useState(false);
   const [openModalConductor, setOpenModalConductor] = useState(false);
-  const [empresaEdit, setEmpresaEdit] = useState<EmpresaTransporte | null>(null);
-  const [conductorEdit, setConductorEdit] = useState<Conductor | null>(null);
+  const [empresaEdit, setEmpresaEdit] = useState<EmpresaTransportadora | null>(null);
+  const [conductorEdit, setConductorEdit] = useState<Transportador | null>(null);
+  const [guardandoEmpresa, setGuardandoEmpresa] = useState(false);
+  const [guardandoConductor, setGuardandoConductor] = useState(false);
 
-  const [formEmpresa, setFormEmpresa] = useState({
-    nombre: '',
-    nit: '',
-    contacto: ''
-  });
+  const [empresaAEliminar, setEmpresaAEliminar] = useState<EmpresaTransportadora | null>(null);
+  const [conductorAEliminar, setConductorAEliminar] = useState<Transportador | null>(null);
 
-  const [formConductor, setFormConductor] = useState({
-    nombre: '',
-    cedula: '',
-    telefono: '',
-    placa: '',
-    empresaId: ''
-  });
+  const [formEmpresa, setFormEmpresa] = useState(FORM_EMPRESA_VACIO);
+  const [formConductor, setFormConductor] = useState(FORM_CONDUCTOR_VACIO);
 
-  // Funciones para Empresas
-  const handleOpenModalEmpresa = (empresa?: EmpresaTransporte) => {
+  const cargarEmpresas = () => {
+    setCargandoEmpresas(true);
+    empresasTransportadorasApi
+      .listar({ per_page: 100, with_transportadores_count: true })
+      .then((res) => setEmpresas(res.data as EmpresaConContador[]))
+      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar las empresas'))
+      .finally(() => setCargandoEmpresas(false));
+  };
+
+  const cargarConductores = () => {
+    setCargandoConductores(true);
+    transportadoresApi
+      .listar({ per_page: 100 })
+      .then((res) => setConductores(res.data))
+      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar los conductores'))
+      .finally(() => setCargandoConductores(false));
+  };
+
+  useEffect(() => {
+    cargarEmpresas();
+    cargarConductores();
+  }, []);
+
+  // ── Empresas ────────────────────────────────────────────────────────────
+  const handleOpenModalEmpresa = (empresa?: EmpresaTransportadora) => {
     if (empresa) {
       setEmpresaEdit(empresa);
       setFormEmpresa({
-        nombre: empresa.nombre,
-        nit: empresa.nit,
-        contacto: empresa.contacto
+        tipo_persona: (empresa as any).tipo_persona ?? 'JURIDICA',
+        razon_social: empresa.razon_social ?? '',
+        nit: empresa.nit ?? '',
+        telefono: empresa.telefono ?? '',
+        direccion: empresa.direccion ?? '',
+        ciudad: empresa.ciudad ?? '',
+        email: empresa.email ?? '',
+        contacto_nombre: empresa.contacto_nombre ?? '',
+        observaciones: empresa.observaciones ?? '',
       });
     } else {
       setEmpresaEdit(null);
-      setFormEmpresa({ nombre: '', nit: '', contacto: '' });
+      setFormEmpresa(FORM_EMPRESA_VACIO);
     }
     setOpenModalEmpresa(true);
   };
 
-  const handleSaveEmpresa = () => {
-    if (!formEmpresa.nombre.trim()) {
-      toast.error('Ingresa el nombre de la empresa');
+  const handleSaveEmpresa = async () => {
+    if (!formEmpresa.razon_social.trim()) {
+      toast.error('Ingresa la razón social de la empresa');
+      return;
+    }
+    if (!formEmpresa.nit.trim()) {
+      toast.error('Ingresa el NIT de la empresa');
       return;
     }
 
-    if (empresaEdit) {
+    setGuardandoEmpresa(true);
+    try {
+      const payload: Partial<EmpresaTransportadora> & { tipo_persona?: string } = {
+        tipo_persona: formEmpresa.tipo_persona,
+        razon_social: formEmpresa.razon_social.trim(),
+        nit: formEmpresa.nit.trim(),
+        telefono: formEmpresa.telefono.trim() || null,
+        direccion: formEmpresa.direccion.trim() || null,
+        ciudad: formEmpresa.ciudad.trim() || null,
+        email: formEmpresa.email.trim() || null,
+        contacto_nombre: formEmpresa.contacto_nombre.trim() || null,
+        observaciones: formEmpresa.observaciones.trim() || null,
+      };
+
+      if (empresaEdit) {
+        await empresasTransportadorasApi.editar(empresaEdit.id, payload);
+        toast.success('Empresa actualizada');
+      } else {
+        await empresasTransportadorasApi.crear(payload);
+        toast.success('Empresa agregada correctamente');
+      }
+      setOpenModalEmpresa(false);
+      cargarEmpresas();
+    } catch (e: any) {
+      if (e?.errors?.nit) {
+        toast.error(e.errors.nit[0] ?? 'Ya existe una empresa con este NIT');
+      } else if (e?.errors) {
+        const primero = Object.values(e.errors).flat()[0];
+        toast.error(typeof primero === 'string' ? primero : 'Error de validación');
+      } else if (e?.message?.toLowerCase().includes('nit')) {
+        toast.error('Ya existe una empresa con este NIT');
+      } else {
+        toast.error(e?.message ?? 'No se pudo guardar la empresa');
+      }
+    } finally {
+      setGuardandoEmpresa(false);
+    }
+  };
+
+  const handleDeleteEmpresa = async () => {
+    if (!empresaAEliminar) return;
+    try {
+      await empresasTransportadorasApi.eliminar(empresaAEliminar.id);
+      toast.success('Empresa eliminada correctamente');
+      cargarEmpresas();
+    } catch (e: any) {
+      toast.error(e?.message ?? 'No se pudo eliminar la empresa');
+    } finally {
+      setEmpresaAEliminar(null);
+    }
+  };
+
+  const handleToggleEstadoEmpresa = async (empresa: EmpresaTransportadora) => {
+    try {
+      await empresasTransportadorasApi.editar(empresa.id, { estado: !empresa.estado });
       setEmpresas((prev) =>
-        prev.map((e) =>
-          e.id === empresaEdit.id ? { ...e, ...formEmpresa } : e
-        )
+        prev.map((e) => (e.id === empresa.id ? { ...e, estado: !empresa.estado } : e)),
       );
-      toast.success('Empresa actualizada');
-    } else {
-      setEmpresas((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          ...formEmpresa
-        },
-      ]);
-      toast.success('Empresa agregada correctamente');
+    } catch (e: any) {
+      toast.error(e?.message ?? 'No se pudo cambiar el estado');
     }
-
-    setOpenModalEmpresa(false);
   };
 
-  const eliminarEmpresa = (id: string) => {
-    // Verificar si tiene conductores asociados
-    const conductoresAsociados = conductores.filter(c => c.empresaId === id);
-    if (conductoresAsociados.length > 0) {
-      toast.error('No puedes eliminar una empresa con conductores asociados');
-      return;
-    }
-
-    setEmpresas(empresas.filter(e => e.id !== id));
-    toast.success('Empresa eliminada correctamente');
-  };
-
-  // Funciones para Conductores
-  const handleOpenModalConductor = (conductor?: Conductor) => {
+  // ── Conductores ───────────────────────────────────────────────────────────
+  const handleOpenModalConductor = (conductor?: Transportador) => {
     if (empresas.length === 0) {
       toast.error('Primero debes crear al menos una empresa de transporte');
       return;
@@ -133,54 +207,110 @@ export function TransporteTab() {
     if (conductor) {
       setConductorEdit(conductor);
       setFormConductor({
-        nombre: conductor.nombre,
-        cedula: conductor.cedula,
-        telefono: conductor.telefono,
-        placa: conductor.placa,
-        empresaId: conductor.empresaId
+        empresa_transportadora_id: String(conductor.empresa_transportadora_id),
+        nombre: `${conductor.nombres ?? ''} ${conductor.apellidos ?? ''}`.trim(),
+        tipo_documento: conductor.tipo_documento ?? 'CC',
+        numero_documento: conductor.numero_documento ?? '',
+        telefono: conductor.telefono ?? '',
+        placa_vehiculo: conductor.placa_vehiculo ?? '',
+        tipo_vehiculo: conductor.tipo_vehiculo ?? '',
+        capacidad_kg: conductor.capacidad_kg != null ? String(conductor.capacidad_kg) : '',
+        licencia_conduccion: conductor.licencia_conduccion ?? '',
+        licencia_vencimiento: conductor.licencia_vencimiento ?? '',
+        observaciones: conductor.observaciones ?? '',
       });
     } else {
       setConductorEdit(null);
-      setFormConductor({ nombre: '', cedula: '', telefono: '', placa: '', empresaId: '' });
+      setFormConductor(FORM_CONDUCTOR_VACIO);
     }
     setOpenModalConductor(true);
   };
 
-  const handleSaveConductor = () => {
+  const handleSaveConductor = async () => {
     if (!formConductor.nombre.trim()) {
       toast.error('Ingresa el nombre del conductor');
       return;
     }
-
-    if (!formConductor.empresaId) {
+    if (!formConductor.empresa_transportadora_id) {
       toast.error('Selecciona una empresa');
       return;
     }
-
-    if (conductorEdit) {
-      setConductores((prev) =>
-        prev.map((c) =>
-          c.id === conductorEdit.id ? { ...c, ...formConductor } : c
-        )
-      );
-      toast.success('Conductor actualizado');
-    } else {
-      setConductores((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          ...formConductor
-        },
-      ]);
-      toast.success('Conductor agregado correctamente');
+    if (!formConductor.placa_vehiculo.trim()) {
+      toast.error('Ingresa la placa del vehículo');
+      return;
     }
 
-    setOpenModalConductor(false);
+    // Split del nombre completo: primera palabra = nombres, resto = apellidos.
+    const partes = formConductor.nombre.trim().split(/\s+/);
+    const nombres = partes[0];
+    const apellidos = partes.slice(1).join(' ');
+
+    setGuardandoConductor(true);
+    try {
+      const payload: Partial<Transportador> = {
+        empresa_transportadora_id: Number(formConductor.empresa_transportadora_id),
+        nombres,
+        apellidos,
+        placa_vehiculo: formConductor.placa_vehiculo.trim(),
+        tipo_documento: formConductor.tipo_documento,
+        numero_documento: formConductor.numero_documento.trim() || null,
+        telefono: formConductor.telefono.trim() || null,
+        tipo_vehiculo: formConductor.tipo_vehiculo.trim() || null,
+        capacidad_kg: formConductor.capacidad_kg.trim() ? Number(formConductor.capacidad_kg) : null,
+        licencia_conduccion: formConductor.licencia_conduccion.trim() || null,
+        licencia_vencimiento: formConductor.licencia_vencimiento.trim() || null,
+        observaciones: formConductor.observaciones.trim() || null,
+      };
+
+      if (conductorEdit) {
+        await transportadoresApi.editar(conductorEdit.id, payload);
+        toast.success('Conductor actualizado');
+      } else {
+        await transportadoresApi.crear(payload);
+        toast.success('Conductor agregado correctamente');
+      }
+      setOpenModalConductor(false);
+      cargarConductores();
+      cargarEmpresas();
+    } catch (e: any) {
+      if (e?.errors?.placa_vehiculo) {
+        toast.error(e.errors.placa_vehiculo[0] ?? 'Ya existe un conductor con esta placa');
+      } else if (e?.errors) {
+        const primero = Object.values(e.errors).flat()[0];
+        toast.error(typeof primero === 'string' ? primero : 'Error de validación');
+      } else if (e?.message?.toLowerCase().includes('placa')) {
+        toast.error('Ya existe un conductor con esta placa');
+      } else {
+        toast.error(e?.message ?? 'No se pudo guardar el conductor');
+      }
+    } finally {
+      setGuardandoConductor(false);
+    }
   };
 
-  const eliminarConductor = (id: string) => {
-    setConductores(conductores.filter(c => c.id !== id));
-    toast.success('Conductor eliminado correctamente');
+  const handleDeleteConductor = async () => {
+    if (!conductorAEliminar) return;
+    try {
+      await transportadoresApi.eliminar(conductorAEliminar.id);
+      toast.success('Conductor eliminado correctamente');
+      cargarConductores();
+      cargarEmpresas();
+    } catch (e: any) {
+      toast.error(e?.message ?? 'No se pudo eliminar el conductor');
+    } finally {
+      setConductorAEliminar(null);
+    }
+  };
+
+  const handleToggleEstadoConductor = async (conductor: Transportador) => {
+    try {
+      await transportadoresApi.editar(conductor.id, { estado: !conductor.estado });
+      setConductores((prev) =>
+        prev.map((c) => (c.id === conductor.id ? { ...c, estado: !conductor.estado } : c)),
+      );
+    } catch (e: any) {
+      toast.error(e?.message ?? 'No se pudo cambiar el estado');
+    }
   };
 
   return (
@@ -198,50 +328,140 @@ export function TransporteTab() {
           </DialogHeader>
 
           <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="tipo_persona">Tipo de Persona</Label>
+                <Select
+                  value={formEmpresa.tipo_persona}
+                  onValueChange={(value) =>
+                    setFormEmpresa((prev) => ({ ...prev, tipo_persona: value as 'JURIDICA' | 'NATURAL' }))
+                  }
+                >
+                  <SelectTrigger id="tipo_persona">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="JURIDICA">Jurídica</SelectItem>
+                    <SelectItem value="NATURAL">Natural</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="nit-empresa">
+                  NIT <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="nit-empresa"
+                  placeholder="900.111.222-1"
+                  value={formEmpresa.nit}
+                  onChange={(e) =>
+                    setFormEmpresa((prev) => ({ ...prev, nit: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+
             <div className="space-y-2">
-              <Label htmlFor="nombre-empresa">
-                Nombre de la Empresa <span className="text-destructive">*</span>
+              <Label htmlFor="razon_social-empresa">
+                Razón Social <span className="text-destructive">*</span>
               </Label>
               <Input
-                id="nombre-empresa"
+                id="razon_social-empresa"
                 placeholder="Ej: Transportes del Valle S.A.S."
-                value={formEmpresa.nombre}
+                value={formEmpresa.razon_social}
                 onChange={(e) =>
-                  setFormEmpresa((prev) => ({ ...prev, nombre: e.target.value }))
+                  setFormEmpresa((prev) => ({ ...prev, razon_social: e.target.value }))
                 }
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="nit">NIT (Opcional)</Label>
+              <Label htmlFor="direccion-empresa">Dirección</Label>
               <Input
-                id="nit"
-                placeholder="900.111.222-1"
-                value={formEmpresa.nit}
+                id="direccion-empresa"
+                placeholder="Dirección"
+                value={formEmpresa.direccion}
                 onChange={(e) =>
-                  setFormEmpresa((prev) => ({ ...prev, nit: e.target.value }))
+                  setFormEmpresa((prev) => ({ ...prev, direccion: e.target.value }))
                 }
               />
             </div>
 
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="ciudad-empresa">Ciudad</Label>
+                <Input
+                  id="ciudad-empresa"
+                  placeholder="Ciudad"
+                  value={formEmpresa.ciudad}
+                  onChange={(e) =>
+                    setFormEmpresa((prev) => ({ ...prev, ciudad: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="telefono-empresa">Teléfono</Label>
+                <Input
+                  id="telefono-empresa"
+                  placeholder="+57 300 444 5555"
+                  value={formEmpresa.telefono}
+                  onChange={(e) =>
+                    setFormEmpresa((prev) => ({ ...prev, telefono: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="email-empresa">Email</Label>
+                <Input
+                  id="email-empresa"
+                  type="email"
+                  placeholder="correo@empresa.com"
+                  value={formEmpresa.email}
+                  onChange={(e) =>
+                    setFormEmpresa((prev) => ({ ...prev, email: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="contacto-empresa">Contacto</Label>
+                <Input
+                  id="contacto-empresa"
+                  placeholder="Nombre del contacto"
+                  value={formEmpresa.contacto_nombre}
+                  onChange={(e) =>
+                    setFormEmpresa((prev) => ({ ...prev, contacto_nombre: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+
             <div className="space-y-2">
-              <Label htmlFor="contacto-empresa">Contacto (Opcional)</Label>
-              <Input
-                id="contacto-empresa"
-                placeholder="+57 300 444 5555"
-                value={formEmpresa.contacto}
+              <Label htmlFor="observaciones-empresa">Observaciones</Label>
+              <Textarea
+                id="observaciones-empresa"
+                placeholder="Notas adicionales"
+                value={formEmpresa.observaciones}
                 onChange={(e) =>
-                  setFormEmpresa((prev) => ({ ...prev, contacto: e.target.value }))
+                  setFormEmpresa((prev) => ({ ...prev, observaciones: e.target.value }))
                 }
               />
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenModalEmpresa(false)}>
+            <Button variant="outline" onClick={() => setOpenModalEmpresa(false)} disabled={guardandoEmpresa}>
               Cancelar
             </Button>
-            <Button onClick={handleSaveEmpresa}>Guardar</Button>
+            <Button onClick={handleSaveEmpresa} disabled={guardandoEmpresa}>
+              {guardandoEmpresa && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Guardar
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -274,68 +494,189 @@ export function TransporteTab() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="empresaId">
+              <Label htmlFor="empresa_transportadora_id">
                 Empresa de Transporte <span className="text-destructive">*</span>
               </Label>
-              <Select value={formConductor.empresaId} onValueChange={(value) => setFormConductor((prev) => ({ ...prev, empresaId: value }))}>
-                <SelectTrigger id="empresaId">
+              <Select
+                value={formConductor.empresa_transportadora_id}
+                onValueChange={(value) =>
+                  setFormConductor((prev) => ({ ...prev, empresa_transportadora_id: value }))
+                }
+              >
+                <SelectTrigger id="empresa_transportadora_id">
                   <SelectValue placeholder="Selecciona una empresa" />
                 </SelectTrigger>
                 <SelectContent>
                   {empresas.map((empresa) => (
-                    <SelectItem key={empresa.id} value={empresa.id}>
-                      {empresa.nombre}
+                    <SelectItem key={empresa.id} value={String(empresa.id)}>
+                      {empresa.razon_social}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="cedula">Cédula (Opcional)</Label>
-              <Input
-                id="cedula"
-                placeholder="16.123.456"
-                value={formConductor.cedula}
-                onChange={(e) =>
-                  setFormConductor((prev) => ({ ...prev, cedula: e.target.value }))
-                }
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="tipo_documento">Tipo de Documento</Label>
+                <Select
+                  value={formConductor.tipo_documento}
+                  onValueChange={(value) =>
+                    setFormConductor((prev) => ({
+                      ...prev,
+                      tipo_documento: value as 'CC' | 'CE' | 'PPT' | 'PASAPORTE',
+                    }))
+                  }
+                >
+                  <SelectTrigger id="tipo_documento">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TIPOS_DOCUMENTO.map((td) => (
+                      <SelectItem key={td} value={td}>
+                        {td}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="numero_documento">Número de Documento</Label>
+                <Input
+                  id="numero_documento"
+                  placeholder="16.123.456"
+                  value={formConductor.numero_documento}
+                  onChange={(e) =>
+                    setFormConductor((prev) => ({ ...prev, numero_documento: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="placa">
+                  Placa del Vehículo <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="placa"
+                  placeholder="ABC-123"
+                  value={formConductor.placa_vehiculo}
+                  onChange={(e) =>
+                    setFormConductor((prev) => ({ ...prev, placa_vehiculo: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="telefono-conductor">Teléfono</Label>
+                <Input
+                  id="telefono-conductor"
+                  placeholder="+57 300 777 8888"
+                  value={formConductor.telefono}
+                  onChange={(e) =>
+                    setFormConductor((prev) => ({ ...prev, telefono: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="tipo_vehiculo">Tipo de Vehículo</Label>
+                <Input
+                  id="tipo_vehiculo"
+                  placeholder="Ej: Volqueta"
+                  value={formConductor.tipo_vehiculo}
+                  onChange={(e) =>
+                    setFormConductor((prev) => ({ ...prev, tipo_vehiculo: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="capacidad_kg">Capacidad (kg)</Label>
+                <Input
+                  id="capacidad_kg"
+                  type="number"
+                  placeholder="0"
+                  value={formConductor.capacidad_kg}
+                  onChange={(e) =>
+                    setFormConductor((prev) => ({ ...prev, capacidad_kg: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="licencia_conduccion">Licencia de Conducción</Label>
+                <Input
+                  id="licencia_conduccion"
+                  placeholder="Número de licencia"
+                  value={formConductor.licencia_conduccion}
+                  onChange={(e) =>
+                    setFormConductor((prev) => ({ ...prev, licencia_conduccion: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="licencia_vencimiento">Vencimiento Licencia</Label>
+                <Input
+                  id="licencia_vencimiento"
+                  type="date"
+                  value={formConductor.licencia_vencimiento}
+                  onChange={(e) =>
+                    setFormConductor((prev) => ({ ...prev, licencia_vencimiento: e.target.value }))
+                  }
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="telefono">Teléfono (Opcional)</Label>
-              <Input
-                id="telefono"
-                placeholder="+57 300 777 8888"
-                value={formConductor.telefono}
+              <Label htmlFor="observaciones-conductor">Observaciones</Label>
+              <Textarea
+                id="observaciones-conductor"
+                placeholder="Notas adicionales"
+                value={formConductor.observaciones}
                 onChange={(e) =>
-                  setFormConductor((prev) => ({ ...prev, telefono: e.target.value }))
-                }
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="placa">Placa del Vehículo (Opcional)</Label>
-              <Input
-                id="placa"
-                placeholder="ABC-123"
-                value={formConductor.placa}
-                onChange={(e) =>
-                  setFormConductor((prev) => ({ ...prev, placa: e.target.value }))
+                  setFormConductor((prev) => ({ ...prev, observaciones: e.target.value }))
                 }
               />
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenModalConductor(false)}>
+            <Button variant="outline" onClick={() => setOpenModalConductor(false)} disabled={guardandoConductor}>
               Cancelar
             </Button>
-            <Button onClick={handleSaveConductor}>Guardar</Button>
+            <Button onClick={handleSaveConductor} disabled={guardandoConductor}>
+              {guardandoConductor && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Guardar
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDeleteDialog
+        open={!!empresaAEliminar}
+        onOpenChange={(open) => !open && setEmpresaAEliminar(null)}
+        title="Eliminar empresa"
+        description={`¿Estás seguro de eliminar "${empresaAEliminar?.razon_social}"? Esta acción no se puede deshacer.`}
+        confirmText="Eliminar"
+        onConfirm={handleDeleteEmpresa}
+      />
+
+      <ConfirmDeleteDialog
+        open={!!conductorAEliminar}
+        onOpenChange={(open) => !open && setConductorAEliminar(null)}
+        title="Eliminar conductor"
+        description={`¿Estás seguro de eliminar a "${conductorAEliminar?.nombres} ${conductorAEliminar?.apellidos}"? Esta acción no se puede deshacer.`}
+        confirmText="Eliminar"
+        onConfirm={handleDeleteConductor}
+      />
 
       {/* Empresas de Transporte */}
       <Card className="border-border">
@@ -355,7 +696,12 @@ export function TransporteTab() {
           </div>
         </CardHeader>
         <CardContent className="p-6">
-          {empresas.length === 0 ? (
+          {cargandoEmpresas ? (
+            <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Cargando empresas...
+            </div>
+          ) : empresas.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Building2 className="h-12 w-12 mx-auto mb-3 opacity-30" />
               <p className="text-sm">No hay empresas de transporte registradas</p>
@@ -368,13 +714,23 @@ export function TransporteTab() {
                   className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border"
                 >
                   <div className="flex-1">
-                    <p className="font-semibold">{empresa.nombre}</p>
-                    <div className="flex gap-4 mt-1 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold">{empresa.razon_social}</p>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                        {empresa.transportadores_count ?? 0} conductores
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-4 mt-1 text-sm text-muted-foreground">
                       {empresa.nit && <span>NIT: {empresa.nit}</span>}
-                      {empresa.contacto && <span>Contacto: {empresa.contacto}</span>}
+                      {empresa.ciudad && <span>Ciudad: {empresa.ciudad}</span>}
+                      {empresa.telefono && <span>Tel: {empresa.telefono}</span>}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={empresa.estado ?? false}
+                      onCheckedChange={() => handleToggleEstadoEmpresa(empresa)}
+                    />
                     <Button
                       variant="ghost"
                       size="sm"
@@ -386,7 +742,7 @@ export function TransporteTab() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => eliminarEmpresa(empresa.id)}
+                      onClick={() => setEmpresaAEliminar(empresa)}
                       className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -417,7 +773,12 @@ export function TransporteTab() {
           </div>
         </CardHeader>
         <CardContent className="p-6">
-          {conductores.length === 0 ? (
+          {cargandoConductores ? (
+            <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Cargando conductores...
+            </div>
+          ) : conductores.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <User className="h-12 w-12 mx-auto mb-3 opacity-30" />
               <p className="text-sm">No hay conductores registrados</p>
@@ -425,7 +786,8 @@ export function TransporteTab() {
           ) : (
             <div className="space-y-3">
               {conductores.map((conductor) => {
-                const empresa = empresas.find(e => e.id === conductor.empresaId);
+                const empresa = empresas.find((e) => e.id === conductor.empresa_transportadora_id);
+                const nombreEmpresa = empresa?.razon_social ?? conductor.empresa_transportadora?.razon_social;
                 return (
                   <div
                     key={conductor.id}
@@ -433,20 +795,30 @@ export function TransporteTab() {
                   >
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <p className="font-semibold">{conductor.nombre}</p>
-                        {empresa && (
+                        <p className="font-semibold">
+                          {conductor.nombres} {conductor.apellidos}
+                        </p>
+                        {nombreEmpresa && (
                           <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                            {empresa.nombre}
+                            {nombreEmpresa}
                           </span>
                         )}
                       </div>
-                      <div className="flex gap-4 mt-1 text-sm text-muted-foreground">
-                        {conductor.cedula && <span>CC: {conductor.cedula}</span>}
+                      <div className="flex flex-wrap gap-4 mt-1 text-sm text-muted-foreground">
+                        {conductor.numero_documento && (
+                          <span>
+                            {conductor.tipo_documento ?? 'CC'}: {conductor.numero_documento}
+                          </span>
+                        )}
                         {conductor.telefono && <span>Tel: {conductor.telefono}</span>}
-                        {conductor.placa && <span>Placa: {conductor.placa}</span>}
+                        {conductor.placa_vehiculo && <span>Placa: {conductor.placa_vehiculo}</span>}
                       </div>
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={conductor.estado ?? false}
+                        onCheckedChange={() => handleToggleEstadoConductor(conductor)}
+                      />
                       <Button
                         variant="ghost"
                         size="sm"
@@ -458,7 +830,7 @@ export function TransporteTab() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => eliminarConductor(conductor.id)}
+                        onClick={() => setConductorAEliminar(conductor)}
                         className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
                       >
                         <Trash2 className="h-4 w-4" />

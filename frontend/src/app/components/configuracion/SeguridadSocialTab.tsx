@@ -1,177 +1,258 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
-import { Plus, Trash2 } from 'lucide-react';
+import { Switch } from '../ui/switch';
+import { Plus, Trash2, Loader2 } from 'lucide-react';
+import { ConfirmDeleteDialog } from '../ui/confirm-delete-dialog';
 import { toast } from 'sonner';
+import {
+  configuracionApi,
+  type ParametricaColaborador,
+} from '../../../api/configuracion';
 
-type EntidadSeguridad = {
-  id: string;
-  nombre: string;
-};
+/**
+ * Tab "Seguridad Social" conectado al API real (§12 API_PARAMETRICAS).
+ *
+ * Maneja 3 catálogos del colaborador: EPS, Fondos de Pensión, ARL.
+ *   GET    /api/v1/tenant/{base}        → listado paginado
+ *   POST   /api/v1/tenant/{base}        → crear
+ *   PUT    /api/v1/tenant/{base}/{id}   → editar (+ toggle estado)
+ *   DELETE /api/v1/tenant/{base}/{id}   → eliminar
+ */
+
+type RecursoColaborador = typeof configuracionApi.eps;
+
+interface SeccionConfig {
+  key: string;
+  titulo: string;
+  descripcion: string;
+  etiqueta: string;
+  api: RecursoColaborador;
+}
+
+const SECCIONES: SeccionConfig[] = [
+  {
+    key: 'eps',
+    titulo: 'Entidades Promotoras de Salud (EPS)',
+    descripcion: 'Administradoras de salud disponibles para los colaboradores',
+    etiqueta: 'EPS',
+    api: configuracionApi.eps,
+  },
+  {
+    key: 'fondos',
+    titulo: 'Fondos de Pensión',
+    descripcion: 'Administradoras de fondos pensionales',
+    etiqueta: 'Fondo',
+    api: configuracionApi.fondosPension,
+  },
+  {
+    key: 'arl',
+    titulo: 'Administradoras de Riesgos Laborales (ARL)',
+    descripcion: 'Entidades de riesgos laborales',
+    etiqueta: 'ARL',
+    api: configuracionApi.arl,
+  },
+];
+
+interface SeccionState {
+  items: ParametricaColaborador[];
+  nuevoNombre: string;
+  guardando: boolean;
+}
+
+const ESTADO_VACIO: SeccionState = { items: [], nuevoNombre: '', guardando: false };
 
 export function SeguridadSocialTab() {
-  const [entidadesEPS, setEntidadesEPS] = useState<EntidadSeguridad[]>([
-    { id: '1', nombre: 'Sanitas' },
-    { id: '2', nombre: 'Compensar' },
-    { id: '3', nombre: 'Sura' },
-    { id: '4', nombre: 'Nueva EPS' },
-    { id: '5', nombre: 'Salud Total' },
-    { id: '6', nombre: 'Famisanar' }
-  ]);
+  const [cargando, setCargando] = useState(true);
+  const [secciones, setSecciones] = useState<Record<string, SeccionState>>(() =>
+    Object.fromEntries(SECCIONES.map((s) => [s.key, { ...ESTADO_VACIO }]))
+  );
 
-  const [entidadesARL, setEntidadesARL] = useState<EntidadSeguridad[]>([
-    { id: '1', nombre: 'Sura' },
-    { id: '2', nombre: 'Positiva' },
-    { id: '3', nombre: 'Axisura' },
-    { id: '4', nombre: 'Liberty' }
-  ]);
+  const [aEliminar, setAEliminar] = useState<
+    { seccion: SeccionConfig; entidad: ParametricaColaborador } | null
+  >(null);
 
-  const [entidadesPension, setEntidadesPension] = useState<EntidadSeguridad[]>([
-    { id: '1', nombre: 'Porvenir' },
-    { id: '2', nombre: 'Protección' },
-    { id: '3', nombre: 'Colfondos' },
-    { id: '4', nombre: 'Old Mutual' },
-    { id: '5', nombre: 'Skandia' }
-  ]);
+  useEffect(() => {
+    let cancelado = false;
+    setCargando(true);
+    Promise.all(SECCIONES.map((s) => s.api.listar({ per_page: 100 })))
+      .then((respuestas) => {
+        if (cancelado) return;
+        setSecciones((prev) => {
+          const next = { ...prev };
+          SECCIONES.forEach((s, i) => {
+            next[s.key] = { ...next[s.key], items: respuestas[i].data };
+          });
+          return next;
+        });
+      })
+      .catch((e: any) => {
+        if (!cancelado) toast.error(e?.message ?? 'No se pudieron cargar las entidades');
+      })
+      .finally(() => {
+        if (!cancelado) setCargando(false);
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, []);
 
-  const [entidadesCesantias, setEntidadesCesantias] = useState<EntidadSeguridad[]>([
-    { id: '1', nombre: 'Porvenir' },
-    { id: '2', nombre: 'Protección' },
-    { id: '3', nombre: 'Colfondos' },
-    { id: '4', nombre: 'Old Mutual' }
-  ]);
+  const setNuevoNombre = (key: string, value: string) => {
+    setSecciones((prev) => ({ ...prev, [key]: { ...prev[key], nuevoNombre: value } }));
+  };
 
-  const [bancos, setBancos] = useState<EntidadSeguridad[]>([
-    { id: '1', nombre: 'Bancolombia' },
-    { id: '2', nombre: 'Davivienda' },
-    { id: '3', nombre: 'BBVA' },
-    { id: '4', nombre: 'Banco de Bogotá' },
-    { id: '5', nombre: 'Banco Popular' },
-    { id: '6', nombre: 'Nequi' },
-    { id: '7', nombre: 'Daviplata' }
-  ]);
-
-  const [nuevoNombre, setNuevoNombre] = useState('');
-
-  const agregarEntidad = (lista: EntidadSeguridad[], setLista: Function, tipo: string) => {
-    if (!nuevoNombre.trim()) {
+  const agregarEntidad = async (seccion: SeccionConfig) => {
+    const estado = secciones[seccion.key];
+    const nombre = estado.nuevoNombre.trim();
+    if (!nombre) {
       toast.error('Ingresa el nombre de la entidad');
       return;
     }
-
-    const nuevaEntidad: EntidadSeguridad = {
-      id: Date.now().toString(),
-      nombre: nuevoNombre.trim()
-    };
-
-    setLista([...lista, nuevaEntidad]);
-    setNuevoNombre('');
-    toast.success(`${tipo} agregado correctamente`);
+    setSecciones((prev) => ({ ...prev, [seccion.key]: { ...prev[seccion.key], guardando: true } }));
+    try {
+      const res = await seccion.api.crear({ nombre });
+      setSecciones((prev) => ({
+        ...prev,
+        [seccion.key]: {
+          ...prev[seccion.key],
+          items: [...prev[seccion.key].items, res.data],
+          nuevoNombre: '',
+        },
+      }));
+      toast.success(res.message ?? `${seccion.etiqueta} agregado correctamente`);
+    } catch (e: any) {
+      if (e?.errors) {
+        const primero = Object.values(e.errors).flat()[0];
+        toast.error(typeof primero === 'string' ? primero : 'Error de validación');
+      } else {
+        toast.error(e?.message ?? 'No se pudo guardar la entidad');
+      }
+    } finally {
+      setSecciones((prev) => ({ ...prev, [seccion.key]: { ...prev[seccion.key], guardando: false } }));
+    }
   };
 
-  const eliminarEntidad = (id: string, lista: EntidadSeguridad[], setLista: Function, tipo: string) => {
-    setLista(lista.filter(e => e.id !== id));
-    toast.success(`${tipo} eliminado correctamente`);
+  const toggleEstado = async (seccion: SeccionConfig, entidad: ParametricaColaborador) => {
+    try {
+      const res = await seccion.api.editar(entidad.id, { estado: !entidad.estado });
+      setSecciones((prev) => ({
+        ...prev,
+        [seccion.key]: {
+          ...prev[seccion.key],
+          items: prev[seccion.key].items.map((it) => (it.id === entidad.id ? res.data : it)),
+        },
+      }));
+    } catch (e: any) {
+      toast.error(e?.message ?? 'No se pudo cambiar el estado');
+    }
   };
 
-  const renderSeccion = (
-    titulo: string,
-    descripcion: string,
-    lista: EntidadSeguridad[],
-    setLista: Function,
-    tipo: string
-  ) => {
+  const handleDelete = async () => {
+    if (!aEliminar) return;
+    const { seccion, entidad } = aEliminar;
+    try {
+      await seccion.api.eliminar(entidad.id);
+      setSecciones((prev) => ({
+        ...prev,
+        [seccion.key]: {
+          ...prev[seccion.key],
+          items: prev[seccion.key].items.filter((it) => it.id !== entidad.id),
+        },
+      }));
+      toast.success(`${seccion.etiqueta} eliminado correctamente`);
+    } catch (e: any) {
+      toast.error(e?.message ?? 'No se pudo eliminar la entidad');
+    } finally {
+      setAEliminar(null);
+    }
+  };
+
+  if (cargando) {
     return (
-      <Card className="border-border">
-        <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
-          <CardTitle>{titulo}</CardTitle>
-          <p className="text-sm text-muted-foreground mt-1">{descripcion}</p>
-        </CardHeader>
-        <CardContent className="p-6">
-          {/* Lista de entidades */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-            {lista.map((entidad) => (
-              <div
-                key={entidad.id}
-                className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border"
-              >
-                <span className="font-medium">{entidad.nombre}</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => eliminarEntidad(entidad.id, lista, setLista, tipo)}
-                  className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
-          </div>
-
-          {/* Agregar nueva entidad */}
-          <div className="flex gap-2">
-            <Input
-              value={nuevoNombre}
-              onChange={(e) => setNuevoNombre(e.target.value)}
-              placeholder={`Nombre del ${tipo.toLowerCase()}`}
-              onKeyPress={(e) => {
-                if (e.key === 'Enter') {
-                  agregarEntidad(lista, setLista, tipo);
-                }
-              }}
-            />
-            <Button onClick={() => agregarEntidad(lista, setLista, tipo)} className="gap-2">
-              <Plus className="h-4 w-4" />
-              Agregar
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex items-center justify-center py-20 gap-2 text-muted-foreground">
+        <Loader2 className="h-5 w-5 animate-spin" />
+        Cargando entidades...
+      </div>
     );
-  };
-
-  const [fondosCombinados, setFondosCombinados] = useState<EntidadSeguridad[]>([
-    { id: '1', nombre: 'Porvenir' },
-    { id: '2', nombre: 'Protección' },
-    { id: '3', nombre: 'Colfondos' },
-    { id: '4', nombre: 'Old Mutual' },
-    { id: '5', nombre: 'Skandia' }
-  ]);
+  }
 
   return (
-    <div className="space-y-6">
-      {renderSeccion(
-        'Entidades Promotoras de Salud (EPS)',
-        'Administradoras de salud disponibles para los colaboradores',
-        entidadesEPS,
-        setEntidadesEPS,
-        'EPS'
-      )}
+    <>
+      <ConfirmDeleteDialog
+        open={!!aEliminar}
+        onOpenChange={(open) => !open && setAEliminar(null)}
+        title="Eliminar entidad"
+        description={`¿Estás seguro de eliminar "${aEliminar?.entidad.nombre}"? Esta acción no se puede deshacer.`}
+        confirmText="Eliminar"
+        onConfirm={handleDelete}
+      />
 
-      {renderSeccion(
-        'Administradoras de Riesgos Laborales (ARL)',
-        'Entidades de riesgos laborales',
-        entidadesARL,
-        setEntidadesARL,
-        'ARL'
-      )}
+      <div className="space-y-6">
+        {SECCIONES.map((seccion) => {
+          const estado = secciones[seccion.key];
+          return (
+            <Card key={seccion.key} className="border-border">
+              <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
+                <CardTitle>{seccion.titulo}</CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">{seccion.descripcion}</p>
+              </CardHeader>
+              <CardContent className="p-6">
+                {/* Lista de entidades */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                  {estado.items.map((entidad) => (
+                    <div
+                      key={entidad.id}
+                      className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border"
+                    >
+                      <span className="font-medium">{entidad.nombre}</span>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={entidad.estado}
+                          onCheckedChange={() => toggleEstado(seccion, entidad)}
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setAEliminar({ seccion, entidad })}
+                          className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
 
-      {renderSeccion(
-        'Fondos de Pensiones y Cesantías',
-        'Administradoras de fondos pensionales y cesantías',
-        fondosCombinados,
-        setFondosCombinados,
-        'Fondo'
-      )}
-
-      {renderSeccion(
-        'Entidades Bancarias',
-        'Bancos disponibles para pagos de nómina',
-        bancos,
-        setBancos,
-        'Banco'
-      )}
-    </div>
+                {/* Agregar nueva entidad */}
+                <div className="flex gap-2">
+                  <Input
+                    value={estado.nuevoNombre}
+                    onChange={(e) => setNuevoNombre(seccion.key, e.target.value)}
+                    placeholder={`Nombre del ${seccion.etiqueta.toLowerCase()}`}
+                    disabled={estado.guardando}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') agregarEntidad(seccion);
+                    }}
+                  />
+                  <Button
+                    onClick={() => agregarEntidad(seccion)}
+                    className="gap-2"
+                    disabled={estado.guardando}
+                  >
+                    {estado.guardando ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Plus className="h-4 w-4" />
+                    )}
+                    Agregar
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+    </>
   );
 }

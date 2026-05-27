@@ -1,39 +1,160 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Textarea } from '../ui/textarea';
-import { Save } from 'lucide-react';
+import { Save, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  configuracionApi,
+  ConfiguracionErrorCodes,
+  type InfoEmpresa,
+  type InfoEmpresaPayload,
+} from '../../../api/configuracion';
+
+/**
+ * Tab "Info Empresa" conectado al API real (§13 API_PARAMETRICAS).
+ *
+ * Endpoints:
+ *   GET  /api/v1/tenant/configuracion/info-empresa  → hidratar form
+ *   PUT  /api/v1/tenant/configuracion/info-empresa  → guardar cambios
+ *
+ * Mapeo de campos del form ↔ API:
+ *   nombreEmpresa        ↔ nombre
+ *   razonSocial          ↔ razon_social
+ *   nit                  ↔ nit
+ *   actividadEconomica   ↔ actividad_economica
+ *   representanteLegal   ↔ representante_nombre
+ *   cedulaRepresentante  ↔ representante_cedula
+ *   cargoRepresentante   ↔ representante_cargo
+ *   direccion            ↔ direccion
+ *   municipio            ↔ municipio
+ *   departamento         ↔ departamento
+ *   celular              ↔ telefono       (sí, "telefono" = celular per doc)
+ *   telefono             ↔ telefono_fijo  (telefono_fijo = fijo)
+ *   email                ↔ correo_contacto
+ *   sitioWeb             ↔ sitio_web
+ */
+
+const FORM_VACIO = {
+  nombreEmpresa: '',
+  razonSocial: '',
+  nit: '',
+  direccion: '',
+  municipio: '',
+  departamento: '',
+  telefono: '',
+  celular: '',
+  email: '',
+  sitioWeb: '',
+  representanteLegal: '',
+  cedulaRepresentante: '',
+  cargoRepresentante: '',
+  actividadEconomica: '',
+};
+
+type FormState = typeof FORM_VACIO;
+
+/** Mapea la respuesta del API al estado del form. */
+function apiToForm(data: InfoEmpresa): FormState {
+  return {
+    nombreEmpresa:       data.nombre ?? '',
+    razonSocial:         data.razon_social ?? '',
+    nit:                 data.nit ?? '',
+    direccion:           data.direccion ?? '',
+    municipio:           data.municipio ?? '',
+    departamento:        data.departamento ?? '',
+    telefono:            data.telefono_fijo ?? '',   // fijo
+    celular:             data.telefono ?? '',         // celular
+    email:               data.correo_contacto ?? '',
+    sitioWeb:            data.sitio_web ?? '',
+    representanteLegal:  data.representante_nombre ?? '',
+    cedulaRepresentante: data.representante_cedula ?? '',
+    cargoRepresentante:  data.representante_cargo ?? '',
+    actividadEconomica:  data.actividad_economica ?? '',
+  };
+}
+
+/** Mapea el estado del form al payload del PUT. */
+function formToPayload(f: FormState): InfoEmpresaPayload {
+  return {
+    nombre:               f.nombreEmpresa.trim(),
+    razon_social:         f.razonSocial.trim(),
+    nit:                  f.nit.trim(),
+    actividad_economica:  f.actividadEconomica.trim(),
+    representante_nombre: f.representanteLegal.trim(),
+    representante_cedula: f.cedulaRepresentante.trim(),
+    representante_cargo:  f.cargoRepresentante.trim(),
+    direccion:            f.direccion.trim(),
+    departamento:         f.departamento.trim(),
+    municipio:            f.municipio.trim(),
+    correo_contacto:      f.email.trim(),
+    telefono:             f.celular.trim(),          // celular → telefono
+    telefono_fijo:        f.telefono.trim(),         // fijo → telefono_fijo
+    sitio_web:            f.sitioWeb.trim(),
+  };
+}
 
 export function DatosEmpresaTab() {
-  const [datosEmpresa, setDatosEmpresa] = useState({
-    nombreEmpresa: 'AGRO CAMPO S.A.S.',
-    razonSocial: 'AGRO CAMPO S.A.S.',
-    nit: '900.123.456-7',
-    direccion: 'Km 5 Vía Palmira - Candelaria',
-    municipio: 'Palmira',
-    departamento: 'Valle del Cauca',
-    telefono: '+57 (2) 123 4567',
-    celular: '+57 300 123 4567',
-    email: 'contacto@agrocampo.com',
-    sitioWeb: 'www.agrocampo.com',
-    representanteLegal: 'Juan Carlos Pérez Gómez',
-    cedulaRepresentante: '16.123.456',
-    cargoRepresentante: 'Gerente General',
-    actividadEconomica: 'Cultivo de palma para aceite',
-    observaciones: ''
-  });
+  const [datosEmpresa, setDatosEmpresa] = useState<FormState>(FORM_VACIO);
+  const [cargando, setCargando] = useState(true);
+  const [guardando, setGuardando] = useState(false);
+  /** Error inline para el NIT cuando el backend devuelve NIT_DUPLICATED. */
+  const [errorNit, setErrorNit] = useState<string | null>(null);
 
-  const handleSave = () => {
-    console.log('Guardando datos de empresa:', datosEmpresa);
-    toast.success('Datos de la empresa guardados correctamente');
+  useEffect(() => {
+    let cancelado = false;
+    setCargando(true);
+    configuracionApi.infoEmpresa.obtener()
+      .then((res) => {
+        if (!cancelado) setDatosEmpresa(apiToForm(res.data));
+      })
+      .catch((e: any) => {
+        if (!cancelado) {
+          toast.error(e?.message ?? 'No se pudo cargar la información de la empresa');
+        }
+      })
+      .finally(() => { if (!cancelado) setCargando(false); });
+    return () => { cancelado = true; };
+  }, []);
+
+  const handleChange = (field: keyof FormState, value: string) => {
+    setDatosEmpresa((prev) => ({ ...prev, [field]: value }));
+    if (field === 'nit' && errorNit) setErrorNit(null);
   };
 
-  const handleChange = (field: string, value: string) => {
-    setDatosEmpresa(prev => ({ ...prev, [field]: value }));
+  const handleSave = async () => {
+    setGuardando(true);
+    setErrorNit(null);
+    try {
+      const res = await configuracionApi.infoEmpresa.actualizar(formToPayload(datosEmpresa));
+      // Re-sincronizamos con lo que devolvió el backend (puede normalizar el NIT, etc.)
+      setDatosEmpresa(apiToForm(res.data));
+      toast.success(res.message ?? 'Datos de la empresa guardados correctamente');
+    } catch (e: any) {
+      if (e?.code === ConfiguracionErrorCodes.NIT_DUPLICATED || e?.errors?.nit) {
+        const msg = e?.errors?.nit?.[0] ?? 'Ya existe otra finca con este NIT';
+        setErrorNit(msg);
+        toast.error(msg);
+      } else if (e?.errors) {
+        const primero = Object.values(e.errors).flat()[0];
+        toast.error(typeof primero === 'string' ? primero : 'Error de validación');
+      } else {
+        toast.error(e?.message ?? 'No se pudieron guardar los cambios');
+      }
+    } finally {
+      setGuardando(false);
+    }
   };
+
+  if (cargando) {
+    return (
+      <div className="flex items-center justify-center py-20 gap-2 text-muted-foreground">
+        <Loader2 className="h-5 w-5 animate-spin" />
+        Cargando información de la empresa...
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -48,7 +169,7 @@ export function DatosEmpresaTab() {
             {/* Datos de la empresa */}
             <div>
               <h3 className="text-sm font-semibold mb-4 text-muted-foreground">Datos de la Empresa</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="nombreEmpresa">Nombre de la Empresa *</Label>
                   <Input
@@ -76,7 +197,11 @@ export function DatosEmpresaTab() {
                     value={datosEmpresa.nit}
                     onChange={(e) => handleChange('nit', e.target.value)}
                     placeholder="900.123.456-7"
+                    className={errorNit ? 'border-destructive focus-visible:ring-destructive' : ''}
                   />
+                  {errorNit && (
+                    <p className="text-xs text-destructive">{errorNit}</p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -91,7 +216,7 @@ export function DatosEmpresaTab() {
               </div>
             </div>
 
-            {/* Separador */}
+            {/* Representante Legal */}
             <div className="border-t border-border pt-6">
               <h3 className="text-sm font-semibold mb-4 text-muted-foreground">Representante Legal</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -141,7 +266,7 @@ export function DatosEmpresaTab() {
             {/* Ubicación */}
             <div>
               <h3 className="text-sm font-semibold mb-4 text-muted-foreground">Ubicación</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 <div className="space-y-2 md:col-span-2">
                   <Label htmlFor="direccion">Dirección *</Label>
                   <Input
@@ -174,10 +299,10 @@ export function DatosEmpresaTab() {
               </div>
             </div>
 
-            {/* Separador */}
+            {/* Información de Contacto */}
             <div className="border-t border-border pt-6">
               <h3 className="text-sm font-semibold mb-4 text-muted-foreground">Información de Contacto</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="telefono">Teléfono Fijo</Label>
                   <Input
@@ -226,9 +351,9 @@ export function DatosEmpresaTab() {
 
       {/* Botón Guardar */}
       <div className="flex justify-end">
-        <Button onClick={handleSave} size="lg" className="gap-2">
-          <Save className="h-5 w-5" />
-          Guardar Cambios
+        <Button onClick={handleSave} size="lg" className="gap-2" disabled={guardando}>
+          {guardando ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
+          {guardando ? 'Guardando...' : 'Guardar Cambios'}
         </Button>
       </div>
     </div>

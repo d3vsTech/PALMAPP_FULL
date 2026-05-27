@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import {
@@ -9,7 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from '../ui/table';
-import { Plus, Edit, Trash2, Hammer } from 'lucide-react';
+import { Plus, Edit, Trash2, Hammer, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -20,84 +20,124 @@ import {
 } from '../ui/dialog';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
+import { Switch } from '../ui/switch';
+import { ConfirmDeleteDialog } from '../ui/confirm-delete-dialog';
+import { toast } from 'sonner';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../ui/select';
-import { Badge } from '../ui/badge';
+  configuracionApi,
+  ConfiguracionErrorCodes,
+  type Labor,
+} from '../../../api/configuracion';
 
-interface Labor {
-  id: string;
-  nombre: string;
-  tipoPago: 'JORNAL FIJO' | 'POR PALMA';
-  valorBase: number;
-  unidad: 'PALMAS' | 'JORNAL';
-}
+/**
+ * Tab "Labores" conectado al API real (§4 API_PARAMETRICAS).
+ *
+ * Endpoints:
+ *   GET    /api/v1/tenant/labores        → listado paginado
+ *   POST   /api/v1/tenant/labores        → crear
+ *   PUT    /api/v1/tenant/labores/{id}   → editar (+ toggle estado)
+ *   DELETE /api/v1/tenant/labores/{id}   → eliminar (409 LABOR_CON_JORNALES si tiene jornales)
+ *
+ * Schema actual: labor simple con nombre + valor_base (dinero COP). Ya no hay
+ * tipo_pago ni unidad.
+ */
 
-const laboresData: Labor[] = [
-  { id: 'l1', nombre: 'Cosecha', tipoPago: 'POR PALMA', valorBase: 1200, unidad: 'PALMAS' },
-  { id: 'l2', nombre: 'Plateo', tipoPago: 'POR PALMA', valorBase: 800, unidad: 'PALMAS' },
-  { id: 'l3', nombre: 'Poda', tipoPago: 'POR PALMA', valorBase: 950, unidad: 'PALMAS' },
-  { id: 'l4', nombre: 'Sanidad', tipoPago: 'JORNAL FIJO', valorBase: 50000, unidad: 'JORNAL' },
-];
+const FORM_VACIO = { nombre: '', valorBase: '' };
 
 export function LaboresTab() {
-  const [labores, setLabores] = useState<Labor[]>(laboresData);
+  const [labores, setLabores] = useState<Labor[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [guardando, setGuardando] = useState(false);
+
   const [openModal, setOpenModal] = useState(false);
   const [laborEdit, setLaborEdit] = useState<Labor | null>(null);
-  const [formData, setFormData] = useState({
-    nombre: '',
-    tipoPago: 'POR PALMA' as 'JORNAL FIJO' | 'POR PALMA',
-    valorBase: 0,
-    unidad: 'PALMAS' as 'PALMAS' | 'JORNAL',
-  });
+  const [formData, setFormData] = useState(FORM_VACIO);
+
+  const [laborAEliminar, setLaborAEliminar] = useState<Labor | null>(null);
+
+  const cargar = () => {
+    setCargando(true);
+    configuracionApi.labores
+      .listar({ per_page: 100 })
+      .then((res) => setLabores(res.data))
+      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar las labores'))
+      .finally(() => setCargando(false));
+  };
+
+  useEffect(() => {
+    cargar();
+  }, []);
 
   const handleOpenModal = (labor?: Labor) => {
     if (labor) {
       setLaborEdit(labor);
-      setFormData({
-        nombre: labor.nombre,
-        tipoPago: labor.tipoPago,
-        valorBase: labor.valorBase,
-        unidad: labor.unidad,
-      });
+      setFormData({ nombre: labor.nombre, valorBase: String(labor.valor_base) });
     } else {
       setLaborEdit(null);
-      setFormData({ nombre: '', tipoPago: 'POR PALMA', valorBase: 0, unidad: 'PALMAS' });
+      setFormData(FORM_VACIO);
     }
     setOpenModal(true);
   };
 
-  const handleSave = () => {
-    if (!formData.nombre || formData.valorBase <= 0) {
-      alert('Todos los campos son obligatorios');
+  const handleSave = async () => {
+    const valor = Number(formData.valorBase);
+    if (!formData.nombre.trim() || !(valor > 0)) {
+      toast.error('Todos los campos son obligatorios');
       return;
     }
 
-    if (laborEdit) {
-      setLabores((prev) =>
-        prev.map((l) =>
-          l.id === laborEdit.id ? { ...l, ...formData } : l
-        )
-      );
-    } else {
-      setLabores((prev) => [
-        ...prev,
-        { id: `l${Date.now()}`, ...formData },
-      ]);
+    setGuardando(true);
+    try {
+      const payload = { nombre: formData.nombre.trim(), valor_base: valor };
+      if (laborEdit) {
+        const res = await configuracionApi.labores.editar(laborEdit.id, payload);
+        setLabores((prev) => prev.map((l) => (l.id === laborEdit.id ? res.data : l)));
+        toast.success(res.message ?? 'Labor actualizada');
+      } else {
+        const res = await configuracionApi.labores.crear(payload);
+        setLabores((prev) => [...prev, res.data]);
+        toast.success(res.message ?? 'Labor creada');
+      }
+      setOpenModal(false);
+    } catch (e: any) {
+      if (e?.errors) {
+        const primero = Object.values(e.errors).flat()[0];
+        toast.error(typeof primero === 'string' ? primero : 'Error de validación');
+      } else {
+        toast.error(e?.message ?? 'No se pudo guardar la labor');
+      }
+    } finally {
+      setGuardando(false);
     }
-
-    setOpenModal(false);
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('¿Estás seguro de eliminar esta labor?')) {
-      setLabores((prev) => prev.filter((l) => l.id !== id));
+  const handleToggleEstado = async (labor: Labor) => {
+    try {
+      const res = await configuracionApi.labores.editar(labor.id, { estado: !labor.estado });
+      setLabores((prev) => prev.map((l) => (l.id === labor.id ? res.data : l)));
+    } catch (e: any) {
+      toast.error(e?.message ?? 'No se pudo cambiar el estado');
     }
   };
+
+  const handleDelete = async () => {
+    if (!laborAEliminar) return;
+    try {
+      await configuracionApi.labores.eliminar(laborAEliminar.id);
+      setLabores((prev) => prev.filter((l) => l.id !== laborAEliminar.id));
+      toast.success('Labor eliminada');
+    } catch (e: any) {
+      if (e?.code === ConfiguracionErrorCodes.LABOR_CON_JORNALES) {
+        toast.error('No se puede eliminar: tiene jornales de Finca asociados');
+      } else {
+        toast.error(e?.message ?? 'No se pudo eliminar la labor');
+      }
+    } finally {
+      setLaborAEliminar(null);
+    }
+  };
+
+  const valorPreview = Number(formData.valorBase);
 
   return (
     <>
@@ -129,69 +169,46 @@ export function LaboresTab() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="tipoPago">
-                Tipo de Pago <span className="text-destructive">*</span>
-              </Label>
-              <Select
-                value={formData.tipoPago}
-                onValueChange={(value: 'JORNAL FIJO' | 'POR PALMA') => {
-                  setFormData((prev) => ({
-                    ...prev,
-                    tipoPago: value,
-                    unidad: value === 'JORNAL FIJO' ? 'JORNAL' : 'PALMAS',
-                  }));
-                }}
-              >
-                <SelectTrigger id="tipoPago">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="POR PALMA">POR PALMA (valor por cada palma trabajada)</SelectItem>
-                  <SelectItem value="JORNAL FIJO">JORNAL FIJO (valor diario fijo)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
               <Label htmlFor="valorBase">
                 Valor Base <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="valorBase"
                 type="number"
-                placeholder={formData.tipoPago === 'POR PALMA' ? '1200' : '50000'}
-                value={formData.valorBase || ''}
+                placeholder="50000"
+                value={formData.valorBase}
                 onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    valorBase: parseFloat(e.target.value) || 0,
-                  }))
+                  setFormData((prev) => ({ ...prev, valorBase: e.target.value }))
                 }
               />
-              {formData.valorBase > 0 && (
+              {valorPreview > 0 && (
                 <p className="text-xs text-muted-foreground">
-                  ${formData.valorBase.toLocaleString('es-CO')}
-                  {formData.tipoPago === 'POR PALMA' ? '/palma' : '/jornal'}
+                  ${valorPreview.toLocaleString('es-CO')}
                 </p>
               )}
-            </div>
-
-            <div className="rounded-lg bg-muted/30 p-3">
-              <p className="text-xs font-medium mb-1">Unidad</p>
-              <p className="text-sm text-muted-foreground">
-                {formData.unidad}
-              </p>
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenModal(false)}>
+            <Button variant="outline" onClick={() => setOpenModal(false)} disabled={guardando}>
               Cancelar
             </Button>
-            <Button onClick={handleSave}>Guardar</Button>
+            <Button onClick={handleSave} disabled={guardando}>
+              {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Guardar
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDeleteDialog
+        open={!!laborAEliminar}
+        onOpenChange={(open) => !open && setLaborAEliminar(null)}
+        title="Eliminar labor"
+        description={`¿Estás seguro de eliminar "${laborAEliminar?.nombre}"? Esta acción no se puede deshacer.`}
+        confirmText="Eliminar"
+        onConfirm={handleDelete}
+      />
 
       <Card className="bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-sm border-border/50">
         <CardHeader>
@@ -212,7 +229,12 @@ export function LaboresTab() {
           </div>
         </CardHeader>
         <CardContent>
-          {labores.length === 0 ? (
+          {cargando ? (
+            <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Cargando labores...
+            </div>
+          ) : labores.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
                 <Hammer className="h-8 w-8 text-muted-foreground" />
@@ -232,9 +254,8 @@ export function LaboresTab() {
                 <TableHeader>
                   <TableRow className="bg-muted/50">
                     <TableHead>Nombre</TableHead>
-                    <TableHead>Tipo de Pago</TableHead>
-                    <TableHead>Unidad</TableHead>
                     <TableHead className="text-right">Valor Base</TableHead>
+                    <TableHead>Estado</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -242,25 +263,14 @@ export function LaboresTab() {
                   {labores.map((labor) => (
                     <TableRow key={labor.id} className="hover:bg-muted/50 transition-colors">
                       <TableCell className="font-medium">{labor.nombre}</TableCell>
-                      <TableCell>
-                        <Badge
-                          className={
-                            labor.tipoPago === 'POR PALMA'
-                              ? 'bg-primary/10 text-primary border-primary/30'
-                              : 'bg-accent/10 text-accent border-accent/30'
-                          }
-                        >
-                          {labor.tipoPago}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm text-muted-foreground">{labor.unidad}</span>
-                      </TableCell>
                       <TableCell className="text-right font-semibold text-success">
-                        ${labor.valorBase.toLocaleString('es-CO')}
-                        <span className="text-xs text-muted-foreground ml-1">
-                          /{labor.unidad === 'PALMAS' ? 'palma' : 'jornal'}
-                        </span>
+                        ${Number(labor.valor_base).toLocaleString('es-CO')}
+                      </TableCell>
+                      <TableCell>
+                        <Switch
+                          checked={labor.estado}
+                          onCheckedChange={() => handleToggleEstado(labor)}
+                        />
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
@@ -274,7 +284,7 @@ export function LaboresTab() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleDelete(labor.id)}
+                            onClick={() => setLaborAEliminar(labor)}
                           >
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>

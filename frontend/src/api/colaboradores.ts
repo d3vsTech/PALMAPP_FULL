@@ -35,10 +35,137 @@ export function buildAvatarUrl(avatarUrl?: string | null): string | null {
 }
 
 // ─── Tipos públicos ────────────────────────────────────────────────────────────
+
+/** Tipos de documento soportados por el backend (§Tipos de Documento). */
+export type TipoDocumento = 'CC' | 'TI' | 'PASAPORTE' | 'CE' | 'PPT';
+
+/** Modalidad de pago — `PRODUCCION` reemplaza al antiguo `VARIABLE`. */
+export type ModalidadPago = 'FIJO' | 'PRODUCCION';
+
+/** Tipo de cuenta bancaria (incluye EFECTIVO desde la última versión del doc). */
+export type TipoCuentaBancaria = 'AHORROS' | 'CORRIENTE' | 'EFECTIVO';
+
+/** Predio asignado al colaborador (forma compacta). */
+export interface PredioRefColaborador {
+  id: number;
+  nombre: string;
+}
+
+/** Contrato vigente que viene anidado en el detalle del colaborador. */
+export interface ContratoVigenteColaborador {
+  id: number;
+  empleado_id: number;
+  fecha_inicio: string;
+  fecha_terminacion: string | null;
+  salario: string | number;
+  estado_contrato: 'VIGENTE' | 'TERMINADO' | string;
+  adjunto_path: string | null;
+  adjunto_nombre_original: string | null;
+  observacion: string | null;
+  estado: boolean;
+}
+
+/** Shape canónico del colaborador (response de §1, §2). */
+export interface Colaborador {
+  id: number;
+  // Personal
+  primer_nombre: string;
+  segundo_nombre: string | null;
+  primer_apellido: string;
+  segundo_apellido: string | null;
+  // Identificación
+  tipo_documento: TipoDocumento;
+  documento: string;
+  fecha_nacimiento: string;
+  fecha_expedicion_documento: string;
+  lugar_expedicion: string | null;
+  // Contratación
+  cargo: string;
+  salario_base: string | number | null;
+  /** Aplica subsidio de transporte. Default `true`. */
+  subsidio_transporte: boolean;
+  modalidad_pago: ModalidadPago;
+  fecha_ingreso: string;
+  fecha_retiro: string | null;
+  predio?: PredioRefColaborador | null;
+  // Contacto
+  correo_electronico: string | null;
+  telefono: string | null;
+  direccion: string | null;
+  municipio: string | null;
+  departamento: string | null;
+  // Seguridad social (guardamos el nombre seleccionado del catálogo)
+  eps: string | null;
+  fondo_pension: string | null;
+  arl: string | null;
+  caja_compensacion: string | null;
+  // Dotación
+  talla_camisa: string | null;
+  talla_pantalon: string | null;
+  talla_calzado: string | null;
+  // Bancario
+  tipo_cuenta: TipoCuentaBancaria | null;
+  entidad_bancaria: string | null;
+  numero_cuenta: string | null;
+  // Emergencia
+  contacto_emergencia_nombre: string | null;
+  contacto_emergencia_telefono: string | null;
+  // Avatar
+  avatar_url?: string | null;
+  // Estado y timestamps
+  estado: boolean;
+  created_at?: string;
+  updated_at?: string;
+  /** Solo presente en el detalle (§2). */
+  contrato_vigente?: ContratoVigenteColaborador | null;
+}
+
+/** Payload de creación (§3). `salario_base` solo es obligatorio si FIJO. */
+export interface CrearColaboradorPayload {
+  primer_nombre: string;
+  segundo_nombre?: string;
+  primer_apellido: string;
+  segundo_apellido?: string;
+  tipo_documento: TipoDocumento;
+  documento: string;
+  fecha_nacimiento: string;
+  fecha_expedicion_documento: string;
+  lugar_expedicion?: string;
+  cargo: string;
+  salario_base?: number;
+  subsidio_transporte?: boolean;
+  modalidad_pago: ModalidadPago;
+  predio_id?: number | null;
+  fecha_ingreso: string;
+  fecha_retiro?: string | null;
+  eps?: string;
+  fondo_pension?: string;
+  arl?: string;
+  caja_compensacion?: string;
+  talla_camisa?: string;
+  talla_pantalon?: string;
+  talla_calzado?: string;
+  tipo_cuenta?: TipoCuentaBancaria;
+  entidad_bancaria?: string;
+  numero_cuenta?: string;
+  correo_electronico?: string;
+  telefono?: string;
+  direccion?: string;
+  municipio?: string;
+  departamento?: string;
+  contacto_emergencia_nombre?: string;
+  contacto_emergencia_telefono?: string;
+}
+
+/** Payload de edición (§4). Todos opcionales + flag `estado`. */
+export type EditarColaboradorPayload = Partial<CrearColaboradorPayload> & {
+  estado?: boolean;
+};
+
 export interface ColaboradorListadoParams {
   search?: string;
   cargo?: string;
-  modalidad_pago?: 'FIJO' | 'PRODUCCION';
+  modalidad_pago?: ModalidadPago;
   predio_id?: number;
   estado?: boolean;
   /** Incluir colaboradores eliminados (soft delete) junto con los vigentes */
@@ -51,8 +178,51 @@ export interface ColaboradorListadoParams {
 
 export interface ColaboradorSelectParams {
   estado?: boolean;
-  modalidad_pago?: 'FIJO' | 'PRODUCCION';
+  modalidad_pago?: ModalidadPago;
   predio_id?: number;
+}
+
+/** Item del listado /select (§0 dropdowns). */
+export interface ColaboradorSelectItem {
+  id: number;
+  nombre_completo: string;
+  documento: string;
+  modalidad_pago: ModalidadPago;
+}
+
+// ─── Tipos de documentos del colaborador (§7-§12) ─────────────────────────────
+
+/** Quien subió el documento. */
+export interface SubidoPor {
+  id: number;
+  name: string;
+}
+
+/** Documento del colaborador (response de §8, §10). */
+export interface DocumentoColaborador {
+  id: number;
+  categoria: string;
+  tipo_documento: string;
+  nombre_archivo: string;
+  archivo_nombre_original: string;
+  mime_type: string;
+  archivo_tamano: number;
+  fecha_documento: string | null;
+  observacion: string | null;
+  subido_por: SubidoPor | null;
+  estado: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Body de subida (multipart). */
+export interface SubirDocumentoPayload {
+  archivo: File;
+  categoria: string;
+  tipo_documento: string;
+  nombre_archivo?: string;
+  fecha_documento?: string;
+  observacion?: string;
 }
 
 // ─── Helpers internos ─────────────────────────────────────────────────────────
@@ -100,7 +270,7 @@ export interface WizardParametricas {
 
 export interface WizardInitResponse {
   /** `null` en modo creación */
-  colaborador: any | null;
+  colaborador: Colaborador | null;
   parametricas: WizardParametricas;
 }
 
@@ -120,22 +290,28 @@ export const colaboradoresApi = {
 
   // ─── Listado / búsqueda ──────────────────────────────────────────────────
   listar: (p?: ColaboradorListadoParams) =>
-    get<{ data: any[]; meta: any }>('', p as any),
+    get<{ data: Colaborador[]; meta: any }>('', p as any),
 
   /**
    * Listado liviano para dropdowns (sin paginación).
    * Retorna: [{ id, nombre_completo, documento, modalidad_pago }]
    */
   selectListado: (p?: ColaboradorSelectParams) =>
-    get<{ data: Array<{ id: number; nombre_completo: string; documento: string; modalidad_pago: string }> }>('/select', p as any),
+    get<{ data: ColaboradorSelectItem[] }>('/select', p as any),
 
-  ver: (id: number) => get<{ data: any }>(`/${id}`),
+  ver: (id: number) => get<{ data: Colaborador }>(`/${id}`),
 
-  crear: (b: Record<string, unknown>) =>
-    post<{ message: string; data: any }>('', b),
+  /**
+   * Crea un colaborador. Si `modalidad_pago='PRODUCCION'` y se omite
+   * `salario_base`, el backend lo auto-completa con `salario_minimo_vigente`
+   * del tenant.
+   */
+  crear: (b: CrearColaboradorPayload) =>
+    post<{ message: string; data: Colaborador }>('', b as unknown as Record<string, unknown>),
 
-  editar: (id: number, b: Record<string, unknown>) =>
-    put<{ message: string; data: any }>(`/${id}`, b),
+  /** Edita un colaborador. Todos los campos opcionales + `estado`. */
+  editar: (id: number, b: EditarColaboradorPayload) =>
+    put<{ message: string; data: Colaborador }>(`/${id}`, b as unknown as Record<string, unknown>),
 
   /**
    * Soft delete del colaborador. Mantiene historial (jornales, nómina, contratos, docs).
@@ -145,14 +321,14 @@ export const colaboradoresApi = {
 
   /** Restaura un colaborador previamente eliminado (soft delete). */
   restaurar: (id: number) =>
-    requestConToken<{ message: string; data: any }>(
+    requestConToken<{ message: string; data: Colaborador }>(
       `/api/v1/tenant/colaboradores/${id}/restaurar`,
       { method: 'POST' },
       tkn()
     ),
 
   toggle: (id: number) =>
-    requestConToken<{ message: string; data: any }>(
+    requestConToken<{ message: string; data: Colaborador }>(
       `/api/v1/tenant/colaboradores/${id}/toggle`, { method: 'PATCH' }, tkn()
     ),
 
@@ -167,30 +343,47 @@ export const colaboradoresApi = {
    *   colaboradoresApi.subirAvatar(id, fd);
    */
   subirAvatar: (id: number, formData: FormData) =>
-    requestConToken<{ message: string; data: any }>(
+    requestConToken<{ message: string; data: Colaborador }>(
       `/api/v1/tenant/colaboradores/${id}/avatar`,
       { method: 'POST', body: formData },
       tkn()
     ),
 
+  /**
+   * Elimina el avatar del colaborador.
+   * Devuelve 409 con `code: 'AVATAR_NOT_FOUND'` si no tenía avatar.
+   */
   eliminarAvatar: (id: number) =>
-    requestConToken<{ message: string; data: any }>(
+    requestConToken<{ message: string; data: Colaborador }>(
       `/api/v1/tenant/colaboradores/${id}/avatar`,
       { method: 'DELETE' },
       tkn()
     ),
 
   // ─── Documentos ──────────────────────────────────────────────────────────
-  getCategorias: () => get<{ data: Record<string, any> }>('/documento-categorias'),
+  getCategorias: () =>
+    get<{ data: Record<string, DocumentoCategoria> }>('/documento-categorias'),
 
   getDocumentos: (id: number, categoria?: string) =>
-    get<{ data: any[] }>(`/${id}/documentos`, categoria ? { categoria } : undefined),
+    get<{ data: DocumentoColaborador[] }>(
+      `/${id}/documentos`,
+      categoria ? { categoria } : undefined,
+    ),
 
   verDocumento: (id: number, docId: number) =>
-    get<{ data: any }>(`/${id}/documentos/${docId}`),
+    get<{ data: DocumentoColaborador }>(`/${id}/documentos/${docId}`),
 
+  /**
+   * Sube un documento. El FormData debe incluir:
+   *   archivo (File, max 10 MB)
+   *   categoria (string, ver DocumentoCategoria)
+   *   tipo_documento (string)
+   *   nombre_archivo (string, opcional)
+   *   fecha_documento (date YYYY-MM-DD, opcional)
+   *   observacion (string, opcional)
+   */
   subirDocumento: (id: number, formData: FormData) =>
-    requestConToken<{ message: string; data: any }>(
+    requestConToken<{ message: string; data: DocumentoColaborador }>(
       `/api/v1/tenant/colaboradores/${id}/documentos`,
       { method: 'POST', body: formData },
       tkn()
@@ -355,3 +548,18 @@ export interface ImportacionColaboradores {
   finalizado_at: string | null;
   created_at: string;
 }
+
+// ─── Códigos de error específicos del módulo ─────────────────────────────────
+export const ColaboradoresErrorCodes = {
+  /** Se intentó restaurar un colaborador que no estaba eliminado (409). */
+  EMPLEADO_NO_ELIMINADO: 'EMPLEADO_NO_ELIMINADO',
+  /** Al restaurar, otro colaborador activo ya usa el mismo documento (409). */
+  DOCUMENTO_DUPLICADO: 'DOCUMENTO_DUPLICADO',
+  /** Se intentó borrar avatar de un colaborador sin avatar (409). */
+  AVATAR_NOT_FOUND: 'AVATAR_NOT_FOUND',
+  /** El documento no se puede previsualizar inline; usar /descargar (415). */
+  MIME_NOT_PREVIEWABLE: 'MIME_NOT_PREVIEWABLE',
+} as const;
+
+export type ColaboradoresErrorCode =
+  typeof ColaboradoresErrorCodes[keyof typeof ColaboradoresErrorCodes];

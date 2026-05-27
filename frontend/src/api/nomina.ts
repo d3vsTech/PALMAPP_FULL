@@ -410,3 +410,32 @@ export const nominaApi = {
       apiClient.delete<{ message: string }>(`/v1/tenant/nomina-conceptos/${id}`, T),
   },
 };
+
+// ─── Códigos de error específicos del módulo (doc §0) ─────────────────────────
+export const NominaErrorCodes = {
+  /** Ya existe una nómina con (tenant, año, mes, quincena). */
+  NOMINA_DUPLICADA: 'NOMINA_DUPLICADA',
+  /** Intento de mutar una nómina ya CERRADA. */
+  NOMINA_CERRADA: 'NOMINA_CERRADA',
+  /** Intento de editar/eliminar nómina con empleados ya LIQUIDADOS. */
+  NOMINA_CON_LIQUIDADOS: 'NOMINA_CON_LIQUIDADOS',
+  /** Intento de cerrar nómina con empleados aún PENDIENTES. */
+  NOMINA_CON_PENDIENTES: 'NOMINA_CON_PENDIENTES',
+  /** Intento de quitar un empleado ya liquidado. */
+  EMPLEADO_LIQUIDADO: 'EMPLEADO_LIQUIDADO',
+  /** Intento de pedir desprendible a un empleado aún PENDIENTE. */
+  EMPLEADO_NO_LIQUIDADO: 'EMPLEADO_NO_LIQUIDADO',
+  /** Intento de pedir resumen-trabajo a un empleado FIJO. */
+  EMPLEADO_NO_VARIABLE: 'EMPLEADO_NO_VARIABLE',
+  /** Falta `salario_minimo_vigente` o FIJO sin `salario_base`. */
+  CALC_ERROR: 'CALC_ERROR',
+  /** Concepto referenciado por nóminas existentes — no se puede eliminar. */
+  CONCEPTO_EN_USO: 'CONCEPTO_EN_USO',
+  /** Concepto obligatorio (SALUD/PENSIÓN/etc.) — no se puede eliminar. */
+  CONCEPTO_OBLIGATORIO: 'CONCEPTO_OBLIGATORIO',
+  /** Usuario sin permiso para la acción. */
+  PERMISSION_DENIED: 'PERMISSION_DENIED',
+} as const;
+
+export type NominaErrorCode =
+  typeof NominaErrorCodes[keyof typeof NominaErrorCodes];
