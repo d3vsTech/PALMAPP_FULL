@@ -39,35 +39,6 @@ interface Props {
 
 type Fase = 'intro' | 'preview' | 'uploading' | 'resultado';
 
-// Columnas de la plantilla Excel (mismo set que parsea el preview).
-const COLUMNAS_PLANTILLA = [
-  'primer_nombre',
-  'segundo_nombre',
-  'primer_apellido',
-  'segundo_apellido',
-  'tipo_documento',
-  'documento',
-  'fecha_nacimiento',
-  'cargo',
-  'modalidad_pago',
-  'salario_base',
-  'fecha_ingreso',
-] as const;
-
-const FILA_EJEMPLO_PLANTILLA: Record<typeof COLUMNAS_PLANTILLA[number], string> = {
-  primer_nombre: 'Juan',
-  segundo_nombre: 'Carlos',
-  primer_apellido: 'Pérez',
-  segundo_apellido: 'Gómez',
-  tipo_documento: 'CC',
-  documento: '1234567890',
-  fecha_nacimiento: '1990-05-15',
-  cargo: 'Operario de Campo',
-  modalidad_pago: 'QUINCENAL',
-  salario_base: '1300000',
-  fecha_ingreso: '2025-01-15',
-};
-
 interface FilaPreview {
   fila: number; // número real en la hoja (fila 2 = primer dato)
   primer_nombre: string;
@@ -130,36 +101,29 @@ export default function ImportarColaboradoresDialog({
   };
 
   // ── Descargar plantilla Excel ──────────────────────────────────────────────
-  // Prioridad 1: si subiste un Excel estático en `public/templates/`, lo
-  // descarga directo (el archivo lo armas vos en Excel con el formato que
-  // quieras: validaciones, colores, hojas de ayuda, etc.).
-  // Prioridad 2 (fallback): genera la plantilla en runtime con xlsx, por si
-  // el archivo estático no está disponible (404).
+  // Sirve el archivo estático tal cual está en `public/formato-carga-empleados.xlsx`
+  // (byte-idéntico al que subió el cliente). Sin fallback runtime — si el
+  // archivo no se puede obtener, mostramos un error en lugar de generar uno
+  // diferente que confunda al usuario.
   const PLANTILLA_URL = '/formato-carga-empleados.xlsx';
   const descargarPlantilla = async () => {
     try {
       const res = await fetch(PLANTILLA_URL);
-      if (res.ok) {
-        const blob = await res.blob();
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'formato-carga-empleados.xlsx';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(a.href);
-        return;
-      }
-    } catch { /* cae al fallback */ }
-
-    // Fallback runtime: arma la plantilla con los headers/ejemplo en código.
-    const headers = [...COLUMNAS_PLANTILLA];
-    const ejemplo = headers.map((c) => FILA_EJEMPLO_PLANTILLA[c]);
-    const sheet = XLSX.utils.aoa_to_sheet([headers, ejemplo]);
-    sheet['!cols'] = headers.map((h) => ({ wch: Math.max(h.length, 16) }));
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, sheet, 'Colaboradores');
-    XLSX.writeFile(wb, 'plantilla_colaboradores.xlsx');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'formato-carga-empleados.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
+    } catch (e) {
+      toast.error(
+        'No se pudo descargar la plantilla. Verifica que el archivo esté disponible.',
+      );
+      console.error('Error al descargar plantilla:', e);
+    }
   };
 
   // ── Parsear el Excel al abrir con archivo ──────────────────────────────────
