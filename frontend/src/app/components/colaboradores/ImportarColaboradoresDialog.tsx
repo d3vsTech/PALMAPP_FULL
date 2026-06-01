@@ -17,7 +17,7 @@ import { Badge } from '../ui/badge';
 import { Progress } from '../ui/progress';
 import {
   Loader2, CheckCircle2, AlertTriangle, XCircle, Upload, Download,
-  FileSpreadsheet, X,
+  FileSpreadsheet, X, FileText,
 } from 'lucide-react';
 import {
   colaboradoresApi,
@@ -28,17 +28,45 @@ import {
 import { toast } from 'sonner';
 
 const POLL_INTERVAL_MS = 4000;
+const MAX_IMPORT_SIZE_MB = 5;
 
 interface Props {
   open: boolean;
-  /** Archivo elegido en el picker nativo (ya validado por extensión y tamaño). */
-  file: File | null;
   onOpenChange: (open: boolean) => void;
   /** Callback al cerrar si hubo al menos un colaborador creado. */
   onFinalizado?: () => void;
 }
 
-type Fase = 'preview' | 'uploading' | 'resultado';
+type Fase = 'intro' | 'preview' | 'uploading' | 'resultado';
+
+// Columnas de la plantilla Excel (mismo set que parsea el preview).
+const COLUMNAS_PLANTILLA = [
+  'primer_nombre',
+  'segundo_nombre',
+  'primer_apellido',
+  'segundo_apellido',
+  'tipo_documento',
+  'documento',
+  'fecha_nacimiento',
+  'cargo',
+  'modalidad_pago',
+  'salario_base',
+  'fecha_ingreso',
+] as const;
+
+const FILA_EJEMPLO_PLANTILLA: Record<typeof COLUMNAS_PLANTILLA[number], string> = {
+  primer_nombre: 'Juan',
+  segundo_nombre: 'Carlos',
+  primer_apellido: 'Pérez',
+  segundo_apellido: 'Gómez',
+  tipo_documento: 'CC',
+  documento: '1234567890',
+  fecha_nacimiento: '1990-05-15',
+  cargo: 'Operario de Campo',
+  modalidad_pago: 'QUINCENAL',
+  salario_base: '1300000',
+  fecha_ingreso: '2025-01-15',
+};
 
 interface FilaPreview {
   fila: number; // número real en la hoja (fila 2 = primer dato)
@@ -56,11 +84,13 @@ interface FilaPreview {
 }
 
 export default function ImportarColaboradoresDialog({
-  open, file, onOpenChange, onFinalizado,
+  open, onOpenChange, onFinalizado,
 }: Props) {
   const pollingRef = useRef<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [fase, setFase] = useState<Fase>('preview');
+  const [fase, setFase] = useState<Fase>('intro');
+  const [file, setFile] = useState<File | null>(null);
   const [filas, setFilas] = useState<FilaPreview[]>([]);
   const [errorParse, setErrorParse] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -73,13 +103,64 @@ export default function ImportarColaboradoresDialog({
     if (!open) {
       if (pollingRef.current) window.clearInterval(pollingRef.current);
       pollingRef.current = null;
-      setFase('preview');
+      setFase('intro');
+      setFile(null);
       setFilas([]);
       setErrorParse(null);
       setEnviando(false);
       setEstado(null);
     }
   }, [open]);
+
+  // ── Picker de archivo (botón "Seleccionar archivo" en la fase intro) ───────
+  const onArchivoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] ?? null;
+    e.target.value = ''; // permite re-elegir el mismo
+    if (!f) return;
+    if (!/\.(xlsx|xls)$/i.test(f.name)) {
+      toast.error('El archivo debe ser .xlsx o .xls');
+      return;
+    }
+    if (f.size > MAX_IMPORT_SIZE_MB * 1024 * 1024) {
+      toast.error(`El archivo supera ${MAX_IMPORT_SIZE_MB} MB`);
+      return;
+    }
+    setFile(f);
+    setFase('preview');
+  };
+
+  // ── Descargar plantilla Excel ──────────────────────────────────────────────
+  // Prioridad 1: si subiste un Excel estático en `public/templates/`, lo
+  // descarga directo (el archivo lo armas vos en Excel con el formato que
+  // quieras: validaciones, colores, hojas de ayuda, etc.).
+  // Prioridad 2 (fallback): genera la plantilla en runtime con xlsx, por si
+  // el archivo estático no está disponible (404).
+  const PLANTILLA_URL = '/formato-carga-empleados.xlsx';
+  const descargarPlantilla = async () => {
+    try {
+      const res = await fetch(PLANTILLA_URL);
+      if (res.ok) {
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'formato-carga-empleados.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(a.href);
+        return;
+      }
+    } catch { /* cae al fallback */ }
+
+    // Fallback runtime: arma la plantilla con los headers/ejemplo en código.
+    const headers = [...COLUMNAS_PLANTILLA];
+    const ejemplo = headers.map((c) => FILA_EJEMPLO_PLANTILLA[c]);
+    const sheet = XLSX.utils.aoa_to_sheet([headers, ejemplo]);
+    sheet['!cols'] = headers.map((h) => ({ wch: Math.max(h.length, 16) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, sheet, 'Colaboradores');
+    XLSX.writeFile(wb, 'plantilla_colaboradores.xlsx');
+  };
 
   // ── Parsear el Excel al abrir con archivo ──────────────────────────────────
   useEffect(() => {
@@ -209,18 +290,44 @@ export default function ImportarColaboradoresDialog({
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!enProgreso || !next) onOpenChange(next); }}>
       <DialogContent
-        className="max-w-5xl w-[95vw] max-h-[85vh] p-0 gap-0 flex flex-col overflow-hidden"
+        className={
+          fase === 'intro'
+            ? 'max-w-md p-0 gap-0 flex flex-col overflow-hidden'
+            : 'max-w-5xl w-[95vw] max-h-[85vh] p-0 gap-0 flex flex-col overflow-hidden'
+        }
       >
         <DialogHeader className="p-6 pb-3 border-b border-border shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <FileSpreadsheet className="h-5 w-5 text-primary" />
-            Importación masiva de colaboradores
+            {fase === 'intro'
+              ? 'Importar Colaboradores desde Excel'
+              : 'Importación masiva de colaboradores'}
           </DialogTitle>
           <DialogDescription>
-            {file ? <>Archivo: <strong>{file.name}</strong></> : 'Selecciona un archivo Excel para empezar.'}
+            {fase === 'intro'
+              ? 'Carga un archivo Excel con la información de los colaboradores'
+              : file
+              ? <>Archivo: <strong>{file.name}</strong></>
+              : 'Selecciona un archivo Excel para empezar.'}
           </DialogDescription>
         </DialogHeader>
 
+        {/* input file oculto, lo dispara el botón "Seleccionar archivo" */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".xlsx,.xls"
+          className="hidden"
+          onChange={onArchivoChange}
+        />
+
+        {fase === 'intro' && (
+          <VistaIntro
+            onDescargarPlantilla={descargarPlantilla}
+            onSeleccionarArchivo={() => fileInputRef.current?.click()}
+            onCancelar={cerrar}
+          />
+        )}
         {fase === 'preview'   && (
           <VistaPreview
             filas={filas}
@@ -242,6 +349,63 @@ export default function ImportarColaboradoresDialog({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────────
+// Vista: intro — descargar plantilla + seleccionar archivo
+// ────────────────────────────────────────────────────────────────────────────────
+function VistaIntro({
+  onDescargarPlantilla, onSeleccionarArchivo, onCancelar,
+}: {
+  onDescargarPlantilla: () => void;
+  onSeleccionarArchivo: () => void;
+  onCancelar: () => void;
+}) {
+  return (
+    <>
+      <div className="p-6 space-y-5">
+        {/* Card de descargar plantilla */}
+        <div className="rounded-xl border border-border bg-muted/30 p-4 flex items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <FileText className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <p className="font-semibold text-sm">¿No tienes una plantilla?</p>
+              <p className="text-sm text-muted-foreground">
+                Descarga nuestra plantilla con el formato correcto
+              </p>
+            </div>
+          </div>
+          <Button variant="outline" size="sm" onClick={onDescargarPlantilla} className="gap-2 shrink-0">
+            <Download className="h-4 w-4" /> Descargar Plantilla
+          </Button>
+        </div>
+
+        {/* Selector de archivo */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Archivo Excel (.xlsx, .xls)</label>
+          <Button
+            variant="outline"
+            onClick={onSeleccionarArchivo}
+            className="w-full gap-2 h-12 border-dashed"
+          >
+            <Upload className="h-4 w-4" />
+            Seleccionar archivo
+          </Button>
+        </div>
+      </div>
+
+      <div className="shrink-0 border-t border-border p-4 flex justify-end gap-2 bg-background">
+        <Button variant="outline" onClick={onCancelar} className="gap-2">
+          <X className="h-4 w-4" /> Cancelar
+        </Button>
+        <Button onClick={onSeleccionarArchivo} className="gap-2">
+          <Upload className="h-4 w-4" /> Importar
+        </Button>
+      </div>
+    </>
   );
 }
 
