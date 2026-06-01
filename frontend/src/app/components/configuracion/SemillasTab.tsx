@@ -65,7 +65,7 @@ export function SemillasTab() {
 
   const handleOpenModal = (semilla?: Semilla) => {
     if (semilla) {
-      const tipoValido = TIPOS_SEMILLA.includes(semilla.tipo) ? semilla.tipo : '';
+      const tipoValido = tiposSemilla.includes(semilla.tipo) ? semilla.tipo : '';
       setSemillaEdit(semilla);
       setFormData({ tipo: tipoValido, nombre: semilla.nombre });
     } else {

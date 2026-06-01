@@ -391,6 +391,14 @@ export const nominaApi = {
         T,
       ),
 
+    /** GET /v1/tenant/nomina-conceptos/{id} — detalle completo (incluye
+     *  porcentaje/valor_referencia que a veces no vienen en el listar). */
+    ver: (id: number) =>
+      apiClient.get<{ data: NominaConcepto }>(
+        `/v1/tenant/nomina-conceptos/${id}`,
+        T,
+      ),
+
     select: (params?: { tipo?: TipoConcepto; aplica_a?: AplicaA }) =>
       apiClient.get<{ data: NominaConcepto[] }>(
         `/v1/tenant/nomina-conceptos/select${toQuery(params)}`,

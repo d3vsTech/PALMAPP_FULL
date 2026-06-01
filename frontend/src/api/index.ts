@@ -94,6 +94,7 @@ export type {
   MotivoAusenciaListadoParams, TipoBaseAusencia,
   // Horas extra
   TipoHoraExtra, TipoHoraExtraPayload, CodigoHoraExtra, FranjaHoraria,
+  TipoHoraExtraCodigoItem,
   // Auditoría
   AuditoriaRegistro, AuditoriaAccion, AuditoriaListadoParams, AuditoriaListadoResponse,
   // Compartido

@@ -34,6 +34,7 @@ import {
   type TablaLegal,
   type TablaLegalConcepto,
 } from '../../../api/configuracion';
+import { FechaDDMMYYYYPicker } from './FechaPickers';
 
 const FORM_VACIO = {
   conceptoId: '',
@@ -56,18 +57,22 @@ export function TablasLegalesTab() {
 
   useEffect(() => {
     let cancelado = false;
-    Promise.all([
-      configuracionApi.tablasLegales.listar(),
-      configuracionApi.tablasLegales.conceptosSelect(),
-    ])
-      .then(([resTablas, resConceptos]) => {
-        if (cancelado) return;
-        setTablas(resTablas.data);
-        setConceptos(resConceptos.data);
-      })
+    // Llamadas independientes: si una falla la otra debe seguir cargando.
+    // Antes usábamos Promise.all → si `tablasLegales.listar()` fallaba (ej. tabla
+    // vacía o backend devolviendo error), el dropdown de conceptos quedaba en
+    // blanco aunque el endpoint /conceptos-select sí respondiera.
+    configuracionApi.tablasLegales.listar()
+      .then((res) => { if (!cancelado) setTablas(res.data); })
       .catch((e: any) => {
-        if (!cancelado) toast.error(e?.message ?? 'No se pudieron cargar las tablas legales');
+        if (!cancelado) toast.error(e?.message ?? 'No se pudieron cargar los aportes');
       });
+
+    configuracionApi.tablasLegales.conceptosSelect()
+      .then((res) => { if (!cancelado) setConceptos(res.data); })
+      .catch((e: any) => {
+        if (!cancelado) toast.error(e?.message ?? 'No se pudieron cargar los conceptos');
+      });
+
     return () => {
       cancelado = true;
     };
@@ -176,11 +181,17 @@ export function TablasLegalesTab() {
                   <SelectValue placeholder="Seleccionar concepto" />
                 </SelectTrigger>
                 <SelectContent>
-                  {conceptos.map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>
-                      {c.nombre}
-                    </SelectItem>
-                  ))}
+                  {conceptos.length === 0 ? (
+                    <div className="px-3 py-2 text-sm text-muted-foreground">
+                      No hay conceptos disponibles (Salud / Pensión / ARL)
+                    </div>
+                  ) : (
+                    conceptos.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {c.nombre}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -220,25 +231,19 @@ export function TablasLegalesTab() {
                 <Label htmlFor="vigDesde">
                   Vigencia Desde <span className="text-destructive">*</span>
                 </Label>
-                <Input
+                <FechaDDMMYYYYPicker
                   id="vigDesde"
-                  placeholder="dd/mm/yyyy"
                   value={formData.vigenteDesde}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, vigenteDesde: e.target.value }))
-                  }
+                  onChange={(v) => setFormData((prev) => ({ ...prev, vigenteDesde: v }))}
                 />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="vigHasta">Vigencia Hasta (opcional)</Label>
-                <Input
+                <FechaDDMMYYYYPicker
                   id="vigHasta"
-                  placeholder="dd/mm/yyyy"
                   value={formData.vigenteHasta}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, vigenteHasta: e.target.value }))
-                  }
+                  onChange={(v) => setFormData((prev) => ({ ...prev, vigenteHasta: v }))}
                 />
               </div>
             </div>

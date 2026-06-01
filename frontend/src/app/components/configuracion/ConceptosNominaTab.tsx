@@ -197,7 +197,17 @@ export function ConceptosNominaTab() {
       }
       setOpenModal(false);
     } catch (e: any) {
-      if (e?.errors) {
+      // El backend devuelve "The codigo has already been taken" cuando otro
+      // concepto del tenant (incluso inactivo o soft-deleted) ya usa ese código.
+      // Como la lista del tab sólo muestra activos, el usuario lo ve "vacío" y
+      // se confunde — damos un mensaje accionable.
+      const errCodigo = e?.errors?.codigo?.[0] as string | undefined;
+      if (errCodigo && /already been taken|has already|ya/i.test(errCodigo)) {
+        toast.error(
+          `El código "${formData.codigo}" ya está registrado en este tenant ` +
+          `(posiblemente como inactivo). Usa otro código o reactiva el existente.`,
+        );
+      } else if (e?.errors) {
         const primero = Object.values(e.errors).flat()[0];
         toast.error(typeof primero === 'string' ? primero : 'Error de validación');
       } else {
@@ -613,15 +623,13 @@ export function ConceptosNominaTab() {
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
-                          {!leerObligatorio(concepto) && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDelete(concepto)}
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(concepto)}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>

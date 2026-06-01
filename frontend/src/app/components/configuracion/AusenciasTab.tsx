@@ -60,7 +60,9 @@ function hexDesdeClase(clase: string): string {
 
 const FORM_VACIO = {
   nombre: '',
-  afectaPago: 'no',
+  // §17: campos independientes
+  afectaNomina: 'no',           // ↔ afecta_nomina boolean
+  remuneracion: 'no_remunerada', // ↔ es_remunerada boolean
   color: 'bg-blue-500',
 };
 
@@ -85,7 +87,8 @@ export function AusenciasTab() {
       setMotivoEdit(motivo);
       setFormData({
         nombre: motivo.nombre,
-        afectaPago: motivo.afecta_nomina ? 'si' : 'no',
+        afectaNomina: motivo.afecta_nomina ? 'si' : 'no',
+        remuneracion: motivo.es_remunerada ? 'remunerada' : 'no_remunerada',
         color: claseDesdeHex(motivo.color),
       });
     } else {
@@ -101,16 +104,18 @@ export function AusenciasTab() {
       return;
     }
 
-    const afecta = formData.afectaPago === 'si';
+    // §17: afecta_nomina y es_remunerada son flags INDEPENDIENTES.
+    const afectaNomina = formData.afectaNomina === 'si';
+    const esRemunerada = formData.remuneracion === 'remunerada';
     const tipoBase: TipoBaseAusencia = motivoEdit?.tipo_base ?? 'OTRO';
     const payload: MotivoAusenciaPayload = {
       nombre: formData.nombre.trim(),
       tipo_base: tipoBase,
-      es_remunerada: !afecta,
-      afecta_nomina: afecta,
+      es_remunerada: esRemunerada,
+      afecta_nomina: afectaNomina,
       porcentaje_pago_default: motivoEdit
         ? Number(motivoEdit.porcentaje_pago_default)
-        : (afecta ? 0 : 100),
+        : (esRemunerada ? 100 : 0),
       requiere_soporte: motivoEdit?.requiere_soporte ?? false,
       color: hexDesdeClase(formData.color),
     };
@@ -187,16 +192,41 @@ export function AusenciasTab() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="afectaPago">¿Afecta el Pago?</Label>
-              <Select value={formData.afectaPago} onValueChange={(value) => setFormData((prev) => ({ ...prev, afectaPago: value }))}>
-                <SelectTrigger id="afectaPago">
+              <Label htmlFor="afectaNomina">¿Afecta Nómina?</Label>
+              <Select
+                value={formData.afectaNomina}
+                onValueChange={(value) => setFormData((prev) => ({ ...prev, afectaNomina: value }))}
+              >
+                <SelectTrigger id="afectaNomina">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="no">No afecta el pago</SelectItem>
-                  <SelectItem value="si">Sí afecta el pago</SelectItem>
+                  <SelectItem value="no">No afecta la nómina</SelectItem>
+                  <SelectItem value="si">Sí afecta la nómina</SelectItem>
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">
+                Si está desactivado, solo es tracking informativo y no toca el cálculo de nómina.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="remuneracion">Remuneración</Label>
+              <Select
+                value={formData.remuneracion}
+                onValueChange={(value) => setFormData((prev) => ({ ...prev, remuneracion: value }))}
+              >
+                <SelectTrigger id="remuneracion">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="remunerada">Remunerado</SelectItem>
+                  <SelectItem value="no_remunerada">No remunerado</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Si es remunerado, suma a las incapacidades pagadas del empleado.
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -253,7 +283,9 @@ export function AusenciasTab() {
                   <div className="flex-1">
                     <p className="font-semibold">{motivo.nombre}</p>
                     <p className="text-sm text-muted-foreground">
-                      {motivo.afecta_nomina ? 'Afecta el pago de nómina' : 'No afecta el pago de nómina'}
+                      {motivo.afecta_nomina ? 'Afecta nómina' : 'No afecta nómina'}
+                      {' · '}
+                      {motivo.es_remunerada ? 'Remunerado' : 'No remunerado'}
                     </p>
                   </div>
                 </div>

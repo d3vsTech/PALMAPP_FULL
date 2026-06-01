@@ -44,7 +44,8 @@ const FORM_EMPRESA_VACIO = {
 
 const FORM_CONDUCTOR_VACIO = {
   empresa_transportadora_id: '',
-  nombre: '',
+  nombres: '',
+  apellidos: '',
   numero_documento: '',
   telefono: '',
   placa_vehiculo: '',
@@ -196,7 +197,8 @@ export function TransporteTab() {
       setConductorEdit(conductor);
       setFormConductor({
         empresa_transportadora_id: String(conductor.empresa_transportadora_id),
-        nombre: `${conductor.nombres ?? ''} ${conductor.apellidos ?? ''}`.trim(),
+        nombres: conductor.nombres ?? '',
+        apellidos: conductor.apellidos ?? '',
         numero_documento: conductor.numero_documento ?? '',
         telefono: conductor.telefono ?? '',
         placa_vehiculo: conductor.placa_vehiculo ?? '',
@@ -209,8 +211,8 @@ export function TransporteTab() {
   };
 
   const handleSaveConductor = async () => {
-    if (!formConductor.nombre.trim()) {
-      toast.error('Ingresa el nombre del conductor');
+    if (!formConductor.nombres.trim() || !formConductor.apellidos.trim()) {
+      toast.error('Nombres y apellidos son obligatorios');
       return;
     }
     if (!formConductor.empresa_transportadora_id) {
@@ -218,16 +220,11 @@ export function TransporteTab() {
       return;
     }
 
-    // Split del nombre completo: primera palabra = nombres, resto = apellidos.
-    const partes = formConductor.nombre.trim().split(/\s+/);
-    const nombres = partes[0];
-    const apellidos = partes.slice(1).join(' ');
-
     try {
       const payload: Partial<Transportador> = {
         empresa_transportadora_id: Number(formConductor.empresa_transportadora_id),
-        nombres,
-        apellidos,
+        nombres: formConductor.nombres.trim(),
+        apellidos: formConductor.apellidos.trim(),
         tipo_documento: 'CC',
         numero_documento: formConductor.numero_documento.trim() || null,
         telefono: formConductor.telefono.trim() || null,
@@ -463,18 +460,34 @@ export function TransporteTab() {
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="nombre-conductor">
-                Nombre Completo <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="nombre-conductor"
-                placeholder="Ej: Carlos Martínez"
-                value={formConductor.nombre}
-                onChange={(e) =>
-                  setFormConductor((prev) => ({ ...prev, nombre: e.target.value }))
-                }
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="nombres-conductor">
+                  Nombres <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="nombres-conductor"
+                  placeholder="Ej: Carlos"
+                  value={formConductor.nombres}
+                  onChange={(e) =>
+                    setFormConductor((prev) => ({ ...prev, nombres: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="apellidos-conductor">
+                  Apellidos <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="apellidos-conductor"
+                  placeholder="Ej: Martínez"
+                  value={formConductor.apellidos}
+                  onChange={(e) =>
+                    setFormConductor((prev) => ({ ...prev, apellidos: e.target.value }))
+                  }
+                />
+              </div>
             </div>
 
             <div className="space-y-2">

@@ -14,77 +14,148 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select';
 import { useConfirmDelete } from '../../hooks/useConfirmDelete';
 import {
   configuracionApi,
   ConfiguracionErrorCodes,
   type TipoHoraExtra,
   type TipoHoraExtraPayload,
+  type TipoHoraExtraCodigoItem,
   type FranjaHoraria,
+  type CodigoHoraExtra,
   type ConfiguracionNomina,
 } from '../../../api/configuracion';
 
 /**
- * Tab "Horas Extras" — visual V.12, datos V.2 (API real).
- *   - Jornada semanal: GET/PUT /v1/tenant/configuracion/nomina (divisor_jornada_mensual).
- *     Visual en horas: horas = divisor / 5. Guardar: 48→240, otro→210.
- *   - Tipos: CRUD /v1/tenant/tipos-hora-extra.
+ * Tab "Horas Extras" — sigue el doc API_PARAMETRICAS.md §8 y §11.
  *
- * Campos no visibles en V.12 (codigo, franja_horaria, es_extra) se conservan al editar
- * o se autogeneran al crear.
+ * §8 Jornada Laboral: GET/PUT /v1/tenant/configuracion/nomina con `horas_semanales`
+ * (48 o 42) como alias del divisor (240/210). El backend convierte automáticamente.
+ *
+ * §11 Tipos de Hora Extra:
+ *  - `/codigos`: lista estática de los 7 códigos legales (HED, HEN, RN, HRD, HEDF, HENF, RND)
+ *    con metadata para pre-llenar nombre/descripción/es_extra/paga_hora_completa.
+ *  - CRUD sobre `/tipos-hora-extra`.
  */
 
-const FORM_VACIO = {
+interface FormState {
+  codigo: CodigoHoraExtra | '';
+  nombre: string;
+  porcentaje_recargo: string;
+  descripcion: string;
+  franja_horaria: FranjaHoraria;
+  aplica_festivo: boolean;
+  es_extra: boolean;
+  paga_hora_completa: boolean;
+}
+
+const FORM_VACIO: FormState = {
+  codigo: '',
   nombre: '',
-  porcentaje: '',
+  porcentaje_recargo: '',
   descripcion: '',
-  franjaHoraria: false,
-  aplicaFestivo: false,
-  pagaHoraCompleta: false,
+  franja_horaria: 'DIURNO',
+  aplica_festivo: false,
+  es_extra: true,
+  paga_hora_completa: true,
 };
 
-/** Genera un código corto a partir del nombre (primeras letras de cada palabra). */
-function generarCodigo(nombre: string): string {
-  const palabras = nombre.trim().split(/\s+/).filter(Boolean);
-  if (palabras.length === 0) return 'HE';
-  return palabras.map((p) => p[0]).join('').toUpperCase().slice(0, 6);
+/** Heurística para inferir la franja a partir del código (no viene en /codigos). */
+function franjaParaCodigo(codigo: CodigoHoraExtra): FranjaHoraria {
+  switch (codigo) {
+    case 'HEN':
+    case 'RN':
+    case 'HENF':
+    case 'RND':
+      return 'NOCTURNO';
+    case 'HED':
+    case 'HRD':
+    case 'HEDF':
+    default:
+      return 'DIURNO';
+  }
+}
+
+/** Porcentaje legal por código (semilla por defecto del doc §11). */
+const PORCENTAJE_DEFAULT: Record<CodigoHoraExtra, number> = {
+  HED: 25,
+  HEN: 75,
+  RN: 35,
+  HRD: 75,
+  HEDF: 100,
+  HENF: 150,
+  RND: 110,
+};
+
+/** ¿El código aplica en festivo? */
+function aplicaFestivoParaCodigo(codigo: CodigoHoraExtra): boolean {
+  return codigo === 'HRD' || codigo === 'HEDF' || codigo === 'HENF' || codigo === 'RND';
 }
 
 export function HorasExtrasTab() {
   const [tipos, setTipos] = useState<TipoHoraExtra[]>([]);
-  const [horasSemanales, setHorasSemanales] = useState('48');
+  const [codigosDisponibles, setCodigosDisponibles] = useState<TipoHoraExtraCodigoItem[]>([]);
+
+  const [horasSemanales, setHorasSemanales] = useState<string>('48');
   const [nominaActual, setNominaActual] = useState<ConfiguracionNomina | null>(null);
 
   const [openModal, setOpenModal] = useState(false);
   const [tipoEdit, setTipoEdit] = useState<TipoHoraExtra | null>(null);
-  const [formData, setFormData] = useState(FORM_VACIO);
+  const [formData, setFormData] = useState<FormState>(FORM_VACIO);
 
   const { confirmDelete, ConfirmDeleteDialog } = useConfirmDelete();
 
+  // Códigos que el usuario puede elegir al crear: los 7 menos los que ya existen
+  // en el tenant (porque `codigo` es único per-tenant según §11). Al editar
+  // mostramos todos para que el código actual quede visible en el select.
+  const codigosUsados = new Set(tipos.map((t) => t.codigo as CodigoHoraExtra));
+  const codigosOpciones = tipoEdit
+    ? codigosDisponibles
+    : codigosDisponibles.filter((c) => !codigosUsados.has(c.codigo));
+
+  // ── Carga inicial ──────────────────────────────────────────────────────────
   useEffect(() => {
     configuracionApi.tiposHoraExtra
       .listar({ per_page: 100 })
       .then((res) => setTipos(res.data))
       .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar los tipos de hora extra'));
 
+    configuracionApi.tiposHoraExtra
+      .codigos()
+      .then((res) => setCodigosDisponibles(res.data))
+      .catch(() => { /* opcional: si falla, el select de código queda vacío */ });
+
     configuracionApi.configuracionNomina.obtener()
       .then((res) => {
         setNominaActual(res.data);
-        setHorasSemanales(String(Number(res.data.divisor_jornada_mensual) / 5));
+        // Preferimos el alias `horas_semanales` del API; fallback al divisor.
+        const horas = res.data.horas_semanales
+          ?? (res.data.divisor_jornada_mensual === 210 ? 42 : 48);
+        setHorasSemanales(String(horas));
       })
       .catch((e: any) => toast.error(e?.message ?? 'No se pudo cargar la jornada semanal'));
   }, []);
 
+  // ── Modal ──────────────────────────────────────────────────────────────────
   const handleOpenModal = (tipo?: TipoHoraExtra) => {
     if (tipo) {
       setTipoEdit(tipo);
       setFormData({
+        codigo: (tipo.codigo as CodigoHoraExtra) ?? '',
         nombre: tipo.nombre,
-        porcentaje: String(tipo.porcentaje_recargo),
+        porcentaje_recargo: String(tipo.porcentaje_recargo),
         descripcion: tipo.descripcion ?? '',
-        franjaHoraria: tipo.franja_horaria !== 'DIURNO',
-        aplicaFestivo: tipo.aplica_festivo,
-        pagaHoraCompleta: tipo.paga_hora_completa,
+        franja_horaria: tipo.franja_horaria,
+        aplica_festivo: tipo.aplica_festivo,
+        es_extra: tipo.es_extra,
+        paga_hora_completa: tipo.paga_hora_completa,
       });
     } else {
       setTipoEdit(null);
@@ -93,24 +164,47 @@ export function HorasExtrasTab() {
     setOpenModal(true);
   };
 
+  /** Al elegir un código en el select, pre-llena los demás campos según
+   *  los valores legales colombianos (§11 del doc). */
+  const handleCodigoChange = (codigo: CodigoHoraExtra) => {
+    const meta = codigosDisponibles.find((c) => c.codigo === codigo);
+    setFormData((prev) => ({
+      ...prev,
+      codigo,
+      nombre: meta?.nombre ?? prev.nombre,
+      descripcion: meta?.descripcion ?? prev.descripcion,
+      es_extra: meta?.es_extra ?? prev.es_extra,
+      paga_hora_completa: meta?.paga_hora_completa ?? prev.paga_hora_completa,
+      franja_horaria: franjaParaCodigo(codigo),
+      aplica_festivo: aplicaFestivoParaCodigo(codigo),
+      porcentaje_recargo:
+        prev.porcentaje_recargo === '' ? String(PORCENTAJE_DEFAULT[codigo]) : prev.porcentaje_recargo,
+    }));
+  };
+
   const handleSave = async () => {
-    if (!formData.nombre.trim() || !formData.porcentaje.trim()) {
-      toast.error('Completa el nombre y porcentaje');
+    if (!formData.codigo) {
+      toast.error('Selecciona un código de hora extra');
+      return;
+    }
+    if (!formData.nombre.trim()) {
+      toast.error('El nombre es obligatorio');
+      return;
+    }
+    const pct = Number(formData.porcentaje_recargo);
+    if (!Number.isFinite(pct) || pct < 0 || pct > 200) {
+      toast.error('El porcentaje debe estar entre 0 y 200');
       return;
     }
 
-    const franja: FranjaHoraria = tipoEdit
-      ? tipoEdit.franja_horaria
-      : formData.franjaHoraria ? 'NOCTURNO' : 'DIURNO';
-
     const payload: TipoHoraExtraPayload = {
-      codigo: tipoEdit ? tipoEdit.codigo : generarCodigo(formData.nombre),
+      codigo: formData.codigo,
       nombre: formData.nombre.trim(),
-      porcentaje_recargo: Number(formData.porcentaje),
-      franja_horaria: franja,
-      aplica_festivo: formData.aplicaFestivo,
-      es_extra: true,
-      paga_hora_completa: formData.pagaHoraCompleta,
+      porcentaje_recargo: pct,
+      franja_horaria: formData.franja_horaria,
+      aplica_festivo: formData.aplica_festivo,
+      es_extra: formData.es_extra,
+      paga_hora_completa: formData.paga_hora_completa,
       descripcion: formData.descripcion.trim() || null,
     };
 
@@ -155,21 +249,28 @@ export function HorasExtrasTab() {
     });
   };
 
-  const handleGuardarJornada = async () => {
-    const horas = Number(horasSemanales);
-    if (!horas || horas <= 0) {
+  // ── Jornada semanal (§8) ───────────────────────────────────────────────────
+  const handleGuardarJornada = async (raw: string) => {
+    const horas = Number(raw);
+    if (!Number.isFinite(horas) || horas <= 0) {
       toast.error('Ingresa un número válido de horas semanales');
       return;
     }
+    // El backend acepta los valores legales 48 o 42. Si el usuario manda otra
+    // cosa el backend devuelve un 422; el toast lo muestra tal cual.
     try {
       const res = await configuracionApi.configuracionNomina.actualizar({
-        divisor_jornada_mensual: horas === 48 ? 240 : 210,
+        horas_semanales: horas as 48 | 42,
       });
       setNominaActual(res.data);
-      setHorasSemanales(String(Number(res.data.divisor_jornada_mensual) / 5));
       toast.success(res.message ?? 'Jornada semanal actualizada');
     } catch (e: any) {
-      toast.error(e?.message ?? 'No se pudo guardar la jornada semanal');
+      if (e?.errors) {
+        const primero = Object.values(e.errors).flat()[0];
+        toast.error(typeof primero === 'string' ? primero : 'Error de validación');
+      } else {
+        toast.error(e?.message ?? 'No se pudo guardar la jornada semanal');
+      }
     }
   };
 
@@ -189,6 +290,41 @@ export function HorasExtrasTab() {
           </DialogHeader>
 
           <div className="space-y-4 py-4">
+            {/* Código (selector con los 7 legales) */}
+            <div className="space-y-2">
+              <Label htmlFor="codigo">
+                Código <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                value={formData.codigo}
+                onValueChange={(v) => handleCodigoChange(v as CodigoHoraExtra)}
+                disabled={!!tipoEdit}
+              >
+                <SelectTrigger id="codigo">
+                  <SelectValue placeholder="Seleccionar código (HED, HEN, RN, etc.)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {codigosOpciones.length === 0 ? (
+                    <div className="px-3 py-2 text-sm text-muted-foreground">
+                      Todos los códigos legales ya están registrados.
+                    </div>
+                  ) : (
+                    codigosOpciones.map((c) => (
+                      <SelectItem key={c.codigo} value={c.codigo}>
+                        <span className="font-mono font-semibold mr-2">{c.codigo}</span>
+                        {c.nombre}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+              {tipoEdit && (
+                <p className="text-xs text-muted-foreground">
+                  El código no se puede cambiar al editar.
+                </p>
+              )}
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="nombre">
                 Nombre <span className="text-destructive">*</span>
@@ -204,22 +340,44 @@ export function HorasExtrasTab() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="porcentaje">
+              <Label htmlFor="porcentaje_recargo">
                 Porcentaje de Recargo <span className="text-destructive">*</span>
               </Label>
               <div className="relative">
                 <Input
-                  id="porcentaje"
+                  id="porcentaje_recargo"
                   type="number"
+                  min={0}
+                  max={200}
+                  step="0.01"
                   placeholder="25"
-                  value={formData.porcentaje}
+                  value={formData.porcentaje_recargo}
                   onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, porcentaje: e.target.value }))
+                    setFormData((prev) => ({ ...prev, porcentaje_recargo: e.target.value }))
                   }
                   className="pr-8"
                 />
                 <span className="absolute right-3 top-3 text-muted-foreground">%</span>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="franja_horaria">Franja Horaria *</Label>
+              <Select
+                value={formData.franja_horaria}
+                onValueChange={(v: FranjaHoraria) =>
+                  setFormData((prev) => ({ ...prev, franja_horaria: v }))
+                }
+              >
+                <SelectTrigger id="franja_horaria">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="DIURNO">Diurno (6:00 AM – 9:00 PM)</SelectItem>
+                  <SelectItem value="NOCTURNO">Nocturno (9:00 PM – 6:00 AM)</SelectItem>
+                  <SelectItem value="MIXTO">Mixto</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">
@@ -234,52 +392,43 @@ export function HorasExtrasTab() {
               />
             </div>
 
-            <div className="space-y-4 pt-2">
+            <div className="space-y-3 pt-2">
               <div className="flex items-center space-x-2">
                 <Checkbox
-                  id="franjaHoraria"
-                  checked={formData.franjaHoraria}
+                  id="aplica_festivo"
+                  checked={formData.aplica_festivo}
                   onCheckedChange={(checked) =>
-                    setFormData((prev) => ({ ...prev, franjaHoraria: checked as boolean }))
+                    setFormData((prev) => ({ ...prev, aplica_festivo: checked === true }))
                   }
                 />
-                <Label
-                  htmlFor="franjaHoraria"
-                  className="text-sm font-normal cursor-pointer"
-                >
-                  Franja horaria
+                <Label htmlFor="aplica_festivo" className="text-sm font-normal cursor-pointer">
+                  Aplica en domingo / festivo
                 </Label>
               </div>
 
               <div className="flex items-center space-x-2">
                 <Checkbox
-                  id="aplicaFestivo"
-                  checked={formData.aplicaFestivo}
+                  id="es_extra"
+                  checked={formData.es_extra}
                   onCheckedChange={(checked) =>
-                    setFormData((prev) => ({ ...prev, aplicaFestivo: checked as boolean }))
+                    setFormData((prev) => ({ ...prev, es_extra: checked === true }))
                   }
                 />
-                <Label
-                  htmlFor="aplicaFestivo"
-                  className="text-sm font-normal cursor-pointer"
-                >
-                  Aplica para festivo
+                <Label htmlFor="es_extra" className="text-sm font-normal cursor-pointer">
+                  Es hora extra (desmarcado = solo recargo, ej. RN, RND)
                 </Label>
               </div>
 
               <div className="flex items-center space-x-2">
                 <Checkbox
-                  id="pagaHoraCompleta"
-                  checked={formData.pagaHoraCompleta}
+                  id="paga_hora_completa"
+                  checked={formData.paga_hora_completa}
                   onCheckedChange={(checked) =>
-                    setFormData((prev) => ({ ...prev, pagaHoraCompleta: checked as boolean }))
+                    setFormData((prev) => ({ ...prev, paga_hora_completa: checked === true }))
                   }
                 />
-                <Label
-                  htmlFor="pagaHoraCompleta"
-                  className="text-sm font-normal cursor-pointer"
-                >
-                  Paga la hora completa
+                <Label htmlFor="paga_hora_completa" className="text-sm font-normal cursor-pointer">
+                  Paga la hora completa (no solo el recargo)
                 </Label>
               </div>
             </div>
@@ -294,7 +443,7 @@ export function HorasExtrasTab() {
         </DialogContent>
       </Dialog>
 
-      {/* Horas Semanales */}
+      {/* Jornada Laboral Semanal */}
       <Card className="border-border">
         <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
           <CardTitle>Jornada Laboral Semanal</CardTitle>
@@ -307,17 +456,16 @@ export function HorasExtrasTab() {
               <Input
                 id="horasSemanales"
                 type="number"
+                min={1}
+                max={60}
                 value={horasSemanales}
                 onChange={(e) => setHorasSemanales(e.target.value)}
-                onBlur={handleGuardarJornada}
+                onBlur={() => handleGuardarJornada(horasSemanales)}
                 className="text-2xl font-bold text-center"
                 disabled={!nominaActual}
               />
               <span className="text-lg font-medium text-muted-foreground">horas</span>
             </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              Según legislación colombiana: 48 horas semanales
-            </p>
           </div>
         </CardContent>
       </Card>
@@ -328,7 +476,9 @@ export function HorasExtrasTab() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Tipos de Horas Extras</CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">Recargos sobre el valor hora ordinaria</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Recargos sobre el valor hora ordinaria (7 tipos legales colombianos)
+              </p>
             </div>
             <Button onClick={() => handleOpenModal()}>
               <Plus className="mr-2 h-4 w-4" />
@@ -338,42 +488,56 @@ export function HorasExtrasTab() {
         </CardHeader>
         <CardContent className="p-6">
           <div className="space-y-3">
-            {tipos.map((tipo) => (
-              <div
-                key={tipo.id}
-                className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border"
-              >
-                <div className="flex-1">
-                  <div className="flex items-center gap-3">
-                    <p className="font-semibold">{tipo.nombre}</p>
-                    <span className="px-2 py-1 rounded-md bg-primary/10 text-primary text-sm font-bold">
-                      +{tipo.porcentaje_recargo}%
-                    </span>
+            {tipos.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                No hay tipos registrados.
+              </p>
+            ) : (
+              tipos.map((tipo) => (
+                <div
+                  key={tipo.id}
+                  className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border"
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <span className="px-2 py-0.5 rounded-md bg-muted text-foreground text-xs font-mono font-semibold">
+                        {tipo.codigo}
+                      </span>
+                      <p className="font-semibold">{tipo.nombre}</p>
+                      <span className="px-2 py-1 rounded-md bg-primary/10 text-primary text-sm font-bold">
+                        +{tipo.porcentaje_recargo}%
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {tipo.franja_horaria}
+                        {tipo.aplica_festivo && ' · festivo'}
+                        {!tipo.es_extra && ' · solo recargo'}
+                      </span>
+                    </div>
+                    {tipo.descripcion && (
+                      <p className="text-sm text-muted-foreground mt-1">{tipo.descripcion}</p>
+                    )}
                   </div>
-                  {tipo.descripcion && (
-                    <p className="text-sm text-muted-foreground mt-1">{tipo.descripcion}</p>
-                  )}
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleOpenModal(tipo)}
+                      className="h-8 w-8 p-0"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => eliminarTipo(tipo)}
+                      className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleOpenModal(tipo)}
-                    className="h-8 w-8 p-0"
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => eliminarTipo(tipo)}
-                    className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </CardContent>
       </Card>

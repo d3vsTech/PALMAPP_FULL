@@ -119,12 +119,16 @@ export function PromediosTab() {
   };
 
   const obtenerUltimaActualizacion = () => {
+    // Devolvemos un ISO completo (no solo YYYY-MM-DD) para que `formatearFecha`
+    // lo parsee en hora local. Antes hacíamos `.split('T')[0]` y al re-parsear
+    // como "YYYY-MM-DD" JS lo trataba como UTC midnight → en COT (UTC-5)
+    // se mostraba el día anterior.
     const fechas = promedios
       .map((p) => p.updated_at)
       .filter((f): f is string => !!f)
       .map((f) => new Date(f).getTime());
     if (fechas.length === 0) return null;
-    return new Date(Math.max(...fechas)).toISOString().split('T')[0];
+    return new Date(Math.max(...fechas)).toISOString();
   };
 
   const valoresParaPromedio = lotes

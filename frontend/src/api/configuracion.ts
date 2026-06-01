@@ -258,6 +258,9 @@ export interface ConfiguracionNomina {
   salario_minimo_vigente: number | string;
   auxilio_transporte: number | string;
   divisor_jornada_mensual: number;
+  /** 48 (CST tradicional, divisor 240) o 42 (Ley 2101/2021, divisor 210).
+   *  Devuelto por el GET junto con `divisor_jornada_mensual`. */
+  horas_semanales?: 48 | 42 | number;
   /** Día (1-31) de inicio de la 1ª quincena. Default 1. */
   dia_inicio_q1: number;
   /** Día (1-31) de fin de la 1ª quincena. Default 15. ≥ dia_inicio_q1. */
@@ -282,6 +285,9 @@ export interface ConfiguracionNominaPayload {
   auxilio_transporte?: number;
   /** 240 (CST tradicional) o 210 (Ley 2101/2021, 42h/sem). */
   divisor_jornada_mensual?: 240 | 210;
+  /** Alias conveniente del backend (48 → divisor 240, 42 → divisor 210).
+   *  Si se mandan ambos, `horas_semanales` tiene prioridad. */
+  horas_semanales?: 48 | 42;
   dia_inicio_q1?: number;
   dia_fin_q1?: number;
   dia_inicio_q2?: number;
@@ -387,6 +393,16 @@ export interface TipoHoraExtraPayload {
   paga_hora_completa?: boolean;
   descripcion?: string | null;
   estado?: boolean;
+}
+
+/** Item devuelto por `GET /tipos-hora-extra/codigos` — los 7 códigos legales
+ *  colombianos con metadata para pre-poblar el form "Nuevo Tipo de Hora Extra". */
+export interface TipoHoraExtraCodigoItem {
+  codigo: CodigoHoraExtra;
+  nombre: string;
+  descripcion: string;
+  es_extra: boolean;
+  paga_hora_completa: boolean;
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -724,6 +740,12 @@ export const configuracionApi = {
     /** Sin paginación. Permiso ampliado (configuración o operaciones). */
     select: () =>
       apiClient.get<{ data: TipoHoraExtra[] }>('/v1/tenant/tipos-hora-extra/select', T),
+    /** Lista estática de los 7 códigos legales colombianos (HED, HEN, RN, HRD,
+     *  HEDF, HENF, RND). Sirve para poblar el selector de `codigo` al crear un
+     *  nuevo tipo y pre-llenar `nombre`, `descripcion`, `es_extra`,
+     *  `paga_hora_completa` según el código elegido. */
+    codigos: () =>
+      apiClient.get<{ data: TipoHoraExtraCodigoItem[] }>('/v1/tenant/tipos-hora-extra/codigos', T),
   },
 
   // ── 12. Paramétricas del Colaborador ───────────────────────────────────────

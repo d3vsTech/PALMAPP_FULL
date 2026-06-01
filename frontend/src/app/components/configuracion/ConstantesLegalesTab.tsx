@@ -11,6 +11,7 @@ import {
   type ConstantesLegales,
   type ConstantesLegalesPayload,
 } from '../../../api/configuracion';
+import { FechaDiaMesPicker } from './FechaPickers';
 
 const FORM_VACIO = {
   anoVigente: new Date().getFullYear().toString(),
@@ -120,13 +121,15 @@ export function ConstantesLegalesTab() {
             <Label htmlFor="anoVigente">Año Vigente *</Label>
             <Input
               id="anoVigente"
-              type="text"
+              type="number"
+              min={2020}
+              max={2100}
               value={constantes.anoVigente}
-              readOnly
-              className="text-2xl font-bold text-center bg-muted/50 cursor-not-allowed"
+              onChange={(e) => handleChange('anoVigente', e.target.value)}
+              className="text-2xl font-bold text-center"
             />
             <p className="text-xs text-muted-foreground mt-2">
-              El año se actualiza automáticamente desde el sistema
+              Año fiscal activo del tenant (rango permitido 2020 – 2100)
             </p>
           </div>
         </CardContent>
@@ -196,23 +199,21 @@ export function ConstantesLegalesTab() {
 
             <div className="space-y-2">
               <Label htmlFor="fechaLimiteCesantias">Fecha Límite Consignación</Label>
-              <Input
+              <FechaDiaMesPicker
                 id="fechaLimiteCesantias"
                 value={constantes.fechaLimiteCesantias}
-                onChange={(e) => handleChange('fechaLimiteCesantias', e.target.value)}
-                readOnly
-                className="bg-muted/50"
+                onChange={(v) => handleChange('fechaLimiteCesantias', v)}
+                placeholder="Ej: 14 de febrero"
               />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="fechaLimiteInteresesCesantias">Fecha Límite Pago Intereses</Label>
-              <Input
+              <FechaDiaMesPicker
                 id="fechaLimiteInteresesCesantias"
                 value={constantes.fechaLimiteInteresesCesantias}
-                onChange={(e) => handleChange('fechaLimiteInteresesCesantias', e.target.value)}
-                readOnly
-                className="bg-muted/50"
+                onChange={(v) => handleChange('fechaLimiteInteresesCesantias', v)}
+                placeholder="Ej: 31 de enero"
               />
             </div>
           </div>
@@ -229,23 +230,21 @@ export function ConstantesLegalesTab() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <Label htmlFor="fechaLimitePrimaPrimerSemestre">Fecha Límite Primer Semestre</Label>
-              <Input
+              <FechaDiaMesPicker
                 id="fechaLimitePrimaPrimerSemestre"
                 value={constantes.fechaLimitePrimaPrimerSemestre}
-                onChange={(e) => handleChange('fechaLimitePrimaPrimerSemestre', e.target.value)}
-                readOnly
-                className="bg-muted/50"
+                onChange={(v) => handleChange('fechaLimitePrimaPrimerSemestre', v)}
+                placeholder="Ej: 30 de junio"
               />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="fechaLimitePrimaSegundoSemestre">Fecha Límite Segundo Semestre</Label>
-              <Input
+              <FechaDiaMesPicker
                 id="fechaLimitePrimaSegundoSemestre"
                 value={constantes.fechaLimitePrimaSegundoSemestre}
-                onChange={(e) => handleChange('fechaLimitePrimaSegundoSemestre', e.target.value)}
-                readOnly
-                className="bg-muted/50"
+                onChange={(v) => handleChange('fechaLimitePrimaSegundoSemestre', v)}
+                placeholder="Ej: 20 de diciembre"
               />
             </div>
           </div>
