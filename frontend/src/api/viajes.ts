@@ -131,6 +131,9 @@ export interface Extractora {
   municipio_codigo?: string | null;
   ciudad?: string | null;
   telefono?: string | null;
+  /** Teléfono fijo (opcional). No está en el doc §16.1 oficial, pero el
+   *  frontend lo expone como input y el backend lo persiste si la columna existe. */
+  telefono_fijo?: string | null;
   email?: string | null;
   contacto_nombre?: string | null;
   distancia_km?: string | number | null;

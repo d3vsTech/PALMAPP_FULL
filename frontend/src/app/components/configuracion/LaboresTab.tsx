@@ -1,15 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../ui/table';
-import { Plus, Edit, Trash2, Hammer, Loader2 } from 'lucide-react';
+import { Plus, Edit, Trash2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -20,8 +12,14 @@ import {
 } from '../ui/dialog';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Switch } from '../ui/switch';
-import { ConfirmDeleteDialog } from '../ui/confirm-delete-dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select';
+import { useConfirmDelete } from '../../hooks/useConfirmDelete';
 import { toast } from 'sonner';
 import {
   configuracionApi,
@@ -29,74 +27,86 @@ import {
   type Labor,
 } from '../../../api/configuracion';
 
-/**
- * Tab "Labores" conectado al API real (§4 API_PARAMETRICAS).
- *
- * Endpoints:
- *   GET    /api/v1/tenant/labores        → listado paginado
- *   POST   /api/v1/tenant/labores        → crear
- *   PUT    /api/v1/tenant/labores/{id}   → editar (+ toggle estado)
- *   DELETE /api/v1/tenant/labores/{id}   → eliminar (409 LABOR_CON_JORNALES si tiene jornales)
- *
- * Schema actual: labor simple con nombre + valor_base (dinero COP). Ya no hay
- * tipo_pago ni unidad.
- */
+// Labores fijas de palma (mismo set hardcoded que V.12 para mantener el diseño).
+// El precio real se configura en "Nómina y Liquidaciones > Precios Labores".
+const laboresPalmaFijas = [
+  { id: 'lp1', nombre: 'Cosecha', tipoPago: 'POR PALMA' as const },
+  { id: 'lp2', nombre: 'Plateo', tipoPago: 'POR PALMA' as const },
+  { id: 'lp3', nombre: 'Poda', tipoPago: 'POR PALMA' as const },
+  { id: 'lp4', nombre: 'Abono', tipoPago: 'POR PALMA' as const },
+  { id: 'lp5', nombre: 'Sanidad', tipoPago: 'JORNAL FIJO' as const },
+];
 
-const FORM_VACIO = { nombre: '', valorBase: '' };
+type TipoPagoLabor = 'POR PALMA' | 'JORNAL FIJO';
 
 export function LaboresTab() {
-  const [labores, setLabores] = useState<Labor[]>([]);
-  const [cargando, setCargando] = useState(true);
-  const [guardando, setGuardando] = useState(false);
-
+  const [laboresFinca, setLaboresFinca] = useState<Labor[]>([]);
   const [openModal, setOpenModal] = useState(false);
   const [laborEdit, setLaborEdit] = useState<Labor | null>(null);
-  const [formData, setFormData] = useState(FORM_VACIO);
+  const [esLaborPalma, setEsLaborPalma] = useState(false);
+  const [formData, setFormData] = useState<{ nombre: string; tipoPago: TipoPagoLabor }>({
+    nombre: '',
+    tipoPago: 'POR PALMA',
+  });
 
-  const [laborAEliminar, setLaborAEliminar] = useState<Labor | null>(null);
-
-  const cargar = () => {
-    setCargando(true);
-    configuracionApi.labores
-      .listar({ per_page: 100 })
-      .then((res) => setLabores(res.data))
-      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar las labores'))
-      .finally(() => setCargando(false));
-  };
+  const { confirmDelete, ConfirmDeleteDialog } = useConfirmDelete();
 
   useEffect(() => {
-    cargar();
+    configuracionApi.labores
+      .listar({ per_page: 100 })
+      .then((res) => setLaboresFinca(res.data))
+      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar las labores'));
   }, []);
 
-  const handleOpenModal = (labor?: Labor) => {
+  const handleOpenModal = (
+    labor?: Labor | { nombre: string; tipoPago: TipoPagoLabor },
+    esLaborPalmaArg?: boolean,
+  ) => {
     if (labor) {
-      setLaborEdit(labor);
-      setFormData({ nombre: labor.nombre, valorBase: String(labor.valor_base) });
+      const esPalma = !!esLaborPalmaArg;
+      setEsLaborPalma(esPalma);
+      if (esPalma) {
+        setLaborEdit(null);
+        const palma = labor as { nombre: string; tipoPago: TipoPagoLabor };
+        setFormData({ nombre: palma.nombre, tipoPago: palma.tipoPago });
+      } else {
+        const real = labor as Labor;
+        setLaborEdit(real);
+        setFormData({ nombre: real.nombre, tipoPago: 'POR PALMA' });
+      }
     } else {
+      setEsLaborPalma(false);
       setLaborEdit(null);
-      setFormData(FORM_VACIO);
+      setFormData({ nombre: '', tipoPago: 'POR PALMA' });
     }
     setOpenModal(true);
   };
 
   const handleSave = async () => {
-    const valor = Number(formData.valorBase);
-    if (!formData.nombre.trim() || !(valor > 0)) {
-      toast.error('Todos los campos son obligatorios');
+    if (esLaborPalma) {
+      toast.info('El precio de las labores de palma se configura en "Nómina y Liquidaciones > Precios Labores"');
+      setOpenModal(false);
+      return;
+    }
+    if (!formData.nombre.trim()) {
+      toast.error('El nombre de la labor es obligatorio');
       return;
     }
 
-    setGuardando(true);
     try {
-      const payload = { nombre: formData.nombre.trim(), valor_base: valor };
+      // El precio (valor_base) lo configura el admin desde "Nómina y
+      // Liquidaciones > Precios Labores"; aquí solo guardamos nombre.
+      // El backend exige valor_base al crear, por eso lo dejamos en 0
+      // (placeholder hasta que se le ponga precio aparte). Al editar nombre
+      // preservamos el valor_base que ya tiene.
       if (laborEdit) {
+        const payload = { nombre: formData.nombre.trim() };
         const res = await configuracionApi.labores.editar(laborEdit.id, payload);
-        setLabores((prev) => prev.map((l) => (l.id === laborEdit.id ? res.data : l)));
-        toast.success(res.message ?? 'Labor actualizada');
+        setLaboresFinca((prev) => prev.map((l) => (l.id === laborEdit.id ? res.data : l)));
       } else {
+        const payload = { nombre: formData.nombre.trim(), valor_base: 0 };
         const res = await configuracionApi.labores.crear(payload);
-        setLabores((prev) => [...prev, res.data]);
-        toast.success(res.message ?? 'Labor creada');
+        setLaboresFinca((prev) => [...prev, res.data]);
       }
       setOpenModal(false);
     } catch (e: any) {
@@ -106,50 +116,40 @@ export function LaboresTab() {
       } else {
         toast.error(e?.message ?? 'No se pudo guardar la labor');
       }
-    } finally {
-      setGuardando(false);
     }
   };
 
-  const handleToggleEstado = async (labor: Labor) => {
-    try {
-      const res = await configuracionApi.labores.editar(labor.id, { estado: !labor.estado });
-      setLabores((prev) => prev.map((l) => (l.id === labor.id ? res.data : l)));
-    } catch (e: any) {
-      toast.error(e?.message ?? 'No se pudo cambiar el estado');
-    }
+  const handleDelete = (id: number, nombre: string) => {
+    confirmDelete({
+      title: '¿Eliminar labor?',
+      description: `¿Estás seguro de que deseas eliminar la labor "${nombre}"? Esta acción no se puede deshacer.`,
+      confirmText: 'Eliminar',
+      onConfirm: async () => {
+        try {
+          await configuracionApi.labores.eliminar(id);
+          setLaboresFinca((prev) => prev.filter((l) => l.id !== id));
+        } catch (e: any) {
+          if (e?.code === ConfiguracionErrorCodes.LABOR_CON_JORNALES) {
+            toast.error('No se puede eliminar: tiene jornales de Finca asociados');
+          } else {
+            toast.error(e?.message ?? 'No se pudo eliminar la labor');
+          }
+        }
+      },
+    });
   };
-
-  const handleDelete = async () => {
-    if (!laborAEliminar) return;
-    try {
-      await configuracionApi.labores.eliminar(laborAEliminar.id);
-      setLabores((prev) => prev.filter((l) => l.id !== laborAEliminar.id));
-      toast.success('Labor eliminada');
-    } catch (e: any) {
-      if (e?.code === ConfiguracionErrorCodes.LABOR_CON_JORNALES) {
-        toast.error('No se puede eliminar: tiene jornales de Finca asociados');
-      } else {
-        toast.error(e?.message ?? 'No se pudo eliminar la labor');
-      }
-    } finally {
-      setLaborAEliminar(null);
-    }
-  };
-
-  const valorPreview = Number(formData.valorBase);
 
   return (
     <>
+      {ConfirmDeleteDialog}
       <Dialog open={openModal} onOpenChange={setOpenModal}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Hammer className="h-5 w-5 text-primary" />
-              {laborEdit ? 'Editar Labor' : 'Nueva Labor'}
+            <DialogTitle>
+              {laborEdit || esLaborPalma ? 'Editar Labor' : 'Nueva Labor'}
             </DialogTitle>
             <DialogDescription>
-              Define un tipo de trabajo de campo y su precio base
+              Define un tipo de trabajo de campo. Los precios se configuran en Nómina y Liquidaciones
             </DialogDescription>
           </DialogHeader>
 
@@ -160,144 +160,163 @@ export function LaboresTab() {
               </Label>
               <Input
                 id="nombre"
-                placeholder="Ej: Cosecha, Plateo, Poda"
+                placeholder="Ej: Cosecha, Plateo, Poda, Fertilización"
                 value={formData.nombre}
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, nombre: e.target.value }))
                 }
+                disabled={esLaborPalma}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="valorBase">
-                Valor Base <span className="text-destructive">*</span>
+              <Label htmlFor="tipoPago">
+                Tipo de Pago <span className="text-destructive">*</span>
               </Label>
-              <Input
-                id="valorBase"
-                type="number"
-                placeholder="50000"
-                value={formData.valorBase}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, valorBase: e.target.value }))
-                }
-              />
-              {valorPreview > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  ${valorPreview.toLocaleString('es-CO')}
-                </p>
-              )}
+              <Select
+                value={formData.tipoPago}
+                onValueChange={(value: TipoPagoLabor) => {
+                  setFormData((prev) => ({ ...prev, tipoPago: value }));
+                }}
+                disabled={esLaborPalma}
+              >
+                <SelectTrigger id="tipoPago">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="POR PALMA">POR PALMA</SelectItem>
+                  <SelectItem value="JORNAL FIJO">JORNAL FIJO</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {formData.tipoPago === 'POR PALMA'
+                  ? 'Se paga según cantidad de palmas trabajadas'
+                  : 'Se paga un valor fijo por día trabajado'}
+              </p>
+            </div>
+
+            <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 p-3">
+              <p className="text-sm text-blue-900 dark:text-blue-100">
+                <strong>Nota:</strong> Los precios de las labores se configuran en la sección "Nómina y Liquidaciones &gt; Precios Labores"
+              </p>
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenModal(false)} disabled={guardando}>
+            <Button variant="outline" onClick={() => setOpenModal(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSave} disabled={guardando}>
-              {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Guardar
-            </Button>
+            <Button onClick={handleSave}>Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <ConfirmDeleteDialog
-        open={!!laborAEliminar}
-        onOpenChange={(open) => !open && setLaborAEliminar(null)}
-        title="Eliminar labor"
-        description={`¿Estás seguro de eliminar "${laborAEliminar?.nombre}"? Esta acción no se puede deshacer.`}
-        confirmText="Eliminar"
-        onConfirm={handleDelete}
-      />
-
-      <Card className="bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-sm border-border/50">
-        <CardHeader>
-          <div className="flex items-center justify-between">
+      <div className="space-y-6">
+        {/* LABORES PALMA - FIJAS */}
+        <Card className="border-border">
+          <CardHeader className="border-b bg-gradient-to-r from-primary/10 to-primary/5">
             <div>
-              <CardTitle className="flex items-center gap-2">
-                <Hammer className="h-5 w-5 text-primary" />
-                Catálogo de Labores
-              </CardTitle>
+              <CardTitle>Labores Palma</CardTitle>
               <CardDescription>
-                Tipos de trabajo de campo y sus precios base
+                Labores estándar de palma - No se pueden crear nuevas
               </CardDescription>
             </div>
-            <Button onClick={() => handleOpenModal()}>
-              <Plus className="mr-2 h-4 w-4" />
-              Nueva Labor
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {cargando ? (
-            <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              Cargando labores...
+          </CardHeader>
+          <CardContent className="p-6">
+            <div className="space-y-2">
+              {laboresPalmaFijas.map((labor) => (
+                <div
+                  key={labor.id}
+                  className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex-1">
+                    <p className="font-semibold">{labor.nombre}</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {labor.tipoPago === 'POR PALMA' ? 'Por Palma' : 'Jornal Fijo'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleOpenModal(labor, true)}
+                      className="h-8 w-8 p-0"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
-          ) : labores.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-                <Hammer className="h-8 w-8 text-muted-foreground" />
+          </CardContent>
+        </Card>
+
+        {/* LABORES FINCA - EDITABLES */}
+        <Card className="border-border">
+          <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Labores Finca</CardTitle>
+                <CardDescription>
+                  Labores personalizadas - Puedes crear y editar
+                </CardDescription>
               </div>
-              <h3 className="mb-2 text-lg font-semibold">No hay labores registradas</h3>
-              <p className="mb-4 text-sm text-muted-foreground">
-                Comienza agregando tu primera labor
-              </p>
               <Button onClick={() => handleOpenModal()}>
                 <Plus className="mr-2 h-4 w-4" />
-                Agregar Labor
+                Nueva Labor
               </Button>
             </div>
-          ) : (
-            <div className="rounded-lg border overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/50">
-                    <TableHead>Nombre</TableHead>
-                    <TableHead className="text-right">Valor Base</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {labores.map((labor) => (
-                    <TableRow key={labor.id} className="hover:bg-muted/50 transition-colors">
-                      <TableCell className="font-medium">{labor.nombre}</TableCell>
-                      <TableCell className="text-right font-semibold text-success">
-                        ${Number(labor.valor_base).toLocaleString('es-CO')}
-                      </TableCell>
-                      <TableCell>
-                        <Switch
-                          checked={labor.estado}
-                          onCheckedChange={() => handleToggleEstado(labor)}
-                        />
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleOpenModal(labor)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setLaborAEliminar(labor)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardHeader>
+          <CardContent className="p-6">
+            {laboresFinca.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <h3 className="mb-2 text-lg font-semibold">No hay labores personalizadas</h3>
+                <p className="mb-4 text-sm text-muted-foreground">
+                  Comienza agregando tu primera labor de finca
+                </p>
+                <Button onClick={() => handleOpenModal()}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Agregar Labor
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {laboresFinca.map((labor) => (
+                  <div
+                    key={labor.id}
+                    className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="flex-1">
+                      <p className="font-semibold">{labor.nombre}</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Por Palma
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleOpenModal(labor)}
+                        className="h-8 w-8 p-0"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDelete(labor.id, labor.nombre)}
+                        className="h-8 w-8 p-0"
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </>
   );
 }

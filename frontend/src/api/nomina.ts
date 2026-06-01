@@ -281,8 +281,13 @@ export interface NominaConcepto {
   calculo: 'PORCENTAJE' | 'VALOR_FIJO';
   porcentaje?: number | null;
   valor_referencia?: number | null;
+  /** Base sobre la que se calcula. Editable vía PUT (doc §6.3). */
+  base_calculo?: string | null;
   aplica_a: AplicaA;
   activo: boolean;
+  /** Si true, el concepto no se puede eliminar (SALUD/PENSION). Editable vía PUT como `es_obligatorio`. */
+  es_obligatorio?: boolean;
+  /** Alias legacy de `es_obligatorio` (algunos endpoints lo devuelven así). */
   obligatorio?: boolean;
 }
 

@@ -9,7 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from '../ui/table';
-import { Plus, Edit, Trash2, FileText, CheckCircle, X, Loader2 } from 'lucide-react';
+import { Plus, Edit, Trash2, CheckCircle, X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -20,7 +20,6 @@ import {
 } from '../ui/dialog';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Switch } from '../ui/switch';
 import {
   Select,
   SelectContent,
@@ -29,40 +28,39 @@ import {
   SelectValue,
 } from '../ui/select';
 import { Badge } from '../ui/badge';
-import { ConfirmDeleteDialog } from '../ui/confirm-delete-dialog';
+import { useConfirmDelete } from '../../hooks/useConfirmDelete';
 import { toast } from 'sonner';
+import { Checkbox } from '../ui/checkbox';
 import {
   nominaApi,
   NominaErrorCodes,
   type NominaConcepto,
   type TipoConcepto,
 } from '../../../api/nomina';
-
-/**
- * Tab "Conceptos de Nómina" conectado al API real (API_NOMINA, conceptos).
- *
- * Endpoints:
- *   GET    /api/v1/tenant/nomina-conceptos        → listado
- *   POST   /api/v1/tenant/nomina-conceptos        → crear
- *   PUT    /api/v1/tenant/nomina-conceptos/{id}   → editar (+ toggle activo)
- *   DELETE /api/v1/tenant/nomina-conceptos/{id}   → eliminar
- *
- * En edición codigo/tipo/subtipo/operacion/calculo son inmutables (readonly).
- * Solo nombre/valor_referencia/aplica_a/activo se pueden cambiar vía PUT.
- */
-
-const TIPOS: { value: TipoConcepto; label: string }[] = [
-  { value: 'DEDUCCION_LEGAL', label: 'Deducción Legal' },
-  { value: 'DEDUCCION_VOLUNTARIA', label: 'Deducción Voluntaria' },
-  { value: 'BONIFICACION_FIJA', label: 'Bonificación Fija' },
-  { value: 'BONIFICACION_VARIABLE', label: 'Bonificación Variable' },
-];
+import { formatCOP, formatThousands, parseCOP } from '../lib/format';
 
 const TIPO_LABEL: Record<TipoConcepto, string> = {
   DEDUCCION_LEGAL: 'Deducción Legal',
   DEDUCCION_VOLUNTARIA: 'Deducción Voluntaria',
   BONIFICACION_FIJA: 'Bonificación Fija',
   BONIFICACION_VARIABLE: 'Bonificación Variable',
+};
+
+type BaseCalculo = 'Total Devengado' | 'Salario Base' | 'SMMLV' | 'Manual';
+type BaseCalculoApi = 'TOTAL_DEVENGADO' | 'SALARIO_BASE' | 'SALARIO_MINIMO' | 'MANUAL';
+
+const BASE_CALCULO_TO_API: Record<BaseCalculo, BaseCalculoApi> = {
+  'Total Devengado': 'TOTAL_DEVENGADO',
+  'Salario Base': 'SALARIO_BASE',
+  'SMMLV': 'SALARIO_MINIMO',
+  'Manual': 'MANUAL',
+};
+
+const BASE_CALCULO_FROM_API: Record<BaseCalculoApi, BaseCalculo> = {
+  TOTAL_DEVENGADO: 'Total Devengado',
+  SALARIO_BASE: 'Salario Base',
+  SALARIO_MINIMO: 'SMMLV',
+  MANUAL: 'Manual',
 };
 
 type FormState = {
@@ -72,7 +70,9 @@ type FormState = {
   operacion: 'SUMA' | 'RESTA';
   calculo: 'PORCENTAJE' | 'VALOR_FIJO';
   valor_referencia: string;
+  base_calculo: BaseCalculo;
   aplica_a: 'FIJO' | 'VARIABLE' | 'AMBOS';
+  es_obligatorio: boolean;
 };
 
 const FORM_VACIO: FormState = {
@@ -82,35 +82,33 @@ const FORM_VACIO: FormState = {
   operacion: 'RESTA',
   calculo: 'PORCENTAJE',
   valor_referencia: '',
+  base_calculo: 'Total Devengado',
   aplica_a: 'AMBOS',
+  es_obligatorio: false,
 };
 
 function esDeduccion(tipo: TipoConcepto) {
   return tipo === 'DEDUCCION_LEGAL' || tipo === 'DEDUCCION_VOLUNTARIA';
 }
 
+/** Lee la bandera de obligatorio aceptando ambos nombres del backend. */
+function leerObligatorio(c: NominaConcepto): boolean {
+  return !!(c.es_obligatorio ?? c.obligatorio);
+}
+
 export function ConceptosNominaTab() {
   const [conceptos, setConceptos] = useState<NominaConcepto[]>([]);
-  const [cargando, setCargando] = useState(true);
-  const [guardando, setGuardando] = useState(false);
-
   const [openModal, setOpenModal] = useState(false);
   const [conceptoEdit, setConceptoEdit] = useState<NominaConcepto | null>(null);
   const [formData, setFormData] = useState<FormState>(FORM_VACIO);
 
-  const [conceptoAEliminar, setConceptoAEliminar] = useState<NominaConcepto | null>(null);
+  const { confirmDelete, ConfirmDeleteDialog } = useConfirmDelete();
 
-  const cargar = () => {
-    setCargando(true);
+  useEffect(() => {
     nominaApi.conceptos
       .listar()
       .then((res) => setConceptos(res.data))
-      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar los conceptos'))
-      .finally(() => setCargando(false));
-  };
-
-  useEffect(() => {
-    cargar();
+      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar los conceptos'));
   }, []);
 
   const handleOpenModal = (concepto?: NominaConcepto) => {
@@ -128,9 +126,14 @@ export function ConceptosNominaTab() {
               ? String(concepto.porcentaje)
               : ''
             : concepto.valor_referencia != null
-            ? String(concepto.valor_referencia)
+            ? formatThousands(concepto.valor_referencia)
             : '',
+        base_calculo:
+          BASE_CALCULO_FROM_API[concepto.base_calculo as BaseCalculoApi] ??
+          (concepto.base_calculo as BaseCalculo) ??
+          'Total Devengado',
         aplica_a: concepto.aplica_a,
+        es_obligatorio: leerObligatorio(concepto),
       });
     } else {
       setConceptoEdit(null);
@@ -153,13 +156,19 @@ export function ConceptosNominaTab() {
       return;
     }
 
-    setGuardando(true);
     try {
-      const valorNum = Number(formData.valor_referencia);
+      // Si es PORCENTAJE el valor es un % (ej "4" o "12.5"), no se formatea como dinero.
+      // Si es VALOR_FIJO, el input tiene puntos de miles y hay que limpiarlos.
+      const valorNum =
+        formData.calculo === 'PORCENTAJE'
+          ? Number(formData.valor_referencia)
+          : Number(parseCOP(formData.valor_referencia));
       if (conceptoEdit) {
         const payload = {
           nombre: formData.nombre.trim(),
           aplica_a: formData.aplica_a,
+          base_calculo: BASE_CALCULO_TO_API[formData.base_calculo],
+          es_obligatorio: formData.es_obligatorio,
           ...(conceptoEdit.calculo === 'PORCENTAJE'
             ? { porcentaje: valorNum }
             : { valor_referencia: valorNum }),
@@ -172,9 +181,12 @@ export function ConceptosNominaTab() {
           codigo: formData.codigo.trim(),
           nombre: formData.nombre.trim(),
           tipo: formData.tipo,
+          subtipo: 'OTRO' as const,
           operacion: formData.operacion,
           calculo: formData.calculo,
           aplica_a: formData.aplica_a,
+          base_calculo: BASE_CALCULO_TO_API[formData.base_calculo],
+          es_obligatorio: formData.es_obligatorio,
           ...(formData.calculo === 'PORCENTAJE'
             ? { porcentaje: valorNum }
             : { valor_referencia: valorNum }),
@@ -191,37 +203,30 @@ export function ConceptosNominaTab() {
       } else {
         toast.error(e?.message ?? 'No se pudo guardar el concepto');
       }
-    } finally {
-      setGuardando(false);
     }
   };
 
-  const handleToggleEstado = async (concepto: NominaConcepto) => {
-    try {
-      const res = await nominaApi.conceptos.editar(concepto.id, { activo: !concepto.activo });
-      setConceptos((prev) => prev.map((c) => (c.id === concepto.id ? res.data : c)));
-    } catch (e: any) {
-      toast.error(e?.message ?? 'No se pudo cambiar el estado');
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!conceptoAEliminar) return;
-    try {
-      await nominaApi.conceptos.eliminar(conceptoAEliminar.id);
-      setConceptos((prev) => prev.filter((c) => c.id !== conceptoAEliminar.id));
-      toast.success('Concepto eliminado');
-    } catch (e: any) {
-      if (e?.code === NominaErrorCodes.CONCEPTO_EN_USO) {
-        toast.error('No se puede eliminar: está en uso por nóminas existentes');
-      } else if (e?.code === NominaErrorCodes.CONCEPTO_OBLIGATORIO) {
-        toast.error('No se puede eliminar: es un concepto obligatorio');
-      } else {
-        toast.error(e?.message ?? 'No se pudo eliminar el concepto');
-      }
-    } finally {
-      setConceptoAEliminar(null);
-    }
+  const handleDelete = (concepto: NominaConcepto) => {
+    confirmDelete({
+      title: '¿Eliminar concepto?',
+      description: `¿Estás seguro de que deseas eliminar el concepto "${concepto.nombre}"? Esta acción no se puede deshacer.`,
+      confirmText: 'Eliminar',
+      onConfirm: async () => {
+        try {
+          await nominaApi.conceptos.eliminar(concepto.id);
+          setConceptos((prev) => prev.filter((c) => c.id !== concepto.id));
+          toast.success('Concepto eliminado');
+        } catch (e: any) {
+          if (e?.code === NominaErrorCodes.CONCEPTO_EN_USO) {
+            toast.error('No se puede eliminar: está en uso por nóminas existentes');
+          } else if (e?.code === NominaErrorCodes.CONCEPTO_OBLIGATORIO) {
+            toast.error('No se puede eliminar: es un concepto obligatorio');
+          } else {
+            toast.error(e?.message ?? 'No se pudo eliminar el concepto');
+          }
+        }
+      },
+    });
   };
 
   const getTipoColor = (tipo: TipoConcepto) => {
@@ -241,27 +246,25 @@ export function ConceptosNominaTab() {
     if (concepto.calculo === 'PORCENTAJE') {
       return concepto.porcentaje != null ? `${concepto.porcentaje}%` : '-';
     }
-    return concepto.valor_referencia != null
-      ? `$${Number(concepto.valor_referencia).toLocaleString('es-CO')}`
-      : '-';
+    return concepto.valor_referencia != null ? formatCOP(concepto.valor_referencia) : '-';
   };
 
   const valorPreview = () => {
     if (!formData.valor_referencia) return '-';
     return formData.calculo === 'PORCENTAJE'
       ? `${formData.valor_referencia}%`
-      : `$${Number(formData.valor_referencia).toLocaleString('es-CO')}`;
+      : formatCOP(parseCOP(formData.valor_referencia));
   };
 
   const inmutable = !!conceptoEdit;
 
   return (
     <>
+      {ConfirmDeleteDialog}
       <Dialog open={openModal} onOpenChange={setOpenModal}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-primary" />
+            <DialogTitle>
               {conceptoEdit ? 'Editar Concepto' : 'Nuevo Concepto de Nómina'}
             </DialogTitle>
             <DialogDescription>
@@ -323,11 +326,10 @@ export function ConceptosNominaTab() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {TIPOS.map((t) => (
-                      <SelectItem key={t.value} value={t.value}>
-                        {t.label}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="DEDUCCION_LEGAL">Deducción Legal</SelectItem>
+                    <SelectItem value="DEDUCCION_VOLUNTARIA">Deducción Voluntaria</SelectItem>
+                    <SelectItem value="BONIFICACION_FIJA">Bonificación Fija</SelectItem>
+                    <SelectItem value="BONIFICACION_VARIABLE">Bonificación Variable</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -379,15 +381,51 @@ export function ConceptosNominaTab() {
                 <Label htmlFor="valorReferencia">
                   Valor Referencia <span className="text-destructive">*</span>
                 </Label>
-                <Input
-                  id="valorReferencia"
-                  type="number"
-                  placeholder={formData.calculo === 'PORCENTAJE' ? '4' : '200000'}
-                  value={formData.valor_referencia}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, valor_referencia: e.target.value }))
+                <div className="relative">
+                  {formData.calculo === 'VALOR_FIJO' && (
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                  )}
+                  <Input
+                    id="valorReferencia"
+                    inputMode={formData.calculo === 'PORCENTAJE' ? 'decimal' : 'numeric'}
+                    placeholder={formData.calculo === 'PORCENTAJE' ? '4' : '200.000'}
+                    value={formData.valor_referencia}
+                    onChange={(e) => {
+                      const v =
+                        formData.calculo === 'PORCENTAJE'
+                          ? e.target.value
+                          : formatThousands(parseCOP(e.target.value));
+                      setFormData((prev) => ({ ...prev, valor_referencia: v }));
+                    }}
+                    className={formData.calculo === 'VALOR_FIJO' ? 'pl-7 pr-8' : 'pr-8'}
+                  />
+                  {formData.calculo === 'PORCENTAJE' && (
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Base de Cálculo */}
+              <div className="space-y-2">
+                <Label htmlFor="baseCalculo">
+                  Base de Cálculo <span className="text-destructive">*</span>
+                </Label>
+                <Select
+                  value={formData.base_calculo}
+                  onValueChange={(value: BaseCalculo) =>
+                    setFormData((prev) => ({ ...prev, base_calculo: value }))
                   }
-                />
+                >
+                  <SelectTrigger id="baseCalculo">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Total Devengado">Total Devengado</SelectItem>
+                    <SelectItem value="Salario Base">Salario Base</SelectItem>
+                    <SelectItem value="SMMLV">SMMLV</SelectItem>
+                    <SelectItem value="Manual">Manual</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Aplica A */}
@@ -410,6 +448,30 @@ export function ConceptosNominaTab() {
                     <SelectItem value="AMBOS">AMBOS tipos</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+            </div>
+
+            {/* Obligatorio */}
+            <div className="flex items-start gap-3 rounded-lg border border-border/60 bg-muted/30 p-3">
+              <Checkbox
+                id="esObligatorio"
+                checked={formData.es_obligatorio}
+                onCheckedChange={(checked) =>
+                  setFormData((prev) => ({ ...prev, es_obligatorio: checked === true }))
+                }
+                className="mt-0.5"
+              />
+              <div className="space-y-1">
+                <label
+                  htmlFor="esObligatorio"
+                  className="text-sm font-medium leading-none cursor-pointer"
+                >
+                  Concepto obligatorio
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  Si está activo, el concepto no se puede eliminar (ej. SALUD, PENSIÓN).
+                </p>
               </div>
             </div>
 
@@ -441,6 +503,10 @@ export function ConceptosNominaTab() {
                     </span>
                   </div>
                   <div className="flex justify-between">
+                    <span className="text-muted-foreground">Base:</span>
+                    <span className="font-semibold">{formData.base_calculo}</span>
+                  </div>
+                  <div className="flex justify-between">
                     <span className="text-muted-foreground">Aplica a:</span>
                     <span className="font-semibold">{formData.aplica_a}</span>
                   </div>
@@ -450,34 +516,19 @@ export function ConceptosNominaTab() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenModal(false)} disabled={guardando}>
+            <Button variant="outline" onClick={() => setOpenModal(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSave} disabled={guardando}>
-              {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Guardar
-            </Button>
+            <Button onClick={handleSave}>Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <ConfirmDeleteDialog
-        open={!!conceptoAEliminar}
-        onOpenChange={(open) => !open && setConceptoAEliminar(null)}
-        title="Eliminar concepto"
-        description={`¿Estás seguro de eliminar "${conceptoAEliminar?.nombre}"? Esta acción no se puede deshacer.`}
-        confirmText="Eliminar"
-        onConfirm={handleDelete}
-      />
 
       <Card className="bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-sm border-border/50">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-primary" />
-                Conceptos de Nómina
-              </CardTitle>
+              <CardTitle>Conceptos de Nómina</CardTitle>
               <CardDescription>
                 Deducciones y bonificaciones que se aplican en cada nómina
               </CardDescription>
@@ -489,16 +540,8 @@ export function ConceptosNominaTab() {
           </div>
         </CardHeader>
         <CardContent>
-          {cargando ? (
-            <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              Cargando conceptos...
-            </div>
-          ) : conceptos.length === 0 ? (
+          {conceptos.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-                <FileText className="h-8 w-8 text-muted-foreground" />
-              </div>
               <h3 className="mb-2 text-lg font-semibold">No hay conceptos registrados</h3>
               <p className="mb-4 text-sm text-muted-foreground">
                 Comienza agregando tu primer concepto de nómina
@@ -521,7 +564,6 @@ export function ConceptosNominaTab() {
                     <TableHead>Valor</TableHead>
                     <TableHead>Aplica A</TableHead>
                     <TableHead className="text-center">Auto</TableHead>
-                    <TableHead>Estado</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -556,17 +598,11 @@ export function ConceptosNominaTab() {
                         <Badge variant="outline">{concepto.aplica_a}</Badge>
                       </TableCell>
                       <TableCell className="text-center">
-                        {concepto.obligatorio ? (
+                        {leerObligatorio(concepto) ? (
                           <CheckCircle className="h-4 w-4 text-success mx-auto" />
                         ) : (
                           <X className="h-4 w-4 text-muted-foreground mx-auto" />
                         )}
-                      </TableCell>
-                      <TableCell>
-                        <Switch
-                          checked={concepto.activo}
-                          onCheckedChange={() => handleToggleEstado(concepto)}
-                        />
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
@@ -577,11 +613,11 @@ export function ConceptosNominaTab() {
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
-                          {!concepto.obligatorio && (
+                          {!leerObligatorio(concepto) && (
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => setConceptoAEliminar(concepto)}
+                              onClick={() => handleDelete(concepto)}
                             >
                               <Trash2 className="h-4 w-4 text-destructive" />
                             </Button>

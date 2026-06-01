@@ -3,9 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Switch } from '../ui/switch';
-import { Textarea } from '../ui/textarea';
-import { Plus, Trash2, Edit, Building2, User, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Edit, Building2, User, ChevronDown, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Select,
@@ -22,7 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../ui/dialog';
-import { ConfirmDeleteDialog } from '../ui/confirm-delete-dialog';
+import { useConfirmDelete } from '../../hooks/useConfirmDelete';
 import {
   empresasTransportadorasApi,
   transportadoresApi,
@@ -47,54 +45,38 @@ const FORM_EMPRESA_VACIO = {
 const FORM_CONDUCTOR_VACIO = {
   empresa_transportadora_id: '',
   nombre: '',
-  tipo_documento: 'CC' as 'CC' | 'CE' | 'PPT' | 'PASAPORTE',
   numero_documento: '',
   telefono: '',
   placa_vehiculo: '',
-  tipo_vehiculo: '',
-  capacidad_kg: '',
-  licencia_conduccion: '',
-  licencia_vencimiento: '',
-  observaciones: '',
 };
 
-const TIPOS_DOCUMENTO: Array<'CC' | 'CE' | 'PPT' | 'PASAPORTE'> = ['CC', 'CE', 'PPT', 'PASAPORTE'];
-
 export function TransporteTab() {
+  const { confirmDelete, ConfirmDeleteDialog } = useConfirmDelete();
+
   const [empresas, setEmpresas] = useState<EmpresaConContador[]>([]);
   const [conductores, setConductores] = useState<Transportador[]>([]);
-  const [cargandoEmpresas, setCargandoEmpresas] = useState(true);
-  const [cargandoConductores, setCargandoConductores] = useState(true);
 
+  const [empresasExpandidas, setEmpresasExpandidas] = useState<number[]>([]);
   const [openModalEmpresa, setOpenModalEmpresa] = useState(false);
   const [openModalConductor, setOpenModalConductor] = useState(false);
   const [empresaEdit, setEmpresaEdit] = useState<EmpresaTransportadora | null>(null);
   const [conductorEdit, setConductorEdit] = useState<Transportador | null>(null);
-  const [guardandoEmpresa, setGuardandoEmpresa] = useState(false);
-  const [guardandoConductor, setGuardandoConductor] = useState(false);
-
-  const [empresaAEliminar, setEmpresaAEliminar] = useState<EmpresaTransportadora | null>(null);
-  const [conductorAEliminar, setConductorAEliminar] = useState<Transportador | null>(null);
 
   const [formEmpresa, setFormEmpresa] = useState(FORM_EMPRESA_VACIO);
   const [formConductor, setFormConductor] = useState(FORM_CONDUCTOR_VACIO);
 
   const cargarEmpresas = () => {
-    setCargandoEmpresas(true);
     empresasTransportadorasApi
       .listar({ per_page: 100, with_transportadores_count: true })
       .then((res) => setEmpresas(res.data as EmpresaConContador[]))
-      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar las empresas'))
-      .finally(() => setCargandoEmpresas(false));
+      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar las empresas'));
   };
 
   const cargarConductores = () => {
-    setCargandoConductores(true);
     transportadoresApi
       .listar({ per_page: 100 })
       .then((res) => setConductores(res.data))
-      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar los conductores'))
-      .finally(() => setCargandoConductores(false));
+      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar los conductores'));
   };
 
   useEffect(() => {
@@ -102,12 +84,21 @@ export function TransporteTab() {
     cargarConductores();
   }, []);
 
-  // ── Empresas ────────────────────────────────────────────────────────────
+  // Toggle expandir/contraer empresa
+  const toggleEmpresa = (empresaId: number) => {
+    setEmpresasExpandidas((prev) =>
+      prev.includes(empresaId)
+        ? prev.filter((id) => id !== empresaId)
+        : [...prev, empresaId],
+    );
+  };
+
+  // Funciones para Empresas
   const handleOpenModalEmpresa = (empresa?: EmpresaTransportadora) => {
     if (empresa) {
       setEmpresaEdit(empresa);
       setFormEmpresa({
-        tipo_persona: (empresa as any).tipo_persona ?? 'JURIDICA',
+        tipo_persona: empresa.tipo_persona ?? 'JURIDICA',
         razon_social: empresa.razon_social ?? '',
         nit: empresa.nit ?? '',
         telefono: empresa.telefono ?? '',
@@ -126,7 +117,7 @@ export function TransporteTab() {
 
   const handleSaveEmpresa = async () => {
     if (!formEmpresa.razon_social.trim()) {
-      toast.error('Ingresa la razón social de la empresa');
+      toast.error('Ingresa el nombre de la empresa');
       return;
     }
     if (!formEmpresa.nit.trim()) {
@@ -134,9 +125,8 @@ export function TransporteTab() {
       return;
     }
 
-    setGuardandoEmpresa(true);
     try {
-      const payload: Partial<EmpresaTransportadora> & { tipo_persona?: string } = {
+      const payload: Partial<EmpresaTransportadora> = {
         tipo_persona: formEmpresa.tipo_persona,
         razon_social: formEmpresa.razon_social.trim(),
         nit: formEmpresa.nit.trim(),
@@ -149,14 +139,21 @@ export function TransporteTab() {
       };
 
       if (empresaEdit) {
-        await empresasTransportadorasApi.editar(empresaEdit.id, payload);
+        const res = await empresasTransportadorasApi.editar(empresaEdit.id, payload);
+        setEmpresas((prev) =>
+          prev.map((e) =>
+            e.id === empresaEdit.id
+              ? { ...e, ...res.data, transportadores_count: e.transportadores_count }
+              : e,
+          ),
+        );
         toast.success('Empresa actualizada');
       } else {
-        await empresasTransportadorasApi.crear(payload);
+        const res = await empresasTransportadorasApi.crear(payload);
+        setEmpresas((prev) => [...prev, { ...res.data, transportadores_count: 0 }]);
         toast.success('Empresa agregada correctamente');
       }
       setOpenModalEmpresa(false);
-      cargarEmpresas();
     } catch (e: any) {
       if (e?.errors?.nit) {
         toast.error(e.errors.nit[0] ?? 'Ya existe una empresa con este NIT');
@@ -168,60 +165,45 @@ export function TransporteTab() {
       } else {
         toast.error(e?.message ?? 'No se pudo guardar la empresa');
       }
-    } finally {
-      setGuardandoEmpresa(false);
     }
   };
 
-  const handleDeleteEmpresa = async () => {
-    if (!empresaAEliminar) return;
-    try {
-      await empresasTransportadorasApi.eliminar(empresaAEliminar.id);
-      toast.success('Empresa eliminada correctamente');
-      cargarEmpresas();
-    } catch (e: any) {
-      toast.error(e?.message ?? 'No se pudo eliminar la empresa');
-    } finally {
-      setEmpresaAEliminar(null);
-    }
-  };
-
-  const handleToggleEstadoEmpresa = async (empresa: EmpresaTransportadora) => {
-    try {
-      await empresasTransportadorasApi.editar(empresa.id, { estado: !empresa.estado });
-      setEmpresas((prev) =>
-        prev.map((e) => (e.id === empresa.id ? { ...e, estado: !empresa.estado } : e)),
-      );
-    } catch (e: any) {
-      toast.error(e?.message ?? 'No se pudo cambiar el estado');
-    }
-  };
-
-  // ── Conductores ───────────────────────────────────────────────────────────
-  const handleOpenModalConductor = (conductor?: Transportador) => {
-    if (empresas.length === 0) {
-      toast.error('Primero debes crear al menos una empresa de transporte');
+  const eliminarEmpresa = (empresa: EmpresaConContador) => {
+    if ((empresa.transportadores_count ?? 0) > 0) {
+      toast.error('No puedes eliminar una empresa con conductores asociados');
       return;
     }
 
+    confirmDelete({
+      title: 'Eliminar empresa',
+      description: `¿Estás seguro de eliminar "${empresa.razon_social}"? Esta acción no se puede deshacer.`,
+      confirmText: 'Eliminar',
+      onConfirm: async () => {
+        try {
+          await empresasTransportadorasApi.eliminar(empresa.id);
+          setEmpresas((prev) => prev.filter((e) => e.id !== empresa.id));
+          toast.success('Empresa eliminada correctamente');
+        } catch (e: any) {
+          toast.error(e?.message ?? 'No se pudo eliminar la empresa');
+        }
+      },
+    });
+  };
+
+  // Funciones para Conductores
+  const handleOpenModalConductor = (empresaId: number, conductor?: Transportador) => {
     if (conductor) {
       setConductorEdit(conductor);
       setFormConductor({
         empresa_transportadora_id: String(conductor.empresa_transportadora_id),
         nombre: `${conductor.nombres ?? ''} ${conductor.apellidos ?? ''}`.trim(),
-        tipo_documento: conductor.tipo_documento ?? 'CC',
         numero_documento: conductor.numero_documento ?? '',
         telefono: conductor.telefono ?? '',
         placa_vehiculo: conductor.placa_vehiculo ?? '',
-        tipo_vehiculo: conductor.tipo_vehiculo ?? '',
-        capacidad_kg: conductor.capacidad_kg != null ? String(conductor.capacidad_kg) : '',
-        licencia_conduccion: conductor.licencia_conduccion ?? '',
-        licencia_vencimiento: conductor.licencia_vencimiento ?? '',
-        observaciones: conductor.observaciones ?? '',
       });
     } else {
       setConductorEdit(null);
-      setFormConductor(FORM_CONDUCTOR_VACIO);
+      setFormConductor({ ...FORM_CONDUCTOR_VACIO, empresa_transportadora_id: String(empresaId) });
     }
     setOpenModalConductor(true);
   };
@@ -235,42 +217,33 @@ export function TransporteTab() {
       toast.error('Selecciona una empresa');
       return;
     }
-    if (!formConductor.placa_vehiculo.trim()) {
-      toast.error('Ingresa la placa del vehículo');
-      return;
-    }
 
     // Split del nombre completo: primera palabra = nombres, resto = apellidos.
     const partes = formConductor.nombre.trim().split(/\s+/);
     const nombres = partes[0];
     const apellidos = partes.slice(1).join(' ');
 
-    setGuardandoConductor(true);
     try {
       const payload: Partial<Transportador> = {
         empresa_transportadora_id: Number(formConductor.empresa_transportadora_id),
         nombres,
         apellidos,
-        placa_vehiculo: formConductor.placa_vehiculo.trim(),
-        tipo_documento: formConductor.tipo_documento,
+        tipo_documento: 'CC',
         numero_documento: formConductor.numero_documento.trim() || null,
         telefono: formConductor.telefono.trim() || null,
-        tipo_vehiculo: formConductor.tipo_vehiculo.trim() || null,
-        capacidad_kg: formConductor.capacidad_kg.trim() ? Number(formConductor.capacidad_kg) : null,
-        licencia_conduccion: formConductor.licencia_conduccion.trim() || null,
-        licencia_vencimiento: formConductor.licencia_vencimiento.trim() || null,
-        observaciones: formConductor.observaciones.trim() || null,
+        placa_vehiculo: formConductor.placa_vehiculo.trim(),
       };
 
       if (conductorEdit) {
-        await transportadoresApi.editar(conductorEdit.id, payload);
+        const res = await transportadoresApi.editar(conductorEdit.id, payload);
+        setConductores((prev) => prev.map((c) => (c.id === conductorEdit.id ? res.data : c)));
         toast.success('Conductor actualizado');
       } else {
-        await transportadoresApi.crear(payload);
+        const res = await transportadoresApi.crear(payload);
+        setConductores((prev) => [...prev, res.data]);
         toast.success('Conductor agregado correctamente');
       }
       setOpenModalConductor(false);
-      cargarConductores();
       cargarEmpresas();
     } catch (e: any) {
       if (e?.errors?.placa_vehiculo) {
@@ -283,38 +256,36 @@ export function TransporteTab() {
       } else {
         toast.error(e?.message ?? 'No se pudo guardar el conductor');
       }
-    } finally {
-      setGuardandoConductor(false);
     }
   };
 
-  const handleDeleteConductor = async () => {
-    if (!conductorAEliminar) return;
-    try {
-      await transportadoresApi.eliminar(conductorAEliminar.id);
-      toast.success('Conductor eliminado correctamente');
-      cargarConductores();
-      cargarEmpresas();
-    } catch (e: any) {
-      toast.error(e?.message ?? 'No se pudo eliminar el conductor');
-    } finally {
-      setConductorAEliminar(null);
-    }
+  const eliminarConductor = (conductor: Transportador) => {
+    confirmDelete({
+      title: 'Eliminar conductor',
+      description: `¿Estás seguro de eliminar a "${conductor.nombres} ${conductor.apellidos}"? Esta acción no se puede deshacer.`,
+      confirmText: 'Eliminar',
+      onConfirm: async () => {
+        try {
+          await transportadoresApi.eliminar(conductor.id);
+          setConductores((prev) => prev.filter((c) => c.id !== conductor.id));
+          toast.success('Conductor eliminado correctamente');
+          cargarEmpresas();
+        } catch (e: any) {
+          toast.error(e?.message ?? 'No se pudo eliminar el conductor');
+        }
+      },
+    });
   };
 
-  const handleToggleEstadoConductor = async (conductor: Transportador) => {
-    try {
-      await transportadoresApi.editar(conductor.id, { estado: !conductor.estado });
-      setConductores((prev) =>
-        prev.map((c) => (c.id === conductor.id ? { ...c, estado: !conductor.estado } : c)),
-      );
-    } catch (e: any) {
-      toast.error(e?.message ?? 'No se pudo cambiar el estado');
-    }
+  // Obtener conductores de una empresa
+  const getConductoresPorEmpresa = (empresaId: number) => {
+    return conductores.filter((c) => c.empresa_transportadora_id === empresaId);
   };
 
   return (
-    <div className="space-y-6">
+    <>
+      {ConfirmDeleteDialog}
+
       {/* Modal Empresa */}
       <Dialog open={openModalEmpresa} onOpenChange={setOpenModalEmpresa}>
         <DialogContent>
@@ -328,140 +299,130 @@ export function TransporteTab() {
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="tipo_persona">Tipo de Persona</Label>
-                <Select
-                  value={formEmpresa.tipo_persona}
-                  onValueChange={(value) =>
-                    setFormEmpresa((prev) => ({ ...prev, tipo_persona: value as 'JURIDICA' | 'NATURAL' }))
-                  }
-                >
-                  <SelectTrigger id="tipo_persona">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="JURIDICA">Jurídica</SelectItem>
-                    <SelectItem value="NATURAL">Natural</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="nit-empresa">
-                  NIT <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="nit-empresa"
-                  placeholder="900.111.222-1"
-                  value={formEmpresa.nit}
-                  onChange={(e) =>
-                    setFormEmpresa((prev) => ({ ...prev, nit: e.target.value }))
-                  }
-                />
-              </div>
-            </div>
-
             <div className="space-y-2">
-              <Label htmlFor="razon_social-empresa">
-                Razón Social <span className="text-destructive">*</span>
+              <Label htmlFor="tipo">
+                Tipo <span className="text-destructive">*</span>
               </Label>
-              <Input
-                id="razon_social-empresa"
-                placeholder="Ej: Transportes del Valle S.A.S."
-                value={formEmpresa.razon_social}
-                onChange={(e) =>
-                  setFormEmpresa((prev) => ({ ...prev, razon_social: e.target.value }))
+              <Select
+                value={formEmpresa.tipo_persona}
+                onValueChange={(value: 'JURIDICA' | 'NATURAL') =>
+                  setFormEmpresa((prev) => ({ ...prev, tipo_persona: value }))
                 }
-              />
+              >
+                <SelectTrigger id="tipo">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="JURIDICA">Persona Jurídica</SelectItem>
+                  <SelectItem value="NATURAL">Persona Natural</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="direccion-empresa">Dirección</Label>
-              <Input
-                id="direccion-empresa"
-                placeholder="Dirección"
-                value={formEmpresa.direccion}
-                onChange={(e) =>
-                  setFormEmpresa((prev) => ({ ...prev, direccion: e.target.value }))
-                }
-              />
-            </div>
+            {formEmpresa.tipo_persona === 'JURIDICA' ? (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="nombre-empresa">
+                    Nombre de la Empresa <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="nombre-empresa"
+                    placeholder="Ej: Transportes del Valle S.A.S."
+                    value={formEmpresa.razon_social}
+                    onChange={(e) =>
+                      setFormEmpresa((prev) => ({ ...prev, razon_social: e.target.value }))
+                    }
+                  />
+                </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="ciudad-empresa">Ciudad</Label>
-                <Input
-                  id="ciudad-empresa"
-                  placeholder="Ciudad"
-                  value={formEmpresa.ciudad}
-                  onChange={(e) =>
-                    setFormEmpresa((prev) => ({ ...prev, ciudad: e.target.value }))
-                  }
-                />
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="nit">
+                    NIT <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="nit"
+                    placeholder="900.111.222-1"
+                    value={formEmpresa.nit}
+                    onChange={(e) =>
+                      setFormEmpresa((prev) => ({ ...prev, nit: e.target.value }))
+                    }
+                  />
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="telefono-empresa">Teléfono</Label>
-                <Input
-                  id="telefono-empresa"
-                  placeholder="+57 300 444 5555"
-                  value={formEmpresa.telefono}
-                  onChange={(e) =>
-                    setFormEmpresa((prev) => ({ ...prev, telefono: e.target.value }))
-                  }
-                />
-              </div>
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="contacto-empresa">Contacto</Label>
+                  <Input
+                    id="contacto-empresa"
+                    placeholder="+57 300 444 5555"
+                    value={formEmpresa.telefono}
+                    onChange={(e) =>
+                      setFormEmpresa((prev) => ({ ...prev, telefono: e.target.value }))
+                    }
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="nombre-natural">
+                    Nombre Completo <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="nombre-natural"
+                    placeholder="Ej: Juan Pérez García"
+                    value={formEmpresa.razon_social}
+                    onChange={(e) =>
+                      setFormEmpresa((prev) => ({ ...prev, razon_social: e.target.value }))
+                    }
+                  />
+                </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="email-empresa">Email</Label>
-                <Input
-                  id="email-empresa"
-                  type="email"
-                  placeholder="correo@empresa.com"
-                  value={formEmpresa.email}
-                  onChange={(e) =>
-                    setFormEmpresa((prev) => ({ ...prev, email: e.target.value }))
-                  }
-                />
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="cedula">
+                    Cédula / NIT <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="cedula"
+                    placeholder="16.123.456"
+                    value={formEmpresa.nit}
+                    onChange={(e) =>
+                      setFormEmpresa((prev) => ({ ...prev, nit: e.target.value }))
+                    }
+                  />
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="contacto-empresa">Contacto</Label>
-                <Input
-                  id="contacto-empresa"
-                  placeholder="Nombre del contacto"
-                  value={formEmpresa.contacto_nombre}
-                  onChange={(e) =>
-                    setFormEmpresa((prev) => ({ ...prev, contacto_nombre: e.target.value }))
-                  }
-                />
-              </div>
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="razon-social">Razón Social / Nombre Comercial</Label>
+                  <Input
+                    id="razon-social"
+                    placeholder="Ej: Transporte JP"
+                    value={formEmpresa.contacto_nombre}
+                    onChange={(e) =>
+                      setFormEmpresa((prev) => ({ ...prev, contacto_nombre: e.target.value }))
+                    }
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="observaciones-empresa">Observaciones</Label>
-              <Textarea
-                id="observaciones-empresa"
-                placeholder="Notas adicionales"
-                value={formEmpresa.observaciones}
-                onChange={(e) =>
-                  setFormEmpresa((prev) => ({ ...prev, observaciones: e.target.value }))
-                }
-              />
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="celular-natural">Celular</Label>
+                  <Input
+                    id="celular-natural"
+                    placeholder="+57 300 555 6666"
+                    value={formEmpresa.telefono}
+                    onChange={(e) =>
+                      setFormEmpresa((prev) => ({ ...prev, telefono: e.target.value }))
+                    }
+                  />
+                </div>
+              </>
+            )}
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenModalEmpresa(false)} disabled={guardandoEmpresa}>
+            <Button variant="outline" onClick={() => setOpenModalEmpresa(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSaveEmpresa} disabled={guardandoEmpresa}>
-              {guardandoEmpresa && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Guardar
-            </Button>
+            <Button onClick={handleSaveEmpresa}>Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -479,20 +440,6 @@ export function TransporteTab() {
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="nombre-conductor">
-                Nombre Completo <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="nombre-conductor"
-                placeholder="Ej: Carlos Martínez"
-                value={formConductor.nombre}
-                onChange={(e) =>
-                  setFormConductor((prev) => ({ ...prev, nombre: e.target.value }))
-                }
-              />
-            </div>
-
             <div className="space-y-2">
               <Label htmlFor="empresa_transportadora_id">
                 Empresa de Transporte <span className="text-destructive">*</span>
@@ -516,178 +463,73 @@ export function TransporteTab() {
               </Select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="tipo_documento">Tipo de Documento</Label>
-                <Select
-                  value={formConductor.tipo_documento}
-                  onValueChange={(value) =>
-                    setFormConductor((prev) => ({
-                      ...prev,
-                      tipo_documento: value as 'CC' | 'CE' | 'PPT' | 'PASAPORTE',
-                    }))
-                  }
-                >
-                  <SelectTrigger id="tipo_documento">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TIPOS_DOCUMENTO.map((td) => (
-                      <SelectItem key={td} value={td}>
-                        {td}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="numero_documento">Número de Documento</Label>
-                <Input
-                  id="numero_documento"
-                  placeholder="16.123.456"
-                  value={formConductor.numero_documento}
-                  onChange={(e) =>
-                    setFormConductor((prev) => ({ ...prev, numero_documento: e.target.value }))
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="placa">
-                  Placa del Vehículo <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="placa"
-                  placeholder="ABC-123"
-                  value={formConductor.placa_vehiculo}
-                  onChange={(e) =>
-                    setFormConductor((prev) => ({ ...prev, placa_vehiculo: e.target.value }))
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="telefono-conductor">Teléfono</Label>
-                <Input
-                  id="telefono-conductor"
-                  placeholder="+57 300 777 8888"
-                  value={formConductor.telefono}
-                  onChange={(e) =>
-                    setFormConductor((prev) => ({ ...prev, telefono: e.target.value }))
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="tipo_vehiculo">Tipo de Vehículo</Label>
-                <Input
-                  id="tipo_vehiculo"
-                  placeholder="Ej: Volqueta"
-                  value={formConductor.tipo_vehiculo}
-                  onChange={(e) =>
-                    setFormConductor((prev) => ({ ...prev, tipo_vehiculo: e.target.value }))
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="capacidad_kg">Capacidad (kg)</Label>
-                <Input
-                  id="capacidad_kg"
-                  type="number"
-                  placeholder="0"
-                  value={formConductor.capacidad_kg}
-                  onChange={(e) =>
-                    setFormConductor((prev) => ({ ...prev, capacidad_kg: e.target.value }))
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="licencia_conduccion">Licencia de Conducción</Label>
-                <Input
-                  id="licencia_conduccion"
-                  placeholder="Número de licencia"
-                  value={formConductor.licencia_conduccion}
-                  onChange={(e) =>
-                    setFormConductor((prev) => ({ ...prev, licencia_conduccion: e.target.value }))
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="licencia_vencimiento">Vencimiento Licencia</Label>
-                <Input
-                  id="licencia_vencimiento"
-                  type="date"
-                  value={formConductor.licencia_vencimiento}
-                  onChange={(e) =>
-                    setFormConductor((prev) => ({ ...prev, licencia_vencimiento: e.target.value }))
-                  }
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="nombre-conductor">
+                Nombre Completo <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="nombre-conductor"
+                placeholder="Ej: Carlos Martínez"
+                value={formConductor.nombre}
+                onChange={(e) =>
+                  setFormConductor((prev) => ({ ...prev, nombre: e.target.value }))
+                }
+              />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="observaciones-conductor">Observaciones</Label>
-              <Textarea
-                id="observaciones-conductor"
-                placeholder="Notas adicionales"
-                value={formConductor.observaciones}
+              <Label htmlFor="cedula-conductor">Cédula</Label>
+              <Input
+                id="cedula-conductor"
+                placeholder="16.123.456"
+                value={formConductor.numero_documento}
                 onChange={(e) =>
-                  setFormConductor((prev) => ({ ...prev, observaciones: e.target.value }))
+                  setFormConductor((prev) => ({ ...prev, numero_documento: e.target.value }))
+                }
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="telefono">Teléfono</Label>
+              <Input
+                id="telefono"
+                placeholder="+57 300 777 8888"
+                value={formConductor.telefono}
+                onChange={(e) =>
+                  setFormConductor((prev) => ({ ...prev, telefono: e.target.value }))
+                }
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="placa">Placa del Vehículo</Label>
+              <Input
+                id="placa"
+                placeholder="ABC-123"
+                value={formConductor.placa_vehiculo}
+                onChange={(e) =>
+                  setFormConductor((prev) => ({ ...prev, placa_vehiculo: e.target.value }))
                 }
               />
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenModalConductor(false)} disabled={guardandoConductor}>
+            <Button variant="outline" onClick={() => setOpenModalConductor(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSaveConductor} disabled={guardandoConductor}>
-              {guardandoConductor && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Guardar
-            </Button>
+            <Button onClick={handleSaveConductor}>Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <ConfirmDeleteDialog
-        open={!!empresaAEliminar}
-        onOpenChange={(open) => !open && setEmpresaAEliminar(null)}
-        title="Eliminar empresa"
-        description={`¿Estás seguro de eliminar "${empresaAEliminar?.razon_social}"? Esta acción no se puede deshacer.`}
-        confirmText="Eliminar"
-        onConfirm={handleDeleteEmpresa}
-      />
-
-      <ConfirmDeleteDialog
-        open={!!conductorAEliminar}
-        onOpenChange={(open) => !open && setConductorAEliminar(null)}
-        title="Eliminar conductor"
-        description={`¿Estás seguro de eliminar a "${conductorAEliminar?.nombres} ${conductorAEliminar?.apellidos}"? Esta acción no se puede deshacer.`}
-        confirmText="Eliminar"
-        onConfirm={handleDeleteConductor}
-      />
-
-      {/* Empresas de Transporte */}
+      {/* Empresas de Transporte con Conductores */}
       <Card className="border-border">
         <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
           <div className="flex items-center justify-between">
             <div>
-              <div className="flex items-center gap-2">
-                <Building2 className="h-5 w-5 text-primary" />
-                <CardTitle>Empresas de Transporte</CardTitle>
-              </div>
-              <p className="text-sm text-muted-foreground mt-1">Compañías de transporte de carga</p>
+              <CardTitle>Transportadores</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">Empresas de transporte y sus conductores</p>
             </div>
             <Button onClick={() => handleOpenModalEmpresa()}>
               <Plus className="mr-2 h-4 w-4" />
@@ -696,146 +538,144 @@ export function TransporteTab() {
           </div>
         </CardHeader>
         <CardContent className="p-6">
-          {cargandoEmpresas ? (
-            <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              Cargando empresas...
-            </div>
-          ) : empresas.length === 0 ? (
+          {empresas.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Building2 className="h-12 w-12 mx-auto mb-3 opacity-30" />
               <p className="text-sm">No hay empresas de transporte registradas</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {empresas.map((empresa) => (
-                <div
-                  key={empresa.id}
-                  className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border"
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="font-semibold">{empresa.razon_social}</p>
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                        {empresa.transportadores_count ?? 0} conductores
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-4 mt-1 text-sm text-muted-foreground">
-                      {empresa.nit && <span>NIT: {empresa.nit}</span>}
-                      {empresa.ciudad && <span>Ciudad: {empresa.ciudad}</span>}
-                      {empresa.telefono && <span>Tel: {empresa.telefono}</span>}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={empresa.estado ?? false}
-                      onCheckedChange={() => handleToggleEstadoEmpresa(empresa)}
-                    />
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleOpenModalEmpresa(empresa)}
-                      className="h-8 w-8 p-0"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setEmpresaAEliminar(empresa)}
-                      className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              {empresas.map((empresa) => {
+                const conductoresEmpresa = getConductoresPorEmpresa(empresa.id);
+                const estaExpandida = empresasExpandidas.includes(empresa.id);
+                const tipo = empresa.tipo_persona ?? 'JURIDICA';
 
-      {/* Conductores */}
-      <Card className="border-border">
-        <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-2">
-                <User className="h-5 w-5 text-primary" />
-                <CardTitle>Conductores</CardTitle>
-              </div>
-              <p className="text-sm text-muted-foreground mt-1">Conductores y sus vehículos</p>
-            </div>
-            <Button onClick={() => handleOpenModalConductor()}>
-              <Plus className="mr-2 h-4 w-4" />
-              Nuevo Conductor
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="p-6">
-          {cargandoConductores ? (
-            <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              Cargando conductores...
-            </div>
-          ) : conductores.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <User className="h-12 w-12 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">No hay conductores registrados</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {conductores.map((conductor) => {
-                const empresa = empresas.find((e) => e.id === conductor.empresa_transportadora_id);
-                const nombreEmpresa = empresa?.razon_social ?? conductor.empresa_transportadora?.razon_social;
                 return (
                   <div
-                    key={conductor.id}
-                    className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border"
+                    key={empresa.id}
+                    className="rounded-lg border border-border bg-muted/30"
                   >
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold">
-                          {conductor.nombres} {conductor.apellidos}
-                        </p>
-                        {nombreEmpresa && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                            {nombreEmpresa}
-                          </span>
-                        )}
+                    {/* Cabecera de la empresa */}
+                    <div className="flex items-center justify-between p-4">
+                      <div className="flex items-center gap-3 flex-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleEmpresa(empresa.id)}
+                          className="h-8 w-8 p-0"
+                        >
+                          {estaExpandida ? (
+                            <ChevronDown className="h-4 w-4" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Building2 className="h-5 w-5 text-primary flex-shrink-0" />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold">{empresa.razon_social}</p>
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${
+                              tipo === 'NATURAL'
+                                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                                : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                            }`}>
+                              {tipo === 'NATURAL' ? 'P. Natural' : 'P. Jurídica'}
+                            </span>
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                              {conductoresEmpresa.length} {conductoresEmpresa.length === 1 ? 'conductor' : 'conductores'}
+                            </span>
+                          </div>
+                          <div className="flex gap-4 mt-1 text-sm text-muted-foreground">
+                            {tipo === 'JURIDICA' && empresa.nit && <span>NIT: {empresa.nit}</span>}
+                            {tipo === 'NATURAL' && empresa.nit && <span>CC: {empresa.nit}</span>}
+                            {tipo === 'NATURAL' && empresa.contacto_nombre && <span>Razón Social: {empresa.contacto_nombre}</span>}
+                            {empresa.telefono && <span>Tel: {empresa.telefono}</span>}
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex flex-wrap gap-4 mt-1 text-sm text-muted-foreground">
-                        {conductor.numero_documento && (
-                          <span>
-                            {conductor.tipo_documento ?? 'CC'}: {conductor.numero_documento}
-                          </span>
-                        )}
-                        {conductor.telefono && <span>Tel: {conductor.telefono}</span>}
-                        {conductor.placa_vehiculo && <span>Placa: {conductor.placa_vehiculo}</span>}
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleOpenModalEmpresa(empresa)}
+                          className="h-8 w-8 p-0"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => eliminarEmpresa(empresa)}
+                          className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={conductor.estado ?? false}
-                        onCheckedChange={() => handleToggleEstadoConductor(conductor)}
-                      />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleOpenModalConductor(conductor)}
-                        className="h-8 w-8 p-0"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setConductorAEliminar(conductor)}
-                        className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+
+                    {/* Conductores (cuando está expandida) */}
+                    {estaExpandida && (
+                      <div className="border-t border-border bg-muted/10 p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm font-medium text-muted-foreground">Conductores</span>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleOpenModalConductor(empresa.id)}
+                          >
+                            <Plus className="mr-2 h-3 w-3" />
+                            Agregar Conductor
+                          </Button>
+                        </div>
+
+                        {conductoresEmpresa.length === 0 ? (
+                          <div className="text-center py-6 text-sm text-muted-foreground">
+                            No hay conductores registrados para esta empresa
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {conductoresEmpresa.map((conductor) => (
+                              <div
+                                key={conductor.id}
+                                className="flex items-center justify-between p-3 rounded-lg bg-background border border-border"
+                              >
+                                <div className="flex-1">
+                                  <p className="font-medium text-sm">
+                                    {conductor.nombres} {conductor.apellidos}
+                                  </p>
+                                  <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
+                                    {conductor.numero_documento && <span>CC: {conductor.numero_documento}</span>}
+                                    {conductor.telefono && <span>Tel: {conductor.telefono}</span>}
+                                    {conductor.placa_vehiculo && <span>Placa: {conductor.placa_vehiculo}</span>}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleOpenModalConductor(empresa.id, conductor)}
+                                    className="h-7 w-7 p-0"
+                                  >
+                                    <Edit className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => eliminarConductor(conductor)}
+                                    className="h-7 w-7 p-0 hover:bg-destructive/10 hover:text-destructive"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -843,6 +683,6 @@ export function TransporteTab() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </>
   );
 }

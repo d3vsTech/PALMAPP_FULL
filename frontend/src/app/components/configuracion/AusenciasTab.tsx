@@ -3,8 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Switch } from '../ui/switch';
-import { Plus, Trash2, Edit, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Edit } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Select,
@@ -21,7 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../ui/dialog';
-import { ConfirmDeleteDialog } from '../ui/confirm-delete-dialog';
+import { useConfirmDelete } from '../../hooks/useConfirmDelete';
 import {
   configuracionApi,
   ConfiguracionErrorCodes,
@@ -31,61 +30,54 @@ import {
 } from '../../../api/configuracion';
 
 /**
- * Tab "Novedades / Motivos de Ausencia" conectado al API real (§17 API_PARAMETRICAS).
+ * Tab "Novedades / Motivos de Ausencia" — visual V.12, datos V.2 (API real).
+ * Endpoints CRUD /v1/tenant/motivos-ausencia.
  *
- * Endpoints:
- *   GET    /api/v1/tenant/motivos-ausencia        → listado paginado
- *   POST   /api/v1/tenant/motivos-ausencia        → crear
- *   PUT    /api/v1/tenant/motivos-ausencia/{id}   → editar (+ toggle estado)
- *   DELETE /api/v1/tenant/motivos-ausencia/{id}   → eliminar (409 si tiene ausencias)
+ * El select de color V.12 usa clases bg-X-500; las mapeamos a hex para el API
+ * (color: #RRGGBB) y de vuelta a clase para mostrar el preview.
  */
 
-const TIPOS_BASE: { value: TipoBaseAusencia; label: string }[] = [
-  { value: 'INCAPACIDAD_EPS', label: 'Incapacidad EPS' },
-  { value: 'INCAPACIDAD_ARL', label: 'Incapacidad ARL' },
-  { value: 'LICENCIA_MATERNIDAD', label: 'Licencia de Maternidad' },
-  { value: 'LICENCIA_PATERNIDAD', label: 'Licencia de Paternidad' },
-  { value: 'LICENCIA_LUTO', label: 'Licencia de Luto' },
-  { value: 'PERMISO_REMUNERADO', label: 'Permiso Remunerado' },
-  { value: 'PERMISO_NO_REMUNERADO', label: 'Permiso No Remunerado' },
-  { value: 'AUSENCIA_INJUSTIFICADA', label: 'Ausencia Injustificada' },
-  { value: 'CALAMIDAD_DOMESTICA', label: 'Calamidad Doméstica' },
-  { value: 'SUSPENSION_DISCIPLINARIA', label: 'Suspensión Disciplinaria' },
-  { value: 'OTRO', label: 'Otro' },
+const COLORES_DISPONIBLES: { value: string; hex: string; label: string }[] = [
+  { value: 'bg-blue-500',   hex: '#3b82f6', label: 'Azul' },
+  { value: 'bg-green-500',  hex: '#22c55e', label: 'Verde' },
+  { value: 'bg-red-500',    hex: '#ef4444', label: 'Rojo' },
+  { value: 'bg-yellow-500', hex: '#eab308', label: 'Amarillo' },
+  { value: 'bg-purple-500', hex: '#a855f7', label: 'Morado' },
+  { value: 'bg-pink-500',   hex: '#ec4899', label: 'Rosa' },
+  { value: 'bg-orange-500', hex: '#f97316', label: 'Naranja' },
+  { value: 'bg-gray-500',   hex: '#6b7280', label: 'Gris' },
 ];
+
+function claseDesdeHex(hex: string): string {
+  const c = COLORES_DISPONIBLES.find((c) => c.hex.toLowerCase() === hex.toLowerCase());
+  return c?.value ?? 'bg-blue-500';
+}
+
+function hexDesdeClase(clase: string): string {
+  const c = COLORES_DISPONIBLES.find((c) => c.value === clase);
+  return c?.hex ?? '#3b82f6';
+}
 
 const FORM_VACIO = {
   nombre: '',
-  tipo_base: 'OTRO' as TipoBaseAusencia,
-  es_remunerada: false,
-  afecta_nomina: false,
-  porcentaje_pago_default: '100',
-  requiere_soporte: false,
-  color: '#3b82f6',
+  afectaPago: 'no',
+  color: 'bg-blue-500',
 };
 
 export function AusenciasTab() {
   const [motivos, setMotivos] = useState<MotivoAusencia[]>([]);
-  const [cargando, setCargando] = useState(true);
-  const [guardando, setGuardando] = useState(false);
 
   const [openModal, setOpenModal] = useState(false);
   const [motivoEdit, setMotivoEdit] = useState<MotivoAusencia | null>(null);
   const [formData, setFormData] = useState(FORM_VACIO);
 
-  const [motivoAEliminar, setMotivoAEliminar] = useState<MotivoAusencia | null>(null);
+  const { confirmDelete, ConfirmDeleteDialog } = useConfirmDelete();
 
-  const cargar = () => {
-    setCargando(true);
+  useEffect(() => {
     configuracionApi.motivosAusencia
       .listar({ per_page: 100 })
       .then((res) => setMotivos(res.data))
-      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar los motivos de ausencia'))
-      .finally(() => setCargando(false));
-  };
-
-  useEffect(() => {
-    cargar();
+      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar los motivos de ausencia'));
   }, []);
 
   const handleOpenModal = (motivo?: MotivoAusencia) => {
@@ -93,12 +85,8 @@ export function AusenciasTab() {
       setMotivoEdit(motivo);
       setFormData({
         nombre: motivo.nombre,
-        tipo_base: motivo.tipo_base,
-        es_remunerada: motivo.es_remunerada,
-        afecta_nomina: motivo.afecta_nomina,
-        porcentaje_pago_default: String(motivo.porcentaje_pago_default),
-        requiere_soporte: motivo.requiere_soporte,
-        color: motivo.color,
+        afectaPago: motivo.afecta_nomina ? 'si' : 'no',
+        color: claseDesdeHex(motivo.color),
       });
     } else {
       setMotivoEdit(null);
@@ -113,17 +101,21 @@ export function AusenciasTab() {
       return;
     }
 
-    setGuardando(true);
+    const afecta = formData.afectaPago === 'si';
+    const tipoBase: TipoBaseAusencia = motivoEdit?.tipo_base ?? 'OTRO';
+    const payload: MotivoAusenciaPayload = {
+      nombre: formData.nombre.trim(),
+      tipo_base: tipoBase,
+      es_remunerada: !afecta,
+      afecta_nomina: afecta,
+      porcentaje_pago_default: motivoEdit
+        ? Number(motivoEdit.porcentaje_pago_default)
+        : (afecta ? 0 : 100),
+      requiere_soporte: motivoEdit?.requiere_soporte ?? false,
+      color: hexDesdeClase(formData.color),
+    };
+
     try {
-      const payload: MotivoAusenciaPayload = {
-        nombre: formData.nombre.trim(),
-        tipo_base: formData.tipo_base,
-        es_remunerada: formData.es_remunerada,
-        afecta_nomina: formData.afecta_nomina,
-        porcentaje_pago_default: Number(formData.porcentaje_pago_default),
-        requiere_soporte: formData.requiere_soporte,
-        color: formData.color,
-      };
       if (motivoEdit) {
         const res = await configuracionApi.motivosAusencia.editar(motivoEdit.id, payload);
         setMotivos((prev) => prev.map((m) => (m.id === motivoEdit.id ? res.data : m)));
@@ -131,7 +123,7 @@ export function AusenciasTab() {
       } else {
         const res = await configuracionApi.motivosAusencia.crear(payload);
         setMotivos((prev) => [...prev, res.data]);
-        toast.success(res.message ?? 'Tipo de novedad creado');
+        toast.success(res.message ?? 'Tipo de novedad agregado');
       }
       setOpenModal(false);
     } catch (e: any) {
@@ -141,39 +133,33 @@ export function AusenciasTab() {
       } else {
         toast.error(e?.message ?? 'No se pudo guardar el tipo de novedad');
       }
-    } finally {
-      setGuardando(false);
     }
   };
 
-  const handleToggleEstado = async (motivo: MotivoAusencia) => {
-    try {
-      const res = await configuracionApi.motivosAusencia.editar(motivo.id, { estado: !motivo.estado });
-      setMotivos((prev) => prev.map((m) => (m.id === motivo.id ? res.data : m)));
-    } catch (e: any) {
-      toast.error(e?.message ?? 'No se pudo cambiar el estado');
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!motivoAEliminar) return;
-    try {
-      await configuracionApi.motivosAusencia.eliminar(motivoAEliminar.id);
-      setMotivos((prev) => prev.filter((m) => m.id !== motivoAEliminar.id));
-      toast.success('Tipo de novedad eliminado');
-    } catch (e: any) {
-      if (e?.code === ConfiguracionErrorCodes.MOTIVO_CON_AUSENCIAS) {
-        toast.error('No se puede eliminar: tiene ausencias asociadas');
-      } else {
-        toast.error(e?.message ?? 'No se pudo eliminar el tipo de novedad');
-      }
-    } finally {
-      setMotivoAEliminar(null);
-    }
+  const eliminarTipo = (motivo: MotivoAusencia) => {
+    confirmDelete({
+      title: 'Eliminar tipo de novedad',
+      description: `¿Estás seguro de eliminar "${motivo.nombre}"? Esta acción no se puede deshacer.`,
+      onConfirm: async () => {
+        try {
+          await configuracionApi.motivosAusencia.eliminar(motivo.id);
+          setMotivos((prev) => prev.filter((m) => m.id !== motivo.id));
+          toast.success('Tipo de novedad eliminado');
+        } catch (e: any) {
+          if (e?.code === ConfiguracionErrorCodes.MOTIVO_CON_AUSENCIAS) {
+            toast.error('No se puede eliminar: tiene ausencias asociadas');
+          } else {
+            toast.error(e?.message ?? 'No se pudo eliminar el tipo de novedad');
+          }
+        }
+      },
+    });
   };
 
   return (
     <>
+      {ConfirmDeleteDialog}
+
       <Dialog open={openModal} onOpenChange={setOpenModal}>
         <DialogContent>
           <DialogHeader>
@@ -201,115 +187,46 @@ export function AusenciasTab() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="tipoBase">
-                Tipo Base <span className="text-destructive">*</span>
-              </Label>
-              <Select
-                value={formData.tipo_base}
-                onValueChange={(value: TipoBaseAusencia) =>
-                  setFormData((prev) => ({ ...prev, tipo_base: value }))
-                }
-              >
-                <SelectTrigger id="tipoBase">
+              <Label htmlFor="afectaPago">¿Afecta el Pago?</Label>
+              <Select value={formData.afectaPago} onValueChange={(value) => setFormData((prev) => ({ ...prev, afectaPago: value }))}>
+                <SelectTrigger id="afectaPago">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {TIPOS_BASE.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>
-                      {t.label}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="no">No afecta el pago</SelectItem>
+                  <SelectItem value="si">Sí afecta el pago</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="porcentaje">Porcentaje de Pago</Label>
-              <div className="relative">
-                <Input
-                  id="porcentaje"
-                  type="number"
-                  placeholder="100"
-                  value={formData.porcentaje_pago_default}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, porcentaje_pago_default: e.target.value }))
-                  }
-                  className="pr-8"
-                />
-                <span className="absolute right-3 top-3 text-muted-foreground">%</span>
-              </div>
-            </div>
-
-            <div className="space-y-2">
               <Label htmlFor="color">Color</Label>
-              <div className="flex items-center gap-3">
-                <Input
-                  id="color"
-                  type="color"
-                  value={formData.color}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, color: e.target.value }))
-                  }
-                  className="h-10 w-16 p-1"
-                />
-                <span className="text-sm text-muted-foreground font-mono">{formData.color}</span>
-              </div>
-            </div>
-
-            <div className="space-y-3 pt-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="es_remunerada">Es remunerada</Label>
-                <Switch
-                  id="es_remunerada"
-                  checked={formData.es_remunerada}
-                  onCheckedChange={(checked) =>
-                    setFormData((prev) => ({ ...prev, es_remunerada: checked }))
-                  }
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <Label htmlFor="afecta_nomina">Afecta la nómina</Label>
-                <Switch
-                  id="afecta_nomina"
-                  checked={formData.afecta_nomina}
-                  onCheckedChange={(checked) =>
-                    setFormData((prev) => ({ ...prev, afecta_nomina: checked }))
-                  }
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <Label htmlFor="requiere_soporte">Requiere soporte</Label>
-                <Switch
-                  id="requiere_soporte"
-                  checked={formData.requiere_soporte}
-                  onCheckedChange={(checked) =>
-                    setFormData((prev) => ({ ...prev, requiere_soporte: checked }))
-                  }
-                />
-              </div>
+              <Select value={formData.color} onValueChange={(value) => setFormData((prev) => ({ ...prev, color: value }))}>
+                <SelectTrigger id="color">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {COLORES_DISPONIBLES.map((color) => (
+                    <SelectItem key={color.value} value={color.value}>
+                      <div className="flex items-center gap-2">
+                        <div className={`h-3 w-3 rounded-full ${color.value}`} />
+                        {color.label}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenModal(false)} disabled={guardando}>
+            <Button variant="outline" onClick={() => setOpenModal(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSave} disabled={guardando}>
-              {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Guardar
-            </Button>
+            <Button onClick={handleSave}>Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <ConfirmDeleteDialog
-        open={!!motivoAEliminar}
-        onOpenChange={(open) => !open && setMotivoAEliminar(null)}
-        title="Eliminar tipo de novedad"
-        description={`¿Estás seguro de eliminar "${motivoAEliminar?.nombre}"? Esta acción no se puede deshacer.`}
-        confirmText="Eliminar"
-        onConfirm={handleDelete}
-      />
 
       <Card className="border-border">
         <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
@@ -325,60 +242,42 @@ export function AusenciasTab() {
           </div>
         </CardHeader>
         <CardContent className="p-6">
-          {cargando ? (
-            <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              Cargando tipos de novedades...
-            </div>
-          ) : motivos.length === 0 ? (
-            <div className="py-16 text-center text-sm text-muted-foreground">
-              No hay tipos de novedades registrados
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {motivos.map((motivo) => (
-                <div
-                  key={motivo.id}
-                  className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border"
-                >
-                  <div className="flex items-center gap-3 flex-1">
-                    <div
-                      className="h-4 w-4 rounded-full shrink-0"
-                      style={{ backgroundColor: motivo.color }}
-                    />
-                    <div className="flex-1">
-                      <p className="font-semibold">{motivo.nombre}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {motivo.afecta_nomina ? 'Afecta el pago de nómina' : 'No afecta el pago de nómina'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={motivo.estado}
-                      onCheckedChange={() => handleToggleEstado(motivo)}
-                    />
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleOpenModal(motivo)}
-                      className="h-8 w-8 p-0"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setMotivoAEliminar(motivo)}
-                      className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+          <div className="space-y-3">
+            {motivos.map((motivo) => (
+              <div
+                key={motivo.id}
+                className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border"
+              >
+                <div className="flex items-center gap-3 flex-1">
+                  <div className={`h-4 w-4 rounded-full ${claseDesdeHex(motivo.color)}`} />
+                  <div className="flex-1">
+                    <p className="font-semibold">{motivo.nombre}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {motivo.afecta_nomina ? 'Afecta el pago de nómina' : 'No afecta el pago de nómina'}
+                    </p>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleOpenModal(motivo)}
+                    className="h-8 w-8 p-0"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => eliminarTipo(motivo)}
+                    className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
     </>

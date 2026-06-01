@@ -88,6 +88,7 @@ interface FormData {
   eps: string;
   arl: string;
   fondoPension: string;
+  fondoCesantias: string;
   cajaCompensacion: string;
   // Dotación
   tallaCamisa: string;
@@ -143,7 +144,7 @@ const FORM_INICIAL: FormData = {
   primerApellido: '', segundoApellido: '', primerNombre: '', segundoNombre: '',
   tipoDocumento: 'CC', numeroDocumento: '', fechaExpedicion: '', fechaNacimiento: '', lugarExpedicion: '',
   cargo: '', predioAsignado: '', modalidadPago: 'FIJO', salarioBase: 0, aplicaSubsidioTransporte: false, fechaContratacion: '', fechaFinalizacion: '',
-  eps: '', arl: '', fondoPension: '', cajaCompensacion: '',
+  eps: '', arl: '', fondoPension: '', fondoCesantias: '', cajaCompensacion: '',
   tallaCamisa: '', tallaPantalon: '', tallaCalzado: '',
   banco: '', tipoCuenta: 'AHORROS', numeroCuenta: '',
   correo: '', telefono: '', direccion: '', municipio: '', departamento: '',
@@ -217,6 +218,7 @@ export default function NuevoColaboradorWizard() {
   const [epsOpciones,       setEpsOpciones]       = useState<string[]>([]);
   const [arlOpciones,       setArlOpciones]       = useState<string[]>([]);
   const [pensionOpciones,   setPensionOpciones]   = useState<string[]>([]);
+  const [cesantiasOpciones, setCesantiasOpciones] = useState<string[]>([]);
   const [bancariasOpciones, setBancariasOpciones] = useState<string[]>([]);
   const [departamentos, setDepartamentos] = useState<{codigo:string;nombre:string}[]>([]);
   const [municipios, setMunicipios] = useState<{codigo:string;nombre:string}[]>([]);
@@ -266,6 +268,8 @@ export default function NuevoColaboradorWizard() {
       if (rawArl) setArlOpciones(JSON.parse(rawArl));
       const rawPension = sessionStorage.getItem('cache_pension');
       if (rawPension) setPensionOpciones(JSON.parse(rawPension));
+      const rawCesantias = sessionStorage.getItem('cache_cesantias');
+      if (rawCesantias) setCesantiasOpciones(JSON.parse(rawCesantias));
       const rawBancos = sessionStorage.getItem('cache_bancos');
       if (rawBancos) setBancariasOpciones(JSON.parse(rawBancos));
       const rawDeptos = sessionStorage.getItem('cache_departamentos');
@@ -295,15 +299,17 @@ export default function NuevoColaboradorWizard() {
         const { colaborador, parametricas } = data;
 
         // Paramétricas → estado + caché
-        const epsList     = (parametricas.eps                 ?? []).map(e => e.nombre);
-        const arlList     = (parametricas.arl                 ?? []).map(e => e.nombre);
-        const pensionList = (parametricas.fondos_pension      ?? []).map(e => e.nombre);
-        const bancosList  = (parametricas.entidades_bancarias ?? []).map(e => e.nombre);
+        const epsList       = (parametricas.eps                 ?? []).map(e => e.nombre);
+        const arlList       = (parametricas.arl                 ?? []).map(e => e.nombre);
+        const pensionList   = (parametricas.fondos_pension      ?? []).map(e => e.nombre);
+        const cesantiasList = (parametricas.fondos_cesantias    ?? []).map(e => e.nombre);
+        const bancosList    = (parametricas.entidades_bancarias ?? []).map(e => e.nombre);
 
         setPredios((parametricas.predios ?? []) as any[]);
         setEpsOpciones(epsList);
         setArlOpciones(arlList);
         setPensionOpciones(pensionList);
+        setCesantiasOpciones(cesantiasList);
         setBancariasOpciones(bancosList);
         setDepartamentos(parametricas.departamentos ?? []);
         setCategoriasDocs(parametricas.documento_categorias as unknown as Record<string, CatDoc>);
@@ -313,6 +319,7 @@ export default function NuevoColaboradorWizard() {
           sessionStorage.setItem('cache_eps',             JSON.stringify(epsList));
           sessionStorage.setItem('cache_arl',             JSON.stringify(arlList));
           sessionStorage.setItem('cache_pension',         JSON.stringify(pensionList));
+          sessionStorage.setItem('cache_cesantias',       JSON.stringify(cesantiasList));
           sessionStorage.setItem('cache_bancos',          JSON.stringify(bancosList));
           sessionStorage.setItem('cache_departamentos',   JSON.stringify(parametricas.departamentos ?? []));
           sessionStorage.setItem('cache_categorias_docs', JSON.stringify(parametricas.documento_categorias ?? {}));
@@ -360,6 +367,7 @@ export default function NuevoColaboradorWizard() {
             eps: d.eps ?? '',
             arl: d.arl ?? '',
             fondoPension: d.fondo_pension ?? '',
+            fondoCesantias: d.fondo_cesantias ?? '',
             cajaCompensacion: d.caja_compensacion ?? '',
             tallaCamisa: d.talla_camisa ?? '',
             tallaPantalon: d.talla_pantalon ?? '',
@@ -759,6 +767,7 @@ export default function NuevoColaboradorWizard() {
     if (formData.eps.trim())                       body.eps                          = formData.eps.trim();
     if (formData.arl.trim())                       body.arl                          = formData.arl.trim();
     if (formData.fondoPension.trim())              body.fondo_pension                = formData.fondoPension.trim();
+    if (formData.fondoCesantias.trim())            body.fondo_cesantias              = formData.fondoCesantias.trim();
     if (formData.cajaCompensacion.trim())          body.caja_compensacion            = formData.cajaCompensacion.trim();
     if (formData.tallaCamisa)                      body.talla_camisa                 = formData.tallaCamisa;
     if (formData.tallaPantalon)                    body.talla_pantalon               = formData.tallaPantalon;
@@ -1320,6 +1329,16 @@ export default function NuevoColaboradorWizard() {
                   </Select>
                 </div>
                 <div className="space-y-2">
+                  <Label>Fondo de Cesantías</Label>
+                  <Select value={formData.fondoCesantias} onValueChange={v => handleInputChange('fondoCesantias', v)}>
+                    <SelectTrigger><SelectValue placeholder="Selecciona un fondo" /></SelectTrigger>
+                    <SelectContent>
+                      {cesantiasOpciones.length > 0 && !cesantiasOpciones.includes(formData.fondoCesantias) && formData.fondoCesantias && <SelectItem value={formData.fondoCesantias}>{formData.fondoCesantias}</SelectItem>}
+                      {cesantiasOpciones.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
                   <Label>Caja de Compensación</Label>
                   <Input placeholder="Ej: Cafam" value={formData.cajaCompensacion} onChange={e => handleInputChange('cajaCompensacion', e.target.value)} />
                 </div>
@@ -1631,6 +1650,7 @@ export default function NuevoColaboradorWizard() {
                   <p className="text-xs">EPS: {formData.eps || '-'}</p>
                   <p className="text-xs">ARL: {formData.arl || '-'}</p>
                   <p className="text-xs">Pensión: {formData.fondoPension || '-'}</p>
+                  <p className="text-xs">Cesantías: {formData.fondoCesantias || '-'}</p>
                 </div>
                 <div className="pb-3 border-b border-border">
                   <p className="text-muted-foreground mb-1">Dotación</p>

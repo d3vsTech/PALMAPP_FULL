@@ -56,15 +56,8 @@ const fertilizantes = [
   'Otro'
 ];
 
-// Tipos de labor para auxiliares
-const laboresAuxiliares = [
-  'Mantenimiento de vías',
-  'Limpieza de instalaciones',
-  'Reparación de cercas',
-  'Mantenimiento de equipos',
-  'Transporte',
-  'Otro'
-];
+// Las labores de Finca se cargan desde el API (`/v1/tenant/labores/select`,
+// §4 del doc paramétricas) — se guardan en `laboresLista` al montar el wizard.
 
 // Tipos de ausentismo
 const motivosAusentismo = [
@@ -2754,11 +2747,18 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                 <SelectValue placeholder="Seleccionar labor" />
                               </SelectTrigger>
                               <SelectContent>
-                                {laboresAuxiliares.map((labor) => (
-                                  <SelectItem key={labor} value={labor}>
-                                    {labor}
+                                {laboresLista.length === 0 ? (
+                                  <SelectItem value="__sin_labores__" disabled>
+                                    No hay labores configuradas
                                   </SelectItem>
-                                ))}
+                                ) : (
+                                  laboresLista.map((labor) => (
+                                    <SelectItem key={labor} value={labor}>
+                                      {labor}
+                                    </SelectItem>
+                                  ))
+                                )}
+                                <SelectItem value="Otro">Otro</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>

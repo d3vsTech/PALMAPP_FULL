@@ -9,7 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from '../ui/table';
-import { Plus, Edit, Trash2, Scale, Loader2 } from 'lucide-react';
+import { Plus, Edit, Trash2, Scale } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -27,27 +27,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
-import { ConfirmDeleteDialog } from '../ui/confirm-delete-dialog';
 import { toast } from 'sonner';
+import { useConfirmDelete } from '../../hooks/useConfirmDelete';
 import {
   configuracionApi,
   type TablaLegal,
   type TablaLegalConcepto,
 } from '../../../api/configuracion';
-
-/**
- * Tab "Tablas Legales" conectado al API real (§15 API_PARAMETRICAS).
- *
- * Endpoints (sin paginación):
- *   GET    /api/v1/tenant/configuracion/tablas-legales                    → listado
- *   GET    /api/v1/tenant/configuracion/tablas-legales/conceptos-select   → dropdown
- *   POST   /api/v1/tenant/configuracion/tablas-legales                    → crear
- *   PUT    /api/v1/tenant/configuracion/tablas-legales/{id}               → editar
- *   DELETE /api/v1/tenant/configuracion/tablas-legales/{id}               → eliminar
- *
- * Fechas en formato dd/mm/yyyy. vigente_hasta null = "vigente".
- * Porcentajes pueden venir string; se mandan como Number.
- */
 
 const FORM_VACIO = {
   conceptoId: '',
@@ -62,18 +48,14 @@ type FormState = typeof FORM_VACIO;
 export function TablasLegalesTab() {
   const [tablas, setTablas] = useState<TablaLegal[]>([]);
   const [conceptos, setConceptos] = useState<TablaLegalConcepto[]>([]);
-  const [cargando, setCargando] = useState(true);
-  const [guardando, setGuardando] = useState(false);
-
   const [openModal, setOpenModal] = useState(false);
   const [tablaEdit, setTablaEdit] = useState<TablaLegal | null>(null);
   const [formData, setFormData] = useState<FormState>(FORM_VACIO);
 
-  const [tablaAEliminar, setTablaAEliminar] = useState<TablaLegal | null>(null);
+  const { confirmDelete, ConfirmDeleteDialog } = useConfirmDelete();
 
   useEffect(() => {
     let cancelado = false;
-    setCargando(true);
     Promise.all([
       configuracionApi.tablasLegales.listar(),
       configuracionApi.tablasLegales.conceptosSelect(),
@@ -85,9 +67,6 @@ export function TablasLegalesTab() {
       })
       .catch((e: any) => {
         if (!cancelado) toast.error(e?.message ?? 'No se pudieron cargar las tablas legales');
-      })
-      .finally(() => {
-        if (!cancelado) setCargando(false);
       });
     return () => {
       cancelado = true;
@@ -122,7 +101,6 @@ export function TablasLegalesTab() {
       return;
     }
 
-    setGuardando(true);
     try {
       const payload = {
         concepto_id: Number(formData.conceptoId),
@@ -134,11 +112,11 @@ export function TablasLegalesTab() {
       if (tablaEdit) {
         const res = await configuracionApi.tablasLegales.editar(tablaEdit.id, payload);
         setTablas((prev) => prev.map((t) => (t.id === tablaEdit.id ? res.data : t)));
-        toast.success(res.message ?? 'Tabla legal actualizada');
+        toast.success('Aporte actualizado');
       } else {
         const res = await configuracionApi.tablasLegales.crear(payload);
         setTablas((prev) => [...prev, res.data]);
-        toast.success(res.message ?? 'Tabla legal creada');
+        toast.success('Aporte creado');
       }
       setOpenModal(false);
     } catch (e: any) {
@@ -146,37 +124,40 @@ export function TablasLegalesTab() {
         const primero = Object.values(e.errors).flat()[0];
         toast.error(typeof primero === 'string' ? primero : 'Error de validación');
       } else {
-        toast.error(e?.message ?? 'No se pudo guardar la tabla legal');
+        toast.error(e?.message ?? 'No se pudo guardar el aporte');
       }
-    } finally {
-      setGuardando(false);
     }
   };
 
-  const handleDelete = async () => {
-    if (!tablaAEliminar) return;
-    try {
-      await configuracionApi.tablasLegales.eliminar(tablaAEliminar.id);
-      setTablas((prev) => prev.filter((t) => t.id !== tablaAEliminar.id));
-      toast.success('Tabla legal eliminada');
-    } catch (e: any) {
-      toast.error(e?.message ?? 'No se pudo eliminar la tabla legal');
-    } finally {
-      setTablaAEliminar(null);
-    }
+  const handleDelete = (tabla: TablaLegal) => {
+    confirmDelete({
+      title: '¿Eliminar aporte?',
+      description: `¿Estás seguro de que deseas eliminar "${nombreConcepto(tabla)}"? Esta acción no se puede deshacer.`,
+      confirmText: 'Eliminar',
+      onConfirm: async () => {
+        try {
+          await configuracionApi.tablasLegales.eliminar(tabla.id);
+          setTablas((prev) => prev.filter((t) => t.id !== tabla.id));
+          toast.success('Aporte eliminado');
+        } catch (e: any) {
+          toast.error(e?.message ?? 'No se pudo eliminar el aporte');
+        }
+      },
+    });
   };
 
   return (
     <>
+      {ConfirmDeleteDialog}
       <Dialog open={openModal} onOpenChange={setOpenModal}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Scale className="h-5 w-5 text-primary" />
-              {tablaEdit ? 'Editar Tabla Legal' : 'Nueva Tabla Legal'}
+              {tablaEdit ? 'Editar Aporte' : 'Nuevo Aporte'}
             </DialogTitle>
             <DialogDescription>
-              Define porcentajes legales colombianos y su vigencia
+              Define porcentajes de aportes legales y su vigencia
             </DialogDescription>
           </DialogHeader>
 
@@ -264,25 +245,13 @@ export function TablasLegalesTab() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenModal(false)} disabled={guardando}>
+            <Button variant="outline" onClick={() => setOpenModal(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSave} disabled={guardando}>
-              {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Guardar
-            </Button>
+            <Button onClick={handleSave}>Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <ConfirmDeleteDialog
-        open={!!tablaAEliminar}
-        onOpenChange={(open) => !open && setTablaAEliminar(null)}
-        title="Eliminar tabla legal"
-        description="¿Estás seguro de eliminar esta tabla legal? Esta acción no se puede deshacer."
-        confirmText="Eliminar"
-        onConfirm={handleDelete}
-      />
 
       <Card className="bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-sm border-border/50">
         <CardHeader>
@@ -290,36 +259,31 @@ export function TablasLegalesTab() {
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Scale className="h-5 w-5 text-primary" />
-                Tablas Legales
+                Aportes
               </CardTitle>
               <CardDescription>
-                Historial de porcentajes legales colombianos
+                Historial de porcentajes de aportes legales
               </CardDescription>
             </div>
             <Button onClick={() => handleOpenModal()}>
               <Plus className="mr-2 h-4 w-4" />
-              Nueva Tabla
+              Nuevo Aporte
             </Button>
           </div>
         </CardHeader>
         <CardContent>
-          {cargando ? (
-            <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              Cargando tablas legales...
-            </div>
-          ) : tablas.length === 0 ? (
+          {tablas.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
                 <Scale className="h-8 w-8 text-muted-foreground" />
               </div>
-              <h3 className="mb-2 text-lg font-semibold">No hay tablas legales</h3>
+              <h3 className="mb-2 text-lg font-semibold">No hay aportes registrados</h3>
               <p className="mb-4 text-sm text-muted-foreground">
-                Agrega los porcentajes legales vigentes
+                Agrega los porcentajes de aportes legales vigentes
               </p>
               <Button onClick={() => handleOpenModal()}>
                 <Plus className="mr-2 h-4 w-4" />
-                Agregar Tabla
+                Agregar Aporte
               </Button>
             </div>
           ) : (
@@ -328,20 +292,20 @@ export function TablasLegalesTab() {
                 <TableHeader>
                   <TableRow className="bg-muted/50">
                     <TableHead>Concepto</TableHead>
-                    <TableHead className="text-center">% Empleado</TableHead>
-                    <TableHead className="text-center">% Empresa</TableHead>
+                    <TableHead>% Empleado</TableHead>
+                    <TableHead>% Empresa</TableHead>
                     <TableHead>Vigencia</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
+                    <TableHead className="text-center">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {tablas.map((tabla) => (
                     <TableRow key={tabla.id} className="hover:bg-muted/50 transition-colors">
                       <TableCell className="font-medium">{nombreConcepto(tabla)}</TableCell>
-                      <TableCell className="text-center font-semibold text-primary">
+                      <TableCell className="font-semibold text-primary">
                         {tabla.porcentaje_empleado}%
                       </TableCell>
-                      <TableCell className="text-center font-semibold text-accent">
+                      <TableCell className="font-semibold text-accent">
                         {tabla.porcentaje_empresa}%
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
@@ -352,8 +316,8 @@ export function TablasLegalesTab() {
                           <> → Vigente</>
                         )}
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center gap-2">
                           <Button
                             variant="ghost"
                             size="sm"
@@ -364,7 +328,7 @@ export function TablasLegalesTab() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => setTablaAEliminar(tabla)}
+                            onClick={() => handleDelete(tabla)}
                           >
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>

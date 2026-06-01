@@ -97,6 +97,7 @@ export interface Colaborador {
   // Seguridad social (guardamos el nombre seleccionado del catálogo)
   eps: string | null;
   fondo_pension: string | null;
+  fondo_cesantias: string | null;
   arl: string | null;
   caja_compensacion: string | null;
   // Dotación
@@ -140,6 +141,7 @@ export interface CrearColaboradorPayload {
   fecha_retiro?: string | null;
   eps?: string;
   fondo_pension?: string;
+  fondo_cesantias?: string;
   arl?: string;
   caja_compensacion?: string;
   talla_camisa?: string;
@@ -263,6 +265,7 @@ export interface WizardParametricas {
   eps:                  ParametricaItem[];
   arl:                  ParametricaItem[];
   fondos_pension:       ParametricaItem[];
+  fondos_cesantias:     ParametricaItem[];
   entidades_bancarias:  ParametricaItem[];
   departamentos:        DepartamentoItem[];
   documento_categorias: Record<string, DocumentoCategoria>;
@@ -277,7 +280,9 @@ export interface WizardInitResponse {
 export const colaboradoresApi = {
   // ─── Bundle de inicialización del wizard ─────────────────────────────────
   /**
-   * Reemplaza 8 fetches paralelos del wizard de colaboradores.
+   * Reemplaza 9 fetches paralelos del wizard de colaboradores
+   * (predios, documento-categorias, eps, arl, fondos-pension, fondos-cesantias,
+   * entidades-bancarias, departamentos y colaboradores/{id}).
    * - `id` presente → modo edición, devuelve colaborador + paramétricas.
    * - `id` ausente  → modo creación, devuelve solo paramétricas (colaborador = null).
    */
@@ -480,6 +485,11 @@ export const colaboradoresApi = {
   getFondosPension: () =>
     requestConToken<{ data: Array<{ id: number; nombre: string }> }>(
       '/api/v1/tenant/fondos-pension/select', { method: 'GET' }, tkn()
+    ),
+
+  getFondosCesantias: () =>
+    requestConToken<{ data: Array<{ id: number; nombre: string }> }>(
+      '/api/v1/tenant/fondos-cesantias/select', { method: 'GET' }, tkn()
     ),
 
   getEntidadesBancarias: () =>

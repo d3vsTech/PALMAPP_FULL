@@ -177,15 +177,9 @@ export default function Configuracion() {
         <p className="text-lead">Configura todos los parámetros de tu finca</p>
       </div>
 
-      {/*
-        Grid responsivo: sidebar de ancho fijo (260px) + contenido que toma
-        TODO el resto del espacio. En pantallas muy anchas (1440+) el contenido
-        se beneficia de toda la pantalla en vez de quedar limitado a 75%.
-        En móvil/tablet (< lg) se apila vertical.
-      */}
-      <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)] gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Sidebar de navegación */}
-        <Card className="border-border h-fit">
+        <Card className="border-border lg:col-span-1 h-fit">
           <CardContent className="p-4">
             <nav className="space-y-1">
               {CATEGORIAS.map((categoria) => {
@@ -248,8 +242,8 @@ export default function Configuracion() {
           </CardContent>
         </Card>
 
-        {/* Contenido principal — ocupa todo el espacio restante */}
-        <div className="min-w-0">
+        {/* Contenido principal */}
+        <div className="lg:col-span-3">
           {ComponenteActual ? <ComponenteActual /> : null}
         </div>
       </div>

@@ -1,22 +1,29 @@
 /**
  * API — Configuración / Paramétricas
  *
- * Cubre las 15 secciones del doc API_PARAMETRICAS.md:
- *   1.  Semillas
+ * Cubre las 17 secciones del doc API_PARAMETRICAS.md:
+ *   1.  Semillas (6 tipos: 4 base + HIBRIDO_TENERA + HIBRIDO_OXG)
  *   2.  Insumos
  *   3.  Precios de Abono (escalas genéricas por gramos)
- *   4.  Labores (con 3 tipos de pago)
+ *   4.  Labores de Finca (nombre + valor_base)
+ *   4b. Precios de Palma (PLATEO/PODA/SANIDAD/OTROS — solo GET/PUT)
  *   5.  Promedios por Lote (kg/gajo por año)
- *   6.  Cargos (con modalidad y salario_tipo)
+ *   6.  Cargos (con modalidad y salario_tipo FIJO/VARIABLE)
  *   7.  Modalidades de Contrato
- *   8.  Configuración de Nómina (tipo de pago, SMMLV, auxilio)
+ *   8.  Configuración de Nómina (periodicidad + cortes Q1/Q2 + SMMLV)
  *   9.  Precios de Cosecha (por lote + año)
- *  10.  Auditoría (read-only)
- *  11.  Tipos de Hora Extra
- *  12.  Paramétricas del Colaborador (EPS, Fondos Pensión, ARL, Bancos)
- *  13.  Info Empresa (datos de la finca + logo)
+ *  10.  Auditoría del tenant (read-only, shape paginación no estándar)
+ *  11.  Tipos de Hora Extra (7 códigos + descripcion libre)
+ *  12.  Paramétricas del Colaborador — 5 catálogos:
+ *         EPS, Fondos Pensión, Fondos Cesantías, ARL, Entidades Bancarias
+ *  13.  Info Empresa (datos de la finca + logo opcional)
  *  14.  Constantes Legales (SMMLV, fechas legales, días vacaciones)
  *  15.  Tablas Legales (Salud, Pensión, ARL — % por vigencia)
+ *  17.  Motivos de Ausencia (Tipos de Novedades, con color hex)
+ *
+ * §16 Paramétricas de Viajes (Extractoras, Empresas Transportadoras,
+ * Transportadores) vive en `api/viajes.ts` porque comparte tipos con el
+ * módulo de Viajes (se exportan también desde `api/index.ts`).
  *
  * Base: /api/v1/tenant — todas las llamadas requieren tenant flag (T=true).
  * Permiso típico: `configuracion.editar` (algunos selects aceptan permisos
@@ -50,10 +57,17 @@ export interface ParametricaParams {
 // ═════════════════════════════════════════════════════════════════════════════
 
 /**
- * Tipos válidos según la última versión del doc. Reemplaza la antigua tripleta
- * HIBRIDO/TENERA/DURA por las 4 variedades reconocidas.
+ * Tipos válidos según la última versión del doc (§1):
+ *  - 4 variedades base (Africana, Híbrido, Compacta, Americana)
+ *  - 2 híbridos específicos (HIBRIDO_TENERA DxP, HIBRIDO_OXG E. oleifera × E. guineensis)
  */
-export type TipoSemilla = 'Africana' | 'Híbrido' | 'Compacta' | 'Americana';
+export type TipoSemilla =
+  | 'Africana'
+  | 'Híbrido'
+  | 'Compacta'
+  | 'Americana'
+  | 'HIBRIDO_TENERA'
+  | 'HIBRIDO_OXG';
 
 export interface Semilla {
   id: number;
@@ -376,7 +390,7 @@ export interface TipoHoraExtraPayload {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 12. PARAMÉTRICAS DEL COLABORADOR (EPS, Fondos Pensión, ARL, Bancos)
+// 12. PARAMÉTRICAS DEL COLABORADOR (EPS, Fondos Pensión, Fondos Cesantías, ARL, Bancos)
 // ═════════════════════════════════════════════════════════════════════════════
 
 /**
@@ -713,9 +727,10 @@ export const configuracionApi = {
   },
 
   // ── 12. Paramétricas del Colaborador ───────────────────────────────────────
-  // EPS / Fondos / ARL: shape básica (solo nombre + estado).
+  // EPS / Fondos Pensión / Fondos Cesantías / ARL: shape básica (solo nombre + estado).
   eps: crudParametricaColaborador('eps'),
   fondosPension: crudParametricaColaborador('fondos-pension'),
+  fondosCesantias: crudParametricaColaborador('fondos-cesantias'),
   arl: crudParametricaColaborador('arl'),
 
   /**
@@ -730,11 +745,20 @@ export const configuracionApi = {
         '/v1/tenant/entidades-bancarias/select', T),
   },
 
-  // ── 13. Info Empresa (multipart para logo) ─────────────────────────────────
+  // ── 13. Info Empresa ───────────────────────────────────────────────────────
+  // Si el payload incluye `logo` (File) → multipart. En cualquier otro caso
+  // mandamos JSON con PUT normal (el backend Laravel no parsea multipart en
+  // métodos PUT, así que solo lo usamos cuando es estrictamente necesario).
   infoEmpresa: {
     obtener: () =>
       apiClient.get<{ data: InfoEmpresa }>('/v1/tenant/configuracion/info-empresa', T),
     actualizar: (payload: InfoEmpresaPayload) => {
+      const tieneLogo = payload.logo instanceof File;
+      if (!tieneLogo) {
+        const { logo: _ignored, ...resto } = payload;
+        return apiClient.put<{ message: string; data: InfoEmpresa }>(
+          '/v1/tenant/configuracion/info-empresa', resto, T);
+      }
       const form = new FormData();
       Object.entries(payload).forEach(([k, v]) => {
         if (v === undefined || v === null) return;

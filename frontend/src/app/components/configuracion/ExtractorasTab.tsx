@@ -3,9 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Switch } from '../ui/switch';
-import { Textarea } from '../ui/textarea';
-import { Plus, Trash2, Edit, Factory, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Edit } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -15,44 +13,62 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../ui/dialog';
-import { ConfirmDeleteDialog } from '../ui/confirm-delete-dialog';
+import { useConfirmDelete } from '../../hooks/useConfirmDelete';
 import { extractorasApi, type Extractora } from '../../../api/viajes';
+import { getDepartamentos, getMunicipios } from '../../../api/plantacion';
+
+type DaneItem = { codigo: string; nombre: string };
 
 const FORM_VACIO = {
   razon_social: '',
   nit: '',
   ubicacion: '',
   ciudad: '',
+  departamento_codigo: '',
+  municipio_codigo: '',
   telefono: '',
+  telefono_fijo: '',
   email: '',
   contacto_nombre: '',
-  distancia_km: '',
   observaciones: '',
 };
 
 export function ExtractorasTab() {
+  const { confirmDelete, ConfirmDeleteDialog } = useConfirmDelete();
+
   const [extractoras, setExtractoras] = useState<Extractora[]>([]);
-  const [cargando, setCargando] = useState(true);
-  const [guardando, setGuardando] = useState(false);
 
   const [openModal, setOpenModal] = useState(false);
   const [extractoraEdit, setExtractoraEdit] = useState<Extractora | null>(null);
   const [formData, setFormData] = useState(FORM_VACIO);
 
-  const [extractoraAEliminar, setExtractoraAEliminar] = useState<Extractora | null>(null);
+  // Selects encadenados Departamento → Ciudad/Municipio (DANE).
+  const [departamentos, setDepartamentos] = useState<DaneItem[]>([]);
+  const [municipios, setMunicipios] = useState<DaneItem[]>([]);
 
-  const cargar = () => {
-    setCargando(true);
+  useEffect(() => {
     extractorasApi
       .listar({ per_page: 100 })
       .then((res) => setExtractoras(res.data))
-      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar las extractoras'))
-      .finally(() => setCargando(false));
-  };
+      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar las extractoras'));
+  }, []);
 
   useEffect(() => {
-    cargar();
+    getDepartamentos()
+      .then((res) => setDepartamentos(res.data ?? []))
+      .catch(() => { /* fallback: el select queda vacío, pero el modal sigue funcional */ });
   }, []);
+
+  // Cuando cambia el departamento, recargar municipios.
+  useEffect(() => {
+    if (!formData.departamento_codigo) {
+      setMunicipios([]);
+      return;
+    }
+    getMunicipios(formData.departamento_codigo)
+      .then((res) => setMunicipios(res.data ?? []))
+      .catch(() => setMunicipios([]));
+  }, [formData.departamento_codigo]);
 
   const handleOpenModal = (extractora?: Extractora) => {
     if (extractora) {
@@ -62,10 +78,12 @@ export function ExtractorasTab() {
         nit: extractora.nit ?? '',
         ubicacion: extractora.ubicacion ?? '',
         ciudad: extractora.ciudad ?? '',
+        departamento_codigo: extractora.departamento_codigo ?? '',
+        municipio_codigo: extractora.municipio_codigo ?? '',
         telefono: extractora.telefono ?? '',
+        telefono_fijo: extractora.telefono_fijo ?? '',
         email: extractora.email ?? '',
         contacto_nombre: extractora.contacto_nombre ?? '',
-        distancia_km: extractora.distancia_km != null ? String(extractora.distancia_km) : '',
         observaciones: extractora.observaciones ?? '',
       });
     } else {
@@ -77,7 +95,7 @@ export function ExtractorasTab() {
 
   const handleSave = async () => {
     if (!formData.razon_social.trim()) {
-      toast.error('Ingresa la razón social de la extractora');
+      toast.error('Ingresa el nombre de la extractora');
       return;
     }
     if (!formData.nit.trim()) {
@@ -85,28 +103,29 @@ export function ExtractorasTab() {
       return;
     }
 
-    setGuardando(true);
     try {
       const payload: Partial<Extractora> = {
         razon_social: formData.razon_social.trim(),
         nit: formData.nit.trim(),
         ubicacion: formData.ubicacion.trim(),
         ciudad: formData.ciudad.trim() || null,
+        departamento_codigo: formData.departamento_codigo || null,
+        municipio_codigo: formData.municipio_codigo || null,
         telefono: formData.telefono.trim() || null,
+        telefono_fijo: formData.telefono_fijo.trim() || null,
         email: formData.email.trim() || null,
         contacto_nombre: formData.contacto_nombre.trim() || null,
-        distancia_km: formData.distancia_km.trim() ? Number(formData.distancia_km) : null,
         observaciones: formData.observaciones.trim() || null,
       };
 
       if (extractoraEdit) {
         const res = await extractorasApi.editar(extractoraEdit.id, payload);
         setExtractoras((prev) => prev.map((e) => (e.id === extractoraEdit.id ? res.data : e)));
-        toast.success(res.message ?? 'Extractora actualizada');
+        toast.success('Extractora actualizada');
       } else {
         const res = await extractorasApi.crear(payload);
         setExtractoras((prev) => [...prev, res.data]);
-        toast.success(res.message ?? 'Extractora agregada correctamente');
+        toast.success('Extractora agregada correctamente');
       }
       setOpenModal(false);
     } catch (e: any) {
@@ -120,35 +139,30 @@ export function ExtractorasTab() {
       } else {
         toast.error(e?.message ?? 'No se pudo guardar la extractora');
       }
-    } finally {
-      setGuardando(false);
     }
   };
 
-  const handleToggleEstado = async (extractora: Extractora) => {
-    try {
-      const res = await extractorasApi.editar(extractora.id, { estado: !extractora.estado });
-      setExtractoras((prev) => prev.map((e) => (e.id === extractora.id ? res.data : e)));
-    } catch (e: any) {
-      toast.error(e?.message ?? 'No se pudo cambiar el estado');
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!extractoraAEliminar) return;
-    try {
-      await extractorasApi.eliminar(extractoraAEliminar.id);
-      setExtractoras((prev) => prev.filter((e) => e.id !== extractoraAEliminar.id));
-      toast.success('Extractora eliminada correctamente');
-    } catch (e: any) {
-      toast.error(e?.message ?? 'No se pudo eliminar la extractora');
-    } finally {
-      setExtractoraAEliminar(null);
-    }
+  const eliminarExtractora = (extractora: Extractora) => {
+    confirmDelete({
+      title: 'Eliminar extractora',
+      description: `¿Estás seguro de eliminar "${extractora.razon_social}"? Esta acción no se puede deshacer.`,
+      confirmText: 'Eliminar',
+      onConfirm: async () => {
+        try {
+          await extractorasApi.eliminar(extractora.id);
+          setExtractoras((prev) => prev.filter((e) => e.id !== extractora.id));
+          toast.success('Extractora eliminada correctamente');
+        } catch (e: any) {
+          toast.error(e?.message ?? 'No se pudo eliminar la extractora');
+        }
+      },
+    });
   };
 
   return (
     <>
+      {ConfirmDeleteDialog}
+
       <Dialog open={openModal} onOpenChange={setOpenModal}>
         <DialogContent>
           <DialogHeader>
@@ -160,22 +174,25 @@ export function ExtractorasTab() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="razon_social">
-                Razón Social <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="razon_social"
-                placeholder="Ej: Extractora del Cauca S.A."
-                value={formData.razon_social}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, razon_social: e.target.value }))
-                }
-              />
-            </div>
+          <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
+            {/* Información de la Empresa */}
+            <div className="space-y-4">
+              <h3 className="font-semibold text-sm text-muted-foreground">Información de la Empresa</h3>
 
-            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="razon_social">
+                  Nombre de la Extractora <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="razon_social"
+                  placeholder="Ej: Extractora del Cauca S.A."
+                  value={formData.razon_social}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, razon_social: e.target.value }))
+                  }
+                />
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="nit">
                   NIT <span className="text-destructive">*</span>
@@ -190,118 +207,129 @@ export function ExtractorasTab() {
                 />
               </div>
 
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="departamento_codigo">Departamento</Label>
+                  <select
+                    id="departamento_codigo"
+                    value={formData.departamento_codigo}
+                    onChange={(e) => {
+                      const codigo = e.target.value;
+                      setFormData((prev) => ({
+                        ...prev,
+                        departamento_codigo: codigo,
+                        municipio_codigo: '',
+                        ciudad: '',
+                      }));
+                    }}
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  >
+                    <option value="">Seleccionar departamento...</option>
+                    {departamentos.map((d) => (
+                      <option key={d.codigo} value={d.codigo}>{d.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="ciudad">Ciudad</Label>
+                  <select
+                    id="ciudad"
+                    value={formData.municipio_codigo}
+                    onChange={(e) => {
+                      const codigo = e.target.value;
+                      const nombre = municipios.find((m) => m.codigo === codigo)?.nombre ?? '';
+                      setFormData((prev) => ({ ...prev, municipio_codigo: codigo, ciudad: nombre }));
+                    }}
+                    disabled={!formData.departamento_codigo}
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="">Seleccionar ciudad...</option>
+                    {municipios.map((m) => (
+                      <option key={m.codigo} value={m.codigo}>{m.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               <div className="space-y-2">
-                <Label htmlFor="distancia_km">Distancia (km)</Label>
+                <Label htmlFor="ubicacion">Dirección</Label>
                 <Input
-                  id="distancia_km"
-                  type="number"
-                  placeholder="0"
-                  value={formData.distancia_km}
+                  id="ubicacion"
+                  placeholder="Ej: Cra 10 # 20-30"
+                  value={formData.ubicacion}
                   onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, distancia_km: e.target.value }))
+                    setFormData((prev) => ({ ...prev, ubicacion: e.target.value }))
                   }
                 />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="ubicacion">Ubicación</Label>
-              <Input
-                id="ubicacion"
-                placeholder="Dirección de la planta"
-                value={formData.ubicacion}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, ubicacion: e.target.value }))
-                }
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="ciudad">Ciudad</Label>
-                <Input
-                  id="ciudad"
-                  placeholder="Ciudad"
-                  value={formData.ciudad}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, ciudad: e.target.value }))
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="telefono">Teléfono</Label>
-                <Input
-                  id="telefono"
-                  placeholder="+57 300 111 2222"
-                  value={formData.telefono}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, telefono: e.target.value }))
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="correo@extractora.com"
-                  value={formData.email}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, email: e.target.value }))
-                  }
-                />
-              </div>
+            {/* Información de Contacto */}
+            <div className="space-y-4 pt-4 border-t">
+              <h3 className="font-semibold text-sm text-muted-foreground">Información de Contacto</h3>
 
               <div className="space-y-2">
                 <Label htmlFor="contacto_nombre">Contacto</Label>
                 <Input
                   id="contacto_nombre"
-                  placeholder="Nombre del contacto"
+                  placeholder="Ej: Juan Pérez"
                   value={formData.contacto_nombre}
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, contacto_nombre: e.target.value }))
                   }
                 />
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="observaciones">Observaciones</Label>
-              <Textarea
-                id="observaciones"
-                placeholder="Notas adicionales"
-                value={formData.observaciones}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, observaciones: e.target.value }))
-                }
-              />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="telefono">Celular</Label>
+                  <Input
+                    id="telefono"
+                    placeholder="+57 300 111 2222"
+                    value={formData.telefono}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, telefono: e.target.value }))
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="telefono_fijo">Teléfono Fijo</Label>
+                  <Input
+                    id="telefono_fijo"
+                    placeholder="+57 (2) 123 4567"
+                    value={formData.telefono_fijo}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, telefono_fijo: e.target.value }))
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="email">Correo Electrónico</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="contacto@extractora.com"
+                  value={formData.email}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, email: e.target.value }))
+                  }
+                />
+              </div>
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenModal(false)} disabled={guardando}>
+            <Button variant="outline" onClick={() => setOpenModal(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSave} disabled={guardando}>
-              {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Guardar
-            </Button>
+            <Button onClick={handleSave}>Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <ConfirmDeleteDialog
-        open={!!extractoraAEliminar}
-        onOpenChange={(open) => !open && setExtractoraAEliminar(null)}
-        title="Eliminar extractora"
-        description={`¿Estás seguro de eliminar "${extractoraAEliminar?.razon_social}"? Esta acción no se puede deshacer.`}
-        confirmText="Eliminar"
-        onConfirm={handleDelete}
-      />
 
       <Card className="border-border">
         <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
@@ -317,39 +345,21 @@ export function ExtractorasTab() {
           </div>
         </CardHeader>
         <CardContent className="p-6">
-          {cargando ? (
-            <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              Cargando extractoras...
-            </div>
-          ) : extractoras.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Factory className="h-12 w-12 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">No hay extractoras registradas</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {extractoras.map((extractora) => (
-                <div
-                  key={extractora.id}
-                  className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border"
-                >
+          <div className="space-y-3">
+            {extractoras.map((extractora) => (
+              <div
+                key={extractora.id}
+                className="p-4 rounded-lg bg-muted/30 border border-border"
+              >
+                <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
-                    <p className="font-semibold">{extractora.razon_social}</p>
-                    <div className="flex flex-wrap gap-4 mt-1 text-sm text-muted-foreground">
+                    <p className="font-semibold text-lg">{extractora.razon_social}</p>
+                    <div className="flex gap-4 mt-1 text-sm text-muted-foreground">
                       {extractora.nit && <span>NIT: {extractora.nit}</span>}
-                      {extractora.ciudad && <span>Ciudad: {extractora.ciudad}</span>}
-                      {extractora.telefono && <span>Tel: {extractora.telefono}</span>}
-                      {extractora.distancia_km != null && extractora.distancia_km !== '' && (
-                        <span>Distancia: {extractora.distancia_km} km</span>
-                      )}
+                      {extractora.ciudad && <span>📍 {extractora.ciudad}</span>}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={extractora.estado ?? false}
-                      onCheckedChange={() => handleToggleEstado(extractora)}
-                    />
+                  <div className="flex items-center gap-1">
                     <Button
                       variant="ghost"
                       size="sm"
@@ -361,16 +371,52 @@ export function ExtractorasTab() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => setExtractoraAEliminar(extractora)}
+                      onClick={() => eliminarExtractora(extractora)}
                       className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+
+                {/* Información de contacto */}
+                {(extractora.contacto_nombre || extractora.telefono || extractora.email || extractora.ubicacion) && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm pt-3 border-t border-border">
+                    {extractora.contacto_nombre && (
+                      <div>
+                        <span className="text-muted-foreground">Contacto:</span>
+                        <span className="ml-2 font-medium">{extractora.contacto_nombre}</span>
+                      </div>
+                    )}
+                    {extractora.telefono && (
+                      <div>
+                        <span className="text-muted-foreground">Celular:</span>
+                        <span className="ml-2 font-medium">{extractora.telefono}</span>
+                      </div>
+                    )}
+                    {extractora.telefono_fijo && (
+                      <div>
+                        <span className="text-muted-foreground">Tel. Fijo:</span>
+                        <span className="ml-2 font-medium">{extractora.telefono_fijo}</span>
+                      </div>
+                    )}
+                    {extractora.email && (
+                      <div>
+                        <span className="text-muted-foreground">Correo:</span>
+                        <span className="ml-2 font-medium">{extractora.email}</span>
+                      </div>
+                    )}
+                    {extractora.ubicacion && (
+                      <div className="md:col-span-2">
+                        <span className="text-muted-foreground">Dirección:</span>
+                        <span className="ml-2 font-medium">{extractora.ubicacion}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
     </>
