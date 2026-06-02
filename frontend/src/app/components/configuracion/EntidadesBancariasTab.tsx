@@ -21,6 +21,34 @@ import {
 
 const FORM_VACIO = { nombre: '', codigo: '', contacto: '' };
 
+/** Catálogo inicial de bancos colombianos sembrado en background si el tenant
+ *  no tiene entidades bancarias todavía. Códigos oficiales Superfinanciera. */
+const BANCOS_DEFAULT: Array<{ nombre: string; codigo: string }> = [
+  { nombre: 'Banco de Bogotá',          codigo: '001' },
+  { nombre: 'Banco Popular',            codigo: '002' },
+  { nombre: 'Bancolombia',              codigo: '007' },
+  { nombre: 'Citibank',                 codigo: '009' },
+  { nombre: 'Banco GNB Sudameris',      codigo: '012' },
+  { nombre: 'BBVA Colombia',            codigo: '013' },
+  { nombre: 'Banco de Occidente',       codigo: '023' },
+  { nombre: 'Banco Caja Social',        codigo: '032' },
+  { nombre: 'Banco Agrario',            codigo: '040' },
+  { nombre: 'Banco Davivienda',         codigo: '051' },
+  { nombre: 'Banco AV Villas',          codigo: '052' },
+  { nombre: 'Banco Pichincha',          codigo: '060' },
+  { nombre: 'Bancoomeva',               codigo: '061' },
+  { nombre: 'Banco Falabella',          codigo: '062' },
+  { nombre: 'Banco Finandina',          codigo: '063' },
+  { nombre: 'Banco Cooperativo Coopcentral', codigo: '066' },
+  { nombre: 'Banco Mundo Mujer',        codigo: '069' },
+  { nombre: 'Bancamía',                 codigo: '070' },
+  { nombre: 'Banco WWB',                codigo: '083' },
+  { nombre: 'Banco Serfinanza',         codigo: '085' },
+  { nombre: 'Banco Itaú',               codigo: '014' },
+  { nombre: 'Scotiabank Colpatria',     codigo: '019' },
+  { nombre: 'Nequi',                    codigo: '507' },
+];
+
 export function EntidadesBancariasTab() {
   const [entidades, setEntidades] = useState<EntidadBancaria[]>([]);
 
@@ -32,14 +60,30 @@ export function EntidadesBancariasTab() {
 
   useEffect(() => {
     let cancelado = false;
-    configuracionApi.entidadesBancarias
-      .listar({ per_page: 100 })
-      .then((res) => {
-        if (!cancelado) setEntidades(res.data);
-      })
-      .catch((e: any) => {
+    (async () => {
+      try {
+        const res = await configuracionApi.entidadesBancarias.listar({ per_page: 100 });
+        if (cancelado) return;
+        if ((res.data ?? []).length > 0) {
+          setEntidades(res.data);
+          return;
+        }
+        // Lista vacía → sembramos los bancos colombianos en background.
+        const creados: EntidadBancaria[] = [];
+        for (const b of BANCOS_DEFAULT) {
+          try {
+            const r = await configuracionApi.entidadesBancarias.crear({
+              nombre: b.nombre,
+              codigo: b.codigo,
+            });
+            creados.push(r.data);
+          } catch { /* skip duplicados / fallos puntuales */ }
+        }
+        if (!cancelado) setEntidades(creados);
+      } catch (e: any) {
         if (!cancelado) toast.error(e?.message ?? 'No se pudieron cargar las entidades bancarias');
-      });
+      }
+    })();
     return () => {
       cancelado = true;
     };

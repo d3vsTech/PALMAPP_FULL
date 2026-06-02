@@ -45,6 +45,20 @@ const tiposSemilla: TipoSemilla[] = [
   'HIBRIDO_OXG',
 ];
 
+/** Catálogo inicial sembrado en background si el tenant no tiene semillas todavía.
+ *  Una entrada por cada `tipo` del enum, con un nombre por defecto razonable. */
+const SEMILLAS_DEFAULT: Array<{ tipo: TipoSemilla; nombre: string }> = [
+  { tipo: 'Africana',       nombre: 'Africana (Elaeis guineensis)' },
+  { tipo: 'Híbrido',        nombre: 'Híbrido OxG' },
+  { tipo: 'Compacta',       nombre: 'Compacta' },
+  { tipo: 'Americana',      nombre: 'Americana (Elaeis oleifera)' },
+  { tipo: 'HIBRIDO_TENERA', nombre: 'Híbrido Ténera DxP' },
+  { tipo: 'HIBRIDO_OXG',    nombre: 'Híbrido OxG tolerante PC' },
+];
+
+/** Clave de caché en sessionStorage para entrada instantánea. */
+const CACHE_KEY_SEMILLAS = 'palmapp_cfg_semillas_v1';
+
 export function SemillasTab() {
   const [semillas, setSemillas] = useState<Semilla[]>([]);
   const [openModal, setOpenModal] = useState(false);
@@ -57,10 +71,61 @@ export function SemillasTab() {
   const { confirmDelete, ConfirmDeleteDialog } = useConfirmDelete();
 
   useEffect(() => {
-    configuracionApi.semillas
-      .listar({ per_page: 100 })
-      .then((res) => setSemillas(res.data))
-      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar las semillas'));
+    let cancelado = false;
+
+    // 1) Stale-while-revalidate: pinta del caché al instante si existe.
+    try {
+      const raw = sessionStorage.getItem(CACHE_KEY_SEMILLAS);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Semilla[];
+        if (Array.isArray(parsed) && parsed.length > 0) setSemillas(parsed);
+      }
+    } catch { /* caché corrupto: ignorar */ }
+
+    // 2) Revalidar en background.
+    (async () => {
+      try {
+        const res = await configuracionApi.semillas.listar({ per_page: 100 });
+        if (cancelado) return;
+        const items = res.data ?? [];
+        if (items.length > 0) {
+          setSemillas(items);
+          try { sessionStorage.setItem(CACHE_KEY_SEMILLAS, JSON.stringify(items)); } catch {}
+          return;
+        }
+
+        // 3) Lista vacía → sembramos los 6 tipos en PARALELO (no secuencial).
+        const resultados = await Promise.allSettled(
+          SEMILLAS_DEFAULT.map((s) =>
+            configuracionApi.semillas.crear({ tipo: s.tipo, nombre: s.nombre }),
+          ),
+        );
+        if (cancelado) return;
+
+        const creadas: Semilla[] = resultados
+          .filter((r): r is PromiseFulfilledResult<{ data: Semilla; message: string }> => r.status === 'fulfilled')
+          .map((r) => r.value.data);
+
+        if (creadas.length === SEMILLAS_DEFAULT.length) {
+          setSemillas(creadas);
+          try { sessionStorage.setItem(CACHE_KEY_SEMILLAS, JSON.stringify(creadas)); } catch {}
+          return;
+        }
+
+        // Si algún POST falló (race condition con otro tab), refetcheamos.
+        try {
+          const final = await configuracionApi.semillas.listar({ per_page: 100 });
+          if (cancelado) return;
+          setSemillas(final.data ?? creadas);
+          try { sessionStorage.setItem(CACHE_KEY_SEMILLAS, JSON.stringify(final.data ?? creadas)); } catch {}
+        } catch {
+          if (!cancelado) setSemillas(creadas);
+        }
+      } catch (e: any) {
+        if (!cancelado) toast.error(e?.message ?? 'No se pudieron cargar las semillas');
+      }
+    })();
+    return () => { cancelado = true; };
   }, []);
 
   const handleOpenModal = (semilla?: Semilla) => {
@@ -85,10 +150,18 @@ export function SemillasTab() {
       const payload = { tipo: formData.tipo as TipoSemilla, nombre: formData.nombre.trim() };
       if (semillaEdit) {
         const res = await configuracionApi.semillas.editar(semillaEdit.id, payload);
-        setSemillas((prev) => prev.map((s) => (s.id === semillaEdit.id ? res.data : s)));
+        setSemillas((prev) => {
+          const next = prev.map((s) => (s.id === semillaEdit.id ? res.data : s));
+          try { sessionStorage.setItem(CACHE_KEY_SEMILLAS, JSON.stringify(next)); } catch {}
+          return next;
+        });
       } else {
         const res = await configuracionApi.semillas.crear(payload);
-        setSemillas((prev) => [...prev, res.data]);
+        setSemillas((prev) => {
+          const next = [...prev, res.data];
+          try { sessionStorage.setItem(CACHE_KEY_SEMILLAS, JSON.stringify(next)); } catch {}
+          return next;
+        });
       }
       setOpenModal(false);
     } catch (e: any) {
@@ -109,7 +182,11 @@ export function SemillasTab() {
       onConfirm: async () => {
         try {
           await configuracionApi.semillas.eliminar(id);
-          setSemillas((prev) => prev.filter((s) => s.id !== id));
+          setSemillas((prev) => {
+            const next = prev.filter((s) => s.id !== id);
+            try { sessionStorage.setItem(CACHE_KEY_SEMILLAS, JSON.stringify(next)); } catch {}
+            return next;
+          });
         } catch (e: any) {
           if (e?.code === ConfiguracionErrorCodes.SEMILLA_CON_LOTES) {
             toast.error('No se puede eliminar: está asignada a uno o más lotes');

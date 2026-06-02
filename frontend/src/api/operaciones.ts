@@ -10,6 +10,16 @@
  *
  * Base URL: {host}/api/v1/tenant
  * Headers: Authorization: Bearer {jwt}, X-Tenant-Id: {tenant_id}
+ *
+ * Alineado con API_OPERACIONES.md (versión vigente). Incluye:
+ *  - Indicadores (§2.2.1) con period semanal/quincenal/mensual/personalizado
+ *  - Cosecha con peso_confirmado opcional al crear (§3.1)
+ *  - Tab OTROS modo catálogo via `labor_palma_id` (§3.2)
+ *  - SANIDAD con `tipo_pago` dependiente (POR_PALMA vs JORNAL_FIJO)
+ *  - Horas Extras con snapshot legal + aprobar/rechazar (§4)
+ *  - Ausencias con aprobar/rechazar/documento + snapshot del motivo (§5)
+ *  - Selects: laboresPalma, preciosPalma, crearInsumo on-the-fly (§8)
+ *  - Códigos de error: OperacionesErrorCodes (§0)
  */
 import { requestConToken, fetchConToken } from './request';
 
@@ -83,6 +93,102 @@ export interface Indicadores {
 }
 
 export type Periodo = 'semanal' | 'quincenal' | 'mensual' | 'personalizado';
+
+// ─── Entidades del módulo (cuerpo de respuestas) ──────────────────────────────
+
+export type EstadoNovedad = 'PENDIENTE' | 'APROBADA' | 'RECHAZADA' | 'LIQUIDADA';
+
+export interface CosechaCuadrillaItem {
+  id: number;
+  empleado_id: number;
+  peso_calculado_empleado: string | number | null;
+  valor_calculado: string | number | null;
+  empleado?: { id: number; primer_nombre?: string; primer_apellido?: string };
+}
+
+export interface Cosecha {
+  id: number;
+  operacion_id: number;
+  lote_id: number;
+  sublote_id: number | null;
+  gajos_reportados: number;
+  gajos_reconteo?: number | null;
+  peso_confirmado: string | number | null;
+  precio_cosecha: string | number | null;
+  promedio_kg_gajo?: string | number | null;
+  valor_total: string | number | null;
+  cuadrilla: CosechaCuadrillaItem[];
+}
+
+export type CategoriaJornal = 'PALMA' | 'FINCA';
+export type TipoJornalPalma = 'PLATEO' | 'PODA' | 'FERTILIZACION' | 'SANIDAD' | 'OTROS';
+
+export interface Jornal {
+  id: number;
+  operacion_id: number;
+  empleado_id: number;
+  categoria: CategoriaJornal;
+  tipo?: TipoJornalPalma | null;
+  lote_id?: number | null;
+  sublote_id?: number | null;
+  labor_id?: number | null;       // FINCA → catálogo de labores
+  labor_palma_id?: number | null; // PALMA/OTROS → catálogo personalizado
+  cantidad_palmas?: number | null;
+  insumo_id?: number | null;
+  gramos_por_palma?: number | null;
+  descripcion?: string | null;
+  nombre_trabajo?: string | null;
+  ubicacion?: string | null;
+  valor_unitario: string | number | null;
+  valor_total: string | number | null;
+  estado: boolean;
+  empleado?: any;
+  labor?: any;
+  lote?: any;
+  sublote?: any;
+  insumo?: any;
+}
+
+export interface HoraExtra {
+  id: number;
+  operacion_id: number;
+  empleado_id: number;
+  tipo_hora_extra_id: number;
+  codigo: string;
+  porcentaje_recargo: string | number;
+  paga_hora_completa: boolean;
+  cantidad_horas: string | number;
+  valor_hora_base: string | number;
+  valor_calculado: string | number;
+  estado: EstadoNovedad;
+  observacion?: string | null;
+  aprobado_por?: number | null;
+  aprobado_at?: string | null;
+  motivo_rechazo?: string | null;
+  empleado?: any;
+  tipoHoraExtra?: any;
+}
+
+export interface Ausencia {
+  id: number;
+  operacion_id: number;
+  empleado_id: number;
+  motivo_ausencia_id: number;
+  tipo: string;
+  fecha_inicio: string;
+  fecha_fin: string;
+  dias_calendario: number;
+  es_remunerada: boolean;
+  afecta_nomina: boolean;
+  porcentaje_pago: string | number;
+  estado: EstadoNovedad;
+  motivo?: string | null;
+  documento_soporte?: string | null;
+  entidad?: string | null;
+  numero_radicado?: string | null;
+  empleado?: any;
+  motivo_ausencia?: any;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -244,7 +350,7 @@ export const cosechasApi = {
 
 export interface JornalPalma {
   categoria: 'PALMA';
-  tipo: 'PLATEO' | 'PODA' | 'FERTILIZACION' | 'SANIDAD' | 'OTROS';
+  tipo: TipoJornalPalma;
   empleado_id: number;
   lote_id?: number | null;
   sublote_id?: number | null;
@@ -253,6 +359,14 @@ export interface JornalPalma {
   gramos_por_palma?: number;
   descripcion?: string;
   nombre_trabajo?: string;
+  /**
+   * Tab OTROS — modo catálogo (recomendado).
+   * Apunta a un registro de `GET /labores-palma/select`.
+   * - Si la labor es `tipo_pago=POR_PALMA`: enviar lote_id, sublote_id y cantidad_palmas.
+   * - Si la labor es `tipo_pago=JORNAL_FIJO`: cantidad_palmas no se envía.
+   * Cuando se usa este modo, `nombre_trabajo` y `descripcion` son opcionales.
+   */
+  labor_palma_id?: number;
 }
 
 export interface JornalFinca {
@@ -404,15 +518,53 @@ export const selectsApi = {
       `${BASE}/labores/select${qs(params)}`
     ),
 
+  /**
+   * Catálogo de Labores de Palma personalizadas (tab OTROS del wizard).
+   * Permisos: `operaciones.crear|editar` o `configuracion.editar`.
+   * Devuelve solo activas.
+   */
+  laboresPalma: (params: { estado?: boolean } = {}) =>
+    requestConToken<{ data: Array<{
+      id: number;
+      nombre: string;
+      tipo_pago: 'POR_PALMA' | 'JORNAL_FIJO';
+      precio_palma: string | number | null;
+    }> }>(`${BASE}/labores-palma/select${qs(params)}`),
+
+  /**
+   * Precios de Palma (PLATEO/PODA/SANIDAD/OTROS) — se consulta al cargar el wizard
+   * para decidir si mostrar u ocultar el input "Cantidad Palmas" según `tipo_pago`.
+   */
+  preciosPalma: () =>
+    requestConToken<{ data: Array<{
+      id: number;
+      tipo: 'PLATEO' | 'PODA' | 'SANIDAD' | 'OTROS';
+      tipo_pago: 'POR_PALMA' | 'JORNAL_FIJO';
+      precio_palma: string | number | null;
+      estado: boolean;
+    }> }>(`${BASE}/precios-palma`),
+
   motivosAusencia: (params: { estado?: boolean } = {}) =>
-    requestConToken<{ data: Array<{ id: number; nombre: string; tipo_base?: string }> }>(
-      `${BASE}/motivos-ausencia/select${qs(params)}`
-    ),
+    requestConToken<{ data: Array<{
+      id: number;
+      nombre: string;
+      tipo_base?: string;
+      es_remunerada?: boolean;
+      afecta_nomina?: boolean;
+      requiere_soporte?: boolean;
+      color?: string;
+    }> }>(`${BASE}/motivos-ausencia/select${qs(params)}`),
 
   tiposHoraExtra: (params: { estado?: boolean } = {}) =>
-    requestConToken<{ data: Array<{ id: number; nombre: string; codigo?: string; porcentaje_recargo?: string | number }> }>(
-      `${BASE}/tipos-hora-extra/select${qs(params)}`
-    ),
+    requestConToken<{ data: Array<{
+      id: number;
+      nombre: string;
+      codigo?: string;
+      porcentaje_recargo?: string | number;
+      franja_horaria?: string;
+      es_extra?: boolean;
+      paga_hora_completa?: boolean;
+    }> }>(`${BASE}/tipos-hora-extra/select${qs(params)}`),
 
   /**
    * Crear insumo "on-the-fly" desde el wizard cuando el operador selecciona
@@ -444,3 +596,37 @@ export const selectsApi = {
       }
     ),
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CÓDIGOS DE ERROR DEL MÓDULO (§0 del doc)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const OperacionesErrorCodes = {
+  /** Intento de mutar una planilla ya aprobada. */
+  OPERACION_APROBADA: 'OPERACION_APROBADA',
+  /** Intento de eliminar planilla con jornales/cosechas/ausencias/horas extras. */
+  OPERACION_CON_HIJOS: 'OPERACION_CON_HIJOS',
+  /** La cosecha ya está asignada a un viaje. */
+  COSECHA_EN_VIAJE: 'COSECHA_EN_VIAJE',
+  /** Falta precio configurado, insumo sin rango, precios_cosecha sin registro, etc. */
+  CALC_ERROR: 'CALC_ERROR',
+  /** Intento de editar/eliminar una ausencia ya liquidada en nómina. */
+  AUSENCIA_LIQUIDADA: 'AUSENCIA_LIQUIDADA',
+  /** Aprobar/rechazar una ausencia que no está en PENDIENTE. */
+  AUSENCIA_ESTADO_INVALIDO: 'AUSENCIA_ESTADO_INVALIDO',
+  /** Eliminar un motivo de ausencia con ausencias asociadas. */
+  MOTIVO_CON_AUSENCIAS: 'MOTIVO_CON_AUSENCIAS',
+  /** Editar/eliminar una hora extra ya liquidada en nómina. */
+  HORA_EXTRA_LIQUIDADA: 'HORA_EXTRA_LIQUIDADA',
+  /** Aprobar/rechazar una hora extra que no está en PENDIENTE. */
+  HORA_EXTRA_ESTADO_INVALIDO: 'HORA_EXTRA_ESTADO_INVALIDO',
+  /** Eliminar un tipo paramétrico de hora extra con registros asociados. */
+  TIPO_HORA_EXTRA_CON_REGISTROS: 'TIPO_HORA_EXTRA_CON_REGISTROS',
+  /** Insumo creado desde el wizard ya existe. Pedir al usuario seleccionarlo del dropdown. */
+  INSUMO_DUPLICADO: 'INSUMO_DUPLICADO',
+  /** Usuario sin permiso para la acción. */
+  PERMISSION_DENIED: 'PERMISSION_DENIED',
+} as const;
+
+export type OperacionesErrorCode =
+  typeof OperacionesErrorCodes[keyof typeof OperacionesErrorCodes];

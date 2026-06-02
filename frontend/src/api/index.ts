@@ -50,8 +50,23 @@ export type {
   NominaErrorCode,
 } from './nomina';
 
-export { operacionesApi } from './operaciones';
-export type { Planilla, PlanillaPayload, LineaPlanilla } from './operaciones';
+export {
+  operacionesApi,
+  cosechasApi,
+  jornalesApi,
+  horasExtraApi,
+  ausenciasApi,
+  selectsApi as operacionesSelectsApi,
+  OperacionesErrorCodes,
+} from './operaciones';
+export type {
+  Planilla, EstadoPlanilla, Periodo,
+  Resumen, Indicadores,
+  Cosecha, CosechaCuadrillaItem,
+  Jornal, JornalPalma, JornalFinca, CategoriaJornal, TipoJornalPalma,
+  HoraExtra, Ausencia, EstadoNovedad,
+  OperacionesErrorCode,
+} from './operaciones';
 
 export {
   viajesApi,
@@ -76,7 +91,8 @@ export type {
   Insumo, InsumoPayload,
   PrecioAbono, PrecioAbonoPayload,
   Labor, LaborPayload, LaborSelectItem,
-  PrecioPalma, PrecioPalmaPayload, TipoPalmaPrecio,
+  PrecioPalma, PrecioPalmaPayload, TipoPalmaPrecio, TipoPagoPalma,
+  LaborPalma, LaborPalmaPayload, LaborPalmaSelectItem, LaborPalmaParams,
   PromedioLote, PromedioLotePayload,
   Cargo, CargoPayload, SalarioTipoCargo,
   ModalidadContrato, ModalidadContratoPayload,

@@ -18,7 +18,27 @@ interface SeccionConfig {
   descripcion: string;
   etiqueta: string;
   api: RecursoColaborador;
+  /** Catálogo inicial sembrado en background si la lista viene vacía. */
+  defaults: string[];
 }
+
+/** Catálogos iniciales — entidades vigentes en Colombia (al 2026). */
+const EPS_DEFAULT = [
+  'Sura', 'Sanitas', 'Nueva EPS', 'Compensar', 'Famisanar',
+  'Salud Total', 'Aliansalud', 'Mutual Ser', 'Coosalud',
+  'Capital Salud', 'Cajacopi', 'Asmet Salud', 'Savia Salud',
+  'EPM Salud', 'Comfenalco Valle', 'Emssanar', 'Capresoca',
+];
+const ARL_DEFAULT = [
+  'Sura', 'Positiva', 'Colmena Seguros', 'Bolívar',
+  'Liberty Seguros', 'La Equidad', 'Mapfre', 'Axa Colpatria', 'Aurora',
+];
+const FONDOS_PENSION_DEFAULT = [
+  'Porvenir', 'Protección', 'Colfondos', 'Skandia', 'Colpensiones',
+];
+const FONDOS_CESANTIAS_DEFAULT = [
+  'Porvenir', 'Protección', 'Colfondos', 'Skandia', 'Fondo Nacional del Ahorro',
+];
 
 const SECCIONES: SeccionConfig[] = [
   {
@@ -27,6 +47,7 @@ const SECCIONES: SeccionConfig[] = [
     descripcion: 'Administradoras de salud disponibles para los colaboradores',
     etiqueta: 'EPS',
     api: configuracionApi.eps,
+    defaults: EPS_DEFAULT,
   },
   {
     key: 'arl',
@@ -34,6 +55,7 @@ const SECCIONES: SeccionConfig[] = [
     descripcion: 'Entidades de riesgos laborales',
     etiqueta: 'ARL',
     api: configuracionApi.arl,
+    defaults: ARL_DEFAULT,
   },
   {
     key: 'fondos',
@@ -41,6 +63,7 @@ const SECCIONES: SeccionConfig[] = [
     descripcion: 'Administradoras de fondos pensionales',
     etiqueta: 'Fondo de Pensiones',
     api: configuracionApi.fondosPension,
+    defaults: FONDOS_PENSION_DEFAULT,
   },
   {
     key: 'fondos-cesantias',
@@ -48,6 +71,7 @@ const SECCIONES: SeccionConfig[] = [
     descripcion: 'Administradoras de fondos de cesantías',
     etiqueta: 'Fondo de Cesantías',
     api: configuracionApi.fondosCesantias,
+    defaults: FONDOS_CESANTIAS_DEFAULT,
   },
 ];
 
@@ -60,18 +84,36 @@ export function SeguridadSocialTab() {
 
   useEffect(() => {
     let cancelado = false;
-    Promise.all(SECCIONES.map((s) => s.api.listar({ per_page: 100 })))
-      .then((respuestas) => {
+    (async () => {
+      try {
+        const respuestas = await Promise.all(
+          SECCIONES.map((s) => s.api.listar({ per_page: 100 })),
+        );
         if (cancelado) return;
+
         const next: Record<string, ParametricaColaborador[]> = {};
-        SECCIONES.forEach((s, i) => {
-          next[s.key] = respuestas[i].data;
-        });
-        setItems(next);
-      })
-      .catch((e: any) => {
+        // Sembramos en background cualquier sección que venga vacía.
+        await Promise.all(SECCIONES.map(async (s, i) => {
+          const existentes = respuestas[i].data ?? [];
+          if (existentes.length > 0) {
+            next[s.key] = existentes;
+            return;
+          }
+          const creados: ParametricaColaborador[] = [];
+          for (const nombre of s.defaults) {
+            try {
+              const r = await s.api.crear({ nombre });
+              creados.push(r.data);
+            } catch { /* skip duplicados / fallos puntuales */ }
+          }
+          next[s.key] = creados;
+        }));
+
+        if (!cancelado) setItems(next);
+      } catch (e: any) {
         if (!cancelado) toast.error(e?.message ?? 'No se pudieron cargar las entidades');
-      });
+      }
+    })();
     return () => {
       cancelado = true;
     };

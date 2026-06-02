@@ -25,28 +25,71 @@ import {
   configuracionApi,
   ConfiguracionErrorCodes,
   type Labor,
+  type PrecioPalma,
+  type TipoPagoPalma,
 } from '../../../api/configuracion';
 
-// Labores fijas de palma (mismo set hardcoded que V.12 para mantener el diseño).
-// El precio real se configura en "Nómina y Liquidaciones > Precios Labores".
-const laboresPalmaFijas = [
-  { id: 'lp1', nombre: 'Cosecha', tipoPago: 'POR PALMA' as const },
-  { id: 'lp2', nombre: 'Plateo', tipoPago: 'POR PALMA' as const },
-  { id: 'lp3', nombre: 'Poda', tipoPago: 'POR PALMA' as const },
-  { id: 'lp4', nombre: 'Abono', tipoPago: 'POR PALMA' as const },
-  { id: 'lp5', nombre: 'Sanidad', tipoPago: 'JORNAL FIJO' as const },
+/** Label legible por tipo de palma del sistema (§4b). */
+const NOMBRE_PALMA: Record<string, string> = {
+  PLATEO: 'Plateo',
+  PODA: 'Poda',
+  SANIDAD: 'Sanidad',
+  OTROS: 'Otros',
+};
+
+/**
+ * Labores de palma fijas del diseño. Las que tienen `apiTipo` se editan vía
+ * §4b (`/precios-palma`). Cosecha y Abono no viven en esa tabla (Cosecha usa
+ * §9 precios_cosecha, Abono usa §3 precios-abono) — para mantener la UX
+ * consistente, su `tipo_pago` se persiste en localStorage por tenant.
+ */
+const PALMA_LABELS: Array<{
+  key: string;
+  nombre: string;
+  apiTipo?: 'PLATEO' | 'PODA' | 'SANIDAD' | 'OTROS';
+  tipoPagoDefault: 'POR_PALMA' | 'JORNAL_FIJO';
+}> = [
+  { key: 'cosecha', nombre: 'Cosecha', tipoPagoDefault: 'POR_PALMA' },
+  { key: 'plateo',  nombre: 'Plateo',  apiTipo: 'PLATEO',  tipoPagoDefault: 'POR_PALMA' },
+  { key: 'poda',    nombre: 'Poda',    apiTipo: 'PODA',    tipoPagoDefault: 'POR_PALMA' },
+  { key: 'abono',   nombre: 'Abono',   tipoPagoDefault: 'POR_PALMA' },
+  { key: 'sanidad', nombre: 'Sanidad', apiTipo: 'SANIDAD', tipoPagoDefault: 'JORNAL_FIJO' },
 ];
 
-type TipoPagoLabor = 'POR PALMA' | 'JORNAL FIJO';
+/** Storage key para tipo_pago local de Cosecha/Abono. */
+const LS_KEY_LOCAL_TIPO_PAGO = 'palmapp_labores_palma_tipo_pago_local';
+
+function leerTipoPagoLocal(): Record<string, 'POR_PALMA' | 'JORNAL_FIJO'> {
+  try {
+    const raw = localStorage.getItem(LS_KEY_LOCAL_TIPO_PAGO);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function guardarTipoPagoLocal(key: string, valor: 'POR_PALMA' | 'JORNAL_FIJO') {
+  const actual = leerTipoPagoLocal();
+  actual[key] = valor;
+  try {
+    localStorage.setItem(LS_KEY_LOCAL_TIPO_PAGO, JSON.stringify(actual));
+  } catch { /* cuota llena */ }
+}
 
 export function LaboresTab() {
   const [laboresFinca, setLaboresFinca] = useState<Labor[]>([]);
+  const [preciosPalma, setPreciosPalma] = useState<PrecioPalma[]>([]);
+  // tipo_pago de Cosecha/Abono (los que no viven en §4b). Persiste localmente.
+  const [tipoPagoLocal, setTipoPagoLocal] = useState<Record<string, TipoPagoPalma>>(() => leerTipoPagoLocal());
+
   const [openModal, setOpenModal] = useState(false);
   const [laborEdit, setLaborEdit] = useState<Labor | null>(null);
-  const [esLaborPalma, setEsLaborPalma] = useState(false);
-  const [formData, setFormData] = useState<{ nombre: string; tipoPago: TipoPagoLabor }>({
+  const [palmaEdit, setPalmaEdit] = useState<PrecioPalma | null>(null);
+  // Si estamos editando una Labor Palma "local" (Cosecha/Abono) guardamos su key.
+  const [palmaLocalEdit, setPalmaLocalEdit] = useState<string | null>(null);
+  const [formData, setFormData] = useState<{ nombre: string; tipo_pago: TipoPagoPalma }>({
     nombre: '',
-    tipoPago: 'POR PALMA',
+    tipo_pago: 'POR_PALMA',
   });
 
   const { confirmDelete, ConfirmDeleteDialog } = useConfirmDelete();
@@ -56,49 +99,88 @@ export function LaboresTab() {
       .listar({ per_page: 100 })
       .then((res) => setLaboresFinca(res.data))
       .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar las labores'));
+
+    // §4b — los 4 tipos fijos del sistema (PLATEO, PODA, SANIDAD, OTROS) vienen
+    // sembrados al provisionar el tenant. Solo se pueden EDITAR (precio_palma,
+    // tipo_pago, estado). No hay POST ni DELETE.
+    configuracionApi.preciosPalma
+      .listar()
+      .then((res) => setPreciosPalma(res.data ?? []))
+      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar las labores de palma'));
   }, []);
 
-  const handleOpenModal = (
-    labor?: Labor | { nombre: string; tipoPago: TipoPagoLabor },
-    esLaborPalmaArg?: boolean,
-  ) => {
+  const abrirModalLaborFinca = (labor?: Labor) => {
+    setPalmaEdit(null);
+    setPalmaLocalEdit(null);
     if (labor) {
-      const esPalma = !!esLaborPalmaArg;
-      setEsLaborPalma(esPalma);
-      if (esPalma) {
-        setLaborEdit(null);
-        const palma = labor as { nombre: string; tipoPago: TipoPagoLabor };
-        setFormData({ nombre: palma.nombre, tipoPago: palma.tipoPago });
-      } else {
-        const real = labor as Labor;
-        setLaborEdit(real);
-        setFormData({ nombre: real.nombre, tipoPago: 'POR PALMA' });
-      }
+      setLaborEdit(labor);
+      setFormData({ nombre: labor.nombre, tipo_pago: 'POR_PALMA' });
     } else {
-      setEsLaborPalma(false);
       setLaborEdit(null);
-      setFormData({ nombre: '', tipoPago: 'POR PALMA' });
+      setFormData({ nombre: '', tipo_pago: 'POR_PALMA' });
     }
     setOpenModal(true);
   };
 
+  const abrirModalLaborPalma = (precio: PrecioPalma) => {
+    setLaborEdit(null);
+    setPalmaLocalEdit(null);
+    setPalmaEdit(precio);
+    setFormData({
+      nombre: NOMBRE_PALMA[precio.tipo] ?? precio.tipo,
+      tipo_pago: precio.tipo_pago,
+    });
+    setOpenModal(true);
+  };
+
+  /** Edita Cosecha o Abono — viven fuera de §4b, persisten en localStorage. */
+  const abrirModalPalmaLocal = (label: typeof PALMA_LABELS[number]) => {
+    setLaborEdit(null);
+    setPalmaEdit(null);
+    setPalmaLocalEdit(label.key);
+    setFormData({
+      nombre: label.nombre,
+      tipo_pago: tipoPagoLocal[label.key] ?? label.tipoPagoDefault,
+    });
+    setOpenModal(true);
+  };
+
   const handleSave = async () => {
-    if (esLaborPalma) {
-      toast.info('El precio de las labores de palma se configura en "Nómina y Liquidaciones > Precios Labores"');
+    // EDITAR LABOR DE PALMA LOCAL (Cosecha / Abono — sin endpoint en §4b).
+    if (palmaLocalEdit) {
+      guardarTipoPagoLocal(palmaLocalEdit, formData.tipo_pago);
+      setTipoPagoLocal((prev) => ({ ...prev, [palmaLocalEdit]: formData.tipo_pago }));
+      toast.success('Labor de palma actualizada');
       setOpenModal(false);
       return;
     }
+
+    // EDITAR LABOR DE PALMA (§4b — solo cambia tipo_pago / estado, no el nombre).
+    if (palmaEdit) {
+      try {
+        const res = await configuracionApi.preciosPalma.editar(palmaEdit.id, {
+          tipo_pago: formData.tipo_pago,
+        });
+        setPreciosPalma((prev) => prev.map((p) => (p.id === palmaEdit.id ? res.data : p)));
+        toast.success(res.message ?? 'Labor de palma actualizada');
+        setOpenModal(false);
+      } catch (e: any) {
+        if (e?.errors) {
+          const primero = Object.values(e.errors).flat()[0];
+          toast.error(typeof primero === 'string' ? primero : 'Error de validación');
+        } else {
+          toast.error(e?.message ?? 'No se pudo actualizar la labor de palma');
+        }
+      }
+      return;
+    }
+
+    // CREAR / EDITAR LABOR DE FINCA.
     if (!formData.nombre.trim()) {
       toast.error('El nombre de la labor es obligatorio');
       return;
     }
-
     try {
-      // El precio (valor_base) lo configura el admin desde "Nómina y
-      // Liquidaciones > Precios Labores"; aquí solo guardamos nombre.
-      // El backend exige valor_base al crear, por eso lo dejamos en 0
-      // (placeholder hasta que se le ponga precio aparte). Al editar nombre
-      // preservamos el valor_base que ya tiene.
       if (laborEdit) {
         const payload = { nombre: formData.nombre.trim() };
         const res = await configuracionApi.labores.editar(laborEdit.id, payload);
@@ -146,10 +228,18 @@ export function LaboresTab() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {laborEdit || esLaborPalma ? 'Editar Labor' : 'Nueva Labor'}
+              {palmaEdit
+                ? `Editar ${NOMBRE_PALMA[palmaEdit.tipo] ?? palmaEdit.tipo}`
+                : palmaLocalEdit
+                  ? `Editar ${formData.nombre}`
+                  : laborEdit
+                    ? 'Editar Labor'
+                    : 'Nueva Labor'}
             </DialogTitle>
             <DialogDescription>
-              Define un tipo de trabajo de campo. Los precios se configuran en Nómina y Liquidaciones
+              {palmaEdit || palmaLocalEdit
+                ? 'Define cómo se paga esta labor de palma. El precio se configura en "Nómina y Liquidaciones > Precios Labores".'
+                : 'Define un tipo de trabajo de campo. Los precios se configuran en Nómina y Liquidaciones.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -160,40 +250,41 @@ export function LaboresTab() {
               </Label>
               <Input
                 id="nombre"
-                placeholder="Ej: Cosecha, Plateo, Poda, Fertilización"
+                placeholder="Ej: Reparación de portón"
                 value={formData.nombre}
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, nombre: e.target.value }))
                 }
-                disabled={esLaborPalma}
+                disabled={!!palmaEdit || !!palmaLocalEdit}
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="tipoPago">
-                Tipo de Pago <span className="text-destructive">*</span>
-              </Label>
-              <Select
-                value={formData.tipoPago}
-                onValueChange={(value: TipoPagoLabor) => {
-                  setFormData((prev) => ({ ...prev, tipoPago: value }));
-                }}
-                disabled={esLaborPalma}
-              >
-                <SelectTrigger id="tipoPago">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="POR PALMA">POR PALMA</SelectItem>
-                  <SelectItem value="JORNAL FIJO">JORNAL FIJO</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                {formData.tipoPago === 'POR PALMA'
-                  ? 'Se paga según cantidad de palmas trabajadas'
-                  : 'Se paga un valor fijo por día trabajado'}
-              </p>
-            </div>
+            {(palmaEdit || palmaLocalEdit) && (
+              <div className="space-y-2">
+                <Label htmlFor="tipo_pago">
+                  Tipo de Pago <span className="text-destructive">*</span>
+                </Label>
+                <Select
+                  value={formData.tipo_pago}
+                  onValueChange={(v: TipoPagoPalma) =>
+                    setFormData((prev) => ({ ...prev, tipo_pago: v }))
+                  }
+                >
+                  <SelectTrigger id="tipo_pago">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="POR_PALMA">Por Palma</SelectItem>
+                    <SelectItem value="JORNAL_FIJO">Jornal Fijo</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {formData.tipo_pago === 'POR_PALMA'
+                    ? 'Se cobra por cada palma trabajada (precio × cantidad).'
+                    : 'Se cobra un valor plano por jornal (sin contar palmas).'}
+                </p>
+              </div>
+            )}
 
             <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 p-3">
               <p className="text-sm text-blue-900 dark:text-blue-100">
@@ -224,29 +315,42 @@ export function LaboresTab() {
           </CardHeader>
           <CardContent className="p-6">
             <div className="space-y-2">
-              {laboresPalmaFijas.map((labor) => (
-                <div
-                  key={labor.id}
-                  className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex-1">
-                    <p className="font-semibold">{labor.nombre}</p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {labor.tipoPago === 'POR PALMA' ? 'Por Palma' : 'Jornal Fijo'}
-                    </p>
+              {PALMA_LABELS.map((label) => {
+                // Matchea contra el API §4b si esta labor es editable allí.
+                const precio = label.apiTipo
+                  ? preciosPalma.find((p) => p.tipo === label.apiTipo)
+                  : undefined;
+                const tipoPago: TipoPagoPalma = precio?.tipo_pago
+                  ?? tipoPagoLocal[label.key]
+                  ?? label.tipoPagoDefault;
+                return (
+                  <div
+                    key={label.key}
+                    className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="flex-1">
+                      <p className="font-semibold">{label.nombre}</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {tipoPago === 'POR_PALMA' ? 'Por Palma' : 'Jornal Fijo'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          precio
+                            ? abrirModalLaborPalma(precio)
+                            : abrirModalPalmaLocal(label)
+                        }
+                        className="h-8 w-8 p-0"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleOpenModal(labor, true)}
-                      className="h-8 w-8 p-0"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>
@@ -261,7 +365,7 @@ export function LaboresTab() {
                   Labores personalizadas - Puedes crear y editar
                 </CardDescription>
               </div>
-              <Button onClick={() => handleOpenModal()}>
+              <Button onClick={() => abrirModalLaborFinca()}>
                 <Plus className="mr-2 h-4 w-4" />
                 Nueva Labor
               </Button>
@@ -274,7 +378,7 @@ export function LaboresTab() {
                 <p className="mb-4 text-sm text-muted-foreground">
                   Comienza agregando tu primera labor de finca
                 </p>
-                <Button onClick={() => handleOpenModal()}>
+                <Button onClick={() => abrirModalLaborFinca()}>
                   <Plus className="mr-2 h-4 w-4" />
                   Agregar Labor
                 </Button>
@@ -289,14 +393,14 @@ export function LaboresTab() {
                     <div className="flex-1">
                       <p className="font-semibold">{labor.nombre}</p>
                       <p className="text-sm text-muted-foreground mt-1">
-                        Por Palma
+                        Jornal Fijo
                       </p>
                     </div>
                     <div className="flex items-center gap-1">
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleOpenModal(labor)}
+                        onClick={() => abrirModalLaborFinca(labor)}
                         className="h-8 w-8 p-0"
                       >
                         <Edit className="h-4 w-4" />

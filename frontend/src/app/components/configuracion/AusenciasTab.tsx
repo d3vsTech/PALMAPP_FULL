@@ -66,6 +66,30 @@ const FORM_VACIO = {
   color: 'bg-blue-500',
 };
 
+/** Catálogo inicial sembrado en background si el tenant no tiene motivos.
+ *  Uno por cada `tipo_base` del enum, con valores legales colombianos (CST). */
+const MOTIVOS_DEFAULT: Array<{
+  nombre: string;
+  tipo_base: TipoBaseAusencia;
+  es_remunerada: boolean;
+  afecta_nomina: boolean;
+  porcentaje_pago_default: number;
+  requiere_soporte: boolean;
+  color: string;
+}> = [
+  { nombre: 'Incapacidad EPS',           tipo_base: 'INCAPACIDAD_EPS',          es_remunerada: true,  afecta_nomina: true, porcentaje_pago_default: 66.67, requiere_soporte: true,  color: '#3b82f6' },
+  { nombre: 'Incapacidad ARL',           tipo_base: 'INCAPACIDAD_ARL',          es_remunerada: true,  afecta_nomina: true, porcentaje_pago_default: 100,   requiere_soporte: true,  color: '#ef4444' },
+  { nombre: 'Licencia de Maternidad',    tipo_base: 'LICENCIA_MATERNIDAD',      es_remunerada: true,  afecta_nomina: true, porcentaje_pago_default: 100,   requiere_soporte: true,  color: '#ec4899' },
+  { nombre: 'Licencia de Paternidad',    tipo_base: 'LICENCIA_PATERNIDAD',      es_remunerada: true,  afecta_nomina: true, porcentaje_pago_default: 100,   requiere_soporte: true,  color: '#a855f7' },
+  { nombre: 'Licencia de Luto',          tipo_base: 'LICENCIA_LUTO',            es_remunerada: true,  afecta_nomina: true, porcentaje_pago_default: 100,   requiere_soporte: true,  color: '#6b7280' },
+  { nombre: 'Permiso Remunerado',        tipo_base: 'PERMISO_REMUNERADO',       es_remunerada: true,  afecta_nomina: true, porcentaje_pago_default: 100,   requiere_soporte: false, color: '#22c55e' },
+  { nombre: 'Permiso No Remunerado',     tipo_base: 'PERMISO_NO_REMUNERADO',    es_remunerada: false, afecta_nomina: true, porcentaje_pago_default: 0,     requiere_soporte: false, color: '#f97316' },
+  { nombre: 'Ausencia Injustificada',    tipo_base: 'AUSENCIA_INJUSTIFICADA',   es_remunerada: false, afecta_nomina: true, porcentaje_pago_default: 0,     requiere_soporte: false, color: '#eab308' },
+  { nombre: 'Calamidad Doméstica',       tipo_base: 'CALAMIDAD_DOMESTICA',      es_remunerada: true,  afecta_nomina: true, porcentaje_pago_default: 100,   requiere_soporte: false, color: '#06b6d4' },
+  { nombre: 'Suspensión Disciplinaria',  tipo_base: 'SUSPENSION_DISCIPLINARIA', es_remunerada: false, afecta_nomina: true, porcentaje_pago_default: 0,     requiere_soporte: true,  color: '#1f2937' },
+  { nombre: 'Otro',                      tipo_base: 'OTRO',                     es_remunerada: false, afecta_nomina: false, porcentaje_pago_default: 0,    requiere_soporte: false, color: '#94a3b8' },
+];
+
 export function AusenciasTab() {
   const [motivos, setMotivos] = useState<MotivoAusencia[]>([]);
 
@@ -76,10 +100,29 @@ export function AusenciasTab() {
   const { confirmDelete, ConfirmDeleteDialog } = useConfirmDelete();
 
   useEffect(() => {
-    configuracionApi.motivosAusencia
-      .listar({ per_page: 100 })
-      .then((res) => setMotivos(res.data))
-      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar los motivos de ausencia'));
+    let cancelado = false;
+    (async () => {
+      try {
+        const res = await configuracionApi.motivosAusencia.listar({ per_page: 100 });
+        if (cancelado) return;
+        if ((res.data ?? []).length > 0) {
+          setMotivos(res.data);
+          return;
+        }
+        // Lista vacía → sembramos los 11 motivos legales en background.
+        const creados: MotivoAusencia[] = [];
+        for (const m of MOTIVOS_DEFAULT) {
+          try {
+            const r = await configuracionApi.motivosAusencia.crear(m);
+            creados.push(r.data);
+          } catch { /* si falla uno seguimos con los demás */ }
+        }
+        if (!cancelado) setMotivos(creados);
+      } catch (e: any) {
+        if (!cancelado) toast.error(e?.message ?? 'No se pudieron cargar los motivos de ausencia');
+      }
+    })();
+    return () => { cancelado = true; };
   }, []);
 
   const handleOpenModal = (motivo?: MotivoAusencia) => {

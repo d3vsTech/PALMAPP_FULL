@@ -60,6 +60,7 @@ import {
 import { Switch } from '../../components/ui/switch';
 import { colaboradoresApi, buildAvatarUrl } from '../../../api/colaboradores';
 import { fetchConToken } from '../../../api/request';
+import { configuracionApi } from '../../../api/configuracion';
 import { toast } from 'sonner';
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────────
@@ -151,27 +152,14 @@ const FORM_INICIAL: FormData = {
   contactoEmergenciaNombre: '', contactoEmergenciaTelefono: '',
 };
 
-// ─── Persistencia local del borrador (solo en creación) ─────────────────────
-// Si el usuario sale a medio camino, conservamos lo escrito en localStorage
-// y al volver al wizard restauramos el formulario y la etapa.
+// ─── Persistencia local del borrador ────────────────────────────────────────
+// La funcionalidad de auto-restaurar borrador en modo creación está
+// deshabilitada — confundía al usuario porque al abrir "Nuevo Colaborador"
+// aparecían datos de sesiones anteriores. Solo mantenemos `limpiarBorrador`
+// para purgar cualquier residuo de versiones previas que sí guardaban.
 const DRAFT_KEY = 'palmapp_borrador_colaborador';
 const DRAFT_STEP_KEY = 'palmapp_borrador_colaborador_etapa';
 
-function leerBorrador(): FormData | null {
-  try {
-    const raw = localStorage.getItem(DRAFT_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? { ...FORM_INICIAL, ...parsed } : null;
-  } catch { return null; }
-}
-function leerEtapaBorrador(): number {
-  try {
-    const raw = localStorage.getItem(DRAFT_STEP_KEY);
-    const n = raw ? parseInt(raw, 10) : 1;
-    return Number.isFinite(n) && n >= 1 && n <= 5 ? n : 1;
-  } catch { return 1; }
-}
 function limpiarBorrador() {
   try {
     localStorage.removeItem(DRAFT_KEY);
@@ -187,14 +175,12 @@ export default function NuevoColaboradorWizard() {
 
   const ETAPAS = isEditMode ? [...ETAPAS_BASE, ETAPA_DOCUMENTOS] : ETAPAS_BASE;
 
-  // En modo creación inicializamos con lo que haya en el borrador local;
-  // en edición no usamos borrador (datos vienen del backend).
-  const borradorInicial = !isEditMode ? leerBorrador() : null;
-  const etapaInicial    = !isEditMode ? leerEtapaBorrador() : 1;
-
-  const [etapaActual, setEtapaActual] = useState(etapaInicial);
-  const [formData, setFormData] = useState<FormData>(borradorInicial ?? FORM_INICIAL);
-  const [borradorRestaurado] = useState(!!borradorInicial);
+  // En modo creación arrancamos siempre con el form vacío en la etapa 1.
+  // Si quedó algún borrador de una sesión anterior lo descartamos, así el
+  // usuario no se confunde al abrir "Nuevo Colaborador" y ver datos viejos.
+  const [etapaActual, setEtapaActual] = useState(1);
+  const [formData, setFormData] = useState<FormData>(FORM_INICIAL);
+  const [borradorRestaurado] = useState(false);
   const [predios, setPredios] = useState<any[]>([]);
   const [guardando, setGuardando] = useState(false);
   const [cargandoColaborador, setCargandoColaborador] = useState<boolean>(isEditMode);
@@ -223,6 +209,34 @@ export default function NuevoColaboradorWizard() {
   const [departamentos, setDepartamentos] = useState<{codigo:string;nombre:string}[]>([]);
   const [municipios, setMunicipios] = useState<{codigo:string;nombre:string}[]>([]);
   const [deptoSel, setDeptoSel] = useState('');
+
+  // SMLV vigente del tenant — usado para pre-llenar el campo Salario Base
+  // en modo creación. Fuente: §14 Constantes Legales (`salario_minimo_vigente`).
+  const [smmlv, setSmmlv] = useState<number | null>(null);
+  // Bandera para asegurar que el auto-fill del SMLV solo aplica UNA vez,
+  // así no pisa lo que el usuario tipea después.
+  const [smlvAplicado, setSmlvAplicado] = useState(false);
+
+  useEffect(() => {
+    configuracionApi.constantesLegales
+      .obtener()
+      .then((res) => {
+        const v = Number(res.data.salario_minimo_vigente);
+        if (Number.isFinite(v) && v > 0) setSmmlv(v);
+      })
+      .catch(() => { /* silencioso */ });
+  }, []);
+
+  // Aplica el SMLV al `salarioBase` cuando ya cargó la constante y todavía
+  // está en 0. Corre como efecto separado para que no haya race con
+  // wizardInit (que también puede tocar formData).
+  useEffect(() => {
+    if (isEditMode || smmlv == null || smlvAplicado) return;
+    setFormData((prev) =>
+      prev.salarioBase > 0 ? prev : { ...prev, salarioBase: smmlv },
+    );
+    setSmlvAplicado(true);
+  }, [smmlv, isEditMode, smlvAplicado]);
 
   // Documentos (solo edición)
   const [documentos, setDocumentos] = useState<any[]>([]);
@@ -454,20 +468,12 @@ export default function NuevoColaboradorWizard() {
       .finally(() => setLoadingDocs(false));
   }, [id, isEditMode, etapaActual]);
 
-  // ─── Persistencia automática del borrador (solo creación) ──────────────────
+  // Limpieza one-shot del borrador residual al entrar en modo creación.
+  // (La funcionalidad de auto-restauración fue deshabilitada por confundir
+  // al usuario cuando abría "Nuevo Colaborador" y veía datos viejos.)
   useEffect(() => {
-    if (isEditMode) return;
-    try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(formData));
-    } catch { /* cuota llena u otro error */ }
-  }, [formData, isEditMode]);
-
-  useEffect(() => {
-    if (isEditMode) return;
-    try {
-      localStorage.setItem(DRAFT_STEP_KEY, String(etapaActual));
-    } catch { /* ignorar */ }
-  }, [etapaActual, isEditMode]);
+    if (!isEditMode) limpiarBorrador();
+  }, [isEditMode]);
 
   // Aviso al usuario cuando se restaura un borrador previo
   useEffect(() => {
@@ -1222,7 +1228,13 @@ export default function NuevoColaboradorWizard() {
                       id="salarioBase"
                       type="text"
                       inputMode="numeric"
-                      placeholder={formData.modalidadPago === 'VARIABLE' ? 'Opcional' : '1.300.000'}
+                      placeholder={
+                        formData.modalidadPago === 'VARIABLE'
+                          ? 'Opcional'
+                          : smmlv
+                            ? smmlv.toLocaleString('es-CO')
+                            : '1.300.000'
+                      }
                       className="pl-7"
                       value={formData.salarioBase > 0 ? formData.salarioBase.toLocaleString('es-CO') : ''}
                       onChange={(e) => {

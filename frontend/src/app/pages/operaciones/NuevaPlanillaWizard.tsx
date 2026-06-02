@@ -126,6 +126,15 @@ interface TrabajoSanidad {
 interface TrabajoOtros {
   id: string;
   colaboradores: string[];
+  /**
+   * Referencia al catálogo de Labores en Configuración:
+   *  - source='palma': envía `labor_palma_id` (modo catálogo §3.2 del API).
+   *  - source='finca': envía `nombre_trabajo` (modo legado — usa la Labor Finca
+   *    como texto descriptivo del trabajo OTRO).
+   */
+  laborOtrosKey?: string;          // ej. "palma-3" o "finca-7"
+  laborOtrosSource?: 'palma' | 'finca';
+  laborOtrosRawId?: number;
   nombre: string;
   laborRealizada: string;
   lote: string;
@@ -202,19 +211,43 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   const [laboresLista, setLaboresLista] = useState<string[]>([]);
   const [motivosLista, setMotivosLista] = useState<string[]>([]);
   const [tiposHoraExtraLista, setTiposHoraExtraLista] = useState<string[]>([]);
+  /**
+   * Catálogo para el select "Nombre" del tab OTROS — fusiona dos fuentes:
+   *  - `/labores-palma/select` (custom labores de palma — modo catálogo §3.2).
+   *  - `/labores/select` (Labores Finca que el admin configura — fallback porque
+   *    es el único catálogo que el admin gestiona desde la UI actualmente).
+   * Cada item carga su `source` para enviar el payload correcto al guardar.
+   */
+  type LaborOtrosOpcion = {
+    key: string;
+    nombre: string;
+    source: 'palma' | 'finca';
+    rawId: number;
+  };
+  const [laboresOtrosOpciones, setLaboresOtrosOpciones] = useState<LaborOtrosOpcion[]>([]);
 
   // Carga inicial de catálogos al montar
   useEffect(() => {
     (async () => {
       try {
-        const [colRes, lotRes, inRes, labRes, motRes, tipoRes] = await Promise.all([
+        const [colRes, lotRes, inRes, labRes, motRes, tipoRes, lpRes] = await Promise.all([
           selectsApi.colaboradores(),
           selectsApi.lotes(),
           selectsApi.insumos(),
           selectsApi.labores(),
           selectsApi.motivosAusencia(),
           selectsApi.tiposHoraExtra(),
+          selectsApi.laboresPalma().catch(() => ({ data: [] as any[] })),
         ]);
+        // Dropdown "Nombre" del tab OTROS: SOLO Labores Palma personalizadas
+        // (`/labores-palma/select`). Las Labores Finca van únicamente al step 3.
+        const opcionesPalma: LaborOtrosOpcion[] = (lpRes.data || []).map((x: any) => ({
+          key: `palma-${x.id}`,
+          nombre: x.nombre,
+          source: 'palma',
+          rawId: x.id,
+        }));
+        setLaboresOtrosOpciones(opcionesPalma);
         setColaboradores((colRes.data || []).map((c: any) => {
           let nombres   = c.primer_nombre   ?? c.nombres   ?? c.nombre   ?? '';
           let apellidos = c.primer_apellido ?? c.apellidos ?? c.apellido ?? '';
@@ -411,14 +444,20 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           sublote: j.sublote_id != null ? String(j.sublote_id) : '',
           trabajoRealizado: j.descripcion ?? '',
         })));
-        setTrabajosOtros(porTipo('OTROS').map(j => ({
-          id: String(j.id),
-          colaboradores: [String(j.empleado_id)],
-          nombre: j.nombre_trabajo ?? '',
-          laborRealizada: j.descripcion ?? '',
-          lote: j.lote_id != null ? String(j.lote_id) : '',
-          sublote: j.sublote_id != null ? String(j.sublote_id) : '',
-        })));
+        setTrabajosOtros(porTipo('OTROS').map(j => {
+          const hasLaborPalma = j.labor_palma_id != null;
+          return {
+            id: String(j.id),
+            colaboradores: [String(j.empleado_id)],
+            laborOtrosKey: hasLaborPalma ? `palma-${j.labor_palma_id}` : undefined,
+            laborOtrosSource: hasLaborPalma ? ('palma' as const) : undefined,
+            laborOtrosRawId: hasLaborPalma ? Number(j.labor_palma_id) : undefined,
+            nombre: j.labor_palma?.nombre ?? j.nombre_trabajo ?? '',
+            laborRealizada: j.descripcion ?? '',
+            lote: j.lote_id != null ? String(j.lote_id) : '',
+            sublote: j.sublote_id != null ? String(j.sublote_id) : '',
+          };
+        }));
         setTrabajosAuxiliares(jornales.filter(j => j.categoria === 'FINCA').map(j => ({
           id: String(j.id),
           nombre: j.empleado ? `${j.empleado.primer_nombre ?? ''} ${j.empleado.primer_apellido ?? ''}`.trim() : '',
@@ -611,18 +650,24 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           } catch {}
         }
       }
-      // Otros (PALMA-OTROS)
+      // Otros (PALMA-OTROS) — soporta modo catálogo (labor_palma_id) y modo legado.
       for (const t of trabajosOtros) {
         for (const cid of t.colaboradores) {
-          try {
-            await jornalesApi.crear(pid, {
-              categoria: 'PALMA', tipo: 'OTROS', empleado_id: parseInt(cid),
-              lote_id: t.lote ? parseInt(t.lote) : null,
-              sublote_id: t.sublote ? parseInt(t.sublote) : null,
-              nombre_trabajo: t.nombre || 'Otros',
-              descripcion: t.laborRealizada || 'Realizado',
-            });
-          } catch {}
+          const base: any = {
+            categoria: 'PALMA', tipo: 'OTROS', empleado_id: parseInt(cid),
+            lote_id: t.lote ? parseInt(t.lote) : null,
+            sublote_id: t.sublote ? parseInt(t.sublote) : null,
+          };
+          if (t.laborOtrosSource === 'palma' && t.laborOtrosRawId) {
+            // Catálogo Labores Palma — backend resuelve nombre y precio.
+            base.labor_palma_id = t.laborOtrosRawId;
+            if (t.laborRealizada) base.descripcion = t.laborRealizada;
+          } else {
+            // Legado: usa el nombre seleccionado (Labor Finca) o texto libre.
+            base.nombre_trabajo = t.nombre || 'Otros';
+            base.descripcion = t.laborRealizada || 'Realizado';
+          }
+          try { await jornalesApi.crear(pid, base); } catch {}
         }
       }
       // Auxiliares (FINCA)
@@ -2525,13 +2570,34 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                               </div>
                               <div className="space-y-2 md:col-span-2">
                                 <Label>Nombre</Label>
-                                <Input
-                                  placeholder="Nombre del trabajo"
-                                  value={otrosEnEdicion.nombre}
-                                  onChange={(e) => {
-                                    setOtrosEnEdicion({ ...otrosEnEdicion, nombre: e.target.value });
+                                <Select
+                                  value={otrosEnEdicion.laborOtrosKey ?? ''}
+                                  onValueChange={(value) => {
+                                    const op = laboresOtrosOpciones.find(o => o.key === value);
+                                    setOtrosEnEdicion({
+                                      ...otrosEnEdicion,
+                                      laborOtrosKey: value,
+                                      laborOtrosSource: op?.source,
+                                      laborOtrosRawId: op?.rawId,
+                                      nombre: op?.nombre ?? '',
+                                    });
                                   }}
-                                />
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder={
+                                      laboresOtrosOpciones.length === 0
+                                        ? 'No hay labores configuradas'
+                                        : 'Seleccionar labor'
+                                    } />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {laboresOtrosOpciones.map((op) => (
+                                      <SelectItem key={op.key} value={op.key}>
+                                        {op.nombre}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
                               </div>
                               <div className="space-y-2 md:col-span-2">
                                 <Label>Labor Realizada</Label>
