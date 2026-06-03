@@ -86,6 +86,7 @@ import UsuarioPermisos from './pages/usuarios/UsuarioPermisos';
 
 // Configuración
 import Configuracion from './pages/configuracion/Configuracion';
+import NuevoConceptoNomina from './pages/configuracion/NuevoConceptoNomina';
 
 import MiPerfil from './pages/perfil/MiPerfil';
 import ProtectedRoute from './components/common/ProtectedRoute';
@@ -271,6 +272,8 @@ export const router = createBrowserRouter([
 
       { path: 'perfil',         Component: MiPerfil },
       { path: 'configuracion', element: <ProtectedRoute permiso="configuracion.editar"><Configuracion /></ProtectedRoute> },
+      { path: 'configuracion/conceptos/nuevo',  element: <ProtectedRoute permiso="configuracion.editar"><NuevoConceptoNomina /></ProtectedRoute> },
+      { path: 'configuracion/conceptos/editar', element: <ProtectedRoute permiso="configuracion.editar"><NuevoConceptoNomina /></ProtectedRoute> },
       { path: 'maestros', element: <Navigate to="/configuracion" replace /> },
 
       { path: '403', Component: SinPermisos },

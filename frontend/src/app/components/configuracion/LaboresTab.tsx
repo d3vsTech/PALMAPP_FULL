@@ -27,6 +27,7 @@ import {
   type Labor,
   type PrecioPalma,
   type TipoPagoPalma,
+  type LaborPalma,
 } from '../../../api/configuracion';
 
 /** Label legible por tipo de palma del sistema (§4b). */
@@ -79,6 +80,8 @@ function guardarTipoPagoLocal(key: string, valor: 'POR_PALMA' | 'JORNAL_FIJO') {
 export function LaboresTab() {
   const [laboresFinca, setLaboresFinca] = useState<Labor[]>([]);
   const [preciosPalma, setPreciosPalma] = useState<PrecioPalma[]>([]);
+  // §4c — Labores Palma personalizadas creadas por el tenant.
+  const [laboresPalmaCustom, setLaboresPalmaCustom] = useState<LaborPalma[]>([]);
   // tipo_pago de Cosecha/Abono (los que no viven en §4b). Persiste localmente.
   const [tipoPagoLocal, setTipoPagoLocal] = useState<Record<string, TipoPagoPalma>>(() => leerTipoPagoLocal());
 
@@ -87,6 +90,9 @@ export function LaboresTab() {
   const [palmaEdit, setPalmaEdit] = useState<PrecioPalma | null>(null);
   // Si estamos editando una Labor Palma "local" (Cosecha/Abono) guardamos su key.
   const [palmaLocalEdit, setPalmaLocalEdit] = useState<string | null>(null);
+  // Si estamos creando/editando una Labor Palma personalizada (§4c).
+  const [palmaCustomEdit, setPalmaCustomEdit] = useState<LaborPalma | null>(null);
+  const [nuevaLaborPalma, setNuevaLaborPalma] = useState(false);
   const [formData, setFormData] = useState<{ nombre: string; tipo_pago: TipoPagoPalma }>({
     nombre: '',
     tipo_pago: 'POR_PALMA',
@@ -107,24 +113,35 @@ export function LaboresTab() {
       .listar()
       .then((res) => setPreciosPalma(res.data ?? []))
       .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar las labores de palma'));
+
+    // §4c — Labores Palma personalizadas del tenant (CRUD completo).
+    configuracionApi.laboresPalma
+      .listar({ per_page: 100 })
+      .then((res) => setLaboresPalmaCustom(res.data ?? []))
+      .catch(() => { /* opcional: si el endpoint no existe, lista queda vacía */ });
   }, []);
 
-  const abrirModalLaborFinca = (labor?: Labor) => {
+  const resetEditStates = () => {
+    setLaborEdit(null);
     setPalmaEdit(null);
     setPalmaLocalEdit(null);
+    setPalmaCustomEdit(null);
+    setNuevaLaborPalma(false);
+  };
+
+  const abrirModalLaborFinca = (labor?: Labor) => {
+    resetEditStates();
     if (labor) {
       setLaborEdit(labor);
       setFormData({ nombre: labor.nombre, tipo_pago: 'POR_PALMA' });
     } else {
-      setLaborEdit(null);
       setFormData({ nombre: '', tipo_pago: 'POR_PALMA' });
     }
     setOpenModal(true);
   };
 
   const abrirModalLaborPalma = (precio: PrecioPalma) => {
-    setLaborEdit(null);
-    setPalmaLocalEdit(null);
+    resetEditStates();
     setPalmaEdit(precio);
     setFormData({
       nombre: NOMBRE_PALMA[precio.tipo] ?? precio.tipo,
@@ -135,13 +152,28 @@ export function LaboresTab() {
 
   /** Edita Cosecha o Abono — viven fuera de §4b, persisten en localStorage. */
   const abrirModalPalmaLocal = (label: typeof PALMA_LABELS[number]) => {
-    setLaborEdit(null);
-    setPalmaEdit(null);
+    resetEditStates();
     setPalmaLocalEdit(label.key);
     setFormData({
       nombre: label.nombre,
       tipo_pago: tipoPagoLocal[label.key] ?? label.tipoPagoDefault,
     });
+    setOpenModal(true);
+  };
+
+  /** Crear una NUEVA Labor Palma personalizada (§4c — POST /labores-palma). */
+  const abrirModalNuevaLaborPalma = () => {
+    resetEditStates();
+    setNuevaLaborPalma(true);
+    setFormData({ nombre: '', tipo_pago: 'POR_PALMA' });
+    setOpenModal(true);
+  };
+
+  /** Editar una Labor Palma personalizada existente (§4c). */
+  const abrirModalLaborPalmaCustom = (lp: LaborPalma) => {
+    resetEditStates();
+    setPalmaCustomEdit(lp);
+    setFormData({ nombre: lp.nombre, tipo_pago: lp.tipo_pago });
     setOpenModal(true);
   };
 
@@ -170,6 +202,44 @@ export function LaboresTab() {
           toast.error(typeof primero === 'string' ? primero : 'Error de validación');
         } else {
           toast.error(e?.message ?? 'No se pudo actualizar la labor de palma');
+        }
+      }
+      return;
+    }
+
+    // CREAR / EDITAR LABOR DE PALMA PERSONALIZADA (§4c — POST/PUT /labores-palma).
+    if (nuevaLaborPalma || palmaCustomEdit) {
+      if (!formData.nombre.trim()) {
+        toast.error('El nombre de la labor es obligatorio');
+        return;
+      }
+      try {
+        if (palmaCustomEdit) {
+          const res = await configuracionApi.laboresPalma.editar(palmaCustomEdit.id, {
+            nombre: formData.nombre.trim(),
+            tipo_pago: formData.tipo_pago,
+          });
+          setLaboresPalmaCustom((prev) => prev.map((l) => (l.id === palmaCustomEdit.id ? res.data : l)));
+          toast.success(res.message ?? 'Labor de palma actualizada');
+        } else {
+          // El precio se configura aparte en Precios Labores; aquí mandamos 0.
+          const res = await configuracionApi.laboresPalma.crear({
+            nombre: formData.nombre.trim(),
+            tipo_pago: formData.tipo_pago,
+            precio: 0,
+          });
+          setLaboresPalmaCustom((prev) => [...prev, res.data]);
+          toast.success(res.message ?? 'Labor de palma creada');
+        }
+        setOpenModal(false);
+      } catch (e: any) {
+        if (e?.code === ConfiguracionErrorCodes.LABOR_PALMA_DUPLICADA) {
+          toast.error('Ya existe una labor de palma con ese nombre');
+        } else if (e?.errors) {
+          const primero = Object.values(e.errors).flat()[0];
+          toast.error(typeof primero === 'string' ? primero : 'Error de validación');
+        } else {
+          toast.error(e?.message ?? 'No se pudo guardar la labor de palma');
         }
       }
       return;
@@ -221,6 +291,26 @@ export function LaboresTab() {
     });
   };
 
+  const handleDeleteLaborPalmaCustom = (lp: LaborPalma) => {
+    confirmDelete({
+      title: '¿Eliminar labor de palma?',
+      description: `¿Estás seguro de que deseas eliminar "${lp.nombre}"? Esta acción no se puede deshacer.`,
+      confirmText: 'Eliminar',
+      onConfirm: async () => {
+        try {
+          await configuracionApi.laboresPalma.eliminar(lp.id);
+          setLaboresPalmaCustom((prev) => prev.filter((l) => l.id !== lp.id));
+        } catch (e: any) {
+          if (e?.code === ConfiguracionErrorCodes.LABOR_PALMA_CON_JORNALES) {
+            toast.error('No se puede eliminar: tiene jornales asociados');
+          } else {
+            toast.error(e?.message ?? 'No se pudo eliminar la labor de palma');
+          }
+        }
+      },
+    });
+  };
+
   return (
     <>
       {ConfirmDeleteDialog}
@@ -232,12 +322,16 @@ export function LaboresTab() {
                 ? `Editar ${NOMBRE_PALMA[palmaEdit.tipo] ?? palmaEdit.tipo}`
                 : palmaLocalEdit
                   ? `Editar ${formData.nombre}`
-                  : laborEdit
-                    ? 'Editar Labor'
-                    : 'Nueva Labor'}
+                  : palmaCustomEdit
+                    ? `Editar ${palmaCustomEdit.nombre}`
+                    : nuevaLaborPalma
+                      ? 'Nueva Labor de Palma'
+                      : laborEdit
+                        ? 'Editar Labor'
+                        : 'Nueva Labor'}
             </DialogTitle>
             <DialogDescription>
-              {palmaEdit || palmaLocalEdit
+              {palmaEdit || palmaLocalEdit || palmaCustomEdit || nuevaLaborPalma
                 ? 'Define cómo se paga esta labor de palma. El precio se configura en "Nómina y Liquidaciones > Precios Labores".'
                 : 'Define un tipo de trabajo de campo. Los precios se configuran en Nómina y Liquidaciones.'}
             </DialogDescription>
@@ -250,7 +344,11 @@ export function LaboresTab() {
               </Label>
               <Input
                 id="nombre"
-                placeholder="Ej: Reparación de portón"
+                placeholder={
+                  nuevaLaborPalma || palmaCustomEdit
+                    ? 'Ej: Resiembra, Repique'
+                    : 'Ej: Reparación de portón'
+                }
                 value={formData.nombre}
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, nombre: e.target.value }))
@@ -259,7 +357,7 @@ export function LaboresTab() {
               />
             </div>
 
-            {(palmaEdit || palmaLocalEdit) && (
+            {(palmaEdit || palmaLocalEdit || palmaCustomEdit || nuevaLaborPalma) && (
               <div className="space-y-2">
                 <Label htmlFor="tipo_pago">
                   Tipo de Pago <span className="text-destructive">*</span>
@@ -286,6 +384,24 @@ export function LaboresTab() {
               </div>
             )}
 
+            {/* Indicador de tipo de pago para Labor Finca (siempre JORNAL FIJO). */}
+            {!palmaEdit && !palmaLocalEdit && !palmaCustomEdit && !nuevaLaborPalma && (
+              <div className="space-y-2">
+                <Label htmlFor="tipo_pago_finca">
+                  Tipo de Pago <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="tipo_pago_finca"
+                  value="JORNAL FIJO"
+                  disabled
+                  className="bg-muted"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Las labores de finca solo permiten pago por jornal fijo
+                </p>
+              </div>
+            )}
+
             <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 p-3">
               <p className="text-sm text-blue-900 dark:text-blue-100">
                 <strong>Nota:</strong> Los precios de las labores se configuran en la sección "Nómina y Liquidaciones &gt; Precios Labores"
@@ -303,18 +419,25 @@ export function LaboresTab() {
       </Dialog>
 
       <div className="space-y-6">
-        {/* LABORES PALMA - FIJAS */}
+        {/* LABORES PALMA — 5 fijas del sistema + personalizadas del tenant */}
         <Card className="border-border">
           <CardHeader className="border-b bg-gradient-to-r from-primary/10 to-primary/5">
-            <div>
-              <CardTitle>Labores Palma</CardTitle>
-              <CardDescription>
-                Labores estándar de palma - No se pueden crear nuevas
-              </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Labores Palma</CardTitle>
+                <CardDescription>
+                  Labores de palma - Puedes crear nuevas y editar
+                </CardDescription>
+              </div>
+              <Button onClick={abrirModalNuevaLaborPalma}>
+                <Plus className="mr-2 h-4 w-4" />
+                Nueva Labor
+              </Button>
             </div>
           </CardHeader>
           <CardContent className="p-6">
             <div className="space-y-2">
+              {/* Las 5 fijas */}
               {PALMA_LABELS.map((label) => {
                 // Matchea contra el API §4b si esta labor es editable allí.
                 const precio = label.apiTipo
@@ -331,7 +454,7 @@ export function LaboresTab() {
                     <div className="flex-1">
                       <p className="font-semibold">{label.nombre}</p>
                       <p className="text-sm text-muted-foreground mt-1">
-                        {tipoPago === 'POR_PALMA' ? 'Por Palma' : 'Jornal Fijo'}
+                        {tipoPago === 'POR_PALMA' ? 'Por Palma' : 'Jornal Fijo'} · Predefinida
                       </p>
                     </div>
                     <div className="flex items-center gap-1">
@@ -351,6 +474,39 @@ export function LaboresTab() {
                   </div>
                 );
               })}
+
+              {/* Personalizadas (§4c) — editables y eliminables */}
+              {laboresPalmaCustom.map((lp) => (
+                <div
+                  key={`custom-${lp.id}`}
+                  className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex-1">
+                    <p className="font-semibold">{lp.nombre}</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {lp.tipo_pago === 'POR_PALMA' ? 'Por Palma' : 'Jornal Fijo'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => abrirModalLaborPalmaCustom(lp)}
+                      className="h-8 w-8 p-0"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDeleteLaborPalmaCustom(lp)}
+                      className="h-8 w-8 p-0"
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>

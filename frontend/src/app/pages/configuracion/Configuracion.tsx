@@ -16,7 +16,6 @@ import { cn } from '../../components/lib/utils';
 // Tabs existentes en V.2 + portados de V.11
 import { DatosEmpresaTab } from '../../components/configuracion/DatosEmpresaTab';
 import { ConstantesLegalesTab } from '../../components/configuracion/ConstantesLegalesTab';
-import { TablasLegalesTab } from '../../components/configuracion/TablasLegalesTab';
 import { SemillasTab } from '../../components/configuracion/SemillasTab';
 import { LaboresTab } from '../../components/configuracion/LaboresTab';
 import { InsumosTab } from '../../components/configuracion/InsumosTab';
@@ -64,7 +63,6 @@ const CATEGORIAS: Categoria[] = [
     icono: Scale,
     items: [
       { id: 'parametros-legales', nombre: 'Parámetros Legales', component: ConstantesLegalesTab },
-      { id: 'tablas-legales',     nombre: 'Aportes',            component: TablasLegalesTab },
     ],
   },
   {
@@ -109,8 +107,8 @@ const CATEGORIAS: Categoria[] = [
     icono: DollarSign,
     items: [
       { id: 'parametros-nomina', nombre: 'Parámetros de Nómina', component: ParametrosNominaTab },
-      { id: 'precios-labores',   nombre: 'Precios Labores',      component: PreciosLaboresTab },
-      { id: 'conceptos',         nombre: 'Aportes y Deducciones', component: ConceptosNominaTab },
+      { id: 'conceptos',         nombre: 'Conceptos de Nómina',  component: ConceptosNominaTab },
+      { id: 'precios-labores',   nombre: 'Precios de Labores',   component: PreciosLaboresTab },
       { id: 'horas-extra',       nombre: 'Horas Extra',          component: HorasExtrasTab },
       { id: 'novedades',         nombre: 'Novedades',            component: AusenciasTab },
     ],

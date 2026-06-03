@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import {
@@ -9,35 +10,17 @@ import {
   TableHeader,
   TableRow,
 } from '../ui/table';
-import { Plus, Edit, Trash2, CheckCircle, X } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '../ui/dialog';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../ui/select';
+import { Plus, Edit, Trash2, CheckCircle, X, FileText } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { useConfirmDelete } from '../../hooks/useConfirmDelete';
 import { toast } from 'sonner';
-import { Checkbox } from '../ui/checkbox';
 import {
   nominaApi,
   NominaErrorCodes,
   type NominaConcepto,
   type TipoConcepto,
 } from '../../../api/nomina';
-import { formatCOP, formatThousands, parseCOP } from '../lib/format';
+import { formatCOP } from '../lib/format';
 
 const TIPO_LABEL: Record<TipoConcepto, string> = {
   DEDUCCION_LEGAL: 'Deducción Legal',
@@ -46,61 +29,14 @@ const TIPO_LABEL: Record<TipoConcepto, string> = {
   BONIFICACION_VARIABLE: 'Bonificación Variable',
 };
 
-type BaseCalculo = 'Total Devengado' | 'Salario Base' | 'SMMLV' | 'Manual';
-type BaseCalculoApi = 'TOTAL_DEVENGADO' | 'SALARIO_BASE' | 'SALARIO_MINIMO' | 'MANUAL';
-
-const BASE_CALCULO_TO_API: Record<BaseCalculo, BaseCalculoApi> = {
-  'Total Devengado': 'TOTAL_DEVENGADO',
-  'Salario Base': 'SALARIO_BASE',
-  'SMMLV': 'SALARIO_MINIMO',
-  'Manual': 'MANUAL',
-};
-
-const BASE_CALCULO_FROM_API: Record<BaseCalculoApi, BaseCalculo> = {
-  TOTAL_DEVENGADO: 'Total Devengado',
-  SALARIO_BASE: 'Salario Base',
-  SALARIO_MINIMO: 'SMMLV',
-  MANUAL: 'Manual',
-};
-
-type FormState = {
-  codigo: string;
-  nombre: string;
-  tipo: TipoConcepto;
-  operacion: 'SUMA' | 'RESTA';
-  calculo: 'PORCENTAJE' | 'VALOR_FIJO';
-  valor_referencia: string;
-  base_calculo: BaseCalculo;
-  aplica_a: 'FIJO' | 'VARIABLE' | 'AMBOS';
-  es_obligatorio: boolean;
-};
-
-const FORM_VACIO: FormState = {
-  codigo: '',
-  nombre: '',
-  tipo: 'DEDUCCION_LEGAL',
-  operacion: 'RESTA',
-  calculo: 'PORCENTAJE',
-  valor_referencia: '',
-  base_calculo: 'Total Devengado',
-  aplica_a: 'AMBOS',
-  es_obligatorio: false,
-};
-
-function esDeduccion(tipo: TipoConcepto) {
-  return tipo === 'DEDUCCION_LEGAL' || tipo === 'DEDUCCION_VOLUNTARIA';
-}
-
 /** Lee la bandera de obligatorio aceptando ambos nombres del backend. */
 function leerObligatorio(c: NominaConcepto): boolean {
   return !!(c.es_obligatorio ?? c.obligatorio);
 }
 
 export function ConceptosNominaTab() {
+  const navigate = useNavigate();
   const [conceptos, setConceptos] = useState<NominaConcepto[]>([]);
-  const [openModal, setOpenModal] = useState(false);
-  const [conceptoEdit, setConceptoEdit] = useState<NominaConcepto | null>(null);
-  const [formData, setFormData] = useState<FormState>(FORM_VACIO);
 
   const { confirmDelete, ConfirmDeleteDialog } = useConfirmDelete();
 
@@ -111,110 +47,9 @@ export function ConceptosNominaTab() {
       .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar los conceptos'));
   }, []);
 
-  const handleOpenModal = (concepto?: NominaConcepto) => {
-    if (concepto) {
-      setConceptoEdit(concepto);
-      setFormData({
-        codigo: concepto.codigo,
-        nombre: concepto.nombre,
-        tipo: concepto.tipo,
-        operacion: concepto.operacion,
-        calculo: concepto.calculo,
-        valor_referencia:
-          concepto.calculo === 'PORCENTAJE'
-            ? concepto.porcentaje != null
-              ? String(concepto.porcentaje)
-              : ''
-            : concepto.valor_referencia != null
-            ? formatThousands(concepto.valor_referencia)
-            : '',
-        base_calculo:
-          BASE_CALCULO_FROM_API[concepto.base_calculo as BaseCalculoApi] ??
-          (concepto.base_calculo as BaseCalculo) ??
-          'Total Devengado',
-        aplica_a: concepto.aplica_a,
-        es_obligatorio: leerObligatorio(concepto),
-      });
-    } else {
-      setConceptoEdit(null);
-      setFormData(FORM_VACIO);
-    }
-    setOpenModal(true);
-  };
-
-  const handleSave = async () => {
-    if (!conceptoEdit && !formData.codigo.trim()) {
-      toast.error('El código es obligatorio');
-      return;
-    }
-    if (!formData.nombre.trim()) {
-      toast.error('El nombre es obligatorio');
-      return;
-    }
-    if (!formData.valor_referencia.trim()) {
-      toast.error('El valor de referencia es obligatorio');
-      return;
-    }
-
-    try {
-      // Si es PORCENTAJE el valor es un % (ej "4" o "12.5"), no se formatea como dinero.
-      // Si es VALOR_FIJO, el input tiene puntos de miles y hay que limpiarlos.
-      const valorNum =
-        formData.calculo === 'PORCENTAJE'
-          ? Number(formData.valor_referencia)
-          : Number(parseCOP(formData.valor_referencia));
-      if (conceptoEdit) {
-        const payload = {
-          nombre: formData.nombre.trim(),
-          aplica_a: formData.aplica_a,
-          base_calculo: BASE_CALCULO_TO_API[formData.base_calculo],
-          es_obligatorio: formData.es_obligatorio,
-          ...(conceptoEdit.calculo === 'PORCENTAJE'
-            ? { porcentaje: valorNum }
-            : { valor_referencia: valorNum }),
-        };
-        const res = await nominaApi.conceptos.editar(conceptoEdit.id, payload);
-        setConceptos((prev) => prev.map((c) => (c.id === conceptoEdit.id ? res.data : c)));
-        toast.success(res.message ?? 'Concepto actualizado');
-      } else {
-        const payload = {
-          codigo: formData.codigo.trim(),
-          nombre: formData.nombre.trim(),
-          tipo: formData.tipo,
-          subtipo: 'OTRO' as const,
-          operacion: formData.operacion,
-          calculo: formData.calculo,
-          aplica_a: formData.aplica_a,
-          base_calculo: BASE_CALCULO_TO_API[formData.base_calculo],
-          es_obligatorio: formData.es_obligatorio,
-          ...(formData.calculo === 'PORCENTAJE'
-            ? { porcentaje: valorNum }
-            : { valor_referencia: valorNum }),
-        };
-        const res = await nominaApi.conceptos.crear(payload);
-        setConceptos((prev) => [...prev, res.data]);
-        toast.success(res.message ?? 'Concepto creado');
-      }
-      setOpenModal(false);
-    } catch (e: any) {
-      // El backend devuelve "The codigo has already been taken" cuando otro
-      // concepto del tenant (incluso inactivo o soft-deleted) ya usa ese código.
-      // Como la lista del tab sólo muestra activos, el usuario lo ve "vacío" y
-      // se confunde — damos un mensaje accionable.
-      const errCodigo = e?.errors?.codigo?.[0] as string | undefined;
-      if (errCodigo && /already been taken|has already|ya/i.test(errCodigo)) {
-        toast.error(
-          `El código "${formData.codigo}" ya está registrado en este tenant ` +
-          `(posiblemente como inactivo). Usa otro código o reactiva el existente.`,
-        );
-      } else if (e?.errors) {
-        const primero = Object.values(e.errors).flat()[0];
-        toast.error(typeof primero === 'string' ? primero : 'Error de validación');
-      } else {
-        toast.error(e?.message ?? 'No se pudo guardar el concepto');
-      }
-    }
-  };
+  const handleNuevo = () => navigate('/configuracion/conceptos/nuevo');
+  const handleEditar = (concepto: NominaConcepto) =>
+    navigate(`/configuracion/conceptos/editar?id=${concepto.id}`);
 
   const handleDelete = (concepto: NominaConcepto) => {
     confirmDelete({
@@ -259,304 +94,48 @@ export function ConceptosNominaTab() {
     return concepto.valor_referencia != null ? formatCOP(concepto.valor_referencia) : '-';
   };
 
-  const valorPreview = () => {
-    if (!formData.valor_referencia) return '-';
-    return formData.calculo === 'PORCENTAJE'
-      ? `${formData.valor_referencia}%`
-      : formatCOP(parseCOP(formData.valor_referencia));
-  };
-
-  const inmutable = !!conceptoEdit;
-
   return (
     <>
       {ConfirmDeleteDialog}
-      <Dialog open={openModal} onOpenChange={setOpenModal}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {conceptoEdit ? 'Editar Concepto' : 'Nuevo Concepto de Nómina'}
-            </DialogTitle>
-            <DialogDescription>
-              Define una deducción o bonificación para aplicar en la nómina
-            </DialogDescription>
-          </DialogHeader>
 
-          <div className="space-y-4 py-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              {/* Código */}
-              <div className="space-y-2">
-                <Label htmlFor="codigo">
-                  Código <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="codigo"
-                  placeholder="SALUD EMP"
-                  value={formData.codigo}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, codigo: e.target.value.toUpperCase() }))
-                  }
-                  className="uppercase"
-                  disabled={inmutable}
-                />
-              </div>
+      {/* Contenido principal con header H2 — diseño V.12+1 */}
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <h2 className="text-2xl font-bold">Conceptos de Nómina</h2>
+          <p className="text-muted-foreground">
+            Gestiona aportes legales, deducciones y bonificaciones para el cálculo de nómina
+          </p>
+        </div>
 
-              {/* Nombre */}
-              <div className="space-y-2">
-                <Label htmlFor="nombre">
-                  Nombre <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="nombre"
-                  placeholder="Salud Empleado"
-                  value={formData.nombre}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, nombre: e.target.value }))
-                  }
-                />
-              </div>
-
-              {/* Tipo */}
-              <div className="space-y-2">
-                <Label htmlFor="tipo">
-                  Tipo <span className="text-destructive">*</span>
-                </Label>
-                <Select
-                  value={formData.tipo}
-                  onValueChange={(value: TipoConcepto) => {
-                    setFormData((prev) => ({
-                      ...prev,
-                      tipo: value,
-                      operacion: esDeduccion(value) ? 'RESTA' : 'SUMA',
-                    }));
-                  }}
-                  disabled={inmutable}
-                >
-                  <SelectTrigger id="tipo">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="DEDUCCION_LEGAL">Deducción Legal</SelectItem>
-                    <SelectItem value="DEDUCCION_VOLUNTARIA">Deducción Voluntaria</SelectItem>
-                    <SelectItem value="BONIFICACION_FIJA">Bonificación Fija</SelectItem>
-                    <SelectItem value="BONIFICACION_VARIABLE">Bonificación Variable</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Operación */}
-              <div className="space-y-2">
-                <Label htmlFor="operacion">Operación</Label>
-                <Select
-                  value={formData.operacion}
-                  onValueChange={(value: 'SUMA' | 'RESTA') =>
-                    setFormData((prev) => ({ ...prev, operacion: value }))
-                  }
-                  disabled
-                >
-                  <SelectTrigger id="operacion">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="SUMA">SUMA (+)</SelectItem>
-                    <SelectItem value="RESTA">RESTA (-)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Tipo de Cálculo */}
-              <div className="space-y-2">
-                <Label htmlFor="calculo">
-                  Tipo de Cálculo <span className="text-destructive">*</span>
-                </Label>
-                <Select
-                  value={formData.calculo}
-                  onValueChange={(value: 'PORCENTAJE' | 'VALOR_FIJO') =>
-                    setFormData((prev) => ({ ...prev, calculo: value }))
-                  }
-                  disabled={inmutable}
-                >
-                  <SelectTrigger id="calculo">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="PORCENTAJE">PORCENTAJE (%)</SelectItem>
-                    <SelectItem value="VALOR_FIJO">VALOR FIJO ($)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Valor Referencia */}
-              <div className="space-y-2">
-                <Label htmlFor="valorReferencia">
-                  Valor Referencia <span className="text-destructive">*</span>
-                </Label>
-                <div className="relative">
-                  {formData.calculo === 'VALOR_FIJO' && (
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                  )}
-                  <Input
-                    id="valorReferencia"
-                    inputMode={formData.calculo === 'PORCENTAJE' ? 'decimal' : 'numeric'}
-                    placeholder={formData.calculo === 'PORCENTAJE' ? '4' : '200.000'}
-                    value={formData.valor_referencia}
-                    onChange={(e) => {
-                      const v =
-                        formData.calculo === 'PORCENTAJE'
-                          ? e.target.value
-                          : formatThousands(parseCOP(e.target.value));
-                      setFormData((prev) => ({ ...prev, valor_referencia: v }));
-                    }}
-                    className={formData.calculo === 'VALOR_FIJO' ? 'pl-7 pr-8' : 'pr-8'}
-                  />
-                  {formData.calculo === 'PORCENTAJE' && (
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Base de Cálculo */}
-              <div className="space-y-2">
-                <Label htmlFor="baseCalculo">
-                  Base de Cálculo <span className="text-destructive">*</span>
-                </Label>
-                <Select
-                  value={formData.base_calculo}
-                  onValueChange={(value: BaseCalculo) =>
-                    setFormData((prev) => ({ ...prev, base_calculo: value }))
-                  }
-                >
-                  <SelectTrigger id="baseCalculo">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Total Devengado">Total Devengado</SelectItem>
-                    <SelectItem value="Salario Base">Salario Base</SelectItem>
-                    <SelectItem value="SMMLV">SMMLV</SelectItem>
-                    <SelectItem value="Manual">Manual</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Aplica A */}
-              <div className="space-y-2">
-                <Label htmlFor="aplicaA">
-                  Aplica A <span className="text-destructive">*</span>
-                </Label>
-                <Select
-                  value={formData.aplica_a}
-                  onValueChange={(value: 'FIJO' | 'VARIABLE' | 'AMBOS') =>
-                    setFormData((prev) => ({ ...prev, aplica_a: value }))
-                  }
-                >
-                  <SelectTrigger id="aplicaA">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="FIJO">Empleados FIJO</SelectItem>
-                    <SelectItem value="VARIABLE">Empleados VARIABLE</SelectItem>
-                    <SelectItem value="AMBOS">AMBOS tipos</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-            </div>
-
-            {/* Obligatorio */}
-            <div className="flex items-start gap-3 rounded-lg border border-border/60 bg-muted/30 p-3">
-              <Checkbox
-                id="esObligatorio"
-                checked={formData.es_obligatorio}
-                onCheckedChange={(checked) =>
-                  setFormData((prev) => ({ ...prev, es_obligatorio: checked === true }))
-                }
-                className="mt-0.5"
-              />
-              <div className="space-y-1">
-                <label
-                  htmlFor="esObligatorio"
-                  className="text-sm font-medium leading-none cursor-pointer"
-                >
-                  Concepto obligatorio
-                </label>
-                <p className="text-xs text-muted-foreground">
-                  Si está activo, el concepto no se puede eliminar (ej. SALUD, PENSIÓN).
-                </p>
-              </div>
-            </div>
-
-            {/* Preview */}
-            <Card className="bg-primary/5 border-primary/30">
-              <CardContent className="pt-6">
-                <h4 className="text-sm font-semibold mb-3">Resumen del Concepto</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Código:</span>
-                    <span className="font-semibold">{formData.codigo || '-'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Tipo:</span>
-                    <Badge className={getTipoColor(formData.tipo)}>
-                      {TIPO_LABEL[formData.tipo]}
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Operación:</span>
-                    <span className="font-semibold">
-                      {formData.operacion === 'SUMA' ? '+' : '-'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Cálculo:</span>
-                    <span className="font-semibold">
-                      {formData.calculo} de {valorPreview()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Base:</span>
-                    <span className="font-semibold">{formData.base_calculo}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Aplica a:</span>
-                    <span className="font-semibold">{formData.aplica_a}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenModal(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSave}>Guardar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Card className="bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-sm border-border/50">
-        <CardHeader>
+      <Card className="border-border">
+        <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Conceptos de Nómina</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-primary" />
+                Aportes y Deducciones
+              </CardTitle>
               <CardDescription>
-                Deducciones y bonificaciones que se aplican en cada nómina
+                Configura todos los conceptos que se aplican en la nómina
               </CardDescription>
             </div>
-            <Button onClick={() => handleOpenModal()}>
+            <Button onClick={handleNuevo}>
               <Plus className="mr-2 h-4 w-4" />
               Nuevo Concepto
             </Button>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-6">
           {conceptos.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                <FileText className="h-8 w-8 text-muted-foreground" />
+              </div>
               <h3 className="mb-2 text-lg font-semibold">No hay conceptos registrados</h3>
               <p className="mb-4 text-sm text-muted-foreground">
-                Comienza agregando tu primer concepto de nómina
+                Agrega aportes, deducciones o bonificaciones para la nómina
               </p>
-              <Button onClick={() => handleOpenModal()}>
+              <Button onClick={handleNuevo}>
                 <Plus className="mr-2 h-4 w-4" />
                 Agregar Concepto
               </Button>
@@ -619,7 +198,7 @@ export function ConceptosNominaTab() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleOpenModal(concepto)}
+                            onClick={() => handleEditar(concepto)}
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
@@ -640,6 +219,7 @@ export function ConceptosNominaTab() {
           )}
         </CardContent>
       </Card>
+      </div>
     </>
   );
 }

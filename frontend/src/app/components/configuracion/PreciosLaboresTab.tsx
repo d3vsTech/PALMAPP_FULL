@@ -48,19 +48,20 @@ const PALMA_LABEL: Record<TipoPalmaPrecio, string> = {
   OTROS: 'Precio Otros',
 };
 
-const PALMA_SUB: Record<TipoPalmaPrecio, string> = {
-  PLATEO: 'Precio por palma',
-  PODA: 'Precio por palma',
-  SANIDAD: 'Precio por jornal fijo',
-  OTROS: 'Precio por palma',
-};
+/** Subtítulo y unidad se derivan del `tipo_pago` real del backend §4b
+ *  (POR_PALMA o JORNAL_FIJO), no del `tipo` hardcodeado, para que cuando
+ *  el admin cambia el tipo_pago desde "Labores", se refleje aquí también. */
+function palmaSubLabel(p: PrecioPalma): string {
+  return p.tipo_pago === 'JORNAL_FIJO' ? 'Precio por jornal fijo' : 'Precio por palma';
+}
 
-const PALMA_UNIDAD: Record<TipoPalmaPrecio, string> = {
-  PLATEO: '/palma',
-  PODA: '/palma',
-  SANIDAD: '/jornal',
-  OTROS: '/palma',
-};
+function palmaUnidad(p: PrecioPalma): string {
+  return p.tipo_pago === 'JORNAL_FIJO' ? '/jornal' : '/palma';
+}
+
+function palmaLabelInput(p: PrecioPalma): string {
+  return p.tipo_pago === 'JORNAL_FIJO' ? 'Valor por Jornal' : 'Valor por Palma';
+}
 
 const PALMA_GRADIENT: Record<TipoPalmaPrecio, string> = {
   PLATEO: 'from-amber-50/50 to-amber-50/10 dark:from-amber-950/20 dark:to-amber-950/5',
@@ -628,16 +629,14 @@ export function PreciosLaboresTab() {
                   <AccordionTrigger className="hover:no-underline py-0">
                     <div className="text-left">
                       <CardTitle>{PALMA_LABEL[palma.tipo]}</CardTitle>
-                      <p className="text-sm text-muted-foreground mt-1">{PALMA_SUB[palma.tipo]}</p>
+                      <p className="text-sm text-muted-foreground mt-1">{palmaSubLabel(palma)}</p>
                     </div>
                   </AccordionTrigger>
                 </CardHeader>
                 <AccordionContent>
                   <CardContent className="p-6">
                     <div className="max-w-md space-y-3">
-                      <Label htmlFor={`precio-${palma.id}`}>
-                        {palma.tipo === 'SANIDAD' ? 'Valor por Jornal' : 'Valor por Palma'}
-                      </Label>
+                      <Label htmlFor={`precio-${palma.id}`}>{palmaLabelInput(palma)}</Label>
                       <div className="flex items-center gap-2">
                         <span className="text-muted-foreground">$</span>
                         <Input
@@ -651,11 +650,11 @@ export function PreciosLaboresTab() {
                           className="text-lg font-semibold"
                           placeholder="0"
                         />
-                        <span className="text-muted-foreground">{PALMA_UNIDAD[palma.tipo]}</span>
+                        <span className="text-muted-foreground">{palmaUnidad(palma)}</span>
                       </div>
                       {palmaInputs[palma.id] && Number(parseCOP(palmaInputs[palma.id])) > 0 && (
                         <p className="text-sm text-success font-medium">
-                          {formatCOP(parseCOP(palmaInputs[palma.id]))} {PALMA_UNIDAD[palma.tipo]}
+                          {formatCOP(parseCOP(palmaInputs[palma.id]))} {palmaUnidad(palma)}
                         </p>
                       )}
                     </div>
