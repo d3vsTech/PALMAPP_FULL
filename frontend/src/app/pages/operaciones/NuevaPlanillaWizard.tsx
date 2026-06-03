@@ -127,13 +127,10 @@ interface TrabajoOtros {
   id: string;
   colaboradores: string[];
   /**
-   * Referencia al catálogo de Labores en Configuración:
-   *  - source='palma': envía `labor_palma_id` (modo catálogo §3.2 del API).
-   *  - source='finca': envía `nombre_trabajo` (modo legado — usa la Labor Finca
-   *    como texto descriptivo del trabajo OTRO).
+   * Referencia al catálogo unificado de Labores (categoria=PALMA, custom, tipo=null).
+   * El wizard envía `labor_id = laborOtrosRawId` al endpoint unificado.
    */
-  laborOtrosKey?: string;          // ej. "palma-3" o "finca-7"
-  laborOtrosSource?: 'palma' | 'finca';
+  laborOtrosKey?: string;          // ej. "palma-3"
   laborOtrosRawId?: number;
   nombre: string;
   laborRealizada: string;
@@ -204,7 +201,16 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
   // Mapas auxiliares para resolver nombres → IDs al guardar
   const [insumosMap, setInsumosMap] = useState<Map<string, number>>(new Map());
+  /** Labores de FINCA: nombre → id (catálogo unificado, categoria='FINCA'). */
   const [laboresMap, setLaboresMap] = useState<Map<string, number>>(new Map());
+  /**
+   * Labores fijas de PALMA: tipo → id. Una sola por tenant para cada uno de
+   * PLATEO, PODA, FERTILIZACION, SANIDAD (y COSECHA, aunque se usa el endpoint
+   * dedicado). Se llena con `es_sistema=true` del catálogo PALMA.
+   */
+  const [palmaTipoToId, setPalmaTipoToId] = useState<Map<string, number>>(new Map());
+  /** Snapshot de las labores fijas de PALMA para conocer su `tipo_pago`. */
+  const [palmaFijasInfo, setPalmaFijasInfo] = useState<Map<string, { id: number; tipo_pago: 'POR_PALMA' | 'JORNAL_FIJO' }>>(new Map());
   const [motivosMap, setMotivosMap] = useState<Map<string, number>>(new Map());
   const [tiposHoraExtraMap, setTiposHoraExtraMap] = useState<Map<string, number>>(new Map());
   const [insumosLista, setInsumosLista] = useState<string[]>([]);
@@ -212,16 +218,13 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   const [motivosLista, setMotivosLista] = useState<string[]>([]);
   const [tiposHoraExtraLista, setTiposHoraExtraLista] = useState<string[]>([]);
   /**
-   * Catálogo para el select "Nombre" del tab OTROS — fusiona dos fuentes:
-   *  - `/labores-palma/select` (custom labores de palma — modo catálogo §3.2).
-   *  - `/labores/select` (Labores Finca que el admin configura — fallback porque
-   *    es el único catálogo que el admin gestiona desde la UI actualmente).
-   * Cada item carga su `source` para enviar el payload correcto al guardar.
+   * Catálogo para el select "Nombre" del tab OTROS — labores custom de palma
+   * (categoria='PALMA', es_sistema=false, tipo=null) del catálogo unificado.
+   * Se envía `labor_id = rawId` al endpoint /jornales.
    */
   type LaborOtrosOpcion = {
     key: string;
     nombre: string;
-    source: 'palma' | 'finca';
     rawId: number;
   };
   const [laboresOtrosOpciones, setLaboresOtrosOpciones] = useState<LaborOtrosOpcion[]>([]);
@@ -230,23 +233,38 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   useEffect(() => {
     (async () => {
       try {
-        const [colRes, lotRes, inRes, labRes, motRes, tipoRes, lpRes] = await Promise.all([
+        const [colRes, lotRes, inRes, labFincaRes, labPalmaRes, motRes, tipoRes] = await Promise.all([
           selectsApi.colaboradores(),
           selectsApi.lotes(),
           selectsApi.insumos(),
-          selectsApi.labores(),
+          selectsApi.labores({ categoria: 'FINCA' }),
+          selectsApi.labores({ categoria: 'PALMA' }),
           selectsApi.motivosAusencia(),
           selectsApi.tiposHoraExtra(),
-          selectsApi.laboresPalma().catch(() => ({ data: [] as any[] })),
         ]);
-        // Dropdown "Nombre" del tab OTROS: SOLO Labores Palma personalizadas
-        // (`/labores-palma/select`). Las Labores Finca van únicamente al step 3.
-        const opcionesPalma: LaborOtrosOpcion[] = (lpRes.data || []).map((x: any) => ({
-          key: `palma-${x.id}`,
-          nombre: x.nombre,
-          source: 'palma',
-          rawId: x.id,
-        }));
+
+        // Labores PALMA: separar fijas (es_sistema=true, tipo!=null) de las custom
+        // (es_sistema=false, tipo=null). Las fijas alimentan los 5 tabs específicos;
+        // las custom alimentan el dropdown del tab OTROS.
+        const palmaItems = (labPalmaRes.data || []) as any[];
+        const tipoMap = new Map<string, number>();
+        const infoMap = new Map<string, { id: number; tipo_pago: 'POR_PALMA' | 'JORNAL_FIJO' }>();
+        palmaItems
+          .filter((x) => x.es_sistema === true && x.tipo)
+          .forEach((x) => {
+            tipoMap.set(x.tipo, x.id);
+            infoMap.set(x.tipo, { id: x.id, tipo_pago: x.tipo_pago });
+          });
+        setPalmaTipoToId(tipoMap);
+        setPalmaFijasInfo(infoMap);
+
+        const opcionesPalma: LaborOtrosOpcion[] = palmaItems
+          .filter((x) => x.es_sistema !== true && x.tipo == null)
+          .map((x) => ({
+            key: `palma-${x.id}`,
+            nombre: x.nombre,
+            rawId: x.id,
+          }));
         setLaboresOtrosOpciones(opcionesPalma);
         setColaboradores((colRes.data || []).map((c: any) => {
           let nombres   = c.primer_nombre   ?? c.nombres   ?? c.nombre   ?? '';
@@ -287,15 +305,16 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         const allSubs = (await Promise.all(subPromises)).flat();
         setSublotes(allSubs);
         const insumos = (inRes.data || []).map((i: any) => ({ nombre: i.nombre as string, id: i.id as number }));
-        const labores = (labRes.data || []).map((l: any) => ({ nombre: l.nombre as string, id: l.id as number }));
+        // El dropdown "Labor" del Paso 3 solo lista labores de FINCA (categoria='FINCA').
+        const laboresFinca = (labFincaRes.data || []).map((l: any) => ({ nombre: l.nombre as string, id: l.id as number }));
         const motivos = (motRes.data || []).map((m: any) => ({ nombre: m.nombre as string, id: m.id as number }));
         const tipos   = (tipoRes.data || []).map((t: any) => ({ nombre: t.nombre as string, id: t.id as number }));
         setInsumosMap(new Map(insumos.map(x => [x.nombre, x.id] as [string, number])));
-        setLaboresMap(new Map(labores.map(x => [x.nombre, x.id] as [string, number])));
+        setLaboresMap(new Map(laboresFinca.map(x => [x.nombre, x.id] as [string, number])));
         setMotivosMap(new Map(motivos.map(x => [x.nombre, x.id] as [string, number])));
         setTiposHoraExtraMap(new Map(tipos.map(x => [x.nombre, x.id] as [string, number])));
         setInsumosLista(insumos.map(x => x.nombre));
-        setLaboresLista(labores.map(x => x.nombre));
+        setLaboresLista(laboresFinca.map(x => x.nombre));
         setMotivosLista(motivos.map(x => x.nombre));
         setTiposHoraExtraLista(tipos.map(x => x.nombre));
       } catch (e) { console.warn('Error cargando selects:', e); }
@@ -444,15 +463,17 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           sublote: j.sublote_id != null ? String(j.sublote_id) : '',
           trabajoRealizado: j.descripcion ?? '',
         })));
-        setTrabajosOtros(porTipo('OTROS').map(j => {
-          const hasLaborPalma = j.labor_palma_id != null;
+        // Otros: labores custom de PALMA (tipo=null en el catálogo unificado).
+        // Quedan fuera de los 4 tipos fijos (PLATEO/PODA/FERTILIZACION/SANIDAD).
+        const jornalesOtros = jornales.filter(j => j.categoria === 'PALMA' && j.tipo == null);
+        setTrabajosOtros(jornalesOtros.map(j => {
+          const laborId = j.labor_id != null ? Number(j.labor_id) : undefined;
           return {
             id: String(j.id),
             colaboradores: [String(j.empleado_id)],
-            laborOtrosKey: hasLaborPalma ? `palma-${j.labor_palma_id}` : undefined,
-            laborOtrosSource: hasLaborPalma ? ('palma' as const) : undefined,
-            laborOtrosRawId: hasLaborPalma ? Number(j.labor_palma_id) : undefined,
-            nombre: j.labor_palma?.nombre ?? j.nombre_trabajo ?? '',
+            laborOtrosKey: laborId ? `palma-${laborId}` : undefined,
+            laborOtrosRawId: laborId,
+            nombre: j.labor?.nombre ?? j.nombre_trabajo ?? '',
             laborRealizada: j.descripcion ?? '',
             lote: j.lote_id != null ? String(j.lote_id) : '',
             sublote: j.sublote_id != null ? String(j.sublote_id) : '',
@@ -464,8 +485,6 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           labor: j.labor?.nombre ?? '',
           otraLabor: '',
           lugar: j.ubicacion ?? '',
-          total: Number(j.valor_total ?? 0),
-          horasExtra: 0,
         })));
         setHorasExtras((p.horas_extra ?? p.horasExtra ?? []).map((h: any) => ({
           id: String(h.id),
@@ -578,99 +597,119 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           });
         } catch {}
       }
-      // Plateo
-      for (const t of trabajosPlateo) {
-        for (const cid of t.colaboradores) {
-          try {
-            await jornalesApi.crear(pid, {
-              categoria: 'PALMA', tipo: 'PLATEO', empleado_id: parseInt(cid),
-              lote_id: t.lote ? parseInt(t.lote) : null,
-              sublote_id: t.sublote ? parseInt(t.sublote) : null,
-              cantidad_palmas: t.numeroPalmas || 0,
-            });
-          } catch {}
-        }
-      }
-      // Poda
-      for (const t of trabajosPoda) {
-        for (const cid of t.colaboradores) {
-          try {
-            await jornalesApi.crear(pid, {
-              categoria: 'PALMA', tipo: 'PODA', empleado_id: parseInt(cid),
-              lote_id: t.lote ? parseInt(t.lote) : null,
-              sublote_id: t.sublote ? parseInt(t.sublote) : null,
-              cantidad_palmas: t.numeroPalmas || 0,
-            });
-          } catch {}
-        }
-      }
-      // Fertilizacion
-      for (const t of trabajosFertilizacion) {
-        let insumoId: number | undefined;
-        if (t.tipoFertilizante === 'Otro') {
-          const nombreNuevo = (t.otroFertilizante || '').trim();
-          if (!nombreNuevo) continue;
-          const matchLocal = Array.from(insumosMap.entries())
-            .find(([n]) => n.toLowerCase() === nombreNuevo.toLowerCase());
-          if (matchLocal) insumoId = matchLocal[1];
-          else {
+      // Plateo (labor fija de PALMA con tipo='PLATEO')
+      const plateoLaborId = palmaTipoToId.get('PLATEO');
+      const plateoInfo = palmaFijasInfo.get('PLATEO');
+      if (plateoLaborId) {
+        for (const t of trabajosPlateo) {
+          for (const cid of t.colaboradores) {
             try {
-              const res = await selectsApi.crearInsumo(nombreNuevo);
-              insumoId = res.data.id;
-              setInsumosMap(prev => new Map(prev).set(res.data.nombre, res.data.id));
-            } catch { continue; }
+              await jornalesApi.crear(pid, {
+                labor_id: plateoLaborId,
+                empleado_id: parseInt(cid),
+                lote_id: t.lote ? parseInt(t.lote) : null,
+                sublote_id: t.sublote ? parseInt(t.sublote) : null,
+                ...(plateoInfo?.tipo_pago === 'POR_PALMA' ? { cantidad_palmas: t.numeroPalmas || 0 } : {}),
+              });
+            } catch {}
           }
-        } else {
-          insumoId = insumosMap.get(t.tipoFertilizante);
-        }
-        if (!insumoId) continue;
-        for (const cid of t.colaboradores) {
-          try {
-            await jornalesApi.crear(pid, {
-              categoria: 'PALMA', tipo: 'FERTILIZACION', empleado_id: parseInt(cid),
-              lote_id: t.lote ? parseInt(t.lote) : null,
-              sublote_id: t.sublote ? parseInt(t.sublote) : null,
-              cantidad_palmas: t.palmas || 0,
-              insumo_id: insumoId,
-              gramos_por_palma: t.cantidadGramos || 0,
-            });
-          } catch {}
         }
       }
-      // Sanidad
-      for (const t of trabajosSanidad) {
-        for (const cid of t.colaboradores) {
-          try {
-            await jornalesApi.crear(pid, {
-              categoria: 'PALMA', tipo: 'SANIDAD', empleado_id: parseInt(cid),
-              lote_id: t.lote ? parseInt(t.lote) : null,
-              sublote_id: t.sublote ? parseInt(t.sublote) : null,
-              descripcion: t.trabajoRealizado || 'Sanidad',
-            });
-          } catch {}
+      // Poda (labor fija de PALMA con tipo='PODA')
+      const podaLaborId = palmaTipoToId.get('PODA');
+      const podaInfo = palmaFijasInfo.get('PODA');
+      if (podaLaborId) {
+        for (const t of trabajosPoda) {
+          for (const cid of t.colaboradores) {
+            try {
+              await jornalesApi.crear(pid, {
+                labor_id: podaLaborId,
+                empleado_id: parseInt(cid),
+                lote_id: t.lote ? parseInt(t.lote) : null,
+                sublote_id: t.sublote ? parseInt(t.sublote) : null,
+                ...(podaInfo?.tipo_pago === 'POR_PALMA' ? { cantidad_palmas: t.numeroPalmas || 0 } : {}),
+              });
+            } catch {}
+          }
         }
       }
-      // Otros (PALMA-OTROS) — soporta modo catálogo (labor_palma_id) y modo legado.
-      for (const t of trabajosOtros) {
-        for (const cid of t.colaboradores) {
-          const base: any = {
-            categoria: 'PALMA', tipo: 'OTROS', empleado_id: parseInt(cid),
-            lote_id: t.lote ? parseInt(t.lote) : null,
-            sublote_id: t.sublote ? parseInt(t.sublote) : null,
-          };
-          if (t.laborOtrosSource === 'palma' && t.laborOtrosRawId) {
-            // Catálogo Labores Palma — backend resuelve nombre y precio.
-            base.labor_palma_id = t.laborOtrosRawId;
-            if (t.laborRealizada) base.descripcion = t.laborRealizada;
+      // Fertilización (labor fija de PALMA con tipo='FERTILIZACION')
+      const fertLaborId = palmaTipoToId.get('FERTILIZACION');
+      const fertInfo = palmaFijasInfo.get('FERTILIZACION');
+      if (fertLaborId) {
+        for (const t of trabajosFertilizacion) {
+          let insumoId: number | undefined;
+          if (t.tipoFertilizante === 'Otro') {
+            const nombreNuevo = (t.otroFertilizante || '').trim();
+            if (!nombreNuevo) continue;
+            const matchLocal = Array.from(insumosMap.entries())
+              .find(([n]) => n.toLowerCase() === nombreNuevo.toLowerCase());
+            if (matchLocal) insumoId = matchLocal[1];
+            else {
+              try {
+                const res = await selectsApi.crearInsumo(nombreNuevo);
+                insumoId = res.data.id;
+                setInsumosMap(prev => new Map(prev).set(res.data.nombre, res.data.id));
+              } catch { continue; }
+            }
           } else {
-            // Legado: usa el nombre seleccionado (Labor Finca) o texto libre.
-            base.nombre_trabajo = t.nombre || 'Otros';
-            base.descripcion = t.laborRealizada || 'Realizado';
+            insumoId = insumosMap.get(t.tipoFertilizante);
           }
-          try { await jornalesApi.crear(pid, base); } catch {}
+          if (!insumoId) continue;
+          for (const cid of t.colaboradores) {
+            try {
+              await jornalesApi.crear(pid, {
+                labor_id: fertLaborId,
+                empleado_id: parseInt(cid),
+                lote_id: t.lote ? parseInt(t.lote) : null,
+                sublote_id: t.sublote ? parseInt(t.sublote) : null,
+                ...(fertInfo?.tipo_pago === 'POR_PALMA' ? { cantidad_palmas: t.palmas || 0 } : {}),
+                insumo_id: insumoId,
+                gramos_por_palma: t.cantidadGramos || 0,
+              });
+            } catch {}
+          }
         }
       }
-      // Auxiliares (FINCA)
+      // Sanidad (labor fija de PALMA con tipo='SANIDAD')
+      const sanidadLaborId = palmaTipoToId.get('SANIDAD');
+      const sanidadInfo = palmaFijasInfo.get('SANIDAD');
+      if (sanidadLaborId) {
+        for (const t of trabajosSanidad) {
+          for (const cid of t.colaboradores) {
+            try {
+              await jornalesApi.crear(pid, {
+                labor_id: sanidadLaborId,
+                empleado_id: parseInt(cid),
+                lote_id: t.lote ? parseInt(t.lote) : null,
+                sublote_id: t.sublote ? parseInt(t.sublote) : null,
+                descripcion: t.trabajoRealizado || 'Sanidad',
+                // Si el tenant configuró SANIDAD como POR_PALMA, el backend exige cantidad_palmas.
+                // El form no expone palmas; reusamos las del sublote como aproximación.
+                ...(sanidadInfo?.tipo_pago === 'POR_PALMA'
+                  ? { cantidad_palmas: Number(sublotes.find(s => s.id === t.sublote)?.cantidadPalmas ?? 0) }
+                  : {}),
+              });
+            } catch {}
+          }
+        }
+      }
+      // Otros (labores custom de PALMA, tipo=null en el catálogo unificado)
+      for (const t of trabajosOtros) {
+        if (!t.laborOtrosRawId) continue;
+        for (const cid of t.colaboradores) {
+          try {
+            await jornalesApi.crear(pid, {
+              labor_id: t.laborOtrosRawId,
+              empleado_id: parseInt(cid),
+              lote_id: t.lote ? parseInt(t.lote) : null,
+              sublote_id: t.sublote ? parseInt(t.sublote) : null,
+              ...(t.laborRealizada ? { descripcion: t.laborRealizada } : {}),
+            });
+          } catch {}
+        }
+      }
+      // Auxiliares (FINCA — labores del catálogo unificado con categoria='FINCA')
       for (const t of trabajosAuxiliares) {
         if (!t.labor) continue;
         const laborKey = t.labor === 'Otro' ? (t.otraLabor || '') : t.labor;
@@ -681,7 +720,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         if (!colab) continue;
         try {
           await jornalesApi.crear(pid, {
-            categoria: 'FINCA', labor_id: laborId,
+            labor_id: laborId,
             empleado_id: parseInt(colab.id),
             ubicacion: t.lugar || undefined,
           });
@@ -2577,7 +2616,6 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                     setOtrosEnEdicion({
                                       ...otrosEnEdicion,
                                       laborOtrosKey: value,
-                                      laborOtrosSource: op?.source,
                                       laborOtrosRawId: op?.rawId,
                                       nombre: op?.nombre ?? '',
                                     });

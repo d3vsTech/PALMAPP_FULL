@@ -409,7 +409,7 @@ export default function CrearFincaModal({
                   type="date"
                   value={formData.fecha_activacion}
                   onChange={(e) => updateField('fecha_activacion', e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
+                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50 [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:opacity-70 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:hover:opacity-100"
                   required
                 />
               </div>
@@ -422,7 +422,7 @@ export default function CrearFincaModal({
                   type="date"
                   value={formData.fecha_suspension}
                   onChange={(e) => updateField('fecha_suspension', e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
+                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50 [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:opacity-70 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:hover:opacity-100"
                   required
                 />
               </div>

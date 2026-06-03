@@ -14,11 +14,12 @@
  * Alineado con API_OPERACIONES.md (versión vigente). Incluye:
  *  - Indicadores (§2.2.1) con period semanal/quincenal/mensual/personalizado
  *  - Cosecha con peso_confirmado opcional al crear (§3.1)
- *  - Tab OTROS modo catálogo via `labor_palma_id` (§3.2)
+ *  - Jornales unificados: solo `labor_id` (§3.2 y §3.3). El backend deriva
+ *    categoría y tipo desde la labor. Las custom de palma tienen tipo=null.
  *  - SANIDAD con `tipo_pago` dependiente (POR_PALMA vs JORNAL_FIJO)
  *  - Horas Extras con snapshot legal + aprobar/rechazar (§4)
  *  - Ausencias con aprobar/rechazar/documento + snapshot del motivo (§5)
- *  - Selects: laboresPalma, preciosPalma, crearInsumo on-the-fly (§8)
+ *  - Selects: labores (catálogo unificado), crearInsumo on-the-fly (§8)
  *  - Códigos de error: OperacionesErrorCodes (§0)
  */
 import { requestConToken, fetchConToken } from './request';
@@ -121,7 +122,8 @@ export interface Cosecha {
 }
 
 export type CategoriaJornal = 'PALMA' | 'FINCA';
-export type TipoJornalPalma = 'PLATEO' | 'PODA' | 'FERTILIZACION' | 'SANIDAD' | 'OTROS';
+/** Tipos snapshoteados en el jornal. Las labores custom de palma tienen tipo=null. */
+export type TipoJornalPalma = 'PLATEO' | 'PODA' | 'FERTILIZACION' | 'SANIDAD';
 
 export interface Jornal {
   id: number;
@@ -131,8 +133,8 @@ export interface Jornal {
   tipo?: TipoJornalPalma | null;
   lote_id?: number | null;
   sublote_id?: number | null;
-  labor_id?: number | null;       // FINCA → catálogo de labores
-  labor_palma_id?: number | null; // PALMA/OTROS → catálogo personalizado
+  /** Referencia al catálogo unificado de labores (PALMA fijas + custom + FINCA). */
+  labor_id?: number | null;
   cantidad_palmas?: number | null;
   insumo_id?: number | null;
   gramos_por_palma?: number | null;
@@ -345,12 +347,26 @@ export const cosechasApi = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 3. jornalesApi (PLATEO/PODA/FERTILIZACION/SANIDAD/OTROS + FINCA)
+// 3. jornalesApi (catálogo unificado — solo se envía labor_id)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export interface JornalPalma {
-  categoria: 'PALMA';
-  tipo: TipoJornalPalma;
+/**
+ * Payload único para jornales (PALMA fijas, custom de palma y FINCA).
+ *
+ * El cliente solo envía `labor_id`. El backend deriva `categoria` y `tipo` desde
+ * la labor y los snapshotea en el jornal. NO enviar `categoria` ni `tipo` (son
+ * silenciosamente descartados, pero conviene omitirlos).
+ *
+ * Reglas resumidas (según labor seleccionada):
+ *  - `tipo_pago='POR_PALMA'` → enviar `cantidad_palmas` (requerido).
+ *  - `tipo_pago='JORNAL_FIJO'` → no enviar `cantidad_palmas`.
+ *  - `tipo='FERTILIZACION'` + `POR_PALMA` → además `insumo_id` + `gramos_por_palma`.
+ *  - `tipo='SANIDAD'` → `descripcion` requerida.
+ *  - `categoria='FINCA'` → opcional `ubicacion` (texto libre).
+ *  - COSECHA NO usa este endpoint; va por `POST /operaciones/{id}/cosechas`.
+ */
+export interface JornalPayload {
+  labor_id: number;
   empleado_id: number;
   lote_id?: number | null;
   sublote_id?: number | null;
@@ -359,32 +375,23 @@ export interface JornalPalma {
   gramos_por_palma?: number;
   descripcion?: string;
   nombre_trabajo?: string;
-  /**
-   * Tab OTROS — modo catálogo (recomendado).
-   * Apunta a un registro de `GET /labores-palma/select`.
-   * - Si la labor es `tipo_pago=POR_PALMA`: enviar lote_id, sublote_id y cantidad_palmas.
-   * - Si la labor es `tipo_pago=JORNAL_FIJO`: cantidad_palmas no se envía.
-   * Cuando se usa este modo, `nombre_trabajo` y `descripcion` son opcionales.
-   */
-  labor_palma_id?: number;
-}
-
-export interface JornalFinca {
-  categoria: 'FINCA';
-  labor_id: number;
-  empleado_id: number;
   ubicacion?: string;
   observacion?: string | null;
 }
 
+/** @deprecated Usar `JornalPayload`. La API ya no requiere `categoria`/`tipo`. */
+export type JornalPalma = JornalPayload;
+/** @deprecated Usar `JornalPayload`. La API ya no requiere `categoria`. */
+export type JornalFinca = JornalPayload;
+
 export const jornalesApi = {
-  crear: (operacionId: number, payload: JornalPalma | JornalFinca) =>
+  crear: (operacionId: number, payload: JornalPayload) =>
     smartRequest<{ data: any }>(`${BASE}/operaciones/${operacionId}/jornales`, {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
 
-  editar: (id: number, payload: Partial<JornalPalma | JornalFinca>) =>
+  editar: (id: number, payload: Partial<JornalPayload>) =>
     smartRequest<{ data: any }>(`${BASE}/jornales/${id}`, {
       method: 'PUT',
       body: JSON.stringify(payload),
@@ -513,36 +520,63 @@ export const selectsApi = {
       `${BASE}/insumos/select`
     ),
 
-  labores: (params: { estado?: boolean } = {}) =>
-    requestConToken<{ data: Array<{ id: number; nombre: string; valor_base?: string | number }> }>(
-      `${BASE}/labores/select${qs(params)}`
-    ),
+  /**
+   * §4 unificado: GET /labores/select devuelve TODAS las labores activas con
+   * el `categoria`, `tipo`, `tipo_pago`, `precio_palma`, `es_sistema`,
+   * `requiere_cosecha_workflow`.
+   * Filtros: `?categoria=PALMA|FINCA`, `?estado=false` para inactivas.
+   */
+  labores: (params: { categoria?: 'PALMA' | 'FINCA'; estado?: boolean } = {}) =>
+    requestConToken<{ data: Array<{
+      id: number;
+      nombre: string;
+      categoria: 'PALMA' | 'FINCA';
+      tipo: 'COSECHA' | 'PLATEO' | 'PODA' | 'FERTILIZACION' | 'SANIDAD' | null;
+      tipo_pago: 'POR_PALMA' | 'JORNAL_FIJO';
+      precio_palma: string | number | null;
+      es_sistema: boolean;
+      requiere_cosecha_workflow: boolean;
+    }> }>(`${BASE}/labores/select${qs(params)}`),
 
   /**
-   * Catálogo de Labores de Palma personalizadas (tab OTROS del wizard).
-   * Permisos: `operaciones.crear|editar` o `configuracion.editar`.
-   * Devuelve solo activas.
+   * @deprecated `/labores-palma/select` ya no existe. Usa `labores({categoria:'PALMA'})`.
+   * Wrapper retrocompat: filtra del endpoint unificado las labores PALMA
+   * custom (es_sistema=false) más las fijas, para mantener compat con el wizard
+   * tab OTROS que muestra todas las opciones de palma.
    */
-  laboresPalma: (params: { estado?: boolean } = {}) =>
-    requestConToken<{ data: Array<{
+  laboresPalma: async (_params: { estado?: boolean } = {}) => {
+    const res = await requestConToken<{ data: Array<any> }>(
+      `${BASE}/labores/select${qs({ categoria: 'PALMA' })}`,
+    );
+    return { data: (res.data ?? []) as Array<{
       id: number;
       nombre: string;
       tipo_pago: 'POR_PALMA' | 'JORNAL_FIJO';
       precio_palma: string | number | null;
-    }> }>(`${BASE}/labores-palma/select${qs(params)}`),
+      es_sistema?: boolean;
+      tipo?: string | null;
+      requiere_cosecha_workflow?: boolean;
+    }> };
+  },
 
   /**
-   * Precios de Palma (PLATEO/PODA/SANIDAD/OTROS) — se consulta al cargar el wizard
-   * para decidir si mostrar u ocultar el input "Cantidad Palmas" según `tipo_pago`.
+   * @deprecated `/precios-palma` ya no existe. Usa `labores({categoria:'PALMA'})`
+   * y filtra `es_sistema=true` para tener solo las 5 fijas.
    */
-  preciosPalma: () =>
-    requestConToken<{ data: Array<{
+  preciosPalma: async () => {
+    const res = await requestConToken<{ data: Array<any> }>(
+      `${BASE}/labores/select${qs({ categoria: 'PALMA' })}`,
+    );
+    const fijas = (res.data ?? []).filter((l: any) => l.es_sistema === true);
+    return { data: fijas as Array<{
       id: number;
-      tipo: 'PLATEO' | 'PODA' | 'SANIDAD' | 'OTROS';
+      tipo: 'COSECHA' | 'PLATEO' | 'PODA' | 'FERTILIZACION' | 'SANIDAD';
       tipo_pago: 'POR_PALMA' | 'JORNAL_FIJO';
       precio_palma: string | number | null;
       estado: boolean;
-    }> }>(`${BASE}/precios-palma`),
+      es_sistema: boolean;
+    }> };
+  },
 
   motivosAusencia: (params: { estado?: boolean } = {}) =>
     requestConToken<{ data: Array<{

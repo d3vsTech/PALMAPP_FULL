@@ -23,6 +23,7 @@ import {
 import { formatCOP } from '../lib/format';
 
 const TIPO_LABEL: Record<TipoConcepto, string> = {
+  APORTE_LEGAL: 'Aporte Legal',
   DEDUCCION_LEGAL: 'Deducción Legal',
   DEDUCCION_VOLUNTARIA: 'Deducción Voluntaria',
   BONIFICACION_FIJA: 'Bonificación Fija',
@@ -74,8 +75,10 @@ export function ConceptosNominaTab() {
     });
   };
 
-  const getTipoColor = (tipo: TipoConcepto) => {
+  const getTipoColor = (tipo: TipoConcepto): string => {
     switch (tipo) {
+      case 'APORTE_LEGAL':
+        return 'bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/30';
       case 'DEDUCCION_LEGAL':
         return 'bg-destructive/10 text-destructive border-destructive/30';
       case 'DEDUCCION_VOLUNTARIA':
@@ -84,6 +87,8 @@ export function ConceptosNominaTab() {
         return 'bg-success/10 text-success border-success/30';
       case 'BONIFICACION_VARIABLE':
         return 'bg-primary/10 text-primary border-primary/30';
+      default:
+        return 'bg-muted text-muted-foreground border-border';
     }
   };
 
@@ -165,7 +170,7 @@ export function ConceptosNominaTab() {
                       <TableCell className="font-medium">{concepto.nombre}</TableCell>
                       <TableCell>
                         <Badge className={getTipoColor(concepto.tipo)}>
-                          {TIPO_LABEL[concepto.tipo].split(' ')[0]}
+                          {(TIPO_LABEL[concepto.tipo] ?? concepto.tipo ?? '—').split(' ')[0]}
                         </Badge>
                       </TableCell>
                       <TableCell>

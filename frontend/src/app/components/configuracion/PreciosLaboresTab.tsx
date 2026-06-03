@@ -98,7 +98,7 @@ export function PreciosLaboresTab() {
   const [preciosPalma, setPreciosPalma] = useState<PrecioPalma[]>([]);
   const [palmaInputs, setPalmaInputs] = useState<Record<number, string>>({});
 
-  // Labores de Finca (precio = valor_base de §4 Labores)
+  // Labores de Finca (precio = precio_palma plano según §4 unificado)
   const [laboresFinca, setLaboresFinca] = useState<Labor[]>([]);
   const [laborInputs, setLaborInputs] = useState<Record<number, string>>({});
 
@@ -108,26 +108,38 @@ export function PreciosLaboresTab() {
     Promise.all([
       configuracionApi.preciosCosecha.listar({ per_page: 100 }),
       configuracionApi.preciosAbono.listar(),
-      configuracionApi.preciosPalma.listar(),
+      // §4 unificado: trae TODAS las labores (palma fijas + custom palma + finca).
+      // Las filtramos en cliente: fijas (es_sistema=true) → sección Palma,
+      // custom finca → sección Labores Finca.
+      configuracionApi.labores.listar({ per_page: 200 }),
       lotesApi.listar({ per_page: 100 }),
-      configuracionApi.labores.listar({ per_page: 100 }),
     ])
-      .then(([cosecha, abono, palma, lotesRes, laboresRes]) => {
+      .then(([cosecha, abono, laboresRes, lotesRes]) => {
         setPreciosCosecha(cosecha.data);
         setRangosAbono(abono.data);
-        setPreciosPalma(palma.data);
+
+        const todas = laboresRes.data ?? [];
+        // Sección Palma: solo las 5 fijas del sistema (categoria=PALMA + es_sistema=true).
+        // Las custom palma se gestionan desde "Configuración → Operaciones → Trabajos
+        // / Labores" — no las mostramos acá para no duplicar UI.
+        const palmaFijas = todas.filter((l) => l.categoria === 'PALMA' && l.es_sistema);
+        setPreciosPalma(palmaFijas);
         setPalmaInputs(
           Object.fromEntries(
-            palma.data.map((p) => [p.id, p.precio_palma != null ? formatThousands(p.precio_palma) : '']),
+            palmaFijas.map((p) => [p.id, p.precio_palma != null ? formatThousands(p.precio_palma) : '']),
           ),
         );
-        setLotes((lotesRes.data ?? []).map((l: any) => ({ id: l.id, nombre: l.nombre })));
-        setLaboresFinca(laboresRes.data);
+
+        // Sección Labores Finca: custom finca con su precio_palma como "valor base".
+        const finca = todas.filter((l) => l.categoria === 'FINCA');
+        setLaboresFinca(finca);
         setLaborInputs(
           Object.fromEntries(
-            laboresRes.data.map((l) => [l.id, l.valor_base != null ? formatThousands(l.valor_base) : '']),
+            finca.map((l) => [l.id, l.precio_palma != null ? formatThousands(l.precio_palma) : '']),
           ),
         );
+
+        setLotes((lotesRes.data ?? []).map((l: any) => ({ id: l.id, nombre: l.nombre })));
       })
       .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar los precios'));
   }, []);
@@ -278,17 +290,17 @@ export function PreciosLaboresTab() {
     });
   };
 
-  // ── Labor Finca (precio = valor_base) ──────────────────────────────────────
-  // Inline edit del valor_base de cada labor §4. Se persiste con onBlur
-  // (PUT /v1/tenant/labores/{id}) — el admin solo configura el precio aquí
-  // porque en "Operaciones > Trabajos / Labores" únicamente registra nombre.
+  // ── Labor Finca (precio_palma plano = "valor por jornal") ─────────────────
+  // §4 unificado: las labores de finca tienen `tipo_pago='JORNAL_FIJO'` y
+  // `precio_palma` es el valor por jornal. Inline edit con onBlur.
   const handleSaveLaborFinca = async (labor: Labor) => {
     const raw = laborInputs[labor.id] ?? '';
     const limpio = parseCOP(raw);
     const valor = limpio ? Number(limpio) : 0;
-    if (Number(parseCOP(formatThousands(labor.valor_base))) === valor) return;
+    const actual = labor.precio_palma != null ? Number(parseCOP(formatThousands(labor.precio_palma))) : 0;
+    if (actual === valor) return;
     try {
-      const res = await configuracionApi.labores.editar(labor.id, { valor_base: valor });
+      const res = await configuracionApi.labores.editar(labor.id, { precio_palma: valor });
       setLaboresFinca((prev) => prev.map((l) => (l.id === labor.id ? res.data : l)));
       toast.success('Precio actualizado');
     } catch (e: any) {
@@ -301,13 +313,15 @@ export function PreciosLaboresTab() {
     }
   };
 
-  // ── Palma (PLATEO/PODA/SANIDAD/OTROS) ──────────────────────────────────────
+  // ── Palma (PLATEO/PODA/SANIDAD/COSECHA/FERTILIZACION fijas) ───────────────
+  // PUT /labores/{id} con precio_palma. El wrapper preciosPalma.editar lo
+  // redirige al endpoint unificado §4.
   const handleSavePalma = async (palma: PrecioPalma) => {
     const raw = palmaInputs[palma.id];
     const limpio = parseCOP(raw);
     const precio = !limpio ? null : Number(limpio);
     try {
-      const res = await configuracionApi.preciosPalma.editar(palma.id, { precio_palma: precio });
+      const res = await configuracionApi.labores.editar(palma.id, { precio_palma: precio });
       setPreciosPalma((prev) => prev.map((p) => (p.id === palma.id ? res.data : p)));
       toast.success(res.message ?? 'Precio actualizado');
     } catch (e: any) {

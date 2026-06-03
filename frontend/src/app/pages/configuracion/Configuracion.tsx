@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent } from '../../components/ui/card';
 import {
   Building2,
@@ -115,10 +115,36 @@ const CATEGORIAS: Categoria[] = [
   },
 ];
 
+/** Clave para recordar el último tab abierto entre navegaciones. */
+const LS_KEY_ULTIMO_TAB = 'palmapp_configuracion_ultimo_tab';
+
+/** Lee el tab guardado y resuelve qué categoría debe abrirse expandida. */
+function leerEstadoInicial(): { item: string; categoria: string } {
+  let item = 'info-empresa';
+  try {
+    const saved = sessionStorage.getItem(LS_KEY_ULTIMO_TAB);
+    if (saved) item = saved;
+  } catch { /* ignorar */ }
+
+  // Buscar la categoría padre del item para expandirla.
+  for (const cat of CATEGORIAS) {
+    if (cat.id === item) return { item, categoria: cat.id };
+    if (cat.items?.some((s) => s.id === item)) return { item, categoria: cat.id };
+  }
+  return { item: 'info-empresa', categoria: 'info-empresa' };
+}
+
 export default function Configuracion() {
-  // La primera categoría arranca expandida y seleccionada por defecto.
-  const [categoriaExpandida, setCategoriaExpandida] = useState<string[]>(['info-empresa']);
-  const [itemSeleccionado, setItemSeleccionado] = useState<string>('info-empresa');
+  const inicial = leerEstadoInicial();
+  // La categoría se expande según el item guardado; si nada, default a info-empresa.
+  const [categoriaExpandida, setCategoriaExpandida] = useState<string[]>([inicial.categoria]);
+  const [itemSeleccionado, setItemSeleccionado] = useState<string>(inicial.item);
+
+  // Persiste el tab activo para que al volver desde una pantalla hija
+  // (ej: /configuracion/conceptos/nuevo) se restaure en el mismo lugar.
+  useEffect(() => {
+    try { sessionStorage.setItem(LS_KEY_ULTIMO_TAB, itemSeleccionado); } catch {}
+  }, [itemSeleccionado]);
 
   const toggleCategoria = (categoriaId: string) => {
     if (categoriaExpandida.includes(categoriaId)) {

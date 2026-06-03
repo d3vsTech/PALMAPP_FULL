@@ -108,8 +108,7 @@ interface FechaDDMMYYYYPickerProps {
 }
 
 /**
- * Picker de fecha completa — formato persistido: "31/12/2025".
- * Coincide con el formato que pide el API (`dd/mm/yyyy`) en tablas-legales.
+ * Picker de fecha completa — formato persistido: "31/12/2025" (dd/mm/yyyy).
  */
 export function FechaDDMMYYYYPicker({
   id,

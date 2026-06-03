@@ -63,7 +63,7 @@ export type {
   Planilla, EstadoPlanilla, Periodo,
   Resumen, Indicadores,
   Cosecha, CosechaCuadrillaItem,
-  Jornal, JornalPalma, JornalFinca, CategoriaJornal, TipoJornalPalma,
+  Jornal, JornalPayload, JornalPalma, JornalFinca, CategoriaJornal, TipoJornalPalma,
   HoraExtra, Ausencia, EstadoNovedad,
   OperacionesErrorCode,
 } from './operaciones';
@@ -90,7 +90,10 @@ export type {
   Semilla, SemillaPayload, TipoSemilla, SemillaSelectItem,
   Insumo, InsumoPayload,
   PrecioAbono, PrecioAbonoPayload,
-  Labor, LaborPayload, LaborSelectItem,
+  // §4 Labores (unificado: palma fijas + custom palma + custom finca)
+  Labor, LaborPayload, LaborSelectItem, LaborParams,
+  CategoriaLabor, TipoLaborPalma, TipoPagoLabor,
+  // Aliases deprecated mantenidos por retrocompatibilidad
   PrecioPalma, PrecioPalmaPayload, TipoPalmaPrecio, TipoPagoPalma,
   LaborPalma, LaborPalmaPayload, LaborPalmaSelectItem, LaborPalmaParams,
   PromedioLote, PromedioLotePayload,
@@ -101,7 +104,6 @@ export type {
   PrecioCosecha, PrecioCosechaPayload, PrecioCosechaParams,
   InfoEmpresa, InfoEmpresaPayload, TipoPersona,
   ConstantesLegales, ConstantesLegalesPayload,
-  TablaLegal, TablaLegalPayload, TablaLegalConcepto,
   // Catálogos del colaborador
   ParametricaColaborador, ParametricaColaboradorPayload,
   EntidadBancaria, EntidadBancariaPayload, EntidadBancariaSelectItem,

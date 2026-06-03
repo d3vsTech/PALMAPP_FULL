@@ -1,13 +1,14 @@
 /**
  * API — Configuración / Paramétricas
  *
- * Cubre las 17 secciones del doc API_PARAMETRICAS.md:
+ * Cubre las 16 secciones del doc API_PARAMETRICAS.md (Tablas Legales fue
+ * eliminada del backend en la última revisión):
  *   1.  Semillas (6 tipos: 4 base + HIBRIDO_TENERA + HIBRIDO_OXG)
  *   2.  Insumos
  *   3.  Precios de Abono (escalas genéricas por gramos)
- *   4.  Labores de Finca (nombre + valor_base)
- *   4b. Precios de Palma (PLATEO/PODA/SANIDAD/OTROS — solo GET/PUT, es_sistema)
- *   4c. Labores de Palma Personalizadas (CRUD del tenant — tab OTROS del wizard)
+ *   4.  Labores (catálogo UNIFICADO: palma fijas + custom palma + custom finca).
+ *       Reemplaza los antiguos endpoints /precios-palma, /labores-palma y
+ *       /labores (legacy). Discriminador: categoria + es_sistema.
  *   5.  Promedios por Lote (kg/gajo por año)
  *   6.  Cargos (con modalidad y salario_tipo FIJO/VARIABLE)
  *   7.  Modalidades de Contrato
@@ -19,12 +20,9 @@
  *         EPS, Fondos Pensión, Fondos Cesantías, ARL, Entidades Bancarias
  *  13.  Info Empresa (datos de la finca + logo opcional)
  *  14.  Constantes Legales (SMMLV, fechas legales, días vacaciones)
- *  15.  Tablas Legales (Salud, Pensión, ARL — % por vigencia)
- *  17.  Motivos de Ausencia (Tipos de Novedades, con color hex)
- *
- * §16 Paramétricas de Viajes (Extractoras, Empresas Transportadoras,
- * Transportadores) vive en `api/viajes.ts` porque comparte tipos con el
- * módulo de Viajes (se exportan también desde `api/index.ts`).
+ *  15.  → vive en `api/viajes.ts` (Extractoras, Empresas Transportadoras,
+ *         Transportadores). Re-exportadas desde `api/index.ts`.
+ *  16.  Motivos de Ausencia (Tipos de Novedades, con color hex)
  *
  * Base: /api/v1/tenant — todas las llamadas requieren tenant flag (T=true).
  * Permiso típico: `configuracion.editar` (algunos selects aceptan permisos
@@ -127,128 +125,94 @@ export interface PrecioAbonoPayload {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 4. LABORES DE FINCA
+// 4. LABORES (catálogo unificado: palma + finca)
 // ═════════════════════════════════════════════════════════════════════════════
 
 /**
- * Trabajos manuales de mantenimiento (reparaciones, transporte interno, etc.).
- * NO confundir con las Labores de Palma (PLATEO/PODA/SANIDAD/OTROS), que son
- * tipos fijos cuyos precios se configuran en `preciosPalma` (§4b).
+ * Catálogo unificado de labores. Reemplaza 3 endpoints antiguos:
+ *  - `/precios-palma`         → ahora se gestiona como labores PALMA es_sistema=true
+ *  - `/labores-palma`         → ahora son labores PALMA es_sistema=false
+ *  - `/labores` (solo finca)  → ahora es labores FINCA es_sistema=false
  *
- * Schema actualizado: ya no hay tipo_pago ni insumo_id ni unidad_medida.
- * Es una labor simple con nombre + valor_base.
+ * Tipos de registros:
+ *  - Fijas del sistema (5/tenant): PALMA + es_sistema=true + tipo∈{COSECHA,
+ *    PLATEO, PODA, FERTILIZACION, SANIDAD}. Solo PUT (`tipo_pago`, `precio_palma`,
+ *    `estado`). No se crean ni borran.
+ *  - Custom palma:   PALMA + es_sistema=false + tipo=null. Aparecen junto a las
+ *    fijas en el dropdown del wizard.
+ *  - Custom finca:   FINCA + es_sistema=false + tipo=null. tipo_pago siempre
+ *    JORNAL_FIJO (forzado por el modelo).
  */
+
+export type CategoriaLabor = 'PALMA' | 'FINCA';
+export type TipoLaborPalma = 'COSECHA' | 'PLATEO' | 'PODA' | 'FERTILIZACION' | 'SANIDAD';
+export type TipoPagoLabor = 'POR_PALMA' | 'JORNAL_FIJO';
+
+/** Alias retrocompatibles con código existente. */
+export type TipoPagoPalma = TipoPagoLabor;
+export type TipoPalmaPrecio = TipoLaborPalma;
+
 export interface Labor {
   id: number;
+  tenant_id?: number;
+  categoria: CategoriaLabor;
+  /** Solo poblado en fijas del sistema; null en custom. */
+  tipo: TipoLaborPalma | null;
   nombre: string;
-  valor_base: number | string;
+  tipo_pago: TipoPagoLabor;
+  /** null = aún no configurado. Si es null al registrar jornal, valor_total queda null. */
+  precio_palma: number | string | null;
+  /** true = sembrada por el sistema (no se borra, nombre/categoría/tipo inmutables). */
+  es_sistema: boolean;
   estado: boolean;
 }
 
-export interface LaborPayload {
-  nombre: string;
-  valor_base: number;
-  estado?: boolean;
-}
-
-/** Item del select de labores (incluye `valor_base` para el wizard). */
+/**
+ * Item del dropdown `/labores/select`. Incluye `requiere_cosecha_workflow` para
+ * que el wizard de operaciones sepa si esta labor activa el flujo especial de
+ * cosecha (cuadrilla + peso confirmado vía /operaciones/{id}/cosechas).
+ */
 export interface LaborSelectItem {
   id: number;
   nombre: string;
-  valor_base: number | string;
-}
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 4b. PRECIOS DE PALMA (PLATEO/PODA/SANIDAD/OTROS)
-// ═════════════════════════════════════════════════════════════════════════════
-
-/**
- * Tipos de palma con precio configurable. Son 4 registros fijos que se siembran
- * al crear el tenant — solo se ACTUALIZA su `precio_palma`. No hay POST ni
- * DELETE (estructura inmutable).
- *
- * - COSECHA       → usa `preciosCosecha` (§9), no esta tabla
- * - FERTILIZACION → usa `preciosAbono` (§3), tampoco esta tabla
- */
-export type TipoPalmaPrecio = 'PLATEO' | 'PODA' | 'SANIDAD' | 'OTROS';
-export type TipoPagoPalma = 'POR_PALMA' | 'JORNAL_FIJO';
-
-export interface PrecioPalma {
-  id: number;
-  tipo: TipoPalmaPrecio;
-  /**
-   * Define cómo se cobra la labor:
-   *  - `POR_PALMA`: `valor_total = precio_palma × cantidad_palmas` (el UI muestra
-   *    el input "Cantidad Palmas" en el wizard).
-   *  - `JORNAL_FIJO`: `valor_total = precio_palma` (valor plano, sin cantidad).
-   * Default histórico: PLATEO/PODA `POR_PALMA`; SANIDAD/OTROS `JORNAL_FIJO`.
-   */
-  tipo_pago: TipoPagoPalma;
-  /** null = no configurado. Si es null al registrar jornal, valor_total queda null. */
+  categoria: CategoriaLabor;
+  tipo: TipoLaborPalma | null;
+  tipo_pago: TipoPagoLabor;
   precio_palma: number | string | null;
-  /**
-   * Bandera del backend: `true` para los 4 registros sembrados por el sistema
-   * (PLATEO/PODA/SANIDAD/OTROS) que solo aceptan PUT. Las labores creadas por
-   * el tenant (§4c) llegan con `es_sistema=false` por el endpoint /labores-palma.
-   */
-  es_sistema?: boolean;
-  estado: boolean;
+  es_sistema: boolean;
+  requiere_cosecha_workflow: boolean;
 }
 
-export interface PrecioPalmaPayload {
-  tipo_pago?: TipoPagoPalma;
+export interface LaborPayload {
+  categoria: CategoriaLabor;
+  nombre: string;
+  /** Requerido en POST si categoria=PALMA. FINCA siempre fuerza JORNAL_FIJO. */
+  tipo_pago?: TipoPagoLabor;
   precio_palma?: number | null;
   estado?: boolean;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 4c. LABORES DE PALMA PERSONALIZADAS (catálogo custom del tenant)
-// ═════════════════════════════════════════════════════════════════════════════
-
-/**
- * Labores de palma creadas por el tenant — alimentan el tab OTROS del wizard
- * de planilla diaria. Viven en la misma tabla `precios_palma` con
- * `es_sistema = false`. El select del wizard devuelve solo activas.
- *
- * Reglas clave (doc §4c):
- *  - `nombre` único por tenant (409 `LABOR_PALMA_DUPLICADA`).
- *  - `precio` requerido en POST (no acepta `null`).
- *  - `tipo_pago` `POR_PALMA` o `JORNAL_FIJO`.
- *  - DELETE bloqueado con 409 `LABOR_PALMA_CON_JORNALES` si tiene jornales.
- *  - Intento de editar/eliminar una labor `es_sistema=true` por este endpoint
- *    → 403 (esas se gestionan en §4b vía `preciosPalma`).
- */
-export interface LaborPalma {
-  id: number;
-  nombre: string;
-  tipo_pago: TipoPagoPalma;
-  /** Precio/palma (POR_PALMA) o valor plano (JORNAL_FIJO). Nunca null. */
-  precio_palma: number | string;
-  /** Siempre `false` para items creados por este CRUD. */
-  es_sistema: false;
-  estado: boolean;
+/** Filtros del listado paginado §4 GET index. */
+export interface LaborParams extends ParametricaParams {
+  categoria?: CategoriaLabor;
+  tipo?: TipoLaborPalma;
+  tipo_pago?: TipoPagoLabor;
+  es_sistema?: boolean;
 }
 
-/** Item del dropdown `/labores-palma/select` (sin paginación, solo activas). */
-export interface LaborPalmaSelectItem {
-  id: number;
-  nombre: string;
-  tipo_pago: TipoPagoPalma;
-  precio_palma: number | string;
-}
-
-export interface LaborPalmaPayload {
-  nombre: string;
-  tipo_pago: TipoPagoPalma;
-  /** Backend lo guarda en `precio_palma`. Requerido en POST; opcional en PUT. */
-  precio: number;
-  estado?: boolean;
-}
-
-/** Filtros de listado paginado (§4c GET index). */
-export interface LaborPalmaParams extends ParametricaParams {
-  tipo_pago?: TipoPagoPalma;
-}
+/** ─── Alias deprecated para no romper imports existentes ──────────────────── */
+/** @deprecated Usar `Labor` con `es_sistema=true` (§4 unificado). */
+export type PrecioPalma = Labor;
+/** @deprecated Usar `LaborPayload`. */
+export type PrecioPalmaPayload = Partial<LaborPayload>;
+/** @deprecated Usar `Labor` con `es_sistema=false`. */
+export type LaborPalma = Labor;
+/** @deprecated Usar `LaborSelectItem`. */
+export type LaborPalmaSelectItem = LaborSelectItem;
+/** @deprecated Usar `LaborPayload`. */
+export type LaborPalmaPayload = LaborPayload & { precio?: number };
+/** @deprecated Usar `LaborParams`. */
+export type LaborPalmaParams = LaborParams;
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 5. PROMEDIOS POR LOTE
@@ -589,39 +553,7 @@ export interface ConstantesLegales {
 export type ConstantesLegalesPayload = Partial<ConstantesLegales>;
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 15. TABLAS LEGALES (% Salud/Pensión/ARL por vigencia)
-// ═════════════════════════════════════════════════════════════════════════════
-
-export interface TablaLegalConcepto {
-  id: number;
-  nombre: string;
-  subtipo: 'SALUD' | 'PENSION' | 'ARL';
-}
-
-export interface TablaLegal {
-  id: number;
-  concepto_id: number;
-  concepto?: TablaLegalConcepto;
-  porcentaje_empleado: number | string;
-  porcentaje_empresa: number | string;
-  /** dd/mm/yyyy */
-  vigente_desde: string;
-  /** dd/mm/yyyy o null (vigente indefinidamente). */
-  vigente_hasta: string | null;
-}
-
-export interface TablaLegalPayload {
-  concepto_id: number;
-  porcentaje_empleado: number;
-  porcentaje_empresa: number;
-  /** dd/mm/yyyy */
-  vigente_desde: string;
-  /** dd/mm/yyyy */
-  vigente_hasta?: string | null;
-}
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 17. MOTIVOS DE AUSENCIA (Tipos de Novedades)
+// 16. MOTIVOS DE AUSENCIA (Tipos de Novedades)
 // ═════════════════════════════════════════════════════════════════════════════
 
 /**
@@ -741,50 +673,99 @@ export const configuracionApi = {
       apiClient.delete<{ message: string }>(`/v1/tenant/precios-abono/${id}`, T),
   },
 
-  // ── 4. Labores de Finca (con /select para wizard de Operaciones) ───────────
+  // ── 4. Labores (catálogo unificado: palma fijas + custom palma + custom finca)
+  /**
+   * Reemplaza los 3 endpoints antiguos:
+   *  - /precios-palma  → labores con es_sistema=true (PALMA)
+   *  - /labores-palma  → labores con es_sistema=false categoria=PALMA
+   *  - /labores legacy → labores con es_sistema=false categoria=FINCA
+   *
+   * El nuevo /labores cubre todo con un discriminador `categoria` y la bandera
+   * `es_sistema`. El wizard de operaciones filtra con ?categoria=PALMA o FINCA.
+   */
   labores: {
-    ...crudParametrica<Labor, LaborPayload>('labores'),
-    /** Dropdown del wizard. Incluye `valor_base`. `?estado=false` para inactivas. */
-    select: (params?: { estado?: boolean }) =>
+    listar: (params?: LaborParams) =>
+      apiClient.get<PaginatedResponse<Labor>>(
+        `/v1/tenant/labores${toQuery(params)}`, T),
+    ver: (id: number) =>
+      apiClient.get<{ data: Labor }>(`/v1/tenant/labores/${id}`, T),
+    /** Dropdown del wizard. Filtros recomendados: ?categoria=PALMA|FINCA. */
+    select: (params?: { categoria?: CategoriaLabor; estado?: boolean }) =>
       apiClient.get<{ data: LaborSelectItem[] }>(
         `/v1/tenant/labores/select${toQuery(params)}`, T),
-  },
-
-  // ── 4b. Precios de Palma (PLATEO/PODA/SANIDAD/OTROS — solo GET/PUT) ────────
-  preciosPalma: {
-    listar: () =>
-      apiClient.get<{ data: PrecioPalma[] }>('/v1/tenant/precios-palma', T),
-    ver: (id: number) =>
-      apiClient.get<{ data: PrecioPalma }>(`/v1/tenant/precios-palma/${id}`, T),
-    /**
-     * Solo PUT — los 4 registros son inmutables en estructura, solo cambia
-     * `precio_palma`, `tipo_pago` y/o `estado`. No hay POST ni DELETE.
-     */
-    editar: (id: number, payload: PrecioPalmaPayload) =>
-      apiClient.put<{ message: string; data: PrecioPalma }>(
-        `/v1/tenant/precios-palma/${id}`, payload, T),
-  },
-
-  // ── 4c. Labores de Palma Personalizadas (catálogo custom del tenant) ───────
-  laboresPalma: {
-    /** Dropdown del wizard (tab OTROS). Permiso ampliado: configuracion.editar
-     *  o operaciones.crear|editar. Sin paginación, solo activas. */
-    select: () =>
-      apiClient.get<{ data: LaborPalmaSelectItem[] }>(
-        '/v1/tenant/labores-palma/select', T),
-    listar: (params?: LaborPalmaParams) =>
-      apiClient.get<PaginatedResponse<LaborPalma>>(
-        `/v1/tenant/labores-palma${toQuery(params)}`, T),
-    ver: (id: number) =>
-      apiClient.get<{ data: LaborPalma }>(`/v1/tenant/labores-palma/${id}`, T),
-    crear: (payload: LaborPalmaPayload) =>
-      apiClient.post<{ message: string; data: LaborPalma }>(
-        '/v1/tenant/labores-palma', payload, T),
-    editar: (id: number, payload: Partial<LaborPalmaPayload>) =>
-      apiClient.put<{ message: string; data: LaborPalma }>(
-        `/v1/tenant/labores-palma/${id}`, payload, T),
+    crear: (payload: LaborPayload) =>
+      apiClient.post<{ message: string; data: Labor }>(
+        '/v1/tenant/labores', payload, T),
+    editar: (id: number, payload: Partial<LaborPayload>) =>
+      apiClient.put<{ message: string; data: Labor }>(
+        `/v1/tenant/labores/${id}`, payload, T),
     eliminar: (id: number) =>
-      apiClient.delete<{ message: string }>(`/v1/tenant/labores-palma/${id}`, T),
+      apiClient.delete<{ message: string }>(`/v1/tenant/labores/${id}`, T),
+  },
+
+  /**
+   * @deprecated `/precios-palma` ya no existe en el backend. Usa
+   * `configuracionApi.labores.listar({categoria: 'PALMA', es_sistema: true})`
+   * y `editar(id, { tipo_pago, precio_palma, estado })`.
+   * Wrappers de retrocompatibilidad para pantallas que aún no migraron.
+   */
+  preciosPalma: {
+    listar: async () => {
+      const res = await apiClient.get<PaginatedResponse<Labor>>(
+        `/v1/tenant/labores${toQuery({ categoria: 'PALMA', es_sistema: true, per_page: 100 })}`,
+        T,
+      );
+      return { data: res.data };
+    },
+    ver: (id: number) =>
+      apiClient.get<{ data: Labor }>(`/v1/tenant/labores/${id}`, T),
+    editar: (id: number, payload: PrecioPalmaPayload) =>
+      apiClient.put<{ message: string; data: Labor }>(
+        `/v1/tenant/labores/${id}`, payload, T),
+  },
+
+  /**
+   * @deprecated `/labores-palma` ya no existe. Usa `configuracionApi.labores`
+   * con `categoria=PALMA` y `es_sistema=false`. Wrappers retrocompatibles abajo.
+   */
+  laboresPalma: {
+    select: async () => {
+      const res = await apiClient.get<{ data: LaborSelectItem[] }>(
+        `/v1/tenant/labores/select${toQuery({ categoria: 'PALMA' })}`, T,
+      );
+      // El wizard antes esperaba solo custom; ahora le entregamos custom + fijas
+      // porque el catálogo está unificado. Si la pantalla necesita filtrar las
+      // fijas, debe revisar `es_sistema`.
+      return { data: res.data };
+    },
+    listar: async (params?: LaborParams) => {
+      const res = await apiClient.get<PaginatedResponse<Labor>>(
+        `/v1/tenant/labores${toQuery({ ...params, categoria: 'PALMA', es_sistema: false })}`,
+        T,
+      );
+      return res;
+    },
+    ver: (id: number) =>
+      apiClient.get<{ data: Labor }>(`/v1/tenant/labores/${id}`, T),
+    crear: (payload: LaborPalmaPayload) => {
+      // `precio` (legacy) se mapea a `precio_palma`.
+      const { precio, ...resto } = payload;
+      return apiClient.post<{ message: string; data: Labor }>(
+        '/v1/tenant/labores',
+        { ...resto, categoria: 'PALMA', precio_palma: precio ?? resto.precio_palma },
+        T,
+      );
+    },
+    editar: (id: number, payload: Partial<LaborPalmaPayload>) => {
+      const { precio, ...resto } = payload;
+      return apiClient.put<{ message: string; data: Labor }>(
+        `/v1/tenant/labores/${id}`,
+        { ...resto, ...(precio != null ? { precio_palma: precio } : {}) },
+        T,
+      );
+    },
+    eliminar: (id: number) =>
+      apiClient.delete<{ message: string }>(`/v1/tenant/labores/${id}`, T),
   },
 
   // ── 5. Promedios por Lote ──────────────────────────────────────────────────
@@ -894,26 +875,7 @@ export const configuracionApi = {
         '/v1/tenant/configuracion/constantes-legales', payload, T),
   },
 
-  // ── 15. Tablas Legales (sin paginación; pocos registros) ───────────────────
-  tablasLegales: {
-    listar: () =>
-      apiClient.get<{ data: TablaLegal[] }>('/v1/tenant/configuracion/tablas-legales', T),
-    /** Conceptos disponibles para el dropdown (Salud, Pensión, ARL). */
-    conceptosSelect: () =>
-      apiClient.get<{ data: TablaLegalConcepto[] }>(
-        '/v1/tenant/configuracion/tablas-legales/conceptos-select', T),
-    crear: (payload: TablaLegalPayload) =>
-      apiClient.post<{ message: string; data: TablaLegal }>(
-        '/v1/tenant/configuracion/tablas-legales', payload, T),
-    editar: (id: number, payload: Partial<TablaLegalPayload>) =>
-      apiClient.put<{ message: string; data: TablaLegal }>(
-        `/v1/tenant/configuracion/tablas-legales/${id}`, payload, T),
-    eliminar: (id: number) =>
-      apiClient.delete<{ message: string }>(
-        `/v1/tenant/configuracion/tablas-legales/${id}`, T),
-  },
-
-  // ── 17. Motivos de Ausencia (Tipos de Novedades) ──────────────────────────
+  // ── 16. Motivos de Ausencia (Tipos de Novedades) ──────────────────────────
   motivosAusencia: {
     /** Dropdown sin paginación (solo activos). Acepta permiso `configuracion.editar` o `operaciones.{crear|editar}`. */
     select: () =>
@@ -951,12 +913,18 @@ export const ConfiguracionErrorCodes = {
   SEMILLA_CON_LOTES: 'SEMILLA_CON_LOTES',
   INSUMO_CON_LABORES: 'INSUMO_CON_LABORES',
   RANGO_SOLAPADO: 'RANGO_SOLAPADO',
-  /** Labor de Finca con jornales asociados — no se puede eliminar. */
+  /** Labor con nombre duplicado en el tenant (§4 unificado). */
+  LABOR_DUPLICADA: 'LABOR_DUPLICADA',
+  /** Labor con jornales asociados — no se puede eliminar. */
   LABOR_CON_JORNALES: 'LABOR_CON_JORNALES',
-  /** Labor de Palma personalizada con nombre duplicado en el tenant (§4c). */
-  LABOR_PALMA_DUPLICADA: 'LABOR_PALMA_DUPLICADA',
-  /** Labor de Palma personalizada con jornales asociados — no se puede eliminar. */
-  LABOR_PALMA_CON_JORNALES: 'LABOR_PALMA_CON_JORNALES',
+  /** Labor COSECHA fija con registros de cosecha asociados. */
+  LABOR_CON_COSECHAS: 'LABOR_CON_COSECHAS',
+  /** Intento de eliminar una labor `es_sistema=true`. */
+  LABOR_DEL_SISTEMA: 'LABOR_DEL_SISTEMA',
+  /** @deprecated alias retrocompatible — usar `LABOR_DUPLICADA`. */
+  LABOR_PALMA_DUPLICADA: 'LABOR_DUPLICADA',
+  /** @deprecated alias retrocompatible — usar `LABOR_CON_JORNALES`. */
+  LABOR_PALMA_CON_JORNALES: 'LABOR_CON_JORNALES',
   PROMEDIO_DUPLICADO: 'PROMEDIO_DUPLICADO',
   CARGO_CON_EMPLEADOS: 'CARGO_CON_EMPLEADOS',
   MODALIDAD_CON_CARGOS: 'MODALIDAD_CON_CARGOS',

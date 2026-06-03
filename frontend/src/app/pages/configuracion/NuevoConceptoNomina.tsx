@@ -19,12 +19,14 @@ import {
   type NominaConcepto,
   type TipoConcepto as TipoConceptoApi,
   type AplicaA,
+  type TipoRemuneracion,
 } from '../../../api/nomina';
 import { formatThousands, parseCOP } from '../../components/lib/format';
 
 /**
- * Tipos visuales del formulario — incluyen "Aporte Legal" del diseño V.12+1.
- * Se mapean al schema real del API (TipoConceptoApi) al guardar/cargar.
+ * Tipos visuales del formulario — coinciden 1:1 con el API §6.
+ * "Aporte Legal" representa conceptos con aporte empleado + empresa (SALUD,
+ * PENSION, ARL); el motor de nómina usa ambos porcentajes al calcular.
  */
 type TipoVisual =
   | 'Aporte Legal'
@@ -33,10 +35,8 @@ type TipoVisual =
   | 'Bonificación Fija'
   | 'Bonificación Variable';
 
-type TipoRemuneracion = 'REMUNERADO' | 'NO_REMUNERADO';
-
 const TIPO_VISUAL_TO_API: Record<TipoVisual, TipoConceptoApi> = {
-  'Aporte Legal':           'DEDUCCION_LEGAL',
+  'Aporte Legal':           'APORTE_LEGAL',
   'Deducción Legal':        'DEDUCCION_LEGAL',
   'Deducción Voluntaria':   'DEDUCCION_VOLUNTARIA',
   'Bonificación Fija':      'BONIFICACION_FIJA',
@@ -44,6 +44,7 @@ const TIPO_VISUAL_TO_API: Record<TipoVisual, TipoConceptoApi> = {
 };
 
 const TIPO_API_TO_VISUAL: Record<TipoConceptoApi, TipoVisual> = {
+  APORTE_LEGAL:          'Aporte Legal',
   DEDUCCION_LEGAL:       'Deducción Legal',
   DEDUCCION_VOLUNTARIA:  'Deducción Voluntaria',
   BONIFICACION_FIJA:     'Bonificación Fija',
@@ -52,6 +53,23 @@ const TIPO_API_TO_VISUAL: Record<TipoConceptoApi, TipoVisual> = {
 
 function esAporteODeduccionLegal(tipo: TipoVisual): boolean {
   return tipo === 'Aporte Legal' || tipo === 'Deducción Legal';
+}
+
+/** Convierte 'yyyy-mm-dd' (input type=date) a 'dd/mm/yyyy' que prefiere el API. */
+function isoADmy(iso: string): string {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  if (!y || !m || !d) return iso;
+  return `${d}/${m}/${y}`;
+}
+
+/** Convierte 'dd/mm/yyyy' o 'yyyy-mm-dd' a 'yyyy-mm-dd' (formato del input type=date). */
+function aIso(s: string | null | undefined): string {
+  if (!s) return '';
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  return '';
 }
 
 interface FormState {
@@ -88,34 +106,12 @@ const FORM_VACIO: FormState = {
   vigenciaHasta: '',
 };
 
-/**
- * Campos extra del diseño que el API no soporta (afecta_salario_mínimo,
- * afecta_nomina, tipo_remuneracion, vigencia desde/hasta, porcentaje empresa).
- * Se persisten en localStorage por id de concepto para no perderlos entre
- * sesiones. Cuando el backend exponga estos campos, se pueden migrar.
- */
-const LS_KEY_EXTRAS = 'palmapp_concepto_nomina_extras_v1';
+/** Mismo key que Configuracion.tsx — al volver de aquí queremos abrir Conceptos. */
+const SS_KEY_ULTIMO_TAB = 'palmapp_configuracion_ultimo_tab';
 
-interface ExtraMeta {
-  porcentajeEmpresa?: number;
-  afectaSalarioMinimo?: boolean;
-  afectaNomina?: boolean;
-  tipoRemuneracion?: TipoRemuneracion;
-  vigenciaDesde?: string;
-  vigenciaHasta?: string;
-}
-
-function leerExtras(): Record<string, ExtraMeta> {
-  try {
-    const raw = localStorage.getItem(LS_KEY_EXTRAS);
-    return raw ? JSON.parse(raw) : {};
-  } catch { return {}; }
-}
-
-function guardarExtras(id: number, extras: ExtraMeta) {
-  const actual = leerExtras();
-  actual[String(id)] = { ...actual[String(id)], ...extras };
-  try { localStorage.setItem(LS_KEY_EXTRAS, JSON.stringify(actual)); } catch {}
+function volverAConceptos(navigate: (to: string) => void) {
+  try { sessionStorage.setItem(SS_KEY_ULTIMO_TAB, 'conceptos'); } catch {}
+  navigate('/configuracion');
 }
 
 export default function NuevoConceptoNomina() {
@@ -129,7 +125,7 @@ export default function NuevoConceptoNomina() {
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
-  // Carga el concepto a editar.
+  // Carga el concepto a editar — todos los campos vienen del API real (§6.1).
   useEffect(() => {
     if (!conceptoId) return;
     setCargando(true);
@@ -137,22 +133,27 @@ export default function NuevoConceptoNomina() {
       .ver(conceptoId)
       .then((res) => {
         const c = res.data;
-        const extras = leerExtras()[String(c.id)] ?? {};
+        // % empleado: viene en `porcentaje_empleado`. Si está null cae al
+        // legacy `porcentaje` (compat con conceptos viejos).
+        const pctEmp = c.porcentaje_empleado ?? c.porcentaje;
+        const pctEmpr = c.porcentaje_empresa;
         setFormData({
           codigo: c.codigo,
           nombre: c.nombre,
-          tipo: TIPO_API_TO_VISUAL[c.tipo],
+          tipo: TIPO_API_TO_VISUAL[c.tipo] ?? 'Aporte Legal',
           operacion: c.operacion,
-          porcentajeEmpleado: c.porcentaje != null ? String(c.porcentaje) : '',
-          porcentajeEmpresa: extras.porcentajeEmpresa != null ? String(extras.porcentajeEmpresa) : '',
+          porcentajeEmpleado: pctEmp != null ? String(pctEmp) : '',
+          porcentajeEmpresa: pctEmpr != null ? String(pctEmpr) : '',
           valorFijo: c.valor_referencia != null ? formatThousands(c.valor_referencia) : '',
           aplicaA: c.aplica_a,
           esObligatorio: !!(c.es_obligatorio ?? c.obligatorio),
-          afectaSalarioMinimo: extras.afectaSalarioMinimo ?? false,
-          afectaNomina: extras.afectaNomina ?? true,
-          tipoRemuneracion: extras.tipoRemuneracion ?? 'REMUNERADO',
-          vigenciaDesde: extras.vigenciaDesde ?? new Date().toISOString().split('T')[0],
-          vigenciaHasta: extras.vigenciaHasta ?? '',
+          afectaSalarioMinimo: !!c.afecta_salario_minimo,
+          // El campo afecta_nomina no existe en API_NOMINA — lo mantenemos en
+          // UI con default true para compatibilidad visual con el diseño V.12+1.
+          afectaNomina: true,
+          tipoRemuneracion: c.tipo_remuneracion ?? 'REMUNERADO',
+          vigenciaDesde: aIso(c.vigente_desde) || new Date().toISOString().split('T')[0],
+          vigenciaHasta: aIso(c.vigente_hasta),
         });
       })
       .catch((e: any) => toast.error(e?.message ?? 'No se pudo cargar el concepto'))
@@ -180,50 +181,42 @@ export default function NuevoConceptoNomina() {
 
     const tipoApi = TIPO_VISUAL_TO_API[formData.tipo];
     const usaPorcentaje = esAporteODeduccionLegal(formData.tipo);
-    const porcentaje = usaPorcentaje ? Number(formData.porcentajeEmpleado || 0) : null;
+    const pctEmp = formData.porcentajeEmpleado ? Number(formData.porcentajeEmpleado) : null;
+    const pctEmpr = formData.porcentajeEmpresa ? Number(formData.porcentajeEmpresa) : null;
     const valorRef = !usaPorcentaje ? Number(parseCOP(formData.valorFijo)) : null;
-    const porcentajeEmpresaNum = formData.porcentajeEmpresa ? Number(formData.porcentajeEmpresa) : undefined;
 
     setGuardando(true);
     try {
-      let conceptoGuardado: NominaConcepto;
+      // Campos comunes entre crear y editar — el doc §6.3 lista los editables.
+      const comunes: Partial<NominaConcepto> = {
+        nombre: formData.nombre.trim(),
+        aplica_a: formData.aplicaA,
+        es_obligatorio: formData.esObligatorio,
+        afecta_salario_minimo: formData.afectaSalarioMinimo,
+        tipo_remuneracion: formData.tipoRemuneracion,
+        vigente_desde: isoADmy(formData.vigenciaDesde),
+        vigente_hasta: formData.vigenciaHasta ? isoADmy(formData.vigenciaHasta) : null,
+        ...(usaPorcentaje
+          ? { porcentaje_empleado: pctEmp ?? 0, porcentaje_empresa: pctEmpr ?? 0 }
+          : { valor_referencia: valorRef! }),
+      };
+
       if (isEditing && conceptoId) {
-        const payload: Partial<NominaConcepto> = {
-          nombre: formData.nombre.trim(),
-          aplica_a: formData.aplicaA,
-          es_obligatorio: formData.esObligatorio,
-          ...(usaPorcentaje ? { porcentaje: porcentaje! } : { valor_referencia: valorRef! }),
-        };
-        const res = await nominaApi.conceptos.editar(conceptoId, payload);
-        conceptoGuardado = res.data;
+        await nominaApi.conceptos.editar(conceptoId, comunes);
       } else {
         const payload: Partial<NominaConcepto> = {
           codigo: formData.codigo.trim().toUpperCase(),
-          nombre: formData.nombre.trim(),
           tipo: tipoApi,
           subtipo: 'OTRO' as any,
           operacion: formData.operacion,
           calculo: usaPorcentaje ? 'PORCENTAJE' : 'VALOR_FIJO',
-          aplica_a: formData.aplicaA,
-          es_obligatorio: formData.esObligatorio,
-          ...(usaPorcentaje ? { porcentaje: porcentaje! } : { valor_referencia: valorRef! }),
+          ...comunes,
         };
-        const res = await nominaApi.conceptos.crear(payload);
-        conceptoGuardado = res.data;
+        await nominaApi.conceptos.crear(payload);
       }
 
-      // Guardar campos extra (no soportados por API) en localStorage.
-      guardarExtras(conceptoGuardado.id, {
-        porcentajeEmpresa: porcentajeEmpresaNum,
-        afectaSalarioMinimo: formData.afectaSalarioMinimo,
-        afectaNomina: formData.afectaNomina,
-        tipoRemuneracion: formData.tipoRemuneracion,
-        vigenciaDesde: formData.vigenciaDesde,
-        vigenciaHasta: formData.vigenciaHasta || undefined,
-      });
-
       toast.success(isEditing ? 'Concepto actualizado correctamente' : 'Concepto creado correctamente');
-      navigate('/configuracion');
+      volverAConceptos(navigate);
     } catch (e: any) {
       const errCodigo = e?.errors?.codigo?.[0] as string | undefined;
       if (errCodigo && /already been taken|has already|ya/i.test(errCodigo)) {
@@ -252,7 +245,7 @@ export default function NuevoConceptoNomina() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+          <Button variant="ghost" size="icon" onClick={() => volverAConceptos(navigate)}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
