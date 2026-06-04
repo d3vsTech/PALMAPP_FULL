@@ -485,7 +485,8 @@ export function PreciosLaboresTab() {
           <p className="text-sm text-muted-foreground">Labores estándar de palma</p>
         </div>
 
-        <Accordion type="multiple" defaultValue={['cosecha', 'abonada']} className="space-y-4">
+        {/* Por default todos los acordeones cerrados; el usuario los abre cuando quiera. */}
+        <Accordion type="multiple" defaultValue={[]} className="space-y-4">
           {/* Sección: Precios de Cosecha */}
           <AccordionItem value="cosecha" className="border-0">
             <Card className="border-border">
@@ -635,8 +636,13 @@ export function PreciosLaboresTab() {
             </Card>
           </AccordionItem>
 
-          {/* Secciones: Plateo / Poda / Control de Plagas / Otros */}
-          {preciosPalma.map((palma) => (
+          {/* Secciones: Plateo / Poda / Control de Plagas.
+              Excluimos COSECHA (ya tiene "Precios de Cosecha" arriba) y
+              FERTILIZACION (ya tiene "Escala de Abonada" arriba) para no
+              duplicar la UI con las labores fijas del §4 unificado. */}
+          {preciosPalma
+            .filter((p) => p.tipo === 'PLATEO' || p.tipo === 'PODA' || p.tipo === 'SANIDAD' || p.tipo === 'OTROS')
+            .map((palma) => (
             <AccordionItem key={palma.id} value={PALMA_VALUE[palma.tipo]} className="border-0">
               <Card className="border-border">
                 <CardHeader className={`border-b bg-gradient-to-r ${PALMA_GRADIENT[palma.tipo]}`}>
