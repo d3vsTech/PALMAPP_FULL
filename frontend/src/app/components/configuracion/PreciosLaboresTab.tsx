@@ -624,13 +624,9 @@ export function PreciosLaboresTab() {
 
         {/* Por default todos los acordeones cerrados; el usuario los abre cuando quiera. */}
         <Accordion type="multiple" defaultValue={[]} className="space-y-4">
-          {/* COSECHA: si el admin la dejó en POR_PALMA (default), mostramos la
-              tabla por lote+año. Si la cambió a JORNAL_FIJO, mostramos abajo un
-              acordeón simple con input plano (renderizado fuera de este bloque). */}
-          {(() => {
-            const cosechaLabor = preciosPalma.find((p) => p.tipo === 'COSECHA');
-            if (cosechaLabor?.tipo_pago === 'JORNAL_FIJO') return null;
-            return (
+          {/* "Precios de Cosecha" siempre visible: la tabla por lote+año vive
+              independiente del tipo_pago de la labor. Si la labor está en
+              JORNAL_FIJO se SUMA un acordeón aparte (más abajo). */}
           <AccordionItem value="cosecha" className="border-0">
             <Card className="border-border">
               <CardHeader className="border-b bg-gradient-to-r from-green-50/50 to-green-50/10 dark:from-green-950/20 dark:to-green-950/5">
@@ -702,15 +698,8 @@ export function PreciosLaboresTab() {
               </AccordionContent>
             </Card>
           </AccordionItem>
-            );
-          })()}
 
-          {/* FERTILIZACION: igual que COSECHA, la tabla "Escala de Abonada" solo
-              aplica si la labor está en POR_PALMA. En JORNAL_FIJO usa input plano. */}
-          {(() => {
-            const fertLabor = preciosPalma.find((p) => p.tipo === 'FERTILIZACION');
-            if (fertLabor?.tipo_pago === 'JORNAL_FIJO') return null;
-            return (
+          {/* "Escala de Abonada" siempre visible (mismo criterio que Cosecha). */}
           <AccordionItem value="abonada" className="border-0">
             <Card className="border-border">
               <CardHeader className="border-b bg-gradient-to-r from-emerald-50/50 to-emerald-50/10 dark:from-emerald-950/20 dark:to-emerald-950/5">
@@ -785,12 +774,11 @@ export function PreciosLaboresTab() {
               </AccordionContent>
             </Card>
           </AccordionItem>
-            );
-          })()}
 
-          {/* COSECHA / FERTILIZACION en JORNAL_FIJO: input plano de precio_palma.
-              Reemplaza la tabla "Precios de Cosecha" / "Escala de Abonada" cuando
-              el admin cambió el tipo_pago desde Operaciones → Trabajos / Labores. */}
+          {/* COSECHA / FERTILIZACION en JORNAL_FIJO: acordeón EXTRA con input
+              plano de precio_palma. Se SUMA a las secciones por lote/escala
+              (no las reemplaza) cuando el admin cambió el tipo_pago desde
+              Operaciones → Trabajos / Labores. */}
           {preciosPalma
             .filter((p) => (p.tipo === 'COSECHA' || p.tipo === 'FERTILIZACION') && p.tipo_pago === 'JORNAL_FIJO')
             .map((labor) => (
@@ -840,8 +828,8 @@ export function PreciosLaboresTab() {
           {/* Secciones: solo Plateo y Poda — las únicas labores fijas de palma
               que tienen "Precio por palma / jornal" en la UI.
               Excluimos:
-                · COSECHA       → ya está arriba en "Precios de Cosecha" (o como JORNAL_FIJO).
-                · FERTILIZACION → ya está arriba en "Escala de Abonada" (o como JORNAL_FIJO).
+                · COSECHA       → "Precios de Cosecha" (siempre) + acordeón extra si JORNAL_FIJO.
+                · FERTILIZACION → "Escala de Abonada" (siempre) + acordeón extra si JORNAL_FIJO.
                 · SANIDAD       → no se gestiona en esta finca como labor estándar.
                 · OTROS         → el §4 unificado ya no usa este tipo. */}
           {preciosPalma
