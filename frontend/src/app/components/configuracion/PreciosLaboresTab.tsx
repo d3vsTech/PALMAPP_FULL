@@ -624,7 +624,13 @@ export function PreciosLaboresTab() {
 
         {/* Por default todos los acordeones cerrados; el usuario los abre cuando quiera. */}
         <Accordion type="multiple" defaultValue={[]} className="space-y-4">
-          {/* Sección: Precios de Cosecha */}
+          {/* COSECHA: si el admin la dejó en POR_PALMA (default), mostramos la
+              tabla por lote+año. Si la cambió a JORNAL_FIJO, mostramos abajo un
+              acordeón simple con input plano (renderizado fuera de este bloque). */}
+          {(() => {
+            const cosechaLabor = preciosPalma.find((p) => p.tipo === 'COSECHA');
+            if (cosechaLabor?.tipo_pago === 'JORNAL_FIJO') return null;
+            return (
           <AccordionItem value="cosecha" className="border-0">
             <Card className="border-border">
               <CardHeader className="border-b bg-gradient-to-r from-green-50/50 to-green-50/10 dark:from-green-950/20 dark:to-green-950/5">
@@ -696,8 +702,15 @@ export function PreciosLaboresTab() {
               </AccordionContent>
             </Card>
           </AccordionItem>
+            );
+          })()}
 
-          {/* Sección: Escala de Abonada */}
+          {/* FERTILIZACION: igual que COSECHA, la tabla "Escala de Abonada" solo
+              aplica si la labor está en POR_PALMA. En JORNAL_FIJO usa input plano. */}
+          {(() => {
+            const fertLabor = preciosPalma.find((p) => p.tipo === 'FERTILIZACION');
+            if (fertLabor?.tipo_pago === 'JORNAL_FIJO') return null;
+            return (
           <AccordionItem value="abonada" className="border-0">
             <Card className="border-border">
               <CardHeader className="border-b bg-gradient-to-r from-emerald-50/50 to-emerald-50/10 dark:from-emerald-950/20 dark:to-emerald-950/5">
@@ -772,12 +785,63 @@ export function PreciosLaboresTab() {
               </AccordionContent>
             </Card>
           </AccordionItem>
+            );
+          })()}
+
+          {/* COSECHA / FERTILIZACION en JORNAL_FIJO: input plano de precio_palma.
+              Reemplaza la tabla "Precios de Cosecha" / "Escala de Abonada" cuando
+              el admin cambió el tipo_pago desde Operaciones → Trabajos / Labores. */}
+          {preciosPalma
+            .filter((p) => (p.tipo === 'COSECHA' || p.tipo === 'FERTILIZACION') && p.tipo_pago === 'JORNAL_FIJO')
+            .map((labor) => (
+            <AccordionItem key={`jornal-${labor.id}`} value={`palma-jornal-${labor.id}`} className="border-0">
+              <Card className="border-border">
+                <CardHeader className={`border-b bg-gradient-to-r ${labor.tipo === 'COSECHA'
+                  ? 'from-green-50/50 to-green-50/10 dark:from-green-950/20 dark:to-green-950/5'
+                  : 'from-emerald-50/50 to-emerald-50/10 dark:from-emerald-950/20 dark:to-emerald-950/5'}`}>
+                  <AccordionTrigger className="hover:no-underline py-0">
+                    <div className="text-left">
+                      <CardTitle>{labor.tipo === 'COSECHA' ? 'Precio Cosecha' : 'Precio Fertilización'}</CardTitle>
+                      <p className="text-sm text-muted-foreground mt-1">Precio por jornal fijo</p>
+                    </div>
+                  </AccordionTrigger>
+                </CardHeader>
+                <AccordionContent>
+                  <CardContent className="p-6">
+                    <div className="max-w-md space-y-3">
+                      <Label htmlFor={`precio-jornal-${labor.id}`}>Valor por Jornal</Label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">$</span>
+                        <Input
+                          id={`precio-jornal-${labor.id}`}
+                          inputMode="numeric"
+                          value={palmaInputs[labor.id] ?? ''}
+                          onChange={(e) =>
+                            setPalmaInputs((prev) => ({ ...prev, [labor.id]: formatThousands(parseCOP(e.target.value)) }))
+                          }
+                          onBlur={() => handleSavePalma(labor)}
+                          className="text-lg font-semibold"
+                          placeholder="0"
+                        />
+                        <span className="text-muted-foreground">/jornal</span>
+                      </div>
+                      {palmaInputs[labor.id] && Number(parseCOP(palmaInputs[labor.id])) > 0 && (
+                        <p className="text-sm text-success font-medium">
+                          {formatCOP(parseCOP(palmaInputs[labor.id]))} /jornal
+                        </p>
+                      )}
+                    </div>
+                  </CardContent>
+                </AccordionContent>
+              </Card>
+            </AccordionItem>
+          ))}
 
           {/* Secciones: solo Plateo y Poda — las únicas labores fijas de palma
               que tienen "Precio por palma / jornal" en la UI.
               Excluimos:
-                · COSECHA       → ya está arriba en "Precios de Cosecha".
-                · FERTILIZACION → ya está arriba en "Escala de Abonada".
+                · COSECHA       → ya está arriba en "Precios de Cosecha" (o como JORNAL_FIJO).
+                · FERTILIZACION → ya está arriba en "Escala de Abonada" (o como JORNAL_FIJO).
                 · SANIDAD       → no se gestiona en esta finca como labor estándar.
                 · OTROS         → el §4 unificado ya no usa este tipo. */}
           {preciosPalma
