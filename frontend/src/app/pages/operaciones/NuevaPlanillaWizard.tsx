@@ -1272,15 +1272,18 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                 {ETAPAS.map((etapa, index) => {
                   const estaCompleta = etapaActual > etapa.numero;
                   const estaActiva = etapaActual === etapa.numero;
+                  // En modo lectura el usuario abre una planilla ya creada → puede
+                  // saltar a cualquier etapa sin restricción (no hay "futuros").
+                  const navegable = estaActiva || estaCompleta || modoLectura;
                   return (
                     <div key={etapa.numero} className="flex items-center" style={{ flex: index < ETAPAS.length - 1 ? 1 : 'none' }}>
                       {/* Círculo de etapa */}
                       <button
                         onClick={() => irAEtapa(etapa.numero)}
                         className={`flex flex-col items-center gap-2 ${
-                          estaActiva || estaCompleta ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
+                          navegable ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
                         }`}
-                        disabled={!estaActiva && !estaCompleta}
+                        disabled={!navegable}
                       >
                         <div
                           className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition-all ${
@@ -1328,27 +1331,33 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           {/* Contenido de las etapas */}
           {modoLectura && (
             <style>{`
+              /* Ocultar acciones de edición (los íconos que sí mutan datos). */
               .wizard-modo-lectura button:has(svg.lucide-pencil),
               .wizard-modo-lectura button:has(svg.lucide-trash-2),
               .wizard-modo-lectura button:has(svg.lucide-plus),
               .wizard-modo-lectura button:has(svg.lucide-x) {
                 display: none !important;
               }
-              .wizard-modo-lectura input:disabled,
-              .wizard-modo-lectura textarea:disabled,
-              .wizard-modo-lectura button:disabled,
-              .wizard-modo-lectura [data-disabled] {
+              /* Inputs/textareas/selects quedan visibles pero no editables.
+                 Usamos pointer-events en vez de fieldset disabled para que
+                 las Tabs (Cosecha/Plateo/Poda/...) y el stepper sigan
+                 navegables. */
+              .wizard-modo-lectura input,
+              .wizard-modo-lectura textarea,
+              .wizard-modo-lectura [role="combobox"] {
+                pointer-events: none !important;
+                background-color: transparent !important;
                 opacity: 1 !important;
                 cursor: default !important;
               }
-              .wizard-modo-lectura input:disabled,
-              .wizard-modo-lectura textarea:disabled {
-                background-color: transparent !important;
+              /* Garantizar que tabs y el stepper sí reciban clicks. */
+              .wizard-modo-lectura [role="tablist"],
+              .wizard-modo-lectura [role="tab"] {
+                pointer-events: auto !important;
               }
             `}</style>
           )}
           <fieldset
-            disabled={modoLectura}
             className={`space-y-6 m-0 p-0 border-0 ${modoLectura ? 'wizard-modo-lectura' : ''}`}
           >
             {/* ETAPA 1: INFORMACIÓN GENERAL */}
