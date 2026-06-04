@@ -34,8 +34,19 @@ export default function MiPlantacion() {
   const cargar = useCallback(async (q?: string) => {
     setLoading(true);
     try {
-      const res = await prediosApi.listar({ search: q?.trim() || undefined, per_page: 50 });
-      const lista = res.data ?? [];
+      const res: any = await prediosApi.listar({ search: q?.trim() || undefined, per_page: 50 });
+      // El backend puede responder en 3 formas dependiendo del wrapper:
+      //   1. { data: [...], meta: {...} }                      (Resource Collection plana)
+      //   2. { data: { data: [...], meta: {...} } }            (Resource envuelto + paginación)
+      //   3. { data: { current_page, data: [...], total: N } } (LengthAwarePaginator crudo)
+      // Cubrimos las tres para que el listado nunca quede vacío por shape.
+      const lista: any[] = Array.isArray(res?.data)
+        ? res.data
+        : Array.isArray(res?.data?.data)
+          ? res.data.data
+          : Array.isArray(res)
+            ? res
+            : [];
       // El listado a veces reporta `palmas_count` desincronizado (sobre todo tras
       // creaciones async de >5000 palmas). Enriquecemos con el resumen real de
       // cada predio (endpoint cacheado en backend a 60s, barato).
@@ -55,6 +66,7 @@ export default function MiPlantacion() {
       );
       setPredios(enriquecidos);
     } catch (err) {
+      console.error('[MiPlantacion.cargar]', err);
       toast.error(err instanceof Error ? err.message : 'Error al cargar predios');
     } finally { setLoading(false); }
   }, []);
