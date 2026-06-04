@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Plus, Trash2, Edit } from 'lucide-react';
+import { Plus, Trash2, Edit, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Accordion,
@@ -81,6 +81,9 @@ const FORM_COSECHA_VACIO = { lote_id: '', precio: '', anio: String(new Date().ge
 const FORM_ABONO_VACIO = { gramos_min: '', gramos_max: '', precio_palma: '' };
 
 export function PreciosLaboresTab() {
+  // Loading global del primer fetch — antes la UI quedaba "muda" varios segundos.
+  const [loading, setLoading] = useState(true);
+
   // Cosecha
   const [preciosCosecha, setPreciosCosecha] = useState<PrecioCosecha[]>([]);
   const [lotes, setLotes] = useState<LoteOption[]>([]);
@@ -105,24 +108,26 @@ export function PreciosLaboresTab() {
   const { confirmDelete, ConfirmDeleteDialog } = useConfirmDelete();
 
   useEffect(() => {
+    // 5 fetches en paralelo, cada uno acotado a lo mínimo:
+    //  - preciosCosecha y preciosAbono: paramétricas pequeñas, listado completo.
+    //  - labores PALMA fijas: máximo 5 registros (es_sistema=true).
+    //  - labores FINCA: custom de finca, paginado a 100.
+    //  - lotes: usamos /lotes/select (sin paginar, payload mínimo {id, nombre}).
+    // Antes hacíamos un solo GET /labores?per_page=200 y un GET /lotes?per_page=100
+    // que devolvían payloads grandes; ahora el TTFB es notablemente menor.
     Promise.all([
       configuracionApi.preciosCosecha.listar({ per_page: 100 }),
       configuracionApi.preciosAbono.listar(),
-      // §4 unificado: trae TODAS las labores (palma fijas + custom palma + finca).
-      // Las filtramos en cliente: fijas (es_sistema=true) → sección Palma,
-      // custom finca → sección Labores Finca.
-      configuracionApi.labores.listar({ per_page: 200 }),
-      lotesApi.listar({ per_page: 100 }),
+      configuracionApi.labores.listar({ categoria: 'PALMA', es_sistema: true, per_page: 10 }),
+      configuracionApi.labores.listar({ categoria: 'FINCA', per_page: 100 }),
+      lotesApi.select(),
     ])
-      .then(([cosecha, abono, laboresRes, lotesRes]) => {
+      .then(([cosecha, abono, palmaRes, fincaRes, lotesRes]) => {
         setPreciosCosecha(cosecha.data);
         setRangosAbono(abono.data);
 
-        const todas = laboresRes.data ?? [];
-        // Sección Palma: solo las 5 fijas del sistema (categoria=PALMA + es_sistema=true).
-        // Las custom palma se gestionan desde "Configuración → Operaciones → Trabajos
-        // / Labores" — no las mostramos acá para no duplicar UI.
-        const palmaFijas = todas.filter((l) => l.categoria === 'PALMA' && l.es_sistema);
+        // Sección Palma: solo las 5 fijas del sistema.
+        const palmaFijas = palmaRes.data ?? [];
         setPreciosPalma(palmaFijas);
         setPalmaInputs(
           Object.fromEntries(
@@ -131,7 +136,7 @@ export function PreciosLaboresTab() {
         );
 
         // Sección Labores Finca: custom finca con su precio_palma como "valor base".
-        const finca = todas.filter((l) => l.categoria === 'FINCA');
+        const finca = fincaRes.data ?? [];
         setLaboresFinca(finca);
         setLaborInputs(
           Object.fromEntries(
@@ -139,9 +144,10 @@ export function PreciosLaboresTab() {
           ),
         );
 
-        setLotes((lotesRes.data ?? []).map((l: any) => ({ id: l.id, nombre: l.nombre })));
+        setLotes((lotesRes.data ?? []).map((l) => ({ id: l.id, nombre: l.nombre })));
       })
-      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar los precios'));
+      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar los precios'))
+      .finally(() => setLoading(false));
   }, []);
 
   // ── Cosecha ────────────────────────────────────────────────────────────────
@@ -345,6 +351,13 @@ export function PreciosLaboresTab() {
         </p>
       </div>
 
+      {loading && (
+        <div className="flex items-center justify-center gap-3 py-16 text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span>Cargando precios y labores…</span>
+        </div>
+      )}
+
       {/* Modal Cosecha */}
       <Dialog open={openCosecha} onOpenChange={setOpenCosecha}>
         <DialogContent>
@@ -479,7 +492,7 @@ export function PreciosLaboresTab() {
       </Dialog>
 
       {/* LABORES PALMA */}
-      <div className="space-y-4">
+      <div className="space-y-4" hidden={loading}>
         <div className="border-l-4 border-primary pl-4 py-2">
           <h3 className="text-xl font-bold">Labores Palma</h3>
           <p className="text-sm text-muted-foreground">Labores estándar de palma</p>
@@ -687,7 +700,7 @@ export function PreciosLaboresTab() {
       </div>
 
       {/* LABORES FINCA */}
-      <div className="space-y-4">
+      <div className="space-y-4" hidden={loading}>
         <div className="border-l-4 border-muted-foreground pl-4 py-2">
           <h3 className="text-xl font-bold">Labores Finca</h3>
           <p className="text-sm text-muted-foreground">Precio por jornal de las labores personalizadas</p>
