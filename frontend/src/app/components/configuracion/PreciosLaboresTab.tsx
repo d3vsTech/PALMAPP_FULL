@@ -82,7 +82,8 @@ const FORM_ABONO_VACIO = { gramos_min: '', gramos_max: '', precio_palma: '' };
 
 // Cache simple en sessionStorage por tenant (TTL 60s). Hace que volver a esta
 // pantalla en la misma sesión sea instantáneo.
-const CACHE_KEY = 'palmapp.preciosLabores.cache.v1';
+// `v2` invalida cachés previas que no traían `palmaCustom`.
+const CACHE_KEY = 'palmapp.preciosLabores.cache.v2';
 const CACHE_TTL_MS = 60_000;
 
 type CacheShape = {
@@ -91,6 +92,7 @@ type CacheShape = {
   cosecha: PrecioCosecha[];
   abono: PrecioAbono[];
   palma: PrecioPalma[];
+  palmaCustom: Labor[];
   finca: Labor[];
   lotes: LoteOption[];
 };
@@ -137,11 +139,20 @@ export function PreciosLaboresTab() {
   const [abonoEdit, setAbonoEdit] = useState<PrecioAbono | null>(null);
   const [formAbono, setFormAbono] = useState(FORM_ABONO_VACIO);
 
-  // Precios de Palma
+  // Precios de Palma — labores fijas (es_sistema=true)
   const [preciosPalma, setPreciosPalma] = useState<PrecioPalma[]>(cached?.palma ?? []);
   const [palmaInputs, setPalmaInputs] = useState<Record<number, string>>(
     Object.fromEntries(
       (cached?.palma ?? []).map((p) => [p.id, p.precio_palma != null ? formatThousands(p.precio_palma) : '']),
+    ),
+  );
+
+  // Labores de Palma custom (es_sistema=false, tipo=null). El admin las crea
+  // desde "Configuración → Operaciones → Trabajos / Labores".
+  const [laboresPalmaCustom, setLaboresPalmaCustom] = useState<Labor[]>(cached?.palmaCustom ?? []);
+  const [palmaCustomInputs, setPalmaCustomInputs] = useState<Record<number, string>>(
+    Object.fromEntries(
+      (cached?.palmaCustom ?? []).map((l) => [l.id, l.precio_palma != null ? formatThousands(l.precio_palma) : '']),
     ),
   );
 
@@ -185,6 +196,19 @@ export function PreciosLaboresTab() {
           fresco.palma = palma;
         })
         .catch(() => {}),
+      configuracionApi.labores.listar({ categoria: 'PALMA', es_sistema: false, per_page: 100 })
+        .then((r) => {
+          if (cancelled) return;
+          const palmaCustom = r.data ?? [];
+          setLaboresPalmaCustom(palmaCustom);
+          setPalmaCustomInputs(
+            Object.fromEntries(
+              palmaCustom.map((l) => [l.id, l.precio_palma != null ? formatThousands(l.precio_palma) : '']),
+            ),
+          );
+          fresco.palmaCustom = palmaCustom;
+        })
+        .catch(() => {}),
       configuracionApi.labores.listar({ categoria: 'FINCA', per_page: 100 })
         .then((r) => {
           if (cancelled) return;
@@ -215,7 +239,8 @@ export function PreciosLaboresTab() {
       // mejor que el siguiente arranque vuelva a intentarlo.
       if (
         fresco.cosecha !== undefined && fresco.abono !== undefined &&
-        fresco.palma !== undefined && fresco.finca !== undefined && fresco.lotes !== undefined
+        fresco.palma !== undefined && fresco.palmaCustom !== undefined &&
+        fresco.finca !== undefined && fresco.lotes !== undefined
       ) {
         writeCache(fresco as Omit<CacheShape, 'ts' | 'tenant'>);
       }
@@ -370,6 +395,27 @@ export function PreciosLaboresTab() {
     });
   };
 
+  // ── Labor Palma custom (precio_palma según tipo_pago) ────────────────────
+  const handleSaveLaborPalmaCustom = async (labor: Labor) => {
+    const raw = palmaCustomInputs[labor.id] ?? '';
+    const limpio = parseCOP(raw);
+    const valor = limpio ? Number(limpio) : 0;
+    const actual = labor.precio_palma != null ? Number(parseCOP(formatThousands(labor.precio_palma))) : 0;
+    if (actual === valor) return;
+    try {
+      const res = await configuracionApi.labores.editar(labor.id, { precio_palma: valor });
+      setLaboresPalmaCustom((prev) => prev.map((l) => (l.id === labor.id ? res.data : l)));
+      toast.success('Precio actualizado');
+    } catch (e: any) {
+      if (e?.errors) {
+        const primero = Object.values(e.errors).flat()[0];
+        toast.error(typeof primero === 'string' ? primero : 'Error de validación');
+      } else {
+        toast.error(e?.message ?? 'No se pudo guardar el precio');
+      }
+    }
+  };
+
   // ── Labor Finca (precio_palma plano = "valor por jornal") ─────────────────
   // §4 unificado: las labores de finca tienen `tipo_pago='JORNAL_FIJO'` y
   // `precio_palma` es el valor por jornal. Inline edit con onBlur.
@@ -428,7 +474,8 @@ export function PreciosLaboresTab() {
       {/* Indicador discreto SOLO en frío. Si hay caché o ya llegó algo, se oculta. */}
       {loading &&
         preciosCosecha.length === 0 && rangosAbono.length === 0 &&
-        preciosPalma.length === 0 && laboresFinca.length === 0 && (
+        preciosPalma.length === 0 && laboresPalmaCustom.length === 0 &&
+        laboresFinca.length === 0 && (
         <div className="flex items-center justify-center gap-3 py-12 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" />
           <span>Cargando precios y labores…</span>
@@ -778,6 +825,68 @@ export function PreciosLaboresTab() {
           ))}
         </Accordion>
       </div>
+
+      {/* LABORES PALMA PERSONALIZADAS (custom — es_sistema=false) */}
+      {laboresPalmaCustom.length > 0 && (
+        <div className="space-y-4">
+          <div className="border-l-4 border-amber-500 pl-4 py-2">
+            <h3 className="text-xl font-bold">Labores Palma Personalizadas</h3>
+            <p className="text-sm text-muted-foreground">
+              Precios de las labores de palma creadas en "Operaciones &gt; Trabajos / Labores"
+            </p>
+          </div>
+
+          <Card className="border-border">
+            <CardContent className="p-6">
+              <div className="rounded-lg border border-border overflow-hidden">
+                <table className="w-full table-fixed">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="text-left p-4 font-semibold w-1/2">Labor</th>
+                      <th className="text-left p-4 font-semibold w-1/4">Tipo de Pago</th>
+                      <th className="text-right p-4 font-semibold">Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {laboresPalmaCustom.map((labor) => {
+                      const esPorPalma = labor.tipo_pago === 'POR_PALMA';
+                      return (
+                        <tr key={labor.id} className="border-t border-border">
+                          <td className="p-4 font-medium">{labor.nombre}</td>
+                          <td className="p-4 text-sm text-muted-foreground">
+                            {esPorPalma ? 'Por palma' : 'Jornal fijo'}
+                          </td>
+                          <td className="p-4">
+                            <div className="flex items-center justify-end gap-2">
+                              <span className="text-muted-foreground text-sm">$</span>
+                              <Input
+                                inputMode="numeric"
+                                value={palmaCustomInputs[labor.id] ?? ''}
+                                onChange={(e) =>
+                                  setPalmaCustomInputs((prev) => ({
+                                    ...prev,
+                                    [labor.id]: formatThousands(parseCOP(e.target.value)),
+                                  }))
+                                }
+                                onBlur={() => handleSaveLaborPalmaCustom(labor)}
+                                placeholder="0"
+                                className="w-32 text-right"
+                              />
+                              <span className="text-muted-foreground text-sm">
+                                {esPorPalma ? '/palma' : '/jornal'}
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* LABORES FINCA */}
       <div className="space-y-4">
