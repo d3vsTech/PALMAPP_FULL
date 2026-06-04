@@ -80,74 +80,148 @@ const PALMA_VALUE: Record<TipoPalmaPrecio, string> = {
 const FORM_COSECHA_VACIO = { lote_id: '', precio: '', anio: String(new Date().getFullYear()) };
 const FORM_ABONO_VACIO = { gramos_min: '', gramos_max: '', precio_palma: '' };
 
+// Cache simple en sessionStorage por tenant (TTL 60s). Hace que volver a esta
+// pantalla en la misma sesión sea instantáneo.
+const CACHE_KEY = 'palmapp.preciosLabores.cache.v1';
+const CACHE_TTL_MS = 60_000;
+
+type CacheShape = {
+  ts: number;
+  tenant: string | null;
+  cosecha: PrecioCosecha[];
+  abono: PrecioAbono[];
+  palma: PrecioPalma[];
+  finca: Labor[];
+  lotes: LoteOption[];
+};
+
+function readCache(): CacheShape | null {
+  try {
+    const raw = sessionStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CacheShape;
+    const tenantActual = localStorage.getItem('palmapp_tenant_id');
+    if (parsed.tenant !== tenantActual) return null;
+    if (Date.now() - parsed.ts > CACHE_TTL_MS) return null;
+    return parsed;
+  } catch { return null; }
+}
+
+function writeCache(payload: Omit<CacheShape, 'ts' | 'tenant'>) {
+  try {
+    const tenantActual = localStorage.getItem('palmapp_tenant_id');
+    sessionStorage.setItem(CACHE_KEY, JSON.stringify({
+      ts: Date.now(),
+      tenant: tenantActual,
+      ...payload,
+    }));
+  } catch { /* cuota llena, ignorar */ }
+}
+
 export function PreciosLaboresTab() {
-  // Loading global del primer fetch — antes la UI quedaba "muda" varios segundos.
-  const [loading, setLoading] = useState(true);
+  // Hidratación desde cache: si hay snapshot reciente, mostramos los datos al
+  // instante (no parpadea el "Cargando..."). Cada fetch sigue corriendo en
+  // background y reescribe los valores reales cuando llegue.
+  const cached = readCache();
 
   // Cosecha
-  const [preciosCosecha, setPreciosCosecha] = useState<PrecioCosecha[]>([]);
-  const [lotes, setLotes] = useState<LoteOption[]>([]);
+  const [preciosCosecha, setPreciosCosecha] = useState<PrecioCosecha[]>(cached?.cosecha ?? []);
+  const [lotes, setLotes] = useState<LoteOption[]>(cached?.lotes ?? []);
   const [openCosecha, setOpenCosecha] = useState(false);
   const [cosechaEdit, setCosechaEdit] = useState<PrecioCosecha | null>(null);
   const [formCosecha, setFormCosecha] = useState(FORM_COSECHA_VACIO);
 
   // Abonada
-  const [rangosAbono, setRangosAbono] = useState<PrecioAbono[]>([]);
+  const [rangosAbono, setRangosAbono] = useState<PrecioAbono[]>(cached?.abono ?? []);
   const [openAbono, setOpenAbono] = useState(false);
   const [abonoEdit, setAbonoEdit] = useState<PrecioAbono | null>(null);
   const [formAbono, setFormAbono] = useState(FORM_ABONO_VACIO);
 
   // Precios de Palma
-  const [preciosPalma, setPreciosPalma] = useState<PrecioPalma[]>([]);
-  const [palmaInputs, setPalmaInputs] = useState<Record<number, string>>({});
+  const [preciosPalma, setPreciosPalma] = useState<PrecioPalma[]>(cached?.palma ?? []);
+  const [palmaInputs, setPalmaInputs] = useState<Record<number, string>>(
+    Object.fromEntries(
+      (cached?.palma ?? []).map((p) => [p.id, p.precio_palma != null ? formatThousands(p.precio_palma) : '']),
+    ),
+  );
 
   // Labores de Finca (precio = precio_palma plano según §4 unificado)
-  const [laboresFinca, setLaboresFinca] = useState<Labor[]>([]);
-  const [laborInputs, setLaborInputs] = useState<Record<number, string>>({});
+  const [laboresFinca, setLaboresFinca] = useState<Labor[]>(cached?.finca ?? []);
+  const [laborInputs, setLaborInputs] = useState<Record<number, string>>(
+    Object.fromEntries(
+      (cached?.finca ?? []).map((l) => [l.id, l.precio_palma != null ? formatThousands(l.precio_palma) : '']),
+    ),
+  );
+
+  // Loading sólo cuando NO hay caché — primer arranque del día / nuevo tenant.
+  const [loading, setLoading] = useState(!cached);
 
   const { confirmDelete, ConfirmDeleteDialog } = useConfirmDelete();
 
   useEffect(() => {
-    // 5 fetches en paralelo, cada uno acotado a lo mínimo:
-    //  - preciosCosecha y preciosAbono: paramétricas pequeñas, listado completo.
-    //  - labores PALMA fijas: máximo 5 registros (es_sistema=true).
-    //  - labores FINCA: custom de finca, paginado a 100.
-    //  - lotes: usamos /lotes/select (sin paginar, payload mínimo {id, nombre}).
-    // Antes hacíamos un solo GET /labores?per_page=200 y un GET /lotes?per_page=100
-    // que devolvían payloads grandes; ahora el TTFB es notablemente menor.
-    Promise.all([
-      configuracionApi.preciosCosecha.listar({ per_page: 100 }),
-      configuracionApi.preciosAbono.listar(),
-      configuracionApi.labores.listar({ categoria: 'PALMA', es_sistema: true, per_page: 10 }),
-      configuracionApi.labores.listar({ categoria: 'FINCA', per_page: 100 }),
-      lotesApi.select(),
-    ])
-      .then(([cosecha, abono, palmaRes, fincaRes, lotesRes]) => {
-        setPreciosCosecha(cosecha.data);
-        setRangosAbono(abono.data);
+    let cancelled = false;
+    // Snapshot temporal que se va llenando con lo que vaya cayendo, para luego
+    // escribir el cache al final con TODO lo fresco.
+    const fresco: Partial<Omit<CacheShape, 'ts' | 'tenant'>> = {};
 
-        // Sección Palma: solo las 5 fijas del sistema.
-        const palmaFijas = palmaRes.data ?? [];
-        setPreciosPalma(palmaFijas);
-        setPalmaInputs(
-          Object.fromEntries(
-            palmaFijas.map((p) => [p.id, p.precio_palma != null ? formatThousands(p.precio_palma) : '']),
-          ),
-        );
+    // Cada fetch actualiza SU sección en cuanto llega — no esperan al resto.
+    const tareas: Promise<unknown>[] = [
+      configuracionApi.preciosCosecha.listar({ per_page: 100 })
+        .then((r) => { if (!cancelled) { setPreciosCosecha(r.data); fresco.cosecha = r.data; } })
+        .catch(() => {}),
+      configuracionApi.preciosAbono.listar()
+        .then((r) => { if (!cancelled) { setRangosAbono(r.data); fresco.abono = r.data; } })
+        .catch(() => {}),
+      configuracionApi.labores.listar({ categoria: 'PALMA', es_sistema: true, per_page: 10 })
+        .then((r) => {
+          if (cancelled) return;
+          const palma = r.data ?? [];
+          setPreciosPalma(palma);
+          setPalmaInputs(
+            Object.fromEntries(
+              palma.map((p) => [p.id, p.precio_palma != null ? formatThousands(p.precio_palma) : '']),
+            ),
+          );
+          fresco.palma = palma;
+        })
+        .catch(() => {}),
+      configuracionApi.labores.listar({ categoria: 'FINCA', per_page: 100 })
+        .then((r) => {
+          if (cancelled) return;
+          const finca = r.data ?? [];
+          setLaboresFinca(finca);
+          setLaborInputs(
+            Object.fromEntries(
+              finca.map((l) => [l.id, l.precio_palma != null ? formatThousands(l.precio_palma) : '']),
+            ),
+          );
+          fresco.finca = finca;
+        })
+        .catch(() => {}),
+      lotesApi.select()
+        .then((r) => {
+          if (cancelled) return;
+          const ls = (r.data ?? []).map((l) => ({ id: l.id, nombre: l.nombre }));
+          setLotes(ls);
+          fresco.lotes = ls;
+        })
+        .catch(() => {}),
+    ];
 
-        // Sección Labores Finca: custom finca con su precio_palma como "valor base".
-        const finca = fincaRes.data ?? [];
-        setLaboresFinca(finca);
-        setLaborInputs(
-          Object.fromEntries(
-            finca.map((l) => [l.id, l.precio_palma != null ? formatThousands(l.precio_palma) : '']),
-          ),
-        );
+    Promise.allSettled(tareas).then(() => {
+      if (cancelled) return;
+      setLoading(false);
+      // Persistimos cache sólo si tenemos todo lo crítico — si algún fetch falló,
+      // mejor que el siguiente arranque vuelva a intentarlo.
+      if (
+        fresco.cosecha !== undefined && fresco.abono !== undefined &&
+        fresco.palma !== undefined && fresco.finca !== undefined && fresco.lotes !== undefined
+      ) {
+        writeCache(fresco as Omit<CacheShape, 'ts' | 'tenant'>);
+      }
+    });
 
-        setLotes((lotesRes.data ?? []).map((l) => ({ id: l.id, nombre: l.nombre })));
-      })
-      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar los precios'))
-      .finally(() => setLoading(false));
+    return () => { cancelled = true; };
   }, []);
 
   // ── Cosecha ────────────────────────────────────────────────────────────────
@@ -351,8 +425,11 @@ export function PreciosLaboresTab() {
         </p>
       </div>
 
-      {loading && (
-        <div className="flex items-center justify-center gap-3 py-16 text-muted-foreground">
+      {/* Indicador discreto SOLO en frío. Si hay caché o ya llegó algo, se oculta. */}
+      {loading &&
+        preciosCosecha.length === 0 && rangosAbono.length === 0 &&
+        preciosPalma.length === 0 && laboresFinca.length === 0 && (
+        <div className="flex items-center justify-center gap-3 py-12 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" />
           <span>Cargando precios y labores…</span>
         </div>
@@ -492,7 +569,7 @@ export function PreciosLaboresTab() {
       </Dialog>
 
       {/* LABORES PALMA */}
-      <div className="space-y-4" hidden={loading}>
+      <div className="space-y-4">
         <div className="border-l-4 border-primary pl-4 py-2">
           <h3 className="text-xl font-bold">Labores Palma</h3>
           <p className="text-sm text-muted-foreground">Labores estándar de palma</p>
@@ -703,7 +780,7 @@ export function PreciosLaboresTab() {
       </div>
 
       {/* LABORES FINCA */}
-      <div className="space-y-4" hidden={loading}>
+      <div className="space-y-4">
         <div className="border-l-4 border-muted-foreground pl-4 py-2">
           <h3 className="text-xl font-bold">Labores Finca</h3>
           <p className="text-sm text-muted-foreground">Precio por jornal de las labores personalizadas</p>
