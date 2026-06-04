@@ -132,8 +132,15 @@ interface TrabajoOtros {
    */
   laborOtrosKey?: string;          // ej. "palma-3"
   laborOtrosRawId?: number;
+  /** Snapshot del `tipo_pago` de la labor — define qué campos pinta el form
+   *  (POR_PALMA → cantidad_palmas; JORNAL_FIJO → nombre_trabajo). */
+  laborOtrosTipoPago?: 'POR_PALMA' | 'JORNAL_FIJO';
   nombre: string;
   laborRealizada: string;
+  /** Solo POR_PALMA — autofill desde sublote.cantidad_palmas, editable. */
+  numeroPalmas?: number;
+  /** Solo JORNAL_FIJO — opcional, texto libre para detallar el trabajo. */
+  nombreTrabajo?: string;
   lote: string;
   sublote: string;
 }
@@ -221,11 +228,16 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
    * Catálogo para el select "Nombre" del tab OTROS — labores custom de palma
    * (categoria='PALMA', es_sistema=false, tipo=null) del catálogo unificado.
    * Se envía `labor_id = rawId` al endpoint /jornales.
+   *
+   * `tipo_pago` viaja con el item para que al elegirlo en el dropdown el form
+   * sepa repintarse (§10 doc API_OPERACIONES.md): POR_PALMA muestra Número de
+   * Palmas (autofill desde sublote); JORNAL_FIJO muestra Nombre del Trabajo.
    */
   type LaborOtrosOpcion = {
     key: string;
     nombre: string;
     rawId: number;
+    tipo_pago: 'POR_PALMA' | 'JORNAL_FIJO';
   };
   const [laboresOtrosOpciones, setLaboresOtrosOpciones] = useState<LaborOtrosOpcion[]>([]);
 
@@ -264,6 +276,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
             key: `palma-${x.id}`,
             nombre: x.nombre,
             rawId: x.id,
+            tipo_pago: (x.tipo_pago === 'POR_PALMA' ? 'POR_PALMA' : 'JORNAL_FIJO') as 'POR_PALMA' | 'JORNAL_FIJO',
           }));
         setLaboresOtrosOpciones(opcionesPalma);
         setColaboradores((colRes.data || []).map((c: any) => {
@@ -468,13 +481,22 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         const jornalesOtros = jornales.filter(j => j.categoria === 'PALMA' && j.tipo == null);
         setTrabajosOtros(jornalesOtros.map(j => {
           const laborId = j.labor_id != null ? Number(j.labor_id) : undefined;
+          // Snapshot del tipo_pago: viene en j.labor.tipo_pago dentro del detalle.
+          const tipoPagoRaw = j.labor?.tipo_pago;
+          const tipoPago: 'POR_PALMA' | 'JORNAL_FIJO' =
+            tipoPagoRaw === 'POR_PALMA' ? 'POR_PALMA' : 'JORNAL_FIJO';
           return {
             id: String(j.id),
             colaboradores: [String(j.empleado_id)],
             laborOtrosKey: laborId ? `palma-${laborId}` : undefined,
             laborOtrosRawId: laborId,
+            laborOtrosTipoPago: tipoPago,
             nombre: j.labor?.nombre ?? j.nombre_trabajo ?? '',
             laborRealizada: j.descripcion ?? '',
+            numeroPalmas: tipoPago === 'POR_PALMA' && j.cantidad_palmas != null
+              ? Number(j.cantidad_palmas)
+              : undefined,
+            nombreTrabajo: tipoPago === 'JORNAL_FIJO' ? (j.nombre_trabajo ?? '') : undefined,
             lote: j.lote_id != null ? String(j.lote_id) : '',
             sublote: j.sublote_id != null ? String(j.sublote_id) : '',
           };
@@ -694,19 +716,26 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           }
         }
       }
-      // Otros (labores custom de PALMA, tipo=null en el catálogo unificado)
+      // Otros (labores custom de PALMA, tipo=null en el catálogo unificado).
+      // §3.2 del doc: el payload depende del tipo_pago de la labor:
+      //  - POR_PALMA   → `cantidad_palmas` requerido.
+      //  - JORNAL_FIJO → `nombre_trabajo` y `descripcion` opcionales; sin cantidad_palmas.
       for (const t of trabajosOtros) {
         if (!t.laborOtrosRawId) continue;
         for (const cid of t.colaboradores) {
-          try {
-            await jornalesApi.crear(pid, {
-              labor_id: t.laborOtrosRawId,
-              empleado_id: parseInt(cid),
-              lote_id: t.lote ? parseInt(t.lote) : null,
-              sublote_id: t.sublote ? parseInt(t.sublote) : null,
-              ...(t.laborRealizada ? { descripcion: t.laborRealizada } : {}),
-            });
-          } catch {}
+          const base: any = {
+            labor_id: t.laborOtrosRawId,
+            empleado_id: parseInt(cid),
+            lote_id: t.lote ? parseInt(t.lote) : null,
+            sublote_id: t.sublote ? parseInt(t.sublote) : null,
+          };
+          if (t.laborOtrosTipoPago === 'POR_PALMA') {
+            base.cantidad_palmas = Number(t.numeroPalmas ?? 0);
+          } else if (t.laborOtrosTipoPago === 'JORNAL_FIJO') {
+            if (t.nombreTrabajo?.trim()) base.nombre_trabajo = t.nombreTrabajo.trim();
+          }
+          if (t.laborRealizada?.trim()) base.descripcion = t.laborRealizada.trim();
+          try { await jornalesApi.crear(pid, base); } catch {}
         }
       }
       // Auxiliares (FINCA — labores del catálogo unificado con categoria='FINCA')
@@ -920,15 +949,23 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   };
 
   const guardarOtros = () => {
-    if (otrosEnEdicion) {
-      const existe = trabajosOtros.some(t => t.id === otrosEnEdicion.id);
-      if (existe) {
-        setTrabajosOtros(trabajosOtros.map(t => t.id === otrosEnEdicion.id ? otrosEnEdicion : t));
-      } else {
-        setTrabajosOtros([otrosEnEdicion, ...trabajosOtros]);
+    if (!otrosEnEdicion) return;
+    // §3.2 del doc: si la labor seleccionada es POR_PALMA, cantidad_palmas es
+    // requerido (el backend devuelve 422 si llega vacío). Validamos en cliente
+    // para evitar el viaje inútil.
+    if (otrosEnEdicion.laborOtrosTipoPago === 'POR_PALMA') {
+      if (!otrosEnEdicion.numeroPalmas || otrosEnEdicion.numeroPalmas <= 0) {
+        toast.error('Esta labor se paga por palma — indica el número de palmas');
+        return;
       }
-      setOtrosEnEdicion(null);
     }
+    const existe = trabajosOtros.some(t => t.id === otrosEnEdicion.id);
+    if (existe) {
+      setTrabajosOtros(trabajosOtros.map(t => t.id === otrosEnEdicion.id ? otrosEnEdicion : t));
+    } else {
+      setTrabajosOtros([otrosEnEdicion, ...trabajosOtros]);
+    }
+    setOtrosEnEdicion(null);
   };
 
   const cancelarOtros = () => {
@@ -2622,11 +2659,24 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                   value={otrosEnEdicion.laborOtrosKey ?? ''}
                                   onValueChange={(value) => {
                                     const op = laboresOtrosOpciones.find(o => o.key === value);
+                                    // Autofill de "Número de Palmas" si la labor es POR_PALMA
+                                    // y el sublote ya está seleccionado (§10 doc API_OPERACIONES.md).
+                                    const sub = otrosEnEdicion.sublote
+                                      ? sublotes.find(s => s.id === otrosEnEdicion.sublote)
+                                      : null;
                                     setOtrosEnEdicion({
                                       ...otrosEnEdicion,
                                       laborOtrosKey: value,
                                       laborOtrosRawId: op?.rawId,
+                                      laborOtrosTipoPago: op?.tipo_pago,
                                       nombre: op?.nombre ?? '',
+                                      // Al cambiar de labor, limpiamos los campos que dependen del tipo_pago.
+                                      numeroPalmas: op?.tipo_pago === 'POR_PALMA'
+                                        ? Number(sub?.cantidadPalmas ?? 0)
+                                        : undefined,
+                                      nombreTrabajo: op?.tipo_pago === 'JORNAL_FIJO'
+                                        ? (otrosEnEdicion.nombreTrabajo ?? '')
+                                        : undefined,
                                     });
                                   }}
                                 >
@@ -2661,7 +2711,14 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                 <Select
                                   value={otrosEnEdicion.lote}
                                   onValueChange={(value) => {
-                                    setOtrosEnEdicion({ ...otrosEnEdicion, lote: value, sublote: '' });
+                                    // Al cambiar de lote también limpiamos sublote y numeroPalmas
+                                    // (queda inválido el autofill previo).
+                                    setOtrosEnEdicion({
+                                      ...otrosEnEdicion,
+                                      lote: value,
+                                      sublote: '',
+                                      numeroPalmas: otrosEnEdicion.laborOtrosTipoPago === 'POR_PALMA' ? 0 : undefined,
+                                    });
                                   }}
                                 >
                                   <SelectTrigger>
@@ -2681,7 +2738,15 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                 <Select
                                   value={otrosEnEdicion.sublote}
                                   onValueChange={(value) => {
-                                    setOtrosEnEdicion({ ...otrosEnEdicion, sublote: value });
+                                    // Autofill de Número de Palmas solo si la labor es POR_PALMA.
+                                    const sub = sublotes.find(s => s.id === value);
+                                    setOtrosEnEdicion({
+                                      ...otrosEnEdicion,
+                                      sublote: value,
+                                      numeroPalmas: otrosEnEdicion.laborOtrosTipoPago === 'POR_PALMA'
+                                        ? Number(sub?.cantidadPalmas ?? 0)
+                                        : otrosEnEdicion.numeroPalmas,
+                                    });
                                   }}
                                   disabled={!otrosEnEdicion.lote}
                                 >
@@ -2699,6 +2764,44 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                   </SelectContent>
                                 </Select>
                               </div>
+
+                              {/* Campos dependientes del tipo_pago de la labor seleccionada
+                                  (§10 doc API_OPERACIONES.md). Solo se renderizan cuando ya
+                                  hay una labor escogida. */}
+                              {otrosEnEdicion.laborOtrosTipoPago === 'POR_PALMA' && (
+                                <div className="space-y-2">
+                                  <Label>
+                                    Número de Palmas <span className="text-destructive">*</span>
+                                  </Label>
+                                  <Input
+                                    type="number"
+                                    placeholder="0"
+                                    value={otrosEnEdicion.numeroPalmas ?? ''}
+                                    onChange={(e) =>
+                                      setOtrosEnEdicion({
+                                        ...otrosEnEdicion,
+                                        numeroPalmas: parseInt(e.target.value) || 0,
+                                      })
+                                    }
+                                  />
+                                </div>
+                              )}
+
+                              {otrosEnEdicion.laborOtrosTipoPago === 'JORNAL_FIJO' && (
+                                <div className="space-y-2">
+                                  <Label>Nombre del Trabajo</Label>
+                                  <Input
+                                    placeholder="Ej. Pintura de postes"
+                                    value={otrosEnEdicion.nombreTrabajo ?? ''}
+                                    onChange={(e) =>
+                                      setOtrosEnEdicion({
+                                        ...otrosEnEdicion,
+                                        nombreTrabajo: e.target.value,
+                                      })
+                                    }
+                                  />
+                                </div>
+                              )}
                             </div>
                             <div className="flex justify-end gap-2 pt-4">
                               <Button variant="outline" onClick={cancelarOtros}>
