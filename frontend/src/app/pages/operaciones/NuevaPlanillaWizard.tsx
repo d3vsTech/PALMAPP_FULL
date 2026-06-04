@@ -2801,7 +2801,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                     <div>
                       <CardTitle>Labores de Finca</CardTitle>
                       <p className="text-sm text-muted-foreground">
-                        Auxiliares y trabajos complementarios
+                        Reparaciones, mantenimiento y trabajos complementarios
                       </p>
                     </div>
                     <Button
@@ -2962,7 +2962,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
                   {trabajosAuxiliares.length === 0 && !auxiliarEnEdicion && (
                     <div className="text-center py-12 text-muted-foreground">
-                      <p>No hay registros de trabajos auxiliares</p>
+                      <p>No hay registros de labores de finca</p>
                       <p className="text-sm">Haz clic en "Agregar Labor" para crear uno</p>
                     </div>
                   )}
@@ -3599,11 +3599,12 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                     </div>
                   )}
 
-                  {/* Auxiliares */}
+                  {/* Labores de Finca (lo que antes se llamaba "Auxiliares" en el
+                      doc; ahora el backend lo agrega como `resumen.labores.labores_finca`). */}
                   {trabajosAuxiliares.length > 0 && (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">Auxiliares</span>
+                        <span className="text-sm font-medium">Labores de Finca</span>
                         <Badge variant="outline" className="bg-muted text-muted-foreground border-border">
                           {trabajosAuxiliares.length}
                         </Badge>
