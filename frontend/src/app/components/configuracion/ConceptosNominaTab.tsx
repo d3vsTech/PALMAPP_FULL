@@ -92,11 +92,50 @@ export function ConceptosNominaTab() {
     }
   };
 
+  /** Normaliza un porcentaje que puede venir como string o number desde la API. */
+  const pct = (v: number | string | null | undefined): number | null => {
+    if (v == null || v === '') return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  /**
+   * Construye el "Valor" que se muestra en la tabla. Soporta:
+   *  - PORCENTAJE legacy → `concepto.porcentaje` (un solo número).
+   *  - PORCENTAJE doble  → `porcentaje_empleado` + `porcentaje_empresa`
+   *    (caso típico de SALUD, PENSION, ARL en el modelo nuevo).
+   *  - VALOR_FIJO        → `valor_referencia` en COP.
+   */
   const valorDisplay = (concepto: NominaConcepto) => {
     if (concepto.calculo === 'PORCENTAJE') {
-      return concepto.porcentaje != null ? `${concepto.porcentaje}%` : '-';
+      const legacy = pct(concepto.porcentaje);
+      if (legacy != null) return `${legacy}%`;
+      const emp = pct(concepto.porcentaje_empleado);
+      const empresa = pct(concepto.porcentaje_empresa);
+      if (emp == null && empresa == null) return '-';
+      // Formato compacto "Emp 4% · Empresa 8.5%". Si uno es 0 lo omitimos.
+      const parts: string[] = [];
+      if (emp != null && emp > 0) parts.push(`Emp ${emp}%`);
+      if (empresa != null && empresa > 0) parts.push(`Empresa ${empresa}%`);
+      if (parts.length === 0) {
+        // Ambos llegaron pero en 0 → mostramos al menos el cero del empleado.
+        return `${emp ?? empresa ?? 0}%`;
+      }
+      return parts.join(' · ');
     }
     return concepto.valor_referencia != null ? formatCOP(concepto.valor_referencia) : '-';
+  };
+
+  /**
+   * Operación (+/-) derivada. Si la API no envía `operacion`, la inferimos del
+   * `tipo` para que la columna siempre tenga signo legible:
+   *  - APORTE_LEGAL / DEDUCCION_* → '-' (descuento al empleado)
+   *  - BONIFICACION_*             → '+' (suma a su pago)
+   */
+  const operacionResuelta = (concepto: NominaConcepto): 'SUMA' | 'RESTA' => {
+    if (concepto.operacion === 'SUMA' || concepto.operacion === 'RESTA') return concepto.operacion;
+    if (concepto.tipo === 'BONIFICACION_FIJA' || concepto.tipo === 'BONIFICACION_VARIABLE') return 'SUMA';
+    return 'RESTA';
   };
 
   return (
@@ -174,13 +213,14 @@ export function ConceptosNominaTab() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <span
-                          className={`font-bold ${
-                            concepto.operacion === 'SUMA' ? 'text-success' : 'text-destructive'
-                          }`}
-                        >
-                          {concepto.operacion === 'SUMA' ? '+' : '-'}
-                        </span>
+                        {(() => {
+                          const op = operacionResuelta(concepto);
+                          return (
+                            <span className={`font-bold ${op === 'SUMA' ? 'text-success' : 'text-destructive'}`}>
+                              {op === 'SUMA' ? '+' : '−'}
+                            </span>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>
                         <span className="text-xs text-muted-foreground">
