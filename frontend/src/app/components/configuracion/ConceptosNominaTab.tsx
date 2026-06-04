@@ -10,7 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from '../ui/table';
-import { Plus, Edit, Trash2, CheckCircle, X, FileText } from 'lucide-react';
+import { Plus, Edit, Trash2, FileText } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { useConfirmDelete } from '../../hooks/useConfirmDelete';
 import { toast } from 'sonner';
@@ -29,11 +29,6 @@ const TIPO_LABEL: Record<TipoConcepto, string> = {
   BONIFICACION_FIJA: 'Bonificación Fija',
   BONIFICACION_VARIABLE: 'Bonificación Variable',
 };
-
-/** Lee la bandera de obligatorio aceptando ambos nombres del backend. */
-function leerObligatorio(c: NominaConcepto): boolean {
-  return !!(c.es_obligatorio ?? c.obligatorio);
-}
 
 export function ConceptosNominaTab() {
   const navigate = useNavigate();
@@ -100,42 +95,65 @@ export function ConceptosNominaTab() {
   };
 
   /**
-   * Construye el "Valor" que se muestra en la tabla. Soporta:
-   *  - PORCENTAJE legacy → `concepto.porcentaje` (un solo número).
-   *  - PORCENTAJE doble  → `porcentaje_empleado` + `porcentaje_empresa`
-   *    (caso típico de SALUD, PENSION, ARL en el modelo nuevo).
-   *  - VALOR_FIJO        → `valor_referencia` en COP.
+   * "Valores" — desglose por lado (empleado / empresa) para PORCENTAJE, o el
+   * monto en COP para VALOR_FIJO. Soporta:
+   *  - PORCENTAJE con `porcentaje_empleado` + `porcentaje_empresa` →
+   *    `Emp: 4% | Empr: 8.5%` (omitiendo el lado en cero).
+   *  - PORCENTAJE legacy (un solo `porcentaje`) → `4%`.
+   *  - VALOR_FIJO → COP formateado.
    */
-  const valorDisplay = (concepto: NominaConcepto) => {
+  const valoresDisplay = (concepto: NominaConcepto): string => {
     if (concepto.calculo === 'PORCENTAJE') {
-      const legacy = pct(concepto.porcentaje);
-      if (legacy != null) return `${legacy}%`;
       const emp = pct(concepto.porcentaje_empleado);
       const empresa = pct(concepto.porcentaje_empresa);
-      if (emp == null && empresa == null) return '-';
-      // Formato compacto "Emp 4% · Empresa 8.5%". Si uno es 0 lo omitimos.
-      const parts: string[] = [];
-      if (emp != null && emp > 0) parts.push(`Emp ${emp}%`);
-      if (empresa != null && empresa > 0) parts.push(`Empresa ${empresa}%`);
-      if (parts.length === 0) {
-        // Ambos llegaron pero en 0 → mostramos al menos el cero del empleado.
-        return `${emp ?? empresa ?? 0}%`;
+      if (emp != null || empresa != null) {
+        const parts: string[] = [];
+        if (emp != null && emp > 0) parts.push(`Emp: ${emp}%`);
+        if (empresa != null && empresa > 0) parts.push(`Empr: ${empresa}%`);
+        if (parts.length > 0) return parts.join(' | ');
       }
-      return parts.join(' · ');
+      const legacy = pct(concepto.porcentaje);
+      if (legacy != null) return `${legacy}%`;
+      return '-';
     }
     return concepto.valor_referencia != null ? formatCOP(concepto.valor_referencia) : '-';
   };
 
   /**
-   * Operación (+/-) derivada. Si la API no envía `operacion`, la inferimos del
-   * `tipo` para que la columna siempre tenga signo legible:
-   *  - APORTE_LEGAL / DEDUCCION_* → '-' (descuento al empleado)
-   *  - BONIFICACION_*             → '+' (suma a su pago)
+   * "Total" — suma del aporte cuando aplica:
+   *  - PORCENTAJE con emp+empresa → `${emp + empresa}%` con 2 decimales.
+   *  - PORCENTAJE legacy single   → ese mismo valor.
+   *  - VALOR_FIJO                 → '-' (el total ya está en la columna Valores).
    */
-  const operacionResuelta = (concepto: NominaConcepto): 'SUMA' | 'RESTA' => {
-    if (concepto.operacion === 'SUMA' || concepto.operacion === 'RESTA') return concepto.operacion;
-    if (concepto.tipo === 'BONIFICACION_FIJA' || concepto.tipo === 'BONIFICACION_VARIABLE') return 'SUMA';
-    return 'RESTA';
+  const totalDisplay = (concepto: NominaConcepto): string => {
+    if (concepto.calculo !== 'PORCENTAJE') return '-';
+    const emp = pct(concepto.porcentaje_empleado);
+    const empresa = pct(concepto.porcentaje_empresa);
+    if (emp != null || empresa != null) {
+      const suma = (emp ?? 0) + (empresa ?? 0);
+      return `${suma.toFixed(2)}%`;
+    }
+    const legacy = pct(concepto.porcentaje);
+    if (legacy != null) return `${legacy.toFixed(2)}%`;
+    return '-';
+  };
+
+  /**
+   * "Vigencia" — formato `DD/MM/YYYY → DD/MM/YYYY` o `DD/MM/YYYY → Vigente`
+   * cuando no hay fecha de cierre. Si no hay `vigente_desde` devolvemos '-'.
+   */
+  const fmtFecha = (iso?: string | null): string | null => {
+    if (!iso) return null;
+    // Soporta `YYYY-MM-DD` y `YYYY-MM-DDTHH:mm:ss...`.
+    const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return null;
+    return `${m[3]}/${m[2]}/${m[1]}`;
+  };
+  const vigenciaDisplay = (concepto: NominaConcepto): string => {
+    const desde = fmtFecha(concepto.vigente_desde);
+    if (!desde) return '-';
+    const hasta = fmtFecha(concepto.vigente_hasta);
+    return `${desde} → ${hasta ?? 'Vigente'}`;
   };
 
   return (
@@ -192,51 +210,28 @@ export function ConceptosNominaTab() {
                     <TableHead>Código</TableHead>
                     <TableHead>Nombre</TableHead>
                     <TableHead>Tipo</TableHead>
-                    <TableHead>Op</TableHead>
-                    <TableHead>Cálculo</TableHead>
-                    <TableHead>Valor</TableHead>
-                    <TableHead>Aplica A</TableHead>
-                    <TableHead className="text-center">Auto</TableHead>
+                    <TableHead>Valores</TableHead>
+                    <TableHead>Total</TableHead>
+                    <TableHead>Vigencia</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {conceptos.map((concepto) => (
                     <TableRow key={concepto.id} className="hover:bg-muted/50 transition-colors">
-                      <TableCell className="font-mono text-xs font-semibold">
+                      <TableCell className="font-mono text-xs font-semibold uppercase">
                         {concepto.codigo}
                       </TableCell>
                       <TableCell className="font-medium">{concepto.nombre}</TableCell>
                       <TableCell>
                         <Badge className={getTipoColor(concepto.tipo)}>
-                          {(TIPO_LABEL[concepto.tipo] ?? concepto.tipo ?? '—').split(' ')[0]}
+                          {TIPO_LABEL[concepto.tipo] ?? concepto.tipo ?? '—'}
                         </Badge>
                       </TableCell>
-                      <TableCell>
-                        {(() => {
-                          const op = operacionResuelta(concepto);
-                          return (
-                            <span className={`font-bold ${op === 'SUMA' ? 'text-success' : 'text-destructive'}`}>
-                              {op === 'SUMA' ? '+' : '−'}
-                            </span>
-                          );
-                        })()}
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-xs text-muted-foreground">
-                          {concepto.calculo}
-                        </span>
-                      </TableCell>
-                      <TableCell className="font-semibold">{valorDisplay(concepto)}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{concepto.aplica_a}</Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {leerObligatorio(concepto) ? (
-                          <CheckCircle className="h-4 w-4 text-success mx-auto" />
-                        ) : (
-                          <X className="h-4 w-4 text-muted-foreground mx-auto" />
-                        )}
+                      <TableCell className="whitespace-nowrap">{valoresDisplay(concepto)}</TableCell>
+                      <TableCell className="font-bold">{totalDisplay(concepto)}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                        {vigenciaDisplay(concepto)}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
