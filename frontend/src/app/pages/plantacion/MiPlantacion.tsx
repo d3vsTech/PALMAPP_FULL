@@ -34,19 +34,36 @@ export default function MiPlantacion() {
   const cargar = useCallback(async (q?: string) => {
     setLoading(true);
     try {
-      const res: any = await prediosApi.listar({ search: q?.trim() || undefined, per_page: 50 });
-      // El backend puede responder en 3 formas dependiendo del wrapper:
-      //   1. { data: [...], meta: {...} }                      (Resource Collection plana)
-      //   2. { data: { data: [...], meta: {...} } }            (Resource envuelto + paginación)
-      //   3. { data: { current_page, data: [...], total: N } } (LengthAwarePaginator crudo)
-      // Cubrimos las tres para que el listado nunca quede vacío por shape.
-      const lista: any[] = Array.isArray(res?.data)
-        ? res.data
-        : Array.isArray(res?.data?.data)
-          ? res.data.data
-          : Array.isArray(res)
-            ? res
-            : [];
+      // Diagnóstico: tenant que se está mandando en X-Tenant-Id.
+      // Si en consola sale `null`, el problema es que no hay finca seleccionada.
+      const tenantActivo = localStorage.getItem('palmapp_tenant_id');
+      console.info('[MiPlantacion.cargar] X-Tenant-Id =', tenantActivo);
+
+      const extraer = (res: any): any[] => {
+        // 3 shapes posibles: { data: [...] } | { data: { data: [...] } } | [...]
+        if (Array.isArray(res?.data)) return res.data;
+        if (Array.isArray(res?.data?.data)) return res.data.data;
+        if (Array.isArray(res)) return res;
+        return [];
+      };
+
+      const baseParams = { search: q?.trim() || undefined, per_page: 50 };
+      const res: any = await prediosApi.listar(baseParams);
+      console.info('[MiPlantacion.cargar] respuesta principal =', res);
+      let lista = extraer(res);
+
+      // Fallback: si el listado vino vacío pero el backend reporta predios
+      // inactivos, intentamos sin el filtro implícito de estado.
+      if (lista.length === 0) {
+        try {
+          const inactivos: any = await prediosApi.listar({ ...baseParams, estado: false });
+          const listaInactivos = extraer(inactivos);
+          if (listaInactivos.length > 0) {
+            console.warn('[MiPlantacion.cargar] predios encontrados con estado=false', listaInactivos);
+            lista = listaInactivos;
+          }
+        } catch (e) { console.warn('[MiPlantacion.cargar] fallback estado=false falló', e); }
+      }
       // El listado a veces reporta `palmas_count` desincronizado (sobre todo tras
       // creaciones async de >5000 palmas). Enriquecemos con el resumen real de
       // cada predio (endpoint cacheado en backend a 60s, barato).
