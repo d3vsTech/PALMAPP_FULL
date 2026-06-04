@@ -649,12 +649,15 @@ export function PreciosLaboresTab() {
             </Card>
           </AccordionItem>
 
-          {/* Secciones: Plateo / Poda / Control de Plagas.
-              Excluimos COSECHA (ya tiene "Precios de Cosecha" arriba) y
-              FERTILIZACION (ya tiene "Escala de Abonada" arriba) para no
-              duplicar la UI con las labores fijas del §4 unificado. */}
+          {/* Secciones: solo Plateo y Poda — las únicas labores fijas de palma
+              que tienen "Precio por palma / jornal" en la UI.
+              Excluimos:
+                · COSECHA       → ya está arriba en "Precios de Cosecha".
+                · FERTILIZACION → ya está arriba en "Escala de Abonada".
+                · SANIDAD       → no se gestiona en esta finca como labor estándar.
+                · OTROS         → el §4 unificado ya no usa este tipo. */}
           {preciosPalma
-            .filter((p) => p.tipo === 'PLATEO' || p.tipo === 'PODA' || p.tipo === 'SANIDAD' || p.tipo === 'OTROS')
+            .filter((p) => p.tipo === 'PLATEO' || p.tipo === 'PODA')
             .map((palma) => (
             <AccordionItem key={palma.id} value={PALMA_VALUE[palma.tipo]} className="border-0">
               <Card className="border-border">
