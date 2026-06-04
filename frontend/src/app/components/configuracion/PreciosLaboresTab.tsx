@@ -471,11 +471,10 @@ export function PreciosLaboresTab() {
         </p>
       </div>
 
-      {/* Indicador discreto SOLO en frío. Si hay caché o ya llegó algo, se oculta. */}
-      {loading &&
-        preciosCosecha.length === 0 && rangosAbono.length === 0 &&
-        preciosPalma.length === 0 && laboresPalmaCustom.length === 0 &&
-        laboresFinca.length === 0 && (
+      {/* Mientras la primera carga está en vuelo (y no hay cache), mostramos
+          SOLO el spinner. La UI completa aparece cuando todos los fetches
+          terminan (Promise.allSettled → setLoading(false)). */}
+      {loading && (
         <div className="flex items-center justify-center gap-3 py-12 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" />
           <span>Cargando precios y labores…</span>
@@ -616,7 +615,7 @@ export function PreciosLaboresTab() {
       </Dialog>
 
       {/* LABORES PALMA */}
-      <div className="space-y-4">
+      <div className="space-y-4" hidden={loading}>
         <div className="border-l-4 border-primary pl-4 py-2">
           <h3 className="text-xl font-bold">Labores Palma</h3>
           <p className="text-sm text-muted-foreground">Labores estándar de palma</p>
@@ -927,7 +926,7 @@ export function PreciosLaboresTab() {
       </div>
 
       {/* LABORES FINCA */}
-      <div className="space-y-4">
+      <div className="space-y-4" hidden={loading}>
         <div className="border-l-4 border-muted-foreground pl-4 py-2">
           <h3 className="text-xl font-bold">Labores Finca</h3>
           <p className="text-sm text-muted-foreground">Precio por jornal de las labores personalizadas</p>
