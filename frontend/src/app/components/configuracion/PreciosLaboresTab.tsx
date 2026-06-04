@@ -783,7 +783,7 @@ export function PreciosLaboresTab() {
           {preciosPalma
             .filter((p) => p.tipo === 'PLATEO' || p.tipo === 'PODA')
             .map((palma) => (
-            <AccordionItem key={palma.id} value={PALMA_VALUE[palma.tipo]} className="border-0">
+            <AccordionItem key={`fija-${palma.id}`} value={PALMA_VALUE[palma.tipo]} className="border-0">
               <Card className="border-border">
                 <CardHeader className={`border-b bg-gradient-to-r ${PALMA_GRADIENT[palma.tipo]}`}>
                   <AccordionTrigger className="hover:no-underline py-0">
@@ -823,70 +823,56 @@ export function PreciosLaboresTab() {
               </Card>
             </AccordionItem>
           ))}
+
+          {/* Custom Palma — mismo formato visual que las fijas. Las trae el fetch
+              `categoria=PALMA, es_sistema=false`. Título = nombre que el admin
+              escribió en "Operaciones → Trabajos / Labores". */}
+          {laboresPalmaCustom.map((labor) => (
+            <AccordionItem key={`custom-${labor.id}`} value={`palma-custom-${labor.id}`} className="border-0">
+              <Card className="border-border">
+                <CardHeader className="border-b bg-gradient-to-r from-amber-50/50 to-amber-50/10 dark:from-amber-950/20 dark:to-amber-950/5">
+                  <AccordionTrigger className="hover:no-underline py-0">
+                    <div className="text-left">
+                      <CardTitle>{labor.nombre}</CardTitle>
+                      <p className="text-sm text-muted-foreground mt-1">{palmaSubLabel(labor)}</p>
+                    </div>
+                  </AccordionTrigger>
+                </CardHeader>
+                <AccordionContent>
+                  <CardContent className="p-6">
+                    <div className="max-w-md space-y-3">
+                      <Label htmlFor={`precio-custom-${labor.id}`}>{palmaLabelInput(labor)}</Label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">$</span>
+                        <Input
+                          id={`precio-custom-${labor.id}`}
+                          inputMode="numeric"
+                          value={palmaCustomInputs[labor.id] ?? ''}
+                          onChange={(e) =>
+                            setPalmaCustomInputs((prev) => ({
+                              ...prev,
+                              [labor.id]: formatThousands(parseCOP(e.target.value)),
+                            }))
+                          }
+                          onBlur={() => handleSaveLaborPalmaCustom(labor)}
+                          className="text-lg font-semibold"
+                          placeholder="0"
+                        />
+                        <span className="text-muted-foreground">{palmaUnidad(labor)}</span>
+                      </div>
+                      {palmaCustomInputs[labor.id] && Number(parseCOP(palmaCustomInputs[labor.id])) > 0 && (
+                        <p className="text-sm text-success font-medium">
+                          {formatCOP(parseCOP(palmaCustomInputs[labor.id]))} {palmaUnidad(labor)}
+                        </p>
+                      )}
+                    </div>
+                  </CardContent>
+                </AccordionContent>
+              </Card>
+            </AccordionItem>
+          ))}
         </Accordion>
       </div>
-
-      {/* LABORES PALMA PERSONALIZADAS (custom — es_sistema=false) */}
-      {laboresPalmaCustom.length > 0 && (
-        <div className="space-y-4">
-          <div className="border-l-4 border-amber-500 pl-4 py-2">
-            <h3 className="text-xl font-bold">Labores Palma Personalizadas</h3>
-            <p className="text-sm text-muted-foreground">
-              Precios de las labores de palma creadas en "Operaciones &gt; Trabajos / Labores"
-            </p>
-          </div>
-
-          <Card className="border-border">
-            <CardContent className="p-6">
-              <div className="rounded-lg border border-border overflow-hidden">
-                <table className="w-full table-fixed">
-                  <thead className="bg-muted/50">
-                    <tr>
-                      <th className="text-left p-4 font-semibold w-1/2">Labor</th>
-                      <th className="text-left p-4 font-semibold w-1/4">Tipo de Pago</th>
-                      <th className="text-right p-4 font-semibold">Valor</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {laboresPalmaCustom.map((labor) => {
-                      const esPorPalma = labor.tipo_pago === 'POR_PALMA';
-                      return (
-                        <tr key={labor.id} className="border-t border-border">
-                          <td className="p-4 font-medium">{labor.nombre}</td>
-                          <td className="p-4 text-sm text-muted-foreground">
-                            {esPorPalma ? 'Por palma' : 'Jornal fijo'}
-                          </td>
-                          <td className="p-4">
-                            <div className="flex items-center justify-end gap-2">
-                              <span className="text-muted-foreground text-sm">$</span>
-                              <Input
-                                inputMode="numeric"
-                                value={palmaCustomInputs[labor.id] ?? ''}
-                                onChange={(e) =>
-                                  setPalmaCustomInputs((prev) => ({
-                                    ...prev,
-                                    [labor.id]: formatThousands(parseCOP(e.target.value)),
-                                  }))
-                                }
-                                onBlur={() => handleSaveLaborPalmaCustom(labor)}
-                                placeholder="0"
-                                className="w-32 text-right"
-                              />
-                              <span className="text-muted-foreground text-sm">
-                                {esPorPalma ? '/palma' : '/jornal'}
-                              </span>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
 
       {/* LABORES FINCA */}
       <div className="space-y-4">
