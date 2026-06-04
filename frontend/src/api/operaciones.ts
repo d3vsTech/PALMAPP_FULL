@@ -52,6 +52,16 @@ export interface Planilla {
   total_general?: string | number;
 }
 
+/**
+ * §6 Resumen del wizard (GET /operaciones/{id}/resumen)
+ *
+ * Buckets de `labores`:
+ *  - `cosecha`, `plateo`, `poda`, `fertilizacion`, `sanidad`: las 5 labores
+ *    fijas del sistema (es_sistema=true), una por bucket.
+ *  - `otros`: agrupa los jornales custom de palma (categoria=PALMA, tipo=null).
+ *  - `labores_finca`: jornales con categoria=FINCA (antes `auxiliares` en el
+ *    doc viejo; el backend ya lo renombró).
+ */
 export interface Resumen {
   fecha: string;
   elaborado_por: string;
@@ -66,7 +76,7 @@ export interface Resumen {
     fertilizacion: number;
     sanidad: number;
     otros: number;
-    auxiliares: number;
+    labores_finca: number;
   };
   ausencias: {
     pendientes: number;
