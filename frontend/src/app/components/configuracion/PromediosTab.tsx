@@ -26,6 +26,7 @@ import {
   type PromedioLote,
 } from '../../../api/configuracion';
 import { lotesApi } from '../../../api/plantacion';
+import { TabLoadingGate } from './TabLoadingGate';
 
 interface LoteOpcion {
   id: number;
@@ -44,8 +45,10 @@ export function PromediosTab() {
   const [promedios, setPromedios] = useState<PromedioRow[]>([]);
   const [lotes, setLotes] = useState<LoteOpcion[]>([]);
   const [editados, setEditados] = useState<Record<number, number>>({});
+  const [loading, setLoading] = useState(true);
 
   const cargar = (anio: number) => {
+    setLoading(true);
     Promise.all([
       configuracionApi.promediosLote.listar({ anio, per_page: 100 }),
       lotesApi.listar({ per_page: 100 }),
@@ -55,7 +58,8 @@ export function PromediosTab() {
         setLotes(resLotes.data.map((l: any) => ({ id: l.id, nombre: l.nombre })));
         setEditados({});
       })
-      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar los promedios'));
+      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar los promedios'))
+      .finally(() => setLoading(false));
   };
 
   useEffect(() => {
@@ -140,6 +144,7 @@ export function PromediosTab() {
       : 0;
 
   return (
+    <TabLoadingGate loading={loading} message="Cargando promedios…">
     <Card className="bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-sm border-border/50">
       <CardHeader>
         <div className="flex items-center justify-between">
@@ -261,5 +266,6 @@ export function PromediosTab() {
         )}
       </CardContent>
     </Card>
+    </TabLoadingGate>
   );
 }

@@ -5,6 +5,7 @@ import { Input } from '../ui/input';
 import { Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useConfirmDelete } from '../../hooks/useConfirmDelete';
+import { TabLoadingGate } from './TabLoadingGate';
 import {
   configuracionApi,
   type ParametricaColaborador,
@@ -80,6 +81,7 @@ export function SeguridadSocialTab() {
     Object.fromEntries(SECCIONES.map((s) => [s.key, []]))
   );
   const [nuevoNombre, setNuevoNombre] = useState('');
+  const [loading, setLoading] = useState(true);
   const { confirmDelete, ConfirmDeleteDialog } = useConfirmDelete();
 
   useEffect(() => {
@@ -112,6 +114,8 @@ export function SeguridadSocialTab() {
         if (!cancelado) setItems(next);
       } catch (e: any) {
         if (!cancelado) toast.error(e?.message ?? 'No se pudieron cargar las entidades');
+      } finally {
+        if (!cancelado) setLoading(false);
       }
     })();
     return () => {
@@ -217,9 +221,11 @@ export function SeguridadSocialTab() {
   return (
     <>
       {ConfirmDeleteDialog}
+      <TabLoadingGate loading={loading} message="Cargando seguridad social…">
       <div className="space-y-6">
         {SECCIONES.map((seccion) => renderSeccion(seccion))}
       </div>
+      </TabLoadingGate>
     </>
   );
 }

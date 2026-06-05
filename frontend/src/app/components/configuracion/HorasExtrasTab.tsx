@@ -11,6 +11,7 @@ import {
   type CodigoHoraExtra,
   type ConfiguracionNomina,
 } from '../../../api/configuracion';
+import { TabLoadingGate } from './TabLoadingGate';
 
 /**
  * Tab "Horas Extras" — sigue el doc API_PARAMETRICAS.md §8 y §11.
@@ -64,6 +65,17 @@ const CACHE_KEY_CODIGOS = 'palmapp_cfg_tipos_hora_extra_codigos_v1';
 const CACHE_KEY_NOMINA  = 'palmapp_cfg_configuracion_nomina_v1';
 
 export function HorasExtrasTab() {
+  // `loading` arranca true; pasa a false en cuanto entra la primera data
+  // (sea desde cache o desde el primer fetch en background).
+  const hayCacheTipos = (() => {
+    try {
+      const raw = sessionStorage.getItem(CACHE_KEY_TIPOS);
+      if (!raw) return false;
+      const parsed = JSON.parse(raw) as TipoHoraExtra[];
+      return Array.isArray(parsed) && parsed.length > 0;
+    } catch { return false; }
+  })();
+  const [loading, setLoading] = useState(!hayCacheTipos);
   const [tipos, setTipos] = useState<TipoHoraExtra[]>([]);
   const [horasSemanales, setHorasSemanales] = useState<string>('48');
   const [nominaActual, setNominaActual] = useState<ConfiguracionNomina | null>(null);
@@ -93,6 +105,9 @@ export function HorasExtrasTab() {
         configuracionApi.tiposHoraExtra.codigos().catch(() => ({ data: [] as TipoHoraExtraCodigoItem[] })),
       ]);
       if (cancelado) return;
+      // Listo el primer roundtrip → quitamos el loader aunque luego haya
+      // seeding en paralelo (la UI ya tiene algo que pintar).
+      setLoading(false);
 
       const codigos = codigosRes.data ?? [];
       if (codigos.length > 0) {
@@ -206,6 +221,7 @@ export function HorasExtrasTab() {
   };
 
   return (
+    <TabLoadingGate loading={loading} message="Cargando horas extra…">
     <div className="space-y-6">
       {/* Jornada Laboral Semanal */}
       <Card className="border-border">
@@ -282,5 +298,6 @@ export function HorasExtrasTab() {
         </CardContent>
       </Card>
     </div>
+    </TabLoadingGate>
   );
 }

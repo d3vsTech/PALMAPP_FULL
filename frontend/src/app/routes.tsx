@@ -93,6 +93,7 @@ const UsuarioPermisos = lazy(() => import('./pages/usuarios/UsuarioPermisos'));
 // Configuración
 const Configuracion = lazy(() => import('./pages/configuracion/Configuracion'));
 const NuevoConceptoNomina = lazy(() => import('./pages/configuracion/NuevoConceptoNomina'));
+const NuevaExtractora = lazy(() => import('./pages/configuracion/NuevaExtractora'));
 
 const MiPerfil = lazy(() => import('./pages/perfil/MiPerfil'));
 
@@ -285,6 +286,8 @@ export const router = createBrowserRouter([
       { path: 'configuracion',                   element: <ProtectedRoute permiso="configuracion.editar">{L(<Configuracion />)}</ProtectedRoute> },
       { path: 'configuracion/conceptos/nuevo',   element: <ProtectedRoute permiso="configuracion.editar">{L(<NuevoConceptoNomina />)}</ProtectedRoute> },
       { path: 'configuracion/conceptos/editar',  element: <ProtectedRoute permiso="configuracion.editar">{L(<NuevoConceptoNomina />)}</ProtectedRoute> },
+      { path: 'configuracion/extractoras/nueva',     element: <ProtectedRoute permiso="configuracion.editar">{L(<NuevaExtractora />)}</ProtectedRoute> },
+      { path: 'configuracion/extractoras/editar/:id', element: <ProtectedRoute permiso="configuracion.editar">{L(<NuevaExtractora />)}</ProtectedRoute> },
       { path: 'maestros', element: <Navigate to="/configuracion" replace /> },
 
       { path: '403', element: <SinPermisos /> },

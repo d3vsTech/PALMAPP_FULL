@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Plus, Trash2, Edit, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Loader2, ChevronUp, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Accordion,
@@ -11,21 +11,6 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '../ui/accordion';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '../ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../ui/select';
 import { useConfirmDelete } from '../../hooks/useConfirmDelete';
 import {
   configuracionApi,
@@ -36,10 +21,11 @@ import {
   type TipoPalmaPrecio,
   type Labor,
 } from '../../../api/configuracion';
-import { lotesApi } from '../../../api/plantacion';
+import { lotesApi, sublotesApi } from '../../../api/plantacion';
 import { formatCOP, formatThousands, parseCOP } from '../lib/format';
 
 type LoteOption = { id: number; nombre: string };
+type SubloteOption = { id: number; nombre: string; lote_id: number };
 
 const PALMA_LABEL: Record<TipoPalmaPrecio, string> = {
   PLATEO: 'Precio Plateo',
@@ -77,13 +63,11 @@ const PALMA_VALUE: Record<TipoPalmaPrecio, string> = {
   OTROS: 'otros',
 };
 
-const FORM_COSECHA_VACIO = { lote_id: '', precio: '', anio: String(new Date().getFullYear()) };
-const FORM_ABONO_VACIO = { gramos_min: '', gramos_max: '', precio_palma: '' };
 
 // Cache simple en sessionStorage por tenant (TTL 60s). Hace que volver a esta
 // pantalla en la misma sesión sea instantáneo.
-// `v2` invalida cachés previas que no traían `palmaCustom`.
-const CACHE_KEY = 'palmapp.preciosLabores.cache.v2';
+// `v3` invalida cachés previas que no traían `sublotes`.
+const CACHE_KEY = 'palmapp.preciosLabores.cache.v3';
 const CACHE_TTL_MS = 60_000;
 
 type CacheShape = {
@@ -95,6 +79,7 @@ type CacheShape = {
   palmaCustom: Labor[];
   finca: Labor[];
   lotes: LoteOption[];
+  sublotes: SubloteOption[];
 };
 
 function readCache(): CacheShape | null {
@@ -129,15 +114,41 @@ export function PreciosLaboresTab() {
   // Cosecha
   const [preciosCosecha, setPreciosCosecha] = useState<PrecioCosecha[]>(cached?.cosecha ?? []);
   const [lotes, setLotes] = useState<LoteOption[]>(cached?.lotes ?? []);
-  const [openCosecha, setOpenCosecha] = useState(false);
-  const [cosechaEdit, setCosechaEdit] = useState<PrecioCosecha | null>(null);
-  const [formCosecha, setFormCosecha] = useState(FORM_COSECHA_VACIO);
+  const [sublotes, setSublotes] = useState<SubloteOption[]>(cached?.sublotes ?? []);
+  // Inputs inline por lote (año actual). Keyed por lote.id como string.
+  // El precio_cosecha en backend sigue siendo por (lote_id, anio); varios
+  // sublotes del mismo lote comparten el mismo input (todas las filas leen
+  // del mismo key del mapa, así se ven sincronizadas).
+  const [cosechaInputs, setCosechaInputs] = useState<Record<string, string>>({});
 
-  // Abonada
+  // El año del que se gestiona el precio inline. Calculado una sola vez
+  // por render — usamos `new Date().getFullYear()`.
+  const anioActual = new Date().getFullYear();
+
+  // Abonada — edición inline
   const [rangosAbono, setRangosAbono] = useState<PrecioAbono[]>(cached?.abono ?? []);
-  const [openAbono, setOpenAbono] = useState(false);
-  const [abonoEdit, setAbonoEdit] = useState<PrecioAbono | null>(null);
-  const [formAbono, setFormAbono] = useState(FORM_ABONO_VACIO);
+  /** Estado por rango guardado (keyed por id) — copia editable de los 3 campos.
+   *  Se hidrata cuando entra `rangosAbono`. Al `onBlur` se hace PUT si algo cambió. */
+  type RangoEditable = { gramos_min: string; gramos_max: string; precio_palma: string };
+  const [abonoInputs, setAbonoInputs] = useState<Record<number, RangoEditable>>(
+    Object.fromEntries(
+      (cached?.abono ?? []).map((r) => [
+        r.id,
+        {
+          // Gramos viene del backend como decimal (ej. "200.00"); lo normalizamos
+          // a entero con separador de miles para mantener formato consistente.
+          gramos_min: formatThousands(r.gramos_min),
+          gramos_max: formatThousands(r.gramos_max),
+          precio_palma: formatThousands(r.precio_palma),
+        },
+      ]),
+    ),
+  );
+  /** Filas nuevas sin guardar (creadas con "Agregar Rango").
+   *  Cuando el usuario llena los 3 campos + onBlur → POST y al éxito mueve el
+   *  registro a `rangosAbono` y quita el tempId de aquí. */
+  type RangoNuevo = { tempId: string } & RangoEditable;
+  const [nuevosRangos, setNuevosRangos] = useState<RangoNuevo[]>([]);
 
   // Precios de Palma — labores fijas (es_sistema=true)
   const [preciosPalma, setPreciosPalma] = useState<PrecioPalma[]>(cached?.palma ?? []);
@@ -171,127 +182,184 @@ export function PreciosLaboresTab() {
 
   useEffect(() => {
     let cancelled = false;
-    // Snapshot temporal que se va llenando con lo que vaya cayendo, para luego
-    // escribir el cache al final con TODO lo fresco.
-    const fresco: Partial<Omit<CacheShape, 'ts' | 'tenant'>> = {};
 
-    // Cada fetch actualiza SU sección en cuanto llega — no esperan al resto.
-    const tareas: Promise<unknown>[] = [
-      configuracionApi.preciosCosecha.listar({ per_page: 100 })
-        .then((r) => { if (!cancelled) { setPreciosCosecha(r.data); fresco.cosecha = r.data; } })
-        .catch(() => {}),
-      configuracionApi.preciosAbono.listar()
-        .then((r) => { if (!cancelled) { setRangosAbono(r.data); fresco.abono = r.data; } })
-        .catch(() => {}),
-      configuracionApi.labores.listar({ categoria: 'PALMA', es_sistema: true, per_page: 10 })
-        .then((r) => {
-          if (cancelled) return;
-          const palma = r.data ?? [];
-          setPreciosPalma(palma);
-          setPalmaInputs(
-            Object.fromEntries(
-              palma.map((p) => [p.id, p.precio_palma != null ? formatThousands(p.precio_palma) : '']),
-            ),
-          );
-          fresco.palma = palma;
-        })
-        .catch(() => {}),
-      configuracionApi.labores.listar({ categoria: 'PALMA', es_sistema: false, per_page: 100 })
-        .then((r) => {
-          if (cancelled) return;
-          const palmaCustom = r.data ?? [];
-          setLaboresPalmaCustom(palmaCustom);
-          setPalmaCustomInputs(
-            Object.fromEntries(
-              palmaCustom.map((l) => [l.id, l.precio_palma != null ? formatThousands(l.precio_palma) : '']),
-            ),
-          );
-          fresco.palmaCustom = palmaCustom;
-        })
-        .catch(() => {}),
-      configuracionApi.labores.listar({ categoria: 'FINCA', per_page: 100 })
-        .then((r) => {
-          if (cancelled) return;
-          const finca = r.data ?? [];
-          setLaboresFinca(finca);
-          setLaborInputs(
-            Object.fromEntries(
-              finca.map((l) => [l.id, l.precio_palma != null ? formatThousands(l.precio_palma) : '']),
-            ),
-          );
-          fresco.finca = finca;
-        })
-        .catch(() => {}),
-      lotesApi.select()
-        .then((r) => {
-          if (cancelled) return;
-          const ls = (r.data ?? []).map((l) => ({ id: l.id, nombre: l.nombre }));
-          setLotes(ls);
-          fresco.lotes = ls;
-        })
-        .catch(() => {}),
-    ];
+    /**
+     * Aplica los datasets a los estados del componente (snapshot completo).
+     * Centralizado en un helper porque viene del bundle (§17) o del fallback
+     * de 6 fetches — la lógica de "hidratar inputs inline" es la misma.
+     */
+    const aplicar = (datos: {
+      cosecha: PrecioCosecha[];
+      rangos: PrecioAbono[];
+      palma: PrecioPalma[];
+      palmaCustom: Labor[];
+      finca: Labor[];
+      ls: LoteOption[];
+      subs: SubloteOption[];
+    }) => {
+      setPreciosCosecha(datos.cosecha);
+      setCosechaInputs(
+        Object.fromEntries(
+          datos.cosecha
+            .filter((p) => p.anio === anioActual)
+            .map((p) => [String(p.lote_id), formatThousands(p.precio)]),
+        ),
+      );
+      setRangosAbono(datos.rangos);
+      setAbonoInputs(
+        Object.fromEntries(
+          datos.rangos.map((rr) => [rr.id, {
+            gramos_min: formatThousands(rr.gramos_min),
+            gramos_max: formatThousands(rr.gramos_max),
+            precio_palma: formatThousands(rr.precio_palma),
+          }]),
+        ),
+      );
+      setPreciosPalma(datos.palma);
+      setPalmaInputs(
+        Object.fromEntries(
+          datos.palma.map((p) => [p.id, p.precio_palma != null ? formatThousands(p.precio_palma) : '']),
+        ),
+      );
+      setLaboresPalmaCustom(datos.palmaCustom);
+      setPalmaCustomInputs(
+        Object.fromEntries(
+          datos.palmaCustom.map((l) => [l.id, l.precio_palma != null ? formatThousands(l.precio_palma) : '']),
+        ),
+      );
+      setLaboresFinca(datos.finca);
+      setLaborInputs(
+        Object.fromEntries(
+          datos.finca.map((l) => [l.id, l.precio_palma != null ? formatThousands(l.precio_palma) : '']),
+        ),
+      );
+      setLotes(datos.ls);
+      setSublotes(datos.subs);
+      writeCache({
+        cosecha: datos.cosecha,
+        abono: datos.rangos,
+        palma: datos.palma,
+        palmaCustom: datos.palmaCustom,
+        finca: datos.finca,
+        lotes: datos.ls,
+        sublotes: datos.subs,
+      });
+    };
 
-    Promise.allSettled(tareas).then(() => {
-      if (cancelled) return;
-      setLoading(false);
-      // Persistimos cache sólo si tenemos todo lo crítico — si algún fetch falló,
-      // mejor que el siguiente arranque vuelva a intentarlo.
-      if (
-        fresco.cosecha !== undefined && fresco.abono !== undefined &&
-        fresco.palma !== undefined && fresco.palmaCustom !== undefined &&
-        fresco.finca !== undefined && fresco.lotes !== undefined
-      ) {
-        writeCache(fresco as Omit<CacheShape, 'ts' | 'tenant'>);
+    /**
+     * Path A (preferido): §17 bundle endpoint — 1 request server-side cacheado.
+     * Si devuelve 404 (backend aún no lo desplegó) caemos al path B.
+     */
+    const intentarBundle = async (): Promise<boolean> => {
+      try {
+        const [bundleRes, sublotesRes] = await Promise.all([
+          configuracionApi.preciosLaboresBundle.obtener({ per_page_cosecha: 100 }),
+          sublotesApi.select(),
+        ]);
+        if (cancelled) return true;
+        const b = bundleRes.data;
+        aplicar({
+          cosecha: b.precios_cosecha ?? [],
+          rangos: b.precios_abono ?? [],
+          palma: b.labores_palma_fijas ?? [],
+          palmaCustom: b.labores_palma_custom ?? [],
+          finca: b.labores_finca ?? [],
+          ls: (b.lotes ?? []).map((l) => ({ id: l.id, nombre: l.nombre })),
+          subs: (sublotesRes.data ?? []).map((s) => ({ id: s.id, nombre: s.nombre, lote_id: s.lote_id })),
+        });
+        return true;
+      } catch (e: any) {
+        // 404 = endpoint no desplegado todavía. Cualquier otro error también
+        // lo tratamos como "intentar fallback" — el fallback aislará el problema real.
+        const status = e?.status ?? e?.response?.status;
+        if (status === 404 || /could not be found|no encontrad/i.test(String(e?.message ?? ''))) {
+          return false;
+        }
+        throw e;
       }
-    });
+    };
+
+    /**
+     * Path B (fallback): los 6 fetches individuales que usábamos antes del §17.
+     * Mantiene la misma estructura y persiste el cache igual.
+     */
+    const fallback6Fetches = async () => {
+      const [cosechaR, abonoR, palmaR, palmaCustomR, fincaR, lotesR, sublotesR] = await Promise.all([
+        configuracionApi.preciosCosecha.listar({ per_page: 100 }),
+        configuracionApi.preciosAbono.listar(),
+        configuracionApi.labores.listar({ categoria: 'PALMA', es_sistema: true, per_page: 10 }),
+        configuracionApi.labores.listar({ categoria: 'PALMA', es_sistema: false, per_page: 100 }),
+        configuracionApi.labores.listar({ categoria: 'FINCA', per_page: 100 }),
+        lotesApi.select(),
+        sublotesApi.select(),
+      ]);
+      if (cancelled) return;
+      aplicar({
+        cosecha: cosechaR.data ?? [],
+        rangos: abonoR.data ?? [],
+        palma: palmaR.data ?? [],
+        palmaCustom: palmaCustomR.data ?? [],
+        finca: fincaR.data ?? [],
+        ls: (lotesR.data ?? []).map((l) => ({ id: l.id, nombre: l.nombre })),
+        subs: (sublotesR.data ?? []).map((s) => ({ id: s.id, nombre: s.nombre, lote_id: s.lote_id })),
+      });
+    };
+
+    (async () => {
+      try {
+        const ok = await intentarBundle();
+        if (!ok) await fallback6Fetches();
+      } catch (e: any) {
+        if (!cancelled) toast.error(e?.message ?? 'No se pudieron cargar los precios y labores');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
 
     return () => { cancelled = true; };
   }, []);
 
-  // ── Cosecha ────────────────────────────────────────────────────────────────
-  const handleOpenCosecha = (precio?: PrecioCosecha) => {
-    if (precio) {
-      setCosechaEdit(precio);
-      setFormCosecha({
-        lote_id: String(precio.lote_id),
-        precio: formatThousands(precio.precio),
-        anio: String(precio.anio),
-      });
-    } else {
-      setCosechaEdit(null);
-      setFormCosecha(FORM_COSECHA_VACIO);
-    }
-    setOpenCosecha(true);
-  };
+  // ── Cosecha (edición inline por lote, año actual) ─────────────────────────
+  /**
+   * Save inline del precio de cosecha de un lote. Decide POST vs PUT según si
+   * ya existe registro para `(lote_id, anioActual)`. Si el input quedó vacío
+   * y había un registro, lo elimina (UX: borrar el input = quitar el precio).
+   */
+  const handleSaveCosechaInline = async (lote: LoteOption) => {
+    const raw = cosechaInputs[String(lote.id)] ?? '';
+    const limpio = parseCOP(raw);
+    const valor = limpio ? Number(limpio) : 0;
+    const existente = preciosCosecha.find(
+      (p) => Number(p.lote_id) === lote.id && p.anio === anioActual,
+    );
 
-  const handleSaveCosecha = async () => {
-    if (!cosechaEdit && !formCosecha.lote_id) {
-      toast.error('Selecciona un lote');
-      return;
-    }
-    if (!formCosecha.precio || !formCosecha.anio) {
-      toast.error('Precio y año son obligatorios');
-      return;
-    }
+    // Mismo valor: no-op (evita un PUT innecesario al salir del input sin tocar nada).
+    if (existente && Number(existente.precio) === valor && valor > 0) return;
+
     try {
-      if (cosechaEdit) {
-        const res = await configuracionApi.preciosCosecha.editar(cosechaEdit.id, {
-          precio: Number(parseCOP(formCosecha.precio)),
-          anio: Number(formCosecha.anio),
+      if (existente && valor > 0) {
+        // PUT actualiza el precio.
+        const res = await configuracionApi.preciosCosecha.editar(existente.id, {
+          precio: valor,
+          anio: anioActual,
         });
-        setPreciosCosecha((prev) => prev.map((p) => (p.id === cosechaEdit.id ? res.data : p)));
-        toast.success(res.message ?? 'Precio actualizado');
-      } else {
+        setPreciosCosecha((prev) => prev.map((p) => (p.id === existente.id ? res.data : p)));
+        toast.success('Guardado');
+      } else if (!existente && valor > 0) {
+        // POST crea el precio.
         const res = await configuracionApi.preciosCosecha.crear({
-          lote_id: Number(formCosecha.lote_id),
-          precio: Number(parseCOP(formCosecha.precio)),
-          anio: Number(formCosecha.anio),
+          lote_id: lote.id,
+          precio: valor,
+          anio: anioActual,
         });
         setPreciosCosecha((prev) => [...prev, res.data]);
-        toast.success(res.message ?? 'Precio creado');
+        toast.success('Guardado');
+      } else if (existente && valor === 0) {
+        // DELETE: el usuario vació el input → quita el precio del lote.
+        await configuracionApi.preciosCosecha.eliminar(existente.id);
+        setPreciosCosecha((prev) => prev.filter((p) => p.id !== existente.id));
+        toast.success('Eliminado');
       }
-      setOpenCosecha(false);
     } catch (e: any) {
       if (e?.code === ConfiguracionErrorCodes.PRECIO_COSECHA_DUPLICADO) {
         toast.error('Ya existe un precio para este lote en ese año');
@@ -304,96 +372,137 @@ export function PreciosLaboresTab() {
     }
   };
 
-  const handleDeleteCosecha = (precio: PrecioCosecha) => {
-    confirmDelete({
-      title: 'Eliminar precio de cosecha',
-      description: `¿Eliminar el precio de "${loteNombre(precio)}" (${precio.anio})? Esta acción no se puede deshacer.`,
-      confirmText: 'Eliminar',
-      onConfirm: async () => {
-        try {
-          await configuracionApi.preciosCosecha.eliminar(precio.id);
-          setPreciosCosecha((prev) => prev.filter((p) => p.id !== precio.id));
-          toast.success('Precio eliminado');
-        } catch (e: any) {
-          toast.error(e?.message ?? 'No se pudo eliminar el precio');
-        }
-      },
-    });
+  // ── Abonada (edición inline + nueva fila al click "Agregar Rango") ────────
+  /**
+   * Incrementa/decrementa el valor de un campo de gramos manteniendo el formato
+   * de miles. Clampea a 0 mínimo (no se permiten negativos).
+   *  - `currentStr`: valor display actual (con separadores, ej. "1.000")
+   *  - `delta`: cuánto sumar (+1) o restar (-1).
+   *  - Devuelve el nuevo valor display.
+   */
+  const adjustGramos = (currentStr: string, delta: number): string => {
+    const n = Number(parseCOP(currentStr)) || 0;
+    const next = Math.max(0, n + delta);
+    return formatThousands(next);
   };
 
-  const loteNombre = (precio: PrecioCosecha) =>
-    precio.lote?.nombre ?? lotes.find((l) => l.id === precio.lote_id)?.nombre ?? `Lote ${precio.lote_id}`;
-
-  // ── Abonada ────────────────────────────────────────────────────────────────
-  const handleOpenAbono = (rango?: PrecioAbono) => {
-    if (rango) {
-      setAbonoEdit(rango);
-      setFormAbono({
-        gramos_min: String(rango.gramos_min),
-        gramos_max: String(rango.gramos_max),
-        precio_palma: formatThousands(rango.precio_palma),
-      });
+  /** Helper: mapea un error de validación del API a un toast amigable. */
+  const reportarErrorRango = (e: any) => {
+    if (e?.code === ConfiguracionErrorCodes.RANGO_SOLAPADO) {
+      toast.error('El rango de gramos se solapa con un rango existente');
+    } else if (e?.errors) {
+      const primero = Object.values(e.errors).flat()[0];
+      toast.error(typeof primero === 'string' ? primero : 'Error de validación');
     } else {
-      setAbonoEdit(null);
-      const ultimo = rangosAbono[rangosAbono.length - 1];
-      setFormAbono({
-        gramos_min: ultimo ? String(ultimo.gramos_max + 1) : '0',
-        gramos_max: '',
-        precio_palma: '',
-      });
+      toast.error(e?.message ?? 'No se pudo guardar el rango');
     }
-    setOpenAbono(true);
   };
 
-  const handleSaveAbono = async () => {
-    if (!formAbono.gramos_min || !formAbono.gramos_max || !formAbono.precio_palma) {
-      toast.error('Todos los campos son obligatorios');
+  /** PUT del rango ya guardado cuando alguno de los 3 inputs pierde foco y
+   *  detectamos cambio respecto al valor original. */
+  const handleSaveAbonoInline = async (rango: PrecioAbono) => {
+    const edit = abonoInputs[rango.id];
+    if (!edit) return;
+    // Quitamos puntos de miles antes de mandar el número al backend.
+    const payload = {
+      gramos_min: Number(parseCOP(edit.gramos_min)),
+      gramos_max: Number(parseCOP(edit.gramos_max)),
+      precio_palma: Number(parseCOP(edit.precio_palma)),
+    };
+    if (!Number.isFinite(payload.gramos_min) || !Number.isFinite(payload.gramos_max) || !Number.isFinite(payload.precio_palma)) {
       return;
     }
+    // No-op si no cambió nada (evita PUT innecesario).
+    if (
+      payload.gramos_min === Number(rango.gramos_min) &&
+      payload.gramos_max === Number(rango.gramos_max) &&
+      payload.precio_palma === Number(rango.precio_palma)
+    ) return;
     try {
-      const payload = {
-        gramos_min: Number(formAbono.gramos_min),
-        gramos_max: Number(formAbono.gramos_max),
-        precio_palma: Number(parseCOP(formAbono.precio_palma)),
-      };
-      if (abonoEdit) {
-        const res = await configuracionApi.preciosAbono.editar(abonoEdit.id, payload);
-        setRangosAbono((prev) => prev.map((r) => (r.id === abonoEdit.id ? res.data : r)));
-        toast.success(res.message ?? 'Rango actualizado');
-      } else {
-        const res = await configuracionApi.preciosAbono.crear(payload);
-        setRangosAbono((prev) => [...prev, res.data]);
-        toast.success(res.message ?? 'Rango creado');
-      }
-      setOpenAbono(false);
+      const res = await configuracionApi.preciosAbono.editar(rango.id, payload);
+      setRangosAbono((prev) => prev.map((r) => (r.id === rango.id ? res.data : r)));
+      // Re-hidratar el input con el formato canónico (con miles).
+      setAbonoInputs((prev) => ({
+        ...prev,
+        [rango.id]: {
+          gramos_min: formatThousands(res.data.gramos_min),
+          gramos_max: formatThousands(res.data.gramos_max),
+          precio_palma: formatThousands(res.data.precio_palma),
+        },
+      }));
+      toast.success('Guardado');
+    } catch (e: any) { reportarErrorRango(e); }
+  };
+
+  /** Elimina un rango guardado. Sin modal de confirmación — el trash es
+   *  acción directa para alinear con el resto de la UI inline. */
+  const handleDeleteAbonoInline = async (rango: PrecioAbono) => {
+    try {
+      await configuracionApi.preciosAbono.eliminar(rango.id);
+      setRangosAbono((prev) => prev.filter((r) => r.id !== rango.id));
+      setAbonoInputs((prev) => {
+        const next = { ...prev };
+        delete next[rango.id];
+        return next;
+      });
+      toast.success('Eliminado');
     } catch (e: any) {
-      if (e?.code === ConfiguracionErrorCodes.RANGO_SOLAPADO) {
-        toast.error('El rango de gramos se solapa con un rango existente');
-      } else if (e?.errors) {
-        const primero = Object.values(e.errors).flat()[0];
-        toast.error(typeof primero === 'string' ? primero : 'Error de validación');
-      } else {
-        toast.error(e?.message ?? 'No se pudo guardar el rango');
-      }
+      toast.error(e?.message ?? 'No se pudo eliminar el rango');
     }
   };
 
-  const handleDeleteAbono = (rango: PrecioAbono) => {
-    confirmDelete({
-      title: 'Eliminar rango de abonada',
-      description: `¿Eliminar el rango ${rango.gramos_min} - ${rango.gramos_max} gramos? Esta acción no se puede deshacer.`,
-      confirmText: 'Eliminar',
-      onConfirm: async () => {
-        try {
-          await configuracionApi.preciosAbono.eliminar(rango.id);
-          setRangosAbono((prev) => prev.filter((r) => r.id !== rango.id));
-          toast.success('Rango eliminado');
-        } catch (e: any) {
-          toast.error(e?.message ?? 'No se pudo eliminar el rango');
-        }
+  /** "+ Agregar Rango": empuja una fila vacía con tempId al estado de nuevos.
+   *  Pre-rellena gramos_min como `(último gramos_max) + 1` para evitar solapes. */
+  const agregarNuevoRango = () => {
+    const ultimo = rangosAbono[rangosAbono.length - 1];
+    // Mostrar el sugerido con separador de miles si aplica (ej. "1.001").
+    const minSugerido = ultimo ? formatThousands(Number(ultimo.gramos_max) + 1) : '0';
+    setNuevosRangos((prev) => [
+      ...prev,
+      {
+        tempId: `tmp-${Date.now()}-${Math.floor(Number(prev.length))}`,
+        gramos_min: minSugerido,
+        gramos_max: '',
+        precio_palma: '',
       },
-    });
+    ]);
   };
+
+  /** POST: al perder foco, si los 3 campos están llenos creamos. Si éxito,
+   *  movemos el item de `nuevosRangos` a `rangosAbono`. */
+  const handleSaveNuevoRango = async (tempId: string) => {
+    const nr = nuevosRangos.find((x) => x.tempId === tempId);
+    if (!nr) return;
+    // Parseamos los 3 campos quitando los puntos de miles del display.
+    const min = Number(parseCOP(nr.gramos_min));
+    const max = Number(parseCOP(nr.gramos_max));
+    const precio = Number(parseCOP(nr.precio_palma));
+    // Esperamos a que los 3 campos sean válidos antes de disparar el POST.
+    if (!nr.gramos_min || !nr.gramos_max || !nr.precio_palma) return;
+    if (!Number.isFinite(min) || !Number.isFinite(max) || !Number.isFinite(precio)) return;
+    try {
+      const res = await configuracionApi.preciosAbono.crear({
+        gramos_min: min,
+        gramos_max: max,
+        precio_palma: precio,
+      });
+      setRangosAbono((prev) => [...prev, res.data]);
+      setAbonoInputs((prev) => ({
+        ...prev,
+        [res.data.id]: {
+          gramos_min: formatThousands(res.data.gramos_min),
+          gramos_max: formatThousands(res.data.gramos_max),
+          precio_palma: formatThousands(res.data.precio_palma),
+        },
+      }));
+      setNuevosRangos((prev) => prev.filter((x) => x.tempId !== tempId));
+      toast.success('Guardado');
+    } catch (e: any) { reportarErrorRango(e); }
+  };
+
+  /** Trash de una fila NUEVA (sin id de backend) — solo splice local. */
+  const eliminarNuevoRango = (tempId: string) =>
+    setNuevosRangos((prev) => prev.filter((x) => x.tempId !== tempId));
 
   // ── Labor Palma custom (precio_palma según tipo_pago) ────────────────────
   const handleSaveLaborPalmaCustom = async (labor: Labor) => {
@@ -405,7 +514,7 @@ export function PreciosLaboresTab() {
     try {
       const res = await configuracionApi.labores.editar(labor.id, { precio_palma: valor });
       setLaboresPalmaCustom((prev) => prev.map((l) => (l.id === labor.id ? res.data : l)));
-      toast.success('Precio actualizado');
+      toast.success('Guardado');
     } catch (e: any) {
       if (e?.errors) {
         const primero = Object.values(e.errors).flat()[0];
@@ -428,7 +537,7 @@ export function PreciosLaboresTab() {
     try {
       const res = await configuracionApi.labores.editar(labor.id, { precio_palma: valor });
       setLaboresFinca((prev) => prev.map((l) => (l.id === labor.id ? res.data : l)));
-      toast.success('Precio actualizado');
+      toast.success('Guardado');
     } catch (e: any) {
       if (e?.errors) {
         const primero = Object.values(e.errors).flat()[0];
@@ -449,7 +558,7 @@ export function PreciosLaboresTab() {
     try {
       const res = await configuracionApi.labores.editar(palma.id, { precio_palma: precio });
       setPreciosPalma((prev) => prev.map((p) => (p.id === palma.id ? res.data : p)));
-      toast.success(res.message ?? 'Precio actualizado');
+      toast.success('Guardado');
     } catch (e: any) {
       if (e?.errors) {
         const primero = Object.values(e.errors).flat()[0];
@@ -481,138 +590,7 @@ export function PreciosLaboresTab() {
         </div>
       )}
 
-      {/* Modal Cosecha */}
-      <Dialog open={openCosecha} onOpenChange={setOpenCosecha}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{cosechaEdit ? 'Editar Precio de Cosecha' : 'Nuevo Precio de Cosecha'}</DialogTitle>
-            <DialogDescription>Precio por kg de fruto cosechado por lote y año</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="cosecha-lote">
-                Lote <span className="text-destructive">*</span>
-              </Label>
-              <Select
-                value={formCosecha.lote_id}
-                onValueChange={(value) => setFormCosecha((prev) => ({ ...prev, lote_id: value }))}
-                disabled={!!cosechaEdit}
-              >
-                <SelectTrigger id="cosecha-lote">
-                  <SelectValue placeholder="Seleccionar lote" />
-                </SelectTrigger>
-                <SelectContent>
-                  {lotes.map((l) => (
-                    <SelectItem key={l.id} value={String(l.id)}>
-                      {l.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="cosecha-anio">
-                  Año <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="cosecha-anio"
-                  type="number"
-                  value={formCosecha.anio}
-                  onChange={(e) => setFormCosecha((prev) => ({ ...prev, anio: e.target.value }))}
-                  placeholder="2026"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="cosecha-precio">
-                  Precio por Kg <span className="text-destructive">*</span>
-                </Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                  <Input
-                    id="cosecha-precio"
-                    inputMode="numeric"
-                    value={formCosecha.precio}
-                    onChange={(e) =>
-                      setFormCosecha((prev) => ({ ...prev, precio: formatThousands(parseCOP(e.target.value)) }))
-                    }
-                    placeholder="0"
-                    className="pl-7"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenCosecha(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveCosecha}>Guardar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Modal Abono */}
-      <Dialog open={openAbono} onOpenChange={setOpenAbono}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{abonoEdit ? 'Editar Rango de Abonada' : 'Nuevo Rango de Abonada'}</DialogTitle>
-            <DialogDescription>Rango de gramos y precio por palma</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="abono-min">
-                  Gramos Mínimo <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="abono-min"
-                  type="number"
-                  value={formAbono.gramos_min}
-                  onChange={(e) => setFormAbono((prev) => ({ ...prev, gramos_min: e.target.value }))}
-                  placeholder="0"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="abono-max">
-                  Gramos Máximo <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="abono-max"
-                  type="number"
-                  value={formAbono.gramos_max}
-                  onChange={(e) => setFormAbono((prev) => ({ ...prev, gramos_max: e.target.value }))}
-                  placeholder="0"
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="abono-precio">
-                Precio por Palma <span className="text-destructive">*</span>
-              </Label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                <Input
-                  id="abono-precio"
-                  inputMode="numeric"
-                  value={formAbono.precio_palma}
-                  onChange={(e) =>
-                    setFormAbono((prev) => ({ ...prev, precio_palma: formatThousands(parseCOP(e.target.value)) }))
-                  }
-                  placeholder="0"
-                  className="pl-7"
-                />
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenAbono(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveAbono}>Guardar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* (Modales Cosecha y Abono removidos: ambas tablas son edición inline.) */}
 
       {/* LABORES PALMA */}
       <div className="space-y-4" hidden={loading}>
@@ -633,62 +611,65 @@ export function PreciosLaboresTab() {
                   <div className="text-left">
                     <CardTitle>Precios de Cosecha</CardTitle>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Precio por kg de fruto cosechado por lote y año
+                      Precio por kg de fruto cosechado por lote y sublote
                     </p>
                   </div>
                 </AccordionTrigger>
               </CardHeader>
               <AccordionContent>
-                <CardContent className="p-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-semibold">Precios por Lote</h3>
-                    <Button onClick={() => handleOpenCosecha()} size="sm" variant="outline" className="gap-2">
-                      <Plus className="h-4 w-4" />
-                      Agregar Precio
-                    </Button>
-                  </div>
+                <CardContent className="p-6">
+                  {/* Tabla inline: una fila por SUBLOTE del tenant.
+                      Como el precio_cosecha del backend es por (lote_id, anio),
+                      varios sublotes del mismo lote leen del mismo input — al
+                      editar cualquiera se sincronizan. El año actual se usa
+                      implícito (no hay columna). */}
                   <div className="rounded-lg border border-border overflow-hidden">
                     <table className="w-full table-fixed">
                       <thead className="bg-muted/50">
                         <tr>
                           <th className="text-left p-4 font-semibold w-2/5">Lote</th>
-                          <th className="text-left p-4 font-semibold w-1/5">Año</th>
-                          <th className="text-right p-4 font-semibold w-1/4">Precio por Kg</th>
-                          <th className="text-center p-4 font-semibold w-24"></th>
+                          <th className="text-left p-4 font-semibold w-1/4">Sublote</th>
+                          <th className="text-right p-4 font-semibold">Precio por Kg</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {preciosCosecha.length === 0 ? (
+                        {sublotes.length === 0 ? (
                           <tr>
-                            <td colSpan={4} className="p-6 text-center text-sm text-muted-foreground">
-                              No hay precios de cosecha registrados
+                            <td colSpan={3} className="p-6 text-center text-sm text-muted-foreground">
+                              No hay sublotes creados. Crea predios, lotes y sublotes en "Mi Plantación".
                             </td>
                           </tr>
                         ) : (
-                          preciosCosecha.map((item) => (
-                            <tr key={item.id} className="border-t border-border">
-                              <td className="p-4">{loteNombre(item)}</td>
-                              <td className="p-4">{item.anio}</td>
-                              <td className="p-4 text-right font-semibold">
-                                {formatCOP(item.precio)} /kg
-                              </td>
-                              <td className="p-4 text-center">
-                                <div className="flex items-center justify-center gap-1">
-                                  <Button variant="ghost" size="sm" onClick={() => handleOpenCosecha(item)}>
-                                    <Edit className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                    onClick={() => handleDeleteCosecha(item)}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))
+                          sublotes.map((sub) => {
+                            const lote = lotes.find((l) => l.id === sub.lote_id);
+                            return (
+                              <tr key={sub.id} className="border-t border-border">
+                                <td className="p-4 font-medium">{lote?.nombre ?? `Lote ${sub.lote_id}`}</td>
+                                <td className="p-4 text-sm text-muted-foreground">{sub.nombre}</td>
+                                <td className="p-4">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <span className="text-muted-foreground text-sm">$</span>
+                                    <Input
+                                      inputMode="numeric"
+                                      value={cosechaInputs[String(sub.lote_id)] ?? ''}
+                                      onChange={(e) =>
+                                        setCosechaInputs((prev) => ({
+                                          ...prev,
+                                          [String(sub.lote_id)]: formatThousands(parseCOP(e.target.value)),
+                                        }))
+                                      }
+                                      onBlur={() => {
+                                        if (lote) handleSaveCosechaInline(lote);
+                                      }}
+                                      placeholder="0"
+                                      className="w-32 text-right"
+                                    />
+                                    <span className="text-muted-foreground text-sm">/kg</span>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
                         )}
                       </tbody>
                     </table>
@@ -716,12 +697,14 @@ export function PreciosLaboresTab() {
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <h3 className="font-semibold">Rangos de Abonada</h3>
-                      <Button onClick={() => handleOpenAbono()} size="sm" variant="outline" className="gap-2">
+                      <Button onClick={agregarNuevoRango} size="sm" variant="outline" className="gap-2">
                         <Plus className="h-4 w-4" />
                         Agregar Rango
                       </Button>
                     </div>
 
+                    {/* Tabla inline. Filas guardadas → PUT onBlur. Filas nuevas
+                        (tempId) → POST onBlur cuando los 3 campos están llenos. */}
                     <div className="rounded-lg border border-border overflow-hidden">
                       <table className="w-full table-fixed">
                         <thead className="bg-muted/50">
@@ -733,37 +716,267 @@ export function PreciosLaboresTab() {
                           </tr>
                         </thead>
                         <tbody>
-                          {rangosAbono.length === 0 ? (
+                          {rangosAbono.length === 0 && nuevosRangos.length === 0 ? (
                             <tr>
                               <td colSpan={4} className="p-6 text-center text-sm text-muted-foreground">
-                                No hay rangos de abonada registrados
+                                No hay rangos de abonada. Haz clic en "Agregar Rango" para crear el primero.
                               </td>
                             </tr>
                           ) : (
-                            rangosAbono.map((rango) => (
-                              <tr key={rango.id} className="border-t border-border">
-                                <td className="p-4">{rango.gramos_min}</td>
-                                <td className="p-4">{rango.gramos_max}</td>
-                                <td className="p-4 font-semibold">
-                                  {formatCOP(rango.precio_palma)} /palma
-                                </td>
-                                <td className="p-4 text-center">
-                                  <div className="flex items-center justify-center gap-1">
-                                    <Button variant="ghost" size="sm" onClick={() => handleOpenAbono(rango)}>
-                                      <Edit className="h-4 w-4" />
-                                    </Button>
+                            <>
+                              {rangosAbono.map((rango) => {
+                                const edit = abonoInputs[rango.id] ?? {
+                                  gramos_min: formatThousands(rango.gramos_min),
+                                  gramos_max: formatThousands(rango.gramos_max),
+                                  precio_palma: formatThousands(rango.precio_palma),
+                                };
+                                return (
+                                  <tr key={rango.id} className="border-t border-border">
+                                    <td className="p-4">
+                                      <div className="relative group">
+                                        <Input
+                                          inputMode="numeric"
+                                          value={edit.gramos_min}
+                                          onChange={(e) =>
+                                            setAbonoInputs((prev) => ({
+                                              ...prev,
+                                              [rango.id]: { ...edit, gramos_min: formatThousands(parseCOP(e.target.value)) },
+                                            }))
+                                          }
+                                          onBlur={() => handleSaveAbonoInline(rango)}
+                                          className="w-full pr-7"
+                                        />
+                                        {/* Spinners. `onMouseDown preventDefault` evita que el input pierda foco. */}
+                                        <div className="absolute right-1 top-1 bottom-1 flex flex-col opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                                          <button type="button" tabIndex={-1}
+                                            onMouseDown={(e) => e.preventDefault()}
+                                            onClick={() => setAbonoInputs((prev) => ({
+                                              ...prev,
+                                              [rango.id]: { ...edit, gramos_min: adjustGramos(edit.gramos_min, 1) },
+                                            }))}
+                                            className="flex-1 px-1 hover:bg-muted rounded-t text-muted-foreground hover:text-foreground"
+                                          >
+                                            <ChevronUp className="h-3 w-3" />
+                                          </button>
+                                          <button type="button" tabIndex={-1}
+                                            onMouseDown={(e) => e.preventDefault()}
+                                            onClick={() => setAbonoInputs((prev) => ({
+                                              ...prev,
+                                              [rango.id]: { ...edit, gramos_min: adjustGramos(edit.gramos_min, -1) },
+                                            }))}
+                                            className="flex-1 px-1 hover:bg-muted rounded-b text-muted-foreground hover:text-foreground"
+                                          >
+                                            <ChevronDown className="h-3 w-3" />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="p-4">
+                                      <div className="relative group">
+                                        <Input
+                                          inputMode="numeric"
+                                          value={edit.gramos_max}
+                                          onChange={(e) =>
+                                            setAbonoInputs((prev) => ({
+                                              ...prev,
+                                              [rango.id]: { ...edit, gramos_max: formatThousands(parseCOP(e.target.value)) },
+                                            }))
+                                          }
+                                          onBlur={() => handleSaveAbonoInline(rango)}
+                                          className="w-full pr-7"
+                                        />
+                                        <div className="absolute right-1 top-1 bottom-1 flex flex-col opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                                          <button type="button" tabIndex={-1}
+                                            onMouseDown={(e) => e.preventDefault()}
+                                            onClick={() => setAbonoInputs((prev) => ({
+                                              ...prev,
+                                              [rango.id]: { ...edit, gramos_max: adjustGramos(edit.gramos_max, 1) },
+                                            }))}
+                                            className="flex-1 px-1 hover:bg-muted rounded-t text-muted-foreground hover:text-foreground"
+                                          >
+                                            <ChevronUp className="h-3 w-3" />
+                                          </button>
+                                          <button type="button" tabIndex={-1}
+                                            onMouseDown={(e) => e.preventDefault()}
+                                            onClick={() => setAbonoInputs((prev) => ({
+                                              ...prev,
+                                              [rango.id]: { ...edit, gramos_max: adjustGramos(edit.gramos_max, -1) },
+                                            }))}
+                                            className="flex-1 px-1 hover:bg-muted rounded-b text-muted-foreground hover:text-foreground"
+                                          >
+                                            <ChevronDown className="h-3 w-3" />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="p-4">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-muted-foreground text-sm">$</span>
+                                        <Input
+                                          inputMode="numeric"
+                                          value={edit.precio_palma}
+                                          onChange={(e) =>
+                                            setAbonoInputs((prev) => ({
+                                              ...prev,
+                                              [rango.id]: {
+                                                ...edit,
+                                                precio_palma: formatThousands(parseCOP(e.target.value)),
+                                              },
+                                            }))
+                                          }
+                                          onBlur={() => handleSaveAbonoInline(rango)}
+                                          className="w-32"
+                                        />
+                                        <span className="text-muted-foreground text-sm">/palma</span>
+                                      </div>
+                                    </td>
+                                    <td className="p-4 text-center">
+                                      <Button
+                                        onClick={() => handleDeleteAbonoInline(rango)}
+                                        size="sm"
+                                        variant="ghost"
+                                        className="text-destructive hover:text-destructive hover:bg-destructive/10 mx-auto"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                              {/* Filas nuevas (sin guardar): mismo layout, tempId como key. */}
+                              {nuevosRangos.map((nr) => (
+                                <tr key={nr.tempId} className="border-t border-border bg-primary/5">
+                                  <td className="p-4">
+                                    <div className="relative group">
+                                      <Input
+                                        inputMode="numeric"
+                                        placeholder="0"
+                                        value={nr.gramos_min}
+                                        onChange={(e) =>
+                                          setNuevosRangos((prev) =>
+                                            prev.map((x) =>
+                                              x.tempId === nr.tempId
+                                                ? { ...x, gramos_min: formatThousands(parseCOP(e.target.value)) }
+                                                : x,
+                                            ),
+                                          )
+                                        }
+                                        onBlur={() => handleSaveNuevoRango(nr.tempId)}
+                                        className="w-full pr-7"
+                                      />
+                                      <div className="absolute right-1 top-1 bottom-1 flex flex-col opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                                        <button type="button" tabIndex={-1}
+                                          onMouseDown={(e) => e.preventDefault()}
+                                          onClick={() => setNuevosRangos((prev) =>
+                                            prev.map((x) =>
+                                              x.tempId === nr.tempId
+                                                ? { ...x, gramos_min: adjustGramos(x.gramos_min, 1) }
+                                                : x,
+                                            ),
+                                          )}
+                                          className="flex-1 px-1 hover:bg-muted rounded-t text-muted-foreground hover:text-foreground"
+                                        >
+                                          <ChevronUp className="h-3 w-3" />
+                                        </button>
+                                        <button type="button" tabIndex={-1}
+                                          onMouseDown={(e) => e.preventDefault()}
+                                          onClick={() => setNuevosRangos((prev) =>
+                                            prev.map((x) =>
+                                              x.tempId === nr.tempId
+                                                ? { ...x, gramos_min: adjustGramos(x.gramos_min, -1) }
+                                                : x,
+                                            ),
+                                          )}
+                                          className="flex-1 px-1 hover:bg-muted rounded-b text-muted-foreground hover:text-foreground"
+                                        >
+                                          <ChevronDown className="h-3 w-3" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="p-4">
+                                    <div className="relative group">
+                                      <Input
+                                        inputMode="numeric"
+                                        placeholder="0"
+                                        value={nr.gramos_max}
+                                        onChange={(e) =>
+                                          setNuevosRangos((prev) =>
+                                            prev.map((x) =>
+                                              x.tempId === nr.tempId
+                                                ? { ...x, gramos_max: formatThousands(parseCOP(e.target.value)) }
+                                                : x,
+                                            ),
+                                          )
+                                        }
+                                        onBlur={() => handleSaveNuevoRango(nr.tempId)}
+                                        className="w-full pr-7"
+                                      />
+                                      <div className="absolute right-1 top-1 bottom-1 flex flex-col opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                                        <button type="button" tabIndex={-1}
+                                          onMouseDown={(e) => e.preventDefault()}
+                                          onClick={() => setNuevosRangos((prev) =>
+                                            prev.map((x) =>
+                                              x.tempId === nr.tempId
+                                                ? { ...x, gramos_max: adjustGramos(x.gramos_max, 1) }
+                                                : x,
+                                            ),
+                                          )}
+                                          className="flex-1 px-1 hover:bg-muted rounded-t text-muted-foreground hover:text-foreground"
+                                        >
+                                          <ChevronUp className="h-3 w-3" />
+                                        </button>
+                                        <button type="button" tabIndex={-1}
+                                          onMouseDown={(e) => e.preventDefault()}
+                                          onClick={() => setNuevosRangos((prev) =>
+                                            prev.map((x) =>
+                                              x.tempId === nr.tempId
+                                                ? { ...x, gramos_max: adjustGramos(x.gramos_max, -1) }
+                                                : x,
+                                            ),
+                                          )}
+                                          className="flex-1 px-1 hover:bg-muted rounded-b text-muted-foreground hover:text-foreground"
+                                        >
+                                          <ChevronDown className="h-3 w-3" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="p-4">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-muted-foreground text-sm">$</span>
+                                      <Input
+                                        inputMode="numeric"
+                                        placeholder="0"
+                                        value={nr.precio_palma}
+                                        onChange={(e) =>
+                                          setNuevosRangos((prev) =>
+                                            prev.map((x) =>
+                                              x.tempId === nr.tempId
+                                                ? { ...x, precio_palma: formatThousands(parseCOP(e.target.value)) }
+                                                : x,
+                                            ),
+                                          )
+                                        }
+                                        onBlur={() => handleSaveNuevoRango(nr.tempId)}
+                                        className="w-32"
+                                      />
+                                      <span className="text-muted-foreground text-sm">/palma</span>
+                                    </div>
+                                  </td>
+                                  <td className="p-4 text-center">
                                     <Button
-                                      onClick={() => handleDeleteAbono(rango)}
+                                      onClick={() => eliminarNuevoRango(nr.tempId)}
                                       size="sm"
                                       variant="ghost"
                                       className="text-destructive hover:text-destructive hover:bg-destructive/10 mx-auto"
                                     >
                                       <Trash2 className="h-4 w-4" />
                                     </Button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))
+                                  </td>
+                                </tr>
+                              ))}
+                            </>
                           )}
                         </tbody>
                       </table>

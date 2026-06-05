@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from '../ui/dialog';
 import { useConfirmDelete } from '../../hooks/useConfirmDelete';
+import { TabLoadingGate } from './TabLoadingGate';
 import {
   configuracionApi,
   type EntidadBancaria,
@@ -51,6 +52,7 @@ const BANCOS_DEFAULT: Array<{ nombre: string; codigo: string }> = [
 
 export function EntidadesBancariasTab() {
   const [entidades, setEntidades] = useState<EntidadBancaria[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [openModal, setOpenModal] = useState(false);
   const [entidadEdit, setEntidadEdit] = useState<EntidadBancaria | null>(null);
@@ -66,6 +68,7 @@ export function EntidadesBancariasTab() {
         if (cancelado) return;
         if ((res.data ?? []).length > 0) {
           setEntidades(res.data);
+          setLoading(false);
           return;
         }
         // Lista vacía → sembramos los bancos colombianos en background.
@@ -79,9 +82,15 @@ export function EntidadesBancariasTab() {
             creados.push(r.data);
           } catch { /* skip duplicados / fallos puntuales */ }
         }
-        if (!cancelado) setEntidades(creados);
+        if (!cancelado) {
+          setEntidades(creados);
+          setLoading(false);
+        }
       } catch (e: any) {
-        if (!cancelado) toast.error(e?.message ?? 'No se pudieron cargar las entidades bancarias');
+        if (!cancelado) {
+          toast.error(e?.message ?? 'No se pudieron cargar las entidades bancarias');
+          setLoading(false);
+        }
       }
     })();
     return () => {
@@ -216,6 +225,7 @@ export function EntidadesBancariasTab() {
         </DialogContent>
       </Dialog>
 
+      <TabLoadingGate loading={loading} message="Cargando entidades bancarias…">
       <Card className="border-border">
         <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
           <div className="flex items-center justify-between">
@@ -266,6 +276,7 @@ export function EntidadesBancariasTab() {
           </div>
         </CardContent>
       </Card>
+      </TabLoadingGate>
     </>
   );
 }

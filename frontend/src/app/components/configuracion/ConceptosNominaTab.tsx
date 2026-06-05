@@ -20,6 +20,7 @@ import {
   type NominaConcepto,
   type TipoConcepto,
 } from '../../../api/nomina';
+import { TabLoadingGate } from './TabLoadingGate';
 import { formatCOP } from '../lib/format';
 
 const TIPO_LABEL: Record<TipoConcepto, string> = {
@@ -33,6 +34,7 @@ const TIPO_LABEL: Record<TipoConcepto, string> = {
 export function ConceptosNominaTab() {
   const navigate = useNavigate();
   const [conceptos, setConceptos] = useState<NominaConcepto[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const { confirmDelete, ConfirmDeleteDialog } = useConfirmDelete();
 
@@ -40,7 +42,8 @@ export function ConceptosNominaTab() {
     nominaApi.conceptos
       .listar()
       .then((res) => setConceptos(res.data))
-      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar los conceptos'));
+      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar los conceptos'))
+      .finally(() => setLoading(false));
   }, []);
 
   const handleNuevo = () => navigate('/configuracion/conceptos/nuevo');
@@ -169,6 +172,7 @@ export function ConceptosNominaTab() {
           </p>
         </div>
 
+      <TabLoadingGate loading={loading} message="Cargando conceptos…">
       <Card className="border-border">
         <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
           <div className="flex items-center justify-between">
@@ -229,7 +233,15 @@ export function ConceptosNominaTab() {
                         </Badge>
                       </TableCell>
                       <TableCell className="whitespace-nowrap">{valoresDisplay(concepto)}</TableCell>
-                      <TableCell className="font-bold">{totalDisplay(concepto)}</TableCell>
+                      <TableCell>
+                        {(() => {
+                          const total = totalDisplay(concepto);
+                          // Verde brillante cuando hay total real; "-" en muted.
+                          return total === '-'
+                            ? <span className="text-muted-foreground">-</span>
+                            : <span className="font-bold text-success">{total}</span>;
+                        })()}
+                      </TableCell>
                       <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                         {vigenciaDisplay(concepto)}
                       </TableCell>
@@ -259,6 +271,7 @@ export function ConceptosNominaTab() {
           )}
         </CardContent>
       </Card>
+      </TabLoadingGate>
       </div>
     </>
   );

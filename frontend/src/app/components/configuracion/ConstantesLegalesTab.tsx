@@ -12,6 +12,7 @@ import {
   type ConstantesLegalesPayload,
 } from '../../../api/configuracion';
 import { FechaDiaMesPicker } from './FechaPickers';
+import { TabLoadingGate } from './TabLoadingGate';
 
 const FORM_VACIO = {
   anoVigente: new Date().getFullYear().toString(),
@@ -71,6 +72,7 @@ const formatNumber = (value: string) => {
 
 export function ConstantesLegalesTab() {
   const [constantes, setConstantes] = useState<FormState>(FORM_VACIO);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelado = false;
@@ -81,7 +83,8 @@ export function ConstantesLegalesTab() {
       })
       .catch((e: any) => {
         if (!cancelado) toast.error(e?.message ?? 'No se pudieron cargar las constantes legales');
-      });
+      })
+      .finally(() => { if (!cancelado) setLoading(false); });
     return () => {
       cancelado = true;
     };
@@ -109,6 +112,7 @@ export function ConstantesLegalesTab() {
   };
 
   return (
+    <TabLoadingGate loading={loading} message="Cargando constantes legales…">
     <div className="space-y-6">
       {/* Año Vigente */}
       <Card className="border-border">
@@ -318,5 +322,6 @@ export function ConstantesLegalesTab() {
         </Button>
       </div>
     </div>
+    </TabLoadingGate>
   );
 }

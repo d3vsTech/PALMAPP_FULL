@@ -29,6 +29,7 @@ import {
 } from '../ui/select';
 import { useConfirmDelete } from '../../hooks/useConfirmDelete';
 import { toast } from 'sonner';
+import { TabLoadingGate } from './TabLoadingGate';
 import {
   configuracionApi,
   ConfiguracionErrorCodes,
@@ -39,6 +40,7 @@ const unidadesMedida = ['gramo', 'kilogramo', 'litro', 'mililitro', 'unidad'];
 
 export function InsumosTab() {
   const [insumos, setInsumos] = useState<Insumo[]>([]);
+  const [loading, setLoading] = useState(true);
   const [openModal, setOpenModal] = useState(false);
   const [insumoEdit, setInsumoEdit] = useState<Insumo | null>(null);
   const [formData, setFormData] = useState({ nombre: '', unidadMedida: '' });
@@ -49,7 +51,8 @@ export function InsumosTab() {
     configuracionApi.insumos
       .listar({ per_page: 100 })
       .then((res) => setInsumos(res.data))
-      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar los insumos'));
+      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar los insumos'))
+      .finally(() => setLoading(false));
   }, []);
 
   const handleOpenModal = (insumo?: Insumo) => {
@@ -171,6 +174,7 @@ export function InsumosTab() {
         </DialogContent>
       </Dialog>
 
+      <TabLoadingGate loading={loading} message="Cargando insumos…">
       <Card className="bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-sm border-border/50">
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -245,6 +249,7 @@ export function InsumosTab() {
           )}
         </CardContent>
       </Card>
+      </TabLoadingGate>
     </>
   );
 }

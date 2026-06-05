@@ -21,6 +21,7 @@ import {
   DialogTitle,
 } from '../ui/dialog';
 import { useConfirmDelete } from '../../hooks/useConfirmDelete';
+import { TabLoadingGate } from './TabLoadingGate';
 import {
   empresasTransportadorasApi,
   transportadoresApi,
@@ -56,6 +57,7 @@ export function TransporteTab() {
 
   const [empresas, setEmpresas] = useState<EmpresaConContador[]>([]);
   const [conductores, setConductores] = useState<Transportador[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [empresasExpandidas, setEmpresasExpandidas] = useState<number[]>([]);
   const [openModalEmpresa, setOpenModalEmpresa] = useState(false);
@@ -81,8 +83,15 @@ export function TransporteTab() {
   };
 
   useEffect(() => {
-    cargarEmpresas();
-    cargarConductores();
+    // Cargo empresas + conductores en paralelo; loading se apaga cuando ambos terminen.
+    Promise.allSettled([
+      empresasTransportadorasApi
+        .listar({ per_page: 100, with_transportadores_count: true })
+        .then((res) => setEmpresas(res.data as EmpresaConContador[])),
+      transportadoresApi
+        .listar({ per_page: 100 })
+        .then((res) => setConductores(res.data)),
+    ]).finally(() => setLoading(false));
   }, []);
 
   // Toggle expandir/contraer empresa
@@ -536,6 +545,7 @@ export function TransporteTab() {
         </DialogContent>
       </Dialog>
 
+      <TabLoadingGate loading={loading} message="Cargando transporte…">
       {/* Empresas de Transporte con Conductores */}
       <Card className="border-border">
         <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
@@ -696,6 +706,7 @@ export function TransporteTab() {
           )}
         </CardContent>
       </Card>
+      </TabLoadingGate>
     </>
   );
 }

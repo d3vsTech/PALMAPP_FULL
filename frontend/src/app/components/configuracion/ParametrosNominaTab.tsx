@@ -18,6 +18,7 @@ import {
   type ConfiguracionNominaPayload,
   type TipoPagoNomina,
 } from '../../../api/configuracion';
+import { TabLoadingGate } from './TabLoadingGate';
 
 /**
  * Tab "Parámetros de Nómina" — visual V.12, datos V.2 (API real).
@@ -70,13 +71,15 @@ function formToPayload(f: FormState): ConfiguracionNominaPayload {
 
 export function ParametrosNominaTab() {
   const [parametros, setParametros] = useState<FormState>(FORM_VACIO);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     configuracionApi.configuracionNomina.obtener()
       .then((res) => setParametros(apiToForm(res.data)))
       .catch((e: any) => {
         toast.error(e?.message ?? 'No se pudieron cargar los parámetros de nómina');
-      });
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   const handleSave = async () => {
@@ -100,6 +103,7 @@ export function ParametrosNominaTab() {
   };
 
   return (
+    <TabLoadingGate loading={loading} message="Cargando parámetros de nómina…">
     <Card className="border-border">
       <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
         <CardTitle>Parámetros de Nómina</CardTitle>
@@ -316,5 +320,6 @@ export function ParametrosNominaTab() {
         </div>
       </CardContent>
     </Card>
+    </TabLoadingGate>
   );
 }

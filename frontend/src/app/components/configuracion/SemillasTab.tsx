@@ -29,6 +29,7 @@ import {
 } from '../ui/select';
 import { useConfirmDelete } from '../../hooks/useConfirmDelete';
 import { toast } from 'sonner';
+import { TabLoadingGate } from './TabLoadingGate';
 import {
   configuracionApi,
   ConfiguracionErrorCodes,
@@ -60,6 +61,15 @@ const SEMILLAS_DEFAULT: Array<{ tipo: TipoSemilla; nombre: string }> = [
 const CACHE_KEY_SEMILLAS = 'palmapp_cfg_semillas_v1';
 
 export function SemillasTab() {
+  const hayCache = (() => {
+    try {
+      const raw = sessionStorage.getItem(CACHE_KEY_SEMILLAS);
+      if (!raw) return false;
+      const parsed = JSON.parse(raw) as Semilla[];
+      return Array.isArray(parsed) && parsed.length > 0;
+    } catch { return false; }
+  })();
+  const [loading, setLoading] = useState(!hayCache);
   const [semillas, setSemillas] = useState<Semilla[]>([]);
   const [openModal, setOpenModal] = useState(false);
   const [semillaEdit, setSemillaEdit] = useState<Semilla | null>(null);
@@ -87,6 +97,8 @@ export function SemillasTab() {
       try {
         const res = await configuracionApi.semillas.listar({ per_page: 100 });
         if (cancelado) return;
+        // Primera respuesta del backend → quitamos el loader.
+        setLoading(false);
         const items = res.data ?? [];
         if (items.length > 0) {
           setSemillas(items);
@@ -122,7 +134,10 @@ export function SemillasTab() {
           if (!cancelado) setSemillas(creadas);
         }
       } catch (e: any) {
-        if (!cancelado) toast.error(e?.message ?? 'No se pudieron cargar las semillas');
+        if (!cancelado) {
+          toast.error(e?.message ?? 'No se pudieron cargar las semillas');
+          setLoading(false);
+        }
       }
     })();
     return () => { cancelado = true; };
@@ -260,6 +275,7 @@ export function SemillasTab() {
         </DialogContent>
       </Dialog>
 
+      <TabLoadingGate loading={loading} message="Cargando semillas…">
       <Card className="bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-sm border-border/50">
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -334,6 +350,7 @@ export function SemillasTab() {
           )}
         </CardContent>
       </Card>
+      </TabLoadingGate>
     </>
   );
 }

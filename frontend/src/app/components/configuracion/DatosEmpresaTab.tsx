@@ -20,6 +20,7 @@ import {
 } from '../../../api/configuracion';
 import { getDepartamentos, getMunicipios } from '../../../api/plantacion';
 import { useAuth } from '../../contexts/AuthContext';
+import { TabLoadingGate } from './TabLoadingGate';
 
 type DaneItem = { codigo: string; nombre: string };
 
@@ -130,6 +131,7 @@ export function DatosEmpresaTab() {
   const { user, updateUser } = useAuth();
   const [tipoPersona, setTipoPersona] = useState<'natural' | 'juridica'>('juridica');
   const [datosEmpresa, setDatosEmpresa] = useState<FormState>(FORM_VACIO);
+  const [loading, setLoading] = useState(true);
 
   // Selects encadenados de Departamento → Municipio (códigos DANE).
   // El payload del backend guarda el NOMBRE (no el código), así que el state
@@ -154,7 +156,8 @@ export function DatosEmpresaTab() {
       })
       .catch((e: any) => {
         toast.error(e?.message ?? 'No se pudo cargar la información de la empresa');
-      });
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   // Cuando ya tengo el listado de departamentos + el nombre cargado del API,
@@ -227,6 +230,7 @@ export function DatosEmpresaTab() {
   };
 
   return (
+    <TabLoadingGate loading={loading} message="Cargando datos de empresa…">
     <div className="space-y-6">
       {/* Información Legal */}
       <Card className="border-border">
@@ -471,5 +475,6 @@ export function DatosEmpresaTab() {
         </Button>
       </div>
     </div>
+    </TabLoadingGate>
   );
 }

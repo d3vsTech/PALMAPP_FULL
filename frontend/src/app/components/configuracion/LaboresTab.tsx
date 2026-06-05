@@ -28,6 +28,7 @@ import {
   type TipoPagoLabor,
   type CategoriaLabor,
 } from '../../../api/configuracion';
+import { TabLoadingGate } from './TabLoadingGate';
 
 /**
  * §4 Labores — catálogo unificado.
@@ -53,6 +54,7 @@ const FORM_VACIO: FormState = { nombre: '', tipo_pago: 'POR_PALMA' };
 
 export function LaboresTab() {
   const [labores, setLabores] = useState<Labor[]>([]);
+  const [loading, setLoading] = useState(true);
   const [modo, setModo] = useState<ModoEdicion | null>(null);
   const [formData, setFormData] = useState<FormState>(FORM_VACIO);
 
@@ -62,7 +64,8 @@ export function LaboresTab() {
     configuracionApi.labores
       .listar({ per_page: 100 })
       .then((res) => setLabores(res.data ?? []))
-      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar las labores'));
+      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar las labores'))
+      .finally(() => setLoading(false));
   }, []);
 
   // Subconjuntos derivados.
@@ -230,11 +233,6 @@ export function LaboresTab() {
                     <SelectItem value="JORNAL_FIJO">Jornal Fijo</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">
-                  {formData.tipo_pago === 'POR_PALMA'
-                    ? 'Se cobra por cada palma trabajada (precio × cantidad).'
-                    : 'Se cobra un valor plano por jornal (sin contar palmas).'}
-                </p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -269,6 +267,7 @@ export function LaboresTab() {
         </DialogContent>
       </Dialog>
 
+      <TabLoadingGate loading={loading} message="Cargando labores…">
       <div className="space-y-6">
         {/* LABORES PALMA — 5 fijas + custom */}
         <Card className="border-border">
@@ -289,7 +288,7 @@ export function LaboresTab() {
           <CardContent className="p-6">
             {laboresPalma.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">
-                Cargando labores de palma…
+                No hay labores de palma configuradas.
               </p>
             ) : (
               <div className="space-y-2">
@@ -396,6 +395,7 @@ export function LaboresTab() {
           </CardContent>
         </Card>
       </div>
+      </TabLoadingGate>
     </>
   );
 }

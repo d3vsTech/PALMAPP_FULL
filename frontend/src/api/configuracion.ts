@@ -801,6 +801,31 @@ export const configuracionApi = {
       apiClient.get<PaginatedResponse<PrecioCosecha>>(`/v1/tenant/precios-cosecha${toQuery(params)}`, T),
   },
 
+  // ── 17. Bundle "Precios de Labores" ───────────────────────────────────────
+  /**
+   * §17 del doc API_PARAMETRICAS.md — reemplaza las 6 llamadas paralelas que
+   * la pantalla de Precios de Labores disparaba al cargar. Devuelve los 6
+   * datasets en una sola respuesta (cacheada server-side, TTL 60s, invalidada
+   * automáticamente por POST/PUT/DELETE en labores, precios-cosecha,
+   * precios-abono o lotes).
+   *
+   * Permiso: `configuracion.editar`.
+   *
+   * Param opcional: `per_page_cosecha` (default 100) — límite de registros de
+   * precios_cosecha incluidos en el bundle.
+   */
+  preciosLaboresBundle: {
+    obtener: (params?: { per_page_cosecha?: number }) =>
+      apiClient.get<{ data: {
+        precios_cosecha: PrecioCosecha[];
+        precios_abono: PrecioAbono[];
+        labores_palma_fijas: Labor[];
+        labores_palma_custom: Labor[];
+        labores_finca: Labor[];
+        lotes: Array<{ id: number; nombre: string; predio_id: number; predio?: { id: number; nombre: string } }>;
+      } }>(`/v1/tenant/configuracion/precios-labores/init${toQuery(params)}`, T),
+  },
+
   // ── 10. Auditoría (solo lectura, shape de paginación no estándar) ──────────
   auditoria: {
     listar: (params?: AuditoriaListadoParams) =>
