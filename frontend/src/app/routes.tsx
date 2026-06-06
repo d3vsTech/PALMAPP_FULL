@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, type ComponentType } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router';
 
 // ─── Carga eager (críticos para el primer paint) ─────────────────────────────
@@ -9,125 +9,169 @@ import NotFound from './pages/errors/NotFound';
 import SinPermisos from './pages/errors/SinPermisos';
 import SinAcceso from './pages/errors/SinAcceso';
 
+/**
+ * Variante de `React.lazy` que recarga la página cuando el chunk dinámico no
+ * existe en el servidor. Pasa típicamente después de un deploy: el `index.html`
+ * cargado en el navegador apunta a hashes viejos (`Foo-DyE1VCcD.js`), Netlify
+ * ya los purgó y el `import()` revienta con "Failed to fetch dynamically
+ * imported module".
+ *
+ * Estrategia: un solo retry forzando un `location.reload()`. Usamos
+ * `sessionStorage` como circuit breaker para no entrar en loop si el error
+ * persiste tras el reload (en ese caso es una falla real — propagamos).
+ */
+const RELOAD_FLAG = 'palmapp_chunk_reload_attempted';
+
+function lazyWithRetry<T extends ComponentType<any>>(
+  factory: () => Promise<{ default: T }>,
+): ReturnType<typeof lazy<T>> {
+  return lazy(async () => {
+    try {
+      const mod = await factory();
+      // Carga exitosa → limpiamos el flag para futuros deploys.
+      try { window.sessionStorage.removeItem(RELOAD_FLAG); } catch {}
+      return mod;
+    } catch (err: any) {
+      const msg = String(err?.message ?? err);
+      const esChunkError =
+        msg.includes('Failed to fetch dynamically imported module') ||
+        msg.includes('Importing a module script failed') ||
+        err?.name === 'ChunkLoadError';
+      const yaReintentado = (() => {
+        try { return window.sessionStorage.getItem(RELOAD_FLAG) === '1'; }
+        catch { return false; }
+      })();
+      if (esChunkError && !yaReintentado) {
+        try { window.sessionStorage.setItem(RELOAD_FLAG, '1'); } catch {}
+        window.location.reload();
+        // Devolvemos una promesa que nunca resuelve para suspender el render
+        // mientras el navegador recarga la página.
+        return new Promise<{ default: T }>(() => {});
+      }
+      throw err;
+    }
+  });
+}
+
 // ─── Carga lazy (cada pantalla se descarga al entrar) ────────────────────────
 // Auth secundario
-const RecuperarPassword = lazy(() => import('./pages/auth/RecuperarPassword'));
-const RestablecerPassword = lazy(() => import('./pages/auth/RestablecerPassword'));
-const SeleccionarFinca = lazy(() => import('./pages/auth/SeleccionarFinca'));
+const RecuperarPassword = lazyWithRetry(() => import('./pages/auth/RecuperarPassword'));
+const RestablecerPassword = lazyWithRetry(() => import('./pages/auth/RestablecerPassword'));
+const SeleccionarFinca = lazyWithRetry(() => import('./pages/auth/SeleccionarFinca'));
 
 // Dashboard
-const Dashboard = lazy(() => import('./pages/dashboard/Dashboard'));
+const Dashboard = lazyWithRetry(() => import('./pages/dashboard/Dashboard'));
 
 // Agente IA
-const AgenteIA = lazy(() => import('./pages/agente-ia/AgenteIA'));
+const AgenteIA = lazyWithRetry(() => import('./pages/agente-ia/AgenteIA'));
 
 // Métricas
-const ProductividadColaboradores = lazy(() => import('./pages/metricas/ProductividadColaboradores'));
-const PreciosCosecha = lazy(() => import('./pages/metricas/PreciosCosecha'));
-const PromediosLote = lazy(() => import('./pages/metricas/PromediosLote'));
-const EstadisticasGenerales = lazy(() => import('./pages/metricas/EstadisticasGenerales'));
-const ComparativosHistoricos = lazy(() => import('./pages/metricas/ComparativosHistoricos'));
+const ProductividadColaboradores = lazyWithRetry(() => import('./pages/metricas/ProductividadColaboradores'));
+const PreciosCosecha = lazyWithRetry(() => import('./pages/metricas/PreciosCosecha'));
+const PromediosLote = lazyWithRetry(() => import('./pages/metricas/PromediosLote'));
+const EstadisticasGenerales = lazyWithRetry(() => import('./pages/metricas/EstadisticasGenerales'));
+const ComparativosHistoricos = lazyWithRetry(() => import('./pages/metricas/ComparativosHistoricos'));
 
 // Plantación
-const MiPlantacion = lazy(() => import('./pages/plantacion/MiPlantacion'));
-const NuevoPredioWizard = lazy(() => import('./pages/plantacion/NuevoPredioWizard'));
-const CrearEditarLote = lazy(() => import('./pages/plantacion/CrearEditarLote'));
-const LoteDetalle = lazy(() => import('./pages/plantacion/LoteDetalle'));
-const CrearSublote = lazy(() => import('./pages/plantacion/CrearSublote'));
-const CrearLinea = lazy(() => import('./pages/plantacion/CrearLinea'));
-const CrearPalmas = lazy(() => import('./pages/plantacion/CrearPalmas'));
+const MiPlantacion = lazyWithRetry(() => import('./pages/plantacion/MiPlantacion'));
+const NuevoPredioWizard = lazyWithRetry(() => import('./pages/plantacion/NuevoPredioWizard'));
+const CrearEditarLote = lazyWithRetry(() => import('./pages/plantacion/CrearEditarLote'));
+const LoteDetalle = lazyWithRetry(() => import('./pages/plantacion/LoteDetalle'));
+const CrearSublote = lazyWithRetry(() => import('./pages/plantacion/CrearSublote'));
+const CrearLinea = lazyWithRetry(() => import('./pages/plantacion/CrearLinea'));
+const CrearPalmas = lazyWithRetry(() => import('./pages/plantacion/CrearPalmas'));
 
 // Colaboradores
-const Colaboradores = lazy(() => import('./pages/colaboradores/Colaboradores'));
-const ColaboradorDetail = lazy(() => import('./pages/colaboradores/ColaboradorDetail'));
-const NuevoColaboradorWizard = lazy(() => import('./pages/colaboradores/NuevoColaboradorWizard'));
+const Colaboradores = lazyWithRetry(() => import('./pages/colaboradores/Colaboradores'));
+const ColaboradorDetail = lazyWithRetry(() => import('./pages/colaboradores/ColaboradorDetail'));
+const NuevoColaboradorWizard = lazyWithRetry(() => import('./pages/colaboradores/NuevoColaboradorWizard'));
 
 // Nómina
-const Nomina = lazy(() => import('./pages/nomina/Nomina'));
-const NominaDetalle = lazy(() => import('./pages/nomina/NominaDetalle'));
-const NuevaNominaWizard = lazy(() => import('./pages/nomina/NuevaNominaWizard'));
-const NuevoPrestamo = lazy(() => import('./pages/nomina/NuevoPrestamo'));
-const NuevaLiquidacionWizard = lazy(() => import('./pages/nomina/NuevaLiquidacionWizard'));
-const LiquidarColaborador = lazy(() => import('./pages/nomina/LiquidarColaborador'));
-const VerLiquidacion = lazy(() => import('./pages/nomina/VerLiquidacion'));
-const PlanillaDiaria = lazy(() => import('./pages/nomina/PlanillaDiaria'));
-const DesprendiblePago = lazy(() => import('./pages/nomina/DesprendiblePago'));
+const Nomina = lazyWithRetry(() => import('./pages/nomina/Nomina'));
+const NominaDetalle = lazyWithRetry(() => import('./pages/nomina/NominaDetalle'));
+const NuevaNominaWizard = lazyWithRetry(() => import('./pages/nomina/NuevaNominaWizard'));
+const NuevoPrestamo = lazyWithRetry(() => import('./pages/nomina/NuevoPrestamo'));
+const NuevaLiquidacionWizard = lazyWithRetry(() => import('./pages/nomina/NuevaLiquidacionWizard'));
+const LiquidarColaborador = lazyWithRetry(() => import('./pages/nomina/LiquidarColaborador'));
+const VerLiquidacion = lazyWithRetry(() => import('./pages/nomina/VerLiquidacion'));
+const PlanillaDiaria = lazyWithRetry(() => import('./pages/nomina/PlanillaDiaria'));
+const DesprendiblePago = lazyWithRetry(() => import('./pages/nomina/DesprendiblePago'));
 
 // Liquidaciones
-const LiquidacionesLayout = lazy(() => import('./pages/liquidaciones/LiquidacionesLayout'));
-const Liquidaciones = lazy(() => import('./pages/liquidaciones/Liquidaciones'));
-const CesantiasDetalle = lazy(() => import('./pages/liquidaciones/CesantiasDetalle'));
-const InteresesDetalle = lazy(() => import('./pages/liquidaciones/InteresesDetalle'));
-const PrimaDetalle = lazy(() => import('./pages/liquidaciones/PrimaDetalle'));
-const VacacionesDetalle = lazy(() => import('./pages/liquidaciones/VacacionesDetalle'));
-const LiquidacionFinalDetalle = lazy(() => import('./pages/liquidaciones/LiquidacionFinalDetalle'));
+const LiquidacionesLayout = lazyWithRetry(() => import('./pages/liquidaciones/LiquidacionesLayout'));
+const Liquidaciones = lazyWithRetry(() => import('./pages/liquidaciones/Liquidaciones'));
+const CesantiasDetalle = lazyWithRetry(() => import('./pages/liquidaciones/CesantiasDetalle'));
+const InteresesDetalle = lazyWithRetry(() => import('./pages/liquidaciones/InteresesDetalle'));
+const PrimaDetalle = lazyWithRetry(() => import('./pages/liquidaciones/PrimaDetalle'));
+const VacacionesDetalle = lazyWithRetry(() => import('./pages/liquidaciones/VacacionesDetalle'));
+const LiquidacionFinalDetalle = lazyWithRetry(() => import('./pages/liquidaciones/LiquidacionFinalDetalle'));
 
 // Operaciones
-const Operaciones = lazy(() => import('./pages/operaciones/Operaciones'));
-const NuevaPlanillaWizard = lazy(() => import('./pages/operaciones/NuevaPlanillaWizard'));
-const VerPlanilla = lazy(() => import('./pages/operaciones/Verplanilla'));
+const Operaciones = lazyWithRetry(() => import('./pages/operaciones/Operaciones'));
+const NuevaPlanillaWizard = lazyWithRetry(() => import('./pages/operaciones/NuevaPlanillaWizard'));
+const VerPlanilla = lazyWithRetry(() => import('./pages/operaciones/Verplanilla'));
 
 // Viajes
-const Viajes = lazy(() => import('./pages/viajes/Viajes'));
-const DetalleViaje = lazy(() => import('./pages/viajes/DetalleViaje'));
-const ConteoCosecha = lazy(() => import('./pages/viajes/ConteoCosecha'));
-const ConteoCosechaWizard = lazy(() => import('./pages/viajes/Conteocosechawizard'));
-const NuevoEditarViaje = lazy(() => import('./pages/viajes/Nuevoeditarviaje'));
+const Viajes = lazyWithRetry(() => import('./pages/viajes/Viajes'));
+const DetalleViaje = lazyWithRetry(() => import('./pages/viajes/DetalleViaje'));
+const ConteoCosecha = lazyWithRetry(() => import('./pages/viajes/ConteoCosecha'));
+const ConteoCosechaWizard = lazyWithRetry(() => import('./pages/viajes/Conteocosechawizard'));
+const NuevoEditarViaje = lazyWithRetry(() => import('./pages/viajes/Nuevoeditarviaje'));
 
 // Market
-const Market = lazy(() => import('./pages/market/Market'));
-const Proveedores = lazy(() => import('./pages/market/Proveedores'));
-const ProveedorDetalle = lazy(() => import('./pages/market/Proveedordetalle'));
-const ProductoDetalle = lazy(() => import('./pages/market/Productodetalle'));
-const Carrito = lazy(() => import('./pages/market/Carrito'));
-const Checkout = lazy(() => import('./pages/market/Checkout'));
-const Pedidos = lazy(() => import('./pages/market/Pedidos'));
-const PedidoDetalle = lazy(() => import('./pages/market/Pedidodetalle'));
+const Market = lazyWithRetry(() => import('./pages/market/Market'));
+const Proveedores = lazyWithRetry(() => import('./pages/market/Proveedores'));
+const ProveedorDetalle = lazyWithRetry(() => import('./pages/market/Proveedordetalle'));
+const ProductoDetalle = lazyWithRetry(() => import('./pages/market/Productodetalle'));
+const Carrito = lazyWithRetry(() => import('./pages/market/Carrito'));
+const Checkout = lazyWithRetry(() => import('./pages/market/Checkout'));
+const Pedidos = lazyWithRetry(() => import('./pages/market/Pedidos'));
+const PedidoDetalle = lazyWithRetry(() => import('./pages/market/Pedidodetalle'));
 
 // Usuarios
-const Usuarios = lazy(() => import('./pages/usuarios/Usuarios'));
-const UsuarioDetalle = lazy(() => import('./pages/usuarios/UsuarioDetalle'));
-const UsuarioNuevoEditar = lazy(() => import('./pages/usuarios/UsuarioNuevoEditar'));
-const UsuarioPermisos = lazy(() => import('./pages/usuarios/UsuarioPermisos'));
+const Usuarios = lazyWithRetry(() => import('./pages/usuarios/Usuarios'));
+const UsuarioDetalle = lazyWithRetry(() => import('./pages/usuarios/UsuarioDetalle'));
+const UsuarioNuevoEditar = lazyWithRetry(() => import('./pages/usuarios/UsuarioNuevoEditar'));
+const UsuarioPermisos = lazyWithRetry(() => import('./pages/usuarios/UsuarioPermisos'));
 
 // Configuración
-const Configuracion = lazy(() => import('./pages/configuracion/Configuracion'));
-const NuevoConceptoNomina = lazy(() => import('./pages/configuracion/NuevoConceptoNomina'));
-const NuevaExtractora = lazy(() => import('./pages/configuracion/NuevaExtractora'));
+const Configuracion = lazyWithRetry(() => import('./pages/configuracion/Configuracion'));
+const NuevoConceptoNomina = lazyWithRetry(() => import('./pages/configuracion/NuevoConceptoNomina'));
+const NuevaExtractora = lazyWithRetry(() => import('./pages/configuracion/NuevaExtractora'));
 
-const MiPerfil = lazy(() => import('./pages/perfil/MiPerfil'));
+const MiPerfil = lazyWithRetry(() => import('./pages/perfil/MiPerfil'));
 
 // Super Admin
-const SuperAdminLogin = lazy(() => import('./pages/super-admin/SuperAdminLogin'));
-const SuperAdminLayout = lazy(() => import('./pages/super-admin/SuperAdminLayout'));
-const SuperAdminDashboard = lazy(() => import('./pages/super-admin/SuperAdminDashboard'));
-const Fincas = lazy(() => import('./pages/super-admin/Fincas'));
-const UsuariosFinca = lazy(() => import('./pages/super-admin/UsuariosFinca'));
-const ProveedoresAdmin = lazy(() => import('./pages/super-admin/Proveedores'));
-const UsuariosProveedor = lazy(() => import('./pages/super-admin/UsuariosProveedor'));
-const Actividad = lazy(() => import('./pages/super-admin/Actividad'));
-const Diagnosticos = lazy(() => import('./pages/super-admin/Diagnosticos'));
-const RecuperarPasswordSuperAdmin = lazy(() => import('./pages/super-admin/RecuperarPassword'));
-const RestablecerPasswordSuperAdmin = lazy(() => import('./pages/super-admin/RestablecerPassword'));
+const SuperAdminLogin = lazyWithRetry(() => import('./pages/super-admin/SuperAdminLogin'));
+const SuperAdminLayout = lazyWithRetry(() => import('./pages/super-admin/SuperAdminLayout'));
+const SuperAdminDashboard = lazyWithRetry(() => import('./pages/super-admin/SuperAdminDashboard'));
+const Fincas = lazyWithRetry(() => import('./pages/super-admin/Fincas'));
+const UsuariosFinca = lazyWithRetry(() => import('./pages/super-admin/UsuariosFinca'));
+const ProveedoresAdmin = lazyWithRetry(() => import('./pages/super-admin/Proveedores'));
+const UsuariosProveedor = lazyWithRetry(() => import('./pages/super-admin/UsuariosProveedor'));
+const Actividad = lazyWithRetry(() => import('./pages/super-admin/Actividad'));
+const Diagnosticos = lazyWithRetry(() => import('./pages/super-admin/Diagnosticos'));
+const RecuperarPasswordSuperAdmin = lazyWithRetry(() => import('./pages/super-admin/RecuperarPassword'));
+const RestablecerPasswordSuperAdmin = lazyWithRetry(() => import('./pages/super-admin/RestablecerPassword'));
 
 // Proveedor (módulo independiente)
-const ProveedorLogin = lazy(() => import('./pages/proveedor/ProveedorLogin'));
-const ProveedorRecuperarPassword = lazy(() => import('./pages/proveedor/ProveedorRecuperarPassword'));
-const ProveedorRestablecerPassword = lazy(() => import('./pages/proveedor/ProveedorRestablecerPassword'));
-const SeleccionarProveedor = lazy(() => import('./pages/proveedor/SeleccionarProveedor'));
-const ProveedorLayout = lazy(() => import('./pages/proveedor/ProveedorLayout'));
-const ProveedorDashboard = lazy(() => import('./pages/proveedor/ProveedorDashboard'));
-const ProveedorProductos = lazy(() => import('./pages/proveedor/ProveedorProductos'));
-const ProveedorPedidos = lazy(() => import('./pages/proveedor/ProveedorPedidos'));
-const ProveedorEstadisticas = lazy(() => import('./pages/proveedor/ProveedorEstadisticas'));
-const ProveedorConfiguracion = lazy(() => import('./pages/proveedor/ProveedorConfiguracion'));
-const MiPerfilProveedor = lazy(() => import('./pages/proveedor/MiPerfilProveedor'));
-const NuevoProductoProv = lazy(() => import('./pages/proveedor/NuevoProducto'));
-const EditarProductoProv = lazy(() => import('./pages/proveedor/EditarProducto'));
-const ProductoDetalleProv = lazy(() => import('./pages/proveedor/ProductoDetalle'));
-const CargaMasivaProductos = lazy(() => import('./pages/proveedor/CargaMasivaProductos'));
-const PedidoDetalleProv = lazy(() => import('./pages/proveedor/PedidoDetalle'));
-const ConfiguracionInicialWizard = lazy(() => import('./pages/proveedor/ConfiguracionInicialWizard'));
+const ProveedorLogin = lazyWithRetry(() => import('./pages/proveedor/ProveedorLogin'));
+const ProveedorRecuperarPassword = lazyWithRetry(() => import('./pages/proveedor/ProveedorRecuperarPassword'));
+const ProveedorRestablecerPassword = lazyWithRetry(() => import('./pages/proveedor/ProveedorRestablecerPassword'));
+const SeleccionarProveedor = lazyWithRetry(() => import('./pages/proveedor/SeleccionarProveedor'));
+const ProveedorLayout = lazyWithRetry(() => import('./pages/proveedor/ProveedorLayout'));
+const ProveedorDashboard = lazyWithRetry(() => import('./pages/proveedor/ProveedorDashboard'));
+const ProveedorProductos = lazyWithRetry(() => import('./pages/proveedor/ProveedorProductos'));
+const ProveedorPedidos = lazyWithRetry(() => import('./pages/proveedor/ProveedorPedidos'));
+const ProveedorEstadisticas = lazyWithRetry(() => import('./pages/proveedor/ProveedorEstadisticas'));
+const ProveedorConfiguracion = lazyWithRetry(() => import('./pages/proveedor/ProveedorConfiguracion'));
+const MiPerfilProveedor = lazyWithRetry(() => import('./pages/proveedor/MiPerfilProveedor'));
+const NuevoProductoProv = lazyWithRetry(() => import('./pages/proveedor/NuevoProducto'));
+const EditarProductoProv = lazyWithRetry(() => import('./pages/proveedor/EditarProducto'));
+const ProductoDetalleProv = lazyWithRetry(() => import('./pages/proveedor/ProductoDetalle'));
+const CargaMasivaProductos = lazyWithRetry(() => import('./pages/proveedor/CargaMasivaProductos'));
+const PedidoDetalleProv = lazyWithRetry(() => import('./pages/proveedor/PedidoDetalle'));
+const ConfiguracionInicialWizard = lazyWithRetry(() => import('./pages/proveedor/ConfiguracionInicialWizard'));
 
 /** Loader visual cuando una ruta lazy se está descargando. */
 function PageLoader() {

@@ -192,6 +192,10 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   // ── Estado planilla ID + loading ─────────────────────────────────────────
   const [planillaId, setPlanillaId] = useState<number | null>(idParam ? Number(idParam) : null);
   const [guardando, setGuardando] = useState(false);
+  /** Se vuelve true tras un Guardado exitoso (explícito o autosave). Inhibe el
+   *  autosave al desmontar para que no dispare un segundo POST que duplicaría
+   *  los jornales/cosechas/horas-extra/ausencias del flujo legacy. */
+  const [planillaPersistida, setPlanillaPersistida] = useState(false);
   const [resumen, setResumen] = useState<import('../../../api/operaciones').Resumen | null>(null);
 
   const cargarResumen = async (pid: number) => {
@@ -571,8 +575,16 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
     }
   };
 
-  const guardarTodo = async () => {
-    setGuardando(true);
+  /**
+   * Persiste la planilla y todos sus hijos (cosechas/jornales/horas-extra/ausencias).
+   *
+   * Modo silencioso (`opts.silent`): usado por el autosave al salir del wizard
+   * sin pulsar "Guardar Planilla". Skipea el chequeo de duplicados, no muestra
+   * toasts ni navega. Cualquier error se traga (no hay UI activa para mostrarlo).
+   */
+  const guardarTodo = async (opts: { silent?: boolean } = {}) => {
+    const silent = opts.silent === true;
+    if (!silent) setGuardando(true);
     try {
       const headerBody = {
         fecha,
@@ -584,8 +596,11 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
       };
       let pid = planillaId;
       if (!pid) {
-        // Validar que no exista ya una planilla para esa fecha
-        if (fecha) {
+        // Validar que no exista ya una planilla para esa fecha (solo en modo
+        // interactivo — el autosave salta la verificación porque si llegó aquí
+        // sin pid es porque el usuario nunca pulsó Guardar; mejor un BORRADOR
+        // duplicable que perder los datos).
+        if (!silent && fecha) {
           try {
             const dup = await operacionesApi.listar({ fecha_desde: fecha, fecha_hasta: fecha, per_page: 5 });
             const yaExiste = (dup.data ?? []).some((p: any) => {
@@ -793,14 +808,56 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         } catch {}
       }
 
-      toast.success(planillaId ? 'Planilla actualizada' : 'Planilla guardada');
-      navigate('/operaciones');
+      setPlanillaPersistida(true);
+      if (!silent) {
+        toast.success(planillaId ? 'Planilla actualizada' : 'Planilla guardada');
+        navigate('/operaciones');
+      }
     } catch (err: any) {
-      toast.error(err?.message ?? 'Error al guardar la planilla');
+      if (!silent) toast.error(err?.message ?? 'Error al guardar la planilla');
     } finally {
-      setGuardando(false);
+      if (!silent) setGuardando(false);
     }
   };
+
+  // ── Autosave al salir del wizard sin pulsar "Guardar Planilla" ───────────
+  //
+  // Se mantiene un ref con la closure fresca para que el cleanup del useEffect
+  // (que solo corre con array vacío en el primer mount) tenga acceso al estado
+  // más reciente. Guarda como BORRADOR si:
+  //   - No estamos en modo lectura.
+  //   - No se ha persistido todavía (evita duplicar hijos del flujo legacy).
+  //   - Hay datos mínimos para que el backend acepte el POST (fecha + elaborado_por).
+  const guardarBorradorRef = useRef<() => void>(() => {});
+  guardarBorradorRef.current = () => {
+    if (modoLectura) return;
+    if (planillaPersistida) return;
+    if (planillaId) return; // ya existe → re-disparar duplicaría hijos
+    if (!fecha || !elaboradoPor) return;
+    // Disparado en background. No espera la promesa: el componente ya se está
+    // desmontando o la página se está cerrando. La petición termina sola.
+    void guardarTodo({ silent: true });
+  };
+
+  useEffect(() => {
+    return () => { guardarBorradorRef.current(); };
+  }, []);
+
+  // Aviso del navegador antes de refresh / cerrar pestaña cuando hay datos
+  // sin persistir. No podemos disparar una petición fiable aquí (el navegador
+  // suele matar el fetch), así que solo pedimos confirmación al usuario.
+  useEffect(() => {
+    if (modoLectura) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (planillaPersistida) return;
+      if (planillaId) return;
+      if (!fecha) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [modoLectura, planillaPersistida, planillaId, fecha]);
 
   // Funciones para agregar trabajos
   const agregarCosecha = () => {
@@ -3434,7 +3491,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                 </Button>
               ) : modoLectura ? null : (
                 <Button
-                  onClick={guardarTodo} disabled={guardando} className="gap-2 bg-success hover:bg-success/90"
+                  onClick={() => guardarTodo()} disabled={guardando} className="gap-2 bg-success hover:bg-success/90"
                 >
                   <Save className="h-4 w-4" />
                   Guardar Planilla
