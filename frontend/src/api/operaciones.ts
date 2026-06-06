@@ -161,24 +161,56 @@ export interface Jornal {
   insumo?: any;
 }
 
+/** Estado de la hora extra. `LIQUIDADA` se llena al cerrar la nómina (snapshot
+ *  en `nomina_hora_extra_ref`). Una vez LIQUIDADA, el registro es inmutable. */
+export type EstadoHoraExtra = 'PENDIENTE' | 'APROBADA' | 'RECHAZADA' | 'LIQUIDADA';
+
+/** Subobjeto eager-loaded en `HoraExtra.tipoHoraExtra` (camelCase del backend). */
+export interface HoraExtraTipoRef {
+  id: number;
+  codigo: string;
+  nombre: string;
+  porcentaje_recargo: string | number;
+  franja_horaria?: string;
+  aplica_festivo?: boolean;
+  es_extra?: boolean;
+  paga_hora_completa?: boolean;
+}
+
 export interface HoraExtra {
   id: number;
   operacion_id: number;
   empleado_id: number;
   tipo_hora_extra_id: number;
+  /** Snapshot del tipo al crear el registro. */
   codigo: string;
+  /** Snapshot. */
   porcentaje_recargo: string | number;
+  /** Snapshot. */
   paga_hora_completa: boolean;
   cantidad_horas: string | number;
+  /** Snapshot: `salario_base / tenant_config.divisor_jornada_mensual` al crear. */
   valor_hora_base: string | number;
+  /** Total a pagar. Fórmula §2.3 del doc API_HORAS_EXTRA.md. */
   valor_calculado: string | number;
-  estado: EstadoNovedad;
+  estado: EstadoHoraExtra;
   observacion?: string | null;
   aprobado_por?: number | null;
   aprobado_at?: string | null;
   motivo_rechazo?: string | null;
-  empleado?: any;
-  tipoHoraExtra?: any;
+  /** Se llena al cerrar nómina → estado LIQUIDADA. */
+  nomina_id?: number | null;
+  empleado?: { id: number; primer_nombre?: string; primer_apellido?: string; [k: string]: any };
+  tipoHoraExtra?: HoraExtraTipoRef;
+}
+
+/** Payload del wizard Paso 4 — POST /operaciones/{id}/horas-extra. */
+export interface HoraExtraPayload {
+  empleado_id: number;
+  tipo_hora_extra_id: number;
+  /** 0.25 a 12. */
+  cantidad_horas: number;
+  observacion?: string;
 }
 
 export interface Ausencia {
@@ -415,25 +447,34 @@ export const jornalesApi = {
 // 4. horasExtraApi
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Cliente del módulo Horas Extras (doc API_HORAS_EXTRA.md §2.4).
+ *
+ * Permisos por acción:
+ *  - `crear` / `editar` / `eliminar`: `operaciones.{crear|editar|eliminar}`.
+ *  - `aprobar` / `rechazar`: `configuracion.editar`.
+ *
+ * Máquina de estados (§2.2):
+ *   PENDIENTE → APROBADA (vía aprobar) → LIQUIDADA (al cerrar nómina).
+ *   PENDIENTE → RECHAZADA (vía rechazar).
+ * Toda mutación está bloqueada si la planilla padre está `APROBADA`
+ * (`OPERACION_APROBADA`), salvo aprobar/rechazar que sí funcionan ahí.
+ * Una vez `LIQUIDADA`, el registro es inmutable (`HORA_EXTRA_LIQUIDADA`).
+ *
+ * El backend snapshotea `codigo`, `porcentaje_recargo`, `paga_hora_completa`
+ * y `valor_hora_base` al crear, y recalcula `valor_calculado` si cambian
+ * `empleado_id`/`tipo_hora_extra_id`/`cantidad_horas` al editar.
+ */
 export const horasExtraApi = {
-  crear: (operacionId: number, payload: {
-    empleado_id: number;
-    tipo_hora_extra_id: number;
-    cantidad_horas: number;
-    observacion?: string;
-  }) =>
-    smartRequest<{ data: any }>(`${BASE}/operaciones/${operacionId}/horas-extra`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
+  crear: (operacionId: number, payload: HoraExtraPayload) =>
+    smartRequest<{ data: HoraExtra; message?: string }>(
+      `${BASE}/operaciones/${operacionId}/horas-extra`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
 
-  editar: (id: number, payload: Partial<{
-    empleado_id: number;
-    tipo_hora_extra_id: number;
-    cantidad_horas: number;
-    observacion: string;
-  }>) =>
-    smartRequest<{ data: any }>(`${BASE}/horas-extra/${id}`, {
+  editar: (id: number, payload: Partial<HoraExtraPayload>) =>
+    smartRequest<{ data: HoraExtra; message?: string }>(`${BASE}/horas-extra/${id}`, {
       method: 'PUT',
       body: JSON.stringify(payload),
     }),
@@ -442,14 +483,51 @@ export const horasExtraApi = {
     smartRequest<{ message: string }>(`${BASE}/horas-extra/${id}`, { method: 'DELETE' }),
 
   aprobar: (id: number) =>
-    smartRequest<{ data: any }>(`${BASE}/horas-extra/${id}/aprobar`, { method: 'POST' }),
+    smartRequest<{ data: HoraExtra; message?: string }>(
+      `${BASE}/horas-extra/${id}/aprobar`, { method: 'POST' }),
 
   rechazar: (id: number, motivo_rechazo: string) =>
-    smartRequest<{ data: any }>(`${BASE}/horas-extra/${id}/rechazar`, {
-      method: 'POST',
-      body: JSON.stringify({ motivo_rechazo }),
-    }),
+    smartRequest<{ data: HoraExtra; message?: string }>(
+      `${BASE}/horas-extra/${id}/rechazar`, {
+        method: 'POST',
+        body: JSON.stringify({ motivo_rechazo }),
+      }),
 };
+
+/**
+ * Pre-cálculo en frontend del `valor_calculado` para vista previa en el
+ * wizard antes de enviar al backend. Aplica exactamente la fórmula §2.3:
+ *
+ *   valor_hora_base = salario_base / divisor_jornada_mensual
+ *   pagaCompleta=true  → cantidad × valor_hora_base × (1 + pct/100)
+ *   pagaCompleta=false → cantidad × valor_hora_base × (pct/100)
+ *
+ * Si no hay `salario_base` (empleados PRODUCCION) se debe pasar el SMMLV
+ * del tenant como fallback. Devuelve `null` si los inputs no son finitos.
+ *
+ * El backend confirma el cálculo en la respuesta 201 y snapshotea el valor
+ * en el registro, así que esto es solo para UX (no autoritativo).
+ */
+export function calcularValorHoraExtra(input: {
+  salario_base: number;
+  divisor_jornada_mensual: number;
+  porcentaje_recargo: number | string;
+  paga_hora_completa: boolean;
+  cantidad_horas: number | string;
+}): { valor_hora_base: number; valor_calculado: number } | null {
+  const sal = Number(input.salario_base);
+  const div = Number(input.divisor_jornada_mensual);
+  const pct = Number(input.porcentaje_recargo);
+  const qty = Number(input.cantidad_horas);
+  if (!Number.isFinite(sal) || !Number.isFinite(div) || div <= 0) return null;
+  if (!Number.isFinite(pct) || !Number.isFinite(qty)) return null;
+  const valor_hora_base = sal / div;
+  const factor = input.paga_hora_completa ? 1 + pct / 100 : pct / 100;
+  return {
+    valor_hora_base: Number(valor_hora_base.toFixed(2)),
+    valor_calculado: Number((qty * valor_hora_base * factor).toFixed(2)),
+  };
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 5. ausenciasApi
@@ -599,15 +677,17 @@ export const selectsApi = {
       color?: string;
     }> }>(`${BASE}/motivos-ausencia/select${qs(params)}`),
 
+  /** §1.3 — dropdown del wizard. Default `estado=true`. */
   tiposHoraExtra: (params: { estado?: boolean } = {}) =>
     requestConToken<{ data: Array<{
       id: number;
       nombre: string;
-      codigo?: string;
-      porcentaje_recargo?: string | number;
-      franja_horaria?: string;
-      es_extra?: boolean;
-      paga_hora_completa?: boolean;
+      codigo: string;
+      porcentaje_recargo: string | number;
+      franja_horaria: 'DIURNO' | 'NOCTURNO' | 'MIXTO';
+      aplica_festivo: boolean;
+      es_extra: boolean;
+      paga_hora_completa: boolean;
     }> }>(`${BASE}/tipos-hora-extra/select${qs(params)}`),
 
   /**

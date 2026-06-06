@@ -432,13 +432,16 @@ export interface TipoHoraExtraPayload {
 }
 
 /** Item devuelto por `GET /tipos-hora-extra/codigos` — los 7 códigos legales
- *  colombianos con metadata para pre-poblar el form "Nuevo Tipo de Hora Extra". */
+ *  colombianos con metadata para pre-poblar el form "Nuevo Tipo de Hora Extra".
+ *  `porcentaje_recargo` corresponde a la **Ley 2466/2025** (HRD 90%, HEDF 115%,
+ *  HENF 165%, RND 125%). */
 export interface TipoHoraExtraCodigoItem {
   codigo: CodigoHoraExtra;
   nombre: string;
   descripcion: string;
   es_extra: boolean;
   paga_hora_completa: boolean;
+  porcentaje_recargo: number | string;
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -584,6 +587,18 @@ export interface MotivoAusencia {
   /** Hex `#RRGGBB` (regex `/^#[0-9a-fA-F]{6}$/`). Usado para el punto de color del listado. */
   color: string;
   estado: boolean;
+  /** Condición legal / restricción de días (ej. "Día 1-2: 100% / Día 3-90: 66.67%"). Solo informativo. */
+  condicion?: string | null;
+  /** Norma de referencia (ej. "Art. 227 CST", "Ley 1822 de 2017"). Solo informativo. */
+  norma_legal?: string | null;
+  /** Descripción libre de la fórmula. Solo informativo. */
+  formula_calculo?: string | null;
+  /** Se **snapshottea en `ausencias.afecta_seguridad_social`** al crear la ausencia. IBC salud/pensión. */
+  afecta_seguridad_social?: boolean;
+  /** Snapshoteado en ausencias. Cuenta para SENA, ICBF, Caja de Compensación. */
+  afecta_parafiscales?: boolean;
+  /** Snapshoteado en ausencias. Cuenta para cesantías, prima, vacaciones. */
+  afecta_prestaciones?: boolean;
 }
 
 export interface MotivoAusenciaPayload {
@@ -596,6 +611,12 @@ export interface MotivoAusenciaPayload {
   /** Hex `#RRGGBB`. */
   color?: string;
   estado?: boolean;
+  condicion?: string | null;
+  norma_legal?: string | null;
+  formula_calculo?: string | null;
+  afecta_seguridad_social?: boolean;
+  afecta_parafiscales?: boolean;
+  afecta_prestaciones?: boolean;
 }
 
 export interface MotivoAusenciaSelectItem {
@@ -607,6 +628,9 @@ export interface MotivoAusenciaSelectItem {
   porcentaje_pago_default: number | string;
   requiere_soporte: boolean;
   color: string;
+  afecta_seguridad_social?: boolean;
+  afecta_parafiscales?: boolean;
+  afecta_prestaciones?: boolean;
 }
 
 export interface MotivoAusenciaListadoParams extends ParametricaParams {

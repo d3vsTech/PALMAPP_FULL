@@ -61,16 +61,15 @@ function hexDesdeClase(clase: string): string {
 }
 
 /**
- * Deriva las dos columnas "S.S. / Paraf." y "Prest." de la tabla a partir del
- * `tipo_base` del motivo. La regla sigue el manejo estándar colombiano:
+ * Fallback para motivos viejos que aún no traen los flags individuales del
+ * backend (`afecta_seguridad_social` / `afecta_parafiscales` / `afecta_prestaciones`).
+ * Reglas estándar colombianas:
  *  - Incapacidades EPS/ARL → la SS y las prestaciones las paga la EPS/ARL,
- *    no la empresa, así que NO aplican.
+ *    no la empresa.
  *  - Licencias remuneradas (maternidad, paternidad, luto, calamidad,
  *    permiso remunerado) → SÍ acumulan SS y prestaciones.
- *  - Permiso no remunerado / ausencia injustificada / suspensión / >180 días
- *    → NO acumulan ni SS ni prestaciones.
- *  - OTRO (custom) → conservador: false/false (el admin puede ajustar
- *    porcentaje_pago si quiere otro comportamiento).
+ *  - Permiso no remunerado / ausencia injustificada / suspensión → NO acumulan.
+ *  - OTRO → conservador.
  */
 function flagsDesdeTipoBase(tipoBase: TipoBaseAusencia): { ss: boolean; prest: boolean } {
   switch (tipoBase) {
@@ -91,6 +90,17 @@ function flagsDesdeTipoBase(tipoBase: TipoBaseAusencia): { ss: boolean; prest: b
   }
 }
 
+/** Lee los flags persistidos en el motivo. Si vienen undefined (registros viejos)
+ *  cae al heurístico por `tipo_base`. */
+function flagsDeMotivo(motivo: MotivoAusencia): { ss: boolean; paraf: boolean; prest: boolean } {
+  const fallback = flagsDesdeTipoBase(motivo.tipo_base);
+  return {
+    ss:    motivo.afecta_seguridad_social ?? fallback.ss,
+    paraf: motivo.afecta_parafiscales     ?? fallback.ss,
+    prest: motivo.afecta_prestaciones     ?? fallback.prest,
+  };
+}
+
 /** "Remunerado" / "No Remunerado" según `es_remunerada` del motivo. */
 function conceptoDesdeMotivo(esRemunerada: boolean): string {
   return esRemunerada ? 'Remunerado' : 'No Remunerado';
@@ -107,15 +117,13 @@ function fmtPorcentaje(valor: number | string | null | undefined): string {
 /**
  * Estado del formulario del modal "Nuevo / Editar Tipo de Novedad".
  *
- * Campos que SÍ persisten al backend (§16 del doc API_PARAMETRICAS.md):
+ * Todos los campos persisten al backend desde la actualización del doc §16:
  *  - nombre, concepto → es_remunerada, porcentaje → porcentaje_pago_default,
- *    color → color hex, ss/paraf/prest → afecta_nomina (combinado).
- *
- * Campos UI-only (no hay columnas en el backend todavía; quedan en el form
- * mientras está abierto y se pierden al guardar):
- *  - condicion, normaLegal, formulaCalculo.
- *  - Las 3 checkboxes (ss/paraf/prest) se ven y se editan por separado, pero
- *    al guardar se colapsan en `afecta_nomina = ss || paraf || prest`.
+ *    color → color hex.
+ *  - condicion, normaLegal, formulaCalculo → strings libres informativos.
+ *  - seguridadSocial / parafiscales / prestaciones → afecta_seguridad_social /
+ *    afecta_parafiscales / afecta_prestaciones (snapshotteados en ausencias).
+ *  - `afecta_nomina` se deriva: true si cualquiera de los 3 flags está activo.
  */
 const FORM_VACIO = {
   nombre: '',
@@ -140,18 +148,23 @@ const MOTIVOS_DEFAULT: Array<{
   porcentaje_pago_default: number;
   requiere_soporte: boolean;
   color: string;
+  condicion: string;
+  norma_legal: string;
+  afecta_seguridad_social: boolean;
+  afecta_parafiscales: boolean;
+  afecta_prestaciones: boolean;
 }> = [
-  { nombre: 'Incapacidad EPS',           tipo_base: 'INCAPACIDAD_EPS',          es_remunerada: true,  afecta_nomina: true, porcentaje_pago_default: 66.67, requiere_soporte: true,  color: '#3b82f6' },
-  { nombre: 'Incapacidad ARL',           tipo_base: 'INCAPACIDAD_ARL',          es_remunerada: true,  afecta_nomina: true, porcentaje_pago_default: 100,   requiere_soporte: true,  color: '#ef4444' },
-  { nombre: 'Licencia de Maternidad',    tipo_base: 'LICENCIA_MATERNIDAD',      es_remunerada: true,  afecta_nomina: true, porcentaje_pago_default: 100,   requiere_soporte: true,  color: '#ec4899' },
-  { nombre: 'Licencia de Paternidad',    tipo_base: 'LICENCIA_PATERNIDAD',      es_remunerada: true,  afecta_nomina: true, porcentaje_pago_default: 100,   requiere_soporte: true,  color: '#a855f7' },
-  { nombre: 'Licencia de Luto',          tipo_base: 'LICENCIA_LUTO',            es_remunerada: true,  afecta_nomina: true, porcentaje_pago_default: 100,   requiere_soporte: true,  color: '#6b7280' },
-  { nombre: 'Permiso Remunerado',        tipo_base: 'PERMISO_REMUNERADO',       es_remunerada: true,  afecta_nomina: true, porcentaje_pago_default: 100,   requiere_soporte: false, color: '#22c55e' },
-  { nombre: 'Permiso No Remunerado',     tipo_base: 'PERMISO_NO_REMUNERADO',    es_remunerada: false, afecta_nomina: true, porcentaje_pago_default: 0,     requiere_soporte: false, color: '#f97316' },
-  { nombre: 'Ausencia Injustificada',    tipo_base: 'AUSENCIA_INJUSTIFICADA',   es_remunerada: false, afecta_nomina: true, porcentaje_pago_default: 0,     requiere_soporte: false, color: '#eab308' },
-  { nombre: 'Calamidad Doméstica',       tipo_base: 'CALAMIDAD_DOMESTICA',      es_remunerada: true,  afecta_nomina: true, porcentaje_pago_default: 100,   requiere_soporte: false, color: '#06b6d4' },
-  { nombre: 'Suspensión Disciplinaria',  tipo_base: 'SUSPENSION_DISCIPLINARIA', es_remunerada: false, afecta_nomina: true, porcentaje_pago_default: 0,     requiere_soporte: true,  color: '#1f2937' },
-  { nombre: 'Otro',                      tipo_base: 'OTRO',                     es_remunerada: false, afecta_nomina: false, porcentaje_pago_default: 0,    requiere_soporte: false, color: '#94a3b8' },
+  { nombre: 'Incapacidad EPS',           tipo_base: 'INCAPACIDAD_EPS',          es_remunerada: true,  afecta_nomina: true,  porcentaje_pago_default: 66.67, requiere_soporte: true,  color: '#3b82f6', condicion: 'Día 1-2: 100% / Día 3-90: 66.67%', norma_legal: 'Art. 227 CST + Dec. 780/2016', afecta_seguridad_social: true,  afecta_parafiscales: false, afecta_prestaciones: false },
+  { nombre: 'Incapacidad ARL',           tipo_base: 'INCAPACIDAD_ARL',          es_remunerada: true,  afecta_nomina: true,  porcentaje_pago_default: 100,   requiere_soporte: true,  color: '#ef4444', condicion: 'Día 1+: 100% (ARL paga desde día 1)', norma_legal: 'Ley 776/2002', afecta_seguridad_social: true,  afecta_parafiscales: false, afecta_prestaciones: false },
+  { nombre: 'Licencia de Maternidad',    tipo_base: 'LICENCIA_MATERNIDAD',      es_remunerada: true,  afecta_nomina: true,  porcentaje_pago_default: 100,   requiere_soporte: true,  color: '#ec4899', condicion: '18 semanas',                 norma_legal: 'Ley 1822/2017',  afecta_seguridad_social: true,  afecta_parafiscales: true,  afecta_prestaciones: true  },
+  { nombre: 'Licencia de Paternidad',    tipo_base: 'LICENCIA_PATERNIDAD',      es_remunerada: true,  afecta_nomina: true,  porcentaje_pago_default: 100,   requiere_soporte: true,  color: '#a855f7', condicion: '2 semanas',                  norma_legal: 'Ley 2114/2021',  afecta_seguridad_social: true,  afecta_parafiscales: true,  afecta_prestaciones: true  },
+  { nombre: 'Licencia de Luto',          tipo_base: 'LICENCIA_LUTO',            es_remunerada: true,  afecta_nomina: true,  porcentaje_pago_default: 100,   requiere_soporte: true,  color: '#6b7280', condicion: '5 días hábiles',             norma_legal: 'Ley 1280/2009',  afecta_seguridad_social: true,  afecta_parafiscales: true,  afecta_prestaciones: true  },
+  { nombre: 'Permiso Remunerado',        tipo_base: 'PERMISO_REMUNERADO',       es_remunerada: true,  afecta_nomina: true,  porcentaje_pago_default: 100,   requiere_soporte: false, color: '#22c55e', condicion: 'Según empresa',              norma_legal: 'CST Art. 57',    afecta_seguridad_social: true,  afecta_parafiscales: true,  afecta_prestaciones: true  },
+  { nombre: 'Permiso No Remunerado',     tipo_base: 'PERMISO_NO_REMUNERADO',    es_remunerada: false, afecta_nomina: true,  porcentaje_pago_default: 0,     requiere_soporte: false, color: '#f97316', condicion: 'Sin pago',                   norma_legal: 'CST Art. 60',    afecta_seguridad_social: false, afecta_parafiscales: false, afecta_prestaciones: false },
+  { nombre: 'Ausencia Injustificada',    tipo_base: 'AUSENCIA_INJUSTIFICADA',   es_remunerada: false, afecta_nomina: true,  porcentaje_pago_default: 0,     requiere_soporte: false, color: '#eab308', condicion: 'Descuento directo',          norma_legal: 'CST Art. 60',    afecta_seguridad_social: false, afecta_parafiscales: false, afecta_prestaciones: false },
+  { nombre: 'Calamidad Doméstica',       tipo_base: 'CALAMIDAD_DOMESTICA',      es_remunerada: true,  afecta_nomina: true,  porcentaje_pago_default: 100,   requiere_soporte: false, color: '#06b6d4', condicion: 'Hasta 5 días',               norma_legal: 'Ley 1280/2009',  afecta_seguridad_social: true,  afecta_parafiscales: true,  afecta_prestaciones: true  },
+  { nombre: 'Suspensión Disciplinaria',  tipo_base: 'SUSPENSION_DISCIPLINARIA', es_remunerada: false, afecta_nomina: true,  porcentaje_pago_default: 0,     requiere_soporte: true,  color: '#1f2937', condicion: 'Según reglamento interno',   norma_legal: 'CST Art. 112',   afecta_seguridad_social: false, afecta_parafiscales: false, afecta_prestaciones: false },
+  { nombre: 'Otro',                      tipo_base: 'OTRO',                     es_remunerada: false, afecta_nomina: false, porcentaje_pago_default: 0,     requiere_soporte: false, color: '#94a3b8', condicion: '',                           norma_legal: '',               afecta_seguridad_social: false, afecta_parafiscales: false, afecta_prestaciones: false },
 ];
 
 export function AusenciasTab() {
@@ -200,23 +213,22 @@ export function AusenciasTab() {
   const handleOpenModal = (motivo?: MotivoAusencia) => {
     if (motivo) {
       setMotivoEdit(motivo);
-      // Para SS/Paraf/Prest no hay columnas individuales en el backend; al
-      // editar las derivamos del `tipo_base` (mismo helper que la tabla).
-      // Si el admin las cambia y guarda, se colapsan en afecta_nomina.
-      const flags = flagsDesdeTipoBase(motivo.tipo_base);
+      // Los 3 flags ahora son columnas reales del backend. Si vienen undefined
+      // (registros viejos pre-migración) caemos al heurístico por tipo_base.
+      const flags = flagsDeMotivo(motivo);
       setFormData({
         nombre: motivo.nombre,
-        condicion: '',          // UI-only, no persiste todavía
-        normaLegal: '',         // UI-only
+        condicion: motivo.condicion ?? '',
+        normaLegal: motivo.norma_legal ?? '',
         concepto: motivo.es_remunerada ? 'remunerada' : 'no_remunerada',
         porcentaje: motivo.porcentaje_pago_default != null
           ? String(Number(motivo.porcentaje_pago_default))
           : '0',
-        formulaCalculo: '',     // UI-only
+        formulaCalculo: motivo.formula_calculo ?? '',
         color: claseDesdeHex(motivo.color),
-        seguridadSocial: flags.ss && motivo.afecta_nomina,
-        parafiscales: flags.ss && motivo.afecta_nomina,
-        prestaciones: flags.prest && motivo.afecta_nomina,
+        seguridadSocial: flags.ss,
+        parafiscales: flags.paraf,
+        prestaciones: flags.prest,
       });
     } else {
       setMotivoEdit(null);
@@ -237,8 +249,8 @@ export function AusenciasTab() {
     }
 
     const esRemunerada = formData.concepto === 'remunerada';
-    // Backend solo tiene `afecta_nomina` (boolean). Colapsamos las 3 checkboxes:
-    // si CUALQUIERA está marcada, la novedad afecta la nómina.
+    // Los 3 flags ahora son columnas independientes. `afecta_nomina` queda
+    // como derivado: la novedad impacta la nómina si cualquier flag está activo.
     const afectaNomina = formData.seguridadSocial || formData.parafiscales || formData.prestaciones;
     const tipoBase: TipoBaseAusencia = motivoEdit?.tipo_base ?? 'OTRO';
     const payload: MotivoAusenciaPayload = {
@@ -249,6 +261,12 @@ export function AusenciasTab() {
       porcentaje_pago_default: porcentaje,
       requiere_soporte: motivoEdit?.requiere_soporte ?? false,
       color: hexDesdeClase(formData.color),
+      condicion: formData.condicion.trim() || null,
+      norma_legal: formData.normaLegal.trim() || null,
+      formula_calculo: formData.formulaCalculo.trim() || null,
+      afecta_seguridad_social: formData.seguridadSocial,
+      afecta_parafiscales: formData.parafiscales,
+      afecta_prestaciones: formData.prestaciones,
     };
 
     try {
@@ -491,9 +509,9 @@ export function AusenciasTab() {
         </CardHeader>
         <CardContent className="p-6">
           {/* Tabla con las 6 columnas del diseño. El punto de color viene de
-              `motivo.color` (hex → clase Tailwind). Las dos columnas de checks
-              (S.S./Paraf. y Prest.) las derivamos de `tipo_base` con
-              `flagsDesdeTipoBase`. */}
+              `motivo.color` (hex → clase Tailwind). Los checks de S.S./Paraf.
+              y Prest. leen los flags persistidos en el motivo (con fallback al
+              heurístico por `tipo_base` para registros viejos pre-migración). */}
           <div className="rounded-lg border border-border overflow-hidden">
             <table className="w-full">
               <thead className="bg-muted/50">
@@ -515,7 +533,7 @@ export function AusenciasTab() {
                   </tr>
                 ) : (
                   motivos.map((motivo) => {
-                    const { ss, prest } = flagsDesdeTipoBase(motivo.tipo_base);
+                    const { ss, prest } = flagsDeMotivo(motivo);
                     return (
                       <tr key={motivo.id} className="border-t border-border hover:bg-muted/30 transition-colors">
                         <td className="p-4">

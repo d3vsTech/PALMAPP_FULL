@@ -39,6 +39,11 @@ interface Props {
 
 type Fase = 'intro' | 'preview' | 'uploading' | 'resultado';
 
+/**
+ * Espejo de las 31 columnas de la plantilla `formato-carga-empleados.xlsx`.
+ * El backend valida la lista completa (ver FIELD_ES más abajo); el preview
+ * muestra todas para que el usuario pueda revisar antes de confirmar.
+ */
 interface FilaPreview {
   fila: number; // número real en la hoja (fila 2 = primer dato)
   primer_nombre: string;
@@ -48,10 +53,30 @@ interface FilaPreview {
   tipo_documento: string;
   documento: string;
   fecha_nacimiento: string;
+  fecha_expedicion_documento: string;
+  lugar_expedicion: string;
   cargo: string;
   modalidad_pago: string;
   salario_base: string;
   fecha_ingreso: string;
+  fecha_retiro: string;
+  eps: string;
+  fondo_pension: string;
+  arl: string;
+  caja_compensacion: string;
+  talla_camisa: string;
+  talla_pantalon: string;
+  talla_calzado: string;
+  tipo_cuenta: string;
+  entidad_bancaria: string;
+  numero_cuenta: string;
+  correo_electronico: string;
+  telefono: string;
+  direccion: string;
+  municipio: string;
+  departamento: string;
+  contacto_emergencia_nombre: string;
+  contacto_emergencia_telefono: string;
 }
 
 export default function ImportarColaboradoresDialog({
@@ -146,17 +171,37 @@ export default function ImportarColaboradoresDialog({
         });
         const parsed: FilaPreview[] = json.map((r, i) => ({
           fila: i + 2,
-          primer_nombre:    str(r['primer_nombre']),
-          segundo_nombre:   str(r['segundo_nombre']),
-          primer_apellido:  str(r['primer_apellido']),
-          segundo_apellido: str(r['segundo_apellido']),
-          tipo_documento:   str(r['tipo_documento']),
-          documento:        str(r['documento']),
-          fecha_nacimiento: str(r['fecha_nacimiento']),
-          cargo:            str(r['cargo']),
-          modalidad_pago:   str(r['modalidad_pago']),
-          salario_base:     str(r['salario_base']),
-          fecha_ingreso:    str(r['fecha_ingreso']),
+          primer_nombre:               str(r['primer_nombre']),
+          segundo_nombre:              str(r['segundo_nombre']),
+          primer_apellido:             str(r['primer_apellido']),
+          segundo_apellido:            str(r['segundo_apellido']),
+          tipo_documento:              str(r['tipo_documento']),
+          documento:                   str(r['documento']),
+          fecha_nacimiento:            str(r['fecha_nacimiento']),
+          fecha_expedicion_documento:  str(r['fecha_expedicion_documento']),
+          lugar_expedicion:            str(r['lugar_expedicion']),
+          cargo:                       str(r['cargo']),
+          modalidad_pago:              str(r['modalidad_pago']),
+          salario_base:                str(r['salario_base']),
+          fecha_ingreso:               str(r['fecha_ingreso']),
+          fecha_retiro:                str(r['fecha_retiro']),
+          eps:                         str(r['eps']),
+          fondo_pension:               str(r['fondo_pension']),
+          arl:                         str(r['arl']),
+          caja_compensacion:           str(r['caja_compensacion']),
+          talla_camisa:                str(r['talla_camisa']),
+          talla_pantalon:              str(r['talla_pantalon']),
+          talla_calzado:               str(r['talla_calzado']),
+          tipo_cuenta:                 str(r['tipo_cuenta']),
+          entidad_bancaria:            str(r['entidad_bancaria']),
+          numero_cuenta:               str(r['numero_cuenta']),
+          correo_electronico:          str(r['correo_electronico']),
+          telefono:                    str(r['telefono']),
+          direccion:                   str(r['direccion']),
+          municipio:                   str(r['municipio']),
+          departamento:                str(r['departamento']),
+          contacto_emergencia_nombre:  str(r['contacto_emergencia_nombre']),
+          contacto_emergencia_telefono:str(r['contacto_emergencia_telefono']),
         }));
         // Filtra filas totalmente vacías (sin documento ni nombres)
         const limpias = parsed.filter(p =>
@@ -444,7 +489,8 @@ function VistaPreview({
         </p>
       </div>
 
-      {/* Tabla — única zona con scroll; crece con el contenido hasta un máximo */}
+      {/* Tabla — única zona con scroll; muestra las 31 columnas de la plantilla.
+          Scroll horizontal libre para revisar todo antes de confirmar. */}
       <div className="overflow-auto max-h-[60vh]">
         <table className="w-full text-sm">
           <thead className="sticky top-0 bg-muted/60 backdrop-blur z-10">
@@ -455,10 +501,30 @@ function VistaPreview({
               <Th>Tipo doc.</Th>
               <Th>Documento</Th>
               <Th>F. nacimiento</Th>
+              <Th>F. expedición</Th>
+              <Th>Lugar expedición</Th>
               <Th>Cargo</Th>
               <Th>Modalidad</Th>
               <Th>Salario</Th>
               <Th>F. ingreso</Th>
+              <Th>F. retiro</Th>
+              <Th>EPS</Th>
+              <Th>Pensión</Th>
+              <Th>ARL</Th>
+              <Th>Caja comp.</Th>
+              <Th>Camisa</Th>
+              <Th>Pantalón</Th>
+              <Th>Calzado</Th>
+              <Th>Tipo cuenta</Th>
+              <Th>Banco</Th>
+              <Th>Nº cuenta</Th>
+              <Th>Correo</Th>
+              <Th>Teléfono</Th>
+              <Th>Dirección</Th>
+              <Th>Municipio</Th>
+              <Th>Departamento</Th>
+              <Th>Contacto emerg.</Th>
+              <Th>Tel. emerg.</Th>
             </tr>
           </thead>
           <tbody>
@@ -473,10 +539,30 @@ function VistaPreview({
                   <Td>{f.tipo_documento || '—'}</Td>
                   <Td className={dup ? 'text-warning font-semibold' : ''}>{f.documento || '—'}</Td>
                   <Td>{f.fecha_nacimiento || '—'}</Td>
+                  <Td>{f.fecha_expedicion_documento || '—'}</Td>
+                  <Td>{f.lugar_expedicion || '—'}</Td>
                   <Td>{f.cargo || '—'}</Td>
                   <Td>{f.modalidad_pago || '—'}</Td>
                   <Td>{f.salario_base || '—'}</Td>
                   <Td>{f.fecha_ingreso || '—'}</Td>
+                  <Td>{f.fecha_retiro || '—'}</Td>
+                  <Td>{f.eps || '—'}</Td>
+                  <Td>{f.fondo_pension || '—'}</Td>
+                  <Td>{f.arl || '—'}</Td>
+                  <Td>{f.caja_compensacion || '—'}</Td>
+                  <Td>{f.talla_camisa || '—'}</Td>
+                  <Td>{f.talla_pantalon || '—'}</Td>
+                  <Td>{f.talla_calzado || '—'}</Td>
+                  <Td>{f.tipo_cuenta || '—'}</Td>
+                  <Td>{f.entidad_bancaria || '—'}</Td>
+                  <Td>{f.numero_cuenta || '—'}</Td>
+                  <Td>{f.correo_electronico || '—'}</Td>
+                  <Td>{f.telefono || '—'}</Td>
+                  <Td>{f.direccion || '—'}</Td>
+                  <Td>{f.municipio || '—'}</Td>
+                  <Td>{f.departamento || '—'}</Td>
+                  <Td>{f.contacto_emergencia_nombre || '—'}</Td>
+                  <Td>{f.contacto_emergencia_telefono || '—'}</Td>
                 </tr>
               );
             })}

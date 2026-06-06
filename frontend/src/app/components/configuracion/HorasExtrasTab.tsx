@@ -43,15 +43,16 @@ function franjaParaCodigo(codigo: CodigoHoraExtra): FranjaHoraria {
   }
 }
 
-/** Porcentaje legal por código (semilla por defecto del doc §11). */
+/** Porcentaje legal por código según **Ley 2466/2025** (recargo dominical 75% → 90%).
+ *  Solo se usa como fallback si `/codigos` no devuelve `porcentaje_recargo`. */
 const PORCENTAJE_DEFAULT: Record<CodigoHoraExtra, number> = {
   HED: 25,
   HEN: 75,
   RN: 35,
-  HRD: 75,
-  HEDF: 100,
-  HENF: 150,
-  RND: 110,
+  HRD: 90,
+  HEDF: 115,
+  HENF: 165,
+  RND: 125,
 };
 
 /** ¿El código aplica en festivo? */
@@ -127,20 +128,22 @@ export function HorasExtrasTab() {
         return;
       }
 
-      // 3) Sembrar los 7 tipos en PARALELO (mucho más rápido que secuencial).
+      // 3) Sembrar los 7 tipos en PARALELO. `/codigos` ya trae `porcentaje_recargo`
+      //    actualizado por Ley 2466/2025 — lo usamos si viene, si no caemos al hardcoded.
       const resultados = await Promise.allSettled(
-        codigos.map((c) =>
-          configuracionApi.tiposHoraExtra.crear({
+        codigos.map((c) => {
+          const pct = Number(c.porcentaje_recargo);
+          return configuracionApi.tiposHoraExtra.crear({
             codigo: c.codigo,
             nombre: c.nombre,
-            porcentaje_recargo: PORCENTAJE_DEFAULT[c.codigo],
+            porcentaje_recargo: Number.isFinite(pct) ? pct : PORCENTAJE_DEFAULT[c.codigo],
             franja_horaria: franjaParaCodigo(c.codigo),
             aplica_festivo: aplicaFestivoParaCodigo(c.codigo),
             es_extra: c.es_extra,
             paga_hora_completa: c.paga_hora_completa,
             descripcion: c.descripcion,
-          }),
-        ),
+          });
+        }),
       );
       if (cancelado) return;
 

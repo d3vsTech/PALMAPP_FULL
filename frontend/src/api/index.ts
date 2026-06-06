@@ -58,13 +58,15 @@ export {
   ausenciasApi,
   selectsApi as operacionesSelectsApi,
   OperacionesErrorCodes,
+  calcularValorHoraExtra,
 } from './operaciones';
 export type {
   Planilla, EstadoPlanilla, Periodo,
   Resumen, Indicadores,
   Cosecha, CosechaCuadrillaItem,
   Jornal, JornalPayload, JornalPalma, JornalFinca, CategoriaJornal, TipoJornalPalma,
-  HoraExtra, Ausencia, EstadoNovedad,
+  HoraExtra, HoraExtraPayload, HoraExtraTipoRef, EstadoHoraExtra,
+  Ausencia, EstadoNovedad,
   OperacionesErrorCode,
 } from './operaciones';
 
