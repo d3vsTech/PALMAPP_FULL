@@ -26,6 +26,7 @@ import {
   ConfiguracionErrorCodes,
   type Labor,
   type TipoPagoLabor,
+  type TipoLaborPalma,
   type CategoriaLabor,
 } from '../../../api/configuracion';
 import { TabLoadingGate } from './TabLoadingGate';
@@ -162,11 +163,17 @@ export function LaboresTab() {
   };
 
   // ── Render helpers ─────────────────────────────────────────────────────────
-  const labelTipoPago = (tp: TipoPagoLabor) =>
-    tp === 'POR_PALMA' ? 'Por Palma' : 'Jornal Fijo';
+  // En COSECHA "POR_PALMA" se muestra como "Por Kilogramo" porque el pago se
+  // calcula sobre el peso confirmado (precios_cosecha). El value en backend
+  // sigue siendo POR_PALMA — solo cambia el label visible.
+  const labelTipoPago = (tp: TipoPagoLabor, tipo?: TipoLaborPalma | null) => {
+    if (tp === 'POR_PALMA') return tipo === 'COSECHA' ? 'Por Kilogramo' : 'Por Palma';
+    return 'Jornal Fijo';
+  };
 
   const editingFija = modo?.kind === 'editar' && modo.labor.es_sistema;
   const editingFinca = modo?.kind === 'editar' && modo.labor.categoria === 'FINCA';
+  const editingCosecha = modo?.kind === 'editar' && modo.labor.tipo === 'COSECHA';
   const creatingFinca = modo?.kind === 'crear-finca';
   const tipoPagoVisible = !creatingFinca && !editingFinca;
 
@@ -229,7 +236,9 @@ export function LaboresTab() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="POR_PALMA">Por Palma</SelectItem>
+                    <SelectItem value="POR_PALMA">
+                      {editingCosecha ? 'Por Kilogramo' : 'Por Palma'}
+                    </SelectItem>
                     <SelectItem value="JORNAL_FIJO">Jornal Fijo</SelectItem>
                   </SelectContent>
                 </Select>
@@ -300,7 +309,7 @@ export function LaboresTab() {
                     <div className="flex-1">
                       <p className="font-semibold">{labor.nombre}</p>
                       <p className="text-sm text-muted-foreground mt-1">
-                        {labelTipoPago(labor.tipo_pago)}
+                        {labelTipoPago(labor.tipo_pago, labor.tipo)}
                         {labor.es_sistema && ' · Predefinida'}
                       </p>
                     </div>

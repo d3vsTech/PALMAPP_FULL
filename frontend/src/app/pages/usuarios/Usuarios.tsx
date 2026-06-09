@@ -94,10 +94,34 @@ export default function Usuarios() {
     return p.length > 1 ? `${p[0][0]}${p[1][0]}`.toUpperCase() : nombre.substring(0, 2).toUpperCase();
   };
 
-  const usuariosFiltrados = usuarios.filter(u =>
-    u.name?.toLowerCase().includes(busqueda.toLowerCase()) ||
-    u.email?.toLowerCase().includes(busqueda.toLowerCase())
-  );
+  // Heurística para extraer el primer apellido del campo `name` (que viene
+  // como string completo, sin columnas separadas). Asumimos convención típica
+  // colombiana:
+  //   - 4 palabras: "Nombre1 Nombre2 Apellido1 Apellido2" → index 2.
+  //   - 3 palabras: "Nombre Apellido1 Apellido2"          → index 1.
+  //   - 2 palabras: "Nombre Apellido"                     → index 1.
+  //   - 1 palabra:  cae a esa misma palabra.
+  const primerApellido = (nombre: string): string => {
+    const parts = (nombre ?? '').trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '';
+    if (parts.length >= 4) return parts[2];
+    if (parts.length === 3) return parts[1];
+    if (parts.length === 2) return parts[1];
+    return parts[0];
+  };
+
+  const usuariosFiltrados = usuarios
+    .filter(u =>
+      u.name?.toLowerCase().includes(busqueda.toLowerCase()) ||
+      u.email?.toLowerCase().includes(busqueda.toLowerCase())
+    )
+    .sort((a, b) => {
+      const apA = primerApellido(a.name ?? '');
+      const apB = primerApellido(b.name ?? '');
+      const cmp = apA.localeCompare(apB, 'es', { sensitivity: 'base' });
+      if (cmp !== 0) return cmp;
+      return (a.name ?? '').localeCompare(b.name ?? '', 'es', { sensitivity: 'base' });
+    });
 
   return (
     <div className="space-y-8">

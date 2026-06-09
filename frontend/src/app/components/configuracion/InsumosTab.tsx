@@ -50,8 +50,27 @@ export function InsumosTab() {
   useEffect(() => {
     configuracionApi.insumos
       .listar({ per_page: 100 })
-      .then((res) => setInsumos(res.data))
-      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar los insumos'))
+      .then((res: any) => {
+        // Robusto al shape de la respuesta: el backend puede mandar
+        //  - { data: Insumo[], meta }  (paginado estándar)
+        //  - { data: { data: Insumo[], meta } }  (doble wrap)
+        //  - Insumo[]  (sin wrap)
+        const arr: Insumo[] =
+          Array.isArray(res) ? res
+          : Array.isArray(res?.data) ? res.data
+          : Array.isArray(res?.data?.data) ? res.data.data
+          : [];
+        setInsumos(arr);
+        if (arr.length === 0) {
+          // eslint-disable-next-line no-console
+          console.warn('[InsumosTab] Respuesta vacía o shape inesperado:', res);
+        }
+      })
+      .catch((e: any) => {
+        // eslint-disable-next-line no-console
+        console.error('[InsumosTab] Error al cargar insumos:', e);
+        toast.error(e?.message ?? 'No se pudieron cargar los insumos');
+      })
       .finally(() => setLoading(false));
   }, []);
 

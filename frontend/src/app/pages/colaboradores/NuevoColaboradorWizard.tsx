@@ -230,11 +230,14 @@ export default function NuevoColaboradorWizard() {
   // Aplica el SMLV al `salarioBase` cuando ya cargó la constante y todavía
   // está en 0. Corre como efecto separado para que no haya race con
   // wizardInit (que también puede tocar formData).
+  // Salta el pre-llenado si la modalidad es VARIABLE — ese caso el salario
+  // es opcional y debe quedar vacío hasta que el usuario lo digite.
   useEffect(() => {
     if (isEditMode || smmlv == null || smlvAplicado) return;
-    setFormData((prev) =>
-      prev.salarioBase > 0 ? prev : { ...prev, salarioBase: smmlv },
-    );
+    setFormData((prev) => {
+      if (prev.modalidadPago === 'VARIABLE') return prev;
+      return prev.salarioBase > 0 ? prev : { ...prev, salarioBase: smmlv };
+    });
     setSmlvAplicado(true);
   }, [smmlv, isEditMode, smlvAplicado]);
 
@@ -1200,7 +1203,22 @@ export default function NuevoColaboradorWizard() {
                   </Label>
                   <Select
                     value={formData.modalidadPago}
-                    onValueChange={(v) => handleInputChange('modalidadPago', v)}
+                    onValueChange={(v) => {
+                      // Cambia la modalidad. Adicionalmente:
+                      //  - VARIABLE → vacía el Salario Base (queda opcional).
+                      //  - FIJO/otro → si estaba en 0, pre-rellena con el SMLV
+                      //    (mismo comportamiento que el efecto inicial).
+                      setFormData((prev) => ({
+                        ...prev,
+                        modalidadPago: v as typeof prev.modalidadPago,
+                        salarioBase:
+                          v === 'VARIABLE'
+                            ? 0
+                            : prev.salarioBase > 0
+                              ? prev.salarioBase
+                              : smmlv ?? 0,
+                      }));
+                    }}
                   >
                     <SelectTrigger id="modalidadPago">
                       <SelectValue />

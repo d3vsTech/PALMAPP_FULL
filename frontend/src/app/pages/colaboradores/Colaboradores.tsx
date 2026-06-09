@@ -89,6 +89,16 @@ export default function Colaboradores() {
   const activos = colaboradores.filter(c => c.estado === true).length;
   const inactivos = colaboradores.filter(c => c.estado === false).length;
 
+  // Orden alfabético por primer apellido (desempate por primer nombre).
+  // Locale 'es' + sensitivity:'base' ignora tildes y mayúsculas.
+  const colaboradoresOrdenados = [...colaboradores].sort((a, b) => {
+    const apA = (a.primer_apellido ?? '').trim();
+    const apB = (b.primer_apellido ?? '').trim();
+    const cmp = apA.localeCompare(apB, 'es', { sensitivity: 'base' });
+    if (cmp !== 0) return cmp;
+    return (a.primer_nombre ?? '').localeCompare(b.primer_nombre ?? '', 'es', { sensitivity: 'base' });
+  });
+
   return (
     <div className="space-y-8">
       {/* Importación masiva */}
@@ -204,7 +214,7 @@ export default function Colaboradores() {
                     </tr>
                   </thead>
                   <tbody>
-                    {colaboradores.map((c, i) => (
+                    {colaboradoresOrdenados.map((c, i) => (
                       <tr key={c.id} className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors ${i % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}>
                         <td className="p-4">
                           <div className="flex items-center gap-3">
