@@ -29,11 +29,22 @@ export type Periodicidad = 'QUINCENAL' | 'MENSUAL';
 export type SalarioTipo = 'FIJO' | 'VARIABLE';
 export type ModalidadPago = 'FIJO' | 'PRODUCCION';
 
+/**
+ * Tipos de concepto de nómina (API_NOMINA.md §6).
+ *  - APORTE_LEGAL: tiene aporte de empleado y empresa (SALUD, PENSION, ARL).
+ *  - DEDUCCION_LEGAL: solo descuento al empleado (FSP, RETEFUENTE, EMBARGO).
+ *  - DEDUCCION_VOLUNTARIA: solicitudes del empleado (préstamo, libranza, ahorro).
+ *  - BONIFICACION_FIJA / BONIFICACION_VARIABLE: pagos extra al devengado.
+ */
 export type TipoConcepto =
+  | 'APORTE_LEGAL'
   | 'DEDUCCION_LEGAL'
   | 'DEDUCCION_VOLUNTARIA'
   | 'BONIFICACION_FIJA'
   | 'BONIFICACION_VARIABLE';
+
+/** Marca si el concepto cuenta para prestaciones sociales (cesantías, prima, vacaciones). */
+export type TipoRemuneracion = 'REMUNERADO' | 'NO_REMUNERADO';
 
 export type SubtipoConcepto =
   | 'PRESTAMO'
@@ -279,11 +290,31 @@ export interface NominaConcepto {
   subtipo: SubtipoConcepto | null;
   operacion: 'SUMA' | 'RESTA';
   calculo: 'PORCENTAJE' | 'VALOR_FIJO';
+  /** Porcentaje legacy (cuando solo se usaba uno). Suele venir null si los campos
+   *  `porcentaje_empleado`/`porcentaje_empresa` están poblados. */
   porcentaje?: number | null;
   valor_referencia?: number | null;
+  /** Base sobre la que se calcula. Editable vía PUT (doc §6.3). */
+  base_calculo?: string | null;
   aplica_a: AplicaA;
   activo: boolean;
+  /** Si true, el concepto no se puede eliminar (SALUD/PENSION). Editable vía PUT como `es_obligatorio`. */
+  es_obligatorio?: boolean;
+  /** Alias legacy de `es_obligatorio` (algunos endpoints lo devuelven así). */
   obligatorio?: boolean;
+
+  // ─── Campos nuevos del doc API_NOMINA.md §6.1/§6.3 ────────────────────────
+  /** % que descuenta al empleado. Para APORTE_LEGAL y DEDUCCION_LEGAL %. */
+  porcentaje_empleado?: number | string | null;
+  /** % que asume la empresa. Solo APORTE_LEGAL (SALUD 8.5%, PENSION 12%, ARL 0.522%). */
+  porcentaje_empresa?: number | string | null;
+  /** Vigencia (formato `yyyy-mm-dd` en el wire; FormRequest acepta `dd/mm/yyyy` y normaliza). */
+  vigente_desde?: string | null;
+  vigente_hasta?: string | null;
+  /** Si true, el concepto cuenta para el cálculo del salario mínimo legal. */
+  afecta_salario_minimo?: boolean;
+  /** REMUNERADO: cuenta para prestaciones sociales. NO_REMUNERADO: no. */
+  tipo_remuneracion?: TipoRemuneracion;
 }
 
 // ─── Endpoints ────────────────────────────────────────────────────────────────
@@ -386,6 +417,14 @@ export const nominaApi = {
         T,
       ),
 
+    /** GET /v1/tenant/nomina-conceptos/{id} — detalle completo (incluye
+     *  porcentaje/valor_referencia que a veces no vienen en el listar). */
+    ver: (id: number) =>
+      apiClient.get<{ data: NominaConcepto }>(
+        `/v1/tenant/nomina-conceptos/${id}`,
+        T,
+      ),
+
     select: (params?: { tipo?: TipoConcepto; aplica_a?: AplicaA }) =>
       apiClient.get<{ data: NominaConcepto[] }>(
         `/v1/tenant/nomina-conceptos/select${toQuery(params)}`,
@@ -410,3 +449,32 @@ export const nominaApi = {
       apiClient.delete<{ message: string }>(`/v1/tenant/nomina-conceptos/${id}`, T),
   },
 };
+
+// ─── Códigos de error específicos del módulo (doc §0) ─────────────────────────
+export const NominaErrorCodes = {
+  /** Ya existe una nómina con (tenant, año, mes, quincena). */
+  NOMINA_DUPLICADA: 'NOMINA_DUPLICADA',
+  /** Intento de mutar una nómina ya CERRADA. */
+  NOMINA_CERRADA: 'NOMINA_CERRADA',
+  /** Intento de editar/eliminar nómina con empleados ya LIQUIDADOS. */
+  NOMINA_CON_LIQUIDADOS: 'NOMINA_CON_LIQUIDADOS',
+  /** Intento de cerrar nómina con empleados aún PENDIENTES. */
+  NOMINA_CON_PENDIENTES: 'NOMINA_CON_PENDIENTES',
+  /** Intento de quitar un empleado ya liquidado. */
+  EMPLEADO_LIQUIDADO: 'EMPLEADO_LIQUIDADO',
+  /** Intento de pedir desprendible a un empleado aún PENDIENTE. */
+  EMPLEADO_NO_LIQUIDADO: 'EMPLEADO_NO_LIQUIDADO',
+  /** Intento de pedir resumen-trabajo a un empleado FIJO. */
+  EMPLEADO_NO_VARIABLE: 'EMPLEADO_NO_VARIABLE',
+  /** Falta `salario_minimo_vigente` o FIJO sin `salario_base`. */
+  CALC_ERROR: 'CALC_ERROR',
+  /** Concepto referenciado por nóminas existentes — no se puede eliminar. */
+  CONCEPTO_EN_USO: 'CONCEPTO_EN_USO',
+  /** Concepto obligatorio (SALUD/PENSIÓN/etc.) — no se puede eliminar. */
+  CONCEPTO_OBLIGATORIO: 'CONCEPTO_OBLIGATORIO',
+  /** Usuario sin permiso para la acción. */
+  PERMISSION_DENIED: 'PERMISSION_DENIED',
+} as const;
+
+export type NominaErrorCode =
+  typeof NominaErrorCodes[keyof typeof NominaErrorCodes];

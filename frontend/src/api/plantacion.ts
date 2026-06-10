@@ -1,11 +1,23 @@
 /**
  * plantacion.ts
  * Cubre todos los endpoints del API Plantación:
- * §1 Predios (1.1-1.6) · §2 Lotes (2.0-2.5) · §3 Sublotes (3.1-3.5)
- * §4 Palmas (4.1-4.6)  · §5 Líneas (5.1-5.5)
+ * §1 Predios   (1.1-1.7)  — incluye wizard-init bundle
+ * §2 Lotes     (2.0-2.5)  — incluye /lotes/select y /lotes/semillas
+ * §3 Sublotes  (3.0-3.5)  — incluye /sublotes/select
+ * §4 Palmas    (4.1-4.7)  — sync/async + batch polling + asignar-linea masivo
+ * §5 Líneas    (5.1-5.5)
  *
- * Base URL: /api/v1/tenant
- * Headers: Authorization: Bearer {token} · X-Tenant-Id: {id}
+ * Base URL:  /api/v1/tenant
+ * Headers:   Authorization: Bearer {token} · X-Tenant-Id: {id}
+ *
+ * Notas:
+ *  - `requestConToken` lee el token y X-Tenant-Id desde localStorage:
+ *      palmapp_token, palmapp_tenant_id.
+ *  - Endpoints `/select` son livianos (sin paginación) y los usan los dropdowns
+ *    del wizard de Operaciones y Plantación.
+ *  - `POST /palmas` y `POST /sublotes` pueden ser sync (201) o async (202)
+ *    cuando `cantidad_palmas > 5000`. El frontend debe inspeccionar `async`/
+ *    `palmas_async` y, si es true, hacer polling de `palmasApi.getBatch`.
  */
 import { requestConToken } from './request';
 
@@ -126,13 +138,28 @@ export const prediosApi = {
 // §2. LOTES
 // ──────────────────────────────────────────────────────────────────────────────
 
-/** §2.0 GET /lotes/semillas — id, tipo, nombre */
-/** §2.1 GET /lotes — predio_id param, sublotes_count en respuesta */
-/** §2.2 GET /lotes/{id} — incluye sublotes[] y semillas[] */
-/** §2.3 POST /lotes — semillas_ids: number[] (IDs, NO strings) */
-/** §2.4 PUT /lotes/{id} — semillas_ids reemplaza todas; [] elimina todas */
-/** §2.5 DELETE /lotes/{id} — recursivo */
+/** §2.0   GET /lotes/select — liviano, sin paginación, para dropdowns */
+/** §2.0.1 GET /lotes/semillas — id, tipo, nombre (cache 15min backend) */
+/** §2.1   GET /lotes — predio_id param, sublotes_count en respuesta */
+/** §2.2   GET /lotes/{id} — incluye sublotes[] y semillas[] */
+/** §2.3   POST /lotes — semillas_ids: number[] (IDs, NO strings) */
+/** §2.4   PUT /lotes/{id} — semillas_ids reemplaza todas; [] elimina todas */
+/** §2.5   DELETE /lotes/{id} — recursivo */
 export const lotesApi = {
+  /**
+   * §2.0 GET /lotes/select
+   * Endpoint liviano sin paginación. Permiso: `lotes.ver` o
+   * `operaciones.crear|editar`. Devuelve `{id, nombre, predio_id, predio}`.
+   * Default filtra activos; pasar `estado: false` para inactivos.
+   */
+  select: (p?: { predio_id?: number; estado?: boolean }) =>
+    get<{ data: Array<{
+      id: number;
+      nombre: string;
+      predio_id: number;
+      predio?: { id: number; nombre: string };
+    }> }>('/lotes/select', p as any),
+
   semillas: () =>
     get<{ data: { id: number; tipo: string; nombre: string }[] }>('/lotes/semillas'),
 
@@ -156,13 +183,17 @@ export const lotesApi = {
 // §3. SUBLOTES
 // ──────────────────────────────────────────────────────────────────────────────
 
-/** §3.3 POST /sublotes y §3.4 PUT /sublotes/{id}:
+/** §3.0   GET /sublotes/select — liviano, sin paginación, para dropdowns */
+/** §3.1   GET /sublotes — paginado, filtrable por lote_id */
+/** §3.2   GET /sublotes/{id} — incluye palmas[] */
+/** §3.3   POST /sublotes y §3.4 PUT /sublotes/{id}:
  *  - Diferencia (crear o eliminar) <= 5000 → sync (sin palmas_async).
  *  - Diferencia > 5000 → async: respuesta trae palmas_async:true y batch_id.
  *    Tanto la creación como la eliminación de palmas se hacen en segundo plano.
  *  - PUT con un batch (creación o eliminación) en curso → 409 {code: BATCH_EN_CURSO}.
  *  - Polling vía palmasApi.getBatch(batch_id).
  */
+/** §3.5   DELETE /sublotes/{id} — recursivo (elimina palmas y líneas) */
 export interface SubloteResponse {
   message: string;
   data: any;
@@ -171,6 +202,19 @@ export interface SubloteResponse {
 }
 
 export const sublotesApi = {
+  /**
+   * §3.0 GET /sublotes/select
+   * Endpoint liviano sin paginación. Permiso: `sublotes.ver` o
+   * `operaciones.crear|editar`. Devuelve `{id, nombre, lote_id, cantidad_palmas}`.
+   */
+  select: (p?: { lote_id?: number; estado?: boolean }) =>
+    get<{ data: Array<{
+      id: number;
+      nombre: string;
+      lote_id: number;
+      cantidad_palmas: number;
+    }> }>('/sublotes/select', p as any),
+
   listar: (p?: { search?: string; lote_id?: number; estado?: boolean; per_page?: number; page?: number }) =>
     get<{ data: any[]; meta: any }>('/sublotes', p as any),
 

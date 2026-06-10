@@ -1,68 +1,197 @@
-import { useState } from 'react';
-import { Button } from '../../components/ui/button';
+import { useEffect, useState } from 'react';
 import { Card, CardContent } from '../../components/ui/card';
 import {
   Building2,
-  Users,
-  DollarSign,
   Sprout,
   Hammer,
-  TrendingUp,
-  Package,
-  Scale,
-  Settings,
-  Shield,
+  Users,
   Truck,
-  Clock,
-  UserX,
-  Landmark,
-  FileText,
+  DollarSign,
+  ChevronRight,
+  ChevronDown,
+  Scale,
 } from 'lucide-react';
 import { cn } from '../../components/lib/utils';
 
-// Tabs existentes en V.2
-import { SemillasTab } from '../../components/configuracion/SemillasTab';
-import { InsumosTab } from '../../components/configuracion/InsumosTab';
-import { LaboresTab } from '../../components/configuracion/LaboresTab';
-import { ConceptosNominaTab } from '../../components/configuracion/ConceptosNominaTab';
-import { PreciosCosechaTab } from '../../components/configuracion/PreciosCosechaTab';
-import { EscalaAbonadaTab } from '../../components/configuracion/EscalaAbonadaTab';
-import { PromediosTab } from '../../components/configuracion/PromediosTab';
-
-// Tabs nuevos portados desde V.10
+// Tabs existentes en V.2 + portados de V.11
 import { DatosEmpresaTab } from '../../components/configuracion/DatosEmpresaTab';
-import { SeguridadSocialTab } from '../../components/configuracion/SeguridadSocialTab';
 import { ConstantesLegalesTab } from '../../components/configuracion/ConstantesLegalesTab';
+import { SemillasTab } from '../../components/configuracion/SemillasTab';
+import { LaboresTab } from '../../components/configuracion/LaboresTab';
+import { InsumosTab } from '../../components/configuracion/InsumosTab';
+import { SeguridadSocialTab } from '../../components/configuracion/SeguridadSocialTab';
 import { ExtractorasTab } from '../../components/configuracion/ExtractorasTab';
 import { TransporteTab } from '../../components/configuracion/TransporteTab';
+import { ConceptosNominaTab } from '../../components/configuracion/ConceptosNominaTab';
 import { HorasExtrasTab } from '../../components/configuracion/HorasExtrasTab';
 import { AusenciasTab } from '../../components/configuracion/AusenciasTab';
+import { PromediosTab } from '../../components/configuracion/PromediosTab';
+// Tabs nuevos portados desde V.11
+import { EntidadesBancariasTab } from '../../components/configuracion/EntidadesBancariasTab';
+import { ParametrosNominaTab } from '../../components/configuracion/ParametrosNominaTab';
+import { PreciosLaboresTab } from '../../components/configuracion/PreciosLaboresTab';
+
+type SubItem = {
+  id: string;
+  nombre: string;
+  component: React.ComponentType;
+};
+
+type Categoria = {
+  id: string;
+  nombre: string;
+  icono: React.ElementType;
+  items?: SubItem[];
+  component?: React.ComponentType;
+};
 
 /**
- * Etapas del wizard de Configuración — réplica idéntica del proyecto V.10
- * (ver `ConfiguracionNueva.tsx` en `D:/Devs/PALMA/Front/V.10/PalmAppv23w`).
+ * Estructura de categorías idéntica al diseño de V.11 (sidebar colapsable).
+ * El usuario solicitó replicarlo "tal cual" preservando las conexiones de API
+ * que ya viven dentro de cada Tab.
  */
-const ETAPAS = [
-  { numero: 1,  nombre: 'Empresa',     icono: Building2, component: DatosEmpresaTab },
-  { numero: 2,  nombre: 'Legal',       icono: Scale,     component: ConstantesLegalesTab },
-  { numero: 3,  nombre: 'Entidades',   icono: Landmark,  component: SeguridadSocialTab },
-  { numero: 4,  nombre: 'Conceptos',   icono: FileText,  component: ConceptosNominaTab },
-  { numero: 5,  nombre: 'Horas',       icono: Clock,     component: HorasExtrasTab },
-  { numero: 6,  nombre: 'Novedades',   icono: UserX,     component: AusenciasTab },
-  { numero: 7,  nombre: 'Semillas',    icono: Sprout,    component: SemillasTab },
-  { numero: 8,  nombre: 'Insumos',     icono: Package,   component: InsumosTab },
-  { numero: 9,  nombre: 'Abonada',     icono: TrendingUp, component: EscalaAbonadaTab },
-  { numero: 10, nombre: 'Labores',     icono: Hammer,    component: LaboresTab },
-  { numero: 11, nombre: 'Precios',     icono: DollarSign, component: PreciosCosechaTab },
-  { numero: 12, nombre: 'Promedios',   icono: TrendingUp, component: PromediosTab },
-  { numero: 13, nombre: 'Extractoras', icono: Package,   component: ExtractorasTab },
-  { numero: 14, nombre: 'Transporte',  icono: Truck,     component: TransporteTab },
+const CATEGORIAS: Categoria[] = [
+  {
+    id: 'info-empresa',
+    nombre: 'Info Empresa',
+    icono: Building2,
+    component: DatosEmpresaTab,
+  },
+  {
+    id: 'legal',
+    nombre: 'Legal',
+    icono: Scale,
+    items: [
+      { id: 'parametros-legales', nombre: 'Parámetros Legales', component: ConstantesLegalesTab },
+    ],
+  },
+  {
+    id: 'mi-plantacion',
+    nombre: 'Mi Plantación',
+    icono: Sprout,
+    items: [
+      { id: 'semillas',  nombre: 'Semillas',  component: SemillasTab },
+      { id: 'promedios', nombre: 'Promedios', component: PromediosTab },
+    ],
+  },
+  {
+    id: 'operaciones',
+    nombre: 'Operaciones',
+    icono: Hammer,
+    items: [
+      { id: 'labores', nombre: 'Trabajos / Labores', component: LaboresTab },
+      { id: 'insumos', nombre: 'Insumos',            component: InsumosTab },
+    ],
+  },
+  {
+    id: 'colaboradores',
+    nombre: 'Colaboradores',
+    icono: Users,
+    items: [
+      { id: 'entidades-prestadoras', nombre: 'Seguridad Social',     component: SeguridadSocialTab },
+      { id: 'entidades-bancarias',   nombre: 'Entidades Bancarias',  component: EntidadesBancariasTab },
+    ],
+  },
+  {
+    id: 'viajes',
+    nombre: 'Viajes',
+    icono: Truck,
+    items: [
+      { id: 'extractoras', nombre: 'Extractoras',     component: ExtractorasTab },
+      { id: 'transporte',  nombre: 'Transportadores', component: TransporteTab },
+    ],
+  },
+  {
+    id: 'nomina-liquidaciones',
+    nombre: 'Nómina y Liquidaciones',
+    icono: DollarSign,
+    items: [
+      { id: 'parametros-nomina', nombre: 'Parámetros de Nómina', component: ParametrosNominaTab },
+      { id: 'conceptos',         nombre: 'Conceptos de Nómina',  component: ConceptosNominaTab },
+      { id: 'precios-labores',   nombre: 'Precios de Labores',   component: PreciosLaboresTab },
+      { id: 'horas-extra',       nombre: 'Horas Extra',          component: HorasExtrasTab },
+      { id: 'novedades',         nombre: 'Novedades',            component: AusenciasTab },
+    ],
+  },
 ];
 
-export default function Configuracion() {
-  const [etapaActual, setEtapaActual] = useState(1);
+/** Clave para recordar el último tab abierto entre navegaciones. */
+const LS_KEY_ULTIMO_TAB = 'palmapp_configuracion_ultimo_tab';
 
-  const EtapaComponent = ETAPAS[etapaActual - 1].component;
+/** Lee el tab guardado y resuelve qué categoría debe abrirse expandida. */
+function leerEstadoInicial(): { item: string; categoria: string } {
+  let item = 'info-empresa';
+  try {
+    const saved = sessionStorage.getItem(LS_KEY_ULTIMO_TAB);
+    if (saved) item = saved;
+  } catch { /* ignorar */ }
+
+  // Buscar la categoría padre del item para expandirla.
+  for (const cat of CATEGORIAS) {
+    if (cat.id === item) return { item, categoria: cat.id };
+    if (cat.items?.some((s) => s.id === item)) return { item, categoria: cat.id };
+  }
+  return { item: 'info-empresa', categoria: 'info-empresa' };
+}
+
+export default function Configuracion() {
+  const inicial = leerEstadoInicial();
+  // La categoría se expande según el item guardado; si nada, default a info-empresa.
+  const [categoriaExpandida, setCategoriaExpandida] = useState<string[]>([inicial.categoria]);
+  const [itemSeleccionado, setItemSeleccionado] = useState<string>(inicial.item);
+
+  // Persiste el tab activo para que al volver desde una pantalla hija
+  // (ej: /configuracion/conceptos/nuevo) se restaure en el mismo lugar.
+  useEffect(() => {
+    try { sessionStorage.setItem(LS_KEY_ULTIMO_TAB, itemSeleccionado); } catch {}
+  }, [itemSeleccionado]);
+
+  const toggleCategoria = (categoriaId: string) => {
+    if (categoriaExpandida.includes(categoriaId)) {
+      setCategoriaExpandida(categoriaExpandida.filter((id) => id !== categoriaId));
+    } else {
+      setCategoriaExpandida([...categoriaExpandida, categoriaId]);
+    }
+  };
+
+  const seleccionarItem = (categoriaId: string, itemId?: string) => {
+    const categoria = CATEGORIAS.find((c) => c.id === categoriaId);
+
+    if (categoria?.items) {
+      // Si tiene subitems, expande la categoría
+      if (!categoriaExpandida.includes(categoriaId)) {
+        setCategoriaExpandida([...categoriaExpandida, categoriaId]);
+      }
+      // Selecciona el primer subitem si no se especificó uno
+      if (itemId) {
+        setItemSeleccionado(itemId);
+      } else {
+        setItemSeleccionado(categoria.items[0].id);
+      }
+    } else {
+      // Si no tiene subitems, selecciona la categoría directamente
+      setItemSeleccionado(categoriaId);
+    }
+  };
+
+  /**
+   * Devuelve el componente correspondiente al item actualmente seleccionado.
+   * Busca primero en las categorías top-level y luego en sus subitems.
+   */
+  const getComponenteActual = () => {
+    const categoria = CATEGORIAS.find((c) => c.id === itemSeleccionado);
+    if (categoria?.component) return categoria.component;
+
+    for (const cat of CATEGORIAS) {
+      if (cat.items) {
+        const subitem = cat.items.find((item) => item.id === itemSeleccionado);
+        if (subitem) return subitem.component;
+      }
+    }
+    return null;
+  };
+
+  const ComponenteActual = getComponenteActual();
 
   return (
     <div className="space-y-6">
@@ -72,86 +201,75 @@ export default function Configuracion() {
         <p className="text-lead">Configura todos los parámetros de tu finca</p>
       </div>
 
-      {/* Indicador de Progreso - Pasos */}
-      <Card className="border-border">
-        <CardContent className="p-6">
-          {/* Desktop - Grid de pasos (8 columnas como V.10) */}
-          <div className="hidden lg:grid grid-cols-8 gap-3">
-            {ETAPAS.map((etapa) => {
-              const Icon = etapa.icono;
-              const isActive = etapaActual === etapa.numero;
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Sidebar de navegación */}
+        <Card className="border-border lg:col-span-1 h-fit">
+          <CardContent className="p-4">
+            <nav className="space-y-1">
+              {CATEGORIAS.map((categoria) => {
+                const Icon = categoria.icono;
+                const tieneSubitems = categoria.items && categoria.items.length > 0;
+                const estaExpandida = categoriaExpandida.includes(categoria.id);
+                const estaSeleccionada = itemSeleccionado === categoria.id;
 
-              return (
-                <button
-                  key={etapa.numero}
-                  onClick={() => setEtapaActual(etapa.numero)}
-                  className={cn(
-                    'flex flex-col items-center gap-2 p-3 rounded-lg transition-all',
-                    isActive && 'bg-primary text-primary-foreground shadow-md scale-105',
-                    !isActive && 'bg-muted/30 text-muted-foreground hover:bg-muted hover:text-foreground',
-                  )}
-                >
-                  <div className={cn(
-                    'relative flex items-center justify-center h-10 w-10 rounded-full transition-all',
-                    isActive && 'bg-primary-foreground/20',
-                    !isActive && 'bg-muted',
-                  )}>
-                    <Icon className="h-5 w-5" />
+                return (
+                  <div key={categoria.id}>
+                    <button
+                      onClick={() => {
+                        if (tieneSubitems) {
+                          toggleCategoria(categoria.id);
+                        } else {
+                          seleccionarItem(categoria.id);
+                        }
+                      }}
+                      className={cn(
+                        'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                        estaSeleccionada && !tieneSubitems
+                          ? 'bg-primary text-primary-foreground'
+                          : 'hover:bg-muted text-muted-foreground hover:text-foreground',
+                      )}
+                    >
+                      <Icon className="h-4 w-4 flex-shrink-0" />
+                      <span className="flex-1 text-left">{categoria.nombre}</span>
+                      {tieneSubitems && (
+                        estaExpandida ? (
+                          <ChevronDown className="h-4 w-4 flex-shrink-0" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 flex-shrink-0" />
+                        )
+                      )}
+                    </button>
+
+                    {/* Subitems */}
+                    {tieneSubitems && estaExpandida && (
+                      <div className="ml-7 mt-1 space-y-1 border-l-2 border-border pl-3">
+                        {categoria.items!.map((subitem) => (
+                          <button
+                            key={subitem.id}
+                            onClick={() => seleccionarItem(categoria.id, subitem.id)}
+                            className={cn(
+                              'w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors',
+                              itemSeleccionado === subitem.id
+                                ? 'bg-primary/10 text-primary font-medium'
+                                : 'hover:bg-muted text-muted-foreground hover:text-foreground',
+                            )}
+                          >
+                            {subitem.nombre}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <span className="text-xs font-medium text-center leading-tight">
-                    {etapa.nombre}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+                );
+              })}
+            </nav>
+          </CardContent>
+        </Card>
 
-          {/* Mobile - Select dropdown */}
-          <div className="lg:hidden">
-            <select
-              value={etapaActual}
-              onChange={(e) => setEtapaActual(Number(e.target.value))}
-              className="w-full p-3 rounded-lg border border-border bg-background"
-            >
-              {ETAPAS.map((etapa) => (
-                <option key={etapa.numero} value={etapa.numero}>
-                  {etapa.numero}. {etapa.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Contenido de la Etapa Actual */}
-      <div className="min-h-[500px]">
-        <EtapaComponent />
-      </div>
-
-      {/* Navegación Inferior */}
-      <div className="flex items-center justify-between pt-6">
-        <Button
-          variant="outline"
-          onClick={() => setEtapaActual(Math.max(1, etapaActual - 1))}
-          disabled={etapaActual === 1}
-          size="lg"
-          className="gap-2"
-        >
-          Anterior
-        </Button>
-
-        <div className="text-sm text-muted-foreground font-medium">
-          Paso {etapaActual} de {ETAPAS.length}
+        {/* Contenido principal */}
+        <div className="lg:col-span-3">
+          {ComponenteActual ? <ComponenteActual /> : null}
         </div>
-
-        <Button
-          onClick={() => setEtapaActual(Math.min(ETAPAS.length, etapaActual + 1))}
-          disabled={etapaActual === ETAPAS.length}
-          size="lg"
-          className="gap-2"
-        >
-          Siguiente
-        </Button>
       </div>
     </div>
   );

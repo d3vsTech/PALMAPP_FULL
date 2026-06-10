@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import {
@@ -9,7 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from '../ui/table';
-import { Plus, Edit, Trash2, Sprout } from 'lucide-react';
+import { Plus, Edit, Trash2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -27,31 +27,127 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
+import { useConfirmDelete } from '../../hooks/useConfirmDelete';
+import { toast } from 'sonner';
+import { TabLoadingGate } from './TabLoadingGate';
+import {
+  configuracionApi,
+  ConfiguracionErrorCodes,
+  type Semilla,
+  type TipoSemilla,
+} from '../../../api/configuracion';
 
-interface Semilla {
-  id: string;
-  tipo: string;
-  nombre: string;
-}
-
-const semillasData: Semilla[] = [
-  { id: 's1', tipo: 'Africana', nombre: 'Elaeis Guineensis' },
-  { id: 's2', tipo: 'Híbrido', nombre: 'Híbrido OxG' },
-  { id: 's3', tipo: 'Compacta', nombre: 'Deli x AVROS' },
+const tiposSemilla: TipoSemilla[] = [
+  'Africana',
+  'Híbrido',
+  'Compacta',
+  'Americana',
+  'HIBRIDO_TENERA',
+  'HIBRIDO_OXG',
 ];
 
-const tiposSemilla = ['Africana', 'Híbrido', 'Compacta', 'Americana'];
+/** Catálogo inicial sembrado en background si el tenant no tiene semillas todavía.
+ *  Una entrada por cada `tipo` del enum, con un nombre por defecto razonable. */
+const SEMILLAS_DEFAULT: Array<{ tipo: TipoSemilla; nombre: string }> = [
+  { tipo: 'Africana',       nombre: 'Africana (Elaeis guineensis)' },
+  { tipo: 'Híbrido',        nombre: 'Híbrido OxG' },
+  { tipo: 'Compacta',       nombre: 'Compacta' },
+  { tipo: 'Americana',      nombre: 'Americana (Elaeis oleifera)' },
+  { tipo: 'HIBRIDO_TENERA', nombre: 'Híbrido Ténera DxP' },
+  { tipo: 'HIBRIDO_OXG',    nombre: 'Híbrido OxG tolerante PC' },
+];
+
+/** Clave de caché en sessionStorage para entrada instantánea. */
+const CACHE_KEY_SEMILLAS = 'palmapp_cfg_semillas_v1';
 
 export function SemillasTab() {
-  const [semillas, setSemillas] = useState<Semilla[]>(semillasData);
+  const hayCache = (() => {
+    try {
+      const raw = sessionStorage.getItem(CACHE_KEY_SEMILLAS);
+      if (!raw) return false;
+      const parsed = JSON.parse(raw) as Semilla[];
+      return Array.isArray(parsed) && parsed.length > 0;
+    } catch { return false; }
+  })();
+  const [loading, setLoading] = useState(!hayCache);
+  const [semillas, setSemillas] = useState<Semilla[]>([]);
   const [openModal, setOpenModal] = useState(false);
   const [semillaEdit, setSemillaEdit] = useState<Semilla | null>(null);
-  const [formData, setFormData] = useState({ tipo: '', nombre: '' });
+  const [formData, setFormData] = useState<{ tipo: TipoSemilla | ''; nombre: string }>({
+    tipo: '',
+    nombre: '',
+  });
+
+  const { confirmDelete, ConfirmDeleteDialog } = useConfirmDelete();
+
+  useEffect(() => {
+    let cancelado = false;
+
+    // 1) Stale-while-revalidate: pinta del caché al instante si existe.
+    try {
+      const raw = sessionStorage.getItem(CACHE_KEY_SEMILLAS);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Semilla[];
+        if (Array.isArray(parsed) && parsed.length > 0) setSemillas(parsed);
+      }
+    } catch { /* caché corrupto: ignorar */ }
+
+    // 2) Revalidar en background.
+    (async () => {
+      try {
+        const res = await configuracionApi.semillas.listar({ per_page: 100 });
+        if (cancelado) return;
+        // Primera respuesta del backend → quitamos el loader.
+        setLoading(false);
+        const items = res.data ?? [];
+        if (items.length > 0) {
+          setSemillas(items);
+          try { sessionStorage.setItem(CACHE_KEY_SEMILLAS, JSON.stringify(items)); } catch {}
+          return;
+        }
+
+        // 3) Lista vacía → sembramos los 6 tipos en PARALELO (no secuencial).
+        const resultados = await Promise.allSettled(
+          SEMILLAS_DEFAULT.map((s) =>
+            configuracionApi.semillas.crear({ tipo: s.tipo, nombre: s.nombre }),
+          ),
+        );
+        if (cancelado) return;
+
+        const creadas: Semilla[] = resultados
+          .filter((r): r is PromiseFulfilledResult<{ data: Semilla; message: string }> => r.status === 'fulfilled')
+          .map((r) => r.value.data);
+
+        if (creadas.length === SEMILLAS_DEFAULT.length) {
+          setSemillas(creadas);
+          try { sessionStorage.setItem(CACHE_KEY_SEMILLAS, JSON.stringify(creadas)); } catch {}
+          return;
+        }
+
+        // Si algún POST falló (race condition con otro tab), refetcheamos.
+        try {
+          const final = await configuracionApi.semillas.listar({ per_page: 100 });
+          if (cancelado) return;
+          setSemillas(final.data ?? creadas);
+          try { sessionStorage.setItem(CACHE_KEY_SEMILLAS, JSON.stringify(final.data ?? creadas)); } catch {}
+        } catch {
+          if (!cancelado) setSemillas(creadas);
+        }
+      } catch (e: any) {
+        if (!cancelado) {
+          toast.error(e?.message ?? 'No se pudieron cargar las semillas');
+          setLoading(false);
+        }
+      }
+    })();
+    return () => { cancelado = true; };
+  }, []);
 
   const handleOpenModal = (semilla?: Semilla) => {
     if (semilla) {
+      const tipoValido = tiposSemilla.includes(semilla.tipo) ? semilla.tipo : '';
       setSemillaEdit(semilla);
-      setFormData({ tipo: semilla.tipo, nombre: semilla.nombre });
+      setFormData({ tipo: tipoValido, nombre: semilla.nombre });
     } else {
       setSemillaEdit(null);
       setFormData({ tipo: '', nombre: '' });
@@ -59,41 +155,71 @@ export function SemillasTab() {
     setOpenModal(true);
   };
 
-  const handleSave = () => {
-    if (!formData.tipo || !formData.nombre) {
-      alert('Todos los campos son obligatorios');
+  const handleSave = async () => {
+    if (!formData.tipo || !formData.nombre.trim()) {
+      toast.error('Todos los campos son obligatorios');
       return;
     }
 
-    if (semillaEdit) {
-      setSemillas((prev) =>
-        prev.map((s) =>
-          s.id === semillaEdit.id ? { ...s, ...formData } : s
-        )
-      );
-    } else {
-      setSemillas((prev) => [
-        ...prev,
-        { id: `s${Date.now()}`, ...formData },
-      ]);
+    try {
+      const payload = { tipo: formData.tipo as TipoSemilla, nombre: formData.nombre.trim() };
+      if (semillaEdit) {
+        const res = await configuracionApi.semillas.editar(semillaEdit.id, payload);
+        setSemillas((prev) => {
+          const next = prev.map((s) => (s.id === semillaEdit.id ? res.data : s));
+          try { sessionStorage.setItem(CACHE_KEY_SEMILLAS, JSON.stringify(next)); } catch {}
+          return next;
+        });
+      } else {
+        const res = await configuracionApi.semillas.crear(payload);
+        setSemillas((prev) => {
+          const next = [...prev, res.data];
+          try { sessionStorage.setItem(CACHE_KEY_SEMILLAS, JSON.stringify(next)); } catch {}
+          return next;
+        });
+      }
+      setOpenModal(false);
+    } catch (e: any) {
+      if (e?.errors) {
+        const primero = Object.values(e.errors).flat()[0];
+        toast.error(typeof primero === 'string' ? primero : 'Error de validación');
+      } else {
+        toast.error(e?.message ?? 'No se pudo guardar la semilla');
+      }
     }
-
-    setOpenModal(false);
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('¿Estás seguro de eliminar esta semilla?')) {
-      setSemillas((prev) => prev.filter((s) => s.id !== id));
-    }
+  const handleDelete = (id: number, nombre: string) => {
+    confirmDelete({
+      title: '¿Eliminar semilla?',
+      description: `¿Estás seguro de que deseas eliminar la semilla "${nombre}"? Esta acción no se puede deshacer.`,
+      confirmText: 'Eliminar',
+      onConfirm: async () => {
+        try {
+          await configuracionApi.semillas.eliminar(id);
+          setSemillas((prev) => {
+            const next = prev.filter((s) => s.id !== id);
+            try { sessionStorage.setItem(CACHE_KEY_SEMILLAS, JSON.stringify(next)); } catch {}
+            return next;
+          });
+        } catch (e: any) {
+          if (e?.code === ConfiguracionErrorCodes.SEMILLA_CON_LOTES) {
+            toast.error('No se puede eliminar: está asignada a uno o más lotes');
+          } else {
+            toast.error(e?.message ?? 'No se pudo eliminar la semilla');
+          }
+        }
+      },
+    });
   };
 
   return (
     <>
+      {ConfirmDeleteDialog}
       <Dialog open={openModal} onOpenChange={setOpenModal}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Sprout className="h-5 w-5 text-primary" />
+            <DialogTitle>
               {semillaEdit ? 'Editar Semilla' : 'Nueva Semilla'}
             </DialogTitle>
             <DialogDescription>
@@ -109,7 +235,7 @@ export function SemillasTab() {
               <Select
                 value={formData.tipo}
                 onValueChange={(value) =>
-                  setFormData((prev) => ({ ...prev, tipo: value }))
+                  setFormData((prev) => ({ ...prev, tipo: value as TipoSemilla }))
                 }
               >
                 <SelectTrigger id="tipo">
@@ -149,12 +275,12 @@ export function SemillasTab() {
         </DialogContent>
       </Dialog>
 
+      <TabLoadingGate loading={loading} message="Cargando semillas…">
       <Card className="bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-sm border-border/50">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="flex items-center gap-2">
-                <Sprout className="h-5 w-5 text-primary" />
+              <CardTitle>
                 Catálogo de Semillas
               </CardTitle>
               <CardDescription>
@@ -170,9 +296,6 @@ export function SemillasTab() {
         <CardContent>
           {semillas.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-                <Sprout className="h-8 w-8 text-muted-foreground" />
-              </div>
               <h3 className="mb-2 text-lg font-semibold">No hay semillas registradas</h3>
               <p className="mb-4 text-sm text-muted-foreground">
                 Comienza agregando tu primera variedad de palma
@@ -197,7 +320,6 @@ export function SemillasTab() {
                     <TableRow key={semilla.id} className="hover:bg-muted/50 transition-colors">
                       <TableCell>
                         <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-                          <Sprout className="h-3 w-3" />
                           {semilla.tipo}
                         </span>
                       </TableCell>
@@ -214,7 +336,7 @@ export function SemillasTab() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleDelete(semilla.id)}
+                            onClick={() => handleDelete(semilla.id, semilla.nombre)}
                           >
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
@@ -228,6 +350,7 @@ export function SemillasTab() {
           )}
         </CardContent>
       </Card>
+      </TabLoadingGate>
     </>
   );
 }

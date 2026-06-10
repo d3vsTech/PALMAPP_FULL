@@ -56,15 +56,8 @@ const fertilizantes = [
   'Otro'
 ];
 
-// Tipos de labor para auxiliares
-const laboresAuxiliares = [
-  'Mantenimiento de vías',
-  'Limpieza de instalaciones',
-  'Reparación de cercas',
-  'Mantenimiento de equipos',
-  'Transporte',
-  'Otro'
-];
+// Las labores de Finca se cargan desde el API (`/v1/tenant/labores/select`,
+// §4 del doc paramétricas) — se guardan en `laboresLista` al montar el wizard.
 
 // Tipos de ausentismo
 const motivosAusentismo = [
@@ -133,8 +126,21 @@ interface TrabajoSanidad {
 interface TrabajoOtros {
   id: string;
   colaboradores: string[];
+  /**
+   * Referencia al catálogo unificado de Labores (categoria=PALMA, custom, tipo=null).
+   * El wizard envía `labor_id = laborOtrosRawId` al endpoint unificado.
+   */
+  laborOtrosKey?: string;          // ej. "palma-3"
+  laborOtrosRawId?: number;
+  /** Snapshot del `tipo_pago` de la labor — define qué campos pinta el form
+   *  (POR_PALMA → cantidad_palmas; JORNAL_FIJO → nombre_trabajo). */
+  laborOtrosTipoPago?: 'POR_PALMA' | 'JORNAL_FIJO';
   nombre: string;
   laborRealizada: string;
+  /** Solo POR_PALMA — autofill desde sublote.cantidad_palmas, editable. */
+  numeroPalmas?: number;
+  /** Solo JORNAL_FIJO — opcional, texto libre para detallar el trabajo. */
+  nombreTrabajo?: string;
   lote: string;
   sublote: string;
 }
@@ -186,6 +192,10 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   // ── Estado planilla ID + loading ─────────────────────────────────────────
   const [planillaId, setPlanillaId] = useState<number | null>(idParam ? Number(idParam) : null);
   const [guardando, setGuardando] = useState(false);
+  /** Se vuelve true tras un Guardado exitoso (explícito o autosave). Inhibe el
+   *  autosave al desmontar para que no dispare un segundo POST que duplicaría
+   *  los jornales/cosechas/horas-extra/ausencias del flujo legacy. */
+  const [planillaPersistida, setPlanillaPersistida] = useState(false);
   const [resumen, setResumen] = useState<import('../../../api/operaciones').Resumen | null>(null);
 
   const cargarResumen = async (pid: number) => {
@@ -202,26 +212,77 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
   // Mapas auxiliares para resolver nombres → IDs al guardar
   const [insumosMap, setInsumosMap] = useState<Map<string, number>>(new Map());
+  /** Labores de FINCA: nombre → id (catálogo unificado, categoria='FINCA'). */
   const [laboresMap, setLaboresMap] = useState<Map<string, number>>(new Map());
+  /**
+   * Labores fijas de PALMA: tipo → id. Una sola por tenant para cada uno de
+   * PLATEO, PODA, FERTILIZACION, SANIDAD (y COSECHA, aunque se usa el endpoint
+   * dedicado). Se llena con `es_sistema=true` del catálogo PALMA.
+   */
+  const [palmaTipoToId, setPalmaTipoToId] = useState<Map<string, number>>(new Map());
+  /** Snapshot de las labores fijas de PALMA para conocer su `tipo_pago`. */
+  const [palmaFijasInfo, setPalmaFijasInfo] = useState<Map<string, { id: number; tipo_pago: 'POR_PALMA' | 'JORNAL_FIJO' }>>(new Map());
   const [motivosMap, setMotivosMap] = useState<Map<string, number>>(new Map());
   const [tiposHoraExtraMap, setTiposHoraExtraMap] = useState<Map<string, number>>(new Map());
   const [insumosLista, setInsumosLista] = useState<string[]>([]);
   const [laboresLista, setLaboresLista] = useState<string[]>([]);
   const [motivosLista, setMotivosLista] = useState<string[]>([]);
   const [tiposHoraExtraLista, setTiposHoraExtraLista] = useState<string[]>([]);
+  /**
+   * Catálogo para el select "Nombre" del tab OTROS — labores custom de palma
+   * (categoria='PALMA', es_sistema=false, tipo=null) del catálogo unificado.
+   * Se envía `labor_id = rawId` al endpoint /jornales.
+   *
+   * `tipo_pago` viaja con el item para que al elegirlo en el dropdown el form
+   * sepa repintarse (§10 doc API_OPERACIONES.md): POR_PALMA muestra Número de
+   * Palmas (autofill desde sublote); JORNAL_FIJO muestra Nombre del Trabajo.
+   */
+  type LaborOtrosOpcion = {
+    key: string;
+    nombre: string;
+    rawId: number;
+    tipo_pago: 'POR_PALMA' | 'JORNAL_FIJO';
+  };
+  const [laboresOtrosOpciones, setLaboresOtrosOpciones] = useState<LaborOtrosOpcion[]>([]);
 
   // Carga inicial de catálogos al montar
   useEffect(() => {
     (async () => {
       try {
-        const [colRes, lotRes, inRes, labRes, motRes, tipoRes] = await Promise.all([
+        const [colRes, lotRes, inRes, labFincaRes, labPalmaRes, motRes, tipoRes] = await Promise.all([
           selectsApi.colaboradores(),
           selectsApi.lotes(),
           selectsApi.insumos(),
-          selectsApi.labores(),
+          selectsApi.labores({ categoria: 'FINCA' }),
+          selectsApi.labores({ categoria: 'PALMA' }),
           selectsApi.motivosAusencia(),
           selectsApi.tiposHoraExtra(),
         ]);
+
+        // Labores PALMA: separar fijas (es_sistema=true, tipo!=null) de las custom
+        // (es_sistema=false, tipo=null). Las fijas alimentan los 5 tabs específicos;
+        // las custom alimentan el dropdown del tab OTROS.
+        const palmaItems = (labPalmaRes.data || []) as any[];
+        const tipoMap = new Map<string, number>();
+        const infoMap = new Map<string, { id: number; tipo_pago: 'POR_PALMA' | 'JORNAL_FIJO' }>();
+        palmaItems
+          .filter((x) => x.es_sistema === true && x.tipo)
+          .forEach((x) => {
+            tipoMap.set(x.tipo, x.id);
+            infoMap.set(x.tipo, { id: x.id, tipo_pago: x.tipo_pago });
+          });
+        setPalmaTipoToId(tipoMap);
+        setPalmaFijasInfo(infoMap);
+
+        const opcionesPalma: LaborOtrosOpcion[] = palmaItems
+          .filter((x) => x.es_sistema !== true && x.tipo == null)
+          .map((x) => ({
+            key: `palma-${x.id}`,
+            nombre: x.nombre,
+            rawId: x.id,
+            tipo_pago: (x.tipo_pago === 'POR_PALMA' ? 'POR_PALMA' : 'JORNAL_FIJO') as 'POR_PALMA' | 'JORNAL_FIJO',
+          }));
+        setLaboresOtrosOpciones(opcionesPalma);
         setColaboradores((colRes.data || []).map((c: any) => {
           let nombres   = c.primer_nombre   ?? c.nombres   ?? c.nombre   ?? '';
           let apellidos = c.primer_apellido ?? c.apellidos ?? c.apellido ?? '';
@@ -261,15 +322,16 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         const allSubs = (await Promise.all(subPromises)).flat();
         setSublotes(allSubs);
         const insumos = (inRes.data || []).map((i: any) => ({ nombre: i.nombre as string, id: i.id as number }));
-        const labores = (labRes.data || []).map((l: any) => ({ nombre: l.nombre as string, id: l.id as number }));
+        // El dropdown "Labor" del Paso 3 solo lista labores de FINCA (categoria='FINCA').
+        const laboresFinca = (labFincaRes.data || []).map((l: any) => ({ nombre: l.nombre as string, id: l.id as number }));
         const motivos = (motRes.data || []).map((m: any) => ({ nombre: m.nombre as string, id: m.id as number }));
         const tipos   = (tipoRes.data || []).map((t: any) => ({ nombre: t.nombre as string, id: t.id as number }));
         setInsumosMap(new Map(insumos.map(x => [x.nombre, x.id] as [string, number])));
-        setLaboresMap(new Map(labores.map(x => [x.nombre, x.id] as [string, number])));
+        setLaboresMap(new Map(laboresFinca.map(x => [x.nombre, x.id] as [string, number])));
         setMotivosMap(new Map(motivos.map(x => [x.nombre, x.id] as [string, number])));
         setTiposHoraExtraMap(new Map(tipos.map(x => [x.nombre, x.id] as [string, number])));
         setInsumosLista(insumos.map(x => x.nombre));
-        setLaboresLista(labores.map(x => x.nombre));
+        setLaboresLista(laboresFinca.map(x => x.nombre));
         setMotivosLista(motivos.map(x => x.nombre));
         setTiposHoraExtraLista(tipos.map(x => x.nombre));
       } catch (e) { console.warn('Error cargando selects:', e); }
@@ -418,22 +480,37 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           sublote: j.sublote_id != null ? String(j.sublote_id) : '',
           trabajoRealizado: j.descripcion ?? '',
         })));
-        setTrabajosOtros(porTipo('OTROS').map(j => ({
-          id: String(j.id),
-          colaboradores: [String(j.empleado_id)],
-          nombre: j.nombre_trabajo ?? '',
-          laborRealizada: j.descripcion ?? '',
-          lote: j.lote_id != null ? String(j.lote_id) : '',
-          sublote: j.sublote_id != null ? String(j.sublote_id) : '',
-        })));
+        // Otros: labores custom de PALMA (tipo=null en el catálogo unificado).
+        // Quedan fuera de los 4 tipos fijos (PLATEO/PODA/FERTILIZACION/SANIDAD).
+        const jornalesOtros = jornales.filter(j => j.categoria === 'PALMA' && j.tipo == null);
+        setTrabajosOtros(jornalesOtros.map(j => {
+          const laborId = j.labor_id != null ? Number(j.labor_id) : undefined;
+          // Snapshot del tipo_pago: viene en j.labor.tipo_pago dentro del detalle.
+          const tipoPagoRaw = j.labor?.tipo_pago;
+          const tipoPago: 'POR_PALMA' | 'JORNAL_FIJO' =
+            tipoPagoRaw === 'POR_PALMA' ? 'POR_PALMA' : 'JORNAL_FIJO';
+          return {
+            id: String(j.id),
+            colaboradores: [String(j.empleado_id)],
+            laborOtrosKey: laborId ? `palma-${laborId}` : undefined,
+            laborOtrosRawId: laborId,
+            laborOtrosTipoPago: tipoPago,
+            nombre: j.labor?.nombre ?? j.nombre_trabajo ?? '',
+            laborRealizada: j.descripcion ?? '',
+            numeroPalmas: tipoPago === 'POR_PALMA' && j.cantidad_palmas != null
+              ? Number(j.cantidad_palmas)
+              : undefined,
+            nombreTrabajo: tipoPago === 'JORNAL_FIJO' ? (j.nombre_trabajo ?? '') : undefined,
+            lote: j.lote_id != null ? String(j.lote_id) : '',
+            sublote: j.sublote_id != null ? String(j.sublote_id) : '',
+          };
+        }));
         setTrabajosAuxiliares(jornales.filter(j => j.categoria === 'FINCA').map(j => ({
           id: String(j.id),
           nombre: j.empleado ? `${j.empleado.primer_nombre ?? ''} ${j.empleado.primer_apellido ?? ''}`.trim() : '',
           labor: j.labor?.nombre ?? '',
           otraLabor: '',
           lugar: j.ubicacion ?? '',
-          total: Number(j.valor_total ?? 0),
-          horasExtra: 0,
         })));
         setHorasExtras((p.horas_extra ?? p.horasExtra ?? []).map((h: any) => ({
           id: String(h.id),
@@ -498,8 +575,16 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
     }
   };
 
-  const guardarTodo = async () => {
-    setGuardando(true);
+  /**
+   * Persiste la planilla y todos sus hijos (cosechas/jornales/horas-extra/ausencias).
+   *
+   * Modo silencioso (`opts.silent`): usado por el autosave al salir del wizard
+   * sin pulsar "Guardar Planilla". Skipea el chequeo de duplicados, no muestra
+   * toasts ni navega. Cualquier error se traga (no hay UI activa para mostrarlo).
+   */
+  const guardarTodo = async (opts: { silent?: boolean } = {}) => {
+    const silent = opts.silent === true;
+    if (!silent) setGuardando(true);
     try {
       const headerBody = {
         fecha,
@@ -511,8 +596,11 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
       };
       let pid = planillaId;
       if (!pid) {
-        // Validar que no exista ya una planilla para esa fecha
-        if (fecha) {
+        // Validar que no exista ya una planilla para esa fecha (solo en modo
+        // interactivo — el autosave salta la verificación porque si llegó aquí
+        // sin pid es porque el usuario nunca pulsó Guardar; mejor un BORRADOR
+        // duplicable que perder los datos).
+        if (!silent && fecha) {
           try {
             const dup = await operacionesApi.listar({ fecha_desde: fecha, fecha_hasta: fecha, per_page: 5 });
             const yaExiste = (dup.data ?? []).some((p: any) => {
@@ -546,93 +634,126 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           });
         } catch {}
       }
-      // Plateo
-      for (const t of trabajosPlateo) {
-        for (const cid of t.colaboradores) {
-          try {
-            await jornalesApi.crear(pid, {
-              categoria: 'PALMA', tipo: 'PLATEO', empleado_id: parseInt(cid),
-              lote_id: t.lote ? parseInt(t.lote) : null,
-              sublote_id: t.sublote ? parseInt(t.sublote) : null,
-              cantidad_palmas: t.numeroPalmas || 0,
-            });
-          } catch {}
-        }
-      }
-      // Poda
-      for (const t of trabajosPoda) {
-        for (const cid of t.colaboradores) {
-          try {
-            await jornalesApi.crear(pid, {
-              categoria: 'PALMA', tipo: 'PODA', empleado_id: parseInt(cid),
-              lote_id: t.lote ? parseInt(t.lote) : null,
-              sublote_id: t.sublote ? parseInt(t.sublote) : null,
-              cantidad_palmas: t.numeroPalmas || 0,
-            });
-          } catch {}
-        }
-      }
-      // Fertilizacion
-      for (const t of trabajosFertilizacion) {
-        let insumoId: number | undefined;
-        if (t.tipoFertilizante === 'Otro') {
-          const nombreNuevo = (t.otroFertilizante || '').trim();
-          if (!nombreNuevo) continue;
-          const matchLocal = Array.from(insumosMap.entries())
-            .find(([n]) => n.toLowerCase() === nombreNuevo.toLowerCase());
-          if (matchLocal) insumoId = matchLocal[1];
-          else {
+      // Plateo (labor fija de PALMA con tipo='PLATEO')
+      const plateoLaborId = palmaTipoToId.get('PLATEO');
+      const plateoInfo = palmaFijasInfo.get('PLATEO');
+      if (plateoLaborId) {
+        for (const t of trabajosPlateo) {
+          for (const cid of t.colaboradores) {
             try {
-              const res = await selectsApi.crearInsumo(nombreNuevo);
-              insumoId = res.data.id;
-              setInsumosMap(prev => new Map(prev).set(res.data.nombre, res.data.id));
-            } catch { continue; }
+              await jornalesApi.crear(pid, {
+                labor_id: plateoLaborId,
+                empleado_id: parseInt(cid),
+                lote_id: t.lote ? parseInt(t.lote) : null,
+                sublote_id: t.sublote ? parseInt(t.sublote) : null,
+                ...(plateoInfo?.tipo_pago === 'POR_PALMA' ? { cantidad_palmas: t.numeroPalmas || 0 } : {}),
+              });
+            } catch {}
           }
-        } else {
-          insumoId = insumosMap.get(t.tipoFertilizante);
-        }
-        if (!insumoId) continue;
-        for (const cid of t.colaboradores) {
-          try {
-            await jornalesApi.crear(pid, {
-              categoria: 'PALMA', tipo: 'FERTILIZACION', empleado_id: parseInt(cid),
-              lote_id: t.lote ? parseInt(t.lote) : null,
-              sublote_id: t.sublote ? parseInt(t.sublote) : null,
-              cantidad_palmas: t.palmas || 0,
-              insumo_id: insumoId,
-              gramos_por_palma: t.cantidadGramos || 0,
-            });
-          } catch {}
         }
       }
-      // Sanidad
-      for (const t of trabajosSanidad) {
-        for (const cid of t.colaboradores) {
-          try {
-            await jornalesApi.crear(pid, {
-              categoria: 'PALMA', tipo: 'SANIDAD', empleado_id: parseInt(cid),
-              lote_id: t.lote ? parseInt(t.lote) : null,
-              sublote_id: t.sublote ? parseInt(t.sublote) : null,
-              descripcion: t.trabajoRealizado || 'Sanidad',
-            });
-          } catch {}
+      // Poda (labor fija de PALMA con tipo='PODA')
+      const podaLaborId = palmaTipoToId.get('PODA');
+      const podaInfo = palmaFijasInfo.get('PODA');
+      if (podaLaborId) {
+        for (const t of trabajosPoda) {
+          for (const cid of t.colaboradores) {
+            try {
+              await jornalesApi.crear(pid, {
+                labor_id: podaLaborId,
+                empleado_id: parseInt(cid),
+                lote_id: t.lote ? parseInt(t.lote) : null,
+                sublote_id: t.sublote ? parseInt(t.sublote) : null,
+                ...(podaInfo?.tipo_pago === 'POR_PALMA' ? { cantidad_palmas: t.numeroPalmas || 0 } : {}),
+              });
+            } catch {}
+          }
         }
       }
-      // Otros (PALMA-OTROS)
+      // Fertilización (labor fija de PALMA con tipo='FERTILIZACION')
+      const fertLaborId = palmaTipoToId.get('FERTILIZACION');
+      const fertInfo = palmaFijasInfo.get('FERTILIZACION');
+      if (fertLaborId) {
+        for (const t of trabajosFertilizacion) {
+          let insumoId: number | undefined;
+          if (t.tipoFertilizante === 'Otro') {
+            const nombreNuevo = (t.otroFertilizante || '').trim();
+            if (!nombreNuevo) continue;
+            const matchLocal = Array.from(insumosMap.entries())
+              .find(([n]) => n.toLowerCase() === nombreNuevo.toLowerCase());
+            if (matchLocal) insumoId = matchLocal[1];
+            else {
+              try {
+                const res = await selectsApi.crearInsumo(nombreNuevo);
+                insumoId = res.data.id;
+                setInsumosMap(prev => new Map(prev).set(res.data.nombre, res.data.id));
+              } catch { continue; }
+            }
+          } else {
+            insumoId = insumosMap.get(t.tipoFertilizante);
+          }
+          if (!insumoId) continue;
+          for (const cid of t.colaboradores) {
+            try {
+              await jornalesApi.crear(pid, {
+                labor_id: fertLaborId,
+                empleado_id: parseInt(cid),
+                lote_id: t.lote ? parseInt(t.lote) : null,
+                sublote_id: t.sublote ? parseInt(t.sublote) : null,
+                ...(fertInfo?.tipo_pago === 'POR_PALMA' ? { cantidad_palmas: t.palmas || 0 } : {}),
+                insumo_id: insumoId,
+                gramos_por_palma: t.cantidadGramos || 0,
+              });
+            } catch {}
+          }
+        }
+      }
+      // Sanidad (labor fija de PALMA con tipo='SANIDAD')
+      const sanidadLaborId = palmaTipoToId.get('SANIDAD');
+      const sanidadInfo = palmaFijasInfo.get('SANIDAD');
+      if (sanidadLaborId) {
+        for (const t of trabajosSanidad) {
+          for (const cid of t.colaboradores) {
+            try {
+              await jornalesApi.crear(pid, {
+                labor_id: sanidadLaborId,
+                empleado_id: parseInt(cid),
+                lote_id: t.lote ? parseInt(t.lote) : null,
+                sublote_id: t.sublote ? parseInt(t.sublote) : null,
+                descripcion: t.trabajoRealizado || 'Sanidad',
+                // Si el tenant configuró SANIDAD como POR_PALMA, el backend exige cantidad_palmas.
+                // El form no expone palmas; reusamos las del sublote como aproximación.
+                ...(sanidadInfo?.tipo_pago === 'POR_PALMA'
+                  ? { cantidad_palmas: Number(sublotes.find(s => s.id === t.sublote)?.cantidadPalmas ?? 0) }
+                  : {}),
+              });
+            } catch {}
+          }
+        }
+      }
+      // Otros (labores custom de PALMA, tipo=null en el catálogo unificado).
+      // §3.2 del doc: el payload depende del tipo_pago de la labor:
+      //  - POR_PALMA   → `cantidad_palmas` requerido.
+      //  - JORNAL_FIJO → `nombre_trabajo` y `descripcion` opcionales; sin cantidad_palmas.
       for (const t of trabajosOtros) {
+        if (!t.laborOtrosRawId) continue;
         for (const cid of t.colaboradores) {
-          try {
-            await jornalesApi.crear(pid, {
-              categoria: 'PALMA', tipo: 'OTROS', empleado_id: parseInt(cid),
-              lote_id: t.lote ? parseInt(t.lote) : null,
-              sublote_id: t.sublote ? parseInt(t.sublote) : null,
-              nombre_trabajo: t.nombre || 'Otros',
-              descripcion: t.laborRealizada || 'Realizado',
-            });
-          } catch {}
+          const base: any = {
+            labor_id: t.laborOtrosRawId,
+            empleado_id: parseInt(cid),
+            lote_id: t.lote ? parseInt(t.lote) : null,
+            sublote_id: t.sublote ? parseInt(t.sublote) : null,
+          };
+          if (t.laborOtrosTipoPago === 'POR_PALMA') {
+            base.cantidad_palmas = Number(t.numeroPalmas ?? 0);
+          } else if (t.laborOtrosTipoPago === 'JORNAL_FIJO') {
+            if (t.nombreTrabajo?.trim()) base.nombre_trabajo = t.nombreTrabajo.trim();
+          }
+          if (t.laborRealizada?.trim()) base.descripcion = t.laborRealizada.trim();
+          try { await jornalesApi.crear(pid, base); } catch {}
         }
       }
-      // Auxiliares (FINCA)
+      // Auxiliares (FINCA — labores del catálogo unificado con categoria='FINCA')
       for (const t of trabajosAuxiliares) {
         if (!t.labor) continue;
         const laborKey = t.labor === 'Otro' ? (t.otraLabor || '') : t.labor;
@@ -643,7 +764,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         if (!colab) continue;
         try {
           await jornalesApi.crear(pid, {
-            categoria: 'FINCA', labor_id: laborId,
+            labor_id: laborId,
             empleado_id: parseInt(colab.id),
             ubicacion: t.lugar || undefined,
           });
@@ -687,14 +808,56 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         } catch {}
       }
 
-      toast.success(planillaId ? 'Planilla actualizada' : 'Planilla guardada');
-      navigate('/operaciones');
+      setPlanillaPersistida(true);
+      if (!silent) {
+        toast.success(planillaId ? 'Planilla actualizada' : 'Planilla guardada');
+        navigate('/operaciones');
+      }
     } catch (err: any) {
-      toast.error(err?.message ?? 'Error al guardar la planilla');
+      if (!silent) toast.error(err?.message ?? 'Error al guardar la planilla');
     } finally {
-      setGuardando(false);
+      if (!silent) setGuardando(false);
     }
   };
+
+  // ── Autosave al salir del wizard sin pulsar "Guardar Planilla" ───────────
+  //
+  // Se mantiene un ref con la closure fresca para que el cleanup del useEffect
+  // (que solo corre con array vacío en el primer mount) tenga acceso al estado
+  // más reciente. Guarda como BORRADOR si:
+  //   - No estamos en modo lectura.
+  //   - No se ha persistido todavía (evita duplicar hijos del flujo legacy).
+  //   - Hay datos mínimos para que el backend acepte el POST (fecha + elaborado_por).
+  const guardarBorradorRef = useRef<() => void>(() => {});
+  guardarBorradorRef.current = () => {
+    if (modoLectura) return;
+    if (planillaPersistida) return;
+    if (planillaId) return; // ya existe → re-disparar duplicaría hijos
+    if (!fecha || !elaboradoPor) return;
+    // Disparado en background. No espera la promesa: el componente ya se está
+    // desmontando o la página se está cerrando. La petición termina sola.
+    void guardarTodo({ silent: true });
+  };
+
+  useEffect(() => {
+    return () => { guardarBorradorRef.current(); };
+  }, []);
+
+  // Aviso del navegador antes de refresh / cerrar pestaña cuando hay datos
+  // sin persistir. No podemos disparar una petición fiable aquí (el navegador
+  // suele matar el fetch), así que solo pedimos confirmación al usuario.
+  useEffect(() => {
+    if (modoLectura) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (planillaPersistida) return;
+      if (planillaId) return;
+      if (!fecha) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [modoLectura, planillaPersistida, planillaId, fecha]);
 
   // Funciones para agregar trabajos
   const agregarCosecha = () => {
@@ -843,15 +1006,23 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   };
 
   const guardarOtros = () => {
-    if (otrosEnEdicion) {
-      const existe = trabajosOtros.some(t => t.id === otrosEnEdicion.id);
-      if (existe) {
-        setTrabajosOtros(trabajosOtros.map(t => t.id === otrosEnEdicion.id ? otrosEnEdicion : t));
-      } else {
-        setTrabajosOtros([otrosEnEdicion, ...trabajosOtros]);
+    if (!otrosEnEdicion) return;
+    // §3.2 del doc: si la labor seleccionada es POR_PALMA, cantidad_palmas es
+    // requerido (el backend devuelve 422 si llega vacío). Validamos en cliente
+    // para evitar el viaje inútil.
+    if (otrosEnEdicion.laborOtrosTipoPago === 'POR_PALMA') {
+      if (!otrosEnEdicion.numeroPalmas || otrosEnEdicion.numeroPalmas <= 0) {
+        toast.error('Esta labor se paga por palma — indica el número de palmas');
+        return;
       }
-      setOtrosEnEdicion(null);
     }
+    const existe = trabajosOtros.some(t => t.id === otrosEnEdicion.id);
+    if (existe) {
+      setTrabajosOtros(trabajosOtros.map(t => t.id === otrosEnEdicion.id ? otrosEnEdicion : t));
+    } else {
+      setTrabajosOtros([otrosEnEdicion, ...trabajosOtros]);
+    }
+    setOtrosEnEdicion(null);
   };
 
   const cancelarOtros = () => {
@@ -1195,15 +1366,18 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                 {ETAPAS.map((etapa, index) => {
                   const estaCompleta = etapaActual > etapa.numero;
                   const estaActiva = etapaActual === etapa.numero;
+                  // En modo lectura el usuario abre una planilla ya creada → puede
+                  // saltar a cualquier etapa sin restricción (no hay "futuros").
+                  const navegable = estaActiva || estaCompleta || modoLectura;
                   return (
                     <div key={etapa.numero} className="flex items-center" style={{ flex: index < ETAPAS.length - 1 ? 1 : 'none' }}>
                       {/* Círculo de etapa */}
                       <button
                         onClick={() => irAEtapa(etapa.numero)}
                         className={`flex flex-col items-center gap-2 ${
-                          estaActiva || estaCompleta ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
+                          navegable ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
                         }`}
-                        disabled={!estaActiva && !estaCompleta}
+                        disabled={!navegable}
                       >
                         <div
                           className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition-all ${
@@ -1251,27 +1425,33 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           {/* Contenido de las etapas */}
           {modoLectura && (
             <style>{`
+              /* Ocultar acciones de edición (los íconos que sí mutan datos). */
               .wizard-modo-lectura button:has(svg.lucide-pencil),
               .wizard-modo-lectura button:has(svg.lucide-trash-2),
               .wizard-modo-lectura button:has(svg.lucide-plus),
               .wizard-modo-lectura button:has(svg.lucide-x) {
                 display: none !important;
               }
-              .wizard-modo-lectura input:disabled,
-              .wizard-modo-lectura textarea:disabled,
-              .wizard-modo-lectura button:disabled,
-              .wizard-modo-lectura [data-disabled] {
+              /* Inputs/textareas/selects quedan visibles pero no editables.
+                 Usamos pointer-events en vez de fieldset disabled para que
+                 las Tabs (Cosecha/Plateo/Poda/...) y el stepper sigan
+                 navegables. */
+              .wizard-modo-lectura input,
+              .wizard-modo-lectura textarea,
+              .wizard-modo-lectura [role="combobox"] {
+                pointer-events: none !important;
+                background-color: transparent !important;
                 opacity: 1 !important;
                 cursor: default !important;
               }
-              .wizard-modo-lectura input:disabled,
-              .wizard-modo-lectura textarea:disabled {
-                background-color: transparent !important;
+              /* Garantizar que tabs y el stepper sí reciban clicks. */
+              .wizard-modo-lectura [role="tablist"],
+              .wizard-modo-lectura [role="tab"] {
+                pointer-events: auto !important;
               }
             `}</style>
           )}
           <fieldset
-            disabled={modoLectura}
             className={`space-y-6 m-0 p-0 border-0 ${modoLectura ? 'wizard-modo-lectura' : ''}`}
           >
             {/* ETAPA 1: INFORMACIÓN GENERAL */}
@@ -2532,13 +2712,46 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                               </div>
                               <div className="space-y-2 md:col-span-2">
                                 <Label>Nombre</Label>
-                                <Input
-                                  placeholder="Nombre del trabajo"
-                                  value={otrosEnEdicion.nombre}
-                                  onChange={(e) => {
-                                    setOtrosEnEdicion({ ...otrosEnEdicion, nombre: e.target.value });
+                                <Select
+                                  value={otrosEnEdicion.laborOtrosKey ?? ''}
+                                  onValueChange={(value) => {
+                                    const op = laboresOtrosOpciones.find(o => o.key === value);
+                                    // Autofill de "Número de Palmas" si la labor es POR_PALMA
+                                    // y el sublote ya está seleccionado (§10 doc API_OPERACIONES.md).
+                                    const sub = otrosEnEdicion.sublote
+                                      ? sublotes.find(s => s.id === otrosEnEdicion.sublote)
+                                      : null;
+                                    setOtrosEnEdicion({
+                                      ...otrosEnEdicion,
+                                      laborOtrosKey: value,
+                                      laborOtrosRawId: op?.rawId,
+                                      laborOtrosTipoPago: op?.tipo_pago,
+                                      nombre: op?.nombre ?? '',
+                                      // Al cambiar de labor, limpiamos los campos que dependen del tipo_pago.
+                                      numeroPalmas: op?.tipo_pago === 'POR_PALMA'
+                                        ? Number(sub?.cantidadPalmas ?? 0)
+                                        : undefined,
+                                      nombreTrabajo: op?.tipo_pago === 'JORNAL_FIJO'
+                                        ? (otrosEnEdicion.nombreTrabajo ?? '')
+                                        : undefined,
+                                    });
                                   }}
-                                />
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder={
+                                      laboresOtrosOpciones.length === 0
+                                        ? 'No hay labores configuradas'
+                                        : 'Seleccionar labor'
+                                    } />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {laboresOtrosOpciones.map((op) => (
+                                      <SelectItem key={op.key} value={op.key}>
+                                        {op.nombre}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
                               </div>
                               <div className="space-y-2 md:col-span-2">
                                 <Label>Labor Realizada</Label>
@@ -2555,7 +2768,14 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                 <Select
                                   value={otrosEnEdicion.lote}
                                   onValueChange={(value) => {
-                                    setOtrosEnEdicion({ ...otrosEnEdicion, lote: value, sublote: '' });
+                                    // Al cambiar de lote también limpiamos sublote y numeroPalmas
+                                    // (queda inválido el autofill previo).
+                                    setOtrosEnEdicion({
+                                      ...otrosEnEdicion,
+                                      lote: value,
+                                      sublote: '',
+                                      numeroPalmas: otrosEnEdicion.laborOtrosTipoPago === 'POR_PALMA' ? 0 : undefined,
+                                    });
                                   }}
                                 >
                                   <SelectTrigger>
@@ -2575,7 +2795,15 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                 <Select
                                   value={otrosEnEdicion.sublote}
                                   onValueChange={(value) => {
-                                    setOtrosEnEdicion({ ...otrosEnEdicion, sublote: value });
+                                    // Autofill de Número de Palmas solo si la labor es POR_PALMA.
+                                    const sub = sublotes.find(s => s.id === value);
+                                    setOtrosEnEdicion({
+                                      ...otrosEnEdicion,
+                                      sublote: value,
+                                      numeroPalmas: otrosEnEdicion.laborOtrosTipoPago === 'POR_PALMA'
+                                        ? Number(sub?.cantidadPalmas ?? 0)
+                                        : otrosEnEdicion.numeroPalmas,
+                                    });
                                   }}
                                   disabled={!otrosEnEdicion.lote}
                                 >
@@ -2593,6 +2821,44 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                   </SelectContent>
                                 </Select>
                               </div>
+
+                              {/* Campos dependientes del tipo_pago de la labor seleccionada
+                                  (§10 doc API_OPERACIONES.md). Solo se renderizan cuando ya
+                                  hay una labor escogida. */}
+                              {otrosEnEdicion.laborOtrosTipoPago === 'POR_PALMA' && (
+                                <div className="space-y-2">
+                                  <Label>
+                                    Número de Palmas <span className="text-destructive">*</span>
+                                  </Label>
+                                  <Input
+                                    type="number"
+                                    placeholder="0"
+                                    value={otrosEnEdicion.numeroPalmas ?? ''}
+                                    onChange={(e) =>
+                                      setOtrosEnEdicion({
+                                        ...otrosEnEdicion,
+                                        numeroPalmas: parseInt(e.target.value) || 0,
+                                      })
+                                    }
+                                  />
+                                </div>
+                              )}
+
+                              {otrosEnEdicion.laborOtrosTipoPago === 'JORNAL_FIJO' && (
+                                <div className="space-y-2">
+                                  <Label>Nombre del Trabajo</Label>
+                                  <Input
+                                    placeholder="Ej. Pintura de postes"
+                                    value={otrosEnEdicion.nombreTrabajo ?? ''}
+                                    onChange={(e) =>
+                                      setOtrosEnEdicion({
+                                        ...otrosEnEdicion,
+                                        nombreTrabajo: e.target.value,
+                                      })
+                                    }
+                                  />
+                                </div>
+                              )}
                             </div>
                             <div className="flex justify-end gap-2 pt-4">
                               <Button variant="outline" onClick={cancelarOtros}>
@@ -2695,7 +2961,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                     <div>
                       <CardTitle>Labores de Finca</CardTitle>
                       <p className="text-sm text-muted-foreground">
-                        Auxiliares y trabajos complementarios
+                        Reparaciones, mantenimiento y trabajos complementarios
                       </p>
                     </div>
                     <Button
@@ -2754,11 +3020,18 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                 <SelectValue placeholder="Seleccionar labor" />
                               </SelectTrigger>
                               <SelectContent>
-                                {laboresAuxiliares.map((labor) => (
-                                  <SelectItem key={labor} value={labor}>
-                                    {labor}
+                                {laboresLista.length === 0 ? (
+                                  <SelectItem value="__sin_labores__" disabled>
+                                    No hay labores configuradas
                                   </SelectItem>
-                                ))}
+                                ) : (
+                                  laboresLista.map((labor) => (
+                                    <SelectItem key={labor} value={labor}>
+                                      {labor}
+                                    </SelectItem>
+                                  ))
+                                )}
+                                <SelectItem value="Otro">Otro</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -2849,7 +3122,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
                   {trabajosAuxiliares.length === 0 && !auxiliarEnEdicion && (
                     <div className="text-center py-12 text-muted-foreground">
-                      <p>No hay registros de trabajos auxiliares</p>
+                      <p>No hay registros de labores de finca</p>
                       <p className="text-sm">Haz clic en "Agregar Labor" para crear uno</p>
                     </div>
                   )}
@@ -3218,7 +3491,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                 </Button>
               ) : modoLectura ? null : (
                 <Button
-                  onClick={guardarTodo} disabled={guardando} className="gap-2 bg-success hover:bg-success/90"
+                  onClick={() => guardarTodo()} disabled={guardando} className="gap-2 bg-success hover:bg-success/90"
                 >
                   <Save className="h-4 w-4" />
                   Guardar Planilla
@@ -3486,11 +3759,12 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                     </div>
                   )}
 
-                  {/* Auxiliares */}
+                  {/* Labores de Finca (lo que antes se llamaba "Auxiliares" en el
+                      doc; ahora el backend lo agrega como `resumen.labores.labores_finca`). */}
                   {trabajosAuxiliares.length > 0 && (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">Auxiliares</span>
+                        <span className="text-sm font-medium">Labores de Finca</span>
                         <Badge variant="outline" className="bg-muted text-muted-foreground border-border">
                           {trabajosAuxiliares.length}
                         </Badge>

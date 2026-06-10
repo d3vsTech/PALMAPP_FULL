@@ -60,6 +60,7 @@ import {
 import { Switch } from '../../components/ui/switch';
 import { colaboradoresApi, buildAvatarUrl } from '../../../api/colaboradores';
 import { fetchConToken } from '../../../api/request';
+import { configuracionApi } from '../../../api/configuracion';
 import { toast } from 'sonner';
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────────
@@ -81,12 +82,14 @@ interface FormData {
   predioAsignado: string;
   modalidadPago: string;
   salarioBase: number;
+  aplicaSubsidioTransporte: boolean;
   fechaContratacion: string;
   fechaFinalizacion: string;
   // Seguridad Social
   eps: string;
   arl: string;
   fondoPension: string;
+  fondoCesantias: string;
   cajaCompensacion: string;
   // Dotación
   tallaCamisa: string;
@@ -141,35 +144,22 @@ const FORM_INICIAL: FormData = {
   estado: true,
   primerApellido: '', segundoApellido: '', primerNombre: '', segundoNombre: '',
   tipoDocumento: 'CC', numeroDocumento: '', fechaExpedicion: '', fechaNacimiento: '', lugarExpedicion: '',
-  cargo: '', predioAsignado: '', modalidadPago: 'FIJO', salarioBase: 0, fechaContratacion: '', fechaFinalizacion: '',
-  eps: '', arl: '', fondoPension: '', cajaCompensacion: '',
+  cargo: '', predioAsignado: '', modalidadPago: 'FIJO', salarioBase: 0, aplicaSubsidioTransporte: false, fechaContratacion: '', fechaFinalizacion: '',
+  eps: '', arl: '', fondoPension: '', fondoCesantias: '', cajaCompensacion: '',
   tallaCamisa: '', tallaPantalon: '', tallaCalzado: '',
   banco: '', tipoCuenta: 'AHORROS', numeroCuenta: '',
   correo: '', telefono: '', direccion: '', municipio: '', departamento: '',
   contactoEmergenciaNombre: '', contactoEmergenciaTelefono: '',
 };
 
-// ─── Persistencia local del borrador (solo en creación) ─────────────────────
-// Si el usuario sale a medio camino, conservamos lo escrito en localStorage
-// y al volver al wizard restauramos el formulario y la etapa.
+// ─── Persistencia local del borrador ────────────────────────────────────────
+// La funcionalidad de auto-restaurar borrador en modo creación está
+// deshabilitada — confundía al usuario porque al abrir "Nuevo Colaborador"
+// aparecían datos de sesiones anteriores. Solo mantenemos `limpiarBorrador`
+// para purgar cualquier residuo de versiones previas que sí guardaban.
 const DRAFT_KEY = 'palmapp_borrador_colaborador';
 const DRAFT_STEP_KEY = 'palmapp_borrador_colaborador_etapa';
 
-function leerBorrador(): FormData | null {
-  try {
-    const raw = localStorage.getItem(DRAFT_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? { ...FORM_INICIAL, ...parsed } : null;
-  } catch { return null; }
-}
-function leerEtapaBorrador(): number {
-  try {
-    const raw = localStorage.getItem(DRAFT_STEP_KEY);
-    const n = raw ? parseInt(raw, 10) : 1;
-    return Number.isFinite(n) && n >= 1 && n <= 5 ? n : 1;
-  } catch { return 1; }
-}
 function limpiarBorrador() {
   try {
     localStorage.removeItem(DRAFT_KEY);
@@ -185,14 +175,12 @@ export default function NuevoColaboradorWizard() {
 
   const ETAPAS = isEditMode ? [...ETAPAS_BASE, ETAPA_DOCUMENTOS] : ETAPAS_BASE;
 
-  // En modo creación inicializamos con lo que haya en el borrador local;
-  // en edición no usamos borrador (datos vienen del backend).
-  const borradorInicial = !isEditMode ? leerBorrador() : null;
-  const etapaInicial    = !isEditMode ? leerEtapaBorrador() : 1;
-
-  const [etapaActual, setEtapaActual] = useState(etapaInicial);
-  const [formData, setFormData] = useState<FormData>(borradorInicial ?? FORM_INICIAL);
-  const [borradorRestaurado] = useState(!!borradorInicial);
+  // En modo creación arrancamos siempre con el form vacío en la etapa 1.
+  // Si quedó algún borrador de una sesión anterior lo descartamos, así el
+  // usuario no se confunde al abrir "Nuevo Colaborador" y ver datos viejos.
+  const [etapaActual, setEtapaActual] = useState(1);
+  const [formData, setFormData] = useState<FormData>(FORM_INICIAL);
+  const [borradorRestaurado] = useState(false);
   const [predios, setPredios] = useState<any[]>([]);
   const [guardando, setGuardando] = useState(false);
   const [cargandoColaborador, setCargandoColaborador] = useState<boolean>(isEditMode);
@@ -216,10 +204,42 @@ export default function NuevoColaboradorWizard() {
   const [epsOpciones,       setEpsOpciones]       = useState<string[]>([]);
   const [arlOpciones,       setArlOpciones]       = useState<string[]>([]);
   const [pensionOpciones,   setPensionOpciones]   = useState<string[]>([]);
+  const [cesantiasOpciones, setCesantiasOpciones] = useState<string[]>([]);
   const [bancariasOpciones, setBancariasOpciones] = useState<string[]>([]);
   const [departamentos, setDepartamentos] = useState<{codigo:string;nombre:string}[]>([]);
   const [municipios, setMunicipios] = useState<{codigo:string;nombre:string}[]>([]);
   const [deptoSel, setDeptoSel] = useState('');
+
+  // SMLV vigente del tenant — usado para pre-llenar el campo Salario Base
+  // en modo creación. Fuente: §14 Constantes Legales (`salario_minimo_vigente`).
+  const [smmlv, setSmmlv] = useState<number | null>(null);
+  // Bandera para asegurar que el auto-fill del SMLV solo aplica UNA vez,
+  // así no pisa lo que el usuario tipea después.
+  const [smlvAplicado, setSmlvAplicado] = useState(false);
+
+  useEffect(() => {
+    configuracionApi.constantesLegales
+      .obtener()
+      .then((res) => {
+        const v = Number(res.data.salario_minimo_vigente);
+        if (Number.isFinite(v) && v > 0) setSmmlv(v);
+      })
+      .catch(() => { /* silencioso */ });
+  }, []);
+
+  // Aplica el SMLV al `salarioBase` cuando ya cargó la constante y todavía
+  // está en 0. Corre como efecto separado para que no haya race con
+  // wizardInit (que también puede tocar formData).
+  // Salta el pre-llenado si la modalidad es VARIABLE — ese caso el salario
+  // es opcional y debe quedar vacío hasta que el usuario lo digite.
+  useEffect(() => {
+    if (isEditMode || smmlv == null || smlvAplicado) return;
+    setFormData((prev) => {
+      if (prev.modalidadPago === 'VARIABLE') return prev;
+      return prev.salarioBase > 0 ? prev : { ...prev, salarioBase: smmlv };
+    });
+    setSmlvAplicado(true);
+  }, [smmlv, isEditMode, smlvAplicado]);
 
   // Documentos (solo edición)
   const [documentos, setDocumentos] = useState<any[]>([]);
@@ -265,6 +285,8 @@ export default function NuevoColaboradorWizard() {
       if (rawArl) setArlOpciones(JSON.parse(rawArl));
       const rawPension = sessionStorage.getItem('cache_pension');
       if (rawPension) setPensionOpciones(JSON.parse(rawPension));
+      const rawCesantias = sessionStorage.getItem('cache_cesantias');
+      if (rawCesantias) setCesantiasOpciones(JSON.parse(rawCesantias));
       const rawBancos = sessionStorage.getItem('cache_bancos');
       if (rawBancos) setBancariasOpciones(JSON.parse(rawBancos));
       const rawDeptos = sessionStorage.getItem('cache_departamentos');
@@ -294,15 +316,17 @@ export default function NuevoColaboradorWizard() {
         const { colaborador, parametricas } = data;
 
         // Paramétricas → estado + caché
-        const epsList     = (parametricas.eps                 ?? []).map(e => e.nombre);
-        const arlList     = (parametricas.arl                 ?? []).map(e => e.nombre);
-        const pensionList = (parametricas.fondos_pension      ?? []).map(e => e.nombre);
-        const bancosList  = (parametricas.entidades_bancarias ?? []).map(e => e.nombre);
+        const epsList       = (parametricas.eps                 ?? []).map(e => e.nombre);
+        const arlList       = (parametricas.arl                 ?? []).map(e => e.nombre);
+        const pensionList   = (parametricas.fondos_pension      ?? []).map(e => e.nombre);
+        const cesantiasList = (parametricas.fondos_cesantias    ?? []).map(e => e.nombre);
+        const bancosList    = (parametricas.entidades_bancarias ?? []).map(e => e.nombre);
 
         setPredios((parametricas.predios ?? []) as any[]);
         setEpsOpciones(epsList);
         setArlOpciones(arlList);
         setPensionOpciones(pensionList);
+        setCesantiasOpciones(cesantiasList);
         setBancariasOpciones(bancosList);
         setDepartamentos(parametricas.departamentos ?? []);
         setCategoriasDocs(parametricas.documento_categorias as unknown as Record<string, CatDoc>);
@@ -312,6 +336,7 @@ export default function NuevoColaboradorWizard() {
           sessionStorage.setItem('cache_eps',             JSON.stringify(epsList));
           sessionStorage.setItem('cache_arl',             JSON.stringify(arlList));
           sessionStorage.setItem('cache_pension',         JSON.stringify(pensionList));
+          sessionStorage.setItem('cache_cesantias',       JSON.stringify(cesantiasList));
           sessionStorage.setItem('cache_bancos',          JSON.stringify(bancosList));
           sessionStorage.setItem('cache_departamentos',   JSON.stringify(parametricas.departamentos ?? []));
           sessionStorage.setItem('cache_categorias_docs', JSON.stringify(parametricas.documento_categorias ?? {}));
@@ -345,11 +370,21 @@ export default function NuevoColaboradorWizard() {
             predioAsignado: predioId ? String(predioId) : '',
             modalidadPago: modalidadPagoForm,
             salarioBase: toNumber(d.salario_base),
+            // Subsidio de transporte: el doc API_COLABORADORES dice que el
+            // campo se llama `subsidio_transporte` (boolean, default true).
+            // Aceptamos también el legacy `aplica_subsidio_transporte` por si
+            // algún backend viejo sigue mandándolo con ese nombre.
+            aplicaSubsidioTransporte: d.subsidio_transporte != null
+              ? !!d.subsidio_transporte
+              : (d.aplica_subsidio_transporte != null
+                ? !!d.aplica_subsidio_transporte
+                : false),
             fechaContratacion: toDateInput(d.fecha_ingreso),
             fechaFinalizacion: toDateInput(d.fecha_retiro),
             eps: d.eps ?? '',
             arl: d.arl ?? '',
             fondoPension: d.fondo_pension ?? '',
+            fondoCesantias: d.fondo_cesantias ?? '',
             cajaCompensacion: d.caja_compensacion ?? '',
             tallaCamisa: d.talla_camisa ?? '',
             tallaPantalon: d.talla_pantalon ?? '',
@@ -436,20 +471,12 @@ export default function NuevoColaboradorWizard() {
       .finally(() => setLoadingDocs(false));
   }, [id, isEditMode, etapaActual]);
 
-  // ─── Persistencia automática del borrador (solo creación) ──────────────────
+  // Limpieza one-shot del borrador residual al entrar en modo creación.
+  // (La funcionalidad de auto-restauración fue deshabilitada por confundir
+  // al usuario cuando abría "Nuevo Colaborador" y veía datos viejos.)
   useEffect(() => {
-    if (isEditMode) return;
-    try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(formData));
-    } catch { /* cuota llena u otro error */ }
-  }, [formData, isEditMode]);
-
-  useEffect(() => {
-    if (isEditMode) return;
-    try {
-      localStorage.setItem(DRAFT_STEP_KEY, String(etapaActual));
-    } catch { /* ignorar */ }
-  }, [etapaActual, isEditMode]);
+    if (!isEditMode) limpiarBorrador();
+  }, [isEditMode]);
 
   // Aviso al usuario cuando se restaura un borrador previo
   useEffect(() => {
@@ -717,6 +744,11 @@ export default function NuevoColaboradorWizard() {
       body.salario_base               = formData.salarioBase > 0 ? formData.salarioBase : 0;
       body.modalidad_pago             = formData.modalidadPago === 'VARIABLE' ? 'PRODUCCION' : formData.modalidadPago;
       body.fecha_ingreso              = formData.fechaContratacion;
+      // Subsidio de transporte: enviamos el campo nombre actual del doc
+      // (`subsidio_transporte`) y también el legacy por si el backend aún no
+      // está actualizado. El que no exista, lo ignora silenciosamente.
+      body.subsidio_transporte        = formData.aplicaSubsidioTransporte;
+      body.aplica_subsidio_transporte = formData.aplicaSubsidioTransporte;
     } else {
       // En edición enviar solo los que tienen valor
       if (formData.primerNombre.trim())    body.primer_nombre              = formData.primerNombre.trim();
@@ -729,6 +761,10 @@ export default function NuevoColaboradorWizard() {
       if (formData.salarioBase > 0)        body.salario_base               = formData.salarioBase;
       if (formData.modalidadPago)          body.modalidad_pago             = formData.modalidadPago === 'VARIABLE' ? 'PRODUCCION' : formData.modalidadPago;
       if (formData.fechaContratacion)      body.fecha_ingreso              = formData.fechaContratacion;
+      // Subsidio: en edición lo mandamos siempre (es booleano, no string vacío).
+      // Doble nombre por compat con backends que aún no migraron.
+      body.subsidio_transporte             = formData.aplicaSubsidioTransporte;
+      body.aplica_subsidio_transporte      = formData.aplicaSubsidioTransporte;
       body.estado = formData.estado;
     }
 
@@ -740,6 +776,7 @@ export default function NuevoColaboradorWizard() {
     if (formData.eps.trim())                       body.eps                          = formData.eps.trim();
     if (formData.arl.trim())                       body.arl                          = formData.arl.trim();
     if (formData.fondoPension.trim())              body.fondo_pension                = formData.fondoPension.trim();
+    if (formData.fondoCesantias.trim())            body.fondo_cesantias              = formData.fondoCesantias.trim();
     if (formData.cajaCompensacion.trim())          body.caja_compensacion            = formData.cajaCompensacion.trim();
     if (formData.tallaCamisa)                      body.talla_camisa                 = formData.tallaCamisa;
     if (formData.tallaPantalon)                    body.talla_pantalon               = formData.tallaPantalon;
@@ -1108,6 +1145,12 @@ export default function NuevoColaboradorWizard() {
           )}
 
           {/* ── ETAPA 3: CONTRATACIÓN ── */}
+          {/* ── ETAPA 3: CONTRATACIÓN — diseño tomado de V.10 exactamente ──
+              Cargo · Predio · Modalidad · Salario Base · grid 3-col
+              (Subsidio Transporte | Fecha Contratación | Fecha Finalización).
+              El Switch de "Estado del colaborador" se mantiene solo en modo
+              edición como fila extra al final (V.10 no lo tiene porque no
+              tiene conexión a backend; nosotros sí necesitamos editarlo). */}
           {etapaActual === 3 && (
             <Card className="border-border">
               <CardHeader>
@@ -1123,68 +1166,146 @@ export default function NuevoColaboradorWizard() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-2">
-                  <Label>Cargo <span className="text-destructive">*</span></Label>
-                  <Input placeholder="Ej: Operario de Campo" value={formData.cargo} onChange={e => handleInputChange('cargo', e.target.value)} />
+                  <Label htmlFor="cargo">
+                    Cargo <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="cargo"
+                    placeholder="Ej: Operario de Campo"
+                    value={formData.cargo}
+                    onChange={(e) => handleInputChange('cargo', e.target.value)}
+                  />
                 </div>
+
                 <div className="space-y-2">
-                  <Label>Predio Asignado</Label>
-                  <Select value={formData.predioAsignado} onValueChange={v => handleInputChange('predioAsignado', v === 'none' ? '' : v)}>
-                    <SelectTrigger><SelectValue placeholder="Sin predio asignado" /></SelectTrigger>
+                  <Label htmlFor="predioAsignado">Predio Asignado</Label>
+                  <Select
+                    value={formData.predioAsignado || 'none'}
+                    onValueChange={(v) => handleInputChange('predioAsignado', v === 'none' ? '' : v)}
+                  >
+                    <SelectTrigger id="predioAsignado">
+                      <SelectValue placeholder="Selecciona un predio" />
+                    </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Sin predio</SelectItem>
-                      {predios.map(p => <SelectItem key={p.id} value={String(p.id)}>{p.nombre}</SelectItem>)}
+                      <SelectItem value="none">Sin predio asignado</SelectItem>
+                      {predios.map((p) => (
+                        <SelectItem key={p.id} value={String(p.id)}>
+                          {p.nombre}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
+
                 <div className="space-y-2">
-                  <Label>Modalidad de Pago <span className="text-destructive">*</span></Label>
-                  <Select value={formData.modalidadPago} onValueChange={v => handleInputChange('modalidadPago', v)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                  <Label htmlFor="modalidadPago">
+                    Modalidad de Pago <span className="text-destructive">*</span>
+                  </Label>
+                  <Select
+                    value={formData.modalidadPago}
+                    onValueChange={(v) => {
+                      // Cambia la modalidad. Adicionalmente:
+                      //  - VARIABLE → vacía el Salario Base (queda opcional).
+                      //  - FIJO/otro → si estaba en 0, pre-rellena con el SMLV
+                      //    (mismo comportamiento que el efecto inicial).
+                      setFormData((prev) => ({
+                        ...prev,
+                        modalidadPago: v as typeof prev.modalidadPago,
+                        salarioBase:
+                          v === 'VARIABLE'
+                            ? 0
+                            : prev.salarioBase > 0
+                              ? prev.salarioBase
+                              : smmlv ?? 0,
+                      }));
+                    }}
+                  >
+                    <SelectTrigger id="modalidadPago">
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
-                      {modalidadesPago.map(m => <SelectItem key={m.codigo} value={m.codigo}>{m.label}</SelectItem>)}
+                      {modalidadesPago.map((m) => (
+                        <SelectItem key={m.codigo} value={m.codigo}>
+                          {m.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
+
                 <div className="space-y-2">
-                  <Label>Salario Base (COP) {formData.modalidadPago === 'FIJO' && <span className="text-destructive">*</span>}</Label>
+                  <Label htmlFor="salarioBase">
+                    Salario Base{' '}
+                    {formData.modalidadPago === 'FIJO' && (
+                      <span className="text-destructive">*</span>
+                    )}
+                  </Label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">$</span>
                     <Input
+                      id="salarioBase"
                       type="text"
-                      placeholder={formData.modalidadPago === 'VARIABLE' ? 'Opcional' : '1.300.000'}
+                      inputMode="numeric"
+                      placeholder={
+                        formData.modalidadPago === 'VARIABLE'
+                          ? 'Opcional'
+                          : smmlv
+                            ? smmlv.toLocaleString('es-CO')
+                            : '1.300.000'
+                      }
                       className="pl-7"
                       value={formData.salarioBase > 0 ? formData.salarioBase.toLocaleString('es-CO') : ''}
-                      onChange={e => {
+                      onChange={(e) => {
                         const raw = e.target.value.replace(/[^0-9]/g, '');
                         handleInputChange('salarioBase', parseInt(raw) || 0);
                       }}
                     />
                   </div>
                 </div>
-                {isEditMode && (
-                  <div className="flex items-center justify-between p-4 border border-border rounded-lg">
-                    <div>
-                      <p className="text-sm font-medium">Estado del colaborador</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formData.estado ? 'Activo — puede ser incluido en nómina' : 'Inactivo — no aparece en operaciones'}
-                      </p>
-                    </div>
-                    <Switch
-                      checked={formData.estado}
-                      onCheckedChange={v => handleInputChange('estado', v as any)}
+
+                {/* Grid 3 columnas (V.10) — Subsidio · Fecha Contratación · Fecha Finalización */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="aplicaSubsidioTransporte">Subsidio de Transporte</Label>
+                    <Select
+                      value={formData.aplicaSubsidioTransporte ? 'si' : 'no'}
+                      onValueChange={(v) =>
+                        handleInputChange('aplicaSubsidioTransporte', (v === 'si') as any)
+                      }
+                    >
+                      <SelectTrigger id="aplicaSubsidioTransporte">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="si">Sí</SelectItem>
+                        <SelectItem value="no">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="fechaContratacion">
+                      Fecha de Contratación <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="fechaContratacion"
+                      type="date"
+                      value={formData.fechaContratacion}
+                      onChange={(e) => handleInputChange('fechaContratacion', e.target.value)}
                     />
                   </div>
-                )}
-                <div className="grid gap-6 md:grid-cols-2">
+
                   <div className="space-y-2">
-                    <Label>Fecha de Contratación<span className="text-destructive">*</span></Label>
-                    <Input type="date" value={formData.fechaContratacion} onChange={e => handleInputChange('fechaContratacion', e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Fecha de Finalización</Label>
-                    <Input type="date" value={formData.fechaFinalizacion} onChange={e => handleInputChange('fechaFinalizacion', e.target.value)} />
+                    <Label htmlFor="fechaFinalizacion">Fecha de Finalización</Label>
+                    <Input
+                      id="fechaFinalizacion"
+                      type="date"
+                      value={formData.fechaFinalizacion}
+                      onChange={(e) => handleInputChange('fechaFinalizacion', e.target.value)}
+                    />
                   </div>
                 </div>
+
               </CardContent>
             </Card>
           )}
@@ -1234,6 +1355,16 @@ export default function NuevoColaboradorWizard() {
                     <SelectContent>
                       {pensionOpciones.length > 0 && !pensionOpciones.includes(formData.fondoPension) && formData.fondoPension && <SelectItem value={formData.fondoPension}>{formData.fondoPension}</SelectItem>}
                       {pensionOpciones.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Fondo de Cesantías</Label>
+                  <Select value={formData.fondoCesantias} onValueChange={v => handleInputChange('fondoCesantias', v)}>
+                    <SelectTrigger><SelectValue placeholder="Selecciona un fondo" /></SelectTrigger>
+                    <SelectContent>
+                      {cesantiasOpciones.length > 0 && !cesantiasOpciones.includes(formData.fondoCesantias) && formData.fondoCesantias && <SelectItem value={formData.fondoCesantias}>{formData.fondoCesantias}</SelectItem>}
+                      {cesantiasOpciones.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1549,6 +1680,7 @@ export default function NuevoColaboradorWizard() {
                   <p className="text-xs">EPS: {formData.eps || '-'}</p>
                   <p className="text-xs">ARL: {formData.arl || '-'}</p>
                   <p className="text-xs">Pensión: {formData.fondoPension || '-'}</p>
+                  <p className="text-xs">Cesantías: {formData.fondoCesantias || '-'}</p>
                 </div>
                 <div className="pb-3 border-b border-border">
                   <p className="text-muted-foreground mb-1">Dotación</p>

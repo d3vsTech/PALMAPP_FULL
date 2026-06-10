@@ -165,11 +165,11 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Footer info */}
+      {/* Footer info — usa la finca activa del usuario logueado */}
       <div className="border-t border-border p-4">
         <div className="rounded-xl bg-muted/50 p-4">
-          <p className="font-bold text-foreground">
-            Finca Puerto Arturo
+          <p className="font-bold text-foreground truncate" title={user?.fincaActual?.nombre}>
+            {user?.fincaActual?.nombre ?? 'Sin finca seleccionada'}
           </p>
           <p className="text-sm text-muted-foreground mt-1">
             Sistema de gestión integral

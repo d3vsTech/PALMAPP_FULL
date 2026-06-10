@@ -1,150 +1,56 @@
-import { useState } from 'react';
+/**
+ * ExtractorasTab — listado de extractoras de aceite de palma.
+ *
+ * El create/edit ya no es un modal en este tab: el botón "Nueva Extractora"
+ * navega a `/configuracion/extractoras/nueva` y el lápiz a
+ * `/configuracion/extractoras/editar/:id` — ver [NuevaExtractora.tsx].
+ */
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
 import { Plus, Trash2, Edit } from 'lucide-react';
 import { toast } from 'sonner';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '../ui/dialog';
-
-type Extractora = {
-  id: string;
-  nombre: string;
-  nit: string;
-  contacto: string;
-};
+import { useConfirmDelete } from '../../hooks/useConfirmDelete';
+import { extractorasApi, type Extractora } from '../../../api/viajes';
+import { TabLoadingGate } from './TabLoadingGate';
 
 export function ExtractorasTab() {
-  const [extractoras, setExtractoras] = useState<Extractora[]>([
-    { id: '1', nombre: 'Extractora del Cauca S.A.', nit: '800.123.456-1', contacto: '+57 300 111 2222' },
-    { id: '2', nombre: 'Palmas del Valle', nit: '800.234.567-2', contacto: '+57 300 222 3333' },
-    { id: '3', nombre: 'Industrial Palmera', nit: '800.345.678-3', contacto: '+57 300 333 4444' }
-  ]);
+  const navigate = useNavigate();
+  const { confirmDelete, ConfirmDeleteDialog } = useConfirmDelete();
 
-  const [openModal, setOpenModal] = useState(false);
-  const [extractoraEdit, setExtractoraEdit] = useState<Extractora | null>(null);
-  const [formData, setFormData] = useState({
-    nombre: '',
-    nit: '',
-    contacto: ''
-  });
+  const [extractoras, setExtractoras] = useState<Extractora[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const handleOpenModal = (extractora?: Extractora) => {
-    if (extractora) {
-      setExtractoraEdit(extractora);
-      setFormData({
-        nombre: extractora.nombre,
-        nit: extractora.nit,
-        contacto: extractora.contacto
-      });
-    } else {
-      setExtractoraEdit(null);
-      setFormData({ nombre: '', nit: '', contacto: '' });
-    }
-    setOpenModal(true);
-  };
+  useEffect(() => {
+    extractorasApi
+      .listar({ per_page: 100 })
+      .then((res) => setExtractoras(res.data))
+      .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar las extractoras'))
+      .finally(() => setLoading(false));
+  }, []);
 
-  const handleSave = () => {
-    if (!formData.nombre.trim()) {
-      toast.error('Ingresa el nombre de la extractora');
-      return;
-    }
-
-    if (extractoraEdit) {
-      setExtractoras((prev) =>
-        prev.map((e) =>
-          e.id === extractoraEdit.id ? { ...e, ...formData } : e
-        )
-      );
-      toast.success('Extractora actualizada');
-    } else {
-      setExtractoras((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          ...formData
-        },
-      ]);
-      toast.success('Extractora agregada correctamente');
-    }
-
-    setOpenModal(false);
-  };
-
-  const eliminarExtractora = (id: string) => {
-    setExtractoras(extractoras.filter(e => e.id !== id));
-    toast.success('Extractora eliminada correctamente');
+  const eliminarExtractora = (extractora: Extractora) => {
+    confirmDelete({
+      title: 'Eliminar extractora',
+      description: `¿Estás seguro de eliminar "${extractora.razon_social}"? Esta acción no se puede deshacer.`,
+      onConfirm: async () => {
+        try {
+          await extractorasApi.eliminar(extractora.id);
+          setExtractoras((prev) => prev.filter((e) => e.id !== extractora.id));
+          toast.success('Extractora eliminada');
+        } catch (e: any) {
+          toast.error(e?.message ?? 'No se pudo eliminar la extractora');
+        }
+      },
+    });
   };
 
   return (
     <>
-      <Dialog open={openModal} onOpenChange={setOpenModal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {extractoraEdit ? 'Editar Extractora' : 'Nueva Extractora'}
-            </DialogTitle>
-            <DialogDescription>
-              Planta extractora de aceite de palma
-            </DialogDescription>
-          </DialogHeader>
+      {ConfirmDeleteDialog}
 
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="nombre">
-                Nombre de la Extractora <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="nombre"
-                placeholder="Ej: Extractora del Cauca S.A."
-                value={formData.nombre}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, nombre: e.target.value }))
-                }
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="nit">NIT (Opcional)</Label>
-              <Input
-                id="nit"
-                placeholder="800.123.456-1"
-                value={formData.nit}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, nit: e.target.value }))
-                }
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="contacto">Contacto (Opcional)</Label>
-              <Input
-                id="contacto"
-                placeholder="+57 300 111 2222"
-                value={formData.contacto}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, contacto: e.target.value }))
-                }
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenModal(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSave}>Guardar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
+      <TabLoadingGate loading={loading} message="Cargando extractoras…">
       <Card className="border-border">
         <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
           <div className="flex items-center justify-between">
@@ -152,49 +58,94 @@ export function ExtractorasTab() {
               <CardTitle>Extractoras</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">Plantas extractoras de aceite de palma</p>
             </div>
-            <Button onClick={() => handleOpenModal()}>
+            <Button onClick={() => navigate('/configuracion/extractoras/nueva')}>
               <Plus className="mr-2 h-4 w-4" />
               Nueva Extractora
             </Button>
           </div>
         </CardHeader>
         <CardContent className="p-6">
-          <div className="space-y-3">
-            {extractoras.map((extractora) => (
-              <div
-                key={extractora.id}
-                className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border"
-              >
-                <div className="flex-1">
-                  <p className="font-semibold">{extractora.nombre}</p>
-                  <div className="flex gap-4 mt-1 text-sm text-muted-foreground">
-                    {extractora.nit && <span>NIT: {extractora.nit}</span>}
-                    {extractora.contacto && <span>Contacto: {extractora.contacto}</span>}
+          {extractoras.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              No hay extractoras registradas. Agrega la primera con "Nueva Extractora".
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {extractoras.map((extractora) => (
+                <div
+                  key={extractora.id}
+                  className="p-4 rounded-lg bg-muted/30 border border-border"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <p className="font-semibold text-lg">{extractora.razon_social}</p>
+                      <div className="flex gap-4 mt-1 text-sm text-muted-foreground">
+                        {extractora.nit && <span>NIT: {extractora.nit}</span>}
+                        {extractora.ciudad && <span>📍 {extractora.ciudad}</span>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => navigate(`/configuracion/extractoras/editar/${extractora.id}`)}
+                        className="h-8 w-8 p-0"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => eliminarExtractora(extractora)}
+                        className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
+
+                  {/* Información de contacto */}
+                  {(extractora.contacto_nombre || extractora.telefono || extractora.email || extractora.ubicacion) && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm pt-3 border-t border-border">
+                      {extractora.contacto_nombre && (
+                        <div>
+                          <span className="text-muted-foreground">Contacto:</span>
+                          <span className="ml-2 font-medium">{extractora.contacto_nombre}</span>
+                        </div>
+                      )}
+                      {extractora.telefono && (
+                        <div>
+                          <span className="text-muted-foreground">Celular:</span>
+                          <span className="ml-2 font-medium">{extractora.telefono}</span>
+                        </div>
+                      )}
+                      {extractora.telefono_fijo && (
+                        <div>
+                          <span className="text-muted-foreground">Tel. Fijo:</span>
+                          <span className="ml-2 font-medium">{extractora.telefono_fijo}</span>
+                        </div>
+                      )}
+                      {extractora.email && (
+                        <div>
+                          <span className="text-muted-foreground">Correo:</span>
+                          <span className="ml-2 font-medium">{extractora.email}</span>
+                        </div>
+                      )}
+                      {extractora.ubicacion && (
+                        <div className="md:col-span-2">
+                          <span className="text-muted-foreground">Dirección:</span>
+                          <span className="ml-2 font-medium">{extractora.ubicacion}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleOpenModal(extractora)}
-                    className="h-8 w-8 p-0"
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => eliminarExtractora(extractora.id)}
-                    className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
+      </TabLoadingGate>
     </>
   );
 }

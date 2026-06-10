@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -16,8 +16,6 @@ import { colaboradoresApi, buildAvatarUrl } from '../../../api/colaboradores';
 import { toast } from 'sonner';
 import ImportarColaboradoresDialog from '../../components/colaboradores/ImportarColaboradoresDialog';
 
-const MAX_IMPORT_SIZE_MB = 5;
-
 export default function Colaboradores() {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
@@ -28,26 +26,9 @@ export default function Colaboradores() {
   const [meta, setMeta] = useState<any>({});
   const [loading, setLoading] = useState(true);
 
-  // Importación masiva
-  const importInputRef = useRef<HTMLInputElement>(null);
-  const [importFile, setImportFile] = useState<File | null>(null);
+  // Importación masiva — el dialog ahora maneja el picker de archivo
+  // internamente (incluye botón de "Descargar Plantilla").
   const [importOpen, setImportOpen] = useState(false);
-
-  const elegirArchivoImport = () => importInputRef.current?.click();
-
-  const onArchivoImportChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0] ?? null;
-    e.target.value = ''; // permite re-elegir el mismo archivo
-    if (!f) return;
-    const ok = /\.(xlsx|xls)$/i.test(f.name);
-    if (!ok) { toast.error('El archivo debe ser .xlsx o .xls'); return; }
-    if (f.size > MAX_IMPORT_SIZE_MB * 1024 * 1024) {
-      toast.error(`El archivo supera ${MAX_IMPORT_SIZE_MB} MB`);
-      return;
-    }
-    setImportFile(f);
-    setImportOpen(true);
-  };
 
   const cargar = useCallback(async (search?: string) => {
     setLoading(true);
@@ -108,13 +89,22 @@ export default function Colaboradores() {
   const activos = colaboradores.filter(c => c.estado === true).length;
   const inactivos = colaboradores.filter(c => c.estado === false).length;
 
+  // Orden alfabético por primer apellido (desempate por primer nombre).
+  // Locale 'es' + sensitivity:'base' ignora tildes y mayúsculas.
+  const colaboradoresOrdenados = [...colaboradores].sort((a, b) => {
+    const apA = (a.primer_apellido ?? '').trim();
+    const apB = (b.primer_apellido ?? '').trim();
+    const cmp = apA.localeCompare(apB, 'es', { sensitivity: 'base' });
+    if (cmp !== 0) return cmp;
+    return (a.primer_nombre ?? '').localeCompare(b.primer_nombre ?? '', 'es', { sensitivity: 'base' });
+  });
+
   return (
     <div className="space-y-8">
       {/* Importación masiva */}
       <ImportarColaboradoresDialog
         open={importOpen}
-        file={importFile}
-        onOpenChange={(o) => { setImportOpen(o); if (!o) setImportFile(null); }}
+        onOpenChange={setImportOpen}
         onFinalizado={() => cargar(searchTerm)}
       />
 
@@ -199,14 +189,7 @@ export default function Colaboradores() {
               className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20">
               <Plus className="h-5 w-5" /> Nuevo Colaborador
             </Button>
-            <input
-              ref={importInputRef}
-              type="file"
-              accept=".xlsx,.xls"
-              className="hidden"
-              onChange={onArchivoImportChange}
-            />
-            <Button onClick={elegirArchivoImport}
+            <Button onClick={() => setImportOpen(true)}
               className="gap-2 bg-accent hover:bg-accent/90 shadow-lg shadow-accent/20">
               <FileSpreadsheet className="h-5 w-5" /> Importar Colaboradores
             </Button>
@@ -231,7 +214,7 @@ export default function Colaboradores() {
                     </tr>
                   </thead>
                   <tbody>
-                    {colaboradores.map((c, i) => (
+                    {colaboradoresOrdenados.map((c, i) => (
                       <tr key={c.id} className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors ${i % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}>
                         <td className="p-4">
                           <div className="flex items-center gap-3">

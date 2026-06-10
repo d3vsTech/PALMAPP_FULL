@@ -17,7 +17,7 @@ import { Badge } from '../ui/badge';
 import { Progress } from '../ui/progress';
 import {
   Loader2, CheckCircle2, AlertTriangle, XCircle, Upload, Download,
-  FileSpreadsheet, X,
+  FileSpreadsheet, X, FileText,
 } from 'lucide-react';
 import {
   colaboradoresApi,
@@ -28,18 +28,22 @@ import {
 import { toast } from 'sonner';
 
 const POLL_INTERVAL_MS = 4000;
+const MAX_IMPORT_SIZE_MB = 5;
 
 interface Props {
   open: boolean;
-  /** Archivo elegido en el picker nativo (ya validado por extensión y tamaño). */
-  file: File | null;
   onOpenChange: (open: boolean) => void;
   /** Callback al cerrar si hubo al menos un colaborador creado. */
   onFinalizado?: () => void;
 }
 
-type Fase = 'preview' | 'uploading' | 'resultado';
+type Fase = 'intro' | 'preview' | 'uploading' | 'resultado';
 
+/**
+ * Espejo de las 31 columnas de la plantilla `formato-carga-empleados.xlsx`.
+ * El backend valida la lista completa (ver FIELD_ES más abajo); el preview
+ * muestra todas para que el usuario pueda revisar antes de confirmar.
+ */
 interface FilaPreview {
   fila: number; // número real en la hoja (fila 2 = primer dato)
   primer_nombre: string;
@@ -49,18 +53,40 @@ interface FilaPreview {
   tipo_documento: string;
   documento: string;
   fecha_nacimiento: string;
+  fecha_expedicion_documento: string;
+  lugar_expedicion: string;
   cargo: string;
   modalidad_pago: string;
   salario_base: string;
   fecha_ingreso: string;
+  fecha_retiro: string;
+  eps: string;
+  fondo_pension: string;
+  arl: string;
+  caja_compensacion: string;
+  talla_camisa: string;
+  talla_pantalon: string;
+  talla_calzado: string;
+  tipo_cuenta: string;
+  entidad_bancaria: string;
+  numero_cuenta: string;
+  correo_electronico: string;
+  telefono: string;
+  direccion: string;
+  municipio: string;
+  departamento: string;
+  contacto_emergencia_nombre: string;
+  contacto_emergencia_telefono: string;
 }
 
 export default function ImportarColaboradoresDialog({
-  open, file, onOpenChange, onFinalizado,
+  open, onOpenChange, onFinalizado,
 }: Props) {
   const pollingRef = useRef<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [fase, setFase] = useState<Fase>('preview');
+  const [fase, setFase] = useState<Fase>('intro');
+  const [file, setFile] = useState<File | null>(null);
   const [filas, setFilas] = useState<FilaPreview[]>([]);
   const [errorParse, setErrorParse] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -73,13 +99,57 @@ export default function ImportarColaboradoresDialog({
     if (!open) {
       if (pollingRef.current) window.clearInterval(pollingRef.current);
       pollingRef.current = null;
-      setFase('preview');
+      setFase('intro');
+      setFile(null);
       setFilas([]);
       setErrorParse(null);
       setEnviando(false);
       setEstado(null);
     }
   }, [open]);
+
+  // ── Picker de archivo (botón "Seleccionar archivo" en la fase intro) ───────
+  const onArchivoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] ?? null;
+    e.target.value = ''; // permite re-elegir el mismo
+    if (!f) return;
+    if (!/\.(xlsx|xls)$/i.test(f.name)) {
+      toast.error('El archivo debe ser .xlsx o .xls');
+      return;
+    }
+    if (f.size > MAX_IMPORT_SIZE_MB * 1024 * 1024) {
+      toast.error(`El archivo supera ${MAX_IMPORT_SIZE_MB} MB`);
+      return;
+    }
+    setFile(f);
+    setFase('preview');
+  };
+
+  // ── Descargar plantilla Excel ──────────────────────────────────────────────
+  // Sirve el archivo estático tal cual está en `public/formato-carga-empleados.xlsx`
+  // (byte-idéntico al que subió el cliente). Sin fallback runtime — si el
+  // archivo no se puede obtener, mostramos un error en lugar de generar uno
+  // diferente que confunda al usuario.
+  const PLANTILLA_URL = '/formato-carga-empleados.xlsx';
+  const descargarPlantilla = async () => {
+    try {
+      const res = await fetch(PLANTILLA_URL);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'formato-carga-empleados.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
+    } catch (e) {
+      toast.error(
+        'No se pudo descargar la plantilla. Verifica que el archivo esté disponible.',
+      );
+      console.error('Error al descargar plantilla:', e);
+    }
+  };
 
   // ── Parsear el Excel al abrir con archivo ──────────────────────────────────
   useEffect(() => {
@@ -101,17 +171,37 @@ export default function ImportarColaboradoresDialog({
         });
         const parsed: FilaPreview[] = json.map((r, i) => ({
           fila: i + 2,
-          primer_nombre:    str(r['primer_nombre']),
-          segundo_nombre:   str(r['segundo_nombre']),
-          primer_apellido:  str(r['primer_apellido']),
-          segundo_apellido: str(r['segundo_apellido']),
-          tipo_documento:   str(r['tipo_documento']),
-          documento:        str(r['documento']),
-          fecha_nacimiento: str(r['fecha_nacimiento']),
-          cargo:            str(r['cargo']),
-          modalidad_pago:   str(r['modalidad_pago']),
-          salario_base:     str(r['salario_base']),
-          fecha_ingreso:    str(r['fecha_ingreso']),
+          primer_nombre:               str(r['primer_nombre']),
+          segundo_nombre:              str(r['segundo_nombre']),
+          primer_apellido:             str(r['primer_apellido']),
+          segundo_apellido:            str(r['segundo_apellido']),
+          tipo_documento:              str(r['tipo_documento']),
+          documento:                   str(r['documento']),
+          fecha_nacimiento:            str(r['fecha_nacimiento']),
+          fecha_expedicion_documento:  str(r['fecha_expedicion_documento']),
+          lugar_expedicion:            str(r['lugar_expedicion']),
+          cargo:                       str(r['cargo']),
+          modalidad_pago:              str(r['modalidad_pago']),
+          salario_base:                str(r['salario_base']),
+          fecha_ingreso:               str(r['fecha_ingreso']),
+          fecha_retiro:                str(r['fecha_retiro']),
+          eps:                         str(r['eps']),
+          fondo_pension:               str(r['fondo_pension']),
+          arl:                         str(r['arl']),
+          caja_compensacion:           str(r['caja_compensacion']),
+          talla_camisa:                str(r['talla_camisa']),
+          talla_pantalon:              str(r['talla_pantalon']),
+          talla_calzado:               str(r['talla_calzado']),
+          tipo_cuenta:                 str(r['tipo_cuenta']),
+          entidad_bancaria:            str(r['entidad_bancaria']),
+          numero_cuenta:               str(r['numero_cuenta']),
+          correo_electronico:          str(r['correo_electronico']),
+          telefono:                    str(r['telefono']),
+          direccion:                   str(r['direccion']),
+          municipio:                   str(r['municipio']),
+          departamento:                str(r['departamento']),
+          contacto_emergencia_nombre:  str(r['contacto_emergencia_nombre']),
+          contacto_emergencia_telefono:str(r['contacto_emergencia_telefono']),
         }));
         // Filtra filas totalmente vacías (sin documento ni nombres)
         const limpias = parsed.filter(p =>
@@ -209,18 +299,44 @@ export default function ImportarColaboradoresDialog({
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!enProgreso || !next) onOpenChange(next); }}>
       <DialogContent
-        className="max-w-5xl w-[95vw] max-h-[85vh] p-0 gap-0 flex flex-col overflow-hidden"
+        className={
+          fase === 'intro'
+            ? 'max-w-md p-0 gap-0 flex flex-col overflow-hidden'
+            : 'max-w-5xl w-[95vw] max-h-[85vh] p-0 gap-0 flex flex-col overflow-hidden'
+        }
       >
         <DialogHeader className="p-6 pb-3 border-b border-border shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <FileSpreadsheet className="h-5 w-5 text-primary" />
-            Importación masiva de colaboradores
+            {fase === 'intro'
+              ? 'Importar Colaboradores desde Excel'
+              : 'Importación masiva de colaboradores'}
           </DialogTitle>
           <DialogDescription>
-            {file ? <>Archivo: <strong>{file.name}</strong></> : 'Selecciona un archivo Excel para empezar.'}
+            {fase === 'intro'
+              ? 'Carga un archivo Excel con la información de los colaboradores'
+              : file
+              ? <>Archivo: <strong>{file.name}</strong></>
+              : 'Selecciona un archivo Excel para empezar.'}
           </DialogDescription>
         </DialogHeader>
 
+        {/* input file oculto, lo dispara el botón "Seleccionar archivo" */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".xlsx,.xls"
+          className="hidden"
+          onChange={onArchivoChange}
+        />
+
+        {fase === 'intro' && (
+          <VistaIntro
+            onDescargarPlantilla={descargarPlantilla}
+            onSeleccionarArchivo={() => fileInputRef.current?.click()}
+            onCancelar={cerrar}
+          />
+        )}
         {fase === 'preview'   && (
           <VistaPreview
             filas={filas}
@@ -242,6 +358,63 @@ export default function ImportarColaboradoresDialog({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────────
+// Vista: intro — descargar plantilla + seleccionar archivo
+// ────────────────────────────────────────────────────────────────────────────────
+function VistaIntro({
+  onDescargarPlantilla, onSeleccionarArchivo, onCancelar,
+}: {
+  onDescargarPlantilla: () => void;
+  onSeleccionarArchivo: () => void;
+  onCancelar: () => void;
+}) {
+  return (
+    <>
+      <div className="p-6 space-y-5">
+        {/* Card de descargar plantilla */}
+        <div className="rounded-xl border border-border bg-muted/30 p-4 flex items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <FileText className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <p className="font-semibold text-sm">¿No tienes una plantilla?</p>
+              <p className="text-sm text-muted-foreground">
+                Descarga nuestra plantilla con el formato correcto
+              </p>
+            </div>
+          </div>
+          <Button variant="outline" size="sm" onClick={onDescargarPlantilla} className="gap-2 shrink-0">
+            <Download className="h-4 w-4" /> Descargar Plantilla
+          </Button>
+        </div>
+
+        {/* Selector de archivo */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Archivo Excel (.xlsx, .xls)</label>
+          <Button
+            variant="outline"
+            onClick={onSeleccionarArchivo}
+            className="w-full gap-2 h-12 border-dashed"
+          >
+            <Upload className="h-4 w-4" />
+            Seleccionar archivo
+          </Button>
+        </div>
+      </div>
+
+      <div className="shrink-0 border-t border-border p-4 flex justify-end gap-2 bg-background">
+        <Button variant="outline" onClick={onCancelar} className="gap-2">
+          <X className="h-4 w-4" /> Cancelar
+        </Button>
+        <Button onClick={onSeleccionarArchivo} className="gap-2">
+          <Upload className="h-4 w-4" /> Importar
+        </Button>
+      </div>
+    </>
   );
 }
 
@@ -316,7 +489,8 @@ function VistaPreview({
         </p>
       </div>
 
-      {/* Tabla — única zona con scroll; crece con el contenido hasta un máximo */}
+      {/* Tabla — única zona con scroll; muestra las 31 columnas de la plantilla.
+          Scroll horizontal libre para revisar todo antes de confirmar. */}
       <div className="overflow-auto max-h-[60vh]">
         <table className="w-full text-sm">
           <thead className="sticky top-0 bg-muted/60 backdrop-blur z-10">
@@ -327,10 +501,30 @@ function VistaPreview({
               <Th>Tipo doc.</Th>
               <Th>Documento</Th>
               <Th>F. nacimiento</Th>
+              <Th>F. expedición</Th>
+              <Th>Lugar expedición</Th>
               <Th>Cargo</Th>
               <Th>Modalidad</Th>
               <Th>Salario</Th>
               <Th>F. ingreso</Th>
+              <Th>F. retiro</Th>
+              <Th>EPS</Th>
+              <Th>Pensión</Th>
+              <Th>ARL</Th>
+              <Th>Caja comp.</Th>
+              <Th>Camisa</Th>
+              <Th>Pantalón</Th>
+              <Th>Calzado</Th>
+              <Th>Tipo cuenta</Th>
+              <Th>Banco</Th>
+              <Th>Nº cuenta</Th>
+              <Th>Correo</Th>
+              <Th>Teléfono</Th>
+              <Th>Dirección</Th>
+              <Th>Municipio</Th>
+              <Th>Departamento</Th>
+              <Th>Contacto emerg.</Th>
+              <Th>Tel. emerg.</Th>
             </tr>
           </thead>
           <tbody>
@@ -345,10 +539,30 @@ function VistaPreview({
                   <Td>{f.tipo_documento || '—'}</Td>
                   <Td className={dup ? 'text-warning font-semibold' : ''}>{f.documento || '—'}</Td>
                   <Td>{f.fecha_nacimiento || '—'}</Td>
+                  <Td>{f.fecha_expedicion_documento || '—'}</Td>
+                  <Td>{f.lugar_expedicion || '—'}</Td>
                   <Td>{f.cargo || '—'}</Td>
                   <Td>{f.modalidad_pago || '—'}</Td>
                   <Td>{f.salario_base || '—'}</Td>
                   <Td>{f.fecha_ingreso || '—'}</Td>
+                  <Td>{f.fecha_retiro || '—'}</Td>
+                  <Td>{f.eps || '—'}</Td>
+                  <Td>{f.fondo_pension || '—'}</Td>
+                  <Td>{f.arl || '—'}</Td>
+                  <Td>{f.caja_compensacion || '—'}</Td>
+                  <Td>{f.talla_camisa || '—'}</Td>
+                  <Td>{f.talla_pantalon || '—'}</Td>
+                  <Td>{f.talla_calzado || '—'}</Td>
+                  <Td>{f.tipo_cuenta || '—'}</Td>
+                  <Td>{f.entidad_bancaria || '—'}</Td>
+                  <Td>{f.numero_cuenta || '—'}</Td>
+                  <Td>{f.correo_electronico || '—'}</Td>
+                  <Td>{f.telefono || '—'}</Td>
+                  <Td>{f.direccion || '—'}</Td>
+                  <Td>{f.municipio || '—'}</Td>
+                  <Td>{f.departamento || '—'}</Td>
+                  <Td>{f.contacto_emergencia_nombre || '—'}</Td>
+                  <Td>{f.contacto_emergencia_telefono || '—'}</Td>
                 </tr>
               );
             })}

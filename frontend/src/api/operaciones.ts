@@ -10,6 +10,17 @@
  *
  * Base URL: {host}/api/v1/tenant
  * Headers: Authorization: Bearer {jwt}, X-Tenant-Id: {tenant_id}
+ *
+ * Alineado con API_OPERACIONES.md (versión vigente). Incluye:
+ *  - Indicadores (§2.2.1) con period semanal/quincenal/mensual/personalizado
+ *  - Cosecha con peso_confirmado opcional al crear (§3.1)
+ *  - Jornales unificados: solo `labor_id` (§3.2 y §3.3). El backend deriva
+ *    categoría y tipo desde la labor. Las custom de palma tienen tipo=null.
+ *  - SANIDAD con `tipo_pago` dependiente (POR_PALMA vs JORNAL_FIJO)
+ *  - Horas Extras con snapshot legal + aprobar/rechazar (§4)
+ *  - Ausencias con aprobar/rechazar/documento + snapshot del motivo (§5)
+ *  - Selects: labores (catálogo unificado), crearInsumo on-the-fly (§8)
+ *  - Códigos de error: OperacionesErrorCodes (§0)
  */
 import { requestConToken, fetchConToken } from './request';
 
@@ -41,6 +52,16 @@ export interface Planilla {
   total_general?: string | number;
 }
 
+/**
+ * §6 Resumen del wizard (GET /operaciones/{id}/resumen)
+ *
+ * Buckets de `labores`:
+ *  - `cosecha`, `plateo`, `poda`, `fertilizacion`, `sanidad`: las 5 labores
+ *    fijas del sistema (es_sistema=true), una por bucket.
+ *  - `otros`: agrupa los jornales custom de palma (categoria=PALMA, tipo=null).
+ *  - `labores_finca`: jornales con categoria=FINCA (antes `auxiliares` en el
+ *    doc viejo; el backend ya lo renombró).
+ */
 export interface Resumen {
   fecha: string;
   elaborado_por: string;
@@ -55,7 +76,7 @@ export interface Resumen {
     fertilizacion: number;
     sanidad: number;
     otros: number;
-    auxiliares: number;
+    labores_finca: number;
   };
   ausencias: {
     pendientes: number;
@@ -83,6 +104,135 @@ export interface Indicadores {
 }
 
 export type Periodo = 'semanal' | 'quincenal' | 'mensual' | 'personalizado';
+
+// ─── Entidades del módulo (cuerpo de respuestas) ──────────────────────────────
+
+export type EstadoNovedad = 'PENDIENTE' | 'APROBADA' | 'RECHAZADA' | 'LIQUIDADA';
+
+export interface CosechaCuadrillaItem {
+  id: number;
+  empleado_id: number;
+  peso_calculado_empleado: string | number | null;
+  valor_calculado: string | number | null;
+  empleado?: { id: number; primer_nombre?: string; primer_apellido?: string };
+}
+
+export interface Cosecha {
+  id: number;
+  operacion_id: number;
+  lote_id: number;
+  sublote_id: number | null;
+  gajos_reportados: number;
+  gajos_reconteo?: number | null;
+  peso_confirmado: string | number | null;
+  precio_cosecha: string | number | null;
+  promedio_kg_gajo?: string | number | null;
+  valor_total: string | number | null;
+  cuadrilla: CosechaCuadrillaItem[];
+}
+
+export type CategoriaJornal = 'PALMA' | 'FINCA';
+/** Tipos snapshoteados en el jornal. Las labores custom de palma tienen tipo=null. */
+export type TipoJornalPalma = 'PLATEO' | 'PODA' | 'FERTILIZACION' | 'SANIDAD';
+
+export interface Jornal {
+  id: number;
+  operacion_id: number;
+  empleado_id: number;
+  categoria: CategoriaJornal;
+  tipo?: TipoJornalPalma | null;
+  lote_id?: number | null;
+  sublote_id?: number | null;
+  /** Referencia al catálogo unificado de labores (PALMA fijas + custom + FINCA). */
+  labor_id?: number | null;
+  cantidad_palmas?: number | null;
+  insumo_id?: number | null;
+  gramos_por_palma?: number | null;
+  descripcion?: string | null;
+  nombre_trabajo?: string | null;
+  ubicacion?: string | null;
+  valor_unitario: string | number | null;
+  valor_total: string | number | null;
+  estado: boolean;
+  empleado?: any;
+  labor?: any;
+  lote?: any;
+  sublote?: any;
+  insumo?: any;
+}
+
+/** Estado de la hora extra. `LIQUIDADA` se llena al cerrar la nómina (snapshot
+ *  en `nomina_hora_extra_ref`). Una vez LIQUIDADA, el registro es inmutable. */
+export type EstadoHoraExtra = 'PENDIENTE' | 'APROBADA' | 'RECHAZADA' | 'LIQUIDADA';
+
+/** Subobjeto eager-loaded en `HoraExtra.tipoHoraExtra` (camelCase del backend). */
+export interface HoraExtraTipoRef {
+  id: number;
+  codigo: string;
+  nombre: string;
+  porcentaje_recargo: string | number;
+  franja_horaria?: string;
+  aplica_festivo?: boolean;
+  es_extra?: boolean;
+  paga_hora_completa?: boolean;
+}
+
+export interface HoraExtra {
+  id: number;
+  operacion_id: number;
+  empleado_id: number;
+  tipo_hora_extra_id: number;
+  /** Snapshot del tipo al crear el registro. */
+  codigo: string;
+  /** Snapshot. */
+  porcentaje_recargo: string | number;
+  /** Snapshot. */
+  paga_hora_completa: boolean;
+  cantidad_horas: string | number;
+  /** Snapshot: `salario_base / tenant_config.divisor_jornada_mensual` al crear. */
+  valor_hora_base: string | number;
+  /** Total a pagar. Fórmula §2.3 del doc API_HORAS_EXTRA.md. */
+  valor_calculado: string | number;
+  estado: EstadoHoraExtra;
+  observacion?: string | null;
+  aprobado_por?: number | null;
+  aprobado_at?: string | null;
+  motivo_rechazo?: string | null;
+  /** Se llena al cerrar nómina → estado LIQUIDADA. */
+  nomina_id?: number | null;
+  empleado?: { id: number; primer_nombre?: string; primer_apellido?: string; [k: string]: any };
+  tipoHoraExtra?: HoraExtraTipoRef;
+}
+
+/** Payload del wizard Paso 4 — POST /operaciones/{id}/horas-extra. */
+export interface HoraExtraPayload {
+  empleado_id: number;
+  tipo_hora_extra_id: number;
+  /** 0.25 a 12. */
+  cantidad_horas: number;
+  observacion?: string;
+}
+
+export interface Ausencia {
+  id: number;
+  operacion_id: number;
+  empleado_id: number;
+  motivo_ausencia_id: number;
+  tipo: string;
+  fecha_inicio: string;
+  fecha_fin: string;
+  dias_calendario: number;
+  es_remunerada: boolean;
+  afecta_nomina: boolean;
+  porcentaje_pago: string | number;
+  estado: EstadoNovedad;
+  motivo?: string | null;
+  documento_soporte?: string | null;
+  entidad?: string | null;
+  numero_radicado?: string | null;
+  empleado?: any;
+  motivo_ausencia?: any;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -239,12 +389,26 @@ export const cosechasApi = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 3. jornalesApi (PLATEO/PODA/FERTILIZACION/SANIDAD/OTROS + FINCA)
+// 3. jornalesApi (catálogo unificado — solo se envía labor_id)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export interface JornalPalma {
-  categoria: 'PALMA';
-  tipo: 'PLATEO' | 'PODA' | 'FERTILIZACION' | 'SANIDAD' | 'OTROS';
+/**
+ * Payload único para jornales (PALMA fijas, custom de palma y FINCA).
+ *
+ * El cliente solo envía `labor_id`. El backend deriva `categoria` y `tipo` desde
+ * la labor y los snapshotea en el jornal. NO enviar `categoria` ni `tipo` (son
+ * silenciosamente descartados, pero conviene omitirlos).
+ *
+ * Reglas resumidas (según labor seleccionada):
+ *  - `tipo_pago='POR_PALMA'` → enviar `cantidad_palmas` (requerido).
+ *  - `tipo_pago='JORNAL_FIJO'` → no enviar `cantidad_palmas`.
+ *  - `tipo='FERTILIZACION'` + `POR_PALMA` → además `insumo_id` + `gramos_por_palma`.
+ *  - `tipo='SANIDAD'` → `descripcion` requerida.
+ *  - `categoria='FINCA'` → opcional `ubicacion` (texto libre).
+ *  - COSECHA NO usa este endpoint; va por `POST /operaciones/{id}/cosechas`.
+ */
+export interface JornalPayload {
+  labor_id: number;
   empleado_id: number;
   lote_id?: number | null;
   sublote_id?: number | null;
@@ -253,24 +417,23 @@ export interface JornalPalma {
   gramos_por_palma?: number;
   descripcion?: string;
   nombre_trabajo?: string;
-}
-
-export interface JornalFinca {
-  categoria: 'FINCA';
-  labor_id: number;
-  empleado_id: number;
   ubicacion?: string;
   observacion?: string | null;
 }
 
+/** @deprecated Usar `JornalPayload`. La API ya no requiere `categoria`/`tipo`. */
+export type JornalPalma = JornalPayload;
+/** @deprecated Usar `JornalPayload`. La API ya no requiere `categoria`. */
+export type JornalFinca = JornalPayload;
+
 export const jornalesApi = {
-  crear: (operacionId: number, payload: JornalPalma | JornalFinca) =>
+  crear: (operacionId: number, payload: JornalPayload) =>
     smartRequest<{ data: any }>(`${BASE}/operaciones/${operacionId}/jornales`, {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
 
-  editar: (id: number, payload: Partial<JornalPalma | JornalFinca>) =>
+  editar: (id: number, payload: Partial<JornalPayload>) =>
     smartRequest<{ data: any }>(`${BASE}/jornales/${id}`, {
       method: 'PUT',
       body: JSON.stringify(payload),
@@ -284,25 +447,34 @@ export const jornalesApi = {
 // 4. horasExtraApi
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Cliente del módulo Horas Extras (doc API_HORAS_EXTRA.md §2.4).
+ *
+ * Permisos por acción:
+ *  - `crear` / `editar` / `eliminar`: `operaciones.{crear|editar|eliminar}`.
+ *  - `aprobar` / `rechazar`: `configuracion.editar`.
+ *
+ * Máquina de estados (§2.2):
+ *   PENDIENTE → APROBADA (vía aprobar) → LIQUIDADA (al cerrar nómina).
+ *   PENDIENTE → RECHAZADA (vía rechazar).
+ * Toda mutación está bloqueada si la planilla padre está `APROBADA`
+ * (`OPERACION_APROBADA`), salvo aprobar/rechazar que sí funcionan ahí.
+ * Una vez `LIQUIDADA`, el registro es inmutable (`HORA_EXTRA_LIQUIDADA`).
+ *
+ * El backend snapshotea `codigo`, `porcentaje_recargo`, `paga_hora_completa`
+ * y `valor_hora_base` al crear, y recalcula `valor_calculado` si cambian
+ * `empleado_id`/`tipo_hora_extra_id`/`cantidad_horas` al editar.
+ */
 export const horasExtraApi = {
-  crear: (operacionId: number, payload: {
-    empleado_id: number;
-    tipo_hora_extra_id: number;
-    cantidad_horas: number;
-    observacion?: string;
-  }) =>
-    smartRequest<{ data: any }>(`${BASE}/operaciones/${operacionId}/horas-extra`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
+  crear: (operacionId: number, payload: HoraExtraPayload) =>
+    smartRequest<{ data: HoraExtra; message?: string }>(
+      `${BASE}/operaciones/${operacionId}/horas-extra`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
 
-  editar: (id: number, payload: Partial<{
-    empleado_id: number;
-    tipo_hora_extra_id: number;
-    cantidad_horas: number;
-    observacion: string;
-  }>) =>
-    smartRequest<{ data: any }>(`${BASE}/horas-extra/${id}`, {
+  editar: (id: number, payload: Partial<HoraExtraPayload>) =>
+    smartRequest<{ data: HoraExtra; message?: string }>(`${BASE}/horas-extra/${id}`, {
       method: 'PUT',
       body: JSON.stringify(payload),
     }),
@@ -311,14 +483,51 @@ export const horasExtraApi = {
     smartRequest<{ message: string }>(`${BASE}/horas-extra/${id}`, { method: 'DELETE' }),
 
   aprobar: (id: number) =>
-    smartRequest<{ data: any }>(`${BASE}/horas-extra/${id}/aprobar`, { method: 'POST' }),
+    smartRequest<{ data: HoraExtra; message?: string }>(
+      `${BASE}/horas-extra/${id}/aprobar`, { method: 'POST' }),
 
   rechazar: (id: number, motivo_rechazo: string) =>
-    smartRequest<{ data: any }>(`${BASE}/horas-extra/${id}/rechazar`, {
-      method: 'POST',
-      body: JSON.stringify({ motivo_rechazo }),
-    }),
+    smartRequest<{ data: HoraExtra; message?: string }>(
+      `${BASE}/horas-extra/${id}/rechazar`, {
+        method: 'POST',
+        body: JSON.stringify({ motivo_rechazo }),
+      }),
 };
+
+/**
+ * Pre-cálculo en frontend del `valor_calculado` para vista previa en el
+ * wizard antes de enviar al backend. Aplica exactamente la fórmula §2.3:
+ *
+ *   valor_hora_base = salario_base / divisor_jornada_mensual
+ *   pagaCompleta=true  → cantidad × valor_hora_base × (1 + pct/100)
+ *   pagaCompleta=false → cantidad × valor_hora_base × (pct/100)
+ *
+ * Si no hay `salario_base` (empleados PRODUCCION) se debe pasar el SMMLV
+ * del tenant como fallback. Devuelve `null` si los inputs no son finitos.
+ *
+ * El backend confirma el cálculo en la respuesta 201 y snapshotea el valor
+ * en el registro, así que esto es solo para UX (no autoritativo).
+ */
+export function calcularValorHoraExtra(input: {
+  salario_base: number;
+  divisor_jornada_mensual: number;
+  porcentaje_recargo: number | string;
+  paga_hora_completa: boolean;
+  cantidad_horas: number | string;
+}): { valor_hora_base: number; valor_calculado: number } | null {
+  const sal = Number(input.salario_base);
+  const div = Number(input.divisor_jornada_mensual);
+  const pct = Number(input.porcentaje_recargo);
+  const qty = Number(input.cantidad_horas);
+  if (!Number.isFinite(sal) || !Number.isFinite(div) || div <= 0) return null;
+  if (!Number.isFinite(pct) || !Number.isFinite(qty)) return null;
+  const valor_hora_base = sal / div;
+  const factor = input.paga_hora_completa ? 1 + pct / 100 : pct / 100;
+  return {
+    valor_hora_base: Number(valor_hora_base.toFixed(2)),
+    valor_calculado: Number((qty * valor_hora_base * factor).toFixed(2)),
+  };
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 5. ausenciasApi
@@ -399,20 +608,87 @@ export const selectsApi = {
       `${BASE}/insumos/select`
     ),
 
-  labores: (params: { estado?: boolean } = {}) =>
-    requestConToken<{ data: Array<{ id: number; nombre: string; valor_base?: string | number }> }>(
-      `${BASE}/labores/select${qs(params)}`
-    ),
+  /**
+   * §4 unificado: GET /labores/select devuelve TODAS las labores activas con
+   * el `categoria`, `tipo`, `tipo_pago`, `precio_palma`, `es_sistema`,
+   * `requiere_cosecha_workflow`.
+   * Filtros: `?categoria=PALMA|FINCA`, `?estado=false` para inactivas.
+   */
+  labores: (params: { categoria?: 'PALMA' | 'FINCA'; estado?: boolean } = {}) =>
+    requestConToken<{ data: Array<{
+      id: number;
+      nombre: string;
+      categoria: 'PALMA' | 'FINCA';
+      tipo: 'COSECHA' | 'PLATEO' | 'PODA' | 'FERTILIZACION' | 'SANIDAD' | null;
+      tipo_pago: 'POR_PALMA' | 'JORNAL_FIJO';
+      precio_palma: string | number | null;
+      es_sistema: boolean;
+      requiere_cosecha_workflow: boolean;
+    }> }>(`${BASE}/labores/select${qs(params)}`),
+
+  /**
+   * @deprecated `/labores-palma/select` ya no existe. Usa `labores({categoria:'PALMA'})`.
+   * Wrapper retrocompat: filtra del endpoint unificado las labores PALMA
+   * custom (es_sistema=false) más las fijas, para mantener compat con el wizard
+   * tab OTROS que muestra todas las opciones de palma.
+   */
+  laboresPalma: async (_params: { estado?: boolean } = {}) => {
+    const res = await requestConToken<{ data: Array<any> }>(
+      `${BASE}/labores/select${qs({ categoria: 'PALMA' })}`,
+    );
+    return { data: (res.data ?? []) as Array<{
+      id: number;
+      nombre: string;
+      tipo_pago: 'POR_PALMA' | 'JORNAL_FIJO';
+      precio_palma: string | number | null;
+      es_sistema?: boolean;
+      tipo?: string | null;
+      requiere_cosecha_workflow?: boolean;
+    }> };
+  },
+
+  /**
+   * @deprecated `/precios-palma` ya no existe. Usa `labores({categoria:'PALMA'})`
+   * y filtra `es_sistema=true` para tener solo las 5 fijas.
+   */
+  preciosPalma: async () => {
+    const res = await requestConToken<{ data: Array<any> }>(
+      `${BASE}/labores/select${qs({ categoria: 'PALMA' })}`,
+    );
+    const fijas = (res.data ?? []).filter((l: any) => l.es_sistema === true);
+    return { data: fijas as Array<{
+      id: number;
+      tipo: 'COSECHA' | 'PLATEO' | 'PODA' | 'FERTILIZACION' | 'SANIDAD';
+      tipo_pago: 'POR_PALMA' | 'JORNAL_FIJO';
+      precio_palma: string | number | null;
+      estado: boolean;
+      es_sistema: boolean;
+    }> };
+  },
 
   motivosAusencia: (params: { estado?: boolean } = {}) =>
-    requestConToken<{ data: Array<{ id: number; nombre: string; tipo_base?: string }> }>(
-      `${BASE}/motivos-ausencia/select${qs(params)}`
-    ),
+    requestConToken<{ data: Array<{
+      id: number;
+      nombre: string;
+      tipo_base?: string;
+      es_remunerada?: boolean;
+      afecta_nomina?: boolean;
+      requiere_soporte?: boolean;
+      color?: string;
+    }> }>(`${BASE}/motivos-ausencia/select${qs(params)}`),
 
+  /** §1.3 — dropdown del wizard. Default `estado=true`. */
   tiposHoraExtra: (params: { estado?: boolean } = {}) =>
-    requestConToken<{ data: Array<{ id: number; nombre: string; codigo?: string; porcentaje_recargo?: string | number }> }>(
-      `${BASE}/tipos-hora-extra/select${qs(params)}`
-    ),
+    requestConToken<{ data: Array<{
+      id: number;
+      nombre: string;
+      codigo: string;
+      porcentaje_recargo: string | number;
+      franja_horaria: 'DIURNO' | 'NOCTURNO' | 'MIXTO';
+      aplica_festivo: boolean;
+      es_extra: boolean;
+      paga_hora_completa: boolean;
+    }> }>(`${BASE}/tipos-hora-extra/select${qs(params)}`),
 
   /**
    * Crear insumo "on-the-fly" desde el wizard cuando el operador selecciona
@@ -444,3 +720,37 @@ export const selectsApi = {
       }
     ),
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CÓDIGOS DE ERROR DEL MÓDULO (§0 del doc)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const OperacionesErrorCodes = {
+  /** Intento de mutar una planilla ya aprobada. */
+  OPERACION_APROBADA: 'OPERACION_APROBADA',
+  /** Intento de eliminar planilla con jornales/cosechas/ausencias/horas extras. */
+  OPERACION_CON_HIJOS: 'OPERACION_CON_HIJOS',
+  /** La cosecha ya está asignada a un viaje. */
+  COSECHA_EN_VIAJE: 'COSECHA_EN_VIAJE',
+  /** Falta precio configurado, insumo sin rango, precios_cosecha sin registro, etc. */
+  CALC_ERROR: 'CALC_ERROR',
+  /** Intento de editar/eliminar una ausencia ya liquidada en nómina. */
+  AUSENCIA_LIQUIDADA: 'AUSENCIA_LIQUIDADA',
+  /** Aprobar/rechazar una ausencia que no está en PENDIENTE. */
+  AUSENCIA_ESTADO_INVALIDO: 'AUSENCIA_ESTADO_INVALIDO',
+  /** Eliminar un motivo de ausencia con ausencias asociadas. */
+  MOTIVO_CON_AUSENCIAS: 'MOTIVO_CON_AUSENCIAS',
+  /** Editar/eliminar una hora extra ya liquidada en nómina. */
+  HORA_EXTRA_LIQUIDADA: 'HORA_EXTRA_LIQUIDADA',
+  /** Aprobar/rechazar una hora extra que no está en PENDIENTE. */
+  HORA_EXTRA_ESTADO_INVALIDO: 'HORA_EXTRA_ESTADO_INVALIDO',
+  /** Eliminar un tipo paramétrico de hora extra con registros asociados. */
+  TIPO_HORA_EXTRA_CON_REGISTROS: 'TIPO_HORA_EXTRA_CON_REGISTROS',
+  /** Insumo creado desde el wizard ya existe. Pedir al usuario seleccionarlo del dropdown. */
+  INSUMO_DUPLICADO: 'INSUMO_DUPLICADO',
+  /** Usuario sin permiso para la acción. */
+  PERMISSION_DENIED: 'PERMISSION_DENIED',
+} as const;
+
+export type OperacionesErrorCode =
+  typeof OperacionesErrorCodes[keyof typeof OperacionesErrorCodes];

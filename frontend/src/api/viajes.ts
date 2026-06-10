@@ -68,6 +68,8 @@ export type CalidadMateriaPrima = 'excelente' | 'buena' | 'regular' | 'deficient
 /** Empresa transportadora — paramétrica */
 export interface EmpresaTransportadora {
   id: number;
+  /** 'JURIDICA' | 'NATURAL'. Define el badge ("P. Jurídica" / "P. Natural") en el UI. */
+  tipo_persona?: 'JURIDICA' | 'NATURAL';
   razon_social: string;
   nit: string;
   telefono?: string | null;
@@ -77,6 +79,8 @@ export interface EmpresaTransportadora {
   contacto_nombre?: string | null;
   observaciones?: string | null;
   estado?: boolean;
+  /** Presente cuando se pide con ?with_transportadores_count=1 o en el detalle. */
+  transportadores_count?: number;
 }
 
 /** Select reducido de empresas (para dropdowns) */
@@ -84,6 +88,7 @@ export interface EmpresaTransportadoraSelect {
   id: number;
   razon_social: string;
   nit: string;
+  tipo_persona?: 'JURIDICA' | 'NATURAL';
 }
 
 /** Transportador (conductor) — paramétrica */
@@ -126,6 +131,9 @@ export interface Extractora {
   municipio_codigo?: string | null;
   ciudad?: string | null;
   telefono?: string | null;
+  /** Teléfono fijo (opcional). No está en el doc §16.1 oficial, pero el
+   *  frontend lo expone como input y el backend lo persiste si la columna existe. */
+  telefono_fijo?: string | null;
   email?: string | null;
   contacto_nombre?: string | null;
   distancia_km?: string | number | null;
@@ -406,8 +414,19 @@ export const empresasTransportadorasApi = {
   transportadoresDe: (empresaId: number) =>
     get<{ data: TransportadorSelect[] }>(`/empresas-transportadoras/${empresaId}/transportadores`),
 
-  /** GET /empresas-transportadoras — listado paginado (CRUD admin) */
-  listar: (params?: { page?: number; per_page?: number; search?: string }) =>
+  /**
+   * GET /empresas-transportadoras — listado paginado (CRUD admin).
+   * Filtros: `search`, `estado`, `tipo_persona`, `with_transportadores_count`.
+   */
+  listar: (params?: {
+    page?: number;
+    per_page?: number;
+    search?: string;
+    estado?: boolean;
+    tipo_persona?: 'JURIDICA' | 'NATURAL';
+    /** Si `true`, cada item incluye `transportadores_count`. */
+    with_transportadores_count?: boolean;
+  }) =>
     get<{ data: EmpresaTransportadora[]; meta?: any }>('/empresas-transportadoras', params as Record<string, unknown>),
 
   /** GET /empresas-transportadoras/{id} */
@@ -429,8 +448,17 @@ export const empresasTransportadorasApi = {
 
 /** Paramétricas: transportadores (conductores) */
 export const transportadoresApi = {
-  /** GET /transportadores — listado paginado · filtro por empresa */
-  listar: (params?: { page?: number; per_page?: number; empresa_transportadora_id?: number; search?: string }) =>
+  /**
+   * GET /transportadores — listado paginado · filtro por empresa.
+   * Filtros: `search`, `estado`, `empresa_transportadora_id`.
+   */
+  listar: (params?: {
+    page?: number;
+    per_page?: number;
+    empresa_transportadora_id?: number;
+    search?: string;
+    estado?: boolean;
+  }) =>
     get<{ data: Transportador[]; meta?: any }>('/transportadores', params as Record<string, unknown>),
 
   /** GET /transportadores/{id} */
@@ -456,8 +484,17 @@ export const extractorasApi = {
   select: () =>
     get<{ data: ExtractoraSelect[] }>('/extractoras/select'),
 
-  /** GET /extractoras — listado paginado */
-  listar: (params?: { page?: number; per_page?: number; search?: string }) =>
+  /**
+   * GET /extractoras — listado paginado.
+   * Filtros: `search`, `estado`, `departamento_codigo` (código DANE).
+   */
+  listar: (params?: {
+    page?: number;
+    per_page?: number;
+    search?: string;
+    estado?: boolean;
+    departamento_codigo?: string;
+  }) =>
     get<{ data: Extractora[]; meta?: any }>('/extractoras', params as Record<string, unknown>),
 
   /** GET /extractoras/{id} */

@@ -458,28 +458,64 @@ export default function Fincas() {
     );
   };
 
-  const handleDelete = async (finca: FincaItem) => {
+  /** Ejecuta el DELETE con manejo robusto de errores y soporte de `?force=1`
+   *  cuando el backend bloquea por datos relacionados (409). */
+  const ejecutarDelete = async (finca: FincaItem, force = false): Promise<void> => {
+    try {
+      const result = await requestConToken<{ message?: string }>(
+        `/api/v1/admin/tenants/${finca.id}${force ? '?force=1' : ''}`,
+        { method: 'DELETE' },
+        token,
+      );
+      toast.success(result.message ?? 'Finca eliminada correctamente');
+      closeConfirm();
+      if (page > 1 && fincas.length === 1) {
+        setPage((prev) => Math.max(1, prev - 1));
+        await loadStats();
+      } else {
+        await Promise.all([loadStats(), loadFincas()]);
+      }
+    } catch (e: any) {
+      const status = e?.status as number | undefined;
+      const code = e?.code as string | undefined;
+      const msg = e?.message as string | undefined;
+
+      // 409 → la finca tiene datos relacionados (usuarios, colaboradores, etc.).
+      // Ofrecemos eliminación forzada en cascada si el usuario la confirma.
+      if (status === 409 && !force) {
+        closeConfirm();
+        showConfirm(
+          'Eliminar finca con sus datos',
+          `${msg ?? 'La finca tiene datos relacionados (usuarios, colaboradores, nóminas, etc.).'} ¿Eliminar la finca con TODOS sus datos asociados? Esta acción no se puede deshacer.`,
+          'danger',
+          () => ejecutarDelete(finca, true),
+        );
+        return;
+      }
+
+      if (status === 403) {
+        toast.error('No tienes permiso para eliminar fincas.');
+      } else if (status === 404) {
+        toast.error('La finca ya no existe.');
+        closeConfirm();
+        await Promise.all([loadStats(), loadFincas()]);
+      } else if (e?.errors) {
+        const primero = Object.values(e.errors).flat()[0];
+        toast.error(typeof primero === 'string' ? primero : (msg ?? 'Error de validación'));
+      } else {
+        toast.error(msg ?? `No se pudo eliminar la finca${code ? ` (${code})` : ''}`);
+      }
+    }
+  };
+
+  const handleDelete = (finca: FincaItem) => {
     if (!token) return;
 
     showConfirm(
       'Eliminar finca',
       `¿Seguro que deseas eliminar "${finca.nombre}"? Esta acción no se puede deshacer.`,
       'danger',
-      async () => {
-        const result = await requestConToken<{ message?: string }>(
-          `/api/v1/admin/tenants/${finca.id}`,
-          { method: 'DELETE' },
-          token,
-        );
-        toast.success(result.message ?? 'Finca eliminada correctamente');
-        closeConfirm();
-        if (page > 1 && fincas.length === 1) {
-          setPage((prev) => Math.max(1, prev - 1));
-          await loadStats();
-        } else {
-          await Promise.all([loadStats(), loadFincas()]);
-        }
-      },
+      () => ejecutarDelete(finca, false),
     );
   };
 
