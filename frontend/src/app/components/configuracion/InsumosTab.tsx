@@ -39,7 +39,94 @@ import { cached, invalidate } from '../../../api/cache';
 
 const CACHE_KEY_INSUMOS = 'config:insumos';
 
-const unidadesMedida = ['gramo', 'kilogramo', 'litro', 'mililitro', 'unidad'];
+/**
+ * Catálogo de unidades de medida usadas en fertilizantes para palma de aceite.
+ * Cubre los formatos del mercado colombiano:
+ *  - sólidos granulados → kilogramo (bulto 50 kg) o tonelada (a granel)
+ *  - líquidos → litro
+ *  - efluentes (POME, vinaza) → metro cúbico
+ *  - micronutrientes en microdosis → gramo
+ */
+const unidadesMedida: Array<{ value: string; label: string }> = [
+  { value: 'gramo',         label: 'Gramo (g)' },
+  { value: 'kilogramo',     label: 'Kilogramo (kg)' },
+  { value: 'tonelada',      label: 'Tonelada (t)' },
+  { value: 'litro',         label: 'Litro (L)' },
+  { value: 'metro_cubico',  label: 'Metro cúbico (m³)' },
+];
+
+/**
+ * Mapeo de presentación → unidad de medida real.
+ *
+ * El seed del backend cargó la columna "Presentación" del doc de fertilizantes
+ * (Gránulo, Cápsula, Polvo, Líquido, etc.) en el campo `unidad_medida`. Eso es
+ * una presentación física, no la unidad de pesaje/volumen.
+ *
+ * Este mapeo normaliza esos valores a la unidad de medida correcta según la
+ * columna "Unidad de Medida" del mismo doc. La heurística:
+ *  - Cualquier forma líquida → Litro.
+ *  - Sólidos (gránulo, polvo, cápsula, sólido, cristales) → Kilogramo.
+ *  - Si el valor ya es uno de nuestros codes (`kilogramo`, `litro`, ...) se
+ *    deja pasar y se renderiza con su label largo.
+ *  - Si no matchea, se devuelve el raw para no ocultar datos del backend.
+ */
+const PRESENTACION_A_UNIDAD: Record<string, string> = {
+  // Sólidos puros → Kilogramo (kg)
+  'granulo': 'kilogramo',
+  'gránulo': 'kilogramo',
+  'granulo/polvo': 'kilogramo',
+  'gránulo/polvo': 'kilogramo',
+  'granulo/soluble': 'kilogramo',
+  'gránulo/soluble': 'kilogramo',
+  'granulo dispersable': 'kilogramo',
+  'gránulo dispersable': 'kilogramo',
+  'granulado dispersable': 'kilogramo',
+  'granulo rojo/blanco': 'kilogramo',
+  'gránulo rojo/blanco': 'kilogramo',
+  'polvo': 'kilogramo',
+  'polvo/granulado': 'kilogramo',
+  'polvo/granulo': 'kilogramo',
+  'polvo/gránulo': 'kilogramo',
+  'polvo soluble': 'kilogramo',
+  'polvo/cristales': 'kilogramo',
+  'capsula': 'kilogramo',
+  'cápsula': 'kilogramo',
+  'solido': 'kilogramo',
+  'sólido': 'kilogramo',
+  'solido humedo': 'kilogramo',
+  'sólido húmedo': 'kilogramo',
+  'cristales': 'kilogramo',
+  'soluble': 'kilogramo',
+  'soluble/granulo': 'kilogramo',
+  'soluble/gránulo': 'kilogramo',
+  // Líquidos → Litro (L)
+  'liquido': 'litro',
+  'líquido': 'litro',
+  'liquido/semisolido': 'litro',
+  'líquido/semisólido': 'litro',
+  'semisolido': 'litro',
+  'semisólido': 'litro',
+  // Mixtos sólido/líquido (humus de lombriz) → Litro como default (más versátil)
+  'solido/liquido': 'litro',
+  'sólido/líquido': 'litro',
+};
+
+function formatearUnidad(raw?: string | null): string {
+  if (!raw) return '—';
+  const trim = raw.trim();
+  // 1) Si ya es uno de nuestros codes, devolvemos el label largo.
+  const directo = unidadesMedida.find((u) => u.value === trim.toLowerCase());
+  if (directo) return directo.label;
+  // 2) Si es una presentación conocida del seed, traducimos a la unidad real.
+  const norm = trim.toLowerCase().replace(/\s+/g, ' ').replace(/_/g, ' ');
+  const mapeado = PRESENTACION_A_UNIDAD[norm] ?? PRESENTACION_A_UNIDAD[norm.replace(/\s/g, '')];
+  if (mapeado) {
+    const u = unidadesMedida.find((x) => x.value === mapeado);
+    return u?.label ?? trim;
+  }
+  // 3) Fallback: el raw tal cual (no ocultamos datos del backend).
+  return trim;
+}
 
 export function InsumosTab() {
   const [insumos, setInsumos] = useState<Insumo[]>([]);
@@ -174,9 +261,9 @@ export function InsumosTab() {
                   <SelectValue placeholder="Seleccionar unidad" />
                 </SelectTrigger>
                 <SelectContent>
-                  {unidadesMedida.map((unidad) => (
-                    <SelectItem key={unidad} value={unidad}>
-                      {unidad}
+                  {unidadesMedida.map((u) => (
+                    <SelectItem key={u.value} value={u.value}>
+                      {u.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -239,7 +326,7 @@ export function InsumosTab() {
                       <TableCell className="font-medium">{insumo.nombre}</TableCell>
                       <TableCell>
                         <span className="inline-flex items-center gap-2 rounded-full bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
-                          {insumo.unidad_medida}
+                          {formatearUnidad(insumo.unidad_medida)}
                         </span>
                       </TableCell>
                       <TableCell className="text-right">
