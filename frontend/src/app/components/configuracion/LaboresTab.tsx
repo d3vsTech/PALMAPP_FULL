@@ -29,6 +29,7 @@ import {
   type TipoLaborPalma,
   type CategoriaLabor,
 } from '../../../api/configuracion';
+import { cached } from '../../../api/cache';
 import { TabLoadingGate } from './TabLoadingGate';
 
 /**
@@ -62,8 +63,7 @@ export function LaboresTab() {
   const { confirmDelete, ConfirmDeleteDialog } = useConfirmDelete();
 
   useEffect(() => {
-    configuracionApi.labores
-      .listar({ per_page: 100 })
+    cached('config:labores', () => configuracionApi.labores.listar({ per_page: 100 }))
       .then((res) => setLabores(res.data ?? []))
       .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar las labores'))
       .finally(() => setLoading(false));

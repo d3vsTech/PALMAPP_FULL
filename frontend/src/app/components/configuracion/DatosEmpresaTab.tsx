@@ -19,6 +19,7 @@ import {
   type TipoPersona,
 } from '../../../api/configuracion';
 import { getDepartamentos, getMunicipios } from '../../../api/plantacion';
+import { cached, FOREVER } from '../../../api/cache';
 import { useAuth } from '../../contexts/AuthContext';
 import { TabLoadingGate } from './TabLoadingGate';
 
@@ -142,13 +143,13 @@ export function DatosEmpresaTab() {
   const [deptoCodigo, setDeptoCodigo] = useState<string>('');
 
   useEffect(() => {
-    getDepartamentos()
+    cached('dane:departamentos', getDepartamentos, FOREVER)
       .then((res) => setDepartamentos(res.data ?? []))
       .catch(() => { /* silencioso: el form todavía es usable como texto */ });
   }, []);
 
   useEffect(() => {
-    configuracionApi.infoEmpresa.obtener()
+    cached('config:info-empresa', () => configuracionApi.infoEmpresa.obtener())
       .then((res) => {
         const { tipoPersona: tp, form } = apiToForm(res.data);
         setTipoPersona(tp);
@@ -176,7 +177,7 @@ export function DatosEmpresaTab() {
       setMunicipios([]);
       return;
     }
-    getMunicipios(deptoCodigo)
+    cached(`dane:municipios:${deptoCodigo}`, () => getMunicipios(deptoCodigo), FOREVER)
       .then((res) => setMunicipios(res.data ?? []))
       .catch(() => setMunicipios([]));
   }, [deptoCodigo]);

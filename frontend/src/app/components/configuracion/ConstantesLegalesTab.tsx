@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { cached } from '../../../api/cache';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -76,8 +77,7 @@ export function ConstantesLegalesTab() {
 
   useEffect(() => {
     let cancelado = false;
-    configuracionApi.constantesLegales
-      .obtener()
+    cached('config:constantes-legales', () => configuracionApi.constantesLegales.obtener())
       .then((res) => {
         if (!cancelado) setConstantes(apiToForm(res.data));
       })

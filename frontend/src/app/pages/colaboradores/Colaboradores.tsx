@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -29,6 +29,7 @@ export default function Colaboradores() {
   // Importación masiva — el dialog ahora maneja el picker de archivo
   // internamente (incluye botón de "Descargar Plantilla").
   const [importOpen, setImportOpen] = useState(false);
+  const searchMounted = useRef(false);
 
   const cargar = useCallback(async (search?: string) => {
     setLoading(true);
@@ -43,6 +44,7 @@ export default function Colaboradores() {
 
   useEffect(() => { cargar(); }, [cargar]);
   useEffect(() => {
+    if (!searchMounted.current) { searchMounted.current = true; return; }
     const t = setTimeout(() => cargar(searchTerm), 350);
     return () => clearTimeout(t);
   }, [searchTerm, cargar]);

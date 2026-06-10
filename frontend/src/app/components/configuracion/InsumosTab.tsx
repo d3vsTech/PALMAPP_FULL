@@ -35,6 +35,7 @@ import {
   ConfiguracionErrorCodes,
   type Insumo,
 } from '../../../api/configuracion';
+import { cached } from '../../../api/cache';
 
 const unidadesMedida = ['gramo', 'kilogramo', 'litro', 'mililitro', 'unidad'];
 
@@ -48,8 +49,7 @@ export function InsumosTab() {
   const { confirmDelete, ConfirmDeleteDialog } = useConfirmDelete();
 
   useEffect(() => {
-    configuracionApi.insumos
-      .listar({ per_page: 100 })
+    cached('config:insumos', () => configuracionApi.insumos.listar({ per_page: 100 }))
       .then((res: any) => {
         // Robusto al shape de la respuesta: el backend puede mandar
         //  - { data: Insumo[], meta }  (paginado estándar)

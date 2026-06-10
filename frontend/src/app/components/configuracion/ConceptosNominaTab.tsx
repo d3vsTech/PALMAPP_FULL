@@ -21,6 +21,7 @@ import {
   type TipoConcepto,
 } from '../../../api/nomina';
 import { TabLoadingGate } from './TabLoadingGate';
+import { cached } from '../../../api/cache';
 import { formatCOP } from '../lib/format';
 
 const TIPO_LABEL: Record<TipoConcepto, string> = {
@@ -39,8 +40,7 @@ export function ConceptosNominaTab() {
   const { confirmDelete, ConfirmDeleteDialog } = useConfirmDelete();
 
   useEffect(() => {
-    nominaApi.conceptos
-      .listar()
+    cached('config:conceptos-nomina', () => nominaApi.conceptos.listar())
       .then((res) => setConceptos(res.data))
       .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar los conceptos'))
       .finally(() => setLoading(false));

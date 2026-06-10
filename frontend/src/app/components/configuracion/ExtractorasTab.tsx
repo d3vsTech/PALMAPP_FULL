@@ -6,6 +6,7 @@
  * `/configuracion/extractoras/editar/:id` — ver [NuevaExtractora.tsx].
  */
 import { useEffect, useState } from 'react';
+import { cached } from '../../../api/cache';
 import { useNavigate } from 'react-router';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
@@ -23,8 +24,7 @@ export function ExtractorasTab() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    extractorasApi
-      .listar({ per_page: 100 })
+    cached('config:extractoras', () => extractorasApi.listar({ per_page: 100 }))
       .then((res) => setExtractoras(res.data))
       .catch((e: any) => toast.error(e?.message ?? 'No se pudieron cargar las extractoras'))
       .finally(() => setLoading(false));

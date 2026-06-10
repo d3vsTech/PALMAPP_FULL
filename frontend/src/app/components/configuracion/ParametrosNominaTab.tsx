@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { cached } from '../../../api/cache';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
@@ -74,7 +75,7 @@ export function ParametrosNominaTab() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    configuracionApi.configuracionNomina.obtener()
+    cached('config:parametros-nomina', () => configuracionApi.configuracionNomina.obtener())
       .then((res) => setParametros(apiToForm(res.data)))
       .catch((e: any) => {
         toast.error(e?.message ?? 'No se pudieron cargar los parámetros de nómina');

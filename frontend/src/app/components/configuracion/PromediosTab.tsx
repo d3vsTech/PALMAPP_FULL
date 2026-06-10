@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { cached, invalidate } from '../../../api/cache';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import {
@@ -49,10 +50,10 @@ export function PromediosTab() {
 
   const cargar = (anio: number) => {
     setLoading(true);
-    Promise.all([
+    cached(`config:promedios:${anio}`, () => Promise.all([
       configuracionApi.promediosLote.listar({ anio, per_page: 100 }),
       lotesApi.listar({ per_page: 100 }),
-    ])
+    ]))
       .then(([resPromedios, resLotes]) => {
         setPromedios(resPromedios.data as PromedioRow[]);
         setLotes(resLotes.data.map((l: any) => ({ id: l.id, nombre: l.nombre })));
@@ -107,6 +108,7 @@ export function PromediosTab() {
     try {
       await Promise.all(tareas);
       toast.success('Promedios guardados');
+      invalidate(`config:promedios:${anioSeleccionado}`);
       cargar(anioSeleccionado);
     } catch (e: any) {
       toast.error(e?.message ?? 'No se pudieron guardar los cambios');

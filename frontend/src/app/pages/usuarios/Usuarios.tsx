@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { usuariosApi, type UsuarioTenant, type ResumenUsuarios } from '../../../api/usuarios';
@@ -24,6 +24,7 @@ export default function Usuarios() {
   const [busqueda, setBusqueda] = useState('');
   const [loading, setLoading] = useState(true);
   const [alertDialog, setAlertDialog] = useState(false);
+  const searchMounted = useRef(false);
   const [usuarioToggle, setUsuarioToggle] = useState<{ id: number; nombre: string; accion: 'activar' | 'desactivar' | 'eliminar'; onConfirm: () => Promise<void> } | null>(null);
 
   const cargar = useCallback(async (search?: string) => {
@@ -42,6 +43,7 @@ export default function Usuarios() {
 
   useEffect(() => { cargar(); }, [cargar]);
   useEffect(() => {
+    if (!searchMounted.current) { searchMounted.current = true; return; }
     const t = setTimeout(() => cargar(busqueda), 300);
     return () => clearTimeout(t);
   }, [busqueda, cargar]);

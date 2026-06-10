@@ -3,7 +3,7 @@
  * §1.1 GET /predios → lotes_count, palmas_count, hectareas_totales
  * §1.5 DELETE /predios/{id} → recursivo
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
@@ -30,6 +30,7 @@ export default function MiPlantacion() {
   const [elimId, setElimId]     = useState<number | null>(null);
   const [elimOpen, setElimOpen] = useState(false);
   const [eliminando, setEliminando] = useState(false);
+  const searchMounted = useRef(false);
 
   const cargar = useCallback(async (q?: string) => {
     setLoading(true);
@@ -62,6 +63,7 @@ export default function MiPlantacion() {
   useEffect(() => { cargar(); }, [cargar]);
 
   useEffect(() => {
+    if (!searchMounted.current) { searchMounted.current = true; return; }
     const t = setTimeout(() => cargar(search), 350);
     return () => clearTimeout(t);
   }, [search, cargar]);

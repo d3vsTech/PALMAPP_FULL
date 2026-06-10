@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { cached } from '../../../api/cache';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -85,11 +86,9 @@ export function TransporteTab() {
   useEffect(() => {
     // Cargo empresas + conductores en paralelo; loading se apaga cuando ambos terminen.
     Promise.allSettled([
-      empresasTransportadorasApi
-        .listar({ per_page: 100, with_transportadores_count: true })
+      cached('config:transporte-empresas', () => empresasTransportadorasApi.listar({ per_page: 100, with_transportadores_count: true }))
         .then((res) => setEmpresas(res.data as EmpresaConContador[])),
-      transportadoresApi
-        .listar({ per_page: 100 })
+      cached('config:transporte-conductores', () => transportadoresApi.listar({ per_page: 100 }))
         .then((res) => setConductores(res.data)),
     ]).finally(() => setLoading(false));
   }, []);
