@@ -61,13 +61,30 @@ export const getMunicipios = (codigo: string) =>
 // §1. PREDIOS
 // ──────────────────────────────────────────────────────────────────────────────
 
-/** §1.1 GET /predios — respuesta paginada, incluye lotes_count y palmas_count */
-/** §1.2 GET /predios/{id} — incluye lotes[] con sublotes_count */
-/** §1.3 POST /predios — campos: nombre*, ubicacion*, latitud?, longitud?, hectareas_totales? */
-/** §1.4 PUT /predios/{id} — todos opcionales + estado? */
-/** §1.5 DELETE /predios/{id} — recursivo: elimina lotes + sublotes + palmas */
-/** §1.6 GET /predios/{id}/resumen — jerarquía completa para panel wizard */
-/** §1.7 GET /predios/{id}/wizard-init — bundle predio + lotes + sublotes + lineas + paramétricas */
+/** §1.1   GET /predios — respuesta paginada, incluye lotes_count y palmas_count */
+/** §1.1.1 GET /predios/totales — totales globales del tenant (cache 60s backend) */
+/** §1.2   GET /predios/{id} — incluye lotes[] con sublotes_count */
+/** §1.3   POST /predios — campos: nombre*, ubicacion*, latitud?, longitud?, hectareas_totales? */
+/** §1.4   PUT /predios/{id} — todos opcionales + estado? */
+/** §1.5   DELETE /predios/{id} — recursivo: elimina lotes + sublotes + palmas */
+/** §1.6   GET /predios/{id}/resumen — jerarquía completa para panel wizard */
+/** §1.7   GET /predios/{id}/wizard-init — bundle predio + lotes + sublotes + lineas + paramétricas */
+
+/**
+ * Totales globales del tenant — alimenta las tarjetas "Hectáreas / Lotes / Palmas"
+ * del index `/plantacion`. Reemplaza el N+1 anterior que llamaba a
+ * `/predios/{id}/resumen` por cada predio.
+ *
+ * Backend cachea 60s por tenant; se invalida automáticamente tras cualquier
+ * mutación de predio, lote, sublote o palma (incluye jobs async de palmas).
+ */
+export interface PrediosTotales {
+  predios_count: number;
+  lotes_count: number;
+  palmas_count: number;
+  /** Decimal serializado, p.ej. "1105.00". Casteable a Number en el render. */
+  hectareas_totales: string;
+}
 export interface PredioWizardLote {
   id: number;
   nombre: string;
@@ -106,6 +123,11 @@ export interface PredioWizardInitResponse {
 export const prediosApi = {
   listar: (p?: { search?: string; estado?: boolean; per_page?: number; page?: number }) =>
     get<{ data: any[]; meta: any }>('/predios', p as any),
+
+  /** §1.1.1 Totales globales del tenant. Endpoint liviano para las tarjetas
+   *  de resumen del index. Usar **junto** a `listar` (no lo reemplaza). */
+  totales: () =>
+    get<{ data: PrediosTotales }>('/predios/totales'),
 
   ver: (id: number) =>
     get<{ data: any }>(`/predios/${id}`),

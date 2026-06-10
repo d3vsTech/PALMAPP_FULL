@@ -1,7 +1,8 @@
 /**
  * MiPlantacion.tsx
- * §1.1 GET /predios → lotes_count, palmas_count, hectareas_totales
- * §1.5 DELETE /predios/{id} → recursivo
+ * §1.1   GET /predios            → listado paginado con lotes_count/palmas_count por predio
+ * §1.1.1 GET /predios/totales    → totales globales del tenant (cache 60s)
+ * §1.5   DELETE /predios/{id}    → recursivo
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router';
@@ -19,12 +20,13 @@ import {
   AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
 import { Plus, MapPin, Edit, Trash2, Search, Loader2 } from 'lucide-react';
-import { prediosApi } from '../../../api/plantacion';
+import { prediosApi, type PrediosTotales } from '../../../api/plantacion';
 import { toast } from 'sonner';
 
 export default function MiPlantacion() {
   const navigate = useNavigate();
   const [predios, setPredios]   = useState<any[]>([]);
+  const [totales, setTotales]   = useState<PrediosTotales | null>(null);
   const [loading, setLoading]   = useState(true);
   const [search, setSearch]     = useState('');
   const [elimId, setElimId]     = useState<number | null>(null);
@@ -35,26 +37,15 @@ export default function MiPlantacion() {
   const cargar = useCallback(async (q?: string) => {
     setLoading(true);
     try {
-      const res = await prediosApi.listar({ search: q?.trim() || undefined, per_page: 50 });
-      const lista = res.data ?? [];
-      // El listado a veces reporta `palmas_count` desincronizado (sobre todo tras
-      // creaciones async de >5000 palmas). Enriquecemos con el resumen real de
-      // cada predio (endpoint cacheado en backend a 60s, barato).
-      setPredios(lista);
-
-      const enriquecidos = await Promise.all(
-        lista.map(async (p: any) => {
-          try {
-            const r = await prediosApi.resumen(p.id);
-            const totalPalmas = Number(r.data?.totales_generales?.palmas ?? p.palmas_count ?? 0);
-            const totalLotes  = Number(r.data?.totales_generales?.lotes   ?? p.lotes_count  ?? 0);
-            return { ...p, palmas_count: totalPalmas, lotes_count: totalLotes };
-          } catch {
-            return p;
-          }
-        }),
-      );
-      setPredios(enriquecidos);
+      // §1.1 + §1.1.1 en paralelo. El bundle anterior hacía 1 + N requests
+      // (uno por predio vía `/resumen`); ahora son 2 fijos. El backend cachea
+      // ambos 60s e invalida con cualquier mutación de la jerarquía.
+      const [resLista, resTot] = await Promise.all([
+        prediosApi.listar({ search: q?.trim() || undefined, per_page: 50 }),
+        prediosApi.totales().catch(() => null), // totales no es crítico para el listado
+      ]);
+      setPredios(resLista.data ?? []);
+      if (resTot?.data) setTotales(resTot.data);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al cargar predios');
     } finally { setLoading(false); }
@@ -101,9 +92,12 @@ export default function MiPlantacion() {
     }
   };
 
-  const totalHa     = predios.reduce((s, p) => s + Number(p.hectareas_totales ?? 0), 0);
-  const totalLotes  = predios.reduce((s, p) => s + Number(p.lotes_count ?? 0), 0);
-  const totalPalmas = predios.reduce((s, p) => s + Number(p.palmas_count ?? 0), 0);
+  // KPIs globales: priorizamos el endpoint `/predios/totales` (datos exactos
+  // del tenant completo); si todavía no llegó, sumamos lo que tengamos del
+  // listado actual como fallback inmediato.
+  const totalHa     = totales ? Number(totales.hectareas_totales) : predios.reduce((s, p) => s + Number(p.hectareas_totales ?? 0), 0);
+  const totalLotes  = totales ? totales.lotes_count                : predios.reduce((s, p) => s + Number(p.lotes_count ?? 0), 0);
+  const totalPalmas = totales ? totales.palmas_count               : predios.reduce((s, p) => s + Number(p.palmas_count ?? 0), 0);
 
   return (
     <div className="space-y-6">
