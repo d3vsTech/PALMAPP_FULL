@@ -512,23 +512,46 @@ Genera el PDF y lo guarda en `storage/app/public/tenants/{tenant_id}/desprendibl
 
 ### 6.1 Listar
 
-`GET /nomina-conceptos` — query params: `tipo` (filtrar por DEDUCCION_LEGAL, DEDUCCION_VOLUNTARIA, BONIFICACION_FIJA, BONIFICACION_VARIABLE), `activo` (true/false).
+`GET /nomina-conceptos` — query params: `tipo` (filtrar por APORTE_LEGAL, DEDUCCION_LEGAL, DEDUCCION_VOLUNTARIA, BONIFICACION_FIJA, BONIFICACION_VARIABLE), `activo` (true/false).
+
+Cada concepto incluye los porcentajes y la vigencia directamente:
+
+```json
+{
+  "data": [
+    {
+      "id": 1, "codigo": "SALUD", "nombre": "Salud",
+      "tipo": "APORTE_LEGAL", "subtipo": "SALUD",
+      "operacion": "RESTA", "calculo": "PORCENTAJE",
+      "valor_referencia": "4.0000", "base_calculo": "TOTAL_DEVENGADO",
+      "aplica_a": "AMBOS", "es_obligatorio": true, "activo": true,
+      "porcentaje_empleado": "4.00", "porcentaje_empresa": "8.50",
+      "vigente_desde": "2022-12-31", "vigente_hasta": null,
+      "afecta_salario_minimo": false, "tipo_remuneracion": "REMUNERADO"
+    }
+  ]
+}
+```
+
+> **Tipo `APORTE_LEGAL`** (nuevo) representa conceptos con aporte de empleado **y** empresa: SALUD, PENSION, ARL. Usa los dos porcentajes. `DEDUCCION_LEGAL` queda reservado para descuentos solo al empleado (FSP, RETEFUENTE, EMBARGO).
 
 ### 6.2 Select para el editor de liquidación
 
 `GET /nomina-conceptos/select?tipo=DEDUCCION_VOLUNTARIA&aplica_a=FIJO`
 
-Devuelve solo conceptos `activo=true`, livianos para dropdown:
+Devuelve solo conceptos `activo=true`, livianos para dropdown (incluye `porcentaje_empleado`/`porcentaje_empresa` para que la UI pueda mostrar el porcentaje aplicable como hint):
 
 ```json
 {
   "data": [
     { "id": 17, "codigo": "DCTO_ADELANTO", "nombre": "Descuento Adelantos / Préstamo",
       "tipo": "DEDUCCION_VOLUNTARIA", "subtipo": "PRESTAMO", "operacion": "RESTA",
-      "calculo": "VALOR_FIJO", "aplica_a": "AMBOS" },
+      "calculo": "VALOR_FIJO", "aplica_a": "AMBOS",
+      "porcentaje_empleado": null, "porcentaje_empresa": null },
     { "id": 18, "codigo": "AHORRO", "nombre": "Ahorro Voluntario",
       "tipo": "DEDUCCION_VOLUNTARIA", "subtipo": "AHORRO_VOLUNTARIO", "operacion": "RESTA",
-      "calculo": "VALOR_FIJO", "aplica_a": "AMBOS" }
+      "calculo": "VALOR_FIJO", "aplica_a": "AMBOS",
+      "porcentaje_empleado": null, "porcentaje_empresa": null }
   ]
 }
 ```
@@ -539,26 +562,60 @@ Devuelve solo conceptos `activo=true`, livianos para dropdown:
 
 `POST /nomina-conceptos`, `PUT /nomina-conceptos/{id}`, `DELETE /nomina-conceptos/{id}` — requieren `nomina-conceptos.gestionar`. La eliminación se bloquea si el concepto está en uso (`CONCEPTO_EN_USO`) o es obligatorio (`CONCEPTO_OBLIGATORIO`).
 
+**Request (`POST` — ejemplo de un nuevo aporte legal):**
+```json
+{
+  "codigo": "PARAFISCAL",
+  "nombre": "Parafiscal SENA/ICBF",
+  "tipo": "APORTE_LEGAL",
+  "subtipo": "OTRO",
+  "operacion": "RESTA",
+  "calculo": "PORCENTAJE",
+  "base_calculo": "TOTAL_DEVENGADO",
+  "aplica_a": "AMBOS",
+  "porcentaje_empleado": 0,
+  "porcentaje_empresa": 9,
+  "vigente_desde": "01/01/2026",
+  "vigente_hasta": null,
+  "afecta_salario_minimo": false,
+  "tipo_remuneracion": "REMUNERADO"
+}
+```
+
+> `vigente_desde` / `vigente_hasta` aceptan tanto `dd/mm/yyyy` como `yyyy-mm-dd`. El FormRequest normaliza el formato `d/m/Y` a `Y-m-d` en `prepareForValidation()`.
+
+**Reglas condicionales:**
+- Si `tipo ∈ {APORTE_LEGAL, DEDUCCION_LEGAL}` **y** `calculo = PORCENTAJE`, entonces `porcentaje_empleado` y `vigente_desde` son requeridos.
+- `porcentaje_empleado` y `porcentaje_empresa` aceptan rango 0–100.
+- `vigente_hasta` debe ser ≥ `vigente_desde` cuando se envía.
+
+> La validación vive en `StoreNominaConceptoRequest` y `UpdateNominaConceptoRequest` (FormRequests). El `authorize()` valida el permiso `nomina-conceptos.gestionar` — un usuario sin él recibe 403 antes de cualquier consulta.
+>
+> **Campos editables vía PUT** (los demás son inmutables tras crear): `nombre`, `valor_referencia`, `base_calculo`, `aplica_a`, `es_obligatorio`, `activo`, `porcentaje_empleado`, `porcentaje_empresa`, `vigente_desde`, `vigente_hasta`, `afecta_salario_minimo`, `tipo_remuneracion`. `codigo`, `tipo`, `subtipo`, `operacion` y `calculo` solo se pueden definir al crear — para cambiarlos hay que eliminar el concepto y crear uno nuevo.
+
 ### 6.4 Catálogo sembrado por defecto
 
-`NominaConceptoSeeder` crea **23 conceptos por tenant**, idempotente con `updateOrCreate(tenant_id, codigo)`.
+`NominaConceptoSeeder` crea **24 conceptos por tenant**, idempotente con `updateOrCreate(tenant_id, codigo)`.
 
-**Activos automáticos (8)** — los aplica el motor sin intervención:
+Cuando se crea un tenant nuevo vía `POST /api/admin/tenants`, el controlador llama a `NominaConceptoSeeder::sembrarParaTenant($tenant, soloActivos: true)` — eso siembra **solo los 9 conceptos activos** (SALUD, PENSION, ARL, FSP_1..FSP_6). El resto del catálogo (plantilla inactiva) se aprovisiona vía `migrate:fresh --seed` para tenants existentes, o el admin los crea bajo demanda.
 
-| Código | Nombre | Tipo | % | Notas |
-|---|---|---|---|---|
-| `SALUD` | Descuento Salud | DEDUCCION_LEGAL | 4% | Obligatorio |
-| `PENSION` | Descuento Pensión | DEDUCCION_LEGAL | 4% | Obligatorio |
-| `FSP_1` | FSP (>4 SMLV) | DEDUCCION_LEGAL | 1.0% | Solo si IBC > 4 SMLV |
-| `FSP_2` | FSP (>16 SMLV) | DEDUCCION_LEGAL | 1.2% | Solo si IBC > 16 SMLV |
-| `FSP_3` | FSP (>17 SMLV) | DEDUCCION_LEGAL | 1.4% | Solo si IBC > 17 SMLV |
-| `FSP_4` | FSP (>18 SMLV) | DEDUCCION_LEGAL | 1.6% | Solo si IBC > 18 SMLV |
-| `FSP_5` | FSP (>19 SMLV) | DEDUCCION_LEGAL | 1.8% | Solo si IBC > 19 SMLV |
-| `FSP_6` | FSP (>20 SMLV) | DEDUCCION_LEGAL | 2.0% | Solo si IBC > 20 SMLV |
+**Activos automáticos (9)** — los aplica el motor sin intervención y se siembran al crear cada tenant:
+
+| Código | Nombre | Tipo | % empleado | % empresa | Notas |
+|---|---|---|---|---|---|
+| `SALUD` | Salud | APORTE_LEGAL | 4% | 8.5% | Obligatorio |
+| `PENSION` | Pensión | APORTE_LEGAL | 4% | 12% | Obligatorio |
+| `ARL` | ARL | APORTE_LEGAL | 0% | 0.522% | Riesgo I (típico — el tenant ajusta según clasificación) |
+| `FSP_1` | FSP (>4 SMLV) | DEDUCCION_LEGAL | 1.0% | 0% | Solo si IBC > 4 SMLV |
+| `FSP_2` | FSP (>16 SMLV) | DEDUCCION_LEGAL | 1.2% | 0% | Solo si IBC > 16 SMLV |
+| `FSP_3` | FSP (>17 SMLV) | DEDUCCION_LEGAL | 1.4% | 0% | Solo si IBC > 17 SMLV |
+| `FSP_4` | FSP (>18 SMLV) | DEDUCCION_LEGAL | 1.6% | 0% | Solo si IBC > 18 SMLV |
+| `FSP_5` | FSP (>19 SMLV) | DEDUCCION_LEGAL | 1.8% | 0% | Solo si IBC > 19 SMLV |
+| `FSP_6` | FSP (>20 SMLV) | DEDUCCION_LEGAL | 2.0% | 0% | Solo si IBC > 20 SMLV |
 
 > Los 6 niveles del Fondo de Solidaridad Pensional (Ley 100/1993 art. 27, modif. Ley 797/2003) se siembran activos pero el motor aplica **uno solo**, según el tramo del IBC mensualizado.
 
-**Plantilla precargada (15)** — `activo=false` por defecto; el admin las activa y configura el `valor_referencia`. Tres de ellas (`DCTO_ADELANTO`, `AHORRO`, `BONIFICACION`) vienen `activo=true` porque la UI las usa directamente.
+**Plantilla precargada (15)** — `activo=false` por defecto, sin porcentajes/vigencia cargados; el admin las activa y configura desde Configuración → Nómina. Tres de ellas (`DCTO_ADELANTO`, `AHORRO`, `BONIFICACION`) vienen `activo=true` porque la UI las usa directamente.
 
 | Código | Tipo | Subtipo |
 |---|---|---|
@@ -636,9 +693,9 @@ salud   = ibc × (porcentaje_salud   / 100)
 pension = ibc × (porcentaje_pension / 100)
 ```
 
-**Origen del porcentaje:** el motor consulta `NominaTablaLegal` vigente en `fecha_fin` de la nómina para cada concepto (SALUD / PENSION). Si el tenant no tiene ninguna tabla configurada para ese concepto, usa `NominaConcepto.valor_referencia` como fallback (típicamente 4% sembrado por `NominaConceptoSeeder`).
+**Origen del porcentaje:** el motor lee `nomina_concepto.porcentaje_empleado` directamente. Si la columna está NULL (concepto recién creado sin porcentaje, o de tipo VALOR_FIJO), cae a `nomina_concepto.valor_referencia` como fallback (típicamente 4% para SALUD/PENSION sembrado por `NominaConceptoSeeder`).
 
-> **Configura las tablas legales en** `PUT /configuracion/tablas-legales` (ver [API_PARAMETRICAS.md §15](./API_PARAMETRICAS.md)). Mientras no haya ningún registro vigente, el fallback garantiza que el cálculo funcione con el porcentaje del seeder.
+> **Configura los porcentajes y la vigencia** vía `PUT /nomina-conceptos/{id}` (campos `porcentaje_empleado`, `porcentaje_empresa`, `vigente_desde`, `vigente_hasta` — ver §6 de este doc). Mientras el porcentaje esté NULL el cálculo cae al `valor_referencia` sembrado y la nómina sigue funcionando.
 
 ### 7.5 Fondo de Solidaridad Pensional (FSP)
 
@@ -814,3 +871,27 @@ curl "$BASE/nominas/indicadores" "${H[@]}"
 - Horas extras (los 7 códigos legales colombianos, fórmula de `valor_calculado` con snapshot): [docs/API_HORAS_EXTRA.md](./API_HORAS_EXTRA.md).
 - Cómo se generan los jornales y cosechas que alimentan la base VARIABLE: [docs/API_OPERACIONES.md](./API_OPERACIONES.md).
 - Modelo de datos del módulo (qué tablas, qué FKs, snapshots): [docs/CONTEXTO.md §6.6, §6.9, §6.13](./CONTEXTO.md).
+
+---
+
+## 13. Pantalla "Configuración → Nómina" (índice cruzado)
+
+El frontend agrupa **7 sub-secciones** bajo una sola pantalla `Configuración → Nómina`. Todas reutilizan endpoints ya existentes — no hay un endpoint "raíz" propio del sub-módulo.
+
+| # | Sección del mockup | Endpoint(s) | Doc |
+|---|---|---|---|
+| 1 | Periodicidad de la Nómina + Fechas de Corte | `GET/PUT /configuracion/nomina` (`tipo_pago_nomina`) | [API_PARAMETRICAS §8](./API_PARAMETRICAS.md) |
+| 2 | Jornada Laboral Semanal (48h derivado de `divisor_jornada_mensual / 5`) | `GET/PUT /configuracion/nomina` (`divisor_jornada_mensual`) | [API_PARAMETRICAS §8](./API_PARAMETRICAS.md) |
+| 3 | Precios de Cosecha (lote × año × $/kg) | `GET/POST/PUT/DELETE /precios-cosecha` | [API_PARAMETRICAS §9](./API_PARAMETRICAS.md) |
+| 4 | Rangos de Abonada (gramos × $/palma) | `GET/POST/PUT/DELETE /precios-abono` | [API_PARAMETRICAS §3](./API_PARAMETRICAS.md) |
+| 5 | Labores de Palma (Cosecha / Plateo / Poda / Fertilización / Sanidad fijas + custom) y Labores de Finca (custom). Cada labor con `tipo_pago` y `precio_palma` | `GET/POST/PUT/DELETE /labores`, `GET /labores/select?categoria=...` | [API_PARAMETRICAS §4](./API_PARAMETRICAS.md) |
+| 6 | Conceptos de Nómina (deducciones + bonificaciones) | `GET/POST/PUT/DELETE /nomina-conceptos` | §6 de este doc |
+| 7 | Tipos de Horas Extras | `GET/POST/PUT/DELETE /tipos-hora-extra` | [API_PARAMETRICAS §11](./API_PARAMETRICAS.md) |
+| 8 | Tipos de Novedades (motivos de ausencia, con `color`) | `GET/POST/PUT/DELETE /motivos-ausencia` | [API_AUSENCIAS §1](./API_AUSENCIAS.md) |
+
+### Notas para el frontend
+
+- **"Control de Plagas" = `SANIDAD`** — es solo el label que el mockup pone sobre el `tipo` del backend. Las 5 labores fijas (COSECHA, PLATEO, PODA, FERTILIZACION, SANIDAD) son inmutables en estructura: solo se editan `tipo_pago`, `precio_palma` y `estado` vía `PUT /labores/{id}`. No se borran ni se renombran. Las labores **custom de palma o de finca** sí se crean / editan / eliminan libremente con el mismo endpoint `/labores`.
+- **Jornada Laboral Semanal**: input del mockup = `divisor / 5`. Al guardar, frontend envía `divisor_jornada_mensual` (48h → 240, 42h → 210).
+- **Fechas de Corte de quincena**: configurables vía `PUT /configuracion/nomina` (campos `dia_inicio_q1`, `dia_fin_q1`, `dia_inicio_q2`, `dia_fin_q2`). Defaults `1/15/16/31`. El motor `Nomina::calcularRangoFechas` los lee al crear cada nómina nueva. **Las nóminas ya creadas conservan su rango original** (no se recalculan). Si los días se solapan, el endpoint devuelve `422 CORTE_QUINCENA_INVALIDO`.
+- **Permisos**: todos los endpoints del sub-módulo requieren `configuracion.editar`, excepto el CRUD de Conceptos de Nómina que requiere `nomina-conceptos.gestionar`.

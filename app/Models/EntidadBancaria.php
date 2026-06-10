@@ -12,7 +12,7 @@ class EntidadBancaria extends Model
 
     protected $table = 'entidades_bancarias';
 
-    protected $fillable = ['tenant_id', 'nombre', 'estado'];
+    protected $fillable = ['tenant_id', 'nombre', 'codigo', 'contacto', 'estado'];
 
     protected function casts(): array
     {

@@ -1,6 +1,6 @@
 # API — Horas Extras
 
-> Documentación dedicada del módulo de **Horas Extras** y su catálogo paramétrico **Tipos de Hora Extra**. Las horas extras se registran desde la planilla diaria (Paso 4 del wizard) y afectan la nómina del período. Los porcentajes siguen el **Código Sustantivo del Trabajo colombiano** (arts. 168, 179) y la **Ley 789 de 2002** (art. 26).
+> Documentación dedicada del módulo de **Horas Extras** y su catálogo paramétrico **Tipos de Hora Extra**. Las horas extras se registran desde la planilla diaria (Paso 4 del wizard) y afectan la nómina del período. Los porcentajes siguen el **Código Sustantivo del Trabajo colombiano** (arts. 168, 179), la **Ley 789 de 2002** (art. 26) y la **Ley 2466 de 2025** (recargo dominical 75% → 90%, vigente desde su promulgación).
 
 ---
 
@@ -57,14 +57,18 @@ Catálogo paramétrico por tenant. Contiene los 7 tipos de hora extra reconocido
 | `HED`  | Hora Extra Diurna (6am-9pm) | **25%** | CST art. 168 |
 | `HEN`  | Hora Extra Nocturna (9pm-6am) | **75%** | CST art. 168 |
 | `RN`   | Recargo Nocturno (solo recargo) | **35%** | CST art. 168 |
-| `HRD`  | Hora Ordinaria Dominical/Festivo | **75%** | Ley 789/2002 art. 26 |
-| `HEDF` | Hora Extra Diurna Dominical/Festivo | **100%** | combinación (75+25) |
-| `HENF` | Hora Extra Nocturna Dominical/Festivo | **150%** | combinación (75+75) |
-| `RND`  | Recargo Nocturno Dominical/Festivo | **110%** | combinación (75+35) |
+| `HRD`  | Hora Ordinaria Dominical/Festivo | **90%** ¹ | Ley 2466/2025 |
+| `HEDF` | Hora Extra Diurna Dominical/Festivo | **115%** ¹ | combinación (90+25) |
+| `HENF` | Hora Extra Nocturna Dominical/Festivo | **165%** ¹ | combinación (90+75) |
+| `RND`  | Recargo Nocturno Dominical/Festivo | **125%** ¹ | combinación (90+35) |
+
+> ¹ **Ley 2466 de 2025** elevó el recargo dominical/festivo del 75% al **90%**. Los tipos compuestos se recalculan sobre la nueva base. HED, HEN y RN no cambian.
 
 `es_extra = false` en `RN` y `RND` porque son **recargos sobre jornada ordinaria**, no horas trabajadas por encima de la jornada. Por eso también tienen `paga_hora_completa = false`: el recargo se suma al salario base, pero la hora ordinaria ya está cubierta por el sueldo.
 
 ### 1.3 Endpoints del catálogo
+
+`GET /tipos-hora-extra/codigos` — lista estática de los 7 códigos legales (sin DB). Usado para poblar el selector de `codigo` en el modal "Nuevo Tipo de Hora Extra". Incluye `es_extra`, `paga_hora_completa` y `porcentaje_recargo` (porcentaje legal vigente según Ley 2466/2025) para pre-llenar automáticamente el formulario. Ver respuesta completa en [API_PARAMETRICAS.md §11](./API_PARAMETRICAS.md).
 
 `GET /tipos-hora-extra/select` — listado liviano para el dropdown del wizard.
 

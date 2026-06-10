@@ -18,6 +18,7 @@ class TenantConfig extends Model
         'moneda', 'zona_horaria', 'pais',
         'salario_minimo_vigente', 'auxilio_transporte',
         'divisor_jornada_mensual',
+        'dia_inicio_q1', 'dia_fin_q1', 'dia_inicio_q2', 'dia_fin_q2',
         'anio_vigente',
         'tasa_interes_cesantias',
         'fecha_limite_consignacion_cesantias',
@@ -47,6 +48,10 @@ class TenantConfig extends Model
             'salario_minimo_vigente'  => 'decimal:2',
             'auxilio_transporte'      => 'decimal:2',
             'divisor_jornada_mensual' => 'integer',
+            'dia_inicio_q1'           => 'integer',
+            'dia_fin_q1'              => 'integer',
+            'dia_inicio_q2'           => 'integer',
+            'dia_fin_q2'              => 'integer',
             'anio_vigente'            => 'integer',
             'tasa_interes_cesantias'  => 'decimal:2',
             'dias_vacaciones_anuales' => 'integer',
@@ -54,6 +59,11 @@ class TenantConfig extends Model
             'dias_mes_comercial'      => 'integer',
             'configuracion_extra'     => 'array',
         ];
+    }
+
+    public function getHorasSemanalesAttribute(): float
+    {
+        return ($this->divisor_jornada_mensual ?? 240) / 5;
     }
 
     public function tenant(): BelongsTo

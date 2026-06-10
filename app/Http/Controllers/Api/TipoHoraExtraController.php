@@ -17,6 +17,21 @@ class TipoHoraExtraController extends Controller
         protected AuditoriaService $auditoria,
     ) {}
 
+    public function codigos(): JsonResponse
+    {
+        $codigos = [
+            ['codigo' => TipoHoraExtra::CODIGO_HED,  'nombre' => 'Hora Extra Diurna',                     'descripcion' => '6:00 AM – 9:00 PM, días hábiles',        'es_extra' => true,  'paga_hora_completa' => true,  'porcentaje_recargo' => 25.00],
+            ['codigo' => TipoHoraExtra::CODIGO_HEN,  'nombre' => 'Hora Extra Nocturna',                   'descripcion' => '9:00 PM – 6:00 AM, días hábiles',        'es_extra' => true,  'paga_hora_completa' => true,  'porcentaje_recargo' => 75.00],
+            ['codigo' => TipoHoraExtra::CODIGO_RN,   'nombre' => 'Recargo Nocturno',                      'descripcion' => '9:00 PM – 6:00 AM (dentro de jornada)',  'es_extra' => false, 'paga_hora_completa' => false, 'porcentaje_recargo' => 35.00],
+            ['codigo' => TipoHoraExtra::CODIGO_HRD,  'nombre' => 'Hora Ordinaria Dominical/Festivo',      'descripcion' => 'Jornada ordinaria en domingo o festivo',  'es_extra' => false, 'paga_hora_completa' => true,  'porcentaje_recargo' => 90.00],
+            ['codigo' => TipoHoraExtra::CODIGO_HEDF, 'nombre' => 'Hora Extra Diurna Dominical/Festivo',   'descripcion' => '6:00 AM – 9:00 PM en domingo o festivo',  'es_extra' => true,  'paga_hora_completa' => true,  'porcentaje_recargo' => 115.00],
+            ['codigo' => TipoHoraExtra::CODIGO_HENF, 'nombre' => 'Hora Extra Nocturna Dominical/Festivo', 'descripcion' => '9:00 PM – 6:00 AM en domingo o festivo',  'es_extra' => true,  'paga_hora_completa' => true,  'porcentaje_recargo' => 165.00],
+            ['codigo' => TipoHoraExtra::CODIGO_RND,  'nombre' => 'Recargo Nocturno Dominical/Festivo',    'descripcion' => 'Jornada ordinaria nocturna en festivo',   'es_extra' => false, 'paga_hora_completa' => false, 'porcentaje_recargo' => 125.00],
+        ];
+
+        return response()->json(['data' => $codigos]);
+    }
+
     /**
      * Listado liviano para dropdowns (wizard Paso 4 - Horas Extras).
      * Incluye codigo + porcentaje + flags para ayuda contextual en la UI.
@@ -30,7 +45,7 @@ class TipoHoraExtraController extends Controller
                 ->when($soloActivos, fn($q) => $q->where('estado', true))
                 ->when(!$soloActivos && $request->has('estado'), fn($q) => $q->where('estado', false))
                 ->orderBy('codigo')
-                ->get(['id', 'codigo', 'nombre', 'porcentaje_recargo', 'franja_horaria', 'aplica_festivo', 'es_extra', 'paga_hora_completa']);
+                ->get(['id', 'codigo', 'nombre', 'porcentaje_recargo', 'franja_horaria', 'aplica_festivo', 'es_extra', 'paga_hora_completa', 'descripcion']);
 
             return response()->json(['data' => $tipos]);
         } catch (\Throwable $e) {

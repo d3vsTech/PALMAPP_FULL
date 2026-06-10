@@ -23,6 +23,13 @@ class StoreMotivoAusenciaRequest extends FormRequest
             'porcentaje_pago_default' => 'sometimes|numeric|min:0|max:100',
             'requiere_soporte'        => 'sometimes|boolean',
             'estado'                  => 'sometimes|boolean',
+            'color'                   => ['nullable', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'condicion'               => 'nullable|string|max:100',
+            'norma_legal'             => 'nullable|string|max:50',
+            'formula_calculo'         => 'nullable|string|max:200',
+            'afecta_seguridad_social' => 'sometimes|boolean',
+            'afecta_parafiscales'     => 'sometimes|boolean',
+            'afecta_prestaciones'     => 'sometimes|boolean',
         ];
     }
 

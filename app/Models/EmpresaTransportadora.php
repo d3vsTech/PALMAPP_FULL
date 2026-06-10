@@ -14,7 +14,7 @@ class EmpresaTransportadora extends Model
     protected $table = 'empresa_transportadora';
 
     protected $fillable = [
-        'tenant_id', 'razon_social', 'nit', 'telefono', 'direccion',
+        'tenant_id', 'razon_social', 'tipo_persona', 'nit', 'telefono', 'direccion',
         'ciudad', 'email', 'contacto_nombre', 'observaciones', 'estado',
     ];
 

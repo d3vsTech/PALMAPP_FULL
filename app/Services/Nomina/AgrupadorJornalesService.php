@@ -14,18 +14,27 @@ use Illuminate\Support\Carbon;
  * con sus subtotales, en el formato exacto que muestra la UI.
  *
  * Solo incluye operaciones APROBADAS (estado=APROBADA).
+ *
+ * Post-unificación de labores: el bucket "otros" agrupa los jornales de palma
+ * que no son de las 5 fijas (PLATEO, PODA, FERTILIZACION, SANIDAD), es decir
+ * los jornales con `categoria='PALMA' AND tipo IS NULL` (labores custom de palma).
  */
 class AgrupadorJornalesService
 {
     /**
+     * Clave interna usada para agrupar los jornales custom de palma (tipo NULL).
+     */
+    private const BUCKET_OTROS = 'OTROS';
+
+    /**
      * @return array{
-     *   cosecha:array{filas:array<int,array<string,mixed>>,subtotal_valor:float,subtotal_jornal:float,subtotal_racimos:int,subtotal_peso:float},
-     *   plateo:array{filas:array<int,array<string,mixed>>,subtotal_valor:float,subtotal_jornal:float,subtotal_palmas:int},
-     *   poda:array{filas:array<int,array<string,mixed>>,subtotal_valor:float,subtotal_jornal:float,subtotal_palmas:int},
-     *   fertilizacion:array{filas:array<int,array<string,mixed>>,subtotal_valor:float,subtotal_jornal:float,subtotal_palmas:int},
-     *   sanidad:array{filas:array<int,array<string,mixed>>,subtotal_jornal:float},
-     *   otros:array{filas:array<int,array<string,mixed>>,subtotal_jornal:float},
-     *   finca:array{filas:array<int,array<string,mixed>>,subtotal_jornal:float},
+     *   cosecha:array,
+     *   plateo:array,
+     *   poda:array,
+     *   fertilizacion:array,
+     *   sanidad:array,
+     *   otros:array,
+     *   finca:array,
      *   total_general:float
      * }
      */
@@ -40,7 +49,7 @@ class AgrupadorJornalesService
             + ($palmaPorTipo[Jornal::TIPO_PODA]['subtotal_jornal'] ?? 0)
             + ($palmaPorTipo[Jornal::TIPO_FERTILIZACION]['subtotal_jornal'] ?? 0)
             + ($palmaPorTipo[Jornal::TIPO_SANIDAD]['subtotal_jornal'] ?? 0)
-            + ($palmaPorTipo[Jornal::TIPO_OTROS]['subtotal_jornal'] ?? 0)
+            + ($palmaPorTipo[self::BUCKET_OTROS]['subtotal_jornal'] ?? 0)
             + $finca['subtotal_jornal'];
 
         return [
@@ -48,8 +57,8 @@ class AgrupadorJornalesService
             'plateo'        => $palmaPorTipo[Jornal::TIPO_PLATEO]        ?? $this->emptyPalma(),
             'poda'          => $palmaPorTipo[Jornal::TIPO_PODA]          ?? $this->emptyPalma(),
             'fertilizacion' => $palmaPorTipo[Jornal::TIPO_FERTILIZACION] ?? $this->emptyPalma(),
-            'sanidad'       => $palmaPorTipo[Jornal::TIPO_SANIDAD]       ?? $this->emptyDescripcion(),
-            'otros'         => $palmaPorTipo[Jornal::TIPO_OTROS]         ?? $this->emptyDescripcion(),
+            'sanidad'       => $palmaPorTipo[Jornal::TIPO_SANIDAD]       ?? $this->emptyMixto(),
+            'otros'         => $palmaPorTipo[self::BUCKET_OTROS]         ?? $this->emptyOtros(),
             'finca'         => $finca,
             'total_general' => round($totalGeneral, 2),
         ];
@@ -110,7 +119,9 @@ class AgrupadorJornalesService
     }
 
     /**
-     * Agrupa jornales de PALMA por tipo (PLATEO, PODA, FERTILIZACION, SANIDAD, OTROS).
+     * Agrupa jornales de PALMA por tipo:
+     *   - tipo IN (PLATEO, PODA, FERTILIZACION, SANIDAD): fijas del sistema.
+     *   - tipo IS NULL: labor custom de palma → bucket "OTROS".
      */
     private function agruparJornalesPalma(int $empleadoId, Carbon $inicio, Carbon $fin): array
     {
@@ -121,25 +132,27 @@ class AgrupadorJornalesService
                 $q->where('estado', Operacion::ESTADO_APROBADA)
                   ->whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()]);
             })
-            ->with(['operacion', 'lote', 'sublote', 'insumo'])
+            ->with(['operacion', 'lote', 'sublote', 'insumo', 'labor'])
             ->orderBy('id')
             ->get()
-            ->groupBy('tipo');
+            ->groupBy(fn($j) => $j->tipo ?? self::BUCKET_OTROS);
 
         $resultado = [];
         foreach ($jornales as $tipo => $items) {
-            if (in_array($tipo, [Jornal::TIPO_SANIDAD, Jornal::TIPO_OTROS], true)) {
-                $resultado[$tipo] = $this->mapearJornalesDescripcion($items);
-            } else {
-                $resultado[$tipo] = $this->mapearJornalesPalmas($items, $tipo);
-            }
+            $resultado[$tipo] = match (true) {
+                $tipo === Jornal::TIPO_FERTILIZACION                       => $this->mapearJornalesPalmas($items, $tipo),
+                in_array($tipo, [Jornal::TIPO_PLATEO, Jornal::TIPO_PODA]) => $this->mapearJornalesMixto($items, $tipo),
+                $tipo === Jornal::TIPO_SANIDAD                            => $this->mapearJornalesMixto($items, $tipo),
+                $tipo === self::BUCKET_OTROS                              => $this->mapearJornalesOtros($items),
+                default                                                    => $this->mapearJornalesOtros($items),
+            };
         }
 
         return $resultado;
     }
 
     /**
-     * Para PLATEO/PODA/FERTILIZACION: incluye cantidad_palmas, precio/palma, total.
+     * Para FERTILIZACION: siempre por palma (sin ambigüedad).
      */
     private function mapearJornalesPalmas($items, string $tipo): array
     {
@@ -183,29 +196,109 @@ class AgrupadorJornalesService
     }
 
     /**
-     * Para SANIDAD/OTROS: incluye descripción (sin cantidad_palmas).
+     * Para PLATEO/PODA/SANIDAD: tipo_pago puede ser POR_PALMA o JORNAL_FIJO.
+     * Heurística histórica: cantidad_palmas IS NOT NULL → fue calculado como POR_PALMA.
+     * Usa el valor guardado en el jornal (inmune a cambios de configuración posteriores).
      */
-    private function mapearJornalesDescripcion($items): array
+    private function mapearJornalesMixto($items, string $tipo): array
     {
         $filas = [];
         $subJornal = 0.0;
+        $subPalmas = 0;
 
         foreach ($items as $j) {
-            $valor = (float) ($j->valor_total ?? 0);
-            $filas[] = [
-                'fecha'          => $j->operacion?->fecha?->format('d/m/Y'),
-                'lote'           => $j->lote?->nombre,
-                'sublote'        => $j->sublote?->nombre,
-                'descripcion'    => $j->descripcion ?? $j->nombre_trabajo,
-                'nombre_trabajo' => $j->nombre_trabajo,
-                'jornal'         => $valor,
-            ];
+            $valor  = (float) ($j->valor_total ?? 0);
+            $palmas = $j->cantidad_palmas !== null ? (int) $j->cantidad_palmas : null;
+
+            if ($palmas !== null) {
+                // POR_PALMA
+                $fila = [
+                    'fecha'          => $j->operacion?->fecha?->format('d/m/Y'),
+                    'lote'           => $j->lote?->nombre,
+                    'sublote'        => $j->sublote?->nombre,
+                    'palmas'         => $palmas,
+                    'precio_palma'   => (float) ($j->valor_unitario ?? 0),
+                    'total_palmas'   => $valor,
+                    'jornal'         => $valor,
+                    'es_por_palma'   => true,
+                ];
+                $subPalmas += $palmas;
+            } else {
+                // JORNAL_FIJO
+                $fila = [
+                    'fecha'          => $j->operacion?->fecha?->format('d/m/Y'),
+                    'lote'           => $j->lote?->nombre,
+                    'sublote'        => $j->sublote?->nombre,
+                    'descripcion'    => $j->descripcion ?? $j->nombre_trabajo,
+                    'jornal'         => $valor,
+                    'es_por_palma'   => false,
+                ];
+                if ($tipo === Jornal::TIPO_SANIDAD) {
+                    $fila['nombre_trabajo'] = $j->nombre_trabajo;
+                }
+            }
+
+            $filas[]    = $fila;
             $subJornal += $valor;
         }
 
         return [
             'filas'           => $filas,
             'subtotal_jornal' => round($subJornal, 2),
+            'subtotal_palmas' => $subPalmas,
+        ];
+    }
+
+    /**
+     * Bucket OTROS: labor custom de palma (tipo IS NULL).
+     * El nombre de la labor se lee de $j->labor (no había antes "labor_palma").
+     */
+    private function mapearJornalesOtros($items): array
+    {
+        $filas = [];
+        $subJornal = 0.0;
+        $subPalmas = 0;
+
+        foreach ($items as $j) {
+            $valor  = (float) ($j->valor_total ?? 0);
+            $palmas = $j->cantidad_palmas !== null ? (int) $j->cantidad_palmas : null;
+            $nombreLabor = $j->labor?->nombre;
+
+            if ($palmas !== null) {
+                // POR_PALMA (catálogo custom o legado reconfigurado)
+                $fila = [
+                    'fecha'        => $j->operacion?->fecha?->format('d/m/Y'),
+                    'lote'         => $j->lote?->nombre,
+                    'sublote'      => $j->sublote?->nombre,
+                    'nombre'       => $nombreLabor ?? $j->nombre_trabajo,
+                    'palmas'       => $palmas,
+                    'precio_palma' => (float) ($j->valor_unitario ?? 0),
+                    'total_palmas' => $valor,
+                    'jornal'       => $valor,
+                    'es_por_palma' => true,
+                ];
+                $subPalmas += $palmas;
+            } else {
+                // JORNAL_FIJO
+                $fila = [
+                    'fecha'          => $j->operacion?->fecha?->format('d/m/Y'),
+                    'lote'           => $j->lote?->nombre,
+                    'sublote'        => $j->sublote?->nombre,
+                    'descripcion'    => $nombreLabor ?? $j->nombre_trabajo ?? $j->descripcion,
+                    'nombre_trabajo' => $j->nombre_trabajo,
+                    'jornal'         => $valor,
+                    'es_por_palma'   => false,
+                ];
+            }
+
+            $filas[]    = $fila;
+            $subJornal += $valor;
+        }
+
+        return [
+            'filas'           => $filas,
+            'subtotal_jornal' => round($subJornal, 2),
+            'subtotal_palmas' => $subPalmas,
         ];
     }
 
@@ -251,8 +344,21 @@ class AgrupadorJornalesService
         ];
     }
 
-    private function emptyDescripcion(): array
+    private function emptyMixto(): array
     {
-        return ['filas' => [], 'subtotal_jornal' => 0.0];
+        return [
+            'filas'           => [],
+            'subtotal_jornal' => 0.0,
+            'subtotal_palmas' => 0,
+        ];
+    }
+
+    private function emptyOtros(): array
+    {
+        return [
+            'filas'           => [],
+            'subtotal_jornal' => 0.0,
+            'subtotal_palmas' => 0,
+        ];
     }
 }

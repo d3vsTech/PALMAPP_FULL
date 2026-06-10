@@ -5,7 +5,6 @@ namespace App\Models;
 use App\Models\Traits\BelongsToTenant;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class NominaConcepto extends Model
 {
@@ -17,20 +16,23 @@ class NominaConcepto extends Model
         'tenant_id', 'nombre', 'codigo', 'tipo', 'subtipo',
         'operacion', 'calculo', 'valor_referencia', 'base_calculo',
         'aplica_a', 'es_obligatorio', 'activo',
+        'porcentaje_empleado', 'porcentaje_empresa',
+        'vigente_desde', 'vigente_hasta',
+        'afecta_salario_minimo', 'tipo_remuneracion',
     ];
 
     protected function casts(): array
     {
         return [
             'valor_referencia' => 'decimal:4',
+            'porcentaje_empleado' => 'decimal:2',
+            'porcentaje_empresa' => 'decimal:2',
+            'vigente_desde' => 'date',
+            'vigente_hasta' => 'date',
             'es_obligatorio' => 'boolean',
             'activo' => 'boolean',
+            'afecta_salario_minimo' => 'boolean',
         ];
-    }
-
-    public function tablaLegal(): HasMany
-    {
-        return $this->hasMany(NominaTablaLegal::class, 'concepto_id');
     }
 
     public function scopeActivos($query)

@@ -47,8 +47,11 @@ El tenant puede crear variantes custom ("Incapacidad EPS - Gripa común") todas 
 | `porcentaje_pago_default` | decimal(5,2) | No | default 0 |
 | `requiere_soporte` | boolean | No | default false (hint UI: si true, el wizard exige PDF para aprobar) |
 | `estado` | boolean | No | default true |
+| `color` | varchar(7) | Sí | Hex tipo `#3b82f6`. Usado por la UI para el punto de color del listado y del modal "Nuevo Tipo de Novedad". El seeder asigna un color por defecto a los 11 motivos base. |
 
 **Constraints:** `UNIQUE (tenant_id, nombre)`, `CHECK tipo_base IN (…)`, índice `(tenant_id, estado)`.
+
+**Validación de `color` (FormRequest):** regex `/^#[0-9a-fA-F]{6}$/`. Acepta `null` (sin color).
 
 ### 1.2 Endpoints
 

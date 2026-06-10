@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\PrecioAbono;
 use App\Services\AuditoriaService;
+use App\Support\WizardCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -66,6 +67,8 @@ class PrecioAbonoController extends Controller
             }
 
             $precio = PrecioAbono::create($validated);
+
+            WizardCache::forgetPreciosLaboresBundle((int) app('current_tenant_id'));
 
             $this->auditoria->registrarCreacion($request, 'PRECIOS_ABONO', $precio, "Se creó rango de precio: {$precio->gramos_min}g-{$precio->gramos_max}g → \${$precio->precio_palma}/palma");
 
@@ -130,6 +133,8 @@ class PrecioAbonoController extends Controller
             $datosAnteriores = $precioAbono->toArray();
             $precioAbono->update($validated);
 
+            WizardCache::forgetPreciosLaboresBundle((int) app('current_tenant_id'));
+
             $this->auditoria->registrarEdicion($request, 'PRECIOS_ABONO', $precioAbono, $datosAnteriores, "Se editó rango de precio: {$precioAbono->gramos_min}g-{$precioAbono->gramos_max}g");
 
             return response()->json([
@@ -150,6 +155,8 @@ class PrecioAbonoController extends Controller
     public function destroy(Request $request, PrecioAbono $precioAbono): JsonResponse
     {
         try {
+            WizardCache::forgetPreciosLaboresBundle((int) app('current_tenant_id'));
+
             $this->auditoria->registrarEliminacion($request, 'PRECIOS_ABONO', $precioAbono, "Se eliminó rango: {$precioAbono->gramos_min}g-{$precioAbono->gramos_max}g → \${$precioAbono->precio_palma}/palma");
             $precioAbono->delete();
 

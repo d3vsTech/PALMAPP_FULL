@@ -22,7 +22,7 @@ class Empleado extends Model
         'correo_electronico', 'telefono',
         'fecha_nacimiento', 'fecha_ingreso', 'fecha_retiro',
         'direccion', 'municipio', 'departamento',
-        'eps', 'fondo_pension', 'arl', 'caja_compensacion',
+        'eps', 'fondo_pension', 'fondo_cesantias', 'arl', 'caja_compensacion',
         'talla_camisa', 'talla_pantalon', 'talla_calzado',
         'tipo_cuenta', 'entidad_bancaria', 'numero_cuenta',
         'contacto_emergencia_nombre', 'contacto_emergencia_telefono',

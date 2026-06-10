@@ -26,7 +26,9 @@ class MotivoAusencia extends Model
     protected $fillable = [
         'tenant_id', 'nombre', 'tipo_base',
         'es_remunerada', 'afecta_nomina', 'porcentaje_pago_default',
-        'requiere_soporte', 'estado',
+        'requiere_soporte', 'estado', 'color',
+        'condicion', 'norma_legal', 'formula_calculo',
+        'afecta_seguridad_social', 'afecta_parafiscales', 'afecta_prestaciones',
     ];
 
     protected function casts(): array
@@ -37,6 +39,9 @@ class MotivoAusencia extends Model
             'requiere_soporte'        => 'boolean',
             'estado'                  => 'boolean',
             'porcentaje_pago_default' => 'decimal:2',
+            'afecta_seguridad_social' => 'boolean',
+            'afecta_parafiscales'     => 'boolean',
+            'afecta_prestaciones'     => 'boolean',
         ];
     }
 

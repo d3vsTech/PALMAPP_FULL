@@ -170,7 +170,7 @@ class OperacionController extends Controller
                 'cosechas.lote:id,nombre',
                 'cosechas.sublote:id,nombre',
                 'jornales.empleado:id,primer_nombre,primer_apellido,documento',
-                'jornales.labor:id,nombre,valor_base',
+                'jornales.labor:id,nombre,categoria,tipo,tipo_pago,precio_palma',
                 'jornales.lote:id,nombre',
                 'jornales.sublote:id,nombre',
                 'jornales.insumo:id,nombre',
@@ -314,17 +314,19 @@ class OperacionController extends Controller
                 'fertilizacion' => 0,
                 'sanidad'       => 0,
                 'otros'         => 0,
-                'auxiliares'    => 0,
+                'labores_finca' => 0,
             ];
 
             foreach ($conteoPorTipo as $row) {
                 if ($row->categoria === Jornal::CATEGORIA_FINCA) {
-                    $labores['auxiliares'] += $row->total;
+                    $labores['labores_finca'] += $row->total;
                     continue;
                 }
-                $key = strtolower($row->tipo ?? '');
+                // PALMA: tipo IS NULL → bucket "otros" (custom de palma);
+                // tipo = PLATEO/PODA/FERTILIZACION/SANIDAD → bucket homónimo.
+                $key = $row->tipo !== null ? strtolower($row->tipo) : 'otros';
                 if (array_key_exists($key, $labores)) {
-                    $labores[$key] = $row->total;
+                    $labores[$key] += $row->total;
                 }
             }
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Jornal\StoreJornalRequest;
 use App\Models\Jornal;
+use App\Models\Labor;
 use App\Models\Operacion;
 use App\Services\AuditoriaService;
 use App\Services\JornalCalculationService;
@@ -29,10 +30,10 @@ class JornalController extends Controller
                 ], 409);
             }
 
-            $data     = $request->validated();
-            $tenantId = app('current_tenant_id');
+            $data  = $request->validated();
+            $labor = $request->getLabor() ?? Labor::findOrFail($data['labor_id']);
 
-            $calc = $this->calcular($data, $tenantId);
+            $calc = $this->calcService->calcular($labor, $data);
 
             $jornal = Jornal::create(array_merge($data, [
                 'operacion_id'           => $operacion->id,
@@ -42,14 +43,24 @@ class JornalController extends Controller
                 'estado'                 => true,
             ]));
 
+            $etiqueta = $jornal->isPalma()
+                ? ($labor->tipo ?? 'OTROS')
+                : 'FINCA';
+
             $this->auditoria->registrarCreacion(
                 $request, 'JORNALES', $jornal,
-                "Se creó jornal {$jornal->categoria}" . ($jornal->tipo ? "/{$jornal->tipo}" : '') . " en planilla {$operacion->fecha->format('Y-m-d')}",
+                "Se creó jornal {$jornal->categoria}/{$etiqueta} ({$labor->nombre}) en planilla {$operacion->fecha->format('Y-m-d')}",
             );
 
             return response()->json([
                 'message' => 'Jornal creado correctamente',
-                'data'    => $jornal->load('empleado:id,primer_nombre,primer_apellido', 'labor:id,nombre', 'lote:id,nombre', 'sublote:id,nombre', 'insumo:id,nombre'),
+                'data'    => $jornal->load(
+                    'empleado:id,primer_nombre,primer_apellido',
+                    'labor:id,nombre,categoria,tipo,tipo_pago,precio_palma',
+                    'lote:id,nombre',
+                    'sublote:id,nombre',
+                    'insumo:id,nombre',
+                ),
             ], 201);
         } catch (\InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage(), 'code' => 'CALC_ERROR'], 422);
@@ -72,10 +83,10 @@ class JornalController extends Controller
             }
 
             $data            = $request->validated();
-            $tenantId        = app('current_tenant_id');
+            $labor           = $request->getLabor() ?? Labor::findOrFail($data['labor_id']);
             $datosAnteriores = $jornal->toArray();
 
-            $calc = $this->calcular($data, $tenantId);
+            $calc = $this->calcService->calcular($labor, $data);
 
             $jornal->update(array_merge($data, [
                 'valor_unitario'         => $calc['valor_unitario'],
@@ -90,7 +101,10 @@ class JornalController extends Controller
 
             return response()->json([
                 'message' => 'Jornal actualizado correctamente',
-                'data'    => $jornal->fresh()->load('empleado:id,primer_nombre,primer_apellido', 'labor:id,nombre'),
+                'data'    => $jornal->fresh()->load(
+                    'empleado:id,primer_nombre,primer_apellido',
+                    'labor:id,nombre,categoria,tipo,tipo_pago,precio_palma',
+                ),
             ]);
         } catch (\InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage(), 'code' => 'CALC_ERROR'], 422);
@@ -124,23 +138,5 @@ class JornalController extends Controller
             Log::error('Error al eliminar jornal: ' . $e->getMessage());
             return response()->json(['message' => 'Error al eliminar el jornal', 'error' => $e->getMessage()], 500);
         }
-    }
-
-    /**
-     * Invoca el servicio de cálculo según la categoría del jornal.
-     */
-    private function calcular(array $data, int $tenantId): array
-    {
-        if ($data['categoria'] === Jornal::CATEGORIA_PALMA) {
-            return $this->calcService->calcularPalma(
-                tipo:            $data['tipo'],
-                tenantId:        $tenantId,
-                cantidadPalmas:  $data['cantidad_palmas'] ?? null,
-                insumoId:        $data['insumo_id'] ?? null,
-                gramosPorPalma:  $data['gramos_por_palma'] ?? null,
-            );
-        }
-
-        return $this->calcService->calcularFinca($data['labor_id']);
     }
 }

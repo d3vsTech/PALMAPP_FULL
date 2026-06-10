@@ -70,6 +70,7 @@ En modo creación no hay colaborador que cargar; `data.colaborador` viene `null`
       "eps":                  [ { "id": 1, "nombre": "Sura" } ],
       "arl":                  [ { "id": 1, "nombre": "Positiva" } ],
       "fondos_pension":       [ { "id": 1, "nombre": "Porvenir" } ],
+      "fondos_cesantias":     [ { "id": 1, "nombre": "Porvenir" } ],
       "entidades_bancarias":  [ { "id": 1, "nombre": "Bancolombia" } ],
       "departamentos":        [ { "codigo": "68", "nombre": "Santander" } ],
       "documento_categorias": {
@@ -84,7 +85,7 @@ En modo creación no hay colaborador que cargar; `data.colaborador` viene `null`
 
 ### Notas para el frontend
 
-- **Reemplaza estas 8 peticiones individuales** (ver `consultas-editar-colaborador.md`): `predios?per_page=100`, `documento-categorias`, `eps/select`, `arl/select`, `fondos-pension/select`, `entidades-bancarias/select`, `auth/departamentos` y `colaboradores/{id}`.
+- **Reemplaza estas 9 peticiones individuales** (ver `consultas-editar-colaborador.md`): `predios?per_page=100`, `documento-categorias`, `eps/select`, `arl/select`, `fondos-pension/select`, `fondos-cesantias/select`, `entidades-bancarias/select`, `auth/departamentos` y `colaboradores/{id}`.
 - **NO incluye** municipios (se cargan condicionalmente cuando cambia el departamento) ni documentos del colaborador (se cargan al llegar al paso 7). Esos endpoints siguen igual.
 - Los selects de paramétricas pueden recibir valores legacy que ya no existen en el catálogo (ej. una EPS retirada). El frontend debe seguir el patrón actual: mostrar el valor pre-cargado aunque no esté en la lista.
 - El header `Cache-Control: private, max-age=0, must-revalidate` indica al navegador que NO cachee la respuesta — el caché vive en el servidor a nivel de paramétricas, no en el cliente, para no servir datos del colaborador desactualizados.
@@ -174,6 +175,7 @@ GET /api/v1/tenant/colaboradores
       "departamento": "Santander",
       "eps": "Sura",
       "fondo_pension": "Porvenir",
+      "fondo_cesantias": "Porvenir",
       "arl": "Sura",
       "caja_compensacion": "Cafam",
       "talla_camisa": "M",
@@ -248,6 +250,7 @@ GET /api/v1/tenant/colaboradores/{id}
     "departamento": "Santander",
     "eps": "Sura",
     "fondo_pension": "Porvenir",
+    "fondo_cesantias": "Porvenir",
     "arl": "Sura",
     "caja_compensacion": "Cafam",
     "talla_camisa": "M",
@@ -313,6 +316,7 @@ POST /api/v1/tenant/colaboradores
   "fecha_retiro": null,
   "eps": "Sura",
   "fondo_pension": "Porvenir",
+  "fondo_cesantias": "Porvenir",
   "arl": "Sura",
   "caja_compensacion": "Cafam",
   "talla_camisa": "M",
@@ -357,6 +361,7 @@ POST /api/v1/tenant/colaboradores
 | `fecha_retiro` | date | Debe ser >= fecha_ingreso |
 | `eps` | string | Máx. 50 |
 | `fondo_pension` | string | Máx. 50 |
+| `fondo_cesantias` | string | Máx. 50 |
 | `arl` | string | Máx. 50 |
 | `subsidio_transporte` | boolean | Default `true`. Indica si el colaborador recibe subsidio de transporte. |
 | `caja_compensacion` | string | Máx. 50 |
@@ -571,7 +576,7 @@ Invierte el estado actual del colaborador (activo ↔ inactivo).
 - `fecha_ingreso`, `fecha_retiro`
 
 ### Sección 5: Seguridad Social
-- `eps`, `arl`, `fondo_pension`, `caja_compensacion`
+- `eps`, `arl`, `fondo_pension`, `fondo_cesantias`, `caja_compensacion`
 
 ### Sección 6: Dotación
 - `talla_camisa`, `talla_pantalon`, `talla_calzado`
@@ -1127,7 +1132,7 @@ Elimina el registro y el archivo físico del servidor.
 
 ## Paramétricas del Colaborador (dropdowns del formulario)
 
-Estos endpoints alimentan los selectores de **EPS**, **fondo de pensión**, **ARL** y **entidad bancaria** del formulario de creación/edición de colaboradores. No forman parte del módulo de colaboradores en sí: la edición del catálogo se hace desde Configuración (permiso `configuracion.editar`). El colaborador guarda el **nombre** seleccionado, no el `id` — esto preserva el histórico aunque el catálogo cambie en el futuro.
+Estos endpoints alimentan los selectores de **EPS**, **fondo de pensión**, **fondo de cesantías**, **ARL** y **entidad bancaria** del formulario de creación/edición de colaboradores. No forman parte del módulo de colaboradores en sí: la edición del catálogo se hace desde Configuración (permiso `configuracion.editar`). El colaborador guarda el **nombre** seleccionado, no el `id` — esto preserva el histórico aunque el catálogo cambie en el futuro.
 
 ### Selects (lectura para dropdowns)
 
@@ -1135,6 +1140,7 @@ Estos endpoints alimentan los selectores de **EPS**, **fondo de pensión**, **AR
 |--------|------|---------|
 | GET | `/eps/select` | `configuracion.editar` o `colaboradores.{ver|crear|editar}` |
 | GET | `/fondos-pension/select` | idem |
+| GET | `/fondos-cesantias/select` | idem |
 | GET | `/arl/select` | idem |
 | GET | `/entidades-bancarias/select` | idem |
 
@@ -1159,6 +1165,7 @@ Todos los selects devuelven el mismo formato:
 - El frontend toma el `nombre` del item seleccionado y lo envía en el campo correspondiente del payload de `POST /colaboradores`:
   - `eps/select` → campo `eps`
   - `fondos-pension/select` → campo `fondo_pension`
+  - `fondos-cesantias/select` → campo `fondo_cesantias`
   - `arl/select` → campo `arl`
   - `entidades-bancarias/select` → campo `entidad_bancaria`
 
@@ -1181,7 +1188,7 @@ Para administrar el catálogo (crear/editar/eliminar EPS, fondos, ARL o entidade
 - `estado`: opcional, boolean (default `true` al crear).
 
 #### Auditoría
-Toda creación, edición y eliminación queda registrada en `auditorias` con módulo `EPS`, `FONDOS_PENSION`, `ARL` o `ENTIDADES_BANCARIAS`.
+Toda creación, edición y eliminación queda registrada en `auditorias` con módulo `EPS`, `FONDOS_PENSION`, `FONDOS_CESANTIAS`, `ARL` o `ENTIDADES_BANCARIAS`.
 
 ---
 

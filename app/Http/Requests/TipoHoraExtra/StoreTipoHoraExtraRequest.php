@@ -31,6 +31,7 @@ class StoreTipoHoraExtraRequest extends FormRequest
             'es_extra'           => 'sometimes|boolean',
             'paga_hora_completa' => 'sometimes|boolean',
             'estado'             => 'sometimes|boolean',
+            'descripcion'        => 'nullable|string|max:150',
         ];
     }
 }

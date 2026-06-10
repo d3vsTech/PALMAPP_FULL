@@ -9,9 +9,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * Un Jornal representa lo que ganó un empleado en una operación por una labor.
- * La tabla es unificada con discriminador:
- *   - categoria = 'PALMA' → tipo ∈ {PLATEO, PODA, FERTILIZACION, SANIDAD, OTROS}
- *   - categoria = 'FINCA' → labor_id apunta al catálogo `labores`
+ *
+ * Esquema unificado (post refactor):
+ *   - `labor_id` apunta SIEMPRE a `labores` (palma o finca, fija o custom).
+ *   - `categoria` y `tipo` se snapshottean al crear/actualizar (a partir de la
+ *     labor cargada). Se conservan para queries rápidos del resumen y para
+ *     reportes históricos inmunes a cambios posteriores de configuración.
+ *   - `tipo` solo se llena cuando la labor es FIJA del sistema (PLATEO, PODA,
+ *     FERTILIZACION, SANIDAD). Las labores custom de palma dejan `tipo=NULL`
+ *     y van al bucket "otros" del resumen y desprendible.
+ *
  * COSECHA NO vive aquí: se maneja en registro_cosecha + cosecha_cuadrilla.
  */
 class Jornal extends Model
@@ -27,14 +34,17 @@ class Jornal extends Model
     public const TIPO_PODA          = 'PODA';
     public const TIPO_FERTILIZACION = 'FERTILIZACION';
     public const TIPO_SANIDAD       = 'SANIDAD';
-    public const TIPO_OTROS         = 'OTROS';
 
+    /**
+     * Tipos válidos dentro de jornales. COSECHA no aparece (va por su flujo
+     * propio); OTROS se eliminó al unificar el catálogo (labores custom de
+     * palma dejan tipo=NULL).
+     */
     public const TIPOS_PALMA = [
         self::TIPO_PLATEO,
         self::TIPO_PODA,
         self::TIPO_FERTILIZACION,
         self::TIPO_SANIDAD,
-        self::TIPO_OTROS,
     ];
 
     protected $fillable = [
@@ -50,10 +60,10 @@ class Jornal extends Model
     protected function casts(): array
     {
         return [
-            'valor_unitario' => 'decimal:2',
+            'valor_unitario'         => 'decimal:2',
             'precio_insumo_snapshot' => 'decimal:2',
-            'valor_total' => 'decimal:2',
-            'estado' => 'boolean',
+            'valor_total'            => 'decimal:2',
+            'estado'                 => 'boolean',
         ];
     }
 
