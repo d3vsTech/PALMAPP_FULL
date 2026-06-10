@@ -35,7 +35,9 @@ import {
   ConfiguracionErrorCodes,
   type Insumo,
 } from '../../../api/configuracion';
-import { cached } from '../../../api/cache';
+import { cached, invalidate } from '../../../api/cache';
+
+const CACHE_KEY_INSUMOS = 'config:insumos';
 
 const unidadesMedida = ['gramo', 'kilogramo', 'litro', 'mililitro', 'unidad'];
 
@@ -49,7 +51,7 @@ export function InsumosTab() {
   const { confirmDelete, ConfirmDeleteDialog } = useConfirmDelete();
 
   useEffect(() => {
-    cached('config:insumos', () => configuracionApi.insumos.listar({ per_page: 100 }))
+    cached(CACHE_KEY_INSUMOS, () => configuracionApi.insumos.listar({ per_page: 100 }))
       .then((res: any) => {
         // Robusto al shape de la respuesta: el backend puede mandar
         //  - { data: Insumo[], meta }  (paginado estándar)
@@ -61,10 +63,6 @@ export function InsumosTab() {
           : Array.isArray(res?.data?.data) ? res.data.data
           : [];
         setInsumos(arr);
-        if (arr.length === 0) {
-          // eslint-disable-next-line no-console
-          console.warn('[InsumosTab] Respuesta vacía o shape inesperado:', res);
-        }
       })
       .catch((e: any) => {
         // eslint-disable-next-line no-console
@@ -100,6 +98,7 @@ export function InsumosTab() {
         const res = await configuracionApi.insumos.crear(payload);
         setInsumos((prev) => [...prev, res.data]);
       }
+      invalidate(CACHE_KEY_INSUMOS);
       setOpenModal(false);
     } catch (e: any) {
       if (e?.errors) {
@@ -120,6 +119,7 @@ export function InsumosTab() {
         try {
           await configuracionApi.insumos.eliminar(id);
           setInsumos((prev) => prev.filter((i) => i.id !== id));
+          invalidate(CACHE_KEY_INSUMOS);
         } catch (e: any) {
           if (e?.code === ConfiguracionErrorCodes.INSUMO_CON_LABORES) {
             toast.error('No se puede eliminar: tiene labores activas asociadas');
