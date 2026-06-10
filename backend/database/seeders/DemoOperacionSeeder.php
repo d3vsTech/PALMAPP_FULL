@@ -7,7 +7,6 @@ use App\Models\Labor;
 use App\Models\Lote;
 use App\Models\PrecioAbono;
 use App\Models\PrecioCosecha;
-use App\Models\PrecioPalma;
 use App\Models\Predio;
 use App\Models\PromedioLote;
 use App\Models\Sublote;
@@ -16,7 +15,7 @@ use Illuminate\Database\Seeder;
 
 /**
  * Datos demo para poder probar el wizard de Operaciones (Planilla del Día).
- * Crea insumos, precios, labores de finca y estructura de plantación básica
+ * Crea insumos, precios, labores fijas + finca y estructura de plantación básica
  * para el tenant "Finca La Esperanza".
  *
  * Idempotente: usa firstOrCreate / updateOrCreate.
@@ -37,7 +36,7 @@ class DemoOperacionSeeder extends Seeder
 
         $this->seedInsumos($tenant->id);
         $this->seedPreciosAbono($tenant->id);
-        $this->seedPreciosPalma($tenant->id);
+        $this->seedLaboresFijasPalma($tenant->id);
         $this->seedLaboresFinca($tenant->id);
         $this->seedPlantacion($tenant->id);
 
@@ -63,8 +62,8 @@ class DemoOperacionSeeder extends Seeder
     private function seedPreciosAbono(int $tenantId): void
     {
         // Precios por rango de gramos/palma para jornales de FERTILIZACION.
+        // Aplica solo cuando la labor FERTILIZACION está configurada como POR_PALMA.
         // Fórmula: valor_total = cantidad_palmas × precio_palma_del_rango
-        // Ejemplo: 500 palmas a 200 g/palma → rango 151-250 → 500 × $2.500 = $1.250.000
         $rangos = [
             ['gramos_min' => 0,   'gramos_max' => 150, 'precio_palma' => 2000.00],
             ['gramos_min' => 151, 'gramos_max' => 250, 'precio_palma' => 2500.00],
@@ -86,41 +85,56 @@ class DemoOperacionSeeder extends Seeder
         }
     }
 
-    private function seedPreciosPalma(int $tenantId): void
+    /**
+     * Las 5 labores fijas del sistema (es_sistema=true). Idempotente.
+     * Si ya existen (la migración 000002 las crea por tenant), solo refresca
+     * tipo_pago/precio_palma demo.
+     */
+    private function seedLaboresFijasPalma(int $tenantId): void
     {
-        // Precio unitario por palma para jornales de tipo PALMA.
-        // PLATEO y PODA: valor_total = cantidad_palmas × precio_palma
-        // SANIDAD y OTROS: precio_palma es un valor plano (no se multiplica por cantidad).
-        //   Si es null, la tarifa queda sin definir y el jornal no calculará valor_total.
-        $precios = [
-            ['tipo' => PrecioPalma::TIPO_PLATEO,  'precio_palma' => 50.00],
-            ['tipo' => PrecioPalma::TIPO_PODA,    'precio_palma' => 80.00],
-            ['tipo' => PrecioPalma::TIPO_SANIDAD, 'precio_palma' => null],
-            ['tipo' => PrecioPalma::TIPO_OTROS,   'precio_palma' => null],
+        $fijas = [
+            ['tipo' => Labor::TIPO_COSECHA,       'tipo_pago' => Labor::TIPO_PAGO_POR_PALMA,   'precio_palma' => null],
+            ['tipo' => Labor::TIPO_PLATEO,        'tipo_pago' => Labor::TIPO_PAGO_POR_PALMA,   'precio_palma' => 50.00],
+            ['tipo' => Labor::TIPO_PODA,          'tipo_pago' => Labor::TIPO_PAGO_POR_PALMA,   'precio_palma' => 80.00],
+            ['tipo' => Labor::TIPO_FERTILIZACION, 'tipo_pago' => Labor::TIPO_PAGO_POR_PALMA,   'precio_palma' => null],
+            ['tipo' => Labor::TIPO_SANIDAD,       'tipo_pago' => Labor::TIPO_PAGO_JORNAL_FIJO, 'precio_palma' => null],
         ];
 
-        foreach ($precios as $p) {
-            PrecioPalma::updateOrCreate(
-                ['tenant_id' => $tenantId, 'tipo' => $p['tipo']],
-                ['precio_palma' => $p['precio_palma'], 'estado' => true],
+        foreach ($fijas as $f) {
+            Labor::updateOrCreate(
+                ['tenant_id' => $tenantId, 'tipo' => $f['tipo'], 'es_sistema' => true],
+                [
+                    'categoria'    => Labor::CATEGORIA_PALMA,
+                    'nombre'       => Labor::NOMBRES_FIJOS[$f['tipo']],
+                    'tipo_pago'    => $f['tipo_pago'],
+                    'precio_palma' => $f['precio_palma'],
+                    'estado'       => true,
+                ],
             );
         }
     }
 
     private function seedLaboresFinca(int $tenantId): void
     {
-        // Labores de finca con tarifa diaria fija (categoría FINCA).
-        // Fórmula: valor_total = valor_base (sin cantidad ni palmas, tarifa plana por jornal).
+        // Labores de finca con tarifa diaria fija (categoria=FINCA, tipo_pago=JORNAL_FIJO).
+        // Fórmula: valor_total = precio_palma (valor plano por jornal).
         $labores = [
-            ['nombre' => 'Reparación de portón',   'valor_base' => 45000.00],
-            ['nombre' => 'Mantenimiento general',  'valor_base' => 30000.00],
-            ['nombre' => 'Transporte interno',     'valor_base' => 50000.00],
+            ['nombre' => 'Reparación de portón',   'precio_palma' => 45000.00],
+            ['nombre' => 'Mantenimiento general',  'precio_palma' => 30000.00],
+            ['nombre' => 'Transporte interno',     'precio_palma' => 50000.00],
         ];
 
         foreach ($labores as $l) {
             Labor::updateOrCreate(
                 ['tenant_id' => $tenantId, 'nombre' => $l['nombre']],
-                ['valor_base' => $l['valor_base'], 'estado' => true],
+                [
+                    'categoria'    => Labor::CATEGORIA_FINCA,
+                    'tipo'         => null,
+                    'tipo_pago'    => Labor::TIPO_PAGO_JORNAL_FIJO,
+                    'precio_palma' => $l['precio_palma'],
+                    'es_sistema'   => false,
+                    'estado'       => true,
+                ],
             );
         }
     }
@@ -128,7 +142,6 @@ class DemoOperacionSeeder extends Seeder
     private function seedPlantacion(int $tenantId): void
     {
         // Crea el Predio físico "Predio Principal" con sus Lotes y Sublotes.
-        // Este es el único Predio demo asociado al tenant "Finca La Esperanza".
         if (Predio::where('tenant_id', $tenantId)->exists()) {
             return;
         }
@@ -148,7 +161,7 @@ class DemoOperacionSeeder extends Seeder
 
         $anio = (int) now()->format('Y');
 
-        foreach ($lotes as $idx => $loteData) {
+        foreach ($lotes as $loteData) {
             $lote = Lote::create([
                 'tenant_id'           => $tenantId,
                 'predio_id'           => $predio->id,
@@ -163,17 +176,14 @@ class DemoOperacionSeeder extends Seeder
                     'tenant_id'       => $tenantId,
                     'lote_id'         => $lote->id,
                     'nombre'          => "{$loteData['nombre']}.{$s}",
-                    // Metadata de capacidad del sublote. NO entra en el cálculo del jornal;
-                    // el jornal usa la cantidad que el operario ingresa en la planilla.
+                    // Metadata de capacidad del sublote.
                     'cantidad_palmas' => 0,
                     'estado'          => true,
                 ]);
             }
 
-            // PromedioLote y PrecioCosecha NO afectan jornales regulares (PLATEO, PODA, etc.).
-            // Solo los usa CosechaCalculationService:
-            //   valor_total_cosecha = peso_confirmado × PrecioCosecha.precio
-            // PromedioLote (12.50 kg/gajo) se guarda como snapshot informativo en RegistroCosecha.
+            // PromedioLote y PrecioCosecha solo aplican cuando la labor COSECHA
+            // está en POR_PALMA (default). En modo JORNAL_FIJO se ignoran.
             PromedioLote::updateOrCreate(
                 ['tenant_id' => $tenantId, 'lote_id' => $lote->id, 'anio' => $anio],
                 ['promedio' => 12.50],

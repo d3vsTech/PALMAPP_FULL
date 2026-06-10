@@ -24,7 +24,9 @@ class UpdateEntidadBancariaRequest extends FormRequest
                     ->where('tenant_id', $tenantId)
                     ->ignore($entidadId),
             ],
-            'estado' => 'sometimes|boolean',
+            'codigo'   => 'sometimes|nullable|string|max:10',
+            'contacto' => 'sometimes|nullable|string|max:50',
+            'estado'   => 'sometimes|boolean',
         ];
     }
 

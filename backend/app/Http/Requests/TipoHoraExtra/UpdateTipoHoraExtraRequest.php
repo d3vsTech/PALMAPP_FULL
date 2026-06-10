@@ -33,6 +33,7 @@ class UpdateTipoHoraExtraRequest extends FormRequest
             'es_extra'           => 'sometimes|boolean',
             'paga_hora_completa' => 'sometimes|boolean',
             'estado'             => 'sometimes|boolean',
+            'descripcion'        => 'sometimes|nullable|string|max:150',
         ];
     }
 }

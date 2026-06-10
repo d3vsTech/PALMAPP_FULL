@@ -16,7 +16,7 @@ use App\Http\Controllers\Api\EmpleadoDocumentoController;
 use App\Http\Controllers\Api\EmpleadoImportacionController;
 use App\Http\Controllers\Api\ConfiguracionNominaController;
 use App\Http\Controllers\Api\ConfiguracionConstantesLegalesController;
-use App\Http\Controllers\Api\NominaTablaLegalController;
+use App\Http\Controllers\Api\ConfiguracionPreciosLaboresController;
 use App\Http\Controllers\Api\TenantAuditoriaController;
 use App\Http\Controllers\Api\InsumoController;
 use App\Http\Controllers\Api\JornalController;
@@ -30,7 +30,6 @@ use App\Http\Controllers\Api\ModalidadContratoController;
 use App\Http\Controllers\Api\MotivoAusenciaController;
 use App\Http\Controllers\Api\PalmaController;
 use App\Http\Controllers\Api\PrecioCosechaController;
-use App\Http\Controllers\Api\PrecioPalmaController;
 use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\PredioController;
 use App\Http\Controllers\Api\ProfileController;
@@ -47,6 +46,7 @@ use App\Http\Controllers\Api\EmpresaTransportadoraController;
 use App\Http\Controllers\Api\EntidadBancariaController;
 use App\Http\Controllers\Api\EpsController;
 use App\Http\Controllers\Api\ExtractoraController;
+use App\Http\Controllers\Api\FondoCesantiasController;
 use App\Http\Controllers\Api\FondoPensionController;
 use App\Http\Controllers\Api\ArlController;
 use App\Http\Controllers\Api\HoraExtraController;
@@ -54,6 +54,7 @@ use App\Http\Controllers\Api\Nomina\NominaConceptoController;
 use App\Http\Controllers\Api\Nomina\NominaController;
 use App\Http\Controllers\Api\Nomina\NominaEmpleadoController;
 use App\Http\Controllers\Api\TipoHoraExtraController;
+use App\Http\Controllers\Api\TransportadorController;
 use App\Http\Controllers\Api\ViajeController;
 use App\Http\Controllers\Api\ViajeDocumentoBasculaController;
 use App\Http\Controllers\Api\Market\MarketCatalogoController;
@@ -365,12 +366,13 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
         ->middleware('check.permission:configuracion.editar');
 
     // ── Viajes: Paramétricas (selects para el form) ──
+    // Aceptan `viajes.crear` (form de viajes) o `configuracion.editar` (pantalla de Configuraciones).
     Route::get('empresas-transportadoras/select', [EmpresaTransportadoraController::class, 'select'])
-        ->middleware('check.permission:viajes.crear');
+        ->middleware('check.permission:viajes.crear,configuracion.editar');
     Route::get('empresas-transportadoras/{empresa}/transportadores', [EmpresaTransportadoraController::class, 'transportadores'])
-        ->middleware('check.permission:viajes.crear');
+        ->middleware('check.permission:viajes.crear,configuracion.editar');
     Route::get('extractoras/select', [ExtractoraController::class, 'select'])
-        ->middleware('check.permission:viajes.crear');
+        ->middleware('check.permission:viajes.crear,configuracion.editar');
 
     // ── Viajes ──
     Route::get('viajes', [ViajeController::class, 'index'])
@@ -527,7 +529,8 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
     Route::post('operaciones/insumos', [InsumoController::class, 'storeFromWizard'])
         ->middleware('check.permission:operaciones.crear,operaciones.editar');
 
-    // ── Labores select (dropdown del wizard Paso 3 - Labores de Finca) ──
+    // ── Labores select (dropdown del wizard de Operaciones) ──
+    // Endpoint unificado: ?categoria=PALMA|FINCA filtra el dropdown.
     // Fuera del grupo configuracion.editar para que operadores con permiso de
     // operaciones también puedan poblar el select "Labor".
     Route::get('labores/select', [LaborController::class, 'select'])
@@ -541,10 +544,16 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
     Route::get('tipos-hora-extra/select', [TipoHoraExtraController::class, 'select'])
         ->middleware('check.permission:configuracion.editar,operaciones.crear,operaciones.editar');
 
+    // ── Tipos de hora extra codigos (lista estática de los 7 códigos legales colombianos) ──
+    Route::get('tipos-hora-extra/codigos', [TipoHoraExtraController::class, 'codigos'])
+        ->middleware('check.permission:configuracion.editar');
+
     // ── Paramétricas del colaborador (dropdowns del form de creación/edición) ──
     Route::get('eps/select', [EpsController::class, 'select'])
         ->middleware('check.permission:configuracion.editar,colaboradores.ver,colaboradores.crear,colaboradores.editar');
     Route::get('fondos-pension/select', [FondoPensionController::class, 'select'])
+        ->middleware('check.permission:configuracion.editar,colaboradores.ver,colaboradores.crear,colaboradores.editar');
+    Route::get('fondos-cesantias/select', [FondoCesantiasController::class, 'select'])
         ->middleware('check.permission:configuracion.editar,colaboradores.ver,colaboradores.crear,colaboradores.editar');
     Route::get('arl/select', [ArlController::class, 'select'])
         ->middleware('check.permission:configuracion.editar,colaboradores.ver,colaboradores.crear,colaboradores.editar');
@@ -576,12 +585,11 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
         Route::put('precios-abono/{precioAbono}', [PrecioAbonoController::class, 'update']);
         Route::delete('precios-abono/{precioAbono}', [PrecioAbonoController::class, 'destroy']);
 
-        // ── Precios de Palma (PLATEO, PODA, SANIDAD, OTROS — registros pre-sembrados) ──
-        Route::get('precios-palma', [PrecioPalmaController::class, 'index']);
-        Route::get('precios-palma/{precioPalma}', [PrecioPalmaController::class, 'show']);
-        Route::put('precios-palma/{precioPalma}', [PrecioPalmaController::class, 'update']);
-
-        // ── Labores ──
+        // ── Labores (catálogo unificado: palma + finca, fijas + custom) ──
+        // Las 5 fijas del sistema (COSECHA, PLATEO, PODA, FERTILIZACION, SANIDAD)
+        // se siembran al provisionar el tenant y no se crean por API. POST crea
+        // labores custom (categoria=PALMA|FINCA). PUT a fijas solo permite tipo_pago,
+        // precio_palma y estado. DELETE de fijas devuelve 403.
         Route::get('labores', [LaborController::class, 'index']);
         Route::get('labores/{labor}', [LaborController::class, 'show']);
         Route::post('labores', [LaborController::class, 'store']);
@@ -616,6 +624,13 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
         Route::put('fondos-pension/{fondoPension}', [FondoPensionController::class, 'update']);
         Route::delete('fondos-pension/{fondoPension}', [FondoPensionController::class, 'destroy']);
 
+        // ── Fondos de Cesantías ──
+        Route::get('fondos-cesantias', [FondoCesantiasController::class, 'index']);
+        Route::get('fondos-cesantias/{fondoCesantias}', [FondoCesantiasController::class, 'show']);
+        Route::post('fondos-cesantias', [FondoCesantiasController::class, 'store']);
+        Route::put('fondos-cesantias/{fondoCesantias}', [FondoCesantiasController::class, 'update']);
+        Route::delete('fondos-cesantias/{fondoCesantias}', [FondoCesantiasController::class, 'destroy']);
+
         // ── ARL ──
         Route::get('arl', [ArlController::class, 'index']);
         Route::get('arl/{arl}', [ArlController::class, 'show']);
@@ -647,6 +662,9 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
         Route::put('modalidades/{modalidad}', [ModalidadContratoController::class, 'update']);
         Route::delete('modalidades/{modalidad}', [ModalidadContratoController::class, 'destroy']);
 
+        // ── Bundle inicial — Pantalla "Precios de Labores" ──
+        Route::get('configuracion/precios-labores/init', [ConfiguracionPreciosLaboresController::class, 'bundleInit']);
+
         // ── Precios de Cosecha ──
         Route::get('precios-cosecha', [PrecioCosechaController::class, 'index']);
         Route::get('precios-cosecha/{precioCosecha}', [PrecioCosechaController::class, 'show']);
@@ -662,12 +680,27 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
         Route::get('configuracion/constantes-legales', [ConfiguracionConstantesLegalesController::class, 'show']);
         Route::put('configuracion/constantes-legales', [ConfiguracionConstantesLegalesController::class, 'update']);
 
-        // ── Configuración — Tablas Legales ──
-        Route::get('configuracion/tablas-legales/conceptos-select', [NominaTablaLegalController::class, 'conceptosSelect']);
-        Route::get('configuracion/tablas-legales', [NominaTablaLegalController::class, 'index']);
-        Route::post('configuracion/tablas-legales', [NominaTablaLegalController::class, 'store']);
-        Route::put('configuracion/tablas-legales/{tablaLegal}', [NominaTablaLegalController::class, 'update']);
-        Route::delete('configuracion/tablas-legales/{tablaLegal}', [NominaTablaLegalController::class, 'destroy']);
+        // ── Viajes — Paramétricas (CRUD) ──
+        // Empresas Transportadoras
+        Route::get('empresas-transportadoras', [EmpresaTransportadoraController::class, 'index']);
+        Route::get('empresas-transportadoras/{empresa}', [EmpresaTransportadoraController::class, 'show']);
+        Route::post('empresas-transportadoras', [EmpresaTransportadoraController::class, 'store']);
+        Route::put('empresas-transportadoras/{empresa}', [EmpresaTransportadoraController::class, 'update']);
+        Route::delete('empresas-transportadoras/{empresa}', [EmpresaTransportadoraController::class, 'destroy']);
+
+        // Transportadores (Conductores)
+        Route::get('transportadores', [TransportadorController::class, 'index']);
+        Route::get('transportadores/{transportador}', [TransportadorController::class, 'show']);
+        Route::post('transportadores', [TransportadorController::class, 'store']);
+        Route::put('transportadores/{transportador}', [TransportadorController::class, 'update']);
+        Route::delete('transportadores/{transportador}', [TransportadorController::class, 'destroy']);
+
+        // Extractoras
+        Route::get('extractoras', [ExtractoraController::class, 'index']);
+        Route::get('extractoras/{extractora}', [ExtractoraController::class, 'show']);
+        Route::post('extractoras', [ExtractoraController::class, 'store']);
+        Route::put('extractoras/{extractora}', [ExtractoraController::class, 'update']);
+        Route::delete('extractoras/{extractora}', [ExtractoraController::class, 'destroy']);
 
         // ── Auditoría del Tenant ──
         Route::get('auditorias', [TenantAuditoriaController::class, 'index']);

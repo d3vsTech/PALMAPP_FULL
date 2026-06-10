@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\PrecioCosecha;
 use App\Services\AuditoriaService;
+use App\Support\WizardCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -73,6 +74,8 @@ class PrecioCosechaController extends Controller
 
             $precio = PrecioCosecha::create($validated);
 
+            WizardCache::forgetPreciosLaboresBundle((int) app('current_tenant_id'));
+
             $this->auditoria->registrarCreacion($request, 'PRECIOS_COSECHA', $precio, "Se creó precio de cosecha para lote #{$precio->lote_id} año {$precio->anio}: \${$precio->precio}");
 
             return response()->json([
@@ -113,6 +116,8 @@ class PrecioCosechaController extends Controller
             $datosAnteriores = $precioCosecha->toArray();
             $precioCosecha->update($validated);
 
+            WizardCache::forgetPreciosLaboresBundle((int) app('current_tenant_id'));
+
             $this->auditoria->registrarEdicion($request, 'PRECIOS_COSECHA', $precioCosecha, $datosAnteriores, "Se editó precio de cosecha lote #{$precioCosecha->lote_id} año {$precioCosecha->anio}");
 
             return response()->json([
@@ -130,6 +135,8 @@ class PrecioCosechaController extends Controller
     public function destroy(Request $request, PrecioCosecha $precioCosecha): JsonResponse
     {
         try {
+            WizardCache::forgetPreciosLaboresBundle((int) app('current_tenant_id'));
+
             $this->auditoria->registrarEliminacion($request, 'PRECIOS_COSECHA', $precioCosecha, "Se eliminó precio de cosecha lote #{$precioCosecha->lote_id} año {$precioCosecha->anio}: \${$precioCosecha->precio}");
             $precioCosecha->delete();
 

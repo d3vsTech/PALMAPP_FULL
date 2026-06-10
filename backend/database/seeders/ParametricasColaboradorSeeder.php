@@ -5,13 +5,14 @@ namespace Database\Seeders;
 use App\Models\Arl;
 use App\Models\EntidadBancaria;
 use App\Models\Eps;
+use App\Models\FondoCesantias;
 use App\Models\FondoPension;
 use App\Models\Tenant;
 use Illuminate\Database\Seeder;
 
 /**
  * Sembra los catálogos paramétricos del colaborador (EPS, fondos de pensión,
- * ARL y entidades bancarias) para cada tenant ACTIVO.
+ * fondos de cesantías, ARL y entidades bancarias) para cada tenant ACTIVO.
  *
  * Idempotente: usa updateOrCreate sobre (tenant_id, nombre).
  */
@@ -24,6 +25,7 @@ class ParametricasColaboradorSeeder extends Seeder
         $catalogos = [
             [Eps::class,             Eps::INICIALES],
             [FondoPension::class,    FondoPension::INICIALES],
+            [FondoCesantias::class,  FondoCesantias::INICIALES],
             [Arl::class,             Arl::INICIALES],
             [EntidadBancaria::class, EntidadBancaria::INICIALES],
         ];

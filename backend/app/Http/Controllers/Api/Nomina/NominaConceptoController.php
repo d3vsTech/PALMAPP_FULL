@@ -3,12 +3,13 @@
 namespace App\Http\Controllers\Api\Nomina;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\NominaConcepto\StoreNominaConceptoRequest;
+use App\Http\Requests\NominaConcepto\UpdateNominaConceptoRequest;
 use App\Models\NominaConcepto;
 use App\Services\AuditoriaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Rule;
 
 /**
  * CRUD del catálogo paramétrico de conceptos de nómina.
@@ -26,9 +27,6 @@ class NominaConceptoController extends Controller
 
         if ($request->filled('tipo')) {
             $query->where('tipo', $request->input('tipo'));
-        }
-        if ($request->boolean('activo', null) !== null) {
-            $query->where('activo', $request->boolean('activo'));
         }
 
         return response()->json(['data' => $query->get()]);
@@ -52,32 +50,18 @@ class NominaConceptoController extends Controller
             $query->whereIn('aplica_a', [$request->input('aplica_a'), 'AMBOS']);
         }
 
-        $conceptos = $query->get(['id', 'codigo', 'nombre', 'tipo', 'subtipo', 'operacion', 'calculo', 'aplica_a']);
+        $conceptos = $query->get([
+            'id', 'codigo', 'nombre', 'tipo', 'subtipo', 'operacion', 'calculo', 'aplica_a',
+            'porcentaje_empleado', 'porcentaje_empresa',
+        ]);
 
         return response()->json(['data' => $conceptos]);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(StoreNominaConceptoRequest $request): JsonResponse
     {
-        if (! $request->user()?->can('nomina-conceptos.gestionar')) {
-            return response()->json(['message' => 'Sin permisos', 'code' => 'PERMISSION_DENIED'], 403);
-        }
-
         $tenantId = (int) $request->header('X-Tenant-Id');
-
-        $data = $request->validate([
-            'codigo'           => ['required', 'string', 'max:20', Rule::unique('nomina_concepto', 'codigo')->where('tenant_id', $tenantId)],
-            'nombre'           => ['required', 'string', 'max:100'],
-            'tipo'             => ['required', 'in:DEDUCCION_LEGAL,DEDUCCION_VOLUNTARIA,BONIFICACION_FIJA,BONIFICACION_VARIABLE'],
-            'subtipo'          => ['required', 'in:SALUD,PENSION,ARL,FONDO_SOLIDARIDAD,LIBRANZA,EMBARGO,PRESTAMO,AHORRO_VOLUNTARIO,PRODUCTIVIDAD,TRANSPORTE,ALIMENTACION,ANTIGUEDAD,OTRO'],
-            'operacion'        => ['required', 'in:SUMA,RESTA'],
-            'calculo'          => ['required', 'in:PORCENTAJE,VALOR_FIJO,FORMULA'],
-            'valor_referencia' => ['nullable', 'numeric'],
-            'base_calculo'     => ['required', 'in:SALARIO_BASE,TOTAL_DEVENGADO,SALARIO_MINIMO,MANUAL'],
-            'aplica_a'         => ['required', 'in:FIJO,VARIABLE,AMBOS'],
-            'es_obligatorio'   => ['boolean'],
-            'activo'           => ['boolean'],
-        ]);
+        $data = $request->validated();
 
         try {
             $concepto = NominaConcepto::create(array_merge($data, ['tenant_id' => $tenantId]));
@@ -94,20 +78,9 @@ class NominaConceptoController extends Controller
         }
     }
 
-    public function update(Request $request, NominaConcepto $nominaConcepto): JsonResponse
+    public function update(UpdateNominaConceptoRequest $request, NominaConcepto $nominaConcepto): JsonResponse
     {
-        if (! $request->user()?->can('nomina-conceptos.gestionar')) {
-            return response()->json(['message' => 'Sin permisos', 'code' => 'PERMISSION_DENIED'], 403);
-        }
-
-        $data = $request->validate([
-            'nombre'           => ['sometimes', 'string', 'max:100'],
-            'valor_referencia' => ['sometimes', 'nullable', 'numeric'],
-            'base_calculo'     => ['sometimes', 'in:SALARIO_BASE,TOTAL_DEVENGADO,SALARIO_MINIMO,MANUAL'],
-            'aplica_a'         => ['sometimes', 'in:FIJO,VARIABLE,AMBOS'],
-            'es_obligatorio'   => ['sometimes', 'boolean'],
-            'activo'           => ['sometimes', 'boolean'],
-        ]);
+        $data = $request->validated();
 
         try {
             $datosAnteriores = $nominaConcepto->toArray();
@@ -132,8 +105,7 @@ class NominaConceptoController extends Controller
         }
 
         // Bloquea si está en uso
-        $enUso = $nominaConcepto->tablaLegal()->exists()
-            || \DB::table('nomina_empleado_concepto')->where('concepto_id', $nominaConcepto->id)->exists();
+        $enUso = \DB::table('nomina_empleado_concepto')->where('concepto_id', $nominaConcepto->id)->exists();
 
         if ($enUso) {
             return response()->json([

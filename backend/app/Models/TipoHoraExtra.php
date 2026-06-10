@@ -62,7 +62,7 @@ class TipoHoraExtra extends Model
         'tenant_id', 'codigo', 'nombre',
         'porcentaje_recargo', 'franja_horaria',
         'aplica_festivo', 'es_extra', 'paga_hora_completa',
-        'estado',
+        'descripcion', 'estado',
     ];
 
     protected function casts(): array

@@ -55,12 +55,21 @@ Cada "Agregar X" del UI dispara un POST inmediato. El backend devuelve el id cre
 └───────────────────────┘
             │
 ┌ Paso 2 — Labores de Palma ────────────────────────────┐
-│  Tab Cosecha:    POST /operaciones/{id}/cosechas       │
-│  Tab Plateo:     POST /operaciones/{id}/jornales       │
-│  Tab Poda:       POST /operaciones/{id}/jornales       │
-│  Tab Fertiliz.:  POST /operaciones/{id}/jornales       │
-│  Tab Sanidad:    POST /operaciones/{id}/jornales       │
-│  Tab Otros:      POST /operaciones/{id}/jornales       │
+│  GET /labores/select?categoria=PALMA   (al cargar paso)│
+│                                                        │
+│  Tab Cosecha:  POST /operaciones/{id}/cosechas         │
+│                (labor.tipo=COSECHA → flujo cuadrilla)  │
+│                                                        │
+│  Tab Plateo / Poda / Fertilización / Sanidad / Otros:  │
+│                POST /operaciones/{id}/jornales         │
+│                body = { labor_id, empleado_id, ... }   │
+│                                                        │
+│  Cada tab filtra el dropdown del select por labor:     │
+│    - Plateo  → labor con tipo='PLATEO'         (fija)  │
+│    - Poda    → labor con tipo='PODA'           (fija)  │
+│    - Fertil. → labor con tipo='FERTILIZACION'  (fija)  │
+│    - Sanidad → labor con tipo='SANIDAD'        (fija)  │
+│    - Otros   → labores con tipo IS NULL  (custom palma)│
 │                                                        │
 │  Eliminar tarjeta: DELETE /jornales/{id} o /cosechas/{id} │
 │  Editar tarjeta:   PUT /jornales/{id} o /cosechas/{id}    │
@@ -69,7 +78,10 @@ Cada "Agregar X" del UI dispara un POST inmediato. El backend devuelve el id cre
 └────────────────────────────────────────────────────────┘
             │
 ┌ Paso 3 — Labores de Finca ────────────────────────────┐
-│  POST /operaciones/{id}/jornales (categoria=FINCA)    │
+│  GET /labores/select?categoria=FINCA   (al cargar paso)│
+│  POST /operaciones/{id}/jornales                       │
+│      body = { labor_id, empleado_id, ubicacion, ... }  │
+│      (categoría FINCA se deriva del labor.categoria)   │
 │  Eliminar/Editar: DELETE|PUT /jornales/{id}           │
 └───────────────────────────────────────────────────────┘
             │
@@ -250,7 +262,7 @@ Cada item del listado trae los agregados necesarios para pintar la tabla "Planil
 | Total Jornales | `total_general` — suma de `total_jornales_sum + total_cosechas_sum` |
 
 **Sobre los sumatorios:**
-- `total_jornales_sum` suma `jornales.valor_total` de PLATEO, PODA, FERTILIZACION y FINCA. SANIDAD y OTROS suelen tener `valor_total = null` mientras no se configure su precio en `precios_palma`, por lo que no aportan al total.
+- `total_jornales_sum` suma `jornales.valor_total` de PLATEO, PODA, FERTILIZACION, SANIDAD, custom de palma y FINCA. Los jornales cuya labor aún no tiene `precio_palma` configurado quedan con `valor_total = null` y no aportan al total.
 - `total_cosechas_sum` suma `registro_cosecha.valor_total` — solo las cosechas con `peso_confirmado` contribuyen (las que solo tienen gajos aportan `null`, es decir 0).
 - `total_general` es el número que debe pintarse en verde en la columna "Total Jornales" (`$693.328` en la captura).
 - Si los tres totales son 0, la UI puede mostrar `—` o `$0` según convención.
@@ -267,13 +279,33 @@ Cada item del listado trae los agregados necesarios para pintar la tabla "Planil
 
 ## 3. Paso 2 — Labores de Palma
 
-El paso 2 tiene 6 tabs. **Cosecha** usa su propio endpoint (cabecera + cuadrilla). **Plateo, Poda, Fertilización, Sanidad, Otros** comparten el endpoint unificado de jornales.
+El paso 2 mantiene 6 tabs en la UI (Cosecha + Plateo + Poda + Fertilización + Sanidad + Otros) por razones de UX, pero en backend solo hay **dos endpoints**:
+
+- **Cosecha** → `POST /operaciones/{id}/cosechas` (su propio flujo con cabecera + cuadrilla).
+- **Plateo, Poda, Fertilización, Sanidad, Otros** → `POST /operaciones/{id}/jornales` (endpoint unificado).
+
+**Carga del paso (una sola vez):** `GET /labores/select?categoria=PALMA` devuelve todas las labores de palma del tenant (las 5 fijas + las custom). Cada item trae `tipo`, `tipo_pago`, `precio_palma`, `es_sistema` y `requiere_cosecha_workflow` para que el front decida cómo pintar el form.
+
+**Mapeo Tab UI → filtro del select (en memoria, sin nuevas llamadas HTTP):**
+
+| Tab UI | Filtro sobre `/labores/select?categoria=PALMA` |
+|---|---|
+| Cosecha | `tipo === 'COSECHA'` (única, fija — usa `/cosechas`) |
+| Plateo | `tipo === 'PLATEO'` (única, fija) |
+| Poda | `tipo === 'PODA'` (única, fija) |
+| Fertilización | `tipo === 'FERTILIZACION'` (única, fija) |
+| Sanidad | `tipo === 'SANIDAD'` (única, fija) |
+| Otros | `tipo === null` (todas las custom de palma del tenant) |
+
+Como las primeras 5 tabs corresponden a una sola labor fija, el "dropdown de labor" del form en esos tabs queda implícito (es la única labor del filtro). En el tab **Otros**, el dropdown sí ofrece la lista de custom de palma para que el operador elija cuál registró.
 
 ### 3.1 Cosecha
 
 Una tarjeta de cosecha = un sublote + varios colaboradores (cuadrilla).
 
-**Reglas de cálculo (importante):**
+> COSECHA es una de las 5 labores fijas del catálogo unificado (`labores` con `es_sistema=true`). El admin configura su `tipo_pago` en Configuración → Labores. **Por defecto es `POR_PALMA`** y el comportamiento es 100% idéntico al histórico. La rama `JORNAL_FIJO` solo se activa si el admin la cambia explícitamente.
+
+**Reglas de cálculo cuando la labor COSECHA está en `tipo_pago = POR_PALMA` (default):**
 
 - El **peso confirmado** son los kilos reales pesados. Es **opcional al crear la tarjeta** desde la planilla diaria. Si el supervisor ya tiene los kilos (ej. pesó en báscula interna), puede enviarlos al crear y el cálculo se hace inmediatamente — no hay que esperar al viaje.
 - `valor_total = peso_confirmado × precios_cosecha.precio`. El cálculo se dispara tanto al crear (POST con `peso_confirmado`) como al editar (PUT agregando/cambiando `peso_confirmado`).
@@ -281,6 +313,13 @@ Una tarjeta de cosecha = un sublote + varios colaboradores (cuadrilla).
 - **Validación estricta:** si envías `peso_confirmado` y no existe registro en `precios_cosecha` para el lote+año de la operación, la respuesta es **422 `CALC_ERROR`**. Configura el precio primero, o crea la tarjeta solo con gajos.
 - **No hay estimación provisional con `promedio_lote`** — ese promedio se guarda como snapshot histórico (`promedio_kg_gajo`) pero no se usa para pre-calcular dinero.
 - `valor_calculado` de cada fila en `cosecha_cuadrilla` es `valor_total / N` (partes iguales). Si `valor_total` es `null`, `valor_calculado` también es `null`. El `peso_calculado_empleado` sigue la misma lógica con `peso_confirmado / N`.
+
+**Reglas de cálculo cuando la labor COSECHA está en `tipo_pago = JORNAL_FIJO`:**
+
+- `valor_total = labor.precio_palma` (valor plano). NO usa `precios_cosecha`.
+- El `peso_confirmado`, si llega, se persiste como tracking agronómico pero NO afecta el cálculo.
+- Si `labor.precio_palma IS NULL`, devuelve **422 `CALC_ERROR`** ("Configure el precio plano de la labor COSECHA").
+- La distribución en cuadrilla sigue siendo por partes iguales: `valor_calculado_empleado = labor.precio_palma / N`.
 
 **Crear:** `POST /operaciones/{id}/cosechas`
 
@@ -362,37 +401,51 @@ Reglas:
 
 **Eliminar:** `DELETE /cosechas/{id}` — falla con 409 `COSECHA_EN_VIAJE` si la cosecha ya está asignada a un viaje.
 
-### 3.2 Jornal de Palma (Plateo / Poda / Fertilización / Sanidad / Otros)
+### 3.2 Jornal de Palma (Plateo / Poda / Fertilización / Sanidad / Custom)
 
-Endpoint unificado. El discriminador es `categoria + tipo`:
+Endpoint unificado. **El cliente solo envía `labor_id`**: el backend deriva `categoria` y `tipo` desde la labor y los snapshotea en el jornal. La matriz de campos requeridos se resuelve a partir de `(labor.categoria, labor.tipo, labor.tipo_pago)`.
 
 **Crear:** `POST /operaciones/{id}/jornales`
 
-#### PLATEO
+**Payload base (común a todos):**
 ```json
 {
-  "categoria": "PALMA",
-  "tipo": "PLATEO",
   "empleado_id": 10,
+  "labor_id": 13,
+  "lote_id": 1,
+  "sublote_id": 3,
+  "observacion": null
+}
+```
+
+`labor_id` viene de `GET /labores/select?categoria=PALMA` (ver §8). El frontend usa los campos `tipo`, `tipo_pago` y `requiere_cosecha_workflow` que vienen en el payload del select para decidir qué inputs mostrar:
+
+- `requiere_cosecha_workflow: true` (solo COSECHA) → no usar este endpoint; redirigir al flujo `/operaciones/{id}/cosechas`.
+- `tipo_pago: "POR_PALMA"` → mostrar input `cantidad_palmas` (requerido). Para FERTILIZACION agregar también `insumo_id` + `gramos_por_palma`.
+- `tipo_pago: "JORNAL_FIJO"` → ocultar `cantidad_palmas`. Mostrar `descripcion` (requerida para SANIDAD), `nombre_trabajo` opcional.
+
+> **Tip de UI — autofill de palmas:** al seleccionar `sublote_id` en el dropdown, pre-rellenar el input "Número de Palmas" con `sublote.cantidad_palmas`. Ese campo viene en el payload de `GET /operaciones/sublotes/select` (`{id, nombre, lote_id, cantidad_palmas}`). El input sigue siendo **editable** — el operador puede ajustarlo a la baja si solo trabajó una franja parcial del sublote. Al cambiar el "Lote" (que limpia el "Sublote"), también se debe limpiar "Número de Palmas". Aplica a cualquier labor con `tipo_pago = POR_PALMA`.
+
+#### PLATEO / PODA
+```json
+{
+  "empleado_id": 10,
+  "labor_id": 13,
   "lote_id": 1,
   "sublote_id": 3,
   "cantidad_palmas": 200
 }
 ```
-- Precio por palma = `precios_palma.precio_palma` donde `tipo='PLATEO'`.
-- `valor_total = cantidad_palmas × precio_palma`.
-
-> **Tip de UI — autofill de palmas:** al seleccionar `sublote_id` en el dropdown, pre-rellenar el input "Número de Palmas" con `sublote.cantidad_palmas`. Ese campo viene en el payload de `GET /operaciones/sublotes/select` (`{id, nombre, lote_id, cantidad_palmas}`). El input sigue siendo **editable** — el operador puede ajustarlo a la baja si solo trabajó una franja parcial del sublote. Al cambiar el "Lote" (que limpia el "Sublote"), también se debe limpiar "Número de Palmas". Aplica también a **PODA** y **FERTILIZACION**; no aplica a SANIDAD ni OTROS (esos jornales no usan `cantidad_palmas`).
-
-#### PODA
-Idéntico a PLATEO pero con `tipo: "PODA"`.
+- Si `labor.tipo_pago = POR_PALMA` (default): `cantidad_palmas` es requerido. `valor_total = cantidad_palmas × labor.precio_palma`.
+- Si `labor.tipo_pago = JORNAL_FIJO`: NO enviar `cantidad_palmas`. `valor_total = labor.precio_palma` (plano).
 
 #### FERTILIZACION
+
+**Si `labor.tipo_pago = POR_PALMA` (default):**
 ```json
 {
-  "categoria": "PALMA",
-  "tipo": "FERTILIZACION",
   "empleado_id": 12,
+  "labor_id": 15,
   "lote_id": 2,
   "sublote_id": null,
   "cantidad_palmas": 300,
@@ -400,9 +453,22 @@ Idéntico a PLATEO pero con `tipo: "PODA"`.
   "gramos_por_palma": 200
 }
 ```
-- `insumo_id` (dropdown "Tipo de Fertilizante", de `GET /insumos/select` — ver §8). El catálogo vive en la tabla `insumos` (modelo `App\Models\Insumo`); cada registro tiene `nombre`, `unidad_medida` y `estado`. El select solo devuelve los activos.
-- `gramos_por_palma` corresponde al campo UI "Cantidad (gramos)".
-- El precio se busca **server-side** en `precio_abono` por rango que contenga `gramos_por_palma` (no hay endpoint expuesto para `precio_abono` — el frontend nunca consulta los rangos). Si no hay rango configurado devuelve **422 `CALC_ERROR`**; el front puede manejarlo mostrando un mensaje "Configura el precio del abono para ese rango de gramos".
+- `cantidad_palmas`, `insumo_id`, `gramos_por_palma` son requeridos.
+- El precio se busca **server-side** en `precio_abono` por rango que contenga `gramos_por_palma` (no hay endpoint expuesto para `precio_abono` — el frontend nunca consulta los rangos).
+- Si no hay rango configurado para esos gramos devuelve **422 `CALC_ERROR`**.
+
+**Si `labor.tipo_pago = JORNAL_FIJO`:**
+```json
+{
+  "empleado_id": 12,
+  "labor_id": 15,
+  "lote_id": 2,
+  "insumo_id": 5,
+  "gramos_por_palma": 200
+}
+```
+- `cantidad_palmas`, `insumo_id` y `gramos_por_palma` quedan **opcionales** (tracking agronómico — útil para reportes aunque el pago sea plano).
+- `valor_total = labor.precio_palma` (plano).
 
 > **Crear fertilizante "on-the-fly" (opción "Otro" del dropdown):** cuando el operador elige **"Otro"** en el dropdown "Tipo de Fertilizante", el front muestra un input de texto y al guardar dispara `POST /operaciones/insumos` con `{ "nombre": "..." }`. La respuesta `201` trae `{id, nombre, unidad_medida}` (con `unidad_medida = "GRAMOS"` por default — el admin puede ajustarla luego desde el módulo de configuración). El front usa el `id` recién creado como `insumo_id` en el siguiente `POST /operaciones/{id}/jornales`. Si el nombre ya existe en el tenant, la respuesta es **409 `INSUMO_DUPLICADO`** y el front debe pedir al usuario que lo seleccione del dropdown.
 >
@@ -414,37 +480,71 @@ Idéntico a PLATEO pero con `tipo: "PODA"`.
 > Permisos del endpoint: `operaciones.crear` u `operaciones.editar` (igual que el resto de selects auxiliares del wizard). El `POST /insumos` admin sigue siendo otro endpoint separado bajo `configuracion.editar`, que requiere también `unidad_medida`.
 
 #### SANIDAD
+
+El comportamiento depende del `tipo_pago` configurado por el admin para la labor SANIDAD (ver `GET /labores/select?categoria=PALMA`).
+
+**Si `labor.tipo_pago = JORNAL_FIJO` (default):**
 ```json
 {
-  "categoria": "PALMA",
-  "tipo": "SANIDAD",
   "empleado_id": 13,
+  "labor_id": 17,
   "lote_id": 1,
   "sublote_id": 3,
   "descripcion": "Aplicación preventiva de fungicida foliar"
 }
 ```
-- `descripcion` obligatoria (UI: "Trabajo Realizado").
-- **No enviar `cantidad_palmas`** — SANIDAD se paga como monto fijo por jornal. Si llega, el backend responde 422.
-- `valor_total = precios_palma.precio_palma` (valor plano, sin multiplicar). `valor_unitario` es el mismo precio.
-- Si el tenant no tiene `precios_palma.precio_palma` configurado para SANIDAD (por defecto NULL), `valor_total` se guarda como `null`. Se activará cuando el admin configure el precio.
+- `descripcion` obligatoria.
+- `cantidad_palmas` NO se envía.
+- `valor_total = labor.precio_palma` (valor plano). Si es `null`, se guarda como `null` hasta que se configure el precio.
 
-#### OTROS
+**Si `labor.tipo_pago = POR_PALMA`:**
 ```json
 {
-  "categoria": "PALMA",
-  "tipo": "OTROS",
-  "empleado_id": 14,
+  "empleado_id": 13,
+  "labor_id": 17,
   "lote_id": 1,
   "sublote_id": 3,
-  "nombre_trabajo": "Pintura de postes",
-  "descripcion": "Pintura anticorrosiva en portería norte"
+  "cantidad_palmas": 150,
+  "descripcion": "Control preventivo Ganoderma"
 }
 ```
-- `nombre_trabajo` obligatorio (UI: "Nombre").
-- `descripcion` obligatoria (UI: "Labor Realizada").
-- **No enviar `cantidad_palmas`** — OTROS se paga como monto fijo por jornal. Si llega, el backend responde 422.
-- `valor_total = precios_palma.precio_palma` (valor plano, sin multiplicar). Se maneja igual que SANIDAD: por defecto NULL hasta que se configure `precios_palma.OTROS`.
+- `cantidad_palmas` requerida.
+- `descripcion` obligatoria.
+- `valor_total = labor.precio_palma × cantidad_palmas`.
+
+#### Labores Custom de Palma (lo que antes era "OTROS")
+
+El admin crea labores personalizadas de palma desde Configuración (`POST /labores` con `categoria: "PALMA"`, `tipo_pago: ...`). En el wizard aparecen en el mismo dropdown `/labores/select?categoria=PALMA`, identificadas por `tipo: null` y `es_sistema: false`.
+
+**Si la labor custom es `tipo_pago = POR_PALMA`:**
+```json
+{
+  "empleado_id": 14,
+  "labor_id": 32,
+  "lote_id": 1,
+  "sublote_id": 3,
+  "cantidad_palmas": 100
+}
+```
+- `cantidad_palmas` requerida.
+- `valor_total = cantidad_palmas × labor.precio_palma`.
+
+**Si la labor custom es `tipo_pago = JORNAL_FIJO`:**
+```json
+{
+  "empleado_id": 14,
+  "labor_id": 32,
+  "lote_id": 1,
+  "sublote_id": 3,
+  "descripcion": "Pintura anticorrosiva en portería norte",
+  "nombre_trabajo": "Pintura de postes"
+}
+```
+- `cantidad_palmas` no se envía.
+- `descripcion` y `nombre_trabajo` opcionales (útiles para detallar el trabajo).
+- `valor_total = labor.precio_palma` (plano).
+
+> **Migración del modo legacy:** los jornales viejos con `tipo='OTROS'` y sin `labor_palma_id` fueron re-apuntados automáticamente a una labor custom "Otros (legacy)" con `estado=false` por tenant. Aparecen en reportes históricos pero no en dropdowns nuevos.
 
 **Respuesta 201:**
 ```json
@@ -456,6 +556,7 @@ Idéntico a PLATEO pero con `tipo: "PODA"`.
     "empleado_id": 10,
     "categoria": "PALMA",
     "tipo": "PLATEO",
+    "labor_id": 13,
     "lote_id": 1,
     "sublote_id": 3,
     "cantidad_palmas": 200,
@@ -463,6 +564,7 @@ Idéntico a PLATEO pero con `tipo: "PODA"`.
     "valor_total": "10000.00",
     "estado": true,
     "empleado": { "id": 10, "primer_nombre": "...", "primer_apellido": "..." },
+    "labor":    { "id": 13, "nombre": "Plateo", "categoria": "PALMA", "tipo": "PLATEO", "tipo_pago": "POR_PALMA", "precio_palma": "50.00" },
     "lote":     { "id": 1, "nombre": "Lote 1" },
     "sublote":  { "id": 3, "nombre": "Lote 1.1" }
   }
@@ -473,15 +575,16 @@ Idéntico a PLATEO pero con `tipo: "PODA"`.
 
 **Eliminar:** `DELETE /jornales/{id}` — bloquea con 409 si la operación está APROBADA.
 
+**Intento de registrar COSECHA vía este endpoint:** si `labor_id` apunta a la labor fija COSECHA, responde **422 `CALC_ERROR`** con mensaje "La labor COSECHA se registra vía POST /operaciones/{id}/cosechas, no como jornal."
+
 ### 3.3 Labores de Finca (Paso 3)
 
-Corresponde al Paso 3 del wizard ("Labores de Finca" — reparaciones, mantenimiento, pintura, transporte interno, etc.). Usa el **mismo endpoint unificado** de jornales con `categoria=FINCA` y `labor_id` apuntando al catálogo editable por el tenant.
+Corresponde al Paso 3 del wizard ("Labores de Finca" — reparaciones, mantenimiento, pintura, transporte interno, etc.). Usa el **mismo endpoint unificado** de jornales: el cliente solo envía `labor_id` (la labor del catálogo) y el backend deriva `categoria=FINCA` automáticamente.
 
 **Crear:** `POST /operaciones/{id}/jornales`
 
 ```json
 {
-  "categoria": "FINCA",
   "labor_id": 7,
   "empleado_id": 10,
   "ubicacion": "Portería norte",
@@ -490,14 +593,16 @@ Corresponde al Paso 3 del wizard ("Labores de Finca" — reparaciones, mantenimi
 ```
 
 Reglas:
-- `labor_id` es **obligatorio** (viene de `GET /labores/select`).
+- `labor_id` es **obligatorio** (viene de `GET /labores/select?categoria=FINCA`).
 - `empleado_id` viene de `GET /colaboradores/select`.
 - `ubicacion` (texto libre, máx. 255) corresponde al campo UI "Lugar".
-- **Prohibidos** en FINCA: `tipo`, `lote_id`, `sublote_id`, `cantidad_palmas`, `insumo_id`, `gramos_por_palma`, `descripcion`, `nombre_trabajo`, `horas_extra` (validación 422 si llegan).
+- **Prohibidos** cuando `labor.categoria=FINCA`: `cantidad_palmas`, `insumo_id`, `gramos_por_palma`, `descripcion` (validación 422 si llegan).
+- `lote_id` / `sublote_id` opcionales (no aplican a la mayoría de labores de finca, pero se aceptan si el operador quiere geolocalizar).
 
-Cálculo (centralizado en `JornalCalculationService::calcularFinca()`):
-- `valor_unitario = labor.valor_base`
-- `valor_total   = labor.valor_base`
+Cálculo (centralizado en `JornalCalculationService::calcular()`):
+- Las labores de FINCA siempre tienen `tipo_pago=JORNAL_FIJO` (forzado por el modelo).
+- `valor_unitario = labor.precio_palma`
+- `valor_total   = labor.precio_palma`
 
 **Respuesta 201:**
 ```json
@@ -515,12 +620,12 @@ Cálculo (centralizado en `JornalCalculationService::calcularFinca()`):
     "valor_total": "50000.00",
     "estado": true,
     "empleado": { "id": 10, "primer_nombre": "...", "primer_apellido": "..." },
-    "labor":    { "id": 7, "nombre": "Reparación portón" }
+    "labor":    { "id": 7, "nombre": "Reparación portón", "categoria": "FINCA", "tipo": null, "tipo_pago": "JORNAL_FIJO", "precio_palma": "50000.00" }
   }
 }
 ```
 
-**Editar:** `PUT /jornales/{id}` — mismo payload. Si cambia `labor_id`, el backend recalcula `valor_total` con el `valor_base` de la nueva labor.
+**Editar:** `PUT /jornales/{id}` — mismo payload. Si cambia `labor_id`, el backend recalcula `valor_total` con el `precio_palma` de la nueva labor.
 
 **Eliminar:** `DELETE /jornales/{id}` — bloquea con 409 `OPERACION_APROBADA` si la planilla ya fue aprobada.
 
@@ -529,9 +634,9 @@ Cálculo (centralizado en `JornalCalculationService::calcularFinca()`):
 | Campo UI | Origen | Campo en el jornal |
 |---|---|---|
 | Nombre (colaborador) | `GET /colaboradores/select` | `empleado_id` |
-| Labor | `GET /labores/select` | `labor_id` |
+| Labor | `GET /labores/select?categoria=FINCA` | `labor_id` |
 | Lugar | input texto libre | `ubicacion` |
-| Total | front lo precalcula con `valor_base` del select; el backend lo confirma en la respuesta | `valor_total` |
+| Total | front lo precalcula con `precio_palma` del select; el backend lo confirma en la respuesta | `valor_total` |
 
 ---
 
@@ -767,7 +872,7 @@ Adicionalmente, cualquier mutación está bloqueada si `operacion.estado = APROB
       "fertilizacion": 0,
       "sanidad": 0,
       "otros": 0,
-      "auxiliares": 0
+      "labores_finca": 0
     },
     "ausencias": {
       "pendientes": 2,
@@ -790,7 +895,8 @@ Adicionalmente, cualquier mutación está bloqueada si `operacion.estado = APROB
 ```
 
 - Se recomienda llamar este endpoint **después de cada POST/DELETE** de tarjeta para refrescar el panel derecho.
-- `auxiliares` representa la cantidad de Labores de Finca (jornales con `categoria=FINCA`) registradas en la planilla.
+- `labores_finca` representa la cantidad de Labores de Finca (jornales con `categoria=FINCA`) registradas en la planilla.
+- `otros` agrupa las labores custom de palma (jornales con `categoria=PALMA` y `tipo=NULL`). Las 4 labores fijas (PLATEO, PODA, FERTILIZACION, SANIDAD) van en sus buckets homónimos.
 - El bloque `ausencias` se agrega por estado; `total` ya viene precalculado.
 - El bloque `horas_extra` incluye además `horas_totales` (suma de `cantidad_horas`) y `valor_total` (suma de `valor_calculado`).
 
@@ -836,7 +942,7 @@ Los dropdowns del wizard usan **endpoints `/select` dedicados** — livianos (so
 | Sublotes — tras elegir lote (wizard) | `GET /operaciones/sublotes/select?lote_id={id}` | Payload `{id, nombre, lote_id, cantidad_palmas}`. **`cantidad_palmas` se usa para autofill** del input "Número de Palmas" en las tarjetas PLATEO/PODA/FERTILIZACION del Paso 2. **Endpoint dedicado al wizard** — solo requiere `operaciones.crear|editar`. |
 | Insumos (Tipo de Fertilizante) | `GET /insumos/select` | |
 | **Crear insumo (opción "Otro")** | `POST /operaciones/insumos` | Body `{ "nombre": "..." }`. Para el flujo "Otro" del dropdown de FERTILIZACION. Devuelve `{id, nombre, unidad_medida}` (con `unidad_medida = "GRAMOS"` por default). **409 `INSUMO_DUPLICADO`** si el nombre ya existe en el tenant. |
-| Labores de Finca | `GET /labores/select` | `?estado=false` para inactivas. Incluye `valor_base` en el payload. |
+| **Labores (catálogo unificado)** | `GET /labores/select?categoria=PALMA\|FINCA` | Devuelve `{id, nombre, categoria, tipo, tipo_pago, precio_palma, es_sistema, requiere_cosecha_workflow}`. Solo activas por defecto. Requiere `operaciones.crear\|editar` o `configuracion.editar`. **Este endpoint sustituye a los antiguos `/labores-palma/select`, `/precios-palma` y al `/labores/select` legacy.** |
 | Motivos de ausencia | `GET /motivos-ausencia/select` | `?estado=false` para inactivos. Incluye `tipo_base`, flags de nómina y `requiere_soporte`. |
 | Tipos de hora extra | `GET /tipos-hora-extra/select` | `?estado=false` para inactivos. Incluye `codigo`, `porcentaje_recargo`, `franja_horaria`, `es_extra`, `paga_hora_completa`. |
 
@@ -879,22 +985,22 @@ curl -X POST "$BASE/operaciones/12/cosechas" "${H[@]}" -d '{
 #     → backend recalcula valor_total y re-distribuye en la cuadrilla.
 curl -X PUT "$BASE/cosechas/55" "${H[@]}" -d '{"peso_confirmado": 1800.5}'
 
-# 3. Agregar plateo
+# 3. Agregar plateo (labor_id 13 = labor fija PLATEO del tenant, POR_PALMA)
 curl -X POST "$BASE/operaciones/12/jornales" "${H[@]}" -d '{
-  "categoria": "PALMA", "tipo": "PLATEO",
+  "labor_id": 13,
   "empleado_id": 10, "lote_id": 1, "sublote_id": 3, "cantidad_palmas": 200
 }'
 
-# 4. Agregar fertilización
+# 4. Agregar fertilización (labor_id 15 = labor fija FERTILIZACION, POR_PALMA)
 curl -X POST "$BASE/operaciones/12/jornales" "${H[@]}" -d '{
-  "categoria": "PALMA", "tipo": "FERTILIZACION",
+  "labor_id": 15,
   "empleado_id": 12, "lote_id": 2, "cantidad_palmas": 300,
   "insumo_id": 5, "gramos_por_palma": 200
 }'
 
-# 4b. Agregar labor de finca (Paso 3) — valor_total = labor.valor_base
+# 4b. Agregar labor de finca (Paso 3) — valor_total = labor.precio_palma
 curl -X POST "$BASE/operaciones/12/jornales" "${H[@]}" -d '{
-  "categoria": "FINCA", "labor_id": 7,
+  "labor_id": 7,
   "empleado_id": 10, "ubicacion": "Portería norte"
 }'
 
@@ -934,19 +1040,32 @@ curl -X POST "$BASE/operaciones/12/aprobar" "${H[@]}"
 
 ## 10. Recomendaciones de implementación frontend
 
+- **Cargar `/labores/select` una sola vez por paso:** llamar `GET /labores/select?categoria=PALMA` al entrar al Paso 2 y `?categoria=FINCA` al entrar al Paso 3. Cachear la respuesta en estado local del wizard — el frontend filtra por `tipo` y `tipo_pago` en memoria al cambiar de tab.
+- **Repintar el form según `labor.tipo_pago` y `labor.requiere_cosecha_workflow`:** son los dos flags que vienen en el payload del select y reemplazan la lógica fija por tipo. No hardcodear "PLATEO siempre pide cantidad_palmas" — ahora `PLATEO + JORNAL_FIJO` no la pide. Decide en runtime con `labor.tipo_pago`.
+- **Tab Cosecha:** si el operador elige una labor con `requiere_cosecha_workflow=true`, redirigir al sub-form de cosecha (con cuadrilla + peso opcional) y enviar a `/cosechas`, no a `/jornales`. Si por error se manda a `/jornales`, el backend responde 422 `CALC_ERROR`.
+- **Tab Otros (custom de palma):** el dropdown filtra `tipo === null`. Si el tenant no ha creado labores custom todavía, la lista viene vacía — mostrar un CTA "Crear labor desde Configuración → Labores".
 - **Estado local del wizard:** mantén los ids de cada tarjeta creada (cosechas, jornales) para soportar edición/eliminación inline.
 - **Re-fetch del resumen:** llama `GET /resumen` después de cada mutación exitosa. Es un endpoint barato (solo COUNT).
-- **Validación previa en UI:** pre-valida los campos condicionales (ej. ocultar `insumo_id` fuera de Fertilización, exigir `nombre_trabajo` solo en Otros) para reducir 422 del backend.
+- **Validación previa en UI:** decidir los campos visibles/requeridos solo a partir de la labor cargada (`labor.tipo`, `labor.tipo_pago`). Reglas resumidas:
+  - `tipo_pago='POR_PALMA'` → mostrar y requerir `cantidad_palmas` (autofill desde `sublote.cantidad_palmas`).
+  - `tipo_pago='JORNAL_FIJO'` → ocultar `cantidad_palmas`.
+  - `tipo='FERTILIZACION'` con `POR_PALMA` → mostrar y requerir `insumo_id` + `gramos_por_palma`.
+  - `tipo='FERTILIZACION'` con `JORNAL_FIJO` → mostrar `insumo_id` + `gramos_por_palma` como opcionales (tracking).
+  - `tipo='SANIDAD'` → mostrar y requerir `descripcion`.
+  - `categoria='FINCA'` → mostrar `ubicacion` (texto libre, opcional).
+- **No envíes `categoria` ni `tipo` en el POST:** el backend los deriva de `labor_id`. Si los mandas, son silenciosamente descartados, pero conviene omitirlos.
+- **`labor.precio_palma === null`:** la labor aún no tiene precio configurado. El POST se acepta y el jornal se guarda con `valor_total = null` (queda "en limbo"). Cuando el admin configure el precio, los jornales viejos **no se recalculan** automáticamente. Muestra un aviso visual en la tarjeta del wizard ("Pendiente de precio") para que el supervisor lo sepa.
 - **Manejo de 409 `OPERACION_APROBADA`:** si aparece, desactiva todos los botones de edición y muestra un banner "Planilla aprobada (solo lectura)".
 - **Fecha única por tenant:** si `fecha.unique` devuelve 422, el usuario está intentando crear una planilla que ya existe — redirígelo a abrir la existente.
+- **Migración del frontend desde el modelo viejo:** los payloads `categoria`/`tipo`/`labor_palma_id` ya no se aceptan. Reemplazar por `labor_id` apuntando al catálogo unificado. Endpoints removidos: `/precios-palma/*` y `/labores-palma/*` → ahora todo es `/labores/*`. Detalles en [API_PARAMETRICAS.md §4](./API_PARAMETRICAS.md).
 - **Offline / PWA (futuro):** los modelos ya tienen `sync_uuid` + `sync_estado`; cuando se habilite la PWA, el cliente podrá generar el UUID localmente y enviarlo.
 
 ---
 
 ## 11. Referencias cruzadas
 
-- Modelo de datos y discriminador `categoria/tipo`: [LABORES_JORNALES.md](./LABORES_JORNALES.md).
-- Razón de la tabla `precios_palma`: [PRECIOS_PALMA.md](./PRECIOS_PALMA.md).
+- Modelo de datos del catálogo unificado de Labores y del discriminador `categoria/tipo`: [LABORES_JORNALES.md](./LABORES_JORNALES.md).
+- **CRUD del catálogo de Labores** (Configuración → Labores: palma fijas + custom palma + custom finca, todas con `tipo_pago` y `precio_palma`): [API_PARAMETRICAS.md §4](./API_PARAMETRICAS.md).
 - Documentación dedicada de Ausencias (catálogo + endpoints): [API_AUSENCIAS.md](./API_AUSENCIAS.md).
 - Documentación dedicada de Horas Extras (catálogo + endpoints + marco legal colombiano): [API_HORAS_EXTRA.md](./API_HORAS_EXTRA.md).
 - Reglas de nómina afectadas por las ausencias (paso 5): ver `CONTEXTO.md` §6.9.

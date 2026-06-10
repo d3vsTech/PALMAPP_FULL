@@ -35,6 +35,7 @@ class Ausencia extends Model
         'tenant_id', 'operacion_id', 'empleado_id', 'motivo_ausencia_id',
         'tipo', 'fecha_inicio', 'fecha_fin', 'dias_calendario', 'dias_habiles',
         'es_remunerada', 'afecta_nomina', 'porcentaje_pago',
+        'afecta_seguridad_social', 'afecta_parafiscales', 'afecta_prestaciones',
         'valor_dia_base', 'valor_calculado',
         'entidad', 'numero_radicado', 'motivo', 'motivo_rechazo', 'documento_soporte',
         'estado', 'aprobado_por', 'aprobado_at',
@@ -48,9 +49,12 @@ class Ausencia extends Model
             'fecha_inicio'      => 'date',
             'fecha_fin'         => 'date',
             'aprobado_at'       => 'datetime',
-            'es_remunerada'     => 'boolean',
-            'afecta_nomina'     => 'boolean',
-            'porcentaje_pago'   => 'decimal:2',
+            'es_remunerada'           => 'boolean',
+            'afecta_nomina'           => 'boolean',
+            'porcentaje_pago'         => 'decimal:2',
+            'afecta_seguridad_social' => 'boolean',
+            'afecta_parafiscales'     => 'boolean',
+            'afecta_prestaciones'     => 'boolean',
             'valor_dia_base'    => 'decimal:2',
             'valor_calculado'   => 'decimal:2',
         ];
@@ -76,6 +80,15 @@ class Ausencia extends Model
                     }
                     if ($ausencia->porcentaje_pago === null) {
                         $ausencia->porcentaje_pago = $motivo->porcentaje_pago_default;
+                    }
+                    if (!isset($ausencia->attributes['afecta_seguridad_social'])) {
+                        $ausencia->afecta_seguridad_social = $motivo->afecta_seguridad_social;
+                    }
+                    if (!isset($ausencia->attributes['afecta_parafiscales'])) {
+                        $ausencia->afecta_parafiscales = $motivo->afecta_parafiscales;
+                    }
+                    if (!isset($ausencia->attributes['afecta_prestaciones'])) {
+                        $ausencia->afecta_prestaciones = $motivo->afecta_prestaciones;
                     }
                 }
             }

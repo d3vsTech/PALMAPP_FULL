@@ -28,7 +28,7 @@ class EntidadBancariaController extends Controller
                 fn () => EntidadBancaria::query()
                     ->activos()
                     ->orderBy('nombre')
-                    ->get(['id', 'nombre']),
+                    ->get(['id', 'nombre', 'codigo', 'contacto']),
             );
 
             return response()->json(['data' => $items])

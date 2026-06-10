@@ -10,7 +10,8 @@ class WizardCache
     public const TTL_UBICACIONES   = 21600; // 6 h
     public const TTL_CATEGORIAS    = 3600;  // 1 h
     public const TTL_TENANT        = 60;    // 60 s
-    public const TTL_PREDIO_BUNDLE = 60;    // 60 s — invalida en mutaciones
+    public const TTL_PREDIO_BUNDLE          = 60;    // 60 s — invalida en mutaciones
+    public const TTL_PRECIOS_LABORES_BUNDLE = 60;    // 60 s — invalida en mutaciones
 
     public static function predios(int $tenantId): string
     {
@@ -38,6 +39,16 @@ class WizardCache
         Cache::forget(static::predioResumen($tenantId, $predioId));
     }
 
+    public static function preciosLaboresBundle(int $tenantId): string
+    {
+        return "wizard:precios_labores_bundle:t:{$tenantId}";
+    }
+
+    public static function forgetPreciosLaboresBundle(int $tenantId): void
+    {
+        Cache::forget(static::preciosLaboresBundle($tenantId));
+    }
+
     public static function eps(int $tenantId): string
     {
         return "wizard:eps:t:{$tenantId}";
@@ -51,6 +62,11 @@ class WizardCache
     public static function fondosPension(int $tenantId): string
     {
         return "wizard:fondos:t:{$tenantId}";
+    }
+
+    public static function fondosCesantias(int $tenantId): string
+    {
+        return "wizard:fondos_cesantias:t:{$tenantId}";
     }
 
     public static function entidadesBancarias(int $tenantId): string
@@ -89,6 +105,7 @@ class WizardCache
             'eps'                 => self::eps($tenantId),
             'arl'                 => self::arl($tenantId),
             'fondos_pension'      => self::fondosPension($tenantId),
+            'fondos_cesantias'    => self::fondosCesantias($tenantId),
             'entidades_bancarias' => self::entidadesBancarias($tenantId),
             'predios'             => self::predios($tenantId),
         ];

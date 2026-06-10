@@ -12,6 +12,7 @@ use App\Models\Departamento;
 use App\Models\Empleado;
 use App\Models\EntidadBancaria;
 use App\Models\Eps;
+use App\Models\FondoCesantias;
 use App\Models\FondoPension;
 use App\Models\Predio;
 use App\Services\AuditoriaService;
@@ -162,6 +163,12 @@ class EmpleadoController extends Controller
                     WizardCache::fondosPension($tenantId),
                     WizardCache::TTL_PARAMETRICA,
                     fn () => FondoPension::query()->activos()->orderBy('nombre')->get(['id', 'nombre']),
+                ),
+
+                'fondos_cesantias' => Cache::remember(
+                    WizardCache::fondosCesantias($tenantId),
+                    WizardCache::TTL_PARAMETRICA,
+                    fn () => FondoCesantias::query()->activos()->orderBy('nombre')->get(['id', 'nombre']),
                 ),
 
                 'entidades_bancarias' => Cache::remember(

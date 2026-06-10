@@ -8,13 +8,18 @@ use App\Http\Requests\Admin\UpdateTenantRequest;
 use App\Models\Arl;
 use App\Models\EntidadBancaria;
 use App\Models\Eps;
+use App\Models\FondoCesantias;
 use App\Models\FondoPension;
-use App\Models\PrecioPalma;
+use App\Models\Labor;
+use App\Models\Semilla;
 use App\Models\Tenant;
+use App\Models\TipoHoraExtra;
 use App\Models\TenantConfig;
 use App\Models\TenantUser;
 use App\Models\User;
 use App\Services\AuditoriaService;
+use Database\Seeders\MotivoAusenciaSeeder;
+use Database\Seeders\NominaConceptoSeeder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -70,16 +75,12 @@ class TenantController extends Controller
                     ...$request->configDefaults(),
                 ]);
 
-                foreach (PrecioPalma::TIPOS as $tipo) {
-                    PrecioPalma::create([
-                        'tenant_id'    => $tenant->id,
-                        'tipo'         => $tipo,
-                        'precio_palma' => 0,
-                        'estado'       => true,
-                    ]);
-                }
-
+                $this->seedLaboresFijas($tenant);
                 $this->seedParametricasColaborador($tenant);
+                $this->seedTiposHoraExtra($tenant);
+                $this->seedSemillas($tenant);
+                $this->seedNominaConceptos($tenant);
+                $this->seedMotivosAusencia($tenant);
 
                 return $tenant;
             });
@@ -436,15 +437,180 @@ class TenantController extends Controller
         }
     }
 
+    private function seedTiposHoraExtra(Tenant $tenant): void
+    {
+        $tipos = [
+            [
+                'codigo'             => TipoHoraExtra::CODIGO_HED,
+                'nombre'             => 'Hora Extra Diurna (6am-9pm)',
+                'porcentaje_recargo' => 25.00,
+                'franja_horaria'     => TipoHoraExtra::FRANJA_DIURNO,
+                'aplica_festivo'     => false,
+                'es_extra'           => true,
+                'paga_hora_completa' => true,
+                'descripcion'        => 'Lunes a sábado 6:00 AM - 9:00 PM',
+            ],
+            [
+                'codigo'             => TipoHoraExtra::CODIGO_HEN,
+                'nombre'             => 'Hora Extra Nocturna (9pm-6am)',
+                'porcentaje_recargo' => 75.00,
+                'franja_horaria'     => TipoHoraExtra::FRANJA_NOCTURNO,
+                'aplica_festivo'     => false,
+                'es_extra'           => true,
+                'paga_hora_completa' => true,
+                'descripcion'        => 'Lunes a sábado 9:00 PM - 6:00 AM',
+            ],
+            [
+                'codigo'             => TipoHoraExtra::CODIGO_RN,
+                'nombre'             => 'Recargo Nocturno',
+                'porcentaje_recargo' => 35.00,
+                'franja_horaria'     => TipoHoraExtra::FRANJA_NOCTURNO,
+                'aplica_festivo'     => false,
+                'es_extra'           => false,
+                'paga_hora_completa' => false,
+                'descripcion'        => 'Lunes a sábado 9:00 PM - 6:00 AM',
+            ],
+            [
+                'codigo'             => TipoHoraExtra::CODIGO_HRD,
+                'nombre'             => 'Hora Ordinaria Dominical/Festivo',
+                'porcentaje_recargo' => 90.00,
+                'franja_horaria'     => TipoHoraExtra::FRANJA_DIURNO,
+                'aplica_festivo'     => true,
+                'es_extra'           => false,
+                'paga_hora_completa' => true,
+                'descripcion'        => 'Domingos y festivos 6:00 AM - 9:00 PM',
+            ],
+            [
+                'codigo'             => TipoHoraExtra::CODIGO_HEDF,
+                'nombre'             => 'Hora Extra Diurna Dominical/Festivo',
+                'porcentaje_recargo' => 115.00,
+                'franja_horaria'     => TipoHoraExtra::FRANJA_DIURNO,
+                'aplica_festivo'     => true,
+                'es_extra'           => true,
+                'paga_hora_completa' => true,
+                'descripcion'        => 'Domingos y festivos 6:00 AM - 9:00 PM',
+            ],
+            [
+                'codigo'             => TipoHoraExtra::CODIGO_HENF,
+                'nombre'             => 'Hora Extra Nocturna Dominical/Festivo',
+                'porcentaje_recargo' => 165.00,
+                'franja_horaria'     => TipoHoraExtra::FRANJA_NOCTURNO,
+                'aplica_festivo'     => true,
+                'es_extra'           => true,
+                'paga_hora_completa' => true,
+                'descripcion'        => 'Domingos y festivos 9:00 PM - 6:00 AM',
+            ],
+            [
+                'codigo'             => TipoHoraExtra::CODIGO_RND,
+                'nombre'             => 'Recargo Nocturno Dominical/Festivo',
+                'porcentaje_recargo' => 125.00,
+                'franja_horaria'     => TipoHoraExtra::FRANJA_NOCTURNO,
+                'aplica_festivo'     => true,
+                'es_extra'           => false,
+                'paga_hora_completa' => false,
+                'descripcion'        => 'Domingos y festivos 9:00 PM - 6:00 AM',
+            ],
+        ];
+
+        foreach ($tipos as $tipo) {
+            TipoHoraExtra::updateOrCreate(
+                ['tenant_id' => $tenant->id, 'codigo' => $tipo['codigo']],
+                array_merge($tipo, ['tenant_id' => $tenant->id, 'estado' => true])
+            );
+        }
+    }
+
+    /**
+     * Provisiona las 5 labores fijas del sistema (es_sistema=true) para un
+     * tenant recién creado. tipo_pago default convencional; precio_palma=null
+     * (el admin lo configura desde Configuración → Labores).
+     */
+    private function seedLaboresFijas(Tenant $tenant): void
+    {
+        $defaults = [
+            Labor::TIPO_COSECHA       => Labor::TIPO_PAGO_POR_PALMA,
+            Labor::TIPO_PLATEO        => Labor::TIPO_PAGO_POR_PALMA,
+            Labor::TIPO_PODA          => Labor::TIPO_PAGO_POR_PALMA,
+            Labor::TIPO_FERTILIZACION => Labor::TIPO_PAGO_POR_PALMA,
+            Labor::TIPO_SANIDAD       => Labor::TIPO_PAGO_JORNAL_FIJO,
+        ];
+
+        foreach (Labor::TIPOS_FIJOS as $tipo) {
+            Labor::create([
+                'tenant_id'    => $tenant->id,
+                'categoria'    => Labor::CATEGORIA_PALMA,
+                'tipo'         => $tipo,
+                'nombre'       => Labor::NOMBRES_FIJOS[$tipo],
+                'tipo_pago'    => $defaults[$tipo],
+                'precio_palma' => null,
+                'es_sistema'   => true,
+                'estado'       => true,
+            ]);
+        }
+    }
+
+    private function seedSemillas(Tenant $tenant): void
+    {
+        $semillas = [
+            ['tipo' => 'HIBRIDO_TENERA', 'nombre' => 'Deli x La Mé'],
+            ['tipo' => 'HIBRIDO_TENERA', 'nombre' => 'Deli x Yangambi'],
+            ['tipo' => 'HIBRIDO_TENERA', 'nombre' => 'Deli x AVROS'],
+            ['tipo' => 'HIBRIDO_TENERA', 'nombre' => 'Deli x Nigeria (NIFOR)'],
+            ['tipo' => 'HIBRIDO_TENERA', 'nombre' => 'Deli x Ghana (Calabar)'],
+            ['tipo' => 'HIBRIDO_TENERA', 'nombre' => 'Deli x Ekona'],
+            ['tipo' => 'HIBRIDO_TENERA', 'nombre' => 'DxP Unipalma'],
+            ['tipo' => 'HIBRIDO_TENERA', 'nombre' => 'DxP Indupalma'],
+            ['tipo' => 'HIBRIDO_OXG', 'nombre' => 'OxG AGROSAVIA El Mira (F1)'],
+            ['tipo' => 'HIBRIDO_OXG', 'nombre' => 'OxG Pacífico RC1'],
+            ['tipo' => 'HIBRIDO_OXG', 'nombre' => 'OxG Tumaco RC1'],
+            ['tipo' => 'HIBRIDO_OXG', 'nombre' => 'OxG Amazon'],
+            ['tipo' => 'HIBRIDO_OXG', 'nombre' => 'OxG Compacta x Ghana'],
+            ['tipo' => 'HIBRIDO_OXG', 'nombre' => 'OxG Semillas Unipalma'],
+            ['tipo' => 'HIBRIDO_OXG', 'nombre' => 'OxG Indupalma'],
+            ['tipo' => 'HIBRIDO_OXG', 'nombre' => 'OxG Taisha'],
+            ['tipo' => 'HIBRIDO_OXG', 'nombre' => 'OxG PDR-Taisha'],
+            ['tipo' => 'HIBRIDO_OXG', 'nombre' => 'OxG Coarí x La Mé'],
+            ['tipo' => 'HIBRIDO_OXG', 'nombre' => 'OxG Colombia (Coarí x La Mé)'],
+            ['tipo' => 'HIBRIDO_OXG', 'nombre' => 'OxG Guineensis RI'],
+        ];
+
+        foreach ($semillas as $data) {
+            Semilla::firstOrCreate(
+                ['tenant_id' => $tenant->id, 'nombre' => $data['nombre']],
+                ['tipo' => $data['tipo'], 'estado' => true]
+            );
+        }
+    }
+
+    /**
+     * Provisiona los conceptos legales obligatorios (SALUD, PENSION, ARL, FSP_*)
+     * para un tenant recién creado. Sin esto el motor de NominaCalculationService
+     * no podría liquidar empleados del tenant.
+     *
+     * La plantilla inactiva (RETEFUENTE, LIBRANZA, AUX_*, etc.) queda fuera —
+     * el admin la activa desde Configuración → Nómina cuando la necesite.
+     */
+    private function seedNominaConceptos(Tenant $tenant): void
+    {
+        (new NominaConceptoSeeder())->sembrarParaTenant($tenant, soloActivos: true);
+    }
+
+    private function seedMotivosAusencia(Tenant $tenant): void
+    {
+        (new MotivoAusenciaSeeder())->sembrarParaTenant($tenant);
+    }
+
     /**
      * Provisiona los catálogos paramétricos del colaborador (EPS, fondos de
-     * pensión, ARL y entidades bancarias) para un tenant recién creado.
+     * pensión, fondos de cesantías, ARL y entidades bancarias) para un tenant
+     * recién creado.
      */
     private function seedParametricasColaborador(Tenant $tenant): void
     {
         $catalogos = [
             [Eps::class,             Eps::INICIALES],
             [FondoPension::class,    FondoPension::INICIALES],
+            [FondoCesantias::class,  FondoCesantias::INICIALES],
             [Arl::class,             Arl::INICIALES],
             [EntidadBancaria::class, EntidadBancaria::INICIALES],
         ];

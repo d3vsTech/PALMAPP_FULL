@@ -10,38 +10,60 @@ use Illuminate\Database\Seeder;
  * Sembra el catálogo de conceptos de nómina según la normatividad colombiana.
  *
  * Se divide en dos grupos:
- *   - ACTIVOS por defecto: los aplica el motor automáticamente (SALUD, PENSION,
+ *   - ACTIVOS por defecto: los aplica el motor automáticamente (SALUD, PENSION, ARL,
  *     y los seis tramos del Fondo de Solidaridad Pensional según IBC en SMLV).
  *   - PLANTILLA inactiva: catálogo precargado para que el admin active y configure
  *     desde Configuración → Nómina cuando el negocio los necesite.
  *
- * El subsidio de transporte NO va aquí: es columna directa en `nomina_empleado`
- * (decisión documentada en docs/API_NOMINA.md y plan de rediseño).
+ * Los porcentajes vigentes y la vigencia (`porcentaje_empleado`, `porcentaje_empresa`,
+ * `vigente_desde`, `vigente_hasta`) viven en la misma tabla `nomina_concepto`:
+ * la tabla auxiliar `nomina_tabla_legal` fue consolidada (ver migración
+ * 2026_06_03_000007_consolidate_tabla_legal_into_nomina_concepto.php).
  *
  * Idempotente con updateOrCreate sobre (tenant_id, codigo).
  */
 class NominaConceptoSeeder extends Seeder
 {
+    private const VIGENCIA_INICIAL = '2022-12-31';
+
     public function run(): void
     {
-        $conceptos = array_merge($this->activosPorDefecto(), $this->plantillaInactiva());
-
         $tenants = Tenant::where('estado', 'ACTIVO')->get();
+        $total = 0;
 
         foreach ($tenants as $tenant) {
-            foreach ($conceptos as $concepto) {
-                NominaConcepto::updateOrCreate(
-                    [
-                        'tenant_id' => $tenant->id,
-                        'codigo'    => $concepto['codigo'],
-                    ],
-                    array_merge($concepto, ['tenant_id' => $tenant->id])
-                );
-            }
+            $total = $this->sembrarParaTenant($tenant);
         }
 
-        $total = count($conceptos);
         $this->command->info(" ✓ NominaConceptoSeeder: {$total} conceptos × {$tenants->count()} tenants");
+    }
+
+    /**
+     * Siembra los conceptos para un tenant. Idempotente vía updateOrCreate.
+     *
+     * @param  Tenant  $tenant
+     * @param  bool    $soloActivos  Si es true siembra solo los conceptos activos por
+     *                               defecto (SALUD, PENSION, ARL, FSP_*). Si es false
+     *                               siembra también la plantilla inactiva. Default false.
+     * @return int Cantidad de conceptos sembrados.
+     */
+    public function sembrarParaTenant(Tenant $tenant, bool $soloActivos = false): int
+    {
+        $conceptos = $soloActivos
+            ? $this->activosPorDefecto()
+            : array_merge($this->activosPorDefecto(), $this->plantillaInactiva());
+
+        foreach ($conceptos as $concepto) {
+            NominaConcepto::updateOrCreate(
+                [
+                    'tenant_id' => $tenant->id,
+                    'codigo'    => $concepto['codigo'],
+                ],
+                array_merge($concepto, ['tenant_id' => $tenant->id])
+            );
+        }
+
+        return count($conceptos);
     }
 
     /**
@@ -50,114 +72,97 @@ class NominaConceptoSeeder extends Seeder
     private function activosPorDefecto(): array
     {
         return [
-            // ─── Deducciones legales obligatorias ───
+            // ─── Aportes legales (empleado + empresa) ───
             [
-                'codigo'           => 'SALUD',
-                'nombre'           => 'Descuento Salud (4%)',
-                'tipo'             => 'DEDUCCION_LEGAL',
-                'subtipo'          => 'SALUD',
-                'operacion'        => 'RESTA',
-                'calculo'          => 'PORCENTAJE',
-                'valor_referencia' => 4.0000,
-                'base_calculo'    => 'TOTAL_DEVENGADO',
-                'aplica_a'         => 'AMBOS',
-                'es_obligatorio'   => true,
-                'activo'           => true,
+                'codigo'                => 'SALUD',
+                'nombre'                => 'Salud',
+                'tipo'                  => 'APORTE_LEGAL',
+                'subtipo'               => 'SALUD',
+                'operacion'             => 'RESTA',
+                'calculo'               => 'PORCENTAJE',
+                'valor_referencia'      => 4.0000,
+                'base_calculo'          => 'TOTAL_DEVENGADO',
+                'aplica_a'              => 'AMBOS',
+                'es_obligatorio'        => true,
+                'activo'                => true,
+                'porcentaje_empleado'   => 4.00,
+                'porcentaje_empresa'    => 8.50,
+                'vigente_desde'         => self::VIGENCIA_INICIAL,
+                'vigente_hasta'         => null,
+                'afecta_salario_minimo' => false,
+                'tipo_remuneracion'     => 'REMUNERADO',
             ],
             [
-                'codigo'           => 'PENSION',
-                'nombre'           => 'Descuento Pensión (4%)',
-                'tipo'             => 'DEDUCCION_LEGAL',
-                'subtipo'          => 'PENSION',
-                'operacion'        => 'RESTA',
-                'calculo'          => 'PORCENTAJE',
-                'valor_referencia' => 4.0000,
-                'base_calculo'    => 'TOTAL_DEVENGADO',
-                'aplica_a'         => 'AMBOS',
-                'es_obligatorio'   => true,
-                'activo'           => true,
+                'codigo'                => 'PENSION',
+                'nombre'                => 'Pensión',
+                'tipo'                  => 'APORTE_LEGAL',
+                'subtipo'               => 'PENSION',
+                'operacion'             => 'RESTA',
+                'calculo'               => 'PORCENTAJE',
+                'valor_referencia'      => 4.0000,
+                'base_calculo'          => 'TOTAL_DEVENGADO',
+                'aplica_a'              => 'AMBOS',
+                'es_obligatorio'        => true,
+                'activo'                => true,
+                'porcentaje_empleado'   => 4.00,
+                'porcentaje_empresa'    => 12.00,
+                'vigente_desde'         => self::VIGENCIA_INICIAL,
+                'vigente_hasta'         => null,
+                'afecta_salario_minimo' => false,
+                'tipo_remuneracion'     => 'REMUNERADO',
+            ],
+            [
+                'codigo'                => 'ARL',
+                'nombre'                => 'ARL',
+                'tipo'                  => 'APORTE_LEGAL',
+                'subtipo'               => 'ARL',
+                'operacion'             => 'RESTA',
+                'calculo'               => 'PORCENTAJE',
+                'valor_referencia'      => 0.0000,
+                'base_calculo'          => 'TOTAL_DEVENGADO',
+                'aplica_a'              => 'AMBOS',
+                'es_obligatorio'        => false,
+                'activo'                => true,
+                'porcentaje_empleado'   => 0.00,
+                'porcentaje_empresa'    => 0.522, // riesgo I (valor típico — el tenant ajusta según clasificación)
+                'vigente_desde'         => self::VIGENCIA_INICIAL,
+                'vigente_hasta'         => null,
+                'afecta_salario_minimo' => false,
+                'tipo_remuneracion'     => 'REMUNERADO',
             ],
 
             // ─── Fondo de Solidaridad Pensional (Ley 100/1993 art. 27, modif. Ley 797/2003) ───
-            // El motor aplica UN SOLO tramo según el IBC en SMLV.
-            [
-                'codigo'           => 'FSP_1',
-                'nombre'           => 'Fondo Solidaridad Pensional (>4 SMLV)',
-                'tipo'             => 'DEDUCCION_LEGAL',
-                'subtipo'          => 'FONDO_SOLIDARIDAD',
-                'operacion'        => 'RESTA',
-                'calculo'          => 'PORCENTAJE',
-                'valor_referencia' => 1.0000,
-                'base_calculo'    => 'TOTAL_DEVENGADO',
-                'aplica_a'         => 'AMBOS',
-                'es_obligatorio'   => false,
-                'activo'           => true,
-            ],
-            [
-                'codigo'           => 'FSP_2',
-                'nombre'           => 'Fondo Solidaridad Pensional (>16 SMLV)',
-                'tipo'             => 'DEDUCCION_LEGAL',
-                'subtipo'          => 'FONDO_SOLIDARIDAD',
-                'operacion'        => 'RESTA',
-                'calculo'          => 'PORCENTAJE',
-                'valor_referencia' => 1.2000,
-                'base_calculo'    => 'TOTAL_DEVENGADO',
-                'aplica_a'         => 'AMBOS',
-                'es_obligatorio'   => false,
-                'activo'           => true,
-            ],
-            [
-                'codigo'           => 'FSP_3',
-                'nombre'           => 'Fondo Solidaridad Pensional (>17 SMLV)',
-                'tipo'             => 'DEDUCCION_LEGAL',
-                'subtipo'          => 'FONDO_SOLIDARIDAD',
-                'operacion'        => 'RESTA',
-                'calculo'          => 'PORCENTAJE',
-                'valor_referencia' => 1.4000,
-                'base_calculo'    => 'TOTAL_DEVENGADO',
-                'aplica_a'         => 'AMBOS',
-                'es_obligatorio'   => false,
-                'activo'           => true,
-            ],
-            [
-                'codigo'           => 'FSP_4',
-                'nombre'           => 'Fondo Solidaridad Pensional (>18 SMLV)',
-                'tipo'             => 'DEDUCCION_LEGAL',
-                'subtipo'          => 'FONDO_SOLIDARIDAD',
-                'operacion'        => 'RESTA',
-                'calculo'          => 'PORCENTAJE',
-                'valor_referencia' => 1.6000,
-                'base_calculo'    => 'TOTAL_DEVENGADO',
-                'aplica_a'         => 'AMBOS',
-                'es_obligatorio'   => false,
-                'activo'           => true,
-            ],
-            [
-                'codigo'           => 'FSP_5',
-                'nombre'           => 'Fondo Solidaridad Pensional (>19 SMLV)',
-                'tipo'             => 'DEDUCCION_LEGAL',
-                'subtipo'          => 'FONDO_SOLIDARIDAD',
-                'operacion'        => 'RESTA',
-                'calculo'          => 'PORCENTAJE',
-                'valor_referencia' => 1.8000,
-                'base_calculo'    => 'TOTAL_DEVENGADO',
-                'aplica_a'         => 'AMBOS',
-                'es_obligatorio'   => false,
-                'activo'           => true,
-            ],
-            [
-                'codigo'           => 'FSP_6',
-                'nombre'           => 'Fondo Solidaridad Pensional (>20 SMLV)',
-                'tipo'             => 'DEDUCCION_LEGAL',
-                'subtipo'          => 'FONDO_SOLIDARIDAD',
-                'operacion'        => 'RESTA',
-                'calculo'          => 'PORCENTAJE',
-                'valor_referencia' => 2.0000,
-                'base_calculo'    => 'TOTAL_DEVENGADO',
-                'aplica_a'         => 'AMBOS',
-                'es_obligatorio'   => false,
-                'activo'           => true,
-            ],
+            // Comentado: solo se provisionan los 3 conceptos base (SALUD, PENSION, ARL).
+            // Activar manualmente si el tenant tiene empleados que superen 4 SMLV.
+            // $this->seedFsp('FSP_1', '>4 SMLV',  1.00),
+            // $this->seedFsp('FSP_2', '>16 SMLV', 1.20),
+            // $this->seedFsp('FSP_3', '>17 SMLV', 1.40),
+            // $this->seedFsp('FSP_4', '>18 SMLV', 1.60),
+            // $this->seedFsp('FSP_5', '>19 SMLV', 1.80),
+            // $this->seedFsp('FSP_6', '>20 SMLV', 2.00),
+        ];
+    }
+
+    private function seedFsp(string $codigo, string $tramo, float $porcentaje): array
+    {
+        return [
+            'codigo'                => $codigo,
+            'nombre'                => "Fondo Solidaridad Pensional ({$tramo})",
+            'tipo'                  => 'DEDUCCION_LEGAL',
+            'subtipo'               => 'FONDO_SOLIDARIDAD',
+            'operacion'             => 'RESTA',
+            'calculo'               => 'PORCENTAJE',
+            'valor_referencia'      => $porcentaje,
+            'base_calculo'          => 'TOTAL_DEVENGADO',
+            'aplica_a'              => 'AMBOS',
+            'es_obligatorio'        => false,
+            'activo'                => true,
+            'porcentaje_empleado'   => $porcentaje,
+            'porcentaje_empresa'    => 0.00,
+            'vigente_desde'         => self::VIGENCIA_INICIAL,
+            'vigente_hasta'         => null,
+            'afecta_salario_minimo' => false,
+            'tipo_remuneracion'     => 'REMUNERADO',
         ];
     }
 
@@ -169,205 +174,192 @@ class NominaConceptoSeeder extends Seeder
     {
         return [
             // ─── Deducciones legales adicionales ───
-            [
+            $this->base([
                 'codigo'           => 'RETEFUENTE',
                 'nombre'           => 'Retención en la Fuente',
                 'tipo'             => 'DEDUCCION_LEGAL',
                 'subtipo'          => 'OTRO',
                 'operacion'        => 'RESTA',
                 'calculo'          => 'FORMULA',
-                'valor_referencia' => 0,
-                'base_calculo'    => 'TOTAL_DEVENGADO',
+                'base_calculo'     => 'TOTAL_DEVENGADO',
                 'aplica_a'         => 'AMBOS',
-                'es_obligatorio'   => false,
                 'activo'           => false,
-            ],
-            [
+            ]),
+            $this->base([
                 'codigo'           => 'EMBARGO',
                 'nombre'           => 'Embargo Judicial',
                 'tipo'             => 'DEDUCCION_LEGAL',
                 'subtipo'          => 'EMBARGO',
                 'operacion'        => 'RESTA',
                 'calculo'          => 'VALOR_FIJO',
-                'valor_referencia' => 0,
-                'base_calculo'    => 'MANUAL',
+                'base_calculo'     => 'MANUAL',
                 'aplica_a'         => 'AMBOS',
-                'es_obligatorio'   => false,
                 'activo'           => false,
-            ],
+            ]),
 
             // ─── Deducciones voluntarias ───
-            [
+            $this->base([
                 'codigo'           => 'LIBRANZA',
                 'nombre'           => 'Libranza (préstamo bancario)',
                 'tipo'             => 'DEDUCCION_VOLUNTARIA',
                 'subtipo'          => 'LIBRANZA',
                 'operacion'        => 'RESTA',
                 'calculo'          => 'VALOR_FIJO',
-                'valor_referencia' => 0,
-                'base_calculo'    => 'MANUAL',
+                'base_calculo'     => 'MANUAL',
                 'aplica_a'         => 'AMBOS',
-                'es_obligatorio'   => false,
                 'activo'           => false,
-            ],
-            [
+            ]),
+            $this->base([
                 'codigo'           => 'CUOTA_SINDICAL',
                 'nombre'           => 'Cuota Sindical',
                 'tipo'             => 'DEDUCCION_VOLUNTARIA',
                 'subtipo'          => 'OTRO',
                 'operacion'        => 'RESTA',
                 'calculo'          => 'PORCENTAJE',
-                'valor_referencia' => 0,
-                'base_calculo'    => 'TOTAL_DEVENGADO',
+                'base_calculo'     => 'TOTAL_DEVENGADO',
                 'aplica_a'         => 'AMBOS',
-                'es_obligatorio'   => false,
                 'activo'           => false,
-            ],
-            [
+            ]),
+            $this->base([
                 'codigo'           => 'AFC',
                 'nombre'           => 'Aporte Voluntario AFC',
                 'tipo'             => 'DEDUCCION_VOLUNTARIA',
                 'subtipo'          => 'OTRO',
                 'operacion'        => 'RESTA',
                 'calculo'          => 'VALOR_FIJO',
-                'valor_referencia' => 0,
-                'base_calculo'    => 'MANUAL',
+                'base_calculo'     => 'MANUAL',
                 'aplica_a'         => 'AMBOS',
-                'es_obligatorio'   => false,
                 'activo'           => false,
-            ],
-            [
+            ]),
+            $this->base([
                 'codigo'           => 'PENSION_VOL',
                 'nombre'           => 'Aporte Pensión Voluntaria',
                 'tipo'             => 'DEDUCCION_VOLUNTARIA',
                 'subtipo'          => 'OTRO',
                 'operacion'        => 'RESTA',
                 'calculo'          => 'VALOR_FIJO',
-                'valor_referencia' => 0,
-                'base_calculo'    => 'MANUAL',
+                'base_calculo'     => 'MANUAL',
                 'aplica_a'         => 'AMBOS',
-                'es_obligatorio'   => false,
                 'activo'           => false,
-            ],
-            [
+            ]),
+            $this->base([
                 'codigo'           => 'DCTO_ADELANTO',
                 'nombre'           => 'Descuento Adelantos / Préstamo',
                 'tipo'             => 'DEDUCCION_VOLUNTARIA',
                 'subtipo'          => 'PRESTAMO',
                 'operacion'        => 'RESTA',
                 'calculo'          => 'VALOR_FIJO',
-                'valor_referencia' => 0,
-                'base_calculo'    => 'MANUAL',
+                'base_calculo'     => 'MANUAL',
                 'aplica_a'         => 'AMBOS',
-                'es_obligatorio'   => false,
-                'activo'           => true, // activo: lo usa la UI ("DCTO ADELANTOS +Agregar")
-            ],
-            [
+                'activo'           => true, // lo usa la UI ("DCTO ADELANTOS +Agregar")
+            ]),
+            $this->base([
                 'codigo'           => 'AHORRO',
                 'nombre'           => 'Ahorro Voluntario',
                 'tipo'             => 'DEDUCCION_VOLUNTARIA',
                 'subtipo'          => 'AHORRO_VOLUNTARIO',
                 'operacion'        => 'RESTA',
                 'calculo'          => 'VALOR_FIJO',
-                'valor_referencia' => 0,
-                'base_calculo'    => 'MANUAL',
+                'base_calculo'     => 'MANUAL',
                 'aplica_a'         => 'AMBOS',
-                'es_obligatorio'   => false,
-                'activo'           => true, // activo: lo usa la UI ("AHORROS +Agregar")
-            ],
+                'activo'           => true, // lo usa la UI ("AHORROS +Agregar")
+            ]),
 
             // ─── Bonificaciones ───
-            [
+            $this->base([
                 'codigo'           => 'AUX_ALIMENTACION',
                 'nombre'           => 'Auxilio de Alimentación',
                 'tipo'             => 'BONIFICACION_FIJA',
                 'subtipo'          => 'ALIMENTACION',
                 'operacion'        => 'SUMA',
                 'calculo'          => 'VALOR_FIJO',
-                'valor_referencia' => 0,
-                'base_calculo'    => 'MANUAL',
+                'base_calculo'     => 'MANUAL',
                 'aplica_a'         => 'AMBOS',
-                'es_obligatorio'   => false,
                 'activo'           => false,
-            ],
-            [
+            ]),
+            $this->base([
                 'codigo'           => 'BON_PRODUCTIVIDAD',
                 'nombre'           => 'Bonificación por Productividad',
                 'tipo'             => 'BONIFICACION_VARIABLE',
                 'subtipo'          => 'PRODUCTIVIDAD',
                 'operacion'        => 'SUMA',
                 'calculo'          => 'VALOR_FIJO',
-                'valor_referencia' => 0,
-                'base_calculo'    => 'MANUAL',
+                'base_calculo'     => 'MANUAL',
                 'aplica_a'         => 'AMBOS',
-                'es_obligatorio'   => false,
                 'activo'           => false,
-            ],
-            [
+            ]),
+            $this->base([
                 'codigo'           => 'BON_ANTIGUEDAD',
                 'nombre'           => 'Bonificación por Antigüedad',
                 'tipo'             => 'BONIFICACION_FIJA',
                 'subtipo'          => 'ANTIGUEDAD',
                 'operacion'        => 'SUMA',
                 'calculo'          => 'PORCENTAJE',
-                'valor_referencia' => 0,
-                'base_calculo'    => 'SALARIO_BASE',
+                'base_calculo'     => 'SALARIO_BASE',
                 'aplica_a'         => 'FIJO',
-                'es_obligatorio'   => false,
                 'activo'           => false,
-            ],
-            [
+            ]),
+            $this->base([
                 'codigo'           => 'COMISIONES',
                 'nombre'           => 'Comisiones por Ventas',
                 'tipo'             => 'BONIFICACION_VARIABLE',
                 'subtipo'          => 'OTRO',
                 'operacion'        => 'SUMA',
                 'calculo'          => 'VALOR_FIJO',
-                'valor_referencia' => 0,
-                'base_calculo'    => 'MANUAL',
+                'base_calculo'     => 'MANUAL',
                 'aplica_a'         => 'AMBOS',
-                'es_obligatorio'   => false,
                 'activo'           => false,
-            ],
-            [
+            ]),
+            $this->base([
                 'codigo'           => 'PRIMA_EXTRALEGAL',
                 'nombre'           => 'Prima Extralegal',
                 'tipo'             => 'BONIFICACION_VARIABLE',
                 'subtipo'          => 'OTRO',
                 'operacion'        => 'SUMA',
                 'calculo'          => 'VALOR_FIJO',
-                'valor_referencia' => 0,
-                'base_calculo'    => 'MANUAL',
+                'base_calculo'     => 'MANUAL',
                 'aplica_a'         => 'AMBOS',
-                'es_obligatorio'   => false,
                 'activo'           => false,
-            ],
-            [
+            ]),
+            $this->base([
                 'codigo'           => 'AUX_EDUCATIVO',
                 'nombre'           => 'Auxilio Educativo',
                 'tipo'             => 'BONIFICACION_FIJA',
                 'subtipo'          => 'OTRO',
                 'operacion'        => 'SUMA',
                 'calculo'          => 'VALOR_FIJO',
-                'valor_referencia' => 0,
-                'base_calculo'    => 'MANUAL',
+                'base_calculo'     => 'MANUAL',
                 'aplica_a'         => 'AMBOS',
-                'es_obligatorio'   => false,
                 'activo'           => false,
-            ],
-            [
+            ]),
+            $this->base([
                 'codigo'           => 'BONIFICACION',
                 'nombre'           => 'Bonificación (genérica)',
                 'tipo'             => 'BONIFICACION_VARIABLE',
                 'subtipo'          => 'OTRO',
                 'operacion'        => 'SUMA',
                 'calculo'          => 'VALOR_FIJO',
-                'valor_referencia' => 0,
-                'base_calculo'    => 'MANUAL',
+                'base_calculo'     => 'MANUAL',
                 'aplica_a'         => 'AMBOS',
-                'es_obligatorio'   => false,
-                'activo'           => true, // activo: lo usa la UI ("BONIFICACIÓN" input abierto)
-            ],
+                'activo'           => true, // lo usa la UI ("BONIFICACIÓN" input abierto)
+            ]),
         ];
+    }
+
+    /**
+     * Defaults para conceptos de la plantilla inactiva (sin porcentajes ni vigencia).
+     */
+    private function base(array $concepto): array
+    {
+        return array_merge([
+            'valor_referencia'      => 0,
+            'es_obligatorio'        => false,
+            'porcentaje_empleado'   => null,
+            'porcentaje_empresa'    => null,
+            'vigente_desde'         => null,
+            'vigente_hasta'         => null,
+            'afecta_salario_minimo' => false,
+            'tipo_remuneracion'     => 'REMUNERADO',
+        ], $concepto);
     }
 }

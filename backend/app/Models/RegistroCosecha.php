@@ -15,7 +15,7 @@ class RegistroCosecha extends Model
     protected $table = 'registro_cosecha';
 
     protected $fillable = [
-        'tenant_id', 'operacion_id', 'lote_id', 'sublote_id',
+        'tenant_id', 'operacion_id', 'lote_id', 'sublote_id', 'labor_id',
         'gajos_reportados', 'gajos_reconteo', 'peso_confirmado',
         'precio_cosecha', 'promedio_kg_gajo', 'valor_total',
         'sync_uuid', 'sync_estado', 'estado',
@@ -50,6 +50,11 @@ class RegistroCosecha extends Model
     public function sublote(): BelongsTo
     {
         return $this->belongsTo(Sublote::class);
+    }
+
+    public function labor(): BelongsTo
+    {
+        return $this->belongsTo(Labor::class, 'labor_id');
     }
 
     public function cuadrilla(): HasMany

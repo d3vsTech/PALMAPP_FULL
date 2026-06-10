@@ -11,7 +11,6 @@ use App\Models\Nomina;
 use App\Models\NominaConcepto;
 use App\Models\NominaEmpleado;
 use App\Models\NominaEmpleadoConcepto;
-use App\Models\NominaTablaLegal;
 use App\Models\Operacion;
 use App\Models\TenantConfig;
 use Illuminate\Support\Carbon;
@@ -502,9 +501,9 @@ class NominaCalculationService
      * IBC = total_devengado del período (excluye subsidio transporte).
      * Topes: mínimo 1 SMLV proporcional, máximo 25 SMLV proporcional.
      *
-     * El porcentaje se obtiene de NominaTablaLegal vigente en $fechaReferencia.
-     * Si no existe tabla legal para el concepto, se usa valor_referencia del concepto
-     * como fallback (útil durante migración o tenants sin tablas configuradas).
+     * El porcentaje se obtiene de nomina_concepto.porcentaje_empleado directamente.
+     * Si el concepto no tiene porcentaje_empleado cargado, se usa valor_referencia
+     * como fallback (compat con conceptos VALOR_FIJO o tenants sin porcentajes seteados).
      *
      * @return array<int,array{concepto_id:int,codigo:string,nombre:string,porcentaje:float,base:float,valor:float}>
      */
@@ -574,17 +573,12 @@ class NominaCalculationService
 
     /**
      * Resuelve el porcentaje del empleado para un concepto en una fecha dada.
-     * Prioriza NominaTablaLegal vigente; cae a valor_referencia si no hay tabla configurada.
+     * Lee directamente de nomina_concepto.porcentaje_empleado; cae a valor_referencia
+     * cuando el porcentaje aún no está cargado (compat con conceptos VALOR_FIJO).
      */
     private function resolverPorcentaje(NominaConcepto $concepto, Carbon $fecha): float
     {
-        $tabla = NominaTablaLegal::where('concepto_id', $concepto->id)
-            ->vigente($fecha->toDateString())
-            ->first();
-
-        return $tabla !== null
-            ? (float) $tabla->porcentaje_empleado
-            : (float) $concepto->valor_referencia;
+        return (float) ($concepto->porcentaje_empleado ?? $concepto->valor_referencia);
     }
 
     /**

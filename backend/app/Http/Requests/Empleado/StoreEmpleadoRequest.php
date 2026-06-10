@@ -67,6 +67,7 @@ class StoreEmpleadoRequest extends FormRequest
             // Seguridad social
             'eps'              => 'nullable|string|max:50',
             'fondo_pension'    => 'nullable|string|max:50',
+            'fondo_cesantias'  => 'nullable|string|max:50',
             'arl'              => 'nullable|string|max:50',
             'caja_compensacion' => 'nullable|string|max:50',
 

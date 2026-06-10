@@ -100,30 +100,42 @@ class Nomina extends Model
      * POST /nominas siempre lo pasa explícitamente desde el body
      * (`periodicidad`), así que el config queda como fallback solo para
      * llamadas internas que no tengan otro contexto.
+     *
+     * Los días de corte de cada quincena se leen de `tenant_config`
+     * (`dia_inicio_q1`, `dia_fin_q1`, `dia_inicio_q2`, `dia_fin_q2`).
+     * Defaults sembrados: 1, 15, 16, 31. El `dia_fin_q2` se clampea al
+     * último día real del mes (febrero → 28/29, abril → 30, etc.).
      */
     public static function calcularRangoFechas(int $mes, int $anio, ?int $quincena = null, ?string $tipo = null): array
     {
         $tipo = $tipo ?? static::tipoPagoTenant();
+        $mesPad = str_pad($mes, 2, '0', STR_PAD_LEFT);
+        $ultimoDia = (int) date('t', mktime(0, 0, 0, $mes, 1, $anio));
 
         if ($tipo === 'MENSUAL') {
             return [
-                'fecha_inicio' => "{$anio}-" . str_pad($mes, 2, '0', STR_PAD_LEFT) . "-01",
-                'fecha_fin'    => date('Y-m-t', mktime(0, 0, 0, $mes, 1, $anio)),
+                'fecha_inicio' => "{$anio}-{$mesPad}-01",
+                'fecha_fin'    => "{$anio}-{$mesPad}-" . str_pad($ultimoDia, 2, '0', STR_PAD_LEFT),
             ];
         }
 
-        // QUINCENAL
-        $mesPad = str_pad($mes, 2, '0', STR_PAD_LEFT);
+        // QUINCENAL — días configurables por tenant
+        $config = app('current_tenant')?->config;
+        $q1Inicio = (int) ($config?->dia_inicio_q1 ?? 1);
+        $q1Fin    = (int) ($config?->dia_fin_q1    ?? 15);
+        $q2Inicio = (int) ($config?->dia_inicio_q2 ?? 16);
+        $q2Fin    = (int) ($config?->dia_fin_q2    ?? 31);
+
         if ($quincena === 1) {
             return [
-                'fecha_inicio' => "{$anio}-{$mesPad}-01",
-                'fecha_fin'    => "{$anio}-{$mesPad}-15",
+                'fecha_inicio' => sprintf('%d-%s-%02d', $anio, $mesPad, min($q1Inicio, $ultimoDia)),
+                'fecha_fin'    => sprintf('%d-%s-%02d', $anio, $mesPad, min($q1Fin, $ultimoDia)),
             ];
         }
 
         return [
-            'fecha_inicio' => "{$anio}-{$mesPad}-16",
-            'fecha_fin'    => date('Y-m-t', mktime(0, 0, 0, $mes, 1, $anio)),
+            'fecha_inicio' => sprintf('%d-%s-%02d', $anio, $mesPad, min($q2Inicio, $ultimoDia)),
+            'fecha_fin'    => sprintf('%d-%s-%02d', $anio, $mesPad, min($q2Fin, $ultimoDia)),
         ];
     }
 }

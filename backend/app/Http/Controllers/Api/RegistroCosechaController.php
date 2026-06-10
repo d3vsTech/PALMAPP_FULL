@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Cosecha\StoreRegistroCosechaRequest;
 use App\Http\Requests\Cosecha\UpdateRegistroCosechaRequest;
 use App\Models\CosechaCuadrilla;
+use App\Models\Labor;
 use App\Models\Operacion;
 use App\Models\RegistroCosecha;
 use App\Services\AuditoriaService;
@@ -36,13 +37,15 @@ class RegistroCosechaController extends Controller
             $anio = (int) $operacion->fecha->format('Y');
             $peso = isset($data['peso_confirmado']) ? (float) $data['peso_confirmado'] : null;
 
-            $calc = $this->calcService->calcular($data['lote_id'], $anio, $peso);
+            $laborCosecha = $this->resolverLaborCosecha();
+            $calc = $this->calcService->calcular($laborCosecha, $data['lote_id'], $anio, $peso);
 
-            [$cosecha, $n] = DB::transaction(function () use ($operacion, $data, $peso, $calc) {
+            [$cosecha, $n] = DB::transaction(function () use ($operacion, $data, $peso, $calc, $laborCosecha) {
                 $cosecha = RegistroCosecha::create([
                     'operacion_id'     => $operacion->id,
                     'lote_id'          => $data['lote_id'],
                     'sublote_id'       => $data['sublote_id'],
+                    'labor_id'         => $laborCosecha->id,
                     'gajos_reportados' => $data['gajos_reportados'],
                     'peso_confirmado'  => $data['peso_confirmado'] ?? null,
                     'precio_cosecha'   => $calc['precio_cosecha'],
@@ -106,45 +109,65 @@ class RegistroCosechaController extends Controller
             $validated       = $request->validated();
             $datosAnteriores = $cosecha->toArray();
 
+            $laborCosecha = $cosecha->labor ?: $this->resolverLaborCosecha();
+
             $pesoCambio   = array_key_exists('peso_confirmado', $validated);
             $pesoEfectivo = $pesoCambio ? $validated['peso_confirmado'] : $cosecha->peso_confirmado;
             $pesoEfectivo = $pesoEfectivo !== null ? (float) $pesoEfectivo : null;
 
-            // Snapshot de precio — se guarda al crear. Si es NULL (creación hecha
-            // sin precios_cosecha configurado) y ahora llega peso, fetch fresco y
-            // valida CALC_ERROR vía el servicio.
-            $precioSnapshot = $cosecha->precio_cosecha !== null ? (float) $cosecha->precio_cosecha : null;
-            $nuevoPrecioSnapshot = null;
-            $nuevoPromedioSnapshot = null;
+            // Si la labor COSECHA está en JORNAL_FIJO, el valor_total no depende del peso —
+            // viene de labor.precio_palma. Resolver de una sola pasada.
+            if ($laborCosecha->esJornalFijo()) {
+                $calc = $this->calcService->calcular(
+                    $laborCosecha,
+                    $cosecha->lote_id,
+                    (int) $cosecha->operacion->fecha->format('Y'),
+                    $pesoEfectivo,
+                );
 
-            if ($pesoCambio && $pesoEfectivo !== null && $precioSnapshot === null) {
-                $anio = (int) $cosecha->operacion->fecha->format('Y');
-                $calc = $this->calcService->calcular($cosecha->lote_id, $anio, $pesoEfectivo);
-                $nuevoPrecioSnapshot   = $calc['precio_cosecha'];
-                $nuevoPromedioSnapshot = $calc['promedio_kg_gajo'];
-                $precioSnapshot = (float) $calc['precio_cosecha'];
-            }
-
-            if ($pesoCambio) {
-                $valorTotal = ($pesoEfectivo !== null && $precioSnapshot !== null)
-                    ? round($pesoEfectivo * $precioSnapshot, 2)
-                    : null;
+                $valorTotal              = $calc['valor_total'] !== null ? (float) $calc['valor_total'] : null;
+                $nuevoPrecioSnapshot     = null; // JORNAL_FIJO no usa precios_cosecha
+                $nuevoPromedioSnapshot   = null;
             } else {
-                $valorTotal = $cosecha->valor_total !== null ? (float) $cosecha->valor_total : null;
+                // POR_PALMA — lógica histórica con snapshot de precio.
+                $precioSnapshot = $cosecha->precio_cosecha !== null ? (float) $cosecha->precio_cosecha : null;
+                $nuevoPrecioSnapshot   = null;
+                $nuevoPromedioSnapshot = null;
+
+                if ($pesoCambio && $pesoEfectivo !== null && $precioSnapshot === null) {
+                    $anio = (int) $cosecha->operacion->fecha->format('Y');
+                    $calc = $this->calcService->calcular($laborCosecha, $cosecha->lote_id, $anio, $pesoEfectivo);
+                    $nuevoPrecioSnapshot   = $calc['precio_cosecha'];
+                    $nuevoPromedioSnapshot = $calc['promedio_kg_gajo'];
+                    $precioSnapshot = (float) $calc['precio_cosecha'];
+                }
+
+                if ($pesoCambio) {
+                    $valorTotal = ($pesoEfectivo !== null && $precioSnapshot !== null)
+                        ? round($pesoEfectivo * $precioSnapshot, 2)
+                        : null;
+                } else {
+                    $valorTotal = $cosecha->valor_total !== null ? (float) $cosecha->valor_total : null;
+                }
             }
 
             $cosecha = DB::transaction(function () use (
                 $cosecha, $validated, $pesoEfectivo, $valorTotal, $pesoCambio,
-                $nuevoPrecioSnapshot, $nuevoPromedioSnapshot
+                $nuevoPrecioSnapshot, $nuevoPromedioSnapshot, $laborCosecha
             ) {
                 $cosecha->fill(collect($validated)->except('cuadrilla')->toArray());
+
+                // Snapshot de la labor (por si la cosecha histórica aún no la tenía).
+                if ($cosecha->labor_id === null) {
+                    $cosecha->labor_id = $laborCosecha->id;
+                }
 
                 if ($nuevoPrecioSnapshot !== null) {
                     $cosecha->precio_cosecha   = $nuevoPrecioSnapshot;
                     $cosecha->promedio_kg_gajo = $nuevoPromedioSnapshot;
                 }
 
-                if ($pesoCambio) {
+                if ($pesoCambio || $laborCosecha->esJornalFijo()) {
                     $cosecha->valor_total = $valorTotal !== null ? (string) $valorTotal : null;
                 }
                 $cosecha->save();
@@ -166,8 +189,9 @@ class RegistroCosechaController extends Controller
                             'estado'                  => true,
                         ]);
                     }
-                } elseif ($pesoCambio) {
-                    // Solo se tocó el peso, redistribuir sobre la cuadrilla existente.
+                } elseif ($pesoCambio || $laborCosecha->esJornalFijo()) {
+                    // Solo se tocó el peso (POR_PALMA) o la labor es JORNAL_FIJO —
+                    // redistribuir sobre la cuadrilla existente.
                     $n = $cosecha->cuadrilla()->count();
                     $dist = $this->calcService->distribuirCuadrilla($valorTotal, $pesoEfectivo, $n);
 
@@ -237,5 +261,20 @@ class RegistroCosechaController extends Controller
             Log::error('Error al eliminar cosecha: ' . $e->getMessage());
             return response()->json(['message' => 'Error al eliminar la cosecha', 'error' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Resuelve la labor fija COSECHA del tenant actual. El seeder garantiza
+     * que existe; si no se encuentra es un error de provisionamiento.
+     */
+    private function resolverLaborCosecha(): Labor
+    {
+        $tenantId = app('current_tenant_id');
+
+        return Labor::query()
+            ->where('tenant_id', $tenantId)
+            ->where('tipo', Labor::TIPO_COSECHA)
+            ->where('es_sistema', true)
+            ->firstOrFail();
     }
 }

@@ -2,92 +2,104 @@
 
 namespace App\Services;
 
-use App\Models\Jornal;
 use App\Models\Labor;
 use App\Models\PrecioAbono;
-use App\Models\PrecioPalma;
 use InvalidArgumentException;
 
 /**
  * Calcula los valores (valor_unitario, precio_insumo_snapshot, valor_total)
- * de un jornal según su categoría y tipo.
+ * de un jornal a partir de la `Labor` asociada.
  *
- * Reglas de precio por tipo:
- *   - PLATEO / PODA:         precios_palma.precio_palma × cantidad_palmas
- *   - FERTILIZACION:         precio_abono por rango de gramos × cantidad_palmas
- *   - SANIDAD / OTROS:       precios_palma.precio_palma (valor plano, sin multiplicar)
- *                            (si precio_palma IS NULL → valor_total NULL)
- *   - FINCA:                 labor.valor_base
+ * Reglas:
+ *   - tipo=COSECHA: rechaza — la cosecha va por su flujo dedicado en
+ *     /operaciones/{id}/cosechas + cosecha_cuadrilla.
+ *   - tipo=FERTILIZACION + POR_PALMA: precio por rango de gramos en
+ *     `precio_abono` × cantidad_palmas (mantiene la lógica histórica).
+ *   - tipo_pago=POR_PALMA (cualquier otra): labor.precio_palma × cantidad_palmas.
+ *   - tipo_pago=JORNAL_FIJO: labor.precio_palma como valor plano.
+ *
+ * Si `labor.precio_palma` aún no está configurado (NULL), valor_total queda
+ * NULL — el jornal vive en "limbo" hasta que admin lo configure.
  */
 class JornalCalculationService
 {
     /**
      * @return array{valor_unitario: string|null, precio_insumo_snapshot: string|null, valor_total: string|null}
      */
-    public function calcularPalma(
-        string $tipo,
-        int $tenantId,
-        ?int $cantidadPalmas = null,
-        ?int $insumoId = null,
-        ?int $gramosPorPalma = null,
-    ): array {
-        return match ($tipo) {
-            Jornal::TIPO_PLATEO, Jornal::TIPO_PODA =>
-                $this->calcularPorPrecioFijo($tipo, $tenantId, $cantidadPalmas),
-
-            Jornal::TIPO_FERTILIZACION =>
-                $this->calcularFertilizacion($tenantId, $cantidadPalmas, $insumoId, $gramosPorPalma),
-
-            Jornal::TIPO_SANIDAD, Jornal::TIPO_OTROS =>
-                $this->calcularSanidadOtros($tipo, $tenantId),
-
-            default => throw new InvalidArgumentException("Tipo de labor de palma no soportado: {$tipo}"),
-        };
-    }
-
-    /**
-     * @return array{valor_unitario: string|null, precio_insumo_snapshot: null, valor_total: string|null}
-     */
-    public function calcularFinca(int $laborId): array
+    public function calcular(Labor $labor, array $data): array
     {
-        $labor = Labor::findOrFail($laborId);
-
-        return [
-            'valor_unitario' => (string) $labor->valor_base,
-            'precio_insumo_snapshot' => null,
-            'valor_total' => (string) $labor->valor_base,
-        ];
-    }
-
-    // ────────────────────────────────────────────────────────────────────
-    // Implementación interna
-    // ────────────────────────────────────────────────────────────────────
-
-    private function calcularPorPrecioFijo(string $tipo, int $tenantId, ?int $cantidadPalmas): array
-    {
-        if (!$cantidadPalmas) {
-            throw new InvalidArgumentException("{$tipo} requiere cantidad_palmas.");
-        }
-
-        $precio = PrecioPalma::query()
-            ->where('tenant_id', $tenantId)
-            ->where('tipo', $tipo)
-            ->where('estado', true)
-            ->value('precio_palma');
-
-        if ($precio === null) {
+        if ($labor->esCosecha()) {
             throw new InvalidArgumentException(
-                "No hay precio configurado en `precios_palma` para tipo {$tipo}."
+                'La labor COSECHA se registra vía POST /operaciones/{id}/cosechas, no como jornal.'
             );
         }
 
+        if ($labor->esPorPalma()) {
+            if ($labor->esFertilizacion()) {
+                return $this->calcularFertilizacion(
+                    tenantId:       (int) $labor->tenant_id,
+                    cantidadPalmas: $data['cantidad_palmas'] ?? null,
+                    insumoId:       $data['insumo_id'] ?? null,
+                    gramosPorPalma: $data['gramos_por_palma'] ?? null,
+                );
+            }
+
+            return $this->calcularPorPalmaSimple($labor, $data['cantidad_palmas'] ?? null);
+        }
+
+        // JORNAL_FIJO — para cualquier categoría (PALMA o FINCA).
+        return $this->calcularJornalFijo($labor);
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // Ramas
+    // ────────────────────────────────────────────────────────────────────
+
+    /**
+     * POR_PALMA simple (PLATEO, PODA, SANIDAD, custom PALMA POR_PALMA).
+     */
+    private function calcularPorPalmaSimple(Labor $labor, ?int $cantidadPalmas): array
+    {
+        if ($cantidadPalmas === null) {
+            throw new InvalidArgumentException(
+                "Se requiere cantidad_palmas para la labor '{$labor->nombre}' (tipo_pago POR_PALMA)."
+            );
+        }
+
+        if ($labor->precio_palma === null) {
+            return ['valor_unitario' => null, 'precio_insumo_snapshot' => null, 'valor_total' => null];
+        }
+
+        $precio = (float) $labor->precio_palma;
+
         return [
-            'valor_unitario' => (string) $precio,
+            'valor_unitario'         => (string) $precio,
             'precio_insumo_snapshot' => null,
-            'valor_total' => (string) round($cantidadPalmas * (float) $precio, 2),
+            'valor_total'            => (string) round($cantidadPalmas * $precio, 2),
         ];
     }
 
+    /**
+     * JORNAL_FIJO — valor plano de labor.precio_palma.
+     */
+    private function calcularJornalFijo(Labor $labor): array
+    {
+        if ($labor->precio_palma === null) {
+            return ['valor_unitario' => null, 'precio_insumo_snapshot' => null, 'valor_total' => null];
+        }
+
+        $precio = (string) (float) $labor->precio_palma;
+
+        return [
+            'valor_unitario'         => $precio,
+            'precio_insumo_snapshot' => null,
+            'valor_total'            => $precio,
+        ];
+    }
+
+    /**
+     * FERTILIZACION en POR_PALMA: precio por rango de gramos.
+     */
     private function calcularFertilizacion(
         int $tenantId,
         ?int $cantidadPalmas,
@@ -96,7 +108,7 @@ class JornalCalculationService
     ): array {
         if (!$cantidadPalmas || !$insumoId || !$gramosPorPalma) {
             throw new InvalidArgumentException(
-                'FERTILIZACION requiere cantidad_palmas, insumo_id y gramos_por_palma.'
+                'FERTILIZACION en POR_PALMA requiere cantidad_palmas, insumo_id y gramos_por_palma.'
             );
         }
 
@@ -116,37 +128,9 @@ class JornalCalculationService
         $precioPalma = (float) $precioAbono->precio_palma;
 
         return [
-            'valor_unitario' => (string) $precioPalma,
+            'valor_unitario'         => (string) $precioPalma,
             'precio_insumo_snapshot' => (string) $precioPalma,
-            'valor_total' => (string) round($cantidadPalmas * $precioPalma, 2),
-        ];
-    }
-
-    /**
-     * SANIDAD y OTROS: valor plano de `precios_palma.precio_palma` (sin multiplicar).
-     * Si no hay precio configurado, se guarda NULL (se hidrata cuando el admin
-     * configure el precio en `precios_palma`).
-     */
-    private function calcularSanidadOtros(string $tipo, int $tenantId): array
-    {
-        $precio = PrecioPalma::query()
-            ->where('tenant_id', $tenantId)
-            ->where('tipo', $tipo)
-            ->where('estado', true)
-            ->value('precio_palma');
-
-        if ($precio === null) {
-            return [
-                'valor_unitario' => null,
-                'precio_insumo_snapshot' => null,
-                'valor_total' => null,
-            ];
-        }
-
-        return [
-            'valor_unitario' => (string) $precio,
-            'precio_insumo_snapshot' => null,
-            'valor_total' => (string) $precio,
+            'valor_total'            => (string) round($cantidadPalmas * $precioPalma, 2),
         ];
     }
 }

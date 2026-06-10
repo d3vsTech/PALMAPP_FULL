@@ -60,6 +60,8 @@ Catálogo de variedades de palma (híbrido, ténera, dura).
 | `Híbrido` | Híbrido interespecífico OxG |
 | `Compacta` | Variedad compacta |
 | `Americana` | Elaeis oleifera americana |
+| `HIBRIDO_TENERA` | Híbrido Ténera DxP (*Elaeis guineensis*) — variedades Dura × Pisífera |
+| `HIBRIDO_OXG` | Híbrido OxG (*Elaeis oleifera × E. guineensis*) — tolerante a Pudrición del cogollo |
 
 ### Crear / Editar
 
@@ -188,122 +190,159 @@ Trabajador abona 150 palmas a 200g/palma:
 
 ---
 
-## 4. Labores de Finca
+## 4. Labores (catálogo unificado: palma + finca)
 
-Catálogo editable de trabajos manuales de mantenimiento de la finca (reparaciones, transporte interno, etc.). **No confundir con las Labores de Palma** (PLATEO, PODA, FERTILIZACION, SANIDAD, OTROS) — estas son tipos fijos cuyos precios se configuran en la sección §4b de este documento.
+Catálogo único de labores agrupado en una sola tabla `labores` con discriminador `categoria` (`PALMA` o `FINCA`).
 
-### Endpoints
+**Tipos de registros:**
 
-| Método   | URL                      | Permiso | Descripción |
-|----------|--------------------------|---------|-------------|
-| `GET`    | `/labores/select`        | `configuracion.editar` **o** `operaciones.crear` **o** `operaciones.editar` | Dropdown sin paginación para el wizard (incluye `valor_base`). Filtros: `?estado=false` para inactivas. |
-| `GET`    | `/labores`               | `configuracion.editar` | Listar labores (paginado, filtrable por `search`, `estado`) |
-| `GET`    | `/labores/{id}`          | `configuracion.editar` | Ver detalle |
-| `POST`   | `/labores`               | `configuracion.editar` | Crear labor |
-| `PUT`    | `/labores/{id}`          | `configuracion.editar` | Editar labor |
-| `DELETE` | `/labores/{id}`          | `configuracion.editar` | Eliminar labor |
+| Tipo | `categoria` | `es_sistema` | `tipo` | Notas |
+|---|---|---|---|---|
+| **Fijas del sistema** (5 por tenant) | `PALMA` | `true` | `COSECHA` / `PLATEO` / `PODA` / `FERTILIZACION` / `SANIDAD` | Sembradas al provisionar el tenant. No se pueden borrar ni renombrar. Solo se editan `tipo_pago`, `precio_palma`, `estado`. |
+| **Custom de palma** | `PALMA` | `false` | `null` | Labores personalizadas del tenant. `tipo_pago` configurable. Aparecen junto a las fijas en el dropdown del wizard. |
+| **Custom de finca** | `FINCA` | `false` | `null` | Trabajos manuales de mantenimiento (reparaciones, transporte interno, etc.). `tipo_pago` siempre `JORNAL_FIJO` (forzado por el modelo). |
 
-### Crear / Editar
-
-```json
-// POST /labores
-{
-  "nombre": "Reparación de portón",
-  "valor_base": 45000.00
-}
-
-// PUT /labores/{id}
-{
-  "nombre": "Mantenimiento portón norte",
-  "valor_base": 50000.00,
-  "estado": false
-}
-```
-
-| Campo | Tipo | Requerido al crear | Descripción |
-|---|---|---|---|
-| `nombre` | string(100) | ✔ | Único por tenant. |
-| `valor_base` | decimal | ✔ | Precio fijo que gana el empleado por esta labor. |
-| `estado` | boolean | — | Default `true`. |
-
-### Respuesta del select
-
-```json
-{
-  "data": [
-    { "id": 7, "nombre": "Reparación de portón", "valor_base": "45000.00" },
-    { "id": 8, "nombre": "Transporte interno", "valor_base": "50000.00" }
-  ]
-}
-```
-
-### Errores específicos
-
-| Código HTTP | code | Descripción |
-|-------------|------|-------------|
-| 409 | `LABOR_CON_JORNALES` | No se puede eliminar porque tiene jornales de Finca asociados |
-
----
-
-## 4b. Precios de Palma (PLATEO, PODA, SANIDAD, OTROS)
-
-Precios configurables por tenant para las 4 labores de palma de precio fijo. Los registros se crean automáticamente con `precio_palma = 0` al provisionar un nuevo tenant — el admin solo los **actualiza** desde Configuración.
-
-> COSECHA usa `precios_cosecha` (§9). FERTILIZACION usa `precios-abono` (§3). Solo PLATEO, PODA, SANIDAD y OTROS usan esta tabla.
+> **Reemplaza tres APIs antiguas:** este endpoint unificado sustituye a los desaparecidos `/precios-palma`, `/labores-palma` y el `/labores` (que solo cubría finca). El modelo único es `App\Models\Labor`.
 
 ### Endpoints
 
 | Método | URL | Permiso | Descripción |
 |---|---|---|---|
-| `GET` | `/precios-palma` | `configuracion.editar` | Listar los 4 tipos con sus precios actuales (sin paginación). |
-| `GET` | `/precios-palma/{id}` | `configuracion.editar` | Ver detalle de un tipo. |
-| `PUT` | `/precios-palma/{id}` | `configuracion.editar` | Actualizar el precio de un tipo. |
+| `GET` | `/labores/select` | `configuracion.editar` **o** `operaciones.crear\|editar` | Dropdown sin paginación para el wizard. Filtros: `?categoria=PALMA\|FINCA` (recomendado), `?estado=false` para inactivas. Incluye `tipo_pago`, `precio_palma`, `es_sistema` y `requiere_cosecha_workflow`. |
+| `GET` | `/labores` | `configuracion.editar` | Listar labores (paginado, con filtros). |
+| `GET` | `/labores/{id}` | `configuracion.editar` | Ver detalle. |
+| `POST` | `/labores` | `configuracion.editar` | Crear labor **custom** (palma o finca). Las 5 fijas no se crean por API. |
+| `PUT` | `/labores/{id}` | `configuracion.editar` | Actualizar. Fijas: solo `tipo_pago` / `precio_palma` / `estado`. Custom: todo excepto `categoria`, `tipo`, `es_sistema`. |
+| `DELETE` | `/labores/{id}` | `configuracion.editar` | Eliminar custom. Fijas devuelven 403. |
 
-No hay `POST` ni `DELETE` — los 4 registros son inmutables en estructura (solo cambia `precio_palma`).
+### Filtros (GET index)
 
-### Respuesta (GET index)
+| Parámetro | Tipo | Descripción |
+|---|---|---|
+| `search` | string | Busca en `nombre` (parcial, ilike). |
+| `categoria` | `PALMA` \| `FINCA` | Filtra por categoría. |
+| `tipo` | `COSECHA` \| `PLATEO` \| `PODA` \| `FERTILIZACION` \| `SANIDAD` | Filtra por tipo (solo aplica a fijas). |
+| `tipo_pago` | `POR_PALMA` \| `JORNAL_FIJO` | Filtra por tipo de pago. |
+| `es_sistema` | boolean | Filtra fijas vs custom. |
+| `estado` | boolean | Filtra activas vs inactivas. |
+| `per_page` | integer | Default: 15. |
+
+### Respuesta del select
 
 ```json
+// GET /labores/select?categoria=PALMA
 {
   "data": [
-    { "id": 1, "tipo": "OTROS",   "precio_palma": null,    "estado": true },
-    { "id": 2, "tipo": "PLATEO",  "precio_palma": "50.00", "estado": true },
-    { "id": 3, "tipo": "PODA",    "precio_palma": "80.00", "estado": true },
-    { "id": 4, "tipo": "SANIDAD", "precio_palma": null,    "estado": true }
+    { "id": 13, "nombre": "Cosecha",       "categoria": "PALMA", "tipo": "COSECHA",       "tipo_pago": "POR_PALMA",   "precio_palma": null,    "es_sistema": true,  "requiere_cosecha_workflow": true },
+    { "id": 14, "nombre": "Plateo",        "categoria": "PALMA", "tipo": "PLATEO",        "tipo_pago": "POR_PALMA",   "precio_palma": "50.00", "es_sistema": true,  "requiere_cosecha_workflow": false },
+    { "id": 15, "nombre": "Poda",          "categoria": "PALMA", "tipo": "PODA",          "tipo_pago": "POR_PALMA",   "precio_palma": "80.00", "es_sistema": true,  "requiere_cosecha_workflow": false },
+    { "id": 16, "nombre": "Fertilización", "categoria": "PALMA", "tipo": "FERTILIZACION", "tipo_pago": "POR_PALMA",   "precio_palma": null,    "es_sistema": true,  "requiere_cosecha_workflow": false },
+    { "id": 17, "nombre": "Sanidad",       "categoria": "PALMA", "tipo": "SANIDAD",       "tipo_pago": "JORNAL_FIJO", "precio_palma": null,    "es_sistema": true,  "requiere_cosecha_workflow": false },
+    { "id": 32, "nombre": "Resiembra",     "categoria": "PALMA", "tipo": null,            "tipo_pago": "POR_PALMA",   "precio_palma": "1500.00","es_sistema": false, "requiere_cosecha_workflow": false }
+  ]
+}
+
+// GET /labores/select?categoria=FINCA
+{
+  "data": [
+    { "id": 7, "nombre": "Reparación de portón", "categoria": "FINCA", "tipo": null, "tipo_pago": "JORNAL_FIJO", "precio_palma": "45000.00", "es_sistema": false, "requiere_cosecha_workflow": false },
+    { "id": 8, "nombre": "Transporte interno",   "categoria": "FINCA", "tipo": null, "tipo_pago": "JORNAL_FIJO", "precio_palma": "50000.00", "es_sistema": false, "requiere_cosecha_workflow": false }
   ]
 }
 ```
 
-### Editar (PUT)
+### Crear (POST)
 
 ```json
-// PUT /precios-palma/{id}
-{ "precio_palma": 60.00 }
-
-// Respuesta 200
+// POST /labores  — labor custom de palma POR_PALMA
 {
-  "message": "Precio actualizado correctamente",
-  "data": { "id": 2, "tipo": "PLATEO", "precio_palma": "60.00", "estado": true }
+  "categoria": "PALMA",
+  "nombre": "Resiembra",
+  "tipo_pago": "POR_PALMA",
+  "precio_palma": 1500.00
+}
+
+// POST /labores  — labor custom de finca (tipo_pago forzado a JORNAL_FIJO)
+{
+  "categoria": "FINCA",
+  "nombre": "Reparación de portón",
+  "precio_palma": 45000.00
 }
 ```
 
-| Campo | Tipo | Descripción |
+**Respuesta 201:**
+```json
+{
+  "message": "Labor creada correctamente",
+  "data": {
+    "id": 32,
+    "tenant_id": 1,
+    "categoria": "PALMA",
+    "tipo": null,
+    "nombre": "Resiembra",
+    "tipo_pago": "POR_PALMA",
+    "precio_palma": "1500.00",
+    "es_sistema": false,
+    "estado": true
+  }
+}
+```
+
+> Los campos `tipo` y `es_sistema` se ignoran si vienen en el body (siempre se fuerzan a `null` y `false` en POST). Las fijas no se crean por API — se siembran al provisionar el tenant.
+
+### Editar (PUT)
+
+**Fija del sistema** — solo `tipo_pago`, `precio_palma`, `estado`:
+```json
+// PUT /labores/14   (la fija PLATEO)
+{
+  "tipo_pago": "JORNAL_FIJO",
+  "precio_palma": 60000.00
+}
+```
+
+**Custom** — `nombre`, `tipo_pago` (solo PALMA), `precio_palma`, `estado`:
+```json
+// PUT /labores/32   (custom de palma)
+{
+  "nombre": "Resiembra palmas enfermas",
+  "tipo_pago": "JORNAL_FIJO",
+  "precio_palma": 50000.00,
+  "estado": true
+}
+```
+
+Los campos `categoria`, `tipo` y `es_sistema` son inmutables (silenciosamente descartados si llegan). En labores de FINCA, `tipo_pago` se vuelve a forzar a `JORNAL_FIJO` aunque el cliente envíe otra cosa.
+
+### Reglas
+
+| Campo | Regla |
+|---|---|
+| `categoria` | Requerido en POST. `PALMA` o `FINCA`. Inmutable tras crear. |
+| `nombre` | Requerido en POST. Único por tenant. Max 100 chars. Las fijas tienen nombre canónico inmutable. |
+| `tipo_pago` | Requerido en POST si `categoria=PALMA`. FINCA fuerza `JORNAL_FIJO`. |
+| `precio_palma` | Opcional. POR_PALMA: precio por palma. JORNAL_FIJO: valor plano. `null` = aún no configurado → los jornales se guardan con `valor_total=null` y se hidratan al configurar precio. |
+| `tipo` | Inmutable. Solo aplica a fijas (COSECHA, PLATEO, PODA, FERTILIZACION, SANIDAD). Custom siempre `null`. |
+| `es_sistema` | Inmutable. POST siempre crea con `false`. |
+
+### Efectos de `tipo_pago` en el cálculo del jornal
+
+| tipo_pago | UI muestra | Servicio calcula |
 |---|---|---|
-| `precio_palma` | decimal \| null | Precio por palma (PLATEO/PODA) o valor plano (SANIDAD/OTROS). `null` = no configurado. |
-| `estado` | boolean | Activar/desactivar el tipo. |
+| `POR_PALMA` | Lote + Sublote + Cantidad Palmas | `precio_palma × cantidad_palmas` (FERTILIZACION usa `precio_abono` por rango en lugar de `labor.precio_palma`) |
+| `JORNAL_FIJO` | Solo descripción (sin palmas) | `precio_palma` (valor plano) |
 
-### Comportamiento de `precio_palma = null`
-
-Para SANIDAD y OTROS, `precio_palma` puede ser `null` (no configurado). En ese caso:
-- El jornal se registra normalmente en la planilla.
-- `valor_total` se guarda como `null` — pendiente de precio.
-- Al configurar el precio luego, los jornales históricos con `valor_total = null` **no se recalculan** automáticamente.
+> COSECHA POR_PALMA tiene su propio flujo en `/operaciones/{id}/cosechas` + `precios_cosecha` (ver [API_OPERACIONES.md §3.1](./API_OPERACIONES.md)). COSECHA JORNAL_FIJO usa `labor.precio_palma` como valor plano por cuadrilla.
 
 ### Errores específicos
 
-| Código HTTP | Descripción |
-|---|---|
-| 422 | `precio_palma` fuera de rango o tipo de dato inválido. |
+| Código HTTP | Code | Descripción |
+|---|---|---|
+| 409 | `LABOR_DUPLICADA` | Ya existe una labor con ese nombre en el tenant. |
+| 409 | `LABOR_CON_JORNALES` | No se puede eliminar — tiene jornales asociados. |
+| 409 | `LABOR_CON_COSECHAS` | No se puede eliminar la labor COSECHA fija — tiene registros de cosecha asociados. |
+| 403 | `LABOR_DEL_SISTEMA` | Intento de eliminar una labor fija (`es_sistema=true`). |
+| 422 | — | `precio_palma` fuera de rango, `tipo_pago` no reconocido, o `categoria` inválida. |
 
 ---
 
@@ -460,6 +499,10 @@ Configuración del tenant para el módulo de nómina. Solo 2 endpoints (ver y ed
     "salario_minimo_vigente": 1300000.00,
     "auxilio_transporte": 162000.00,
     "divisor_jornada_mensual": 240,
+    "dia_inicio_q1": 1,
+    "dia_fin_q1": 15,
+    "dia_inicio_q2": 16,
+    "dia_fin_q2": 31,
     "moneda": "COP",
     "zona_horaria": "America/Bogota",
     "pais": "CO"
@@ -469,15 +512,51 @@ Configuración del tenant para el módulo de nómina. Solo 2 endpoints (ver y ed
 
 ### Editar (PUT)
 
-Solo se pueden editar estos 4 campos. Los demás (`moneda`, `zona_horaria`, `pais`) son de solo lectura.
+Editables: los 8 campos listados abajo. Los demás (`moneda`, `zona_horaria`, `pais`) son de solo lectura.
+
+> **El PUT acepta payloads parciales (todos los campos son `sometimes`).** El frontend está dividido en varias vistas y cada una manda **solo los campos que controla** — no es necesario re-enviar el resto. La validación cruzada de fechas combina lo que llega con los valores actuales en BD, así que mandar un único campo es seguro y no produce falsos `CORTE_QUINCENA_INVALIDO`.
+
+#### Payloads por vista del frontend
 
 ```json
-// PUT /configuracion/nomina
+// Vista "Periodicidad de la Nómina" — solo periodicidad + fechas de corte
+PUT /configuracion/nomina
 {
-  "tipo_pago_nomina": "MENSUAL",
+  "tipo_pago_nomina": "QUINCENAL",
+  "dia_inicio_q1": 1,
+  "dia_fin_q1": 15,
+  "dia_inicio_q2": 16,
+  "dia_fin_q2": 30
+}
+```
+
+```json
+// Vista "Jornada Laboral Semanal" — solo el divisor
+PUT /configuracion/nomina
+{ "divisor_jornada_mensual": 210 }
+```
+
+```json
+// Vista "Constantes Legales" (cuando aplique) — solo SMLV + auxilio
+PUT /configuracion/nomina
+{
+  "salario_minimo_vigente": 1300000.00,
+  "auxilio_transporte": 162000.00
+}
+```
+
+```json
+// Payload completo (también válido, p.ej. desde un único formulario)
+PUT /configuracion/nomina
+{
+  "tipo_pago_nomina": "QUINCENAL",
   "salario_minimo_vigente": 1300000.00,
   "auxilio_transporte": 162000.00,
-  "divisor_jornada_mensual": 240
+  "divisor_jornada_mensual": 240,
+  "dia_inicio_q1": 1,
+  "dia_fin_q1": 15,
+  "dia_inicio_q2": 16,
+  "dia_fin_q2": 30
 }
 ```
 
@@ -486,7 +565,23 @@ Solo se pueden editar estos 4 campos. Los demás (`moneda`, `zona_horaria`, `pai
 | `tipo_pago_nomina` | string | `QUINCENAL` o `MENSUAL` |
 | `salario_minimo_vigente` | decimal | Salario mínimo legal vigente |
 | `auxilio_transporte` | decimal | Auxilio de transporte vigente |
-| `divisor_jornada_mensual` | integer | `240` (CST tradicional, 48h/sem) o `210` (Ley 2101/2021, 42h/sem). Usado para calcular `valor_hora = salario_base / divisor` en el módulo de Horas Extras. |
+| `divisor_jornada_mensual` | integer (1-480) | Divisor mensual para calcular `valor_hora = salario_base / divisor`. Valores típicos: `240` (48h/sem, CST tradicional) y `210` (42h/sem, Ley 2101/2021). |
+| `horas_semanales` | integer (1-96) | **Alias conveniente de `divisor_jornada_mensual`** — acepta cualquier número de horas semanales y el backend calcula `divisor = horas × 5`. Si se envían ambos campos, `horas_semanales` tiene prioridad. |
+| `dia_inicio_q1` | integer (1-31) | Día de inicio de la 1ª quincena. Default `1`. |
+| `dia_fin_q1` | integer (1-31) | Día de fin de la 1ª quincena. Default `15`. Debe ser ≥ `dia_inicio_q1`. |
+| `dia_inicio_q2` | integer (1-31) | Día de inicio de la 2ª quincena. Default `16`. Debe ser > `dia_fin_q1` (sin solapamiento). |
+| `dia_fin_q2` | integer (1-31) | Día de fin de la 2ª quincena. Default `31`. Debe ser ≥ `dia_inicio_q2`. **Si supera el último día del mes, se clampea automáticamente** (ej. `31` en febrero → 28/29). |
+
+### Notas para la UI de Configuración → Nómina
+
+- **Jornada Laboral Semanal:** el GET ahora devuelve `horas_semanales` (48 o 42) junto con `divisor_jornada_mensual`. El frontend puede enviar `horas_semanales` directamente en el PUT — el backend lo convierte a `divisor_jornada_mensual` internamente.
+- **Fechas de Corte (1ª/2ª quincena):** los 4 dropdowns son **editables**. El motor `Nomina::calcularRangoFechas()` los lee al crear cada nómina nueva. Las nóminas históricas conservan su `fecha_inicio`/`fecha_fin` originales (no se recalculan al cambiar la config). Si el admin pone valores que se solapan o invierten, el endpoint devuelve **422 `CORTE_QUINCENA_INVALIDO`** con los errores por campo.
+
+### Errores específicos
+
+| Código HTTP | code | Descripción |
+|---|---|---|
+| 422 | `CORTE_QUINCENA_INVALIDO` | Los días de quincena no son coherentes (`dia_fin_q1 < dia_inicio_q1`, solapamiento Q1/Q2, o `dia_fin_q2 < dia_inicio_q2`). |
 
 ---
 
@@ -652,18 +747,37 @@ Historial de acciones realizadas dentro de la finca. Solo lectura — los regist
 
 ## 11. Tipos de Hora Extra
 
-Catálogo paramétrico por tenant con los 7 tipos de hora extra reconocidos por la legislación laboral colombiana (Código Sustantivo del Trabajo arts. 168, 179 y Ley 789/2002 art. 26). Usado por el Paso 4 del wizard de Planilla del Día.
+Catálogo paramétrico por tenant con los 7 tipos de hora extra reconocidos por la legislación laboral colombiana (Código Sustantivo del Trabajo arts. 168, 179, Ley 789/2002 art. 26 y **Ley 2466 de 2025** — recargo dominical 75% → 90%). Usado por el Paso 4 del wizard de Planilla del Día.
 
 ### Endpoints
 
 | Método   | URL                                | Descripción |
 |----------|------------------------------------|-------------|
+| `GET`    | `/tipos-hora-extra/codigos`        | Lista estática de los 7 códigos legales colombianos (sin paginación, sin DB). Útil para poblar el selector de `codigo` al crear un nuevo tipo. Permiso: `configuracion.editar`. |
 | `GET`    | `/tipos-hora-extra/select`         | Dropdown del wizard (sin paginación). Permiso especial: `configuracion.editar` **o** `operaciones.crear` **o** `operaciones.editar`. |
 | `GET`    | `/tipos-hora-extra`                | Listar (paginado). |
 | `GET`    | `/tipos-hora-extra/{id}`           | Ver detalle. |
 | `POST`   | `/tipos-hora-extra`                | Crear. |
 | `PUT`    | `/tipos-hora-extra/{id}`           | Actualizar. |
 | `DELETE` | `/tipos-hora-extra/{id}`           | Eliminar. Falla con 409 `TIPO_HORA_EXTRA_CON_REGISTROS` si hay horas extras asociadas. |
+
+### Respuesta de `/codigos`
+
+```json
+{
+  "data": [
+    { "codigo": "HED",  "nombre": "Hora Extra Diurna",                     "descripcion": "6:00 AM – 9:00 PM, días hábiles",        "es_extra": true,  "paga_hora_completa": true,  "porcentaje_recargo":  25.00 },
+    { "codigo": "HEN",  "nombre": "Hora Extra Nocturna",                   "descripcion": "9:00 PM – 6:00 AM, días hábiles",        "es_extra": true,  "paga_hora_completa": true,  "porcentaje_recargo":  75.00 },
+    { "codigo": "RN",   "nombre": "Recargo Nocturno",                      "descripcion": "9:00 PM – 6:00 AM (dentro de jornada)", "es_extra": false, "paga_hora_completa": false, "porcentaje_recargo":  35.00 },
+    { "codigo": "HRD",  "nombre": "Hora Ordinaria Dominical/Festivo",      "descripcion": "Jornada ordinaria en domingo o festivo", "es_extra": false, "paga_hora_completa": true,  "porcentaje_recargo":  90.00 },
+    { "codigo": "HEDF", "nombre": "Hora Extra Diurna Dominical/Festivo",   "descripcion": "6:00 AM – 9:00 PM en domingo o festivo", "es_extra": true,  "paga_hora_completa": true,  "porcentaje_recargo": 115.00 },
+    { "codigo": "HENF", "nombre": "Hora Extra Nocturna Dominical/Festivo", "descripcion": "9:00 PM – 6:00 AM en domingo o festivo", "es_extra": true,  "paga_hora_completa": true,  "porcentaje_recargo": 165.00 },
+    { "codigo": "RND",  "nombre": "Recargo Nocturno Dominical/Festivo",    "descripcion": "Jornada ordinaria nocturna en festivo",  "es_extra": false, "paga_hora_completa": false, "porcentaje_recargo": 125.00 }
+  ]
+}
+```
+
+> `es_extra`, `paga_hora_completa` y `porcentaje_recargo` están incluidos para que el frontend pueda **pre-llenar automáticamente** el formulario al seleccionar un código en el modal "Nuevo Tipo de Hora Extra". Los valores de `porcentaje_recargo` corresponden a la **Ley 2466 de 2025** para los tipos dominicales/festivos.
 
 ### Campos
 
@@ -676,29 +790,32 @@ Catálogo paramétrico por tenant con los 7 tipos de hora extra reconocidos por 
 | `aplica_festivo` | boolean | — | Default `false`. |
 | `es_extra` | boolean | — | Default `true`. `false` para RN/RND (solo recargos). |
 | `paga_hora_completa` | boolean | — | Default `true`. Si `false`, se paga solo el recargo (no la hora ordinaria). |
+| `descripcion` | string(150) | — | Texto libre para la UI (ej. "Lunes a sábado 6:00 AM - 9:00 PM"). Solo display, no afecta cálculo. Sembrado por defecto en los 7 tipos. |
 | `estado` | boolean | — | Default `true`. |
 
 ### Valores sembrados por default
 
 | codigo | nombre | % | franja | festivo | es_extra | paga_hora_completa |
 |---|---|---|---|---|---|---|
-| HED  | Hora Extra Diurna (6am-9pm)             | 25.00  | DIURNO   | false | true  | true  |
-| HEN  | Hora Extra Nocturna (9pm-6am)           | 75.00  | NOCTURNO | false | true  | true  |
-| RN   | Recargo Nocturno                        | 35.00  | NOCTURNO | false | false | false |
-| HRD  | Hora Ordinaria Dominical/Festivo        | 75.00  | DIURNO   | true  | false | true  |
-| HEDF | Hora Extra Diurna Dominical/Festivo     | 100.00 | DIURNO   | true  | true  | true  |
-| HENF | Hora Extra Nocturna Dominical/Festivo   | 150.00 | NOCTURNO | true  | true  | true  |
-| RND  | Recargo Nocturno Dominical/Festivo      | 110.00 | NOCTURNO | true  | false | false |
+| HED  | Hora Extra Diurna (6am-9pm)             |  25.00 | DIURNO   | false | true  | true  |
+| HEN  | Hora Extra Nocturna (9pm-6am)           |  75.00 | NOCTURNO | false | true  | true  |
+| RN   | Recargo Nocturno                        |  35.00 | NOCTURNO | false | false | false |
+| HRD  | Hora Ordinaria Dominical/Festivo        |  **90.00** ¹ | DIURNO   | true  | false | true  |
+| HEDF | Hora Extra Diurna Dominical/Festivo     | **115.00** ¹ | DIURNO   | true  | true  | true  |
+| HENF | Hora Extra Nocturna Dominical/Festivo   | **165.00** ¹ | NOCTURNO | true  | true  | true  |
+| RND  | Recargo Nocturno Dominical/Festivo      | **125.00** ¹ | NOCTURNO | true  | false | false |
+
+> ¹ **Ley 2466 de 2025**: el recargo dominical/festivo subió de 75% a **90%**. Los tipos compuestos se recalculan sobre la nueva base. Migración idempotente aplicada por `2026_06_05_000003_update_tipos_hora_extra_ley2466.php`.
 
 Documentación completa del módulo (registros, máquina de estados, integración con nómina, fórmulas): [API_HORAS_EXTRA.md](./API_HORAS_EXTRA.md).
 
 ---
 
-## 12. Paramétricas del Colaborador (EPS, Fondos de Pensión, ARL, Entidades Bancarias)
+## 12. Paramétricas del Colaborador (EPS, Fondos de Pensión, Fondos de Cesantías, ARL, Entidades Bancarias)
 
-Cuatro catálogos paramétricos por tenant que alimentan los selectores del formulario de creación/edición de colaboradores. El **empleado guarda el `nombre`** seleccionado (no el `id`), por lo que renombrar o eliminar una entrada del catálogo NO afecta los empleados ya creados — preservando el histórico.
+Cinco catálogos paramétricos por tenant que alimentan los selectores del formulario de creación/edición de colaboradores. El **empleado guarda el `nombre`** seleccionado (no el `id`), por lo que renombrar o eliminar una entrada del catálogo NO afecta los empleados ya creados — preservando el histórico.
 
-Las cuatro paramétricas comparten exactamente el mismo schema y comportamiento; varían solo en los nombres de tabla y URLs.
+Las cinco paramétricas comparten exactamente el mismo schema y comportamiento; varían solo en los nombres de tabla y URLs.
 
 ### Endpoints
 
@@ -708,6 +825,7 @@ Cada paramétrica expone 6 endpoints (5 CRUD + 1 select):
 |---------|----------|--------|-------|
 | EPS | `/eps` | `Eps` | `eps` |
 | Fondos de Pensión | `/fondos-pension` | `FondoPension` | `fondos_pension` |
+| Fondos de Cesantías | `/fondos-cesantias` | `FondoCesantias` | `fondos_cesantias` |
 | ARL | `/arl` | `Arl` | `arl` |
 | Entidades Bancarias | `/entidades-bancarias` | `EntidadBancaria` | `entidades_bancarias` |
 
@@ -725,7 +843,11 @@ Cada paramétrica expone 6 endpoints (5 CRUD + 1 select):
 | Campo | Tipo | Requerido al crear | Descripción |
 |-------|------|--------------------|-------------|
 | `nombre` | string(100) | ✔ | Único por tenant. |
+| `codigo` | string(10) | — | **Solo Entidades Bancarias.** Código del banco (ej. `001` para Bancolombia). Opcional. |
+| `contacto` | string(50) | — | **Solo Entidades Bancarias.** Línea de atención / contacto. Opcional. |
 | `estado` | boolean | — | Default `true`. |
+
+> EPS, ARL, Fondos de Pensión y Fondos de Cesantías **no** tienen `codigo`/`contacto` — son exclusivos de Entidades Bancarias.
 
 ### Crear / Editar
 
@@ -735,28 +857,44 @@ Cada paramétrica expone 6 endpoints (5 CRUD + 1 select):
 
 // PUT /eps/{id}
 { "nombre": "Sura EPS", "estado": false }
+
+// POST /entidades-bancarias
+{ "nombre": "Bancolombia", "codigo": "001", "contacto": "01-8000-912345" }
+
+// PUT /entidades-bancarias/{id}
+{ "codigo": "007", "contacto": null }
 ```
 
 ### Respuesta del select
 
 ```json
+// GET /eps/select  (mismo formato para /arl/select, /fondos-pension/select y /fondos-cesantias/select)
 {
   "data": [
     { "id": 1, "nombre": "Sura" },
     { "id": 2, "nombre": "Sanitas" }
   ]
 }
+
+// GET /entidades-bancarias/select
+{
+  "data": [
+    { "id": 1, "nombre": "Bancolombia",    "codigo": "001", "contacto": "01-8000-912345" },
+    { "id": 2, "nombre": "Banco de Bogotá", "codigo": "002", "contacto": "01-8000-911111" }
+  ]
+}
 ```
 
-> Sin paginación. Devuelve solo activos. Ordenado alfabéticamente por `nombre`. El frontend toma el `nombre` y lo envía en el campo correspondiente del payload de `POST /colaboradores` (`eps`, `fondo_pension`, `arl`, `entidad_bancaria`).
+> Sin paginación. Devuelve solo activos. Ordenado alfabéticamente por `nombre`. El frontend toma el `nombre` y lo envía en el campo correspondiente del payload de `POST /colaboradores` (`eps`, `fondo_pension`, `fondo_cesantias`, `arl`, `entidad_bancaria`).
 
 ### Provisionamiento al crear tenant
 
-Al crear un tenant nuevo desde `POST /api/admin/tenants`, el backend siembra automáticamente las cuatro paramétricas con un catálogo inicial vigente para Colombia (EPS, fondos, ARLs, bancos). El admin del tenant puede editarlo libremente desde Configuración.
+Al crear un tenant nuevo desde `POST /api/admin/tenants`, el backend siembra automáticamente las cinco paramétricas con un catálogo inicial vigente para Colombia (EPS, fondos de pensión, fondos de cesantías, ARLs, bancos). El admin del tenant puede editarlo libremente desde Configuración.
 
 Las listas iniciales viven en constantes del modelo:
 - `App\Models\Eps::INICIALES` (17 EPS)
 - `App\Models\FondoPension::INICIALES` (5 fondos)
+- `App\Models\FondoCesantias::INICIALES` (5 fondos de cesantías)
 - `App\Models\Arl::INICIALES` (9 ARLs)
 - `App\Models\EntidadBancaria::INICIALES` (23 entidades)
 
@@ -894,79 +1032,484 @@ Todos los campos son opcionales (`sometimes`).
 
 ---
 
-## 15. Tablas Legales
+## 15. Paramétricas de Viajes (Extractoras · Empresas Transportadoras · Transportadores)
 
-Historial de porcentajes de aportes a seguridad social (Salud, Pensión, ARL) por vigencia. Corresponde a la sub-sección **Configuración → Legal → Tablas Legales**.
+Tres catálogos paramétricos por tenant que alimentan el módulo de Viajes: **extractoras** (plantas destino), **empresa_transportadora** (compañías de transporte de carga) y **transportadores** (conductores hijos N:1 de una empresa). Corresponden a la sub-sección **Configuración → Viajes** del frontend.
 
-### Endpoints
+> **CRUD bajo `configuracion.editar`.** Los endpoints `/select` y `/{empresa}/transportadores` admiten también `viajes.crear` porque el form "Nuevo Viaje" del módulo Viajes los consume directamente (ver [API_VIAJES.md](./API_VIAJES.md) §4.1).
+>
+> **Soft delete:** las FK `viajes.empresa_transportadora_id`, `viajes.transportador_id` y `viajes.extractora_id` son `restrictOnDelete()`. Por eso `DELETE` no borra físicamente — solo actualiza `estado = false`. Los viajes históricos conservan la referencia.
 
-| Método   | URL | Descripción |
-|----------|-----|-------------|
-| `GET`    | `/configuracion/tablas-legales` | Listar registros (sin paginación) |
-| `GET`    | `/configuracion/tablas-legales/conceptos-select` | Dropdown de conceptos disponibles (Salud, Pensión, ARL) |
-| `POST`   | `/configuracion/tablas-legales` | Crear nuevo registro |
-| `PUT`    | `/configuracion/tablas-legales/{id}` | Editar registro |
-| `DELETE` | `/configuracion/tablas-legales/{id}` | Eliminar registro |
+### 16.1 Extractoras
 
-### Respuesta del listado (GET)
+Plantas extractoras de aceite de palma que reciben el fruto despachado en cada viaje.
+
+#### Endpoints
+
+| Método | URL | Permiso | Descripción |
+|---|---|---|---|
+| `GET` | `/extractoras/select` | `viajes.crear` **o** `configuracion.editar` | Dropdown sin paginación (solo activas). Campos: `id`, `razon_social`, `nit`, `ubicacion`, `ciudad`, `distancia_km`. |
+| `GET` | `/extractoras` | `configuracion.editar` | Listar paginado. |
+| `GET` | `/extractoras/{id}` | `configuracion.editar` | Ver detalle (incluye `departamento` y `municipio` cargados). |
+| `POST` | `/extractoras` | `configuracion.editar` | Crear. |
+| `PUT` | `/extractoras/{id}` | `configuracion.editar` | Editar. |
+| `DELETE` | `/extractoras/{id}` | `configuracion.editar` | Inactivar (soft delete: `estado = false`). |
+
+#### Filtros adicionales (GET index)
+
+| Parámetro | Tipo | Descripción |
+|---|---|---|
+| `search` | string | Busca parcialmente en `razon_social` y `nit` (ilike). |
+| `estado` | boolean | Filtra por activas / inactivas. |
+| `departamento_codigo` | string(2) | Filtra por departamento (código DANE). |
+
+#### Campos
+
+| Campo | Tipo | Requerido al crear | Descripción |
+|---|---|---|---|
+| `razon_social` | string(150) | ✔ | Nombre comercial / razón social. |
+| `nit` | string(30) | ✔ | Único por tenant (`unique(tenant_id, nit)`). |
+| `ubicacion` | string(200) | ✔ | Dirección o punto físico (Km de vía, etc.). |
+| `departamento_codigo` | string(2) | — | Código DANE del departamento. FK a `departamentos`. |
+| `municipio_codigo` | string(5) | — | Código DANE del municipio. FK a `municipios`. |
+| `ciudad` | string(100) | — | Ciudad / municipio en texto libre (alternativo a los códigos DANE). |
+| `telefono` | string(30) | — | Teléfono de contacto. |
+| `email` | email(150) | — | Correo electrónico. |
+| `contacto_nombre` | string(150) | — | Persona de contacto. |
+| `distancia_km` | decimal(6,2) | — | Distancia desde la finca, para costeo logístico. |
+| `observaciones` | text | — | Notas internas. |
+| `estado` | boolean | — | Default `true`. |
+
+#### Crear / Editar
+
+```json
+// POST /extractoras
+{
+  "razon_social": "Extractora del Cauca S.A.",
+  "nit": "800123456-1",
+  "ubicacion": "Km 12 Vía Popayán - Cali",
+  "ciudad": "Popayán",
+  "telefono": "+57 2 123 4567",
+  "email": "extractora@cauca.com",
+  "contacto_nombre": "Juan Pérez",
+  "distancia_km": 45.50
+}
+
+// PUT /extractoras/{id}
+{
+  "telefono": "+57 2 234 5678",
+  "distancia_km": 47.00,
+  "estado": false
+}
+```
+
+#### Respuesta del select
 
 ```json
 {
   "data": [
     {
       "id": 1,
-      "concepto_id": 3,
-      "concepto": {
-        "id": 3,
-        "nombre": "Salud",
-        "subtipo": "SALUD"
-      },
-      "porcentaje_empleado": "4.00",
-      "porcentaje_empresa": "8.50",
-      "vigente_desde": "31/12/2022",
-      "vigente_hasta": null
+      "razon_social": "Extractora del Cauca S.A.",
+      "nit": "800123456-1",
+      "ubicacion": "Km 12 Vía Popayán - Cali",
+      "ciudad": "Popayán",
+      "distancia_km": "45.50"
     }
   ]
 }
 ```
 
-> `vigente_hasta: null` significa que el registro está actualmente vigente.
+### 16.2 Empresas Transportadoras
 
-### Respuesta del select de conceptos
+Compañías de transporte que mueven el fruto al destino. Cada una agrupa N transportadores (conductores).
+
+#### Endpoints
+
+| Método | URL | Permiso | Descripción |
+|---|---|---|---|
+| `GET` | `/empresas-transportadoras/select` | `viajes.crear` **o** `configuracion.editar` | Dropdown sin paginación (solo activas). Campos: `id`, `razon_social`, `nit`, `tipo_persona`. |
+| `GET` | `/empresas-transportadoras/{empresa}/transportadores` | `viajes.crear` **o** `configuracion.editar` | Lista de conductores activos de la empresa (para el dropdown encadenado del form de viaje). |
+| `GET` | `/empresas-transportadoras` | `configuracion.editar` | Listar paginado. Soporta `?with_transportadores_count=1` para incluir contador de conductores en cada item (badge "2 conductores"). |
+| `GET` | `/empresas-transportadoras/{id}` | `configuracion.editar` | Ver detalle (siempre con `transportadores_count`). |
+| `POST` | `/empresas-transportadoras` | `configuracion.editar` | Crear. |
+| `PUT` | `/empresas-transportadoras/{id}` | `configuracion.editar` | Editar. |
+| `DELETE` | `/empresas-transportadoras/{id}` | `configuracion.editar` | Inactivar (soft delete). |
+
+#### Filtros adicionales (GET index)
+
+| Parámetro | Tipo | Descripción |
+|---|---|---|
+| `search` | string | Busca parcialmente en `razon_social` y `nit`. |
+| `estado` | boolean | Filtra por activas / inactivas. |
+| `tipo_persona` | string | `JURIDICA` o `NATURAL`. |
+| `with_transportadores_count` | boolean | Si `true`, incluye `transportadores_count` en cada item. |
+
+#### Campos
+
+| Campo | Tipo | Requerido al crear | Descripción |
+|---|---|---|---|
+| `tipo_persona` | string | ✔ | `JURIDICA` o `NATURAL`. Define el badge ("P. Jurídica" / "P. Natural") en el UI. |
+| `razon_social` | string(150) | ✔ | Nombre comercial / razón social. |
+| `nit` | string(30) | ✔ | Único por tenant. |
+| `telefono` | string(30) | — | Teléfono de contacto. |
+| `direccion` | string(200) | — | Dirección física. |
+| `ciudad` | string(100) | — | Ciudad. |
+| `email` | email(150) | — | Correo electrónico. |
+| `contacto_nombre` | string(150) | — | Persona de contacto. |
+| `observaciones` | text | — | Notas internas. |
+| `estado` | boolean | — | Default `true`. |
+
+#### Crear / Editar
+
+```json
+// POST /empresas-transportadoras
+{
+  "tipo_persona": "JURIDICA",
+  "razon_social": "Transportes del Valle S.A.S.",
+  "nit": "900111222-1",
+  "telefono": "+57 300 444 5555"
+}
+
+// POST /empresas-transportadoras (persona natural)
+{
+  "tipo_persona": "NATURAL",
+  "razon_social": "Juan Pérez — Transporte JP",
+  "nit": "16123456",
+  "telefono": "+57 300 555 6666"
+}
+
+// PUT /empresas-transportadoras/{id}
+{
+  "email": "contacto@transportesvalle.com",
+  "estado": false
+}
+```
+
+#### Respuesta del select
 
 ```json
 {
   "data": [
-    { "id": 1, "nombre": "ARL", "subtipo": "ARL" },
-    { "id": 2, "nombre": "Pensión", "subtipo": "PENSION" },
-    { "id": 3, "nombre": "Salud", "subtipo": "SALUD" }
+    {
+      "id": 1,
+      "razon_social": "Transportes del Valle S.A.S.",
+      "nit": "900111222-1",
+      "tipo_persona": "JURIDICA"
+    }
   ]
 }
 ```
 
-### Crear (POST)
+#### Respuesta del listado con contador (GET `?with_transportadores_count=1`)
 
 ```json
 {
-  "concepto_id": 3,
-  "porcentaje_empleado": 4.00,
-  "porcentaje_empresa": 8.50,
-  "vigente_desde": "01/01/2026",
-  "vigente_hasta": null
+  "data": [
+    {
+      "id": 1,
+      "razon_social": "Transportes del Valle S.A.S.",
+      "nit": "900111222-1",
+      "tipo_persona": "JURIDICA",
+      "telefono": "+57 300 444 5555",
+      "estado": true,
+      "transportadores_count": 2
+    }
+  ],
+  "meta": { "current_page": 1, "last_page": 1, "per_page": 15, "total": 1 }
 }
 ```
 
-| Campo | Tipo | Requerido | Validación |
-|-------|------|-----------|------------|
-| `concepto_id` | integer | **Sí** | Debe existir en `nomina_concepto` del tenant con `subtipo` en SALUD/PENSION/ARL |
-| `porcentaje_empleado` | decimal | **Sí** | 0–100 |
-| `porcentaje_empresa` | decimal | **Sí** | 0–100 |
-| `vigente_desde` | date | **Sí** | Formato `dd/mm/yyyy` |
-| `vigente_hasta` | date | No | Formato `dd/mm/yyyy`. `null` = vigente indefinidamente |
+### 16.3 Transportadores (Conductores)
 
-### Editar (PUT)
+Personas naturales que conducen el vehículo del viaje. Cada uno está asociado a una **única** empresa transportadora (relación N:1) y declara su placa, tipo de vehículo y capacidad.
 
-Todos los campos son opcionales (`sometimes`). Mismas validaciones que el POST.
+#### Endpoints
+
+| Método | URL | Permiso | Descripción |
+|---|---|---|---|
+| `GET` | `/transportadores` | `configuracion.editar` | Listar paginado (incluye `empresa` eager-loaded). |
+| `GET` | `/transportadores/{id}` | `configuracion.editar` | Ver detalle (con `empresa`). |
+| `POST` | `/transportadores` | `configuracion.editar` | Crear. |
+| `PUT` | `/transportadores/{id}` | `configuracion.editar` | Editar. |
+| `DELETE` | `/transportadores/{id}` | `configuracion.editar` | Inactivar (soft delete). |
+
+> Para listar los conductores de **una empresa específica** (dropdown encadenado del form de viaje), usar `GET /empresas-transportadoras/{empresa}/transportadores` (sección 16.2).
+
+#### Filtros adicionales (GET index)
+
+| Parámetro | Tipo | Descripción |
+|---|---|---|
+| `search` | string | Busca parcialmente en `nombres`, `apellidos`, `numero_documento` y `placa_vehiculo`. |
+| `estado` | boolean | Filtra por activos / inactivos. |
+| `empresa_transportadora_id` | integer | Filtra por empresa. |
+
+#### Campos
+
+| Campo | Tipo | Requerido al crear | Descripción |
+|---|---|---|---|
+| `empresa_transportadora_id` | integer | ✔ | FK a `empresa_transportadora`. La global scope multi-tenant garantiza aislamiento. |
+| `nombres` | string(100) | ✔ | El frontend hace el split del campo "Nombre Completo" (primera palabra = nombres, resto = apellidos). |
+| `apellidos` | string(100) | ✔ | — |
+| `placa_vehiculo` | string(20) | ✔ | Único por tenant. |
+| `tipo_documento` | string | — | `CC`, `CE`, `PPT` o `PASAPORTE`. |
+| `numero_documento` | string(30) | — | Cédula / documento. |
+| `telefono` | string(30) | — | Teléfono celular. |
+| `licencia_conduccion` | string(30) | — | Número de licencia. |
+| `licencia_vencimiento` | date | — | Fecha de vencimiento (formato `YYYY-MM-DD`). |
+| `tipo_vehiculo` | string(50) | — | "Camión NHR", "Turbo", etc. |
+| `capacidad_kg` | decimal(10,2) | — | Capacidad de carga. |
+| `observaciones` | text | — | Notas internas. |
+| `estado` | boolean | — | Default `true`. |
+
+#### Crear / Editar
+
+```json
+// POST /transportadores
+{
+  "empresa_transportadora_id": 1,
+  "nombres": "Carlos",
+  "apellidos": "Martínez",
+  "placa_vehiculo": "ABC-123",
+  "tipo_documento": "CC",
+  "numero_documento": "16123456",
+  "telefono": "+57 300 777 8888"
+}
+
+// PUT /transportadores/{id}
+{
+  "telefono": "+57 300 999 0000",
+  "tipo_vehiculo": "Turbo",
+  "capacidad_kg": 8500.00,
+  "estado": false
+}
+```
+
+#### Respuesta del listado de conductores por empresa (consumida por el form de viaje)
+
+```json
+// GET /empresas-transportadoras/1/transportadores
+{
+  "data": [
+    {
+      "id": 12,
+      "empresa_transportadora_id": 1,
+      "nombres": "Carlos",
+      "apellidos": "Martínez",
+      "placa_vehiculo": "ABC-123",
+      "tipo_vehiculo": "Camión NHR",
+      "capacidad_kg": "8500.00"
+    }
+  ]
+}
+```
+
+### 16.4 Errores específicos del módulo
+
+| Código HTTP | Cuándo | Descripción |
+|---|---|---|
+| 422 | NIT duplicado (mismo tenant) en `extractoras` o `empresa_transportadora` | `Ya existe una extractora/empresa con este NIT.` |
+| 422 | Placa duplicada (mismo tenant) en `transportadores` | `Ya existe un conductor registrado con esta placa.` |
+| 422 | `tipo_persona` inválido en `empresa_transportadora` | Solo se aceptan `JURIDICA` o `NATURAL`. |
+| 422 | `tipo_documento` inválido en `transportadores` | Solo se aceptan `CC`, `CE`, `PPT` o `PASAPORTE`. |
+| 404 | El recurso pertenece a otro tenant | El global scope `BelongsToTenant` filtra automáticamente. |
+
+> **Importante:** los NIT/placas son únicos **por tenant**. Dos fincas distintas pueden tener registros con el mismo NIT/placa sin conflicto.
+
+---
+
+## 16. Motivos de Ausencia (Tipos de Novedades)
+
+Catálogo paramétrico por tenant que alimenta el dropdown "Motivo" del wizard de Ausencias y la sección **Tipos de Novedades** de la pantalla Configuración → Nómina. Cada motivo está anclado a un `tipo_base` del enum fijo (11 valores) que es el discriminador que usa la nómina para aplicar reglas especiales (días 1-2 EPS al 100%, días 3+ al 66.67%, descuentos de permisos no remunerados, etc.).
+
+> **Documentación completa** (snapshots al crear ausencia, integración con nómina, máquina de estados de la ausencia en sí): [API_AUSENCIAS.md §1](./API_AUSENCIAS.md). Esta sección es el **cross-link** para que la pantalla de Configuración → Nómina tenga todos sus CRUD en un solo índice.
+
+### Endpoints
+
+| Método | URL | Permiso | Descripción |
+|---|---|---|---|
+| `GET` | `/motivos-ausencia/select` | `configuracion.editar` **o** `operaciones.crear` **o** `operaciones.editar` | Dropdown sin paginación (solo activos). Incluye `tipo_base` + flags + `color`. |
+| `GET` | `/motivos-ausencia` | `configuracion.editar` | Listar paginado. Filtros: `search`, `tipo_base`, `estado`. |
+| `GET` | `/motivos-ausencia/{id}` | `configuracion.editar` | Ver detalle. |
+| `POST` | `/motivos-ausencia` | `configuracion.editar` | Crear. |
+| `PUT` | `/motivos-ausencia/{id}` | `configuracion.editar` | Editar. |
+| `DELETE` | `/motivos-ausencia/{id}` | `configuracion.editar` | Eliminar. 409 `MOTIVO_CON_AUSENCIAS` si tiene ausencias asociadas. |
+
+### Campos
+
+| Campo | Tipo | Requerido al crear | Descripción |
+|---|---|---|---|
+| `nombre` | string(100) | ✔ | Único por tenant. Ej: "Incapacidad EPS - General". |
+| `tipo_base` | enum(11) | ✔ | `INCAPACIDAD_EPS`, `INCAPACIDAD_ARL`, `LICENCIA_MATERNIDAD`, `LICENCIA_PATERNIDAD`, `LICENCIA_LUTO`, `PERMISO_REMUNERADO`, `PERMISO_NO_REMUNERADO`, `AUSENCIA_INJUSTIFICADA`, `CALAMIDAD_DOMESTICA`, `SUSPENSION_DISCIPLINARIA`, `OTRO`. Discrimina la regla de cálculo en nómina. |
+| `es_remunerada` | boolean | — | Default `false`. Si `true`, suma a `total_incapacidades`. |
+| `afecta_nomina` | boolean | — | Default `true`. Si `false`, solo es tracking informativo. |
+| `porcentaje_pago_default` | decimal(5,2) | — | Default `0`. Valor por defecto del % de pago (0-100). |
+| `requiere_soporte` | boolean | — | Default `false`. Si `true`, el wizard exige PDF para aprobar. |
+| `color` | string(7) | — | Hex `#RRGGBB` (ej. `#3b82f6`). Usado por la UI para el punto de color del listado. Regex `/^#[0-9a-fA-F]{6}$/`. |
+| `estado` | boolean | — | Default `true`. |
+| `condicion` | string(100) | — | Condición legal / restricción de días (ej. "Día 1-2: 100% / Día 3-90: 66.67%"). Solo informativo. |
+| `norma_legal` | string(50) | — | Norma de referencia (ej. "Art. 227 CST + Dec. 780", "Ley 1822 de 2017"). Solo informativo. |
+| `formula_calculo` | string(200) | — | Descripción libre de la fórmula si aplica. Solo informativo. |
+| `afecta_seguridad_social` | boolean | — | Default `false`. Se **snapshottea en `ausencias.afecta_seguridad_social`** al crear la ausencia. Indica si el período cuenta para IBC de salud/pensión. |
+| `afecta_parafiscales` | boolean | — | Default `false`. Snapshoteado en `ausencias`. Indica si el período cuenta para parafiscales (SENA, ICBF, Caja de Compensación). |
+| `afecta_prestaciones` | boolean | — | Default `false`. Snapshoteado en `ausencias`. Indica si el período cuenta para prestaciones sociales (cesantías, prima, vacaciones). |
+
+### Crear / Editar
+
+```json
+// POST /motivos-ausencia
+{
+  "nombre": "Permiso médico ambulatorio",
+  "tipo_base": "PERMISO_REMUNERADO",
+  "es_remunerada": true,
+  "afecta_nomina": true,
+  "porcentaje_pago_default": 100,
+  "requiere_soporte": true,
+  "color": "#22c55e",
+  "condicion": "Según empresa",
+  "norma_legal": "CST Art. 57",
+  "afecta_seguridad_social": true,
+  "afecta_parafiscales": true,
+  "afecta_prestaciones": true
+}
+
+// PUT /motivos-ausencia/{id}
+{
+  "color": "#ef4444",
+  "estado": false,
+  "afecta_prestaciones": false
+}
+```
+
+### Respuesta del select
+
+```json
+// GET /motivos-ausencia/select
+{
+  "data": [
+    {
+      "id": 1,
+      "nombre": "Incapacidad EPS - General",
+      "tipo_base": "INCAPACIDAD_EPS",
+      "es_remunerada": true,
+      "afecta_nomina": true,
+      "porcentaje_pago_default": "66.67",
+      "requiere_soporte": true,
+      "color": "#3b82f6",
+      "afecta_seguridad_social": true,
+      "afecta_parafiscales": false,
+      "afecta_prestaciones": false
+    }
+  ]
+}
+```
+
+### Catálogo sembrado
+
+`MotivoAusenciaSeeder` crea 11 motivos base por tenant activo (uno por `tipo_base`) con colores, porcentajes y flags de afectación según legislación laboral colombiana. Idempotente vía `updateOrCreate(tenant_id, nombre)`.
+
+Expone `sembrarParaTenant(Tenant $tenant): int` — usado por `TenantController::store()` para que cada finca nueva reciba automáticamente los 11 motivos. Para re-sembrar en tenants existentes tras agregar los nuevos campos:
+
+```bash
+php artisan db:seed --class=MotivoAusenciaSeeder
+```
+
+Los tres flags (`afecta_seguridad_social`, `afecta_parafiscales`, `afecta_prestaciones`) quedan **snapshotteados en `ausencias`** al crear cada ausencia (via `Ausencia::booted() → creating`), preservando el histórico aunque el admin luego edite el motivo.
+
+### Errores específicos
+
+| Código HTTP | code | Descripción |
+|---|---|---|
+| 409 | `MOTIVO_CON_AUSENCIAS` | No se puede eliminar porque tiene ausencias asociadas. |
+| 422 | — | `color` no cumple el regex hex `#RRGGBB`, o `tipo_base` fuera del enum. |
+
+---
+
+## Sub-módulo "Configuración → Nómina" — índice unificado
+
+Pantalla agrupada del frontend. Todos los endpoints usan **`configuracion.editar`** salvo Conceptos de Nómina (excepción documentada abajo). Mapeo completo:
+
+| # | Sección del mockup | Endpoint(s) | Sección en este doc |
+|---|---|---|---|
+| 1 | Periodicidad + Fechas de Corte (Q1/Q2) | `GET/PUT /configuracion/nomina` | §8 |
+| 2 | Jornada Laboral Semanal (frontend deriva `divisor / 5`) | `GET/PUT /configuracion/nomina` | §8 |
+| 3 | Precios de Cosecha (lote × año × $/kg) | `GET/POST/PUT/DELETE /precios-cosecha` | §9 |
+| 4 | Rangos de Abonada (gramos × $/palma) | `GET/POST/PUT/DELETE /precios-abono` | §3 |
+| 5 | Labores (palma fijas + custom palma + custom finca) — catálogo unificado con `tipo_pago` y `precio_palma` por labor | `GET/POST/PUT/DELETE /labores` | §4 |
+| 6 | Tipos de Horas Extras (incluye `descripcion` libre) | `GET/POST/PUT/DELETE /tipos-hora-extra` | §11 |
+| 7 | Tipos de Novedades (motivos de ausencia, con `color`) | `GET/POST/PUT/DELETE /motivos-ausencia` | §16 (este doc) |
+| 8 | Conceptos de Nómina (deducciones + bonificaciones) | `GET/POST/PUT/DELETE /nomina-conceptos` | ⚠ Vive en [API_NOMINA.md §6](./API_NOMINA.md) |
+
+> **Excepción intencional — Conceptos de Nómina:** usa el permiso **`nomina-conceptos.gestionar`** (no `configuracion.editar`). Esto existe para que el rol "Contador" pueda gestionar conceptos sin tener que recibir acceso al resto de Configuración. Por esa diferencia de permiso vive documentado en `API_NOMINA.md §6` y no aquí.
+
+---
+
+## 17. Bundle inicial — Pantalla "Precios de Labores"
+
+Endpoint único que reemplaza los 6 requests paralelos que la pantalla **Configuración → Precios de Labores** disparaba al cargar. Devuelve los 6 datasets en una sola respuesta cacheada en el servidor (TTL 60 s por tenant). El caché se invalida automáticamente cuando se crea, edita o elimina cualquier labor, precio de cosecha, precio de abono o lote.
+
+### Endpoint
+
+| Método | URL | Permiso |
+|--------|-----|---------|
+| `GET`  | `/configuracion/precios-labores/init` | `configuracion.editar` |
+
+### Parámetros opcionales
+
+| Parámetro | Tipo | Default | Descripción |
+|---|---|---|---|
+| `per_page_cosecha` | integer | 100 | Límite de registros de `precios_cosecha` incluidos en el bundle |
+
+### Respuesta (200)
+
+```json
+{
+  "data": {
+    "precios_cosecha": [
+      { "id": 1, "lote_id": 1, "anio": 2025, "precio": "4500.00", "lote": { "id": 1, "nombre": "Lote Norte" } }
+    ],
+    "precios_abono": [
+      { "id": 1, "gramos_min": 0, "gramos_max": 200, "precio_palma": "100.00", "estado": true }
+    ],
+    "labores_palma_fijas": [
+      { "id": 13, "nombre": "Cosecha",       "categoria": "PALMA", "tipo": "COSECHA",       "tipo_pago": "POR_PALMA",   "precio_palma": null,    "es_sistema": true },
+      { "id": 14, "nombre": "Plateo",        "categoria": "PALMA", "tipo": "PLATEO",        "tipo_pago": "POR_PALMA",   "precio_palma": "50.00", "es_sistema": true },
+      { "id": 15, "nombre": "Poda",          "categoria": "PALMA", "tipo": "PODA",          "tipo_pago": "POR_PALMA",   "precio_palma": "80.00", "es_sistema": true },
+      { "id": 16, "nombre": "Fertilización", "categoria": "PALMA", "tipo": "FERTILIZACION", "tipo_pago": "POR_PALMA",   "precio_palma": null,    "es_sistema": true },
+      { "id": 17, "nombre": "Sanidad",       "categoria": "PALMA", "tipo": "SANIDAD",       "tipo_pago": "JORNAL_FIJO", "precio_palma": null,    "es_sistema": true }
+    ],
+    "labores_palma_custom": [
+      { "id": 32, "nombre": "Resiembra", "categoria": "PALMA", "tipo": null, "tipo_pago": "POR_PALMA", "precio_palma": "1500.00", "es_sistema": false }
+    ],
+    "labores_finca": [
+      { "id": 7, "nombre": "Reparación de portón", "categoria": "FINCA", "tipo": null, "tipo_pago": "JORNAL_FIJO", "precio_palma": "45000.00", "es_sistema": false }
+    ],
+    "lotes": [
+      { "id": 1, "nombre": "Lote Norte", "predio_id": 1, "predio": { "id": 1, "nombre": "Predio A" } }
+    ]
+  }
+}
+```
+
+### Notas de implementación para el frontend
+
+- **Reemplaza 6 llamadas paralelas** (`/precios-cosecha`, `/precios-abono`, `/labores?categoria=PALMA&es_sistema=true`, `/labores?categoria=PALMA&es_sistema=false`, `/labores?categoria=FINCA`, `/lotes/select`) por una sola.
+- **`staleTime` recomendado:** 60 000 ms (igual al TTL del servidor). Ejemplo con TanStack Query:
+  ```ts
+  useQuery({
+    queryKey: ['precios-labores-bundle'],
+    queryFn: () => api.get('/configuracion/precios-labores/init').then(r => r.data.data),
+    staleTime: 60_000,
+    gcTime:    5 * 60_000,
+  })
+  ```
+- **Invalidar tras mutaciones:** después de cada `POST / PUT / DELETE` a `/labores`, `/precios-cosecha`, `/precios-abono` o `/lotes`, ejecutar:
+  ```ts
+  queryClient.invalidateQueries({ queryKey: ['precios-labores-bundle'] })
+  ```
+- **Endpoints individuales se mantienen:** siguen funcionando para CRUD, búsquedas con filtros y paginación profunda. Solo la carga inicial de la pantalla usa el bundle.
+- **`labores_palma_fijas`** contiene siempre las 5 labores del sistema (`es_sistema=true`, `estado=true`). No incluye inactivas.
+- **`lotes`** contiene solo lotes con `estado=true`, ordenados por nombre, con el predio anidado.
 
 ---
 

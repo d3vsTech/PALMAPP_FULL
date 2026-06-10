@@ -30,7 +30,7 @@ class MotivoAusenciaController extends Controller
                 ->when($soloActivos, fn($q) => $q->where('estado', true))
                 ->when(!$soloActivos && $request->has('estado'), fn($q) => $q->where('estado', false))
                 ->orderBy('nombre')
-                ->get(['id', 'nombre', 'tipo_base', 'es_remunerada', 'afecta_nomina', 'porcentaje_pago_default', 'requiere_soporte']);
+                ->get(['id', 'nombre', 'tipo_base', 'es_remunerada', 'afecta_nomina', 'porcentaje_pago_default', 'requiere_soporte', 'color', 'afecta_seguridad_social', 'afecta_parafiscales', 'afecta_prestaciones']);
 
             return response()->json(['data' => $motivos]);
         } catch (\Throwable $e) {

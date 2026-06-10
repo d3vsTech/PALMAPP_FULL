@@ -159,6 +159,7 @@ class LoteController extends Controller
             DB::commit();
 
             WizardCache::forgetPredioBundle((int) app('current_tenant_id'), $lote->predio_id);
+            WizardCache::forgetPreciosLaboresBundle((int) app('current_tenant_id'));
 
             $this->auditoria->registrarCreacion(
                 $request,
@@ -215,6 +216,7 @@ class LoteController extends Controller
             DB::commit();
 
             WizardCache::forgetPredioBundle((int) app('current_tenant_id'), $lote->predio_id);
+            WizardCache::forgetPreciosLaboresBundle((int) app('current_tenant_id'));
 
             $this->auditoria->registrarEdicion(
                 $request,
@@ -271,6 +273,7 @@ class LoteController extends Controller
             DB::commit();
 
             WizardCache::forgetPredioBundle((int) app('current_tenant_id'), $predioId);
+            WizardCache::forgetPreciosLaboresBundle((int) app('current_tenant_id'));
 
             return response()->json([
                 'message' => "Lote '{$lote->nombre}' eliminado correctamente",

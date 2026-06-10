@@ -21,7 +21,9 @@ class StoreEntidadBancariaRequest extends FormRequest
                 'required', 'string', 'max:100',
                 Rule::unique('entidades_bancarias', 'nombre')->where('tenant_id', $tenantId),
             ],
-            'estado' => 'sometimes|boolean',
+            'codigo'   => 'nullable|string|max:10',
+            'contacto' => 'nullable|string|max:50',
+            'estado'   => 'sometimes|boolean',
         ];
     }
 

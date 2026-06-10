@@ -19,6 +19,7 @@ class HoraExtraController extends Controller
         protected AuditoriaService $auditoria,
     ) {}
 
+
     public function store(StoreHoraExtraRequest $request, Operacion $operacion): JsonResponse
     {
         try {

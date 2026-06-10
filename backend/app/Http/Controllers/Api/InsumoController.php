@@ -188,10 +188,10 @@ class InsumoController extends Controller
     public function destroy(Request $request, Insumo $insumo): JsonResponse
     {
         try {
-            if ($insumo->labores()->where('estado', true)->exists()) {
+            if ($insumo->jornales()->where('estado', true)->exists()) {
                 return response()->json([
-                    'message' => 'No se puede eliminar el insumo porque tiene labores activas asociadas',
-                    'code'    => 'INSUMO_CON_LABORES',
+                    'message' => 'No se puede eliminar el insumo porque tiene jornales activos asociados',
+                    'code'    => 'INSUMO_CON_JORNALES',
                 ], 409);
             }
 
