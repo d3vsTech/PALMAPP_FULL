@@ -6,6 +6,8 @@ node_modules/
 # Build
 dist/
 build/
+# Artefacto compilado del vite.config.ts — Vite usa el .ts directo.
+frontend/vite.config.js
 
 # Env
 .env

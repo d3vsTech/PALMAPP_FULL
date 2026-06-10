@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { API_URL } from '../../api/env';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -54,7 +55,7 @@ const TENANT_KEY = 'palmapp_tenant_id';
 const USER_KEY = 'palmapp_user';
 const IS_SUPER_KEY = 'palmapp_is_super_admin';
 
-const BASE_URL = (import.meta.env.VITE_API_URL ?? 'https://31.97.7.50:3000/api').replace(/\/+$/, '');
+const BASE_URL = API_URL;
 
 // ─── HTTP helper ──────────────────────────────────────────────────────────────
 

@@ -5,6 +5,7 @@
  * Headers: Authorization Bearer + X-Tenant-Id
  */
 import { requestConToken } from './request';
+import { API_URL } from './env';
 
 const BASE = '/api/v1/tenant/market';
 
@@ -286,12 +287,8 @@ export function toNumber(v: string | number | null | undefined): number {
   return parseFloat(v) || 0;
 }
 
-// Host raíz del backend (sin /api) para componer URLs de imágenes de productos.
-const _API_BASE = (
-  (import.meta.env.VITE_API_URL as string | undefined)?.trim() ??
-  'https://31.97.7.50:3000/api'
-).replace(/\/+$/, '');
-const _FILES_BASE = _API_BASE.replace(/\/api\/?$/, '');
+// Host raíz del backend (sin `/api`) para componer URLs de imágenes de productos.
+const _FILES_BASE = API_URL.replace(/\/api\/?$/, '');
 
 /**
  * Convierte una ruta relativa de imagen del backend (ej. /assets/images/products/AGRO-001.jpg)

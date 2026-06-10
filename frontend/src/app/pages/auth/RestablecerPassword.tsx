@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router';
 import { Lock, Eye, EyeOff, CheckCircle2, AlertCircle } from 'lucide-react';
 import { PalmappLogo } from '../../components/common/PalmappLogo';
-
-const BASE_URL = (import.meta.env.VITE_API_URL ?? 'https://31.97.7.50:3000/api').replace(/\/+$/, '');
+import { API_URL as BASE_URL } from '../../../api/env';
 
 export default function RestablecerPassword() {
   const [searchParams] = useSearchParams();

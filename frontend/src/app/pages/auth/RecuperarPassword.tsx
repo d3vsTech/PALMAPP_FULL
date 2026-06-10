@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { ArrowLeft, Mail, CheckCircle2 } from 'lucide-react';
 import { PalmappLogo } from '../../components/common/PalmappLogo';
-
-const BASE_URL = (import.meta.env.VITE_API_URL ?? 'https://31.97.7.50:3000/api').replace(/\/+$/, '');
+import { API_URL as BASE_URL } from '../../../api/env';
 
 export default function RecuperarPassword() {
   const [email, setEmail] = useState('');

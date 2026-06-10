@@ -10,16 +10,12 @@
  *  - Listado liviano /select para wizards (Operaciones, Nómina, etc.)
  */
 import { requestConToken, fetchConToken } from './request';
+import { API_URL } from './env';
 
 function tkn() { return localStorage.getItem('palmapp_token'); }
 
-// ─── Base URL del servidor (sin /api) para construir URLs absolutas de archivos ──
-const _API_BASE = (
-  (import.meta.env.VITE_API_URL as string | undefined)?.trim() ??
-  'https://31.97.7.50:3000/api'
-).replace(/\/+$/, '');
-/** Host raíz del backend (sin /api), para componer URLs de avatares y documentos */
-export const FILES_BASE_URL = _API_BASE.replace(/\/api\/?$/, '');
+/** Host raíz del backend (sin `/api`), para componer URLs de avatares y documentos. */
+export const FILES_BASE_URL = API_URL.replace(/\/api\/?$/, '');
 
 /**
  * Convierte una URL de avatar relativa (ej. /storage/avatars/abc.jpg) en URL absoluta.

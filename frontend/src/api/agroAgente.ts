@@ -3,8 +3,9 @@
  * Servicio API para el chat del Agente IA (AgroAgente / FastAPI).
  *
  * Backend:
- *   Producción: http://31.97.7.50/agro-agente/api
- *   Desarrollo: proxy de Vite en /agro-agente/api (ver vite.config.ts)
+ *   URL configurable vía `VITE_AGRO_AGENTE_URL` en el .env (ver `api/env.ts`).
+ *   En dev sin override, usa el proxy de Vite `/agro-agente/api`. En prod
+ *   HTTPS usa el proxy `/agro-api` definido en `public/_redirects`.
  *
  * Auth:
  *   Reutiliza el JWT que ya tiene el usuario en localStorage bajo la clave
@@ -16,16 +17,18 @@
  *   responde 400 "Debe seleccionar una finca".
  */
 
+import { AGRO_AGENTE_URL } from './env';
+
 // URL base del backend del Agente IA (FastAPI).
-// - En HTTPS (Netlify) usamos el proxy `/agro-api/*` definido en
-//   `public/_redirects` para evitar el bloqueo de "Mixed Content".
-// - En HTTP local (dev) llamamos directo al server: FastAPI tiene CORS
-//   abierto (allow_origins=["*"]) y no necesitamos proxy de Vite.
-// - Se puede sobreescribir con la env var VITE_AGRO_AGENTE_URL.
-const AGRO_API_DIRECT = 'http://31.97.7.50/agro-agente/api';
-const _envUrl = (import.meta.env.VITE_AGRO_AGENTE_URL as string | undefined)?.trim();
+// Prioridad:
+//   1. `VITE_AGRO_AGENTE_URL` del .env (si está definida).
+//   2. En HTTPS (Netlify) → `/agro-api/*` proxeado por `public/_redirects`
+//      para evitar el bloqueo de Mixed Content sobre HTTP del agente.
+//   3. En HTTP local (dev) → proxy de Vite `/agro-agente` definido en
+//      `vite.config.ts`. NUNCA hardcodear la IP del servidor del agente —
+//      si necesitás un host distinto, agregalo al .env.
 const _isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
-const AGRO_API = _envUrl ?? (_isHttps ? '/agro-api' : AGRO_API_DIRECT);
+const AGRO_API = AGRO_AGENTE_URL || (_isHttps ? '/agro-api' : '/agro-agente/api');
 
 /**
  * Prefijo para los adjuntos del chat. En HTTPS pasa por el proxy de Netlify
