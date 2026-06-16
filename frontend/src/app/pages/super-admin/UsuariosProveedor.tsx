@@ -91,6 +91,8 @@ export default function UsuariosProveedor() {
   const [saving, setSaving] = useState(false);
 
   const [selectedUser, setSelectedUser] = useState<ProveedorUser | null>(null);
+  /** Usuario abierto en el modal "Ver detalle" (solo lectura). null = cerrado. */
+  const [viewUser, setViewUser] = useState<ProveedorUser | null>(null);
   const [createForm, setCreateForm] = useState(EMPTY_CREATE_FORM);
   const [editForm, setEditForm] = useState(EMPTY_EDIT_FORM);
   const [showPassword, setShowPassword] = useState(false);
@@ -485,6 +487,13 @@ export default function UsuariosProveedor() {
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-2">
                         <button
+                          onClick={() => setViewUser(u)}
+                          className="p-2 rounded-lg text-blue-400 hover:bg-blue-500/10 transition-colors"
+                          title="Ver datos del usuario"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button
                           onClick={() => openEditModal(u)}
                           className="p-2 rounded-lg text-purple-400 hover:bg-purple-500/10 transition-colors"
                           title="Editar usuario"
@@ -514,6 +523,98 @@ export default function UsuariosProveedor() {
           </table>
         </div>
       </div>
+
+      {/* Modal "Ver datos" — solo lectura. Las contraseñas NO se muestran nunca
+          (guardadas hasheadas en backend, irreversible). Si el super admin
+          necesita acceso de emergencia, debe usar "Editar" para establecer una
+          nueva clave temporal. */}
+      {viewUser && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-[#0a0a0a] overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-white/10">
+              <div>
+                <h2 className="text-2xl font-bold text-white">Datos del usuario</h2>
+                <p className="text-sm text-gray-400 mt-1">{viewUser.email}</p>
+              </div>
+              <button
+                onClick={() => setViewUser(null)}
+                className="p-2 rounded-lg text-gray-400 hover:bg-white/5 transition-colors"
+                title="Cerrar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">ID</p>
+                  <p className="text-white font-mono text-sm">{viewUser.id}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Rol</p>
+                  <span className="inline-flex items-center gap-1.5 rounded-lg border border-[#9032F0]/30 bg-[#9032F0]/10 px-3 py-1 text-xs font-semibold text-[#c79cff]">
+                    <Shield className="w-3 h-3" />
+                    {viewUser.rol}
+                  </span>
+                </div>
+                <div className="sm:col-span-2">
+                  <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Nombre</p>
+                  <p className="text-white">{viewUser.name || '—'}</p>
+                </div>
+                <div className="sm:col-span-2">
+                  <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Email</p>
+                  <p className="text-white break-all">{viewUser.email || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Estado en proveedor</p>
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1 text-xs font-semibold ${getAssignmentStatusClasses(viewUser.estado)}`}
+                  >
+                    {viewUser.estado ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                    {viewUser.estado ? 'Activo' : 'Inactivo'}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Asignado</p>
+                  <p className="text-sm text-gray-300">{formatDate(viewUser.asignado_at)}</p>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4">
+                <p className="text-sm font-semibold text-yellow-300 mb-1">
+                  Contraseña no visible
+                </p>
+                <p className="text-xs text-yellow-200/80 leading-relaxed">
+                  Las contraseñas se guardan cifradas (hash) y no pueden recuperarse
+                  por seguridad. Si el usuario perdió acceso, abre "Editar usuario"
+                  y establece una contraseña temporal nueva.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-white/10">
+              <button
+                onClick={() => setViewUser(null)}
+                className="px-4 py-2 rounded-lg text-gray-300 hover:bg-white/5 transition-colors"
+              >
+                Cerrar
+              </button>
+              <button
+                onClick={() => {
+                  const u = viewUser;
+                  setViewUser(null);
+                  openEditModal(u);
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#9032F0] hover:bg-[#7b27d4] text-white font-semibold transition-colors"
+              >
+                <Edit2 className="w-4 h-4" />
+                Editar / cambiar contraseña
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Crear / Editar */}
       {showModal && (

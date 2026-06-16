@@ -122,10 +122,23 @@ export interface Cosecha {
   operacion_id: number;
   lote_id: number;
   sublote_id: number | null;
+  /**
+   * Snapshot de la labor COSECHA del tenant al momento de registrar (§5).
+   * El servicio usa esta labor para decidir POR_PALMA vs JORNAL_FIJO al
+   * calcular `valor_total`. NULL en cosechas históricas pre-refactor — el
+   * backend las resuelve al vuelo a la fija COSECHA del tenant.
+   */
+  labor_id?: number | null;
   gajos_reportados: number;
   gajos_reconteo?: number | null;
   peso_confirmado: string | number | null;
   precio_cosecha: string | number | null;
+  /**
+   * Snapshot VISUAL del promedio kg/gajo del lote en el viaje (§5).
+   * NO entra en el cálculo de nómina: el pago real a empleados VARIABLE se
+   * recalcula en `NominaCalculationService` usando los `PromedioLote` del
+   * período. Este campo solo alimenta la vista de la planilla.
+   */
   promedio_kg_gajo?: string | number | null;
   valor_total: string | number | null;
   cuadrilla: CosechaCuadrillaItem[];
@@ -152,6 +165,13 @@ export interface Jornal {
   nombre_trabajo?: string | null;
   ubicacion?: string | null;
   valor_unitario: string | number | null;
+  /**
+   * Solo FERTILIZACION POR_PALMA (§4.1). Snapshot del `precio_abono.precio_palma`
+   * del rango que matcheó `gramos_por_palma` al momento de crear el jornal.
+   * Permite que el desprendible muestre el precio aplicado aunque la tabla
+   * `precio_abono` luego se ajuste.
+   */
+  precio_insumo_snapshot?: string | number | null;
   valor_total: string | number | null;
   estado: boolean;
   empleado?: any;

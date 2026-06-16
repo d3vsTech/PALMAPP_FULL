@@ -204,9 +204,16 @@ export interface Viaje {
   observaciones_extractora?: string | null;
   // Datos generales
   observaciones?: string | null;
+  /** Solo lectura: lo calcula el backend según los lotes de las cosechas
+   *  enlazadas. Se recalcula en cada add/remove de detalles (§6.1 del doc). */
   es_homogeneo: boolean;
   sync_uuid?: string | null;
+  /** Soporte offline (§2.4, §7). LOCAL = creado offline pendiente de sync;
+   *  SINCRONIZADO = ya replicado al servidor. */
+  sync_estado?: 'LOCAL' | 'SINCRONIZADO';
   // Auditoría
+  /** FK a `users` — quien creó el viaje (§2.4). */
+  creado_por?: number | null;
   validacion_at?: string | null;
   finalizado_at?: string | null;
   // Legacy (no usar — se mantiene por retro-compat de respuestas)
@@ -226,25 +233,34 @@ export interface Viaje {
   detalles_count?: number;
 }
 
-/** Payload para crear viaje */
+/**
+ * Payload para crear viaje (§5.1, §12.3 — `StoreViajeRequest`).
+ *
+ * NO incluye `es_homogeneo`: el backend lo calcula automáticamente según los
+ * lotes de las cosechas asignadas al viaje (se recalcula en `addDetalle` /
+ * `removeDetalle`). El frontend recibe el valor en la respuesta `Viaje`.
+ */
 export interface CrearViajePayload {
   fecha_viaje: string;
   hora_salida: string;
   transportador_id: number;
   extractora_id: number;
   observaciones?: string | null;
-  es_homogeneo?: boolean;
   sync_uuid?: string | null;
 }
 
-/** Payload para editar viaje (solo en estado CREADO) */
+/**
+ * Payload para editar viaje (§12.3 — `UpdateViajeRequest`).
+ *
+ * Solo permitido cuando `viaje.estado = CREADO`. Tampoco acepta `es_homogeneo`
+ * (mismo motivo que el POST: lo calcula el backend).
+ */
 export interface EditarViajePayload {
   fecha_viaje?: string;
   hora_salida?: string;
   transportador_id?: number;
   extractora_id?: number;
   observaciones?: string | null;
-  es_homogeneo?: boolean;
 }
 
 /** Payload para hidratar el reconteo de un detalle */

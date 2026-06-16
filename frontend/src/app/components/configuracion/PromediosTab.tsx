@@ -98,8 +98,14 @@ export function PromediosTab() {
           });
         }
       } catch (e: any) {
-        if (e?.code === ConfiguracionErrorCodes.PROMEDIO_DUPLICADO) {
-          throw new Error('Ya existe un promedio para ese lote en ese año');
+        // El backend ya no rechaza por duplicado (lote_id, anio) — varios
+        // baselines son válidos. El único error específico del módulo es
+        // PROMEDIO_DE_VIAJE: intento de editar/eliminar un registro generado
+        // automáticamente por un viaje homogéneo (inmutable).
+        if (e?.code === ConfiguracionErrorCodes.PROMEDIO_DE_VIAJE) {
+          throw new Error(
+            'Este promedio fue generado automáticamente por un viaje y no se puede modificar.',
+          );
         }
         throw e;
       }

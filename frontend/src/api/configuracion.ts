@@ -218,18 +218,55 @@ export type LaborPalmaParams = LaborParams;
 // 5. PROMEDIOS POR LOTE
 // ═════════════════════════════════════════════════════════════════════════════
 
+/**
+ * §5 Promedio por lote (historial kg/gajo).
+ *
+ * Dos tipos de registro conviven en la misma tabla, diferenciados por `viaje_id`:
+ *  - **Baseline admin** (`viaje_id = null`): lo crea/edita/elimina el admin desde
+ *    el CRUD. Sirve como referencia manual.
+ *  - **Generado por viaje** (`viaje_id` FK): lo crea automáticamente el backend
+ *    al finalizar un viaje homogéneo (ver `ViajeCalculationService`). Es
+ *    **inmutable**: PUT/DELETE devuelven 409 `PROMEDIO_DE_VIAJE`.
+ *
+ * Ya **no hay restricción única `(lote_id, anio)`** — varios baselines para el
+ * mismo lote+año son válidos.
+ */
 export interface PromedioLote {
   id: number;
   lote_id: number;
-  lote?: { id: number; nombre: string };
+  /** FK a `viajes` — null si es un baseline admin; presente si lo generó un viaje. */
+  viaje_id?: number | null;
   promedio: number | string;
   anio: number;
+  /**
+   * Fecha del promedio. Usada por nómina para filtrar registros del período.
+   * Si se omite, el registro queda sin fecha y **no entra en el cálculo de
+   * nómina por período** (solo sirve como fallback baseline).
+   */
+  fecha?: string | null;
+  lote?: { id: number; nombre: string };
+  /** Presente cuando `viaje_id` no es null. */
+  viaje?: { id: number; remision: string; fecha_viaje: string } | null;
 }
 
 export interface PromedioLotePayload {
   lote_id: number;
   promedio: number;
   anio: number;
+  /** Opcional. Si se omite, el registro queda sin fecha (fallback baseline). */
+  fecha?: string;
+}
+
+/** Filtros del listado de promedios por lote (§5 GET index). */
+export interface PromedioLoteParams extends ParametricaParams {
+  lote_id?: number;
+  anio?: number;
+  fecha_desde?: string;
+  fecha_hasta?: string;
+  /** Si `true`, solo registros con `viaje_id = null` (baselines admin). */
+  solo_baseline?: boolean;
+  /** Si `true`, solo registros con `viaje_id IS NOT NULL` (auto-generados). */
+  solo_viajes?: boolean;
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -793,9 +830,12 @@ export const configuracionApi = {
   },
 
   // ── 5. Promedios por Lote ──────────────────────────────────────────────────
+  // CRUD admin sobre baselines (`viaje_id = null`). Los registros con
+  // `viaje_id` (auto-generados por viajes homogéneos) son inmutables y
+  // PUT/DELETE responden 409 `PROMEDIO_DE_VIAJE`.
   promediosLote: {
     ...crudParametrica<PromedioLote, PromedioLotePayload>('promedios-lote'),
-    listar: (params?: ParametricaParams & { lote_id?: number; anio?: number }) =>
+    listar: (params?: PromedioLoteParams) =>
       apiClient.get<PaginatedResponse<PromedioLote>>(`/v1/tenant/promedios-lote${toQuery(params)}`, T),
   },
 
@@ -974,7 +1014,13 @@ export const ConfiguracionErrorCodes = {
   LABOR_PALMA_DUPLICADA: 'LABOR_DUPLICADA',
   /** @deprecated alias retrocompatible — usar `LABOR_CON_JORNALES`. */
   LABOR_PALMA_CON_JORNALES: 'LABOR_CON_JORNALES',
-  PROMEDIO_DUPLICADO: 'PROMEDIO_DUPLICADO',
+  /** Intento de PUT/DELETE sobre un promedio generado automáticamente por un
+   *  viaje homogéneo (`viaje_id IS NOT NULL`). Esos registros son inmutables. */
+  PROMEDIO_DE_VIAJE: 'PROMEDIO_DE_VIAJE',
+  /** @deprecated El doc viejo ya no usa este código. El modelo nuevo permite
+   *  varios baselines para el mismo `(lote_id, anio)`. Mantenemos el alias
+   *  para no romper consumidores que aún lo referencien en su catch. */
+  PROMEDIO_DUPLICADO: 'PROMEDIO_DE_VIAJE',
   CARGO_CON_EMPLEADOS: 'CARGO_CON_EMPLEADOS',
   MODALIDAD_CON_CARGOS: 'MODALIDAD_CON_CARGOS',
   PRECIO_COSECHA_DUPLICADO: 'PRECIO_COSECHA_DUPLICADO',

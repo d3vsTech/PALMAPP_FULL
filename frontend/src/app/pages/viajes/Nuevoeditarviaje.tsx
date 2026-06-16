@@ -139,13 +139,14 @@ export default function NuevoEditarViaje() {
     if (!puedeGuardar) return;
     setGuardando(true);
     try {
+      // `es_homogeneo` no va en el payload: lo calcula el backend al agregar /
+      // quitar detalles de cosecha (§5.1 + §6.1 del doc API_VIAJES.md).
       const payload = {
         fecha_viaje: formData.fecha,
         hora_salida: formData.horaSalida,
         transportador_id: Number(formData.transportadorId),
         extractora_id: Number(formData.extractoraId),
         observaciones: null,
-        es_homogeneo: true,
       };
       if (esEdicion && id) {
         await viajesApi.editar(Number(id), payload);

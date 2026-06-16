@@ -308,19 +308,19 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         }));
         const lotes = (lotRes.data || []).map((l: any) => ({ id: String(l.id), nombre: l.nombre }));
         setLotesData(lotes);
-        const subPromises = lotes.map(async (l) => {
-          try {
-            const sr = await selectsApi.sublotes({ lote_id: Number(l.id) });
-            return (sr.data || []).map((s: any) => ({
-              id: String(s.id),
-              nombre: s.nombre,
-              loteId: l.id,
-              cantidadPalmas: Number(s.cantidad_palmas ?? s.palmas ?? 0),
-            }));
-          } catch { return []; }
-        });
-        const allSubs = (await Promise.all(subPromises)).flat();
-        setSublotes(allSubs);
+        // Antes: una petición por lote (N+1). Ahora: una sola llamada que trae
+        // todos los sublotes activos del tenant (lote_id es opcional en el
+        // endpoint). Si tienes 20 lotes pasas de 20 requests a 1.
+        try {
+          const sr = await selectsApi.sublotes();
+          const allSubs = (sr.data || []).map((s: any) => ({
+            id: String(s.id),
+            nombre: s.nombre,
+            loteId: String(s.lote_id),
+            cantidadPalmas: Number(s.cantidad_palmas ?? (s as any).palmas ?? 0),
+          }));
+          setSublotes(allSubs);
+        } catch (e) { console.warn('Error cargando sublotes:', e); }
         const insumos = (inRes.data || []).map((i: any) => ({ nombre: i.nombre as string, id: i.id as number }));
         // El dropdown "Labor" del Paso 3 solo lista labores de FINCA (categoria='FINCA').
         const laboresFinca = (labFincaRes.data || []).map((l: any) => ({ nombre: l.nombre as string, id: l.id as number }));
@@ -414,8 +414,21 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
     let cancelled = false;
     (async () => {
       try {
-        const res = await operacionesApi.ver(Number(idParam));
+        // `ver` y `resumen` arrancan a la vez. Antes el `resumen` salía después
+        // de procesar todo el detalle (cascada). Ahora ahorramos esa latencia
+        // — usamos `allSettled` para que un fallo del resumen no tumbe el ver.
+        const [resPlanilla, resResumen] = await Promise.allSettled([
+          operacionesApi.ver(Number(idParam)),
+          operacionesApi.resumen(Number(idParam)),
+        ]);
         if (cancelled) return;
+        if (resResumen.status === 'fulfilled' && !cancelled) {
+          setResumen(resResumen.value.data);
+        }
+        if (resPlanilla.status !== 'fulfilled') {
+          throw resPlanilla.reason ?? new Error('No se pudo cargar la planilla');
+        }
+        const res = resPlanilla.value;
         const p: any = res.data ?? {};
         setEstadoPlanilla(String(p.estado ?? ''));
         const fechaRaw = p.fecha ?? '';
@@ -525,10 +538,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           motivo: a.motivo_ausencia?.nombre ?? '',
           otroMotivo: a.motivo ?? '',
         })));
-        try {
-          const r = await operacionesApi.resumen(Number(idParam));
-          if (!cancelled) setResumen(r.data);
-        } catch {}
+        // El resumen ya se hidrató arriba (Promise.allSettled junto al `ver`).
       } catch (err: any) {
         if (!cancelled) toast.error(err?.message ?? 'Error al cargar la planilla');
       }
