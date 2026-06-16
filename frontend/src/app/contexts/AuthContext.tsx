@@ -178,6 +178,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     rehidratar();
   }, []);
 
+  // ─── Logout forzado desde fuera del árbol React ──────────────────────────
+  //
+  // `api/client.ts` no puede usar `useNavigate()` porque no es un componente
+  // React. Cuando el refresh token falla, dispara el evento
+  // `palmapp:auth:logout` y este listener limpia la sesión y navega al login
+  // sin causar full page reload (history.pushState + popstate hace que React
+  // Router detecte el cambio).
+  useEffect(() => {
+    const handleLogout = () => {
+      clearAll();
+      if (window.location.pathname !== '/login') {
+        window.history.pushState({}, '', '/login');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      }
+    };
+    window.addEventListener('palmapp:auth:logout', handleLogout);
+    return () => window.removeEventListener('palmapp:auth:logout', handleLogout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ─── Login ────────────────────────────────────────────────────────────────
 
   const login = async (email: string, password: string, isSuperAdmin = false): Promise<string> => {

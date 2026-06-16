@@ -112,9 +112,15 @@ async function request<T>(
         if (!retryResponse.ok) throw await parseError(retryResponse);
         return retryResponse.json() as Promise<T>;
       } catch {
+        // Refresh falló: limpia sesión y avisa al árbol React que navegue al
+        // login. NO usamos `window.location.href` (causa full page reload, pierde
+        // estado de React Router). El AuthContext escucha este evento y llama
+        // a `navigate('/login', { replace: true })`.
         tokenStorage.remove();
         tenantStorage.remove();
-        window.location.href = '/login';
+        window.dispatchEvent(new CustomEvent('palmapp:auth:logout', {
+          detail: { reason: 'refresh_failed' },
+        }));
         throw err;
       }
     }
