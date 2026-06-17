@@ -15,7 +15,7 @@ import {
 } from '../../components/ui/alert-dialog';
 import {
   Plus, Truck, Package, MapPin, Scale, Eye, TrendingUp, CheckCircle, Clock,
-  FileText, Search, Calculator, Edit, Trash2,
+  FileText, Search, Calculator, Edit, Trash2, AlertTriangle,
 } from 'lucide-react';
 import {
   viajesApi, strField,
@@ -271,18 +271,44 @@ export default function Viajes() {
       <AlertDialog open={!!viajeAValidar} onOpenChange={open => !open && setViajeAValidar(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Pasar viaje a En Validación?</AlertDialogTitle>
-            <AlertDialogDescription>
-              <span>
-                ¿Deseas pasar el viaje <strong>{viajeAValidar?.remision}</strong> al estado{' '}
-                <strong>"En Validación"</strong>? El conteo de cosecha es opcional.
-              </span>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-yellow-600" />
+              Pasar a En Validación
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>
+                  ¿Confirmas que deseas cambiar el estado del viaje{' '}
+                  <strong>{viajeAValidar?.remision}</strong> a{' '}
+                  <strong>"En Validación"</strong>?
+                </p>
+                {/* Advertencia: cuando se salta el reconteo, el sistema toma los
+                    gajos/peso reportados por el colaborador como definitivos. Eso
+                    impacta el cálculo de nómina, así que el usuario debe verlo
+                    claramente antes de confirmar. */}
+                <div className="rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-900">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-yellow-600" />
+                    <div>
+                      <p className="font-semibold mb-1">
+                        Importante: datos que tomará el sistema
+                      </p>
+                      <p className="leading-relaxed">
+                        Si no ingresas la información de la extractora durante la
+                        validación, el sistema tomará como definitivos los{' '}
+                        <strong>gajos y kilogramos reportados por el colaborador</strong>.
+                        Estos valores serán los usados para calcular la nómina.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={confirmarValidar} className="bg-primary hover:bg-primary/90">
-              Pasar a En Validación
+              Confirmar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
