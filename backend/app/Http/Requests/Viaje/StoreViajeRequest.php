@@ -19,7 +19,6 @@ class StoreViajeRequest extends FormRequest
             'transportador_id'  => 'required|integer|exists:transportadores,id',
             'extractora_id'     => 'required|integer|exists:extractoras,id',
             'observaciones'     => 'nullable|string|max:255',
-            'es_homogeneo'      => 'sometimes|boolean',
             'sync_uuid'         => 'nullable|uuid|unique:viajes,sync_uuid',
         ];
     }

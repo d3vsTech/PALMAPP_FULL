@@ -208,9 +208,9 @@ si labor.tipo_pago === JORNAL_FIJO:
 **`CosechaCalculationService::calcular(Labor $laborCosecha, int $loteId, int $anio, ?float $peso)`** (`app/Services/CosechaCalculationService.php`):
 
 ```
-si laborCosecha.tipo_pago === POR_PALMA  (modo histórico, sin cambios):
+si laborCosecha.tipo_pago === POR_PALMA  (capa operativa — referencia visual):
   precio   = precios_cosecha.where(lote_id, anio).value('precio')
-  promedio = promedio_lote.where(lote_id, anio).value('promedio')   ← snapshot informativo
+  promedio = promedio_lote más reciente del año   ← snapshot visual, NO entra en nómina
   si peso !== null y precio IS NULL → CALC_ERROR
   valor_total = (peso !== null y precio !== null) ? peso × precio : NULL
 
@@ -271,6 +271,16 @@ Sin cambios estructurales mayores. Agrega snapshot de la labor COSECHA usada:
 
 Las cosechas nuevas (`RegistroCosechaController::store`) llenan `labor_id` automáticamente. El servicio usa esa labor para decidir POR_PALMA vs JORNAL_FIJO.
 
+**Campo `promedio_kg_gajo`** — snapshot visual actualizado por `ViajeCalculationService` al finalizar un viaje homogéneo:
+
+```
+promedio_kg_gajo = peso_viaje / total_gajos_efectivos_del_lote_en_el_viaje
+```
+
+- Lo usa la vista de la planilla para mostrar el promedio al usuario.
+- **No entra en el cálculo de nómina**: el pago real de cosecha a empleados VARIABLE se calcula en `NominaCalculationService` como `gajos_empleado × avg(PromedioLote del período) × precio_cosecha`.
+- En viajes **no homogéneos** o cuando el viaje no tiene detalles, este campo no se actualiza.
+
 ---
 
 ## 6. Relación con Operaciones
@@ -292,14 +302,34 @@ operaciones (planilla del día)
 
 ## 7. Relación con Nómina
 
-| Escenario | Empleado PRODUCCION | Empleado FIJO |
+| Escenario | Empleado VARIABLE (PRODUCCION) | Empleado FIJO |
 |---|---|---|
-| Se registra jornal | Sí | Sí |
+| Se registra jornal / cosecha | Sí | Sí |
 | Calcula `valor_total` | Sí | Sí |
-| En nómina | Sueldo = Σ jornales + Σ cosecha_cuadrilla del período | Sueldo = `empleado.salario_base` siempre |
-| Propósito del jornal | **Calcular remuneración** | **Tracking** (qué hizo ese día) |
+| Pago por jornales en nómina | Σ `jornales.valor_total` del período | Tracking — no se suma |
+| Pago por cosecha en nómina | Σ (`gajos_empleado × avg(PromedioLote período) × precio_cosecha`) | Tracking — no se suma |
+| Sueldo final | Σ jornales + `total_cosecha` calculado | `empleado.salario_base` |
+| Propósito del jornal / cosecha | **Calcular remuneración** | **Tracking** (qué hizo ese día) |
 
-`nomina_jornal_ref` y `nomina_cosecha_ref` guardan snapshots de jornales y cuadrilla incluidos en cada nómina.
+**Fórmula cosecha para empleados VARIABLE** (`NominaCalculationService::sumarCosecha()`):
+
+```
+Para cada cosecha_cuadrilla del empleado en el período (operación APROBADA):
+  gajos_efectivos  = cosecha.gajos_reconteo ?? cosecha.gajos_reportados
+  N                = COUNT(cuadrilleros activos de esa cosecha)
+  gajos_empleado   = FLOOR(gajos_efectivos / N)   ← partes iguales enteras
+
+  promedio_avg = AVG(PromedioLote WHERE lote_id=? AND fecha BETWEEN inicio AND fin)
+  Si no hay promedios en el período:
+    → usar PromedioLote baseline admin más reciente del año (viaje_id IS NULL)
+  precio = PrecioCosecha WHERE lote_id=? AND anio=?
+
+  pago_cosecha = gajos_empleado × promedio_avg × precio
+
+total_cosecha = SUM(pago_cosecha por cada cosecha del período)
+```
+
+`nomina_jornal_ref` y `nomina_cosecha_ref` guardan snapshots de jornales y cuadrillas al cerrar la nómina. `nomina_cosecha_ref` incluye `gajos_asignados`, `precio_cosecha_snapshot` y `promedio_promedios_snapshot` para trazabilidad completa.
 
 El **`AgrupadorJornalesService`** del desprendible agrupa jornales de PALMA por tipo. Los jornales con `tipo IS NULL` (labores custom de palma) van al bucket "otros" del desprendible. Para reportes históricos usa la heurística `cantidad_palmas IS NOT NULL ⇒ POR_PALMA` cuando inspecciona snapshots viejos.
 

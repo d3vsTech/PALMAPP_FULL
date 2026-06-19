@@ -68,6 +68,68 @@ GET /predios
 
 ---
 
+### 1.1.1 Totales globales del tenant
+
+```
+GET /predios/totales
+```
+
+**Permiso:** `lotes.ver`
+
+Endpoint liviano pensado para alimentar las tarjetas "Hectáreas / Lotes / Palmas" del index `/plantacion`. Evita el N+1 de llamar `GET /predios/{id}/resumen` por cada predio.
+
+**Caché:** TTL 60 s por tenant. Se invalida automáticamente tras cualquier mutación de predio, lote, sublote o palma (incluye jobs async `CrearPalmasJob` / `EliminarPalmasJob`).
+
+**Respuesta 200:**
+```json
+{
+  "data": {
+    "predios_count": 5,
+    "lotes_count": 7,
+    "palmas_count": 7077,
+    "hectareas_totales": "1105.00"
+  }
+}
+```
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `predios_count` | integer | Cantidad de predios del tenant |
+| `lotes_count` | integer | Suma de lotes en todos los predios |
+| `palmas_count` | integer | Suma de `Sublote.cantidad_palmas` en todos los sublotes |
+| `hectareas_totales` | string | Suma de `Predio.hectareas_totales` (formato `0.00`) |
+
+> El listado `GET /predios` ya devuelve `lotes_count` y `palmas_count` **por predio** vía `withCount('lotes')` y `withSum('sublotes', 'cantidad_palmas')`. Este endpoint solo agrega los **totales globales**; no reemplaza al listado.
+
+**Integración en el frontend (`/plantacion`):**
+
+Eliminar el workaround N+1 en `MiPlantacion.tsx` (líneas 44–57):
+
+```typescript
+// ❌ Quitar: hace 1 + N requests (uno por predio)
+const enriquecidos = await Promise.all(
+  lista.map(async (p) => {
+    const r = await prediosApi.resumen(p.id);
+    const totalPalmas = Number(r.data?.totales_generales?.palmas ?? p.palmas_count ?? 0);
+    const totalLotes  = Number(r.data?.totales_generales?.lotes   ?? p.lotes_count  ?? 0);
+    return { ...p, palmas_count: totalPalmas, lotes_count: totalLotes };
+  }),
+);
+setPredios(enriquecidos);
+```
+
+```typescript
+// ✅ Reemplazar por: 2 requests fijos en paralelo
+const [lista, totales] = await Promise.all([
+  prediosApi.lista({ per_page: 50 }),
+  prediosApi.totales(),
+]);
+setPredios(lista);
+setTotales(totales.data); // alimenta las 3 tarjetas: hectareas_totales / lotes_count / palmas_count
+```
+
+---
+
 ### 1.2 Ver predio
 
 ```

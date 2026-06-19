@@ -348,48 +348,94 @@ Los campos `categoria`, `tipo` y `es_sistema` son inmutables (silenciosamente de
 
 ## 5. Promedios por Lote
 
-Promedio de kg/gajo por lote por año. Usado en el cálculo de cosecha.
+Historial de promedios kg/gajo por lote. Alimenta el cálculo de pago de cosecha a empleados VARIABLE durante la liquidación de nómina.
+
+Hay **dos tipos de registro** — ambos viven en la misma tabla, diferenciados por `viaje_id`:
+
+| Tipo | `viaje_id` | Quién lo crea | Editable / Eliminable |
+|---|---|---|---|
+| **Baseline admin** | `NULL` | El admin desde este CRUD | Sí |
+| **Generado por viaje** | FK al viaje | Sistema automáticamente al finalizar un viaje homogéneo | No — inmutable |
+
+El admin puede crear varios registros baseline para el mismo lote con fechas distintas. No existe restricción de unicidad por `(lote_id, anio)`.
 
 ### Endpoints
 
 | Método   | URL                              | Descripción |
 |----------|----------------------------------|-------------|
-| `GET`    | `/promedios-lote`                | Listar promedios |
-| `GET`    | `/promedios-lote/{id}`           | Ver detalle |
-| `POST`   | `/promedios-lote`                | Crear promedio |
-| `PUT`    | `/promedios-lote/{id}`           | Editar promedio |
-| `DELETE` | `/promedios-lote/{id}`           | Eliminar promedio |
+| `GET`    | `/promedios-lote`                | Listar (paginado). Incluye baseline y auto-generados. |
+| `GET`    | `/promedios-lote/{id}`           | Ver detalle. Carga `lote` y `viaje` (si aplica). |
+| `POST`   | `/promedios-lote`                | Crear baseline (admin). Siempre crea con `viaje_id = null`. |
+| `PUT`    | `/promedios-lote/{id}`           | Editar baseline. Bloquea si `viaje_id IS NOT NULL`. |
+| `DELETE` | `/promedios-lote/{id}`           | Eliminar baseline. Bloquea si `viaje_id IS NOT NULL`. |
 
-### Filtros adicionales
+### Filtros (GET index)
 
 | Parámetro | Tipo    | Descripción |
 |-----------|---------|-------------|
 | `lote_id` | integer | Filtrar por lote |
 | `anio`    | integer | Filtrar por año |
+| `fecha_desde` | date | Filtrar desde fecha (inclusive) |
+| `fecha_hasta` | date | Filtrar hasta fecha (inclusive) |
+| `solo_baseline` | boolean | Si presente, devuelve solo registros con `viaje_id = null` (admin) |
+| `solo_viajes`   | boolean | Si presente, devuelve solo registros con `viaje_id IS NOT NULL` (auto) |
 
-### Crear / Editar
+### Crear (POST)
 
 ```json
-// POST /promedios-lote
+// POST /promedios-lote  — baseline admin
 {
   "lote_id": 5,
   "promedio": 12.50,
-  "anio": 2026
-}
-
-// PUT /promedios-lote/{id}
-{
-  "promedio": 13.20
+  "anio": 2026,
+  "fecha": "2026-01-01"
 }
 ```
 
-> Al editar, si se envía `anio`, se valida que no exista otro registro con el mismo `lote_id` + `anio` (excluyendo el registro actual). Si existe, retorna 409 `PROMEDIO_DUPLICADO`.
+| Campo | Tipo | Requerido | Notas |
+|---|---|---|---|
+| `lote_id` | integer | ✔ | Debe existir en `lotes` |
+| `promedio` | decimal | ✔ | min: 0, max: 99999999.99 |
+| `anio` | integer | ✔ | min: 2000, max: 2100 |
+| `fecha` | date | — | Fecha del promedio. Usada por nómina para filtrar registros del período. Si se omite, el registro queda sin fecha y **no entra en el cálculo de nómina por período** (solo sirve como fallback baseline si no hay promedios con fecha en el rango). |
+
+### Editar (PUT)
+
+```json
+// PUT /promedios-lote/{id}
+{
+  "promedio": 13.20,
+  "anio": 2026,
+  "fecha": "2026-01-15"
+}
+```
+
+Solo aplica a registros **baseline** (`viaje_id = null`). Campos editables: `promedio`, `anio`, `fecha`. El campo `lote_id` es inmutable.
+
+### Respuesta del detalle (200)
+
+```json
+{
+  "data": {
+    "id": 12,
+    "lote_id": 5,
+    "viaje_id": null,
+    "promedio": "12.50",
+    "anio": 2026,
+    "fecha": "2026-01-01",
+    "lote": { "id": 5, "nombre": "Marsella" },
+    "viaje": null
+  }
+}
+```
+
+Para registros generados por viaje, `viaje` incluye `{ id, remision, fecha_viaje }`.
 
 ### Errores específicos
 
 | Código HTTP | code | Descripción |
 |-------------|------|-------------|
-| 409 | `PROMEDIO_DUPLICADO` | Ya existe un promedio para ese lote en ese año (aplica en POST y en PUT al cambiar `anio`) |
+| 409 | `PROMEDIO_DE_VIAJE` | Intento de editar o eliminar un registro generado automáticamente por un viaje (`viaje_id IS NOT NULL`). Estos registros son inmutables. |
 
 ---
 

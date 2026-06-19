@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Predio\StorePredioRequest;
 use App\Http\Requests\Predio\UpdatePredioRequest;
+use App\Models\Lote;
 use App\Models\Predio;
 use App\Models\Semilla;
+use App\Models\Sublote;
 use App\Services\AuditoriaService;
 use App\Support\WizardCache;
 use Illuminate\Http\JsonResponse;
@@ -165,7 +167,7 @@ class PredioController extends Controller
             $payload = $cacheable
                 ? Cache::remember(
                     WizardCache::predios($tenantId) . ":p:{$perPage}",
-                    WizardCache::TTL_PARAMETRICA,
+                    WizardCache::TTL_PREDIO_BUNDLE,
                     $build,
                 )
                 : $build();
@@ -190,15 +192,47 @@ class PredioController extends Controller
     }
 
     /**
-     * Forget cached predios listings for the current tenant.
-     * The cache is keyed by per_page; clear the values used in practice
-     * (default admin list and wizard load).
+     * Forget cached predios listings + globales del tenant.
+     * Delegado a WizardCache para que todas las mutaciones (predios,
+     * lotes, sublotes, líneas, palmas y jobs async) invaliden las
+     * mismas claves.
      */
     protected function forgetPrediosCache(int $tenantId): void
     {
-        $base = WizardCache::predios($tenantId);
-        foreach ([15, 100] as $perPage) {
-            Cache::forget("{$base}:p:{$perPage}");
+        WizardCache::forgetPrediosResumenes($tenantId);
+    }
+
+    /**
+     * GET /api/v1/tenant/predios/totales
+     *
+     * Totales globales del tenant para las tarjetas de la vista
+     * "Mi Plantación" (Hectáreas, Lotes, Palmas). Evita el N+1
+     * de llamar resumen() por cada predio.
+     */
+    public function totales(): JsonResponse
+    {
+        try {
+            $tenantId = (int) app('current_tenant_id');
+
+            $data = Cache::remember(
+                WizardCache::prediosTotales($tenantId),
+                WizardCache::TTL_PREDIO_BUNDLE,
+                fn() => [
+                    'predios_count'     => Predio::count(),
+                    'lotes_count'       => Lote::count(),
+                    'palmas_count'      => (int) Sublote::sum('cantidad_palmas'),
+                    'hectareas_totales' => number_format((float) Predio::sum('hectareas_totales'), 2, '.', ''),
+                ],
+            );
+
+            return response()->json(['data' => $data]);
+        } catch (\Throwable $e) {
+            Log::error('Error al obtener totales de predios: ' . $e->getMessage());
+
+            return response()->json([
+                'message' => 'Error al obtener los totales de predios',
+                'error'   => $e->getMessage(),
+            ], 500);
         }
     }
 

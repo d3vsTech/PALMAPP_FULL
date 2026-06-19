@@ -199,6 +199,7 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
 
     // ── Predios ──
     Route::get('predios/wizard-init', [PredioController::class, 'wizardInit'])->middleware('check.permission:lotes.crear');
+    Route::get('predios/totales', [PredioController::class, 'totales'])->middleware('check.permission:lotes.ver');
     Route::get('predios/{predio}/wizard-init', [PredioController::class, 'wizardInit'])->middleware('check.permission:lotes.ver');
     Route::get('predios', [PredioController::class, 'index'])->middleware('check.permission:lotes.ver');
     Route::get('predios/{predio}/resumen', [PredioController::class, 'resumen'])->middleware('check.permission:lotes.ver');

@@ -14,14 +14,19 @@ class NominaCosechaRef extends Model
 
     protected $fillable = [
         'tenant_id', 'nomina_empleado_id', 'cosecha_cuadrilla_id',
-        'valor_snapshot', 'estado',
+        'valor_snapshot', 'gajos_asignados',
+        'precio_cosecha_snapshot', 'promedio_promedios_snapshot',
+        'estado',
     ];
 
     protected function casts(): array
     {
         return [
-            'valor_snapshot' => 'decimal:2',
-            'estado' => 'boolean',
+            'valor_snapshot'              => 'decimal:2',
+            'gajos_asignados'             => 'integer',
+            'precio_cosecha_snapshot'     => 'decimal:2',
+            'promedio_promedios_snapshot' => 'decimal:4',
+            'estado'                      => 'boolean',
         ];
     }
 

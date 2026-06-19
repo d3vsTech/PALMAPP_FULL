@@ -12,6 +12,8 @@ use App\Models\NominaConcepto;
 use App\Models\NominaEmpleado;
 use App\Models\NominaEmpleadoConcepto;
 use App\Models\Operacion;
+use App\Models\PrecioCosecha;
+use App\Models\PromedioLote;
 use App\Models\TenantConfig;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -431,17 +433,93 @@ class NominaCalculationService
     }
 
     /**
-     * Suma valor_calculado de la cuadrilla de cosecha del empleado en el rango.
+     * Calcula el pago de cosecha del empleado en el período con la fórmula:
+     *   gajos_empleado × promedio_de_promedios_lote × precio_cosecha_lote
+     *
+     * gajos_empleado = FLOOR(gajos_efectivos / N), donde:
+     *   - gajos_efectivos = gajos_reconteo si existe, si no gajos_reportados
+     *   - N = cantidad de cuadrilleros activos de esa cosecha
+     *
+     * promedio_de_promedios = AVG(PromedioLote.promedio WHERE lote_id=X AND fecha IN período).
+     * Si no hay promedios de viajes en el período, usa el baseline admin más reciente del año.
      */
     private function sumarCosecha(Empleado $empleado, Carbon $inicio, Carbon $fin): float
     {
-        return (float) CosechaCuadrilla::where('empleado_id', $empleado->id)
+        $cuadrillas = CosechaCuadrilla::where('empleado_id', $empleado->id)
             ->where('estado', true)
+            ->with([
+                'cosecha:id,lote_id,gajos_reportados,gajos_reconteo,operacion_id',
+                'cosecha.operacion:id,fecha,estado',
+            ])
             ->whereHas('cosecha.operacion', function ($q) use ($inicio, $fin) {
                 $q->where('estado', Operacion::ESTADO_APROBADA)
                   ->whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()]);
             })
-            ->sum('valor_calculado');
+            ->get();
+
+        if ($cuadrillas->isEmpty()) {
+            return 0.0;
+        }
+
+        $tenantId = $empleado->tenant_id;
+        $anio     = $inicio->year;
+        $total    = 0.0;
+
+        foreach ($cuadrillas as $cc) {
+            $cosecha = $cc->cosecha;
+            $loteId  = $cosecha->lote_id;
+
+            // Gajos efectivos del lote completo (reconteo tiene prioridad sobre reportados)
+            $gajosEfectivos = $cosecha->gajos_reconteo ?? $cosecha->gajos_reportados;
+            if (! $gajosEfectivos || $gajosEfectivos <= 0) {
+                continue;
+            }
+
+            // Cuadrilleros activos de esta cosecha (para la división equitativa)
+            $N = $cosecha->cuadrilla()->where('estado', true)->count();
+            if ($N <= 0) {
+                continue;
+            }
+
+            $gajosEmpleado = (int) floor($gajosEfectivos / $N);
+            if ($gajosEmpleado <= 0) {
+                continue;
+            }
+
+            // Promedio de promedios del lote en el período (generados por viajes)
+            $promedioPromedio = PromedioLote::where('tenant_id', $tenantId)
+                ->where('lote_id', $loteId)
+                ->whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()])
+                ->avg('promedio');
+
+            // Fallback: baseline admin más reciente del año si no hay promedios de viajes
+            if (! $promedioPromedio) {
+                $promedioPromedio = PromedioLote::where('tenant_id', $tenantId)
+                    ->where('lote_id', $loteId)
+                    ->where('anio', $anio)
+                    ->whereNull('viaje_id')
+                    ->orderByDesc('created_at')
+                    ->value('promedio');
+            }
+
+            if (! $promedioPromedio) {
+                continue; // Sin promedio disponible: cosecha no liquidable en este período
+            }
+
+            // Precio cosecha del lote ($/kg) para el año
+            $precio = PrecioCosecha::where('tenant_id', $tenantId)
+                ->where('lote_id', $loteId)
+                ->where('anio', $anio)
+                ->value('precio');
+
+            if (! $precio) {
+                continue; // Sin precio configurado: cosecha no liquidable
+            }
+
+            $total += round($gajosEmpleado * (float) $promedioPromedio * (float) $precio, 2);
+        }
+
+        return $total;
     }
 
     /**

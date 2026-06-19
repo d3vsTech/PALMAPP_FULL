@@ -33,10 +33,31 @@ class WizardCache
         return "wizard:predio_resumen:t:{$tenantId}:p:{$predioId}";
     }
 
+    public static function prediosTotales(int $tenantId): string
+    {
+        return "wizard:predios_totales:t:{$tenantId}";
+    }
+
     public static function forgetPredioBundle(int $tenantId, int $predioId): void
     {
         Cache::forget(static::predioBundle($tenantId, $predioId));
         Cache::forget(static::predioResumen($tenantId, $predioId));
+    }
+
+    /**
+     * Invalida los agregados del index de /plantacion: el listado paginado
+     * de predios y los totales globales del tenant.
+     *
+     * Llamar tras cualquier mutación que cambie lotes/sublotes/palmas/hectáreas
+     * del tenant (incluye jobs async de palmas).
+     */
+    public static function forgetPrediosResumenes(int $tenantId): void
+    {
+        Cache::forget(static::prediosTotales($tenantId));
+        $base = static::predios($tenantId);
+        foreach ([15, 50, 100] as $perPage) {
+            Cache::forget("{$base}:p:{$perPage}");
+        }
     }
 
     public static function preciosLaboresBundle(int $tenantId): string
