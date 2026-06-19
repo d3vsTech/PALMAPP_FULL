@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\Sublote;
 use App\Services\PalmaCreationService;
+use App\Support\WizardCache;
 use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -38,6 +39,8 @@ class EliminarPalmasJob implements ShouldQueue, ShouldBeUnique
         $sublote = Sublote::withoutTenant()->findOrFail($this->subloteId);
         // deleteSync: elimina chunk a chunk y llama updateCounters al final.
         $service->deleteSync($sublote, $this->cantidad);
+
+        WizardCache::forgetPrediosResumenes($this->tenantId);
     }
 
     public function failed(\Throwable $exception): void

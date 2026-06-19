@@ -10,100 +10,138 @@ El sistema tiene **tres servicios** orquestando el cálculo del dinero que gana 
 
 | Tabla | Llave de búsqueda | Quién la consume | Ubicación |
 |---|---|---|---|
-| `precio_cosecha` | `(lote_id, anio)` | `CosechaCalculationService` | [app/Models/PrecioCosecha.php:13](../app/Models/PrecioCosecha.php#L13) |
-| `precios_palma` | `(tenant_id, tipo)` | `JornalCalculationService` | [app/Models/PrecioPalma.php:19](../app/Models/PrecioPalma.php#L19) |
-| `precio_abono` | rango `gramos_min..gramos_max` | `JornalCalculationService` (solo FERTILIZACION) | — |
-| `labores.valor_base` | `labor_id` | `JornalCalculationService::calcularFinca` | [docs/LABORES_JORNALES.md:42](./LABORES_JORNALES.md#L42) |
-
-Y una tabla **informativa**, no participa en dinero:
-
-| Tabla | Para qué sirve |
-|---|---|
-| `promedio_lote` | Snapshot histórico de kg/gajo por `(lote, año)`. Se guarda en `registro_cosecha.promedio_kg_gajo` para reportes, **pero nunca multiplica dinero**. [CONTEXTO.md:394](../CONTEXTO.md#L394) lo dice explícito: *"no participa en la fórmula del dinero"*. |
+| `precio_cosecha` | `(lote_id, anio)` | `NominaCalculationService`, `CosechaCalculationService` | [app/Models/PrecioCosecha.php](../app/Models/PrecioCosecha.php) |
+| `promedio_lote` | `(tenant_id, lote_id, fecha)` | `NominaCalculationService`, `ViajeCalculationService` | [app/Models/PromedioLote.php](../app/Models/PromedioLote.php) |
+| `labores.precio_palma` | `labor_id` | `JornalCalculationService` (PALMA y FINCA) | [app/Models/Labor.php](../app/Models/Labor.php) |
+| `precio_abono` | rango `gramos_min..gramos_max` | `JornalCalculationService` (solo FERTILIZACION POR_PALMA) | — |
 
 ---
 
-## 2. Cosecha (sigue su propio carril)
+## 2. Cosecha — Flujo Correcto (dos capas: operativa y de nómina)
 
-**Vive aparte de `jornales`** en `registro_cosecha` + `cosecha_cuadrilla` porque es labor de cuadrilla (varios empleados sobre el mismo sublote). Esto está descrito en [docs/LABORES_JORNALES.md:18](./LABORES_JORNALES.md#L18) y [CONTEXTO.md:309](../CONTEXTO.md#L309).
+**Vive aparte de `jornales`** en `registro_cosecha` + `cosecha_cuadrilla` porque es labor de cuadrilla (varios empleados sobre el mismo sublote).
 
-### 2.1 Cómo entra el precio
+### 2.1 Capa operativa: registro en la planilla
 
-[app/Services/CosechaCalculationService.php:23-50](../app/Services/CosechaCalculationService.php#L23-L50) hace dos lookups en paralelo al crear/editar:
+`CosechaCalculationService::calcular()` calcula `registro_cosecha.valor_total` al crear o editar una cosecha. Esto es un **valor de referencia operativo** (visible en el resumen de la planilla), NO el valor final de nómina.
 
 ```
-precio   = SELECT precio   FROM precio_cosecha WHERE lote_id=? AND anio=?
-promedio = SELECT promedio FROM promedio_lote  WHERE lote_id=? AND anio=?
+POR_PALMA (default):
+  precio   = precio_cosecha WHERE lote_id=? AND anio=?
+  promedio = promedio_lote más reciente del año (snapshot informativo)
+  Si peso_confirmado es NULL:
+    valor_total = NULL (se hidrata al registrar el peso)
+  Si peso_confirmado existe:
+    valor_total = peso_confirmado × precio
+
+JORNAL_FIJO:
+  valor_total = labor.precio_palma (plano)
 ```
 
-- **`precio`** entra a `valor_total = peso_confirmado × precio`.
-- **`promedio`** se copia tal cual a `registro_cosecha.promedio_kg_gajo` como *snapshot* histórico, **no se usa para calcular dinero**. Es ornamental.
+`cosecha_cuadrilla.valor_calculado = valor_total / N` (valor por empleado, referencia operativa).
 
-### 2.2 Las dos ramas del cálculo (con peso vs. sin peso)
+### 2.2 Capa de viaje: generación del historial de promedios
 
-| Caso | `peso_confirmado` | `precio_cosecha` en DB | `valor_total` | Cuadrilla |
-|---|---|---|---|---|
-| A — solo gajos | NULL | NULL | NULL | `valor_calculado=NULL` por empleado |
-| B — gajos + kilos | número | obligado a existir | `peso × precio` | `valor_total/N` (partes iguales) |
+Al finalizar un viaje (`ViajeCalculationService::calcularAlFinalizar()`):
 
-Si en el caso B **no existe** registro en `precios_cosecha` para `(lote, año)`, el servicio lanza `InvalidArgumentException` y el controller devuelve **422 `CALC_ERROR`** ([app/Services/CosechaCalculationService.php:35-39](../app/Services/CosechaCalculationService.php#L35-L39), [docs/API_OPERACIONES.md:36](./API_OPERACIONES.md#L36)).
+El campo `es_homogeneo` **no lo define el usuario** — el sistema lo recalcula automáticamente en cada `addDetalle()` / `removeDetalle()`:
 
-### 2.3 Hidratación posterior (el caso interesante)
+```
+lotes_distintos = COUNT(DISTINCT lote_id de cosechas activas del viaje)
+es_homogeneo    = (lotes_distintos <= 1)
+```
 
-La tarjeta de cosecha se crea en campo **antes de pesar** (caso A). Cuando llega el camión a báscula, hay dos rutas para llenar el peso:
+- **Si `es_homogeneo = true`** (single-lote): calcula el promedio real kg/gajo usando los gajos efectivos de cada cosecha:
+  ```
+  gajos_efectivos = gajos_reconteo ?? gajos_reportados
+  promedio = peso_viaje / SUM(gajos_efectivos) agrupado por lote
+  → INSERT INTO promedio_lote (lote_id, viaje_id, promedio, fecha, anio)
+  → UPDATE registro_cosecha SET promedio_kg_gajo = promedio (snapshot visual)
+  ```
+  Crea un registro histórico en `promedio_lote` por cada lote involucrado.
 
-1. **Manual:** `PUT /cosechas/{id}` con `peso_confirmado`. [app/Http/Controllers/Api/RegistroCosechaController.php:109-180](../app/Http/Controllers/Api/RegistroCosechaController.php#L109-L180) detecta el cambio y:
-   - Si `precio_cosecha` ya está snapshotteado en la fila → multiplica y redistribuye.
-   - Si era NULL (porque la cosecha se creó solo con gajos) → re-consulta `precios_cosecha` por primera vez y graba el snapshot ([RegistroCosechaController.php:120-126](../app/Http/Controllers/Api/RegistroCosechaController.php#L120-L126)).
-   - Si llega `cuadrilla` en el PUT, se borra y recrea; si no, se hace UPDATE in-place sobre las filas existentes.
+- **Si `es_homogeneo = false`** (multi-lote): no se crea PromedioLote, no se actualiza nada.
 
-2. **Vía Viaje:** [app/Services/ViajeCalculationService.php:17-38](../app/Services/ViajeCalculationService.php#L17-L38) actualiza `promedio_kg_gajo` (solo snapshot, no dinero) cuando un viaje HOMOGENEO se finaliza. **No toca `valor_total`** — la actualización del peso/dinero en cosecha pasa por el PUT del controller, no por el cierre del viaje.
+### 2.3 Capa de nómina: cálculo del pago real por empleado
 
-> Detalle importante: el snapshot del precio (`precio_cosecha` en `registro_cosecha`) **se preserva entre ediciones**. Solo se sobreescribe si era NULL y llega peso por primera vez. Esto blinda el histórico si el admin cambia la tarifa anual a media campaña.
+`NominaCalculationService::sumarCosecha()` calcula cuánto gana el empleado de VARIABLE por cosecha en el período:
+
+```
+Para cada cosecha_cuadrilla del empleado en el período (operación APROBADA):
+  lote_id = cosecha.lote_id
+  gajos_efectivos = cosecha.gajos_reconteo ?? cosecha.gajos_reportados
+  N = COUNT(cuadrilleros activos de la cosecha)
+  gajos_empleado = FLOOR(gajos_efectivos / N)   ← partes iguales enteras
+
+  promedio_de_promedios = AVG(promedio_lote WHERE lote_id=X AND fecha BETWEEN inicio AND fin)
+  
+  Si no hay promedios de viajes en el período:
+    → usar PromedioLote baseline admin más reciente del año (viaje_id IS NULL)
+  Si sigue sin haber → omitir, totalcosecha no aumenta
+
+  precio = precio_cosecha WHERE lote_id=X AND anio=año_inicio_periodo
+
+  pago_dia = gajos_empleado × promedio_de_promedios × precio
+
+total_cosecha = SUM(pago_dia por cada cosecha del período)
+```
+
+**Ejemplo:**
+```
+Período: Jun 1-15  |  Lote: Marsella
+PromedioLote registrados: [15.5 (viaje 1), 14.2 (viaje 2), 16.0 (viaje 3)]
+Promedio de promedios: (15.5 + 14.2 + 16.0) / 3 = 15.23 kg/gajo
+PrecioCosecha Marsella 2026: $2.500/kg
+
+Juan: 50 gajos × 15.23 × $2.500 = $1.903.750
+Pedro: 50 gajos × 15.23 × $2.500 = $1.903.750
+```
+
+### 2.4 Tabla promedio_lote — Nuevo comportamiento histórico
+
+La tabla `promedio_lote` ya no tiene UNIQUE(lote_id, anio). Soporta múltiples registros por lote:
+
+| Campo | Descripción |
+|---|---|
+| `viaje_id` | FK a viajes. NULL = baseline manual del admin. NOT NULL = generado por viaje |
+| `fecha` | Fecha del viaje o fecha manual. Usada para filtrar por período de nómina |
+| `anio` | Año (para filtros rápidos) |
+
+El admin puede seguir creando registros baseline desde el CRUD de PromedioLote. Los registros generados por viajes son **inmutables** (no se pueden editar ni borrar manualmente).
+
+### 2.5 Snapshots de nómina: trazabilidad
+
+Al cerrar la nómina, `CerrarNominaService::snapshotCosechas()` graba en `nomina_cosecha_ref`:
+
+| Campo | Descripción |
+|---|---|
+| `valor_snapshot` | Pago calculado: gajos × promedio × precio |
+| `gajos_asignados` | Gajos que le correspondieron a este empleado |
+| `precio_cosecha_snapshot` | Precio/kg vigente al momento de liquidar |
+| `promedio_promedios_snapshot` | Promedio de promedios del período |
+
+Esto garantiza trazabilidad completa aunque cambien los precios o promedios después.
 
 ---
 
 ## 3. Labores de Palma (5 de las 6 caen aquí; COSECHA es el caso aparte)
 
-Todas viven en `jornales` con `categoria='PALMA'` y discriminador `tipo`. El servicio único es [app/Services/JornalCalculationService.php:27-46](../app/Services/JornalCalculationService.php#L27-L46), que despacha por `match($tipo)`:
+Sin cambios respecto al diseño anterior. Todas viven en `jornales` con `categoria='PALMA'` y discriminador `tipo`. El servicio único es `JornalCalculationService`.
 
-| `tipo` | Resuelve precio en | Fórmula | Comportamiento si no hay precio |
+| `tipo` | tipo_pago | Resuelve precio en | Fórmula |
 |---|---|---|---|
-| `PLATEO` | `precios_palma` `(tenant, 'PLATEO', estado=true)` | `cantidad_palmas × precio_palma` | **422 `CALC_ERROR`** ([JornalCalculationService.php:78-82](../app/Services/JornalCalculationService.php#L78-L82)) |
-| `PODA` | igual que PLATEO | igual | igual |
-| `FERTILIZACION` | `precio_abono` por **rango de gramos** | `cantidad_palmas × precio_palma_del_rango` + snapshot en `precio_insumo_snapshot` | **422 `CALC_ERROR`** si no hay rango que cubra los gramos |
-| `SANIDAD` | `precios_palma` `(tenant, 'SANIDAD')` | **`valor_total = precio_palma`** (plano, sin multiplicar) | **`valor_total = NULL`** (no rompe, queda pendiente) |
-| `OTROS` | `precios_palma` `(tenant, 'OTROS')` | igual que SANIDAD | igual que SANIDAD |
-
-### 3.1 Por qué SANIDAD/OTROS son raros
-
-Dos cosas únicas (documentadas en [docs/PRECIOS_PALMA.md:51-58](./PRECIOS_PALMA.md#L51-L58)):
-
-1. **No usan `cantidad_palmas`** — son monto plano por jornal. Si llega `cantidad_palmas` en el payload, el FormRequest rebota con 422.
-2. **`precio_palma` puede ser NULL** — y entonces `valor_total` queda NULL. El servicio retorna NULL en lugar de lanzar excepción ([JornalCalculationService.php:130-151](../app/Services/JornalCalculationService.php#L130-L151)). Esto permite que el supervisor registre la **estructura** del trabajo (lote, descripción, colaborador) hoy aunque la finca aún no decida cobrarlo. El día que se decide cobrar, basta con `UPDATE precios_palma SET precio_palma=X WHERE tipo='SANIDAD'` y los jornales **nuevos** salen calculados — los viejos quedan con NULL salvo recálculo.
-
-### 3.2 Por qué se creó `precios_palma` y no se reutilizó algo
-
-[docs/PRECIOS_PALMA.md:25-29](./PRECIOS_PALMA.md#L25-L29) explica el descarte de las 3 alternativas:
-
-- `labores.valor_base` → quedó reservado a Labores de **Finca** post-Migración 13; mezclar precios de Palma ahí volvía a unir lo que se separó.
-- `precio_abono` → su llave es por gramos, no aplica a PLATEO/PODA que son precio plano por palma.
-- `tenant_config` (JSON) → no se presta a CRUD admin estándar.
+| PLATEO / PODA | POR_PALMA | `labor.precio_palma` | `cantidad_palmas × precio_palma` |
+| PLATEO / PODA | JORNAL_FIJO | `labor.precio_palma` | valor plano |
+| FERTILIZACION | POR_PALMA | `precio_abono` por rango de gramos | `cantidad_palmas × precio_rango` |
+| FERTILIZACION | JORNAL_FIJO | `labor.precio_palma` | valor plano |
+| SANIDAD | POR_PALMA | `labor.precio_palma` | `cantidad_palmas × precio_palma` |
+| SANIDAD | JORNAL_FIJO | `labor.precio_palma` | valor plano (puede ser NULL) |
 
 ---
 
 ## 4. Labores de Finca (el caso más simple)
 
-`categoria='FINCA'`, el discriminador es `labor_id` (FK a `labores`). El catálogo `labores` quedó **exclusivamente** para Finca después de la Migración 13 ([CONTEXTO.md:179](../CONTEXTO.md#L179)).
-
-[app/Services/JornalCalculationService.php:51-60](../app/Services/JornalCalculationService.php#L51-L60):
-
-```
-valor_unitario = labor.valor_base
-valor_total    = labor.valor_base
-```
-
-Sin multiplicación, sin condiciones, sin NULLs. Es un precio fijo por jornal. Si cambia el `valor_base` de la labor después de creado el jornal, el jornal **no se recalcula** salvo que se haga PUT.
+`categoria='FINCA'`, siempre `JORNAL_FIJO`. `valor_total = labor.precio_palma` (plano). Sin cambios.
 
 ---
 
@@ -111,50 +149,49 @@ Sin multiplicación, sin condiciones, sin NULLs. Es un precio fijo por jornal. S
 
 | Operación UI | Tabla destino | Servicio | Precio sale de | ¿Puede quedar `valor_total=NULL`? |
 |---|---|---|---|---|
-| Tab Cosecha | `registro_cosecha` + `cosecha_cuadrilla` | `CosechaCalculationService` | `precio_cosecha` | Sí, cuando no se envía `peso_confirmado` |
-| Tab Plateo | `jornales` (PALMA/PLATEO) | `JornalCalculationService::calcularPalma` | `precios_palma.PLATEO` | No — falta de precio = 422 |
-| Tab Poda | `jornales` (PALMA/PODA) | igual | `precios_palma.PODA` | No |
-| Tab Fertilización | `jornales` (PALMA/FERTILIZACION) | igual | `precio_abono` por rango | No |
-| Tab Sanidad | `jornales` (PALMA/SANIDAD) | igual | `precios_palma.SANIDAD` (nullable) | **Sí**, por diseño |
-| Tab Otros | `jornales` (PALMA/OTROS) | igual | `precios_palma.OTROS` (nullable) | **Sí**, por diseño |
-| Labores de Finca | `jornales` (FINCA) | `JornalCalculationService::calcularFinca` | `labores.valor_base` | No |
+| Tab Cosecha | `registro_cosecha` + `cosecha_cuadrilla` | `CosechaCalculationService` | `precio_cosecha` (referencia operativa) | Sí, cuando no se envía `peso_confirmado` |
+| Nómina — cosecha | `nomina_empleado.total_cosecha` | `NominaCalculationService::sumarCosecha` | `promedio_lote` + `precio_cosecha` | 0 si sin promedios/precio |
+| Tab Plateo/Poda | `jornales` (PALMA) | `JornalCalculationService` | `labor.precio_palma` | No |
+| Tab Fertilización | `jornales` (PALMA) | `JornalCalculationService` | `precio_abono` por rango | No |
+| Tab Sanidad | `jornales` (PALMA) | `JornalCalculationService` | `labor.precio_palma` (nullable) | Sí, por diseño |
+| Labores de Finca | `jornales` (FINCA) | `JornalCalculationService` | `labor.precio_palma` | No |
 
 ---
 
 ## 6. Conexión con Nómina (cierra el ciclo)
 
-[CONTEXTO.md:313-320](../CONTEXTO.md#L313-L320) y [docs/LABORES_JORNALES.md:231-243](./LABORES_JORNALES.md#L231-L243):
-
-- **Empleados FIJO:** los jornales son solo **tracking**. Su sueldo en nómina = `salario_base`, no depende del `valor_total`.
-- **Empleados PRODUCCION:** su sueldo = `SUM(jornales.valor_total) + SUM(cosecha_cuadrilla.valor_calculado)` del rango de la nómina, **excluyendo NULLs**. Por eso SANIDAD/OTROS con precio NULL no contaminan la nómina — simplemente no aportan hasta que se les configure precio.
-
-La query agregadora filtra explícitamente `j.valor_total IS NOT NULL`, lo cual hace que el diseño "estructura sin precio" de SANIDAD/OTROS funcione sin tocar nada en el módulo de Nómina.
+- **Empleados FIJO**: los jornales y cosechas son solo **tracking**. Sueldo = `salario_base × (dias/periodo)`.
+- **Empleados VARIABLE**: sueldo = `SUM(jornales.valor_total) + total_cosecha_calculado`.
+  - `total_cosecha_calculado` usa la fórmula nueva: gajos × promedio_promedios × precio.
+  - NULLs excluidos automáticamente.
 
 ---
 
-## 7. Rol final de `PromedioLote`
+## 7. Rol de promedio_lote en el nuevo sistema
 
-A pesar de aparecer en el flujo, su rol es **menor**:
-
-1. `CosechaCalculationService` lo lee y lo escribe como `promedio_kg_gajo` en la fila de cosecha.
-2. `ViajeCalculationService::calcularAlFinalizar` lo **recalcula y sobreescribe** en cosechas cuando el viaje es HOMOGENEO (peso real del viaje / gajos totales del viaje).
-3. **No multiplica dinero en ningún lado** — es un dato analítico que vive en la cosecha para reportes y para alimentar reglas del módulo Viajes (HOMOGENEO vs NO_HOMOGENEO).
-
-Si mañana se borrara `promedio_lote`, el cálculo de la plata no se rompería; solo se perdería el snapshot histórico.
+| Momento | Rol |
+|---|---|
+| Inicio de temporada | Admin crea registros baseline (viaje_id=NULL) con fecha dentro del primer período |
+| Cierre de viaje homogéneo | Sistema crea registro de viaje (viaje_id=ID) con fecha = fecha_viaje |
+| Cálculo de nómina | NominaCalculationService promedia todos los registros del período para el lote |
+| Reportes | El historial de promedios por lote está disponible para análisis |
 
 ---
 
 ## 8. TL;DR del flujo
 
 ```
-Cosecha       → precio_cosecha (por lote/año)  → valor_total = peso × precio        → /N a cuadrilla
-PLATEO/PODA   → precios_palma (por tipo)       → valor_total = palmas × precio
-FERTILIZ.     → precio_abono (por gramos)      → valor_total = palmas × precio_rango
-SANIDAD/OTROS → precios_palma (nullable)       → valor_total = precio (plano, o NULL)
-FINCA         → labores.valor_base             → valor_total = valor_base
-```
+Cosecha (operativa):  precio_cosecha        → valor_total = peso × precio (referencia, opcional)
+Cosecha (nómina):     promedio_lote + precio_cosecha → gajos_empleado × avg(promedio) × precio
+PLATEO/PODA:          labor.precio_palma     → palmas × precio  (o plano en JORNAL_FIJO)
+FERTILIZ.:            precio_abono (rangos)  → palmas × precio_rango
+SANIDAD:              labor.precio_palma     → plano (nullable)
+FINCA:                labor.precio_palma     → plano
 
-El único punto donde el cálculo es **diferido** es Cosecha (espera el peso de báscula). Todos los demás se resuelven en el `POST /operaciones/{id}/jornales` o devuelven 422 si falta config — excepto SANIDAD/OTROS, que tienen permiso explícito de quedar en NULL.
+ViajeCalculationService (al finalizar viaje homogéneo):
+  → CREATE PromedioLote { lote_id, viaje_id, promedio = peso/gajos, fecha }
+  → UPDATE registro_cosecha.promedio_kg_gajo (snapshot visual)
+```
 
 ---
 
@@ -162,15 +199,15 @@ El único punto donde el cálculo es **diferido** es Cosecha (espera el peso de 
 
 - Servicios:
   - [app/Services/CosechaCalculationService.php](../app/Services/CosechaCalculationService.php)
-  - [app/Services/JornalCalculationService.php](../app/Services/JornalCalculationService.php)
   - [app/Services/ViajeCalculationService.php](../app/Services/ViajeCalculationService.php)
+  - [app/Services/Nomina/NominaCalculationService.php](../app/Services/Nomina/NominaCalculationService.php)
+  - [app/Services/Nomina/CerrarNominaService.php](../app/Services/Nomina/CerrarNominaService.php)
 - Modelos:
   - [app/Models/PrecioCosecha.php](../app/Models/PrecioCosecha.php)
-  - [app/Models/PrecioPalma.php](../app/Models/PrecioPalma.php)
   - [app/Models/PromedioLote.php](../app/Models/PromedioLote.php)
   - [app/Models/RegistroCosecha.php](../app/Models/RegistroCosecha.php)
+  - [app/Models/NominaCosechaRef.php](../app/Models/NominaCosechaRef.php)
 - Docs relacionados:
   - [docs/API_OPERACIONES.md](./API_OPERACIONES.md)
   - [docs/LABORES_JORNALES.md](./LABORES_JORNALES.md)
-  - [docs/PRECIOS_PALMA.md](./PRECIOS_PALMA.md)
-  - [CONTEXTO.md §5.1 (Migración 13)](../CONTEXTO.md), [§6.5 (Cosecha y Viajes)](../CONTEXTO.md), [§6.6 (Nómina)](../CONTEXTO.md)
+  - [docs/API_VIAJES.md](./API_VIAJES.md)

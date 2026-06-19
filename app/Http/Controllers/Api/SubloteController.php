@@ -164,6 +164,7 @@ class SubloteController extends Controller
             }
 
             WizardCache::forgetPredioBundle((int) app('current_tenant_id'), $lote->predio_id);
+            WizardCache::forgetPrediosResumenes((int) app('current_tenant_id'));
 
             $this->auditoria->registrarCreacion(
                 $request,
@@ -284,6 +285,7 @@ class SubloteController extends Controller
             if ($predioId) {
                 WizardCache::forgetPredioBundle((int) app('current_tenant_id'), $predioId);
             }
+            WizardCache::forgetPrediosResumenes((int) app('current_tenant_id'));
 
             $auditoriaExtra = '';
             if ($diferenciaAsync > 0 && $batchId) {
@@ -354,6 +356,7 @@ class SubloteController extends Controller
             if ($predioId) {
                 WizardCache::forgetPredioBundle((int) app('current_tenant_id'), $predioId);
             }
+            WizardCache::forgetPrediosResumenes((int) app('current_tenant_id'));
 
             return response()->json([
                 'message' => "Sublote '{$sublote->nombre}' eliminado correctamente",

@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\Sublote;
 use App\Services\PalmaCreationService;
+use App\Support\WizardCache;
 use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -41,6 +42,8 @@ class CrearPalmasJob implements ShouldQueue, ShouldBeUnique
         // createSync: inserta chunk a chunk (sin transaccion global) y
         // llama updateCounters al final fuera de cualquier lock de insercion.
         $service->createSync($sublote, $this->cantidad, $this->lineaId);
+
+        WizardCache::forgetPrediosResumenes($this->tenantId);
     }
 
     public function failed(\Throwable $exception): void

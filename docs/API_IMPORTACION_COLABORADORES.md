@@ -60,7 +60,7 @@ Guarda el `importacion_id` para consultar el progreso con el segundo endpoint.
 GET /api/v1/tenant/colaboradores/importaciones/{id}
 ```
 
-### Respuesta 200
+### Respuesta 200 — Ejemplo con errores de validación (importación atómica abortada)
 
 ```json
 {
@@ -69,16 +69,10 @@ GET /api/v1/tenant/colaboradores/importaciones/{id}
     "estado": "CON_ERRORES",
     "nombre_archivo_original": "colaboradores_mayo_2026.xlsx",
     "total_filas": 120,
-    "filas_exitosas": 118,
+    "filas_exitosas": 0,
     "filas_fallidas": 2,
     "error_fatal": null,
     "resultados": [
-      {
-        "fila": 2,
-        "estado": "exitoso",
-        "documento": "1098765432",
-        "mensaje": "Colaborador 'Juan Pérez' creado correctamente"
-      },
       {
         "fila": 45,
         "estado": "fallido",
@@ -99,15 +93,17 @@ GET /api/v1/tenant/colaboradores/importaciones/{id}
 }
 ```
 
+> **Importante:** la importación es **atómica**. Cuando `estado = CON_ERRORES`, **ningún colaborador fue creado**: `filas_exitosas` siempre es `0` y `resultados` contiene únicamente las filas inválidas. Corrija el archivo y vuelva a subirlo.
+
 ### Estados posibles
 
 | Estado | Descripción |
 |--------|-------------|
 | `PENDIENTE` | El job aún no ha sido tomado por el worker |
 | `PROCESANDO` | El job está en ejecución activa |
-| `COMPLETADO` | Todas las filas fueron creadas exitosamente |
-| `CON_ERRORES` | El proceso terminó pero una o más filas fallaron |
-| `FALLIDO` | Error fatal — el archivo no pudo procesarse, o el job falló inesperadamente |
+| `COMPLETADO` | Todas las filas pasaron validación y fueron creadas exitosamente |
+| `CON_ERRORES` | La validación detectó errores en una o más filas. **Ningún colaborador fue creado.** Consultar `resultados` para ver el detalle |
+| `FALLIDO` | Error fatal — el archivo no pudo procesarse (parseo, excede 1.000 filas, excepción durante la inserción) |
 
 > **Recomendación para el frontend:** hacer polling cada 3–5 segundos mientras `estado` sea `PENDIENTE` o `PROCESANDO`. Detener el polling cuando el estado sea `COMPLETADO`, `CON_ERRORES` o `FALLIDO`.
 
@@ -172,12 +168,15 @@ GET /api/v1/tenant/colaboradores/importaciones/{id}
 
 ---
 
-## Comportamiento por Fila
+## Comportamiento Atómico (All-or-Nothing)
 
-- Cada fila se valida independientemente.
-- Una fila con error **no cancela** el procesamiento del resto del archivo.
-- El campo `resultados` del endpoint de estado contiene el detalle fila a fila.
-- Cuando una fila es exitosa, se crea automáticamente el **contrato vigente** del colaborador (igual que al crear individualmente).
+- La importación es **transaccional a nivel de archivo**: si **una sola** fila no pasa validación, **ninguna** se crea.
+- El procesamiento ocurre en dos fases:
+  1. **Validación completa en memoria**: se valida cada fila sin escribir en BD.
+  2. **Inserción atómica**: solo si todas las filas son válidas, se insertan dentro de una única transacción. Si alguna inserción falla (p.ej. race condition con un documento único), se hace rollback total y la importación queda en `FALLIDO`.
+- Si una o más fallan validación, la importación termina en `CON_ERRORES` con `filas_exitosas = 0`, `filas_fallidas = N` y `resultados` con el detalle de **todas** las filas inválidas (ordenadas por número de fila).
+- Cuando todas las filas son exitosas, se crea automáticamente el **contrato vigente** de cada colaborador (igual que al crear individualmente).
+- **Unicidad del documento**: el `documento` debe ser único contra la BD del tenant **y** único dentro del propio archivo. Si dos o más filas del Excel comparten el mismo `documento`, todas ellas se reportan como fallidas con el mensaje `documento: El documento aparece duplicado en las filas X, Y, Z del archivo`.
 
 ### Estructura de cada elemento en `resultados`
 
@@ -194,12 +193,14 @@ GET /api/v1/tenant/colaboradores/importaciones/{id}
 
 ## Auditoría
 
-Cada importación completada (incluyendo las que terminan con errores parciales) genera un registro en `auditorias` con:
+Las importaciones que terminan en `COMPLETADO` o `CON_ERRORES` generan un registro en `auditorias` con:
 
 - `accion`: `IMPORTACION_MASIVA`
 - `modulo`: `COLABORADORES`
 - `observaciones`: resumen con conteos
 - `datos_nuevos`: JSON con `importacion_id`, `total_filas`, `filas_exitosas`, `filas_fallidas`, `estado_final`
+
+> Cuando `estado_final = CON_ERRORES`, `filas_exitosas` siempre será `0` por el comportamiento atómico. Las importaciones que terminan en `FALLIDO` (errores fatales del archivo) no generan registro de auditoría.
 
 ---
 
@@ -254,4 +255,4 @@ while (!terminado) {
 | 422 | Archivo inválido (formato o tamaño) |
 | 500 | Error inesperado del servidor |
 
-> **Nota:** Los errores de validación por fila individual **no generan HTTP 422**. La petición POST siempre retorna 202 si el archivo es válido. Los errores por fila se consultan en el endpoint `GET /importaciones/{id}`.
+> **Nota:** Los errores de validación por fila **no generan HTTP 422**. La petición POST siempre retorna 202 si el archivo es válido. Los errores por fila se consultan en `GET /importaciones/{id}` y se reflejan como `estado = CON_ERRORES`. Cuando hay errores, **ninguna fila se crea**: la importación es atómica (all-or-nothing).

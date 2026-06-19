@@ -103,7 +103,7 @@ El campo `remision` (formato `REM-{YYYY}-{NNN}`) se autogenera al crear el viaje
 | `mal_formado` | decimal(5,2) | no | % de fruto mal formado (0–100) |
 | `observaciones_extractora` | string(500) | no | Notas que reporta la extractora |
 | `observaciones` | string(255) | no | Notas internas del operador |
-| `es_homogeneo` | boolean | no | default `true` |
+| `es_homogeneo` | boolean | no | **Solo lectura — calculado por el sistema.** `true` si todas las cosechas activas del viaje son del mismo lote; `false` si hay lotes distintos. Se recalcula en cada `addDetalle`/`removeDetalle`. |
 | `estado` | varchar(20) | sí | CHECK: CREADO, EN_VALIDACION, FINALIZADO |
 | `estado_activo` | boolean | no | Borrado lógico (renombrado del antiguo `estado`) |
 | `despachado_at` | timestamp | no | **Legacy/deprecated** (read-only desde refactor a 3 estados) |
@@ -299,10 +299,11 @@ GET    /viajes/{id}/documento-bascula/{docId}           Polling del estado OCR +
   "transportador_id": 12,
   "extractora_id": 3,
   "observaciones": null,
-  "es_homogeneo": true,
   "sync_uuid": "a3c1..."
 }
 ```
+
+> `es_homogeneo` **no se envía** — el backend lo calcula automáticamente según los lotes de las cosechas asignadas.
 
 **Backend hace (transaccional):**
 1. `SELECT ... FOR UPDATE` del transportador → extrae `empresa_transportadora_id`, `placa_vehiculo`, `nombres`, `apellidos`.
@@ -383,6 +384,7 @@ Alimenta el segundo dropdown. Lista `registro_cosecha` de esa operación que **n
 - `cosecha_id` pertenece al tenant.
 - Operación padre de la cosecha está `APROBADA`.
 - No existe otro `viaje_detalle` activo con ese `cosecha_id` (lo refuerza el unique parcial; si hay carrera, capturamos `UniqueConstraintViolationException` → 422 `COSECHA_YA_ASIGNADA`).
+- `es_homogeneo` se recalcula automáticamente tras cada operación en detalles (ver §6).
 
 ### 5.5 `PUT /viajes/{id}/detalles/{detalleId}/reconteo` — Hidratar reconteo
 
@@ -527,14 +529,41 @@ Solo devuelve viajes con `estado_activo = true`.
 
 ## 6. Cálculo HOMOGENEO vs NO_HOMOGENEO (al finalizar)
 
-Al pasar a `FINALIZADO`, el backend debe recalcular el promedio kg/gajo de los `registro_cosecha` asociados al viaje (si aplica):
+Al pasar a `FINALIZADO`, `ViajeCalculationService::calcularAlFinalizar()` se ejecuta si el viaje tiene detalles enlazados con peso.
 
-- **HOMOGENEO** (`es_homogeneo = true`): `promedio_kg_gajo = peso_viaje / cantidad_gajos_total`. Todos los `registro_cosecha` enlazados al viaje reciben el mismo promedio.
-- **NO_HOMOGENEO** (`es_homogeneo = false`): cada sublote conserva su promedio histórico del año (`promedio_lote`). El viaje no sobrescribe.
+### 6.1 HOMOGENEO (`es_homogeneo = true`)
 
-Este cálculo **no modifica `valor_total` de las cosechas** (ese ya se calculó al registrar `peso_confirmado` en la operación). Solo refresca `promedio_kg_gajo` para reportes.
+`es_homogeneo` **no lo envía el frontend** — el sistema lo calcula automáticamente cada vez que se agrega o quita una cosecha del viaje:
 
-Si el viaje **tiene detalles enlazados** y `peso_viaje` o `cantidad_gajos_total` son `NULL` al finalizar, el controller retorna **422** `VIAJE_INCOMPLETO`. Si **no hay detalles** (caso "paga por jornal"), el viaje cierra sin esa validación y el cálculo HOMOGENEO/NO_HOMOGENEO se omite (no hay cosechas a las que aplicar promedio).
+```
+lotes_distintos = COUNT(DISTINCT lote_id de cosechas activas del viaje)
+es_homogeneo    = (lotes_distintos <= 1)
+```
+
+Cuando un viaje finaliza con `es_homogeneo = true` se crea un registro en `promedio_lote` **por cada lote** involucrado:
+
+```
+gajos_efectivos_por_cosecha  = gajos_reconteo ?? gajos_reportados
+total_gajos_lote             = SUM(gajos_efectivos) de cosechas del mismo lote en el viaje
+promedio                     = peso_viaje / total_gajos_lote
+
+→ PromedioLote::create { tenant_id, lote_id, viaje_id, promedio, fecha, anio }
+→ UPDATE registro_cosecha SET promedio_kg_gajo = promedio  (snapshot visual)
+```
+
+Estos registros en `promedio_lote` son los que usa `NominaCalculationService` para calcular el pago de cosecha en el período (`AVG(promedio WHERE lote_id=X AND fecha BETWEEN inicio AND fin)`).
+
+### 6.2 NO_HOMOGENEO (`es_homogeneo = false`)
+
+No se crea ningún registro en `promedio_lote`. El viaje finaliza sin registrar promedios históricos; las cosechas del viaje no afectan el cálculo de nómina por la vía del promedio de promedios.
+
+### 6.3 Sin detalles (viaje "paga por jornal")
+
+Si el viaje no tiene detalles enlazados, cierra sin ejecutar ningún cálculo. La validación de `peso_viaje` y `cantidad_gajos_total` se omite.
+
+Si el viaje **tiene detalles enlazados** y `peso_viaje` es `NULL` al finalizar, el controller retorna **422** `VIAJE_INCOMPLETO`.
+
+> **Nota:** `registro_cosecha.valor_total` no se modifica al finalizar el viaje — ese valor ya se calculó al registrar `peso_confirmado` en la operación (capa operativa). Solo `promedio_kg_gajo` se actualiza como snapshot visual para la planilla.
 
 ---
 
@@ -655,8 +684,8 @@ php artisan migrate --path=database/migrations/2026_04_22_000004_make_cantidad_g
 
 | FormRequest | Reglas principales |
 |---|---|
-| `StoreViajeRequest` | `fecha_viaje` date required, `hora_salida` time required, `transportador_id` exists required, `extractora_id` exists required, `observaciones` nullable, `es_homogeneo` boolean, `sync_uuid` uuid nullable unique |
-| `UpdateViajeRequest` | Mismos campos pero todos `sometimes`. Bloqueo por estado se valida en controller. |
+| `StoreViajeRequest` | `fecha_viaje` date required, `hora_salida` time required, `transportador_id` exists required, `extractora_id` exists required, `observaciones` nullable, `sync_uuid` uuid nullable unique. `es_homogeneo` **no se acepta** — el sistema lo calcula. |
+| `UpdateViajeRequest` | Mismos campos pero todos `sometimes`. `es_homogeneo` excluido también. Bloqueo por estado se valida en controller. |
 | `StoreViajeDetalleRequest` | `cosecha_id` exists required + rule custom de unicidad activa |
 | `UpdateReconteoRequest` | `gajos_reconteo` integer min:0 required, `peso_confirmado` decimal nullable |
 
@@ -665,10 +694,11 @@ php artisan migrate --path=database/migrations/2026_04_22_000004_make_cantidad_g
 - **`RemisionGeneratorService::generar(int $tenantId, Carbon $fecha): string`**
   Atómico: `SELECT COUNT(...) FOR UPDATE` sobre `viajes` filtrando por `tenant_id` y `YEAR(fecha_viaje) = $fecha->year`. Retorna `REM-{YYYY}-{NNN}` con 3+ dígitos zero-padded.
 
-- **`ViajeCalculationService::calcularHomogeneo(Viaje $viaje): void`**
-  Al finalizar el viaje, si `es_homogeneo = true`:
-  `promedio = peso_viaje / cantidad_gajos_total`.
-  Update masivo a todos los `registro_cosecha` enlazados vía `viaje_detalle` activo: `SET promedio_kg_gajo = $promedio`.
+- **`ViajeCalculationService::calcularAlFinalizar(Viaje $viaje): void`**
+  Al finalizar el viaje, si `es_homogeneo = true` y hay detalles con peso:
+  Agrupa cosechas por lote. Por cada lote: `promedio = peso_viaje / SUM(gajos_efectivos_del_lote)`.
+  Crea un registro en `promedio_lote` (`viaje_id`, `fecha`, `anio`) para trazabilidad de nómina.
+  Update masivo de `registro_cosecha.promedio_kg_gajo` (snapshot visual). Si `es_homogeneo = false`, no hace nada.
 
 ### 12.5 Patrón obligatorio en cada método del controller
 
@@ -692,7 +722,7 @@ public function store(StoreViajeRequest $request): JsonResponse
                 'nombre_conductor'          => $transportador->nombre_completo,
                 'fecha_viaje'               => $request->fecha_viaje,
                 'hora_salida'               => $request->hora_salida,
-                'es_homogeneo'              => $request->boolean('es_homogeneo', true),
+                'es_homogeneo'              => true, // calculado por el sistema; se actualiza en addDetalle/removeDetalle
                 'observaciones'             => $request->observaciones,
                 'sync_uuid'                 => $request->sync_uuid,
                 'estado'                    => ViajeEstado::CREADO,

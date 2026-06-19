@@ -12,6 +12,7 @@ use App\Models\Palma;
 use App\Models\Sublote;
 use App\Services\AuditoriaService;
 use App\Services\PalmaCreationService;
+use App\Support\WizardCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Bus;
@@ -160,6 +161,8 @@ class PalmaController extends Controller
             $this->palmaService->createSync($sublote, $cantidadPalmas, $linea?->id);
 
             DB::commit();
+
+            WizardCache::forgetPrediosResumenes((int) $sublote->tenant_id);
 
             $this->auditoria->registrar(
                 request: $request,
@@ -418,6 +421,8 @@ class PalmaController extends Controller
             }
 
             DB::commit();
+
+            WizardCache::forgetPrediosResumenes((int) app('current_tenant_id'));
 
             $this->auditoria->registrar(
                 request: $request,

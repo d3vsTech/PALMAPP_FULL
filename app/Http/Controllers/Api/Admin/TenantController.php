@@ -18,6 +18,7 @@ use App\Models\TenantConfig;
 use App\Models\TenantUser;
 use App\Models\User;
 use App\Services\AuditoriaService;
+use Database\Seeders\InsumoSeeder;
 use Database\Seeders\MotivoAusenciaSeeder;
 use Database\Seeders\NominaConceptoSeeder;
 use Illuminate\Http\JsonResponse;
@@ -79,6 +80,7 @@ class TenantController extends Controller
                 $this->seedParametricasColaborador($tenant);
                 $this->seedTiposHoraExtra($tenant);
                 $this->seedSemillas($tenant);
+                $this->seedInsumos($tenant);
                 $this->seedNominaConceptos($tenant);
                 $this->seedMotivosAusencia($tenant);
 
@@ -598,6 +600,16 @@ class TenantController extends Controller
     private function seedMotivosAusencia(Tenant $tenant): void
     {
         (new MotivoAusenciaSeeder())->sembrarParaTenant($tenant);
+    }
+
+    /**
+     * Provisiona el catálogo base de fertilizantes (~59 productos comerciales
+     * usados en palma de aceite) para un tenant recién creado. El admin puede
+     * desactivar o agregar insumos desde Configuración → Insumos.
+     */
+    private function seedInsumos(Tenant $tenant): void
+    {
+        (new InsumoSeeder())->sembrarParaTenant($tenant);
     }
 
     /**

@@ -115,6 +115,22 @@ class ViajeController extends Controller
         }
     }
 
+    /**
+     * Recomputa es_homogeneo basándose en los lotes de las cosechas activas del viaje.
+     * 0 o 1 lote distinto → true (homogéneo). 2+ lotes distintos → false.
+     * Se llama tras cada addDetalle() y removeDetalle() dentro de una transacción.
+     */
+    private function recalcularHomogeneidad(Viaje $viaje): void
+    {
+        $lotesDistintos = ViajeDetalle::where('viaje_id', $viaje->id)
+            ->where('estado', true)
+            ->join('registro_cosecha', 'viaje_detalle.cosecha_id', '=', 'registro_cosecha.id')
+            ->distinct()
+            ->count('registro_cosecha.lote_id');
+
+        $viaje->update(['es_homogeneo' => $lotesDistintos <= 1]);
+    }
+
     private function resolverPeriodo(Request $request): array
     {
         $periodo = strtoupper($request->periodo ?? 'MENSUAL');
@@ -230,7 +246,7 @@ class ViajeController extends Controller
                     'nombre_conductor'          => trim("{$transportador->nombres} {$transportador->apellidos}"),
                     'fecha_viaje'               => $request->fecha_viaje,
                     'hora_salida'               => $request->hora_salida,
-                    'es_homogeneo'              => $request->boolean('es_homogeneo', true),
+                    'es_homogeneo'              => true,
                     'observaciones'             => $request->observaciones,
                     'sync_uuid'                 => $request->sync_uuid,
                     'sync_estado'               => 'SINCRONIZADO',
@@ -401,11 +417,15 @@ class ViajeController extends Controller
             }
 
             try {
-                $detalle = ViajeDetalle::create([
-                    'viaje_id'   => $viaje->id,
-                    'cosecha_id' => $cosecha->id,
-                    'estado'     => true,
-                ]);
+                $detalle = DB::transaction(function () use ($viaje, $cosecha) {
+                    $detalle = ViajeDetalle::create([
+                        'viaje_id'   => $viaje->id,
+                        'cosecha_id' => $cosecha->id,
+                        'estado'     => true,
+                    ]);
+                    $this->recalcularHomogeneidad($viaje);
+                    return $detalle;
+                });
             } catch (UniqueConstraintViolationException $e) {
                 return response()->json([
                     'message' => 'Esta cosecha ya está asignada a otro viaje',
@@ -449,7 +469,10 @@ class ViajeController extends Controller
                 ], 409);
             }
 
-            $detalle->update(['estado' => false]);
+            DB::transaction(function () use ($viaje, $detalle) {
+                $detalle->update(['estado' => false]);
+                $this->recalcularHomogeneidad($viaje);
+            });
 
             $this->auditoria->registrarEliminacion(
                 $request, 'VIAJES', $detalle,

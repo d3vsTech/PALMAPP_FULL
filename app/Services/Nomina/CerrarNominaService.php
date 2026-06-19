@@ -12,6 +12,8 @@ use App\Models\NominaEmpleado;
 use App\Models\NominaHoraExtraRef;
 use App\Models\NominaJornalRef;
 use App\Models\Operacion;
+use App\Models\PrecioCosecha;
+use App\Models\PromedioLote;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -103,22 +105,66 @@ class CerrarNominaService
     {
         $cuadrillas = CosechaCuadrilla::where('empleado_id', $ne->empleado_id)
             ->where('estado', true)
+            ->with(['cosecha:id,lote_id,gajos_reportados,gajos_reconteo'])
             ->whereHas('cosecha.operacion', function ($q) use ($inicio, $fin) {
                 $q->where('estado', Operacion::ESTADO_APROBADA)
                   ->whereBetween('fecha', [$inicio, $fin]);
             })
             ->get();
 
+        $tenantId = $ne->tenant_id;
+        $anio     = \Illuminate\Support\Carbon::parse($inicio)->year;
+
         foreach ($cuadrillas as $cc) {
+            $cosecha = $cc->cosecha;
+            $loteId  = $cosecha->lote_id;
+
+            // Gajos efectivos del total de la cuadrilla
+            $gajosEfectivos = $cosecha->gajos_reconteo ?? $cosecha->gajos_reportados ?? 0;
+            $N = $cosecha->cuadrilla()->where('estado', true)->count();
+            $gajosEmpleado = ($N > 0 && $gajosEfectivos > 0)
+                ? (int) floor($gajosEfectivos / $N)
+                : 0;
+
+            // Promedio de promedios del lote en el período (con fallback a baseline admin)
+            $promedioPromedio = PromedioLote::where('tenant_id', $tenantId)
+                ->where('lote_id', $loteId)
+                ->whereBetween('fecha', [$inicio, $fin])
+                ->avg('promedio');
+
+            if (! $promedioPromedio) {
+                $promedioPromedio = PromedioLote::where('tenant_id', $tenantId)
+                    ->where('lote_id', $loteId)
+                    ->where('anio', $anio)
+                    ->whereNull('viaje_id')
+                    ->orderByDesc('created_at')
+                    ->value('promedio');
+            }
+
+            // Precio cosecha del lote
+            $precio = PrecioCosecha::where('tenant_id', $tenantId)
+                ->where('lote_id', $loteId)
+                ->where('anio', $anio)
+                ->value('precio');
+
+            $valorSnapshot = ($gajosEmpleado > 0 && $promedioPromedio && $precio)
+                ? round($gajosEmpleado * (float) $promedioPromedio * (float) $precio, 2)
+                : 0;
+
             NominaCosechaRef::updateOrCreate(
                 [
                     'nomina_empleado_id'   => $ne->id,
                     'cosecha_cuadrilla_id' => $cc->id,
                 ],
                 [
-                    'tenant_id'      => $ne->tenant_id,
-                    'valor_snapshot' => $cc->valor_calculado ?? 0,
-                    'estado'         => true,
+                    'tenant_id'                   => $tenantId,
+                    'valor_snapshot'               => $valorSnapshot,
+                    'gajos_asignados'              => $gajosEmpleado ?: null,
+                    'precio_cosecha_snapshot'      => $precio ?: null,
+                    'promedio_promedios_snapshot'  => $promedioPromedio
+                        ? round((float) $promedioPromedio, 4)
+                        : null,
+                    'estado'                       => true,
                 ]
             );
         }

@@ -83,34 +83,52 @@ class ProcesarImportacionEmpleadosJob implements ShouldQueue
             $smlv = TenantConfig::where('tenant_id', $this->tenantId)
                 ->value('salario_minimo_vigente');
 
-            $allResultados = [];
-            $totalExitosas = 0;
-            $totalFallidas = 0;
+            // Fase 1 — Validar TODAS las filas en memoria (sin escribir en BD).
+            [$filasValidas, $erroresValidacion] = $this->validateAllRows($rows, $smlv);
 
-            foreach (array_chunk($rows, 100, true) as $chunk) {
-                [$chunkResultados, $chunkExitosas, $chunkFallidas] = $this->processChunk($chunk, $smlv);
-
-                $allResultados  = array_merge($allResultados, $chunkResultados);
-                $totalExitosas += $chunkExitosas;
-                $totalFallidas += $chunkFallidas;
+            // Si una sola fila falla validación, abortar sin crear nada (all-or-nothing).
+            if (count($erroresValidacion) > 0) {
+                usort($erroresValidacion, fn($a, $b) => $a['fila'] <=> $b['fila']);
 
                 $importacion->update([
-                    'filas_exitosas' => $totalExitosas,
-                    'filas_fallidas' => $totalFallidas,
-                    'resultados'     => $allResultados,
+                    'estado'         => ImportacionEmpleados::ESTADO_CON_ERRORES,
+                    'filas_exitosas' => 0,
+                    'filas_fallidas' => count($erroresValidacion),
+                    'resultados'     => $erroresValidacion,
+                    'finalizado_at'  => now(),
                 ]);
+
+                $this->registrarAuditoria($importacion, 0, count($erroresValidacion));
+                return;
             }
 
-            $estadoFinal = $totalFallidas === 0
-                ? ImportacionEmpleados::ESTADO_COMPLETADO
-                : ImportacionEmpleados::ESTADO_CON_ERRORES;
+            // Fase 3 — Inserción atómica de todas las filas válidas en una única transacción.
+            $resultadosExitos = [];
+
+            DB::transaction(function () use ($filasValidas, &$resultadosExitos) {
+                foreach (array_chunk($filasValidas, 100, true) as $chunk) {
+                    foreach ($chunk as $rowIndex => $validated) {
+                        $empleado = $this->insertEmpleadoYContrato($validated);
+
+                        $resultadosExitos[] = [
+                            'fila'      => $rowIndex,
+                            'estado'    => 'exitoso',
+                            'documento' => $empleado->documento,
+                            'mensaje'   => "Colaborador '{$empleado->primer_nombre} {$empleado->primer_apellido}' creado correctamente",
+                        ];
+                    }
+                }
+            });
 
             $importacion->update([
-                'estado'        => $estadoFinal,
-                'finalizado_at' => now(),
+                'estado'         => ImportacionEmpleados::ESTADO_COMPLETADO,
+                'filas_exitosas' => count($filasValidas),
+                'filas_fallidas' => 0,
+                'resultados'     => $resultadosExitos,
+                'finalizado_at'  => now(),
             ]);
 
-            $this->registrarAuditoria($importacion, $totalExitosas, $totalFallidas);
+            $this->registrarAuditoria($importacion, count($filasValidas), 0);
 
         } catch (Throwable $e) {
             $importacion->update([
@@ -126,50 +144,76 @@ class ProcesarImportacionEmpleadosJob implements ShouldQueue
         }
     }
 
-    private function processChunk(array $chunk, ?float $smlv): array
+    /**
+     * Valida todas las filas en memoria (sin escribir en BD) y detecta duplicados intra-archivo.
+     *
+     * @return array{0: array<int, array<string, mixed>>, 1: array<int, array<string, mixed>>}
+     *         [filasValidas (indexadas por número de fila), erroresValidacion]
+     */
+    private function validateAllRows(array $rows, ?float $smlv): array
     {
-        $resultados    = [];
-        $chunkExitosas = 0;
-        $chunkFallidas = 0;
+        $filasValidas      = [];
+        $erroresValidacion = [];
 
-        DB::transaction(function () use ($chunk, $smlv, &$resultados, &$chunkExitosas, &$chunkFallidas) {
-            foreach ($chunk as $rowIndex => $cells) {
-                $data      = $this->mapRow($cells, $smlv);
-                $validator = $this->makeValidator($data);
+        foreach ($rows as $rowIndex => $cells) {
+            $data      = $this->mapRow($cells, $smlv);
+            $validator = $this->makeValidator($data);
 
-                if ($validator->fails()) {
-                    $resultados[] = [
-                        'fila'      => $rowIndex,
-                        'estado'    => 'fallido',
-                        'documento' => $data['documento'] ?? null,
-                        'mensaje'   => implode(' | ', Arr::flatten($validator->errors()->toArray())),
-                    ];
-                    $chunkFallidas++;
-                    continue;
-                }
-
-                $validated = $validator->validated();
-
-                $empleado = Empleado::create($validated);
-
-                $empleado->contratos()->create([
-                    'fecha_inicio'      => $empleado->fecha_ingreso,
-                    'fecha_terminacion' => $empleado->fecha_retiro,
-                    'salario'           => $empleado->salario_base,
-                    'estado_contrato'   => $empleado->fecha_retiro ? 'TERMINADO' : 'VIGENTE',
-                ]);
-
-                $resultados[] = [
+            if ($validator->fails()) {
+                $erroresValidacion[] = [
                     'fila'      => $rowIndex,
-                    'estado'    => 'exitoso',
-                    'documento' => $empleado->documento,
-                    'mensaje'   => "Colaborador '{$empleado->primer_nombre} {$empleado->primer_apellido}' creado correctamente",
+                    'estado'    => 'fallido',
+                    'documento' => $data['documento'] ?? null,
+                    'mensaje'   => implode(' | ', Arr::flatten($validator->errors()->toArray())),
                 ];
-                $chunkExitosas++;
+                continue;
             }
-        });
 
-        return [$resultados, $chunkExitosas, $chunkFallidas];
+            $filasValidas[$rowIndex] = $validator->validated();
+        }
+
+        // Validación intra-archivo: documento debe ser único dentro del propio Excel.
+        $porDocumento = [];
+        foreach ($filasValidas as $rowIndex => $validated) {
+            $doc = $validated['documento'] ?? null;
+            if ($doc === null) {
+                continue;
+            }
+            $porDocumento[$doc][] = $rowIndex;
+        }
+
+        foreach ($porDocumento as $documento => $filas) {
+            if (count($filas) <= 1) {
+                continue;
+            }
+
+            $filasStr = implode(', ', $filas);
+            foreach ($filas as $rowIndex) {
+                $erroresValidacion[] = [
+                    'fila'      => $rowIndex,
+                    'estado'    => 'fallido',
+                    'documento' => $documento,
+                    'mensaje'   => "documento: El documento aparece duplicado en las filas {$filasStr} del archivo",
+                ];
+                unset($filasValidas[$rowIndex]);
+            }
+        }
+
+        return [$filasValidas, $erroresValidacion];
+    }
+
+    private function insertEmpleadoYContrato(array $validated): Empleado
+    {
+        $empleado = Empleado::create($validated);
+
+        $empleado->contratos()->create([
+            'fecha_inicio'      => $empleado->fecha_ingreso,
+            'fecha_terminacion' => $empleado->fecha_retiro,
+            'salario'           => $empleado->salario_base,
+            'estado_contrato'   => $empleado->fecha_retiro ? 'TERMINADO' : 'VIGENTE',
+        ]);
+
+        return $empleado;
     }
 
     private function mapRow(array $cells, ?float $smlv): array
