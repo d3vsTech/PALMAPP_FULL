@@ -372,6 +372,38 @@ export const operacionesApi = {
   resumen: (id: number) =>
     requestConToken<{ data: Resumen }>(`${BASE}/operaciones/${id}/resumen`),
 
+  /**
+   * Bundle único para abrir el wizard. Reemplaza las ~10 peticiones que el
+   * componente disparaba (7 catálogos + sublotes + ver + resumen) por una
+   * sola respuesta cacheada por tenant en el backend.
+   *
+   * - Sin id → modo creación: `planilla` y `resumen` son null, `parametricas`
+   *   trae todos los catálogos.
+   * - Con id → modo lectura/edición: además trae la planilla con sus
+   *   relaciones y el resumen calculado.
+   */
+  wizardInit: (id?: number) =>
+    requestConToken<{
+      data: {
+        planilla: (Planilla & Record<string, any>) | null;
+        resumen: Resumen | null;
+        parametricas: {
+          colaboradores: any[];
+          lotes: any[];
+          sublotes: any[];
+          insumos: any[];
+          labores_palma: any[];
+          labores_finca: any[];
+          motivos_ausencia: any[];
+          tipos_hora_extra: any[];
+        };
+      };
+    }>(
+      id != null
+        ? `${BASE}/operaciones/${id}/wizard-init`
+        : `${BASE}/operaciones/wizard-init`
+    ),
+
   indicadores: (params: { periodo?: Periodo; fecha_desde?: string; fecha_hasta?: string } = {}) =>
     requestConToken<{ data: Indicadores }>(`${BASE}/operaciones/indicadores${qs(params)}`),
 };

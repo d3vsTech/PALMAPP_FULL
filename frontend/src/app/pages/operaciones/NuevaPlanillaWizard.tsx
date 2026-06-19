@@ -245,29 +245,42 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   };
   const [laboresOtrosOpciones, setLaboresOtrosOpciones] = useState<LaborOtrosOpcion[]>([]);
 
-  // Carga inicial de catálogos al montar
+  /** Planilla cruda traída por `wizard-init`. La consume el useEffect de
+   *  prefill más abajo para hidratar los estados del wizard sin disparar una
+   *  segunda petición a `/operaciones/{id}`. */
+  const [planillaBundle, setPlanillaBundle] = useState<(import('../../../api/operaciones').Planilla & Record<string, any>) | null>(null);
+
+  /**
+   * Bundle único de inicialización del wizard.
+   *
+   * Antes: 9–10 peticiones al montar (7 catálogos + sublotes en serie + ver +
+   * resumen) que tardaban 6–8 s. Ahora una sola petición a
+   * `GET /operaciones[/{id}]/wizard-init` trae todos los catálogos cacheados
+   * por tenant + la planilla con sus relaciones + el resumen calculado.
+   *
+   * Se vuelve a disparar si cambia `idParam`/`isEditMode`/`modoLectura`
+   * (navegación entre planillas dentro del SPA).
+   */
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
-        const [colRes, lotRes, inRes, labFincaRes, labPalmaRes, motRes, tipoRes] = await Promise.all([
-          selectsApi.colaboradores(),
-          selectsApi.lotes(),
-          selectsApi.insumos(),
-          selectsApi.labores({ categoria: 'FINCA' }),
-          selectsApi.labores({ categoria: 'PALMA' }),
-          selectsApi.motivosAusencia(),
-          selectsApi.tiposHoraExtra(),
-        ]);
+        const id = idParam ? Number(idParam) : undefined;
+        const bundle = await operacionesApi.wizardInit(id);
+        if (cancelled) return;
 
-        // Labores PALMA: separar fijas (es_sistema=true, tipo!=null) de las custom
-        // (es_sistema=false, tipo=null). Las fijas alimentan los 5 tabs específicos;
-        // las custom alimentan el dropdown del tab OTROS.
-        const palmaItems = (labPalmaRes.data || []) as any[];
+        const { parametricas, planilla, resumen: resumenData } = bundle.data;
+
+        // ── Catálogos ─────────────────────────────────────────────────────
+        // Labores PALMA: separar fijas (es_sistema=true, tipo!=null) de las
+        // custom (es_sistema=false, tipo=null). Las fijas alimentan los 5
+        // tabs específicos; las custom alimentan el dropdown del tab OTROS.
+        const palmaItems = parametricas.labores_palma ?? [];
         const tipoMap = new Map<string, number>();
         const infoMap = new Map<string, { id: number; tipo_pago: 'POR_PALMA' | 'JORNAL_FIJO' }>();
         palmaItems
-          .filter((x) => x.es_sistema === true && x.tipo)
-          .forEach((x) => {
+          .filter((x: any) => x.es_sistema === true && x.tipo)
+          .forEach((x: any) => {
             tipoMap.set(x.tipo, x.id);
             infoMap.set(x.tipo, { id: x.id, tipo_pago: x.tipo_pago });
           });
@@ -275,68 +288,72 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         setPalmaFijasInfo(infoMap);
 
         const opcionesPalma: LaborOtrosOpcion[] = palmaItems
-          .filter((x) => x.es_sistema !== true && x.tipo == null)
-          .map((x) => ({
+          .filter((x: any) => x.es_sistema !== true && x.tipo == null)
+          .map((x: any) => ({
             key: `palma-${x.id}`,
             nombre: x.nombre,
             rawId: x.id,
             tipo_pago: (x.tipo_pago === 'POR_PALMA' ? 'POR_PALMA' : 'JORNAL_FIJO') as 'POR_PALMA' | 'JORNAL_FIJO',
           }));
         setLaboresOtrosOpciones(opcionesPalma);
-        setColaboradores((colRes.data || []).map((c: any) => {
+
+        setColaboradores((parametricas.colaboradores ?? []).map((c: any) => {
           let nombres   = c.primer_nombre   ?? c.nombres   ?? c.nombre   ?? '';
           let apellidos = c.primer_apellido ?? c.apellidos ?? c.apellido ?? '';
           const nombreCompletoApi = c.nombre_completo ?? c.full_name ?? c.name ?? '';
 
-          // Si no llegan separados pero sí llega el completo, partirlo en 2 mitades
-          // para que el badge muestre algo (en vez de quedar vacío y verse como un bloque verde).
+          // Si no llegan separados pero sí llega el completo, partirlo en 2
+          // mitades para que el badge muestre algo (en vez de quedar vacío y
+          // verse como un bloque verde).
           if ((!nombres && !apellidos) && nombreCompletoApi) {
             const partes = String(nombreCompletoApi).trim().split(/\s+/);
             const mid = Math.ceil(partes.length / 2);
             nombres   = partes.slice(0, mid).join(' ');
             apellidos = partes.slice(mid).join(' ');
           }
-
-          // Última garantía: si todavía no hay nada, mostrar al menos el ID.
           if (!nombres && !apellidos) {
             nombres = `Colaborador`;
             apellidos = String(c.id);
           }
-
           const nombreCompleto = nombreCompletoApi || `${nombres} ${apellidos}`.trim();
           return { id: String(c.id), nombres, apellidos, nombre_completo: nombreCompleto, _raw: c };
         }));
-        const lotes = (lotRes.data || []).map((l: any) => ({ id: String(l.id), nombre: l.nombre }));
-        setLotesData(lotes);
-        // Antes: una petición por lote (N+1). Ahora: una sola llamada que trae
-        // todos los sublotes activos del tenant (lote_id es opcional en el
-        // endpoint). Si tienes 20 lotes pasas de 20 requests a 1.
-        try {
-          const sr = await selectsApi.sublotes();
-          const allSubs = (sr.data || []).map((s: any) => ({
-            id: String(s.id),
-            nombre: s.nombre,
-            loteId: String(s.lote_id),
-            cantidadPalmas: Number(s.cantidad_palmas ?? (s as any).palmas ?? 0),
-          }));
-          setSublotes(allSubs);
-        } catch (e) { console.warn('Error cargando sublotes:', e); }
-        const insumos = (inRes.data || []).map((i: any) => ({ nombre: i.nombre as string, id: i.id as number }));
-        // El dropdown "Labor" del Paso 3 solo lista labores de FINCA (categoria='FINCA').
-        const laboresFinca = (labFincaRes.data || []).map((l: any) => ({ nombre: l.nombre as string, id: l.id as number }));
-        const motivos = (motRes.data || []).map((m: any) => ({ nombre: m.nombre as string, id: m.id as number }));
-        const tipos   = (tipoRes.data || []).map((t: any) => ({ nombre: t.nombre as string, id: t.id as number }));
-        setInsumosMap(new Map(insumos.map(x => [x.nombre, x.id] as [string, number])));
-        setLaboresMap(new Map(laboresFinca.map(x => [x.nombre, x.id] as [string, number])));
-        setMotivosMap(new Map(motivos.map(x => [x.nombre, x.id] as [string, number])));
-        setTiposHoraExtraMap(new Map(tipos.map(x => [x.nombre, x.id] as [string, number])));
-        setInsumosLista(insumos.map(x => x.nombre));
-        setLaboresLista(laboresFinca.map(x => x.nombre));
-        setMotivosLista(motivos.map(x => x.nombre));
-        setTiposHoraExtraLista(tipos.map(x => x.nombre));
-      } catch (e) { console.warn('Error cargando selects:', e); }
+
+        setLotesData((parametricas.lotes ?? []).map((l: any) => ({ id: String(l.id), nombre: l.nombre })));
+
+        setSublotes((parametricas.sublotes ?? []).map((s: any) => ({
+          id: String(s.id),
+          nombre: s.nombre,
+          loteId: String(s.lote_id),
+          cantidadPalmas: Number(s.cantidad_palmas ?? (s as any).palmas ?? 0),
+        })));
+
+        const insumos = (parametricas.insumos ?? []).map((i: any) => ({ nombre: i.nombre as string, id: i.id as number }));
+        // El dropdown "Labor" del Paso 3 solo lista labores de FINCA.
+        const laboresFinca = (parametricas.labores_finca ?? []).map((l: any) => ({ nombre: l.nombre as string, id: l.id as number }));
+        const motivos = (parametricas.motivos_ausencia ?? []).map((m: any) => ({ nombre: m.nombre as string, id: m.id as number }));
+        const tipos   = (parametricas.tipos_hora_extra ?? []).map((t: any) => ({ nombre: t.nombre as string, id: t.id as number }));
+        setInsumosMap(new Map(insumos.map((x: any) => [x.nombre, x.id] as [string, number])));
+        setLaboresMap(new Map(laboresFinca.map((x: any) => [x.nombre, x.id] as [string, number])));
+        setMotivosMap(new Map(motivos.map((x: any) => [x.nombre, x.id] as [string, number])));
+        setTiposHoraExtraMap(new Map(tipos.map((x: any) => [x.nombre, x.id] as [string, number])));
+        setInsumosLista(insumos.map((x: any) => x.nombre));
+        setLaboresLista(laboresFinca.map((x: any) => x.nombre));
+        setMotivosLista(motivos.map((x: any) => x.nombre));
+        setTiposHoraExtraLista(tipos.map((x: any) => x.nombre));
+
+        // ── Planilla + resumen (modo edición/lectura) ─────────────────────
+        // El segundo useEffect (prefill desde API) lee `planillaBundle` y
+        // dispara la hidratación cuando hay valores. Setearlos aquí evita
+        // una segunda petición HTTP.
+        if (resumenData) setResumen(resumenData);
+        setPlanillaBundle(planilla ?? null);
+      } catch (e) {
+        if (!cancelled) console.warn('Error cargando wizard-init:', e);
+      }
     })();
-  }, []);
+    return () => { cancelled = true; };
+  }, [idParam, isEditMode, modoLectura]);
 
 
   // Información General
@@ -408,28 +425,18 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   ]);
 
   // ── Prefill desde API en modo edición o lectura ─────────────────────────
+  // El bundle `wizard-init` ya trae la planilla y el resumen; este effect solo
+  // hidrata los estados del wizard a partir del objeto en memoria. Antes hacía
+  // 2 peticiones HTTP adicionales (`ver` + `resumen`) que ya están en el bundle.
   useEffect(() => {
     if (!idParam) return;
     if (!isEditMode && !modoLectura) return;
+    if (!planillaBundle) return; // todavía no llega el bundle
     let cancelled = false;
     (async () => {
       try {
-        // `ver` y `resumen` arrancan a la vez. Antes el `resumen` salía después
-        // de procesar todo el detalle (cascada). Ahora ahorramos esa latencia
-        // — usamos `allSettled` para que un fallo del resumen no tumbe el ver.
-        const [resPlanilla, resResumen] = await Promise.allSettled([
-          operacionesApi.ver(Number(idParam)),
-          operacionesApi.resumen(Number(idParam)),
-        ]);
+        const p: any = planillaBundle ?? {};
         if (cancelled) return;
-        if (resResumen.status === 'fulfilled' && !cancelled) {
-          setResumen(resResumen.value.data);
-        }
-        if (resPlanilla.status !== 'fulfilled') {
-          throw resPlanilla.reason ?? new Error('No se pudo cargar la planilla');
-        }
-        const res = resPlanilla.value;
-        const p: any = res.data ?? {};
         setEstadoPlanilla(String(p.estado ?? ''));
         const fechaRaw = p.fecha ?? '';
         const fechaNorm = typeof fechaRaw === 'string'
@@ -538,14 +545,14 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           motivo: a.motivo_ausencia?.nombre ?? '',
           otroMotivo: a.motivo ?? '',
         })));
-        // El resumen ya se hidrató arriba (Promise.allSettled junto al `ver`).
+        // El resumen ya se hidrató en el effect de `wizard-init` arriba.
       } catch (err: any) {
         if (!cancelled) toast.error(err?.message ?? 'Error al cargar la planilla');
       }
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [idParam, isEditMode, modoLectura]);
+  }, [idParam, isEditMode, modoLectura, planillaBundle]);
 
   const irAEtapa = (numero: number) => {
     setEtapaActual(numero);
