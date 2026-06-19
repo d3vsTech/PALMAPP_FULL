@@ -145,4 +145,66 @@ class WizardCache
     {
         Cache::forget(self::tenantUser($tenantId, $userId));
     }
+
+    // ── Wizard de Operaciones (planilla del día) ──────────────────────────────
+    // Bundle único `GET /operaciones[/{id}]/wizard-init` reemplaza las 8
+    // peticiones que el wizard hacía a /select. Cada catálogo se cachea por
+    // tenant durante TTL_PARAMETRICA (15 min) y se invalida explícitamente en
+    // los controladores que mutan cada catálogo.
+
+    public static function operacionesColaboradores(int $tenantId): string
+    {
+        return "wizard:op:colab:t:{$tenantId}";
+    }
+
+    public static function operacionesLotes(int $tenantId): string
+    {
+        return "wizard:op:lotes:t:{$tenantId}";
+    }
+
+    public static function operacionesSublotes(int $tenantId): string
+    {
+        return "wizard:op:sublotes:t:{$tenantId}";
+    }
+
+    public static function operacionesInsumos(int $tenantId): string
+    {
+        return "wizard:op:insumos:t:{$tenantId}";
+    }
+
+    public static function operacionesLabores(int $tenantId, string $categoria): string
+    {
+        return "wizard:op:labores:t:{$tenantId}:c:{$categoria}";
+    }
+
+    public static function operacionesMotivosAusencia(int $tenantId): string
+    {
+        return "wizard:op:motivos:t:{$tenantId}";
+    }
+
+    public static function operacionesTiposHoraExtra(int $tenantId): string
+    {
+        return "wizard:op:tipos_he:t:{$tenantId}";
+    }
+
+    public static function forgetOperacionesKey(string $key): void
+    {
+        Cache::forget($key);
+    }
+
+    public static function forgetOperacionesBundle(int $tenantId): void
+    {
+        foreach ([
+            self::operacionesColaboradores($tenantId),
+            self::operacionesLotes($tenantId),
+            self::operacionesSublotes($tenantId),
+            self::operacionesInsumos($tenantId),
+            self::operacionesLabores($tenantId, 'PALMA'),
+            self::operacionesLabores($tenantId, 'FINCA'),
+            self::operacionesMotivosAusencia($tenantId),
+            self::operacionesTiposHoraExtra($tenantId),
+        ] as $key) {
+            Cache::forget($key);
+        }
+    }
 }

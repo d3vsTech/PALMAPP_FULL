@@ -105,6 +105,11 @@ class LaborController extends Controller
             $labor = Labor::create($data);
 
             WizardCache::forgetPreciosLaboresBundle((int) app('current_tenant_id'));
+            // El wizard de operaciones tiene cachés separados por categoría
+            // (PALMA/FINCA). Invalidamos ambas para evitar acoplar la lógica
+            // al campo categoría enviado en el request.
+            WizardCache::forgetOperacionesKey(WizardCache::operacionesLabores((int) app('current_tenant_id'), 'PALMA'));
+            WizardCache::forgetOperacionesKey(WizardCache::operacionesLabores((int) app('current_tenant_id'), 'FINCA'));
 
             $this->auditoria->registrarCreacion(
                 $request,
@@ -139,6 +144,8 @@ class LaborController extends Controller
             $labor->update($request->validated());
 
             WizardCache::forgetPreciosLaboresBundle((int) app('current_tenant_id'));
+            WizardCache::forgetOperacionesKey(WizardCache::operacionesLabores((int) app('current_tenant_id'), 'PALMA'));
+            WizardCache::forgetOperacionesKey(WizardCache::operacionesLabores((int) app('current_tenant_id'), 'FINCA'));
 
             $this->auditoria->registrarEdicion(
                 $request,
@@ -192,6 +199,8 @@ class LaborController extends Controller
             }
 
             WizardCache::forgetPreciosLaboresBundle((int) app('current_tenant_id'));
+            WizardCache::forgetOperacionesKey(WizardCache::operacionesLabores((int) app('current_tenant_id'), 'PALMA'));
+            WizardCache::forgetOperacionesKey(WizardCache::operacionesLabores((int) app('current_tenant_id'), 'FINCA'));
 
             $this->auditoria->registrarEliminacion(
                 $request,

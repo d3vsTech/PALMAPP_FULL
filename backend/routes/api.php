@@ -309,6 +309,13 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
     // ── Operaciones: Planilla del Día ──
     Route::get('operaciones/indicadores', [OperacionController::class, 'indicadores'])
         ->middleware('check.permission:operaciones.ver');
+    // Bundle único del wizard (creación y edición/lectura). Debe ir ANTES de
+    // `operaciones/{operacion}` para que el segmento `wizard-init` no se
+    // capture como id.
+    Route::get('operaciones/wizard-init', [OperacionController::class, 'wizardInit'])
+        ->middleware('check.permission:operaciones.ver');
+    Route::get('operaciones/{operacion}/wizard-init', [OperacionController::class, 'wizardInit'])
+        ->middleware('check.permission:operaciones.ver');
     Route::get('operaciones', [OperacionController::class, 'index'])
         ->middleware('check.permission:operaciones.ver');
     Route::post('operaciones', [OperacionController::class, 'store'])

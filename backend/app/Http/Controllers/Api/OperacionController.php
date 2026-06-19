@@ -6,13 +6,22 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Operacion\StoreOperacionRequest;
 use App\Http\Requests\Operacion\UpdateOperacionRequest;
 use App\Models\Ausencia;
+use App\Models\Empleado;
 use App\Models\HoraExtra;
+use App\Models\Insumo;
 use App\Models\Jornal;
+use App\Models\Labor;
+use App\Models\Lote;
+use App\Models\MotivoAusencia;
 use App\Models\Operacion;
+use App\Models\Sublote;
+use App\Models\TipoHoraExtra;
 use App\Services\AuditoriaService;
+use App\Support\WizardCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -160,22 +169,28 @@ class OperacionController extends Controller
         return [Carbon::parse($desde)->startOfDay(), Carbon::parse($hasta)->endOfDay()];
     }
 
+    /**
+     * Relaciones eager-loaded del detalle de una planilla. Compartido entre
+     * `show()` y `wizardInit()` para garantizar idéntica forma de respuesta.
+     */
+    private const SHOW_RELATIONS = [
+        'creadoPor:id,name',
+        'aprobadoPor:id,name',
+        'cosechas.cuadrilla.empleado:id,primer_nombre,primer_apellido,documento',
+        'cosechas.lote:id,nombre',
+        'cosechas.sublote:id,nombre',
+        'jornales.empleado:id,primer_nombre,primer_apellido,documento',
+        'jornales.labor:id,nombre,categoria,tipo,tipo_pago,precio_palma',
+        'jornales.lote:id,nombre',
+        'jornales.sublote:id,nombre',
+        'jornales.insumo:id,nombre',
+        'ausencias.empleado:id,primer_nombre,primer_apellido',
+    ];
+
     public function show(Operacion $operacion): JsonResponse
     {
         try {
-            $operacion->load([
-                'creadoPor:id,name',
-                'aprobadoPor:id,name',
-                'cosechas.cuadrilla.empleado:id,primer_nombre,primer_apellido,documento',
-                'cosechas.lote:id,nombre',
-                'cosechas.sublote:id,nombre',
-                'jornales.empleado:id,primer_nombre,primer_apellido,documento',
-                'jornales.labor:id,nombre,categoria,tipo,tipo_pago,precio_palma',
-                'jornales.lote:id,nombre',
-                'jornales.sublote:id,nombre',
-                'jornales.insumo:id,nombre',
-                'ausencias.empleado:id,primer_nombre,primer_apellido',
-            ]);
+            $operacion->load(self::SHOW_RELATIONS);
 
             return response()->json(['data' => $operacion]);
         } catch (\Throwable $e) {
@@ -298,86 +313,239 @@ class OperacionController extends Controller
     public function resumen(Operacion $operacion): JsonResponse
     {
         try {
-            $operacion->loadMissing('creadoPor:id,name');
-
-            $conteoPorTipo = Jornal::query()
-                ->where('operacion_id', $operacion->id)
-                ->where('estado', true)
-                ->selectRaw('categoria, tipo, COUNT(*) as total')
-                ->groupBy('categoria', 'tipo')
-                ->get();
-
-            $labores = [
-                'cosecha'       => $operacion->cosechas()->where('estado', true)->count(),
-                'plateo'        => 0,
-                'poda'          => 0,
-                'fertilizacion' => 0,
-                'sanidad'       => 0,
-                'otros'         => 0,
-                'labores_finca' => 0,
-            ];
-
-            foreach ($conteoPorTipo as $row) {
-                if ($row->categoria === Jornal::CATEGORIA_FINCA) {
-                    $labores['labores_finca'] += $row->total;
-                    continue;
-                }
-                // PALMA: tipo IS NULL → bucket "otros" (custom de palma);
-                // tipo = PLATEO/PODA/FERTILIZACION/SANIDAD → bucket homónimo.
-                $key = $row->tipo !== null ? strtolower($row->tipo) : 'otros';
-                if (array_key_exists($key, $labores)) {
-                    $labores[$key] += $row->total;
-                }
-            }
-
-            $ausenciasConteo = Ausencia::query()
-                ->where('operacion_id', $operacion->id)
-                ->selectRaw('estado, COUNT(*) as total')
-                ->groupBy('estado')
-                ->pluck('total', 'estado');
-
-            $ausencias = [
-                'pendientes' => (int) ($ausenciasConteo[Ausencia::ESTADO_PENDIENTE] ?? 0),
-                'aprobadas'  => (int) ($ausenciasConteo[Ausencia::ESTADO_APROBADA] ?? 0),
-                'rechazadas' => (int) ($ausenciasConteo[Ausencia::ESTADO_RECHAZADA] ?? 0),
-                'liquidadas' => (int) ($ausenciasConteo[Ausencia::ESTADO_LIQUIDADA] ?? 0),
-            ];
-            $ausencias['total'] = array_sum($ausencias);
-
-            $horasExtraRows = HoraExtra::query()
-                ->where('operacion_id', $operacion->id)
-                ->selectRaw('estado, COUNT(*) as total, COALESCE(SUM(cantidad_horas), 0) as horas, COALESCE(SUM(valor_calculado), 0) as valor')
-                ->groupBy('estado')
-                ->get()
-                ->keyBy('estado');
-
-            $horasExtra = [
-                'pendientes' => (int) ($horasExtraRows[HoraExtra::ESTADO_PENDIENTE]->total ?? 0),
-                'aprobadas'  => (int) ($horasExtraRows[HoraExtra::ESTADO_APROBADA]->total ?? 0),
-                'rechazadas' => (int) ($horasExtraRows[HoraExtra::ESTADO_RECHAZADA]->total ?? 0),
-                'liquidadas' => (int) ($horasExtraRows[HoraExtra::ESTADO_LIQUIDADA]->total ?? 0),
-            ];
-            $horasExtra['total']         = $horasExtra['pendientes'] + $horasExtra['aprobadas']
-                                          + $horasExtra['rechazadas'] + $horasExtra['liquidadas'];
-            $horasExtra['horas_totales'] = number_format((float) $horasExtraRows->sum('horas'), 2, '.', '');
-            $horasExtra['valor_total']   = number_format((float) $horasExtraRows->sum('valor'), 2, '.', '');
-
-            return response()->json([
-                'data' => [
-                    'fecha'           => $operacion->fecha?->format('Y-m-d'),
-                    'elaborado_por'   => $operacion->creadoPor?->name,
-                    'hubo_lluvia'     => (bool) $operacion->hubo_lluvia,
-                    'cantidad_lluvia' => $operacion->cantidad_lluvia,
-                    'inicio_labores'  => $operacion->hora_inicio,
-                    'estado'          => $operacion->estado,
-                    'labores'         => $labores,
-                    'ausencias'       => $ausencias,
-                    'horas_extra'     => $horasExtra,
-                ],
-            ]);
+            return response()->json(['data' => $this->calcularResumen($operacion)]);
         } catch (\Throwable $e) {
             Log::error('Error al obtener resumen: ' . $e->getMessage());
             return response()->json(['message' => 'Error al obtener el resumen', 'error' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Calcula el resumen reutilizando las relaciones ya cargadas cuando es
+     * posible. Si vienes de `wizardInit()` con la planilla eager-loaded, no
+     * dispara queries adicionales para labores/ausencias — solo 1 para horas
+     * extra (que no se trae en `SHOW_RELATIONS`). El endpoint standalone
+     * `resumen()` paga las cargas faltantes con `loadMissing`.
+     */
+    private function calcularResumen(Operacion $operacion): array
+    {
+        $operacion->loadMissing([
+            'creadoPor:id,name',
+            'jornales:id,operacion_id,categoria,tipo,estado',
+            'cosechas:id,operacion_id,estado',
+            'ausencias:id,operacion_id,estado',
+        ]);
+
+        $labores = [
+            'cosecha'       => $operacion->cosechas->where('estado', true)->count(),
+            'plateo'        => 0,
+            'poda'          => 0,
+            'fertilizacion' => 0,
+            'sanidad'       => 0,
+            'otros'         => 0,
+            'labores_finca' => 0,
+        ];
+
+        foreach ($operacion->jornales as $j) {
+            if (!$j->estado) continue;
+            if ($j->categoria === Jornal::CATEGORIA_FINCA) {
+                $labores['labores_finca']++;
+                continue;
+            }
+            // PALMA: tipo IS NULL → bucket "otros" (custom); tipo = PLATEO/
+            // PODA/FERTILIZACION/SANIDAD → bucket homónimo.
+            $key = $j->tipo !== null ? strtolower($j->tipo) : 'otros';
+            if (array_key_exists($key, $labores)) {
+                $labores[$key]++;
+            }
+        }
+
+        $ausencias = [
+            'pendientes' => 0,
+            'aprobadas'  => 0,
+            'rechazadas' => 0,
+            'liquidadas' => 0,
+        ];
+        $mapAusencia = [
+            Ausencia::ESTADO_PENDIENTE => 'pendientes',
+            Ausencia::ESTADO_APROBADA  => 'aprobadas',
+            Ausencia::ESTADO_RECHAZADA => 'rechazadas',
+            Ausencia::ESTADO_LIQUIDADA => 'liquidadas',
+        ];
+        foreach ($operacion->ausencias as $a) {
+            if (isset($mapAusencia[$a->estado])) {
+                $ausencias[$mapAusencia[$a->estado]]++;
+            }
+        }
+        $ausencias['total'] = array_sum($ausencias);
+
+        // Horas extra: única query SQL real porque requiere SUM y no viene en
+        // las relaciones eager-loaded del show.
+        $horasExtraRows = HoraExtra::query()
+            ->where('operacion_id', $operacion->id)
+            ->selectRaw('estado, COUNT(*) as total, COALESCE(SUM(cantidad_horas), 0) as horas, COALESCE(SUM(valor_calculado), 0) as valor')
+            ->groupBy('estado')
+            ->get()
+            ->keyBy('estado');
+
+        $horasExtra = [
+            'pendientes' => (int) ($horasExtraRows[HoraExtra::ESTADO_PENDIENTE]->total ?? 0),
+            'aprobadas'  => (int) ($horasExtraRows[HoraExtra::ESTADO_APROBADA]->total ?? 0),
+            'rechazadas' => (int) ($horasExtraRows[HoraExtra::ESTADO_RECHAZADA]->total ?? 0),
+            'liquidadas' => (int) ($horasExtraRows[HoraExtra::ESTADO_LIQUIDADA]->total ?? 0),
+        ];
+        $horasExtra['total']         = $horasExtra['pendientes'] + $horasExtra['aprobadas']
+                                      + $horasExtra['rechazadas'] + $horasExtra['liquidadas'];
+        $horasExtra['horas_totales'] = number_format((float) $horasExtraRows->sum('horas'), 2, '.', '');
+        $horasExtra['valor_total']   = number_format((float) $horasExtraRows->sum('valor'), 2, '.', '');
+
+        return [
+            'fecha'           => $operacion->fecha?->format('Y-m-d'),
+            'elaborado_por'   => $operacion->creadoPor?->name,
+            'hubo_lluvia'     => (bool) $operacion->hubo_lluvia,
+            'cantidad_lluvia' => $operacion->cantidad_lluvia,
+            'inicio_labores'  => $operacion->hora_inicio,
+            'estado'          => $operacion->estado,
+            'labores'         => $labores,
+            'ausencias'       => $ausencias,
+            'horas_extra'     => $horasExtra,
+        ];
+    }
+
+    /**
+     * Bundle único para abrir el wizard de planilla en lectura/edición/creación.
+     * Reemplaza las ~10 peticiones que el frontend disparaba (7 catálogos +
+     * sublotes + show + resumen) por una sola respuesta cacheada por tenant.
+     *
+     * - Modo edición/lectura: GET /operaciones/{operacion}/wizard-init
+     * - Modo creación:        GET /operaciones/wizard-init
+     */
+    public function wizardInit(Request $request, ?Operacion $operacion = null): JsonResponse
+    {
+        try {
+            $tenantId = (int) app('current_tenant_id');
+
+            $planilla = null;
+            $resumen  = null;
+            if ($operacion !== null && $operacion->exists) {
+                $operacion->load(self::SHOW_RELATIONS);
+                $planilla = $operacion;
+                $resumen  = $this->calcularResumen($operacion);
+            }
+
+            $parametricas = [
+                'colaboradores'    => Cache::remember(
+                    WizardCache::operacionesColaboradores($tenantId),
+                    WizardCache::TTL_PARAMETRICA,
+                    fn () => Empleado::query()
+                        ->where('estado', true)
+                        ->orderBy('primer_nombre')
+                        ->orderBy('primer_apellido')
+                        ->get(['id', 'primer_nombre', 'segundo_nombre', 'primer_apellido', 'segundo_apellido',
+                               'documento', 'modalidad_pago', 'estado'])
+                        ->map(fn ($e) => [
+                            'id'              => $e->id,
+                            'nombre_completo' => $e->nombre_completo,
+                            'documento'       => $e->documento,
+                            'modalidad_pago'  => $e->modalidad_pago,
+                        ])->values()->all(),
+                ),
+
+                'lotes' => Cache::remember(
+                    WizardCache::operacionesLotes($tenantId),
+                    WizardCache::TTL_PARAMETRICA,
+                    fn () => Lote::query()
+                        ->where('estado', true)
+                        ->with('predio:id,nombre')
+                        ->orderBy('nombre')
+                        ->get(['id', 'nombre', 'predio_id']),
+                ),
+
+                'sublotes' => Cache::remember(
+                    WizardCache::operacionesSublotes($tenantId),
+                    WizardCache::TTL_PARAMETRICA,
+                    fn () => Sublote::query()
+                        ->where('estado', true)
+                        ->orderBy('nombre')
+                        ->get(['id', 'nombre', 'lote_id', 'cantidad_palmas']),
+                ),
+
+                'insumos' => Cache::remember(
+                    WizardCache::operacionesInsumos($tenantId),
+                    WizardCache::TTL_PARAMETRICA,
+                    fn () => Insumo::query()
+                        ->where('estado', true)
+                        ->orderBy('nombre')
+                        ->get(['id', 'nombre', 'unidad_medida']),
+                ),
+
+                'labores_palma' => Cache::remember(
+                    WizardCache::operacionesLabores($tenantId, 'PALMA'),
+                    WizardCache::TTL_PARAMETRICA,
+                    fn () => $this->cargarLaboresParaSelect('PALMA'),
+                ),
+
+                'labores_finca' => Cache::remember(
+                    WizardCache::operacionesLabores($tenantId, 'FINCA'),
+                    WizardCache::TTL_PARAMETRICA,
+                    fn () => $this->cargarLaboresParaSelect('FINCA'),
+                ),
+
+                'motivos_ausencia' => Cache::remember(
+                    WizardCache::operacionesMotivosAusencia($tenantId),
+                    WizardCache::TTL_PARAMETRICA,
+                    fn () => MotivoAusencia::query()
+                        ->where('estado', true)
+                        ->orderBy('nombre')
+                        ->get(['id', 'nombre', 'tipo_base', 'es_remunerada', 'afecta_nomina',
+                               'porcentaje_pago_default', 'requiere_soporte', 'color',
+                               'afecta_seguridad_social', 'afecta_parafiscales', 'afecta_prestaciones']),
+                ),
+
+                'tipos_hora_extra' => Cache::remember(
+                    WizardCache::operacionesTiposHoraExtra($tenantId),
+                    WizardCache::TTL_PARAMETRICA,
+                    fn () => TipoHoraExtra::query()
+                        ->where('estado', true)
+                        ->orderBy('codigo')
+                        ->get(['id', 'codigo', 'nombre', 'porcentaje_recargo', 'franja_horaria',
+                               'aplica_festivo', 'es_extra', 'paga_hora_completa', 'descripcion']),
+                ),
+            ];
+
+            return response()->json([
+                'data' => [
+                    'planilla'     => $planilla,
+                    'resumen'      => $resumen,
+                    'parametricas' => $parametricas,
+                ],
+            ])->header('Cache-Control', 'private, max-age=0, must-revalidate');
+        } catch (\Throwable $e) {
+            Log::error('Error en operaciones/wizard-init: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Error al inicializar el wizard de planilla',
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Replica el shape de `LaborController::select()` para reutilizar en el
+     * bundle: incluye el accessor virtual `requiere_cosecha_workflow`.
+     */
+    private function cargarLaboresParaSelect(string $categoria)
+    {
+        $labores = Labor::query()
+            ->where('categoria', $categoria)
+            ->where('estado', true)
+            ->orderBy('es_sistema', 'desc')
+            ->orderBy('nombre')
+            ->get(['id', 'nombre', 'categoria', 'tipo', 'tipo_pago', 'precio_palma', 'es_sistema']);
+
+        $labores->each(function (Labor $l) {
+            $l->requiere_cosecha_workflow = $l->requiereFlujoCosecha();
+        });
+
+        return $labores;
     }
 }

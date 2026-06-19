@@ -47,15 +47,27 @@ Códigos especiales del módulo:
 
 ## 1. Flujo del wizard (persistencia incremental)
 
-Cada "Agregar X" del UI dispara un POST inmediato. El backend devuelve el id creado que el front debe guardar para posibles ediciones o eliminaciones. El panel derecho "Resumen" se obtiene de `GET /operaciones/{id}/resumen`.
+> **Apertura del wizard (1 sola petición):** al montar la pantalla del wizard (creación nueva o edición/lectura), el frontend hace **un único `GET /operaciones[/{id}]/wizard-init`** que devuelve todos los catálogos paramétricos cacheados por tenant + (si hay id) la planilla con sus relaciones + el resumen calculado. Reemplaza las 8–10 peticiones que antes se disparaban (7 `/select` + sublotes + `show` + `resumen`). Ver **§1.1** para el contrato. El detalle por mutación (POST/PUT/DELETE de tarjetas) y el refresh del resumen siguen igual.
+
+Cada "Agregar X" del UI dispara un POST inmediato. El backend devuelve el id creado que el front debe guardar para posibles ediciones o eliminaciones. El panel derecho "Resumen" se obtiene de `GET /operaciones/{id}/resumen` tras cada mutación (el bundle inicial ya lo trae al abrir).
 
 ```
+┌ Apertura del wizard ──────────────────────────────────┐
+│  GET /operaciones[/{id}]/wizard-init                  │
+│  → { planilla, resumen, parametricas: {               │
+│       colaboradores, lotes, sublotes, insumos,        │
+│       labores_palma, labores_finca,                   │
+│       motivos_ausencia, tipos_hora_extra              │
+│    } }                                                │
+│  (1 petición; catálogos cacheados 15 min por tenant)  │
+└───────────────────────────────────────────────────────┘
+            │
 ┌ Paso 1 — Info General ┐
 │  POST /operaciones    │  → crea planilla BORRADOR. Devuelve { id }
 └───────────────────────┘
             │
 ┌ Paso 2 — Labores de Palma ────────────────────────────┐
-│  GET /labores/select?categoria=PALMA   (al cargar paso)│
+│  (labores PALMA ya vienen en el bundle del wizard)    │
 │                                                        │
 │  Tab Cosecha:  POST /operaciones/{id}/cosechas         │
 │                (labor.tipo=COSECHA → flujo cuadrilla)  │
@@ -78,7 +90,7 @@ Cada "Agregar X" del UI dispara un POST inmediato. El backend devuelve el id cre
 └────────────────────────────────────────────────────────┘
             │
 ┌ Paso 3 — Labores de Finca ────────────────────────────┐
-│  GET /labores/select?categoria=FINCA   (al cargar paso)│
+│  (labores FINCA ya vienen en el bundle del wizard)    │
 │  POST /operaciones/{id}/jornales                       │
 │      body = { labor_id, empleado_id, ubicacion, ... }  │
 │      (categoría FINCA se deriva del labor.categoria)   │
@@ -101,6 +113,50 @@ Cada "Agregar X" del UI dispara un POST inmediato. El backend devuelve el id cre
 │  Cerrar planilla:                                     │
 │  POST /operaciones/{id}/aprobar → estado APROBADA, inmutable │
 └────────────────────────────────────────────────────────┘
+```
+
+### 1.1 Bundle de inicialización del wizard
+
+`GET /operaciones/wizard-init`           — modo **creación** (sin id).
+`GET /operaciones/{operacion}/wizard-init` — modo **edición / lectura**.
+
+**Permiso:** `operaciones.ver` (mismo permiso que los `/select` que reemplaza).
+
+**Respuesta:**
+
+```json
+{
+  "data": {
+    "planilla": { ... } | null,
+    "resumen":  { ... } | null,
+    "parametricas": {
+      "colaboradores":    [{ "id": 10, "nombre_completo": "Carlos Rodríguez", "documento": "1098765432", "modalidad_pago": "PRODUCCION" }, ...],
+      "lotes":            [{ "id": 1,  "nombre": "Lote 1", "predio_id": 1, "predio": { "id": 1, "nombre": "Finca La Esperanza" } }, ...],
+      "sublotes":         [{ "id": 3,  "nombre": "Lote 1.1", "lote_id": 1, "cantidad_palmas": 240 }, ...],
+      "insumos":          [{ "id": 5,  "nombre": "Urea 46%", "unidad_medida": "GRAMOS" }, ...],
+      "labores_palma":    [{ "id": 13, "nombre": "Plateo", "categoria": "PALMA", "tipo": "PLATEO", "tipo_pago": "POR_PALMA", "precio_palma": "50.00", "es_sistema": true, "requiere_cosecha_workflow": false }, ...],
+      "labores_finca":    [{ "id": 7,  "nombre": "Reparación portón", "categoria": "FINCA", "tipo": null, "tipo_pago": "JORNAL_FIJO", "precio_palma": "50000.00", "es_sistema": false, "requiere_cosecha_workflow": false }, ...],
+      "motivos_ausencia": [{ "id": 3,  "nombre": "Incapacidad EPS - General", "tipo_base": "INCAPACIDAD_EPS", "es_remunerada": true, "afecta_nomina": true, "porcentaje_pago_default": "66.67", "requiere_soporte": true, "color": "#FF6B6B", "afecta_seguridad_social": true, "afecta_parafiscales": false, "afecta_prestaciones": true }, ...],
+      "tipos_hora_extra": [{ "id": 1,  "codigo": "HED", "nombre": "Hora Extra Diurna", "porcentaje_recargo": "25.00", "franja_horaria": "06:00-21:00", "aplica_festivo": false, "es_extra": true, "paga_hora_completa": true, "descripcion": "6:00 AM – 9:00 PM, días hábiles" }, ...]
+    }
+  }
+}
+```
+
+- En modo **creación** (sin id), `planilla` y `resumen` vienen `null` y `parametricas` viene completo.
+- En modo **edición/lectura**, `planilla` es el mismo payload que [§2.4 `GET /operaciones/{id}`](#24-ver-detalle) (cosechas + jornales + ausencias con todas sus relaciones eager-loaded) y `resumen` es el mismo shape de [§6 `GET /operaciones/{id}/resumen`](#6-resumen-panel-derecho-del-wizard).
+- Los 8 catálogos se cachean en backend por tenant durante **15 min** (`WizardCache::TTL_PARAMETRICA`) y se invalidan automáticamente cuando se crea/edita/elimina cualquier colaborador, lote, sublote, insumo, labor, motivo de ausencia o tipo de hora extra. El cliente percibe los cambios al primer refresh siguiente del bundle.
+- El header de respuesta incluye `Cache-Control: private, max-age=0, must-revalidate` — fuerza al navegador a revalidar (no a guardar en caché del cliente).
+- Los endpoints `/select` listados en §8 **siguen vivos** sin cambios para otros consumidores (apps móviles, exports, módulos administrativos). El wizard de Operaciones es el único que pasa por el bundle.
+
+**Ejemplo cURL:**
+
+```bash
+# Modo creación (nueva planilla)
+curl "$BASE/operaciones/wizard-init" "${H[@]}"
+
+# Modo edición/lectura (planilla existente)
+curl "$BASE/operaciones/12/wizard-init" "${H[@]}"
 ```
 
 ---
@@ -270,6 +326,8 @@ Cada item del listado trae los agregados necesarios para pintar la tabla "Planil
 ### 2.4 Ver detalle
 
 `GET /operaciones/{id}` — devuelve la planilla con `cosechas.cuadrilla.empleado`, `jornales.empleado`, `jornales.labor`, `jornales.lote`, `jornales.sublote`, `jornales.insumo`, `ausencias.empleado`, `creado_por_rel`, `aprobado_por_rel`.
+
+> El **wizard del frontend** no llama a este endpoint directamente al abrir el detalle — la misma data viene dentro del bundle `GET /operaciones/{id}/wizard-init` (§1.1). Este endpoint sigue disponible para otros consumidores (apps móviles, exports, integraciones).
 
 ### 2.5 Eliminar
 
@@ -894,7 +952,7 @@ Adicionalmente, cualquier mutación está bloqueada si `operacion.estado = APROB
 }
 ```
 
-- Se recomienda llamar este endpoint **después de cada POST/DELETE** de tarjeta para refrescar el panel derecho.
+- Se recomienda llamar este endpoint **después de cada POST/DELETE** de tarjeta para refrescar el panel derecho. Al **abrir** el wizard el resumen ya viene en el bundle (§1.1), no hay que pedirlo aparte.
 - `labores_finca` representa la cantidad de Labores de Finca (jornales con `categoria=FINCA`) registradas en la planilla.
 - `otros` agrupa las labores custom de palma (jornales con `categoria=PALMA` y `tipo=NULL`). Las 4 labores fijas (PLATEO, PODA, FERTILIZACION, SANIDAD) van en sus buckets homónimos.
 - El bloque `ausencias` se agrega por estado; `total` ya viene precalculado.
@@ -931,9 +989,11 @@ Tras aprobar:
 
 ## 8. Datos auxiliares para el wizard
 
-Los dropdowns del wizard usan **endpoints `/select` dedicados** — livianos (solo campos necesarios), sin paginación y con permisos compatibles con un operador de campo (no requieren `*.ver` del módulo específico; basta con `operaciones.crear` u `operaciones.editar`).
+> **Apertura del wizard:** el frontend recibe los 8 catálogos de abajo de una sola vez vía `GET /operaciones[/{id}]/wizard-init` (§1.1). Los endpoints `/select` documentados aquí **siguen vivos** sin cambios para consumidores que necesiten pedirlos sueltos (apps móviles, exports, refresh manual), pero el wizard web ya no los llama uno por uno al abrir la pantalla.
 
-> **No confundir con `predios/wizard-init`:** el endpoint bundle del wizard de Plantación (`GET /predios/{id}/wizard-init`) devuelve la jerarquía completa de un predio (lotes → sublotes → líneas) para el wizard de creación/edición de predios. El wizard de Operaciones **no debe usarlo** — los endpoints `/operaciones/lotes/select` y `/operaciones/sublotes/select` abajo son los correctos para el contexto de planillas, tienen permisos distintos y devuelven solo los campos necesarios para el dropdown.
+Los dropdowns usan **endpoints `/select` dedicados** — livianos (solo campos necesarios), sin paginación y con permisos compatibles con un operador de campo (no requieren `*.ver` del módulo específico; basta con `operaciones.crear` u `operaciones.editar`).
+
+> **No confundir con `predios/wizard-init`:** el endpoint bundle del wizard de Plantación (`GET /predios/{id}/wizard-init`) devuelve la jerarquía completa de un predio (lotes → sublotes → líneas) para el wizard de creación/edición de predios. El wizard de Operaciones tiene su propio bundle (`GET /operaciones[/{id}]/wizard-init`) descrito en §1.1.
 
 | Dropdown | Endpoint | Filtros útiles |
 |---|---|---|
@@ -1040,7 +1100,7 @@ curl -X POST "$BASE/operaciones/12/aprobar" "${H[@]}"
 
 ## 10. Recomendaciones de implementación frontend
 
-- **Cargar `/labores/select` una sola vez por paso:** llamar `GET /labores/select?categoria=PALMA` al entrar al Paso 2 y `?categoria=FINCA` al entrar al Paso 3. Cachear la respuesta en estado local del wizard — el frontend filtra por `tipo` y `tipo_pago` en memoria al cambiar de tab.
+- **Una sola petición al abrir el wizard:** llamar `GET /operaciones[/{id}]/wizard-init` (§1.1) al montar la pantalla. Trae los 8 catálogos (incluyendo `labores_palma` y `labores_finca` separados) + la planilla con relaciones + el resumen. El frontend filtra por `tipo` y `tipo_pago` en memoria al cambiar de tab dentro del Paso 2. No volver a pedir `/labores/select` ni los demás `/select` para abrir el detalle.
 - **Repintar el form según `labor.tipo_pago` y `labor.requiere_cosecha_workflow`:** son los dos flags que vienen en el payload del select y reemplazan la lógica fija por tipo. No hardcodear "PLATEO siempre pide cantidad_palmas" — ahora `PLATEO + JORNAL_FIJO` no la pide. Decide en runtime con `labor.tipo_pago`.
 - **Tab Cosecha:** si el operador elige una labor con `requiere_cosecha_workflow=true`, redirigir al sub-form de cosecha (con cuadrilla + peso opcional) y enviar a `/cosechas`, no a `/jornales`. Si por error se manda a `/jornales`, el backend responde 422 `CALC_ERROR`.
 - **Tab Otros (custom de palma):** el dropdown filtra `tipo === null`. Si el tenant no ha creado labores custom todavía, la lista viene vacía — mostrar un CTA "Crear labor desde Configuración → Labores".
