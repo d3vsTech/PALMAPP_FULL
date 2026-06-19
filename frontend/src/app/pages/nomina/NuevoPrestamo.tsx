@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
+import { toast } from 'sonner';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -63,29 +64,29 @@ export default function NuevoPrestamo() {
 
   const handleSave = () => {
     if (!colaboradorId || !colaboradorSeleccionado) {
-      alert('Debes buscar y seleccionar un colaborador');
+      toast.error('Debes buscar y seleccionar un colaborador');
       return;
     }
     if (!fechaDesde) {
-      alert('La fecha desde es obligatoria');
+      toast.error('La fecha desde es obligatoria');
       return;
     }
     if (!fechaHasta) {
-      alert('La fecha hasta es obligatoria');
+      toast.error('La fecha hasta es obligatoria');
       return;
     }
     if (!concepto.trim()) {
-      alert('El concepto es obligatorio');
+      toast.error('El concepto es obligatorio');
       return;
     }
     if (!monto || parseFloat(monto) <= 0) {
-      alert('Ingresa un monto válido mayor a 0');
+      toast.error('Ingresa un monto válido mayor a 0');
       return;
     }
 
     // Validar que fecha hasta sea mayor o igual a fecha desde
     if (new Date(fechaHasta) < new Date(fechaDesde)) {
-      alert('La fecha hasta debe ser mayor o igual a la fecha desde');
+      toast.error('La fecha hasta debe ser mayor o igual a la fecha desde');
       return;
     }
 

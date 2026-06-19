@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -138,27 +139,27 @@ export function CrearEditarColaboradorModal({
   const handleSave = () => {
     // Validaciones básicas
     if (!formData.nombres.trim()) {
-      alert('El nombre es obligatorio');
+      toast.error('El nombre es obligatorio');
       setActiveTab('personal');
       return;
     }
     if (!formData.apellidos.trim()) {
-      alert('Los apellidos son obligatorios');
+      toast.error('Los apellidos son obligatorios');
       setActiveTab('personal');
       return;
     }
     if (!formData.numeroDocumento.trim()) {
-      alert('El número de documento es obligatorio');
+      toast.error('El número de documento es obligatorio');
       setActiveTab('identificacion');
       return;
     }
     if (!formData.cargo.trim()) {
-      alert('El cargo es obligatorio');
+      toast.error('El cargo es obligatorio');
       setActiveTab('contratacion');
       return;
     }
     if (!formData.salarioBase || formData.salarioBase <= 0) {
-      alert('El salario base debe ser mayor a 0');
+      toast.error('El salario base debe ser mayor a 0');
       setActiveTab('contratacion');
       return;
     }

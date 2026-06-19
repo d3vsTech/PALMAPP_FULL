@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -56,12 +57,12 @@ export function CrearEditarPredioModal({
 
   const handleSave = () => {
     if (!nombre.trim()) {
-      alert('El nombre del predio es obligatorio');
+      toast.error('El nombre del predio es obligatorio');
       return;
     }
 
     if (!hectareas.trim() || isNaN(Number(hectareas)) || Number(hectareas) <= 0) {
-      alert('Las hectáreas totales deben ser un número válido mayor a 0');
+      toast.error('Las hectáreas totales deben ser un número válido mayor a 0');
       return;
     }
 

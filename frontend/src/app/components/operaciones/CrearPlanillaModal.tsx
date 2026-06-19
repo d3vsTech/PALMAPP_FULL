@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter,
 } from '../ui/dialog';
@@ -203,7 +204,7 @@ export function CrearPlanillaModal({
   }));
 
   const handleSave = () => {
-    if (!formData.fecha) { alert('La fecha es obligatoria'); return; }
+    if (!formData.fecha) { toast.error('La fecha es obligatoria'); return; }
     onSave(formData);
   };
 

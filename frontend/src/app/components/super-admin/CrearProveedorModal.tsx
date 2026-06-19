@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { toast } from 'sonner';
 import { X, Store, MapPin, Image as ImageIcon, FileText, Loader2 } from 'lucide-react';
 import {
   marketProveedoresAdminApi,
@@ -94,11 +95,11 @@ export default function CrearProveedorModal({
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!formData.departamento) {
-      alert('Selecciona un departamento');
+      toast.error('Selecciona un departamento');
       return;
     }
     if (!formData.ciudad) {
-      alert('Selecciona una ciudad');
+      toast.error('Selecciona una ciudad');
       return;
     }
     await onSave(formData);

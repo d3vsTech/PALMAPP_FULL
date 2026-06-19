@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -102,34 +103,34 @@ export function CrearEditarLoteModal({
 
   const handleSave = () => {
     if (!nombre.trim()) {
-      alert('El nombre del lote es obligatorio');
+      toast.error('El nombre del lote es obligatorio');
       return;
     }
     if (!predioId) {
-      alert('Debes seleccionar un predio');
+      toast.error('Debes seleccionar un predio');
       return;
     }
     if (!fechaSiembra) {
-      alert('La fecha de siembra es obligatoria');
+      toast.error('La fecha de siembra es obligatoria');
       return;
     }
     if (!variedad.trim()) {
-      alert('La variedad es obligatoria');
+      toast.error('La variedad es obligatoria');
       return;
     }
     if (semillasSeleccionadas.length === 0) {
-      alert('Debes seleccionar al menos una semilla');
+      toast.error('Debes seleccionar al menos una semilla');
       return;
     }
     if (!hectareas || parseFloat(hectareas) <= 0) {
-      alert('Ingresa una cantidad de hectáreas válida');
+      toast.error('Ingresa una cantidad de hectáreas válida');
       return;
     }
 
     // Validar que las hectáreas no superen las disponibles
     const hectareasDisponibles = calcularHectareasDisponibles(predioId);
     if (parseFloat(hectareas) > hectareasDisponibles) {
-      alert(`Las hectáreas sembradas (${hectareas} ha) no pueden superar las hectáreas disponibles del predio (${hectareasDisponibles.toFixed(2)} ha)`);
+      toast.error(`Las hectáreas sembradas (${hectareas} ha) no pueden superar las hectáreas disponibles del predio (${hectareasDisponibles.toFixed(2)} ha)`);
       return;
     }
 

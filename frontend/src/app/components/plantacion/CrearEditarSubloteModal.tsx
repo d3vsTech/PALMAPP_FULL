@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -51,11 +52,11 @@ export function CrearEditarSubloteModal({
 
   const handleSave = () => {
     if (!nombre.trim()) {
-      alert('El nombre del sublote es obligatorio');
+      toast.error('El nombre del sublote es obligatorio');
       return;
     }
     if (!cantidadPalmas || parseInt(cantidadPalmas) <= 0) {
-      alert('Ingresa una cantidad de palmas válida');
+      toast.error('Ingresa una cantidad de palmas válida');
       return;
     }
 

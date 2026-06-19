@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -70,7 +71,7 @@ export function RegistrarPalmasModal({
     const palmasValidas = palmas.filter((p) => p.descripcion.trim() !== '');
     
     if (palmasValidas.length === 0) {
-      alert('Debes agregar al menos una palma con descripción');
+      toast.error('Debes agregar al menos una palma con descripción');
       return;
     }
 

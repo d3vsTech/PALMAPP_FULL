@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -66,11 +67,11 @@ export function CrearAusenciaModal({
 
   const handleSave = () => {
     if (!formData.colaboradorId) {
-      alert('Debes seleccionar un colaborador');
+      toast.error('Debes seleccionar un colaborador');
       return;
     }
     if (!formData.fecha) {
-      alert('La fecha es obligatoria');
+      toast.error('La fecha es obligatoria');
       return;
     }
 

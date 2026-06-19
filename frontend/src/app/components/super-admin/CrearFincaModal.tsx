@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent, useCallback } from 'react';
+import { toast } from 'sonner';
 import { useAuth } from '../../contexts/AuthContext';
 import { fetchConToken } from '../../../api/request';
 import {
@@ -153,12 +154,12 @@ export default function CrearFincaModal({
     e.preventDefault();
 
     if (!formData.departamento) {
-      alert('Selecciona un departamento');
+      toast.error('Selecciona un departamento');
       return;
     }
 
     if (!formData.municipio) {
-      alert('Selecciona un municipio');
+      toast.error('Selecciona un municipio');
       return;
     }
 

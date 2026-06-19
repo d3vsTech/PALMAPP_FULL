@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -87,27 +88,27 @@ export function CrearViajeModal({
 
   const handleSave = () => {
     if (!formData.fecha) {
-      alert('La fecha es obligatoria');
+      toast.error('La fecha es obligatoria');
       return;
     }
     if (!formData.placaVehiculo) {
-      alert('La placa del vehículo es obligatoria');
+      toast.error('La placa del vehículo es obligatoria');
       return;
     }
     if (!formData.conductor) {
-      alert('El conductor es obligatorio');
+      toast.error('El conductor es obligatorio');
       return;
     }
     if (formData.lotes.length === 0) {
-      alert('Debes seleccionar al menos un lote');
+      toast.error('Debes seleccionar al menos un lote');
       return;
     }
     if (!formData.gajosEstimados || formData.gajosEstimados <= 0) {
-      alert('Los gajos estimados deben ser mayores a 0');
+      toast.error('Los gajos estimados deben ser mayores a 0');
       return;
     }
     if (!formData.extractora) {
-      alert('La extractora es obligatoria');
+      toast.error('La extractora es obligatoria');
       return;
     }
 

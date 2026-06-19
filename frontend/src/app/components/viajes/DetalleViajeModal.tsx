@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -118,7 +119,7 @@ export function DetalleViajeModal({
 
   const handleSave = () => {
     if (!formData.placaVehiculo || !formData.conductor || formData.lotes.length === 0) {
-      alert('Todos los campos obligatorios deben estar completos');
+      toast.error('Todos los campos obligatorios deben estar completos');
       return;
     }
 

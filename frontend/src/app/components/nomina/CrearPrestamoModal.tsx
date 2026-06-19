@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -69,15 +70,15 @@ export function CrearPrestamoModal({
 
   const handleSave = () => {
     if (!formData.colaboradorId) {
-      alert('Debes seleccionar un colaborador');
+      toast.error('Debes seleccionar un colaborador');
       return;
     }
     if (!formData.fecha) {
-      alert('La fecha es obligatoria');
+      toast.error('La fecha es obligatoria');
       return;
     }
     if (!formData.valor || formData.valor <= 0) {
-      alert('El valor debe ser mayor a 0');
+      toast.error('El valor debe ser mayor a 0');
       return;
     }
 

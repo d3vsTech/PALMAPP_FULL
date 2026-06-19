@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -85,19 +86,19 @@ export function CrearPermisoModal({
 
   const handleSave = () => {
     if (!formData.colaboradorId) {
-      alert('Debes seleccionar un colaborador');
+      toast.error('Debes seleccionar un colaborador');
       return;
     }
     if (!formData.fechaInicio || !formData.fechaFin) {
-      alert('Las fechas son obligatorias');
+      toast.error('Las fechas son obligatorias');
       return;
     }
     if (new Date(formData.fechaFin) < new Date(formData.fechaInicio)) {
-      alert('La fecha de fin debe ser posterior a la fecha de inicio');
+      toast.error('La fecha de fin debe ser posterior a la fecha de inicio');
       return;
     }
     if (formData.tipo === 'Remunerado' && (!formData.valorJornal || formData.valorJornal <= 0)) {
-      alert('El valor del jornal es obligatorio para permisos remunerados');
+      toast.error('El valor del jornal es obligatorio para permisos remunerados');
       return;
     }
 

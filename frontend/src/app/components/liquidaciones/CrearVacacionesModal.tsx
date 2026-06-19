@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -100,25 +101,25 @@ export function CrearVacacionesModal({
 
   const handleSave = () => {
     if (!formData.colaboradorId) {
-      alert('Debes seleccionar un colaborador');
+      toast.error('Debes seleccionar un colaborador');
       return;
     }
     if (!formData.fechaInicio || !formData.fechaFin) {
-      alert('Las fechas son obligatorias');
+      toast.error('Las fechas son obligatorias');
       return;
     }
     if (new Date(formData.fechaFin) < new Date(formData.fechaInicio)) {
-      alert('La fecha de fin debe ser posterior a la fecha de inicio');
+      toast.error('La fecha de fin debe ser posterior a la fecha de inicio');
       return;
     }
     if (formData.diasHabiles === 0) {
-      alert('No hay días hábiles en el rango seleccionado');
+      toast.error('No hay días hábiles en el rango seleccionado');
       return;
     }
 
     const colaborador = colaboradores.find((c) => c.id === formData.colaboradorId);
     if (colaborador && formData.diasHabiles > colaborador.diasVacacionesDisponibles) {
-      alert(
+      toast.error(
         `El colaborador solo tiene ${colaborador.diasVacacionesDisponibles} días disponibles`
       );
       return;

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -92,12 +93,12 @@ export function CrearEditarContratoModal({
     if (file) {
       // Validar que sea PDF
       if (file.type !== 'application/pdf') {
-        alert('Solo se permiten archivos PDF');
+        toast.error('Solo se permiten archivos PDF');
         return;
       }
       // Validar tamaño (máximo 10MB)
       if (file.size > 10 * 1024 * 1024) {
-        alert('El archivo no puede superar los 10MB');
+        toast.error('El archivo no puede superar los 10MB');
         return;
       }
       setArchivo(file);
@@ -115,23 +116,23 @@ export function CrearEditarContratoModal({
   const handleSave = () => {
     // Validaciones
     if (!formData.colaboradorId) {
-      alert('Debes seleccionar un colaborador');
+      toast.error('Debes seleccionar un colaborador');
       return;
     }
     if (!formData.fechaInicio) {
-      alert('La fecha de inicio es obligatoria');
+      toast.error('La fecha de inicio es obligatoria');
       return;
     }
     if (!formData.fechaTerminacion) {
-      alert('La fecha de terminación es obligatoria');
+      toast.error('La fecha de terminación es obligatoria');
       return;
     }
     if (new Date(formData.fechaTerminacion) <= new Date(formData.fechaInicio)) {
-      alert('La fecha de terminación debe ser posterior a la fecha de inicio');
+      toast.error('La fecha de terminación debe ser posterior a la fecha de inicio');
       return;
     }
     if (!archivo && !archivoNombreExistente) {
-      alert('Debes adjuntar el documento del contrato en PDF');
+      toast.error('Debes adjuntar el documento del contrato en PDF');
       return;
     }
 
