@@ -554,6 +554,29 @@ export default function EditarTerceroWizard() {
                 <Badge variant="outline" className="text-xs border-primary/30 text-primary">
                   {operarios.length} registrado{operarios.length !== 1 ? 's' : ''}
                 </Badge>
+                {operarios.length > 0 && (
+                  <div className="space-y-2 pt-2">
+                    {operarios.map((op, i) => {
+                      const nombres = op.nombres?.trim() ?? '';
+                      const apellidos = op.apellidos?.trim() ?? '';
+                      const inicial = (nombres[0] ?? '') + (apellidos[0] ?? '');
+                      const nombreCompleto = `${nombres} ${apellidos}`.trim() || '(sin nombre)';
+                      return (
+                        <div key={op.id ?? i} className="flex items-center gap-2.5">
+                          <div className="h-7 w-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+                            {inicial.toUpperCase() || '?'}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-medium truncate" title={nombreCompleto}>{nombreCompleto}</p>
+                            <p className="text-[11px] text-muted-foreground truncate">
+                              {op.cargo || '—'}{op.documento ? ` · CC ${op.documento}` : ''}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
