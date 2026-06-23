@@ -53,6 +53,22 @@ export interface Planilla {
 }
 
 /**
+ * Planilla con todas sus relaciones eager-loaded (§2.4 GET /operaciones/{id}).
+ * Se devuelve en `ver` / `detalle` y se incrusta en `WizardInitBundle.planilla`.
+ *
+ * Los campos `[k: string]: unknown` se mantienen como escape hatch para que el
+ * wizard (que consume muchos atributos auxiliares) no falle por TS. La
+ * intención a futuro es ir reemplazando esos accesos por los campos tipados.
+ */
+export interface PlanillaDetalle extends Planilla {
+  cosechas?: Cosecha[];
+  jornales?: Jornal[];
+  ausencias?: Ausencia[];
+  horas_extra?: HoraExtra[];
+  [k: string]: unknown;
+}
+
+/**
  * §6 Resumen del wizard (GET /operaciones/{id}/resumen)
  *
  * Buckets de `labores`:
@@ -109,12 +125,21 @@ export type Periodo = 'semanal' | 'quincenal' | 'mensual' | 'personalizado';
 
 export type EstadoNovedad = 'PENDIENTE' | 'APROBADA' | 'RECHAZADA' | 'LIQUIDADA';
 
+/**
+ * Fila de cuadrilla en cosecha. XOR: exactamente uno de `empleado_id` u
+ * `operario_id` (§3.1 cuadrilla mixta). El `tercero_id` se inyecta en backend
+ * desde el `operario_id` — el cliente no lo envía pero lo recibe.
+ */
 export interface CosechaCuadrillaItem {
   id: number;
-  empleado_id: number;
+  empleado_id?: number | null;
+  operario_id?: number | null;
+  tercero_id?: number | null;
   peso_calculado_empleado: string | number | null;
   valor_calculado: string | number | null;
-  empleado?: { id: number; primer_nombre?: string; primer_apellido?: string };
+  empleado?: { id: number; primer_nombre?: string; primer_apellido?: string } | null;
+  /** Subobjeto eager-loaded cuando la fila es de un operario de tercero. */
+  operario?: { id: number; nombres?: string; apellidos?: string; nombre_completo?: string } | null;
 }
 
 export interface Cosecha {
@@ -148,10 +173,20 @@ export type CategoriaJornal = 'PALMA' | 'FINCA';
 /** Tipos snapshoteados en el jornal. Las labores custom de palma tienen tipo=null. */
 export type TipoJornalPalma = 'PLATEO' | 'PODA' | 'FERTILIZACION' | 'SANIDAD';
 
+/**
+ * Jornal — registro de trabajo de un colaborador (o un operario de tercero)
+ * en una planilla. XOR: exactamente uno de `empleado_id` u `operario_id`
+ * (§3.2 selector de persona). El backend inyecta `tercero_id` desde
+ * `operario_id` — el cliente no lo envía pero lo recibe.
+ */
 export interface Jornal {
   id: number;
   operacion_id: number;
-  empleado_id: number;
+  empleado_id?: number | null;
+  /** Nuevo (§3.2): jornal de un operario de tercero. */
+  operario_id?: number | null;
+  /** Inyectado por backend cuando hay `operario_id`. */
+  tercero_id?: number | null;
   categoria: CategoriaJornal;
   tipo?: TipoJornalPalma | null;
   lote_id?: number | null;
@@ -174,11 +209,14 @@ export interface Jornal {
   precio_insumo_snapshot?: string | number | null;
   valor_total: string | number | null;
   estado: boolean;
-  empleado?: any;
-  labor?: any;
-  lote?: any;
-  sublote?: any;
-  insumo?: any;
+  /** Subobjetos eager-loaded — null cuando la fila es de operario. */
+  empleado?: EmpleadoRef | null;
+  /** Subobjeto eager-loaded cuando la fila es de un operario de tercero. */
+  operario?: { id: number; nombres?: string; apellidos?: string; nombre_completo?: string } | null;
+  labor?: LaborWizardItem | Record<string, unknown> | null;
+  lote?: { id: number; nombre: string } | Record<string, unknown> | null;
+  sublote?: { id: number; nombre: string } | Record<string, unknown> | null;
+  insumo?: InsumoWizardItem | Record<string, unknown> | null;
 }
 
 /** Estado de la hora extra. `LIQUIDADA` se llena al cerrar la nómina (snapshot
@@ -250,8 +288,125 @@ export interface Ausencia {
   documento_soporte?: string | null;
   entidad?: string | null;
   numero_radicado?: string | null;
-  empleado?: any;
-  motivo_ausencia?: any;
+  empleado?: EmpleadoRef | Record<string, unknown> | null;
+  motivo_ausencia?: MotivoAusenciaWizardItem | Record<string, unknown> | null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIPOS — Bundle del wizard (§1.1)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Subobjeto eager-loaded en jornales/cosechas/ausencias/horas extra. */
+export interface EmpleadoRef {
+  id: number;
+  primer_nombre?: string | null;
+  primer_apellido?: string | null;
+  segundo_nombre?: string | null;
+  segundo_apellido?: string | null;
+  [k: string]: unknown;
+}
+
+/** Item de `parametricas.colaboradores` del bundle del wizard. */
+export interface ColaboradorWizardItem {
+  id: number;
+  nombre_completo: string;
+  documento: string;
+  modalidad_pago: 'FIJO' | 'PRODUCCION' | string;
+}
+
+/**
+ * Item de `parametricas.operarios` del bundle del wizard.
+ *
+ * Operarios son trabajadores de terceros contratistas. La UI los muestra en
+ * el mismo dropdown que `colaboradores`, diferenciados por `tercero_nombre`.
+ * En los payloads se envían como `operario_id` (XOR con `empleado_id`).
+ */
+export interface OperarioWizardItem {
+  id: number;
+  tercero_id: number;
+  nombre_completo: string;
+  cedula: string;
+  tercero_nombre: string;
+}
+
+export interface LoteWizardItem {
+  id: number;
+  nombre: string;
+  predio_id: number;
+  predio?: { id: number; nombre: string };
+}
+
+export interface SubloteWizardItem {
+  id: number;
+  nombre: string;
+  lote_id: number;
+  /** Usado para autofill del input "Número de Palmas" cuando POR_PALMA. */
+  cantidad_palmas: number;
+}
+
+export interface InsumoWizardItem {
+  id: number;
+  nombre: string;
+  unidad_medida?: string;
+}
+
+export interface LaborWizardItem {
+  id: number;
+  nombre: string;
+  categoria: CategoriaJornal;
+  /** `null` para custom de palma (las que el admin crea sin tipo fijo). */
+  tipo: 'COSECHA' | 'PLATEO' | 'PODA' | 'FERTILIZACION' | 'SANIDAD' | null;
+  tipo_pago: 'POR_PALMA' | 'JORNAL_FIJO';
+  precio_palma: string | number | null;
+  es_sistema: boolean;
+  requiere_cosecha_workflow: boolean;
+}
+
+export interface MotivoAusenciaWizardItem {
+  id: number;
+  nombre: string;
+  tipo_base: string;
+  es_remunerada: boolean;
+  afecta_nomina: boolean;
+  porcentaje_pago_default: string | number;
+  requiere_soporte: boolean;
+  color?: string;
+  afecta_seguridad_social?: boolean;
+  afecta_parafiscales?: boolean;
+  afecta_prestaciones?: boolean;
+}
+
+export interface TipoHoraExtraWizardItem {
+  id: number;
+  codigo: string;
+  nombre: string;
+  porcentaje_recargo: string | number;
+  franja_horaria: string;
+  aplica_festivo: boolean;
+  es_extra: boolean;
+  paga_hora_completa: boolean;
+  descripcion?: string;
+}
+
+/**
+ * Bundle único del wizard. Modo creación: `planilla` y `resumen` son `null`.
+ * Modo edición: ambos vienen con la planilla y el resumen calculado.
+ */
+export interface WizardInitBundle {
+  planilla: PlanillaDetalle | null;
+  resumen: Resumen | null;
+  parametricas: {
+    colaboradores: ColaboradorWizardItem[];
+    /** Nuevo en §1.1: operarios de terceros. Se unifican con colaboradores en el dropdown. */
+    operarios: OperarioWizardItem[];
+    lotes: LoteWizardItem[];
+    sublotes: SubloteWizardItem[];
+    insumos: InsumoWizardItem[];
+    labores_palma: LaborWizardItem[];
+    labores_finca: LaborWizardItem[];
+    motivos_ausencia: MotivoAusenciaWizardItem[];
+    tipos_hora_extra: TipoHoraExtraWizardItem[];
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -260,50 +415,82 @@ export interface Ausencia {
 
 const BASE = '/api/v1/tenant';
 
-function qs(params: Record<string, any> = {}): string {
+/** Meta de paginación estándar Laravel (replica `PaginatedResponse` del cliente). */
+export interface PaginatedMeta {
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
+}
+
+/**
+ * Error enriquecido que arroja `smartRequest` — agrega `code` y `status` al
+ * `Error` estándar para que los componentes puedan distinguir por código
+ * (ej. `OPERACION_APROBADA`, `CALC_ERROR`) sin hacer string-matching del
+ * mensaje. Es la versión local del `ApiError` de `apiClient`.
+ */
+export interface OperacionesApiError extends Error {
+  code?: string;
+  status?: number;
+}
+
+function qs(params: Record<string, unknown> = {}): string {
   const filtered = Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '');
   if (filtered.length === 0) return '';
   return '?' + filtered.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`).join('&');
 }
 
+/**
+ * Forma cruda del JSON de error del backend. No exportado: solo usado para
+ * el parseo defensivo en `parseError`.
+ */
+interface RawErrorBody {
+  message?: string;
+  error?: string;
+  code?: string;
+  errors?: Record<string, string[] | string>;
+}
+
 /** Parsea respuestas no-OK e incluye el `code` del backend cuando aplica. */
 async function parseError(res: Response): Promise<{ message: string; code?: string }> {
-  let data: any = null;
+  let raw: unknown = null;
   try {
     const ct = res.headers.get('content-type') ?? '';
-    data = ct.includes('application/json') ? await res.json() : await res.text();
-  } catch {}
-  if (data && typeof data === 'object') {
-    const msg =
-      (data.errors && typeof data.errors === 'object' && (() => {
-        for (const k of Object.keys(data.errors)) {
-          const arr = data.errors[k];
-          if (Array.isArray(arr) && arr.length && typeof arr[0] === 'string') return arr[0];
-          if (typeof arr === 'string' && arr.trim()) return arr;
-        }
-        return null;
-      })()) ||
-      data.message ||
-      data.error ||
-      'Error al comunicarse con el servidor';
+    raw = ct.includes('application/json') ? await res.json() : await res.text();
+  } catch {
+    // Si el body no es parseable, `raw` queda `null` y caemos al fallback.
+  }
+  if (raw && typeof raw === 'object') {
+    const data = raw as RawErrorBody;
+    const firstFieldError = (() => {
+      if (!data.errors || typeof data.errors !== 'object') return null;
+      for (const k of Object.keys(data.errors)) {
+        const arr = data.errors[k];
+        if (Array.isArray(arr) && arr.length && typeof arr[0] === 'string') return arr[0];
+        if (typeof arr === 'string' && arr.trim()) return arr;
+      }
+      return null;
+    })();
+    const msg = firstFieldError ?? data.message ?? data.error ?? 'Error al comunicarse con el servidor';
     return { message: typeof msg === 'string' ? msg : 'Error', code: data.code };
   }
-  return { message: typeof data === 'string' && data.trim() ? data : 'Error al comunicarse con el servidor' };
+  return { message: typeof raw === 'string' && raw.trim() ? raw : 'Error al comunicarse con el servidor' };
 }
 
 /** Versión de request que devuelve `{ message, code }` en errores HTTP. */
-async function smartRequest<T = any>(endpoint: string, opciones: RequestInit = {}): Promise<T> {
+async function smartRequest<T = unknown>(endpoint: string, opciones: RequestInit = {}): Promise<T> {
   const res = await fetchConToken(endpoint, undefined, opciones);
   if (!res.ok) {
     const { message, code } = await parseError(res);
-    const err: any = new Error(message);
+    const err: OperacionesApiError = new Error(message);
     if (code) err.code = code;
     err.status = res.status;
     throw err;
   }
   if (res.status === 204) return null as unknown as T;
   const ct = res.headers.get('content-type') ?? '';
-  return (ct.includes('application/json') ? await res.json() : (await res.text() as any)) as T;
+  if (ct.includes('application/json')) return (await res.json()) as T;
+  return (await res.text()) as unknown as T;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -318,7 +505,7 @@ export const operacionesApi = {
     per_page?: number;
     page?: number;
   } = {}) =>
-    requestConToken<{ data: Planilla[]; meta: any }>(`${BASE}/operaciones${qs(params)}`),
+    requestConToken<{ data: Planilla[]; meta: PaginatedMeta }>(`${BASE}/operaciones${qs(params)}`),
 
   /**
    * Trae el detalle completo de una planilla incluyendo:
@@ -329,11 +516,11 @@ export const operacionesApi = {
    *  - creado_por_rel, aprobado_por_rel
    */
   ver: (id: number) =>
-    requestConToken<{ data: Planilla & Record<string, any> }>(`${BASE}/operaciones/${id}`),
+    requestConToken<{ data: PlanillaDetalle }>(`${BASE}/operaciones/${id}`),
 
   // Alias para compat con código que ya llamaba .detalle(...)
   detalle: (id: number) =>
-    requestConToken<{ data: Planilla & Record<string, any> }>(`${BASE}/operaciones/${id}`),
+    requestConToken<{ data: PlanillaDetalle }>(`${BASE}/operaciones/${id}`),
 
   crear: (payload: {
     fecha: string;
@@ -383,22 +570,7 @@ export const operacionesApi = {
    *   relaciones y el resumen calculado.
    */
   wizardInit: (id?: number) =>
-    requestConToken<{
-      data: {
-        planilla: (Planilla & Record<string, any>) | null;
-        resumen: Resumen | null;
-        parametricas: {
-          colaboradores: any[];
-          lotes: any[];
-          sublotes: any[];
-          insumos: any[];
-          labores_palma: any[];
-          labores_finca: any[];
-          motivos_ausencia: any[];
-          tipos_hora_extra: any[];
-        };
-      };
-    }>(
+    requestConToken<{ data: WizardInitBundle }>(
       id != null
         ? `${BASE}/operaciones/${id}/wizard-init`
         : `${BASE}/operaciones/wizard-init`
@@ -412,26 +584,40 @@ export const operacionesApi = {
 // 2. cosechasApi
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Fila de cuadrilla del payload de cosechas. XOR: `empleado_id` u `operario_id`
+ * (§3.1 cuadrilla mixta). El cliente envía solo uno; el backend infiere el
+ * `tercero_id` cuando aplica. La clave de dedup en backend es
+ * `CONCAT('E_', empleado_id)` o `CONCAT('O_', operario_id)`.
+ */
+export interface CuadrillaPayloadItem {
+  empleado_id?: number;
+  operario_id?: number;
+}
+
 export const cosechasApi = {
   crear: (operacionId: number, payload: {
     lote_id: number;
     sublote_id?: number | null;
     gajos_reportados: number;
     peso_confirmado?: number | null;
-    cuadrilla: Array<{ empleado_id: number }>;
+    cuadrilla: CuadrillaPayloadItem[];
   }) =>
-    smartRequest<{ data: any }>(`${BASE}/operaciones/${operacionId}/cosechas`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
+    smartRequest<{ data: Cosecha; message?: string }>(
+      `${BASE}/operaciones/${operacionId}/cosechas`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+    ),
 
   editar: (id: number, payload: Partial<{
     gajos_reportados: number;
     gajos_reconteo: number;
     peso_confirmado: number | null;
-    cuadrilla: Array<{ empleado_id: number }>;
+    cuadrilla: CuadrillaPayloadItem[];
   }>) =>
-    smartRequest<{ data: any }>(`${BASE}/cosechas/${id}`, {
+    smartRequest<{ data: Cosecha; message?: string }>(`${BASE}/cosechas/${id}`, {
       method: 'PUT',
       body: JSON.stringify(payload),
     }),
@@ -451,6 +637,12 @@ export const cosechasApi = {
  * la labor y los snapshotea en el jornal. NO enviar `categoria` ni `tipo` (son
  * silenciosamente descartados, pero conviene omitirlos).
  *
+ * **Selector de persona — XOR `empleado_id` vs `operario_id` (§3.2):**
+ *  - Colaborador propio → `empleado_id`.
+ *  - Operario de tercero → `operario_id`. El backend inyecta el `tercero_id`.
+ *
+ * Enviar ambos o ninguno → 422 con error en `empleado_id`.
+ *
  * Reglas resumidas (según labor seleccionada):
  *  - `tipo_pago='POR_PALMA'` → enviar `cantidad_palmas` (requerido).
  *  - `tipo_pago='JORNAL_FIJO'` → no enviar `cantidad_palmas`.
@@ -461,7 +653,10 @@ export const cosechasApi = {
  */
 export interface JornalPayload {
   labor_id: number;
-  empleado_id: number;
+  /** Una de las dos: `empleado_id` u `operario_id` (XOR). */
+  empleado_id?: number;
+  /** Nuevo (§3.2). XOR con `empleado_id`. */
+  operario_id?: number;
   lote_id?: number | null;
   sublote_id?: number | null;
   cantidad_palmas?: number;
@@ -480,13 +675,16 @@ export type JornalFinca = JornalPayload;
 
 export const jornalesApi = {
   crear: (operacionId: number, payload: JornalPayload) =>
-    smartRequest<{ data: any }>(`${BASE}/operaciones/${operacionId}/jornales`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
+    smartRequest<{ data: Jornal; message?: string }>(
+      `${BASE}/operaciones/${operacionId}/jornales`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+    ),
 
   editar: (id: number, payload: Partial<JornalPayload>) =>
-    smartRequest<{ data: any }>(`${BASE}/jornales/${id}`, {
+    smartRequest<{ data: Jornal; message?: string }>(`${BASE}/jornales/${id}`, {
       method: 'PUT',
       body: JSON.stringify(payload),
     }),
@@ -595,10 +793,13 @@ export const ausenciasApi = {
     numero_radicado?: string;
     porcentaje_pago?: number;
   }) =>
-    smartRequest<{ data: any }>(`${BASE}/operaciones/${operacionId}/ausencias`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
+    smartRequest<{ data: Ausencia; message?: string }>(
+      `${BASE}/operaciones/${operacionId}/ausencias`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+    ),
 
   editar: (id: number, payload: Partial<{
     motivo_ausencia_id: number;
@@ -608,7 +809,7 @@ export const ausenciasApi = {
     numero_radicado: string;
     porcentaje_pago: number;
   }>) =>
-    smartRequest<{ data: any }>(`${BASE}/ausencias/${id}`, {
+    smartRequest<{ data: Ausencia; message?: string }>(`${BASE}/ausencias/${id}`, {
       method: 'PUT',
       body: JSON.stringify(payload),
     }),
@@ -617,10 +818,13 @@ export const ausenciasApi = {
     smartRequest<{ message: string }>(`${BASE}/ausencias/${id}`, { method: 'DELETE' }),
 
   aprobar: (id: number) =>
-    smartRequest<{ data: any }>(`${BASE}/ausencias/${id}/aprobar`, { method: 'POST' }),
+    smartRequest<{ data: Ausencia; message?: string }>(
+      `${BASE}/ausencias/${id}/aprobar`,
+      { method: 'POST' },
+    ),
 
   rechazar: (id: number, motivo_rechazo: string) =>
-    smartRequest<{ data: any }>(`${BASE}/ausencias/${id}/rechazar`, {
+    smartRequest<{ data: Ausencia; message?: string }>(`${BASE}/ausencias/${id}/rechazar`, {
       method: 'POST',
       body: JSON.stringify({ motivo_rechazo }),
     }),
@@ -628,10 +832,13 @@ export const ausenciasApi = {
   subirDocumento: (id: number, documento: File) => {
     const fd = new FormData();
     fd.append('documento', documento);
-    return smartRequest<{ data: any }>(`${BASE}/ausencias/${id}/documento`, {
-      method: 'POST',
-      body: fd,
-    });
+    return smartRequest<{ data: Ausencia; message?: string }>(
+      `${BASE}/ausencias/${id}/documento`,
+      {
+        method: 'POST',
+        body: fd,
+      },
+    );
   },
 };
 

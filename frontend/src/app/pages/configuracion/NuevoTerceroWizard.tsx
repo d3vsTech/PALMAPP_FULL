@@ -1,12 +1,22 @@
 /**
- * Wizard "Nuevo Tercero" — portado tal cual del diseño V.15.
+ * Wizard "Nuevo Tercero" — conectado al backend (`API_TERCEROS.md`).
  *
- * Tres pasos: datos del tercero → precios por labor → operarios.
- * Aún NO hay endpoint backend para terceros: `handleGuardar` solo navega
- * de vuelta. Cuando exista la API se conecta sin tocar el JSX.
+ * Flujo de tres pasos:
+ *  1. Datos del tercero (Jurídica o Natural)
+ *  2. Precios por labor / cosecha / abono (overrides del tercero)
+ *  3. Operarios vinculados
+ *
+ * Al montar, carga `tercerosApi.wizardInit()` para obtener los IDs reales de
+ * lotes y labores (sin esto los precios no podrían persistirse). Al guardar:
+ *  - POST /terceros                         con datos del paso 1
+ *  - POST /terceros/{id}/precios-cosecha    por cada lote con precio > 0
+ *  - POST /terceros/{id}/precios-abono      por cada rango con precio > 0
+ *  - POST /terceros/{id}/labor-precios      por cada labor simple > 0
+ *  - POST /terceros/{id}/operarios          por cada operario válido
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
+import { toast } from 'sonner';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -23,29 +33,48 @@ import {
   HardHat, ShieldCheck, DollarSign, Users, UserPlus, Save,
 } from 'lucide-react';
 import type { EmpresaTercero, ColaboradorTercero } from '../../components/configuracion/TercerosTab';
+import {
+  tercerosApi,
+  operariosApi,
+  tercerosPreciosApi,
+  TercerosErrorCodes,
+  TercerosCacheKeys,
+  type CrearTerceroPayload,
+  type TerceroWizardInit,
+} from '../../../api/terceros';
+import { cached } from '../../../api/cache';
+import type { ApiError } from '../../../api/client';
 
-// ─── Catálogos locales (mientras no exista API) ───────────────────────────────
+// ─── Helper de error tipado ──────────────────────────────────────────────────
 
-const EPS_OPTIONS = ['Sura', 'Sanitas', 'Compensar', 'Famisanar', 'Salud Total', 'Nueva EPS'];
-const ARL_OPTIONS = ['Sura', 'Positiva', 'Colmena', 'Bolívar', 'Equidad'];
+/** Estrecha `unknown` a `ApiError` sin usar `any`. */
+function asApiError(e: unknown): Partial<ApiError> {
+  return (typeof e === 'object' && e !== null) ? (e as Partial<ApiError>) : {};
+}
 
 // ─── Tipos del paso 2 ────────────────────────────────────────────────────────
 
-type PrecioCosecha = { lote: string; sublote: string; precioPorKg: number };
-type RangoAbonada  = { gramosMinimo: number; gramosMaximo: number; precioPorPalma: number };
-type PreciosLabores = {
+/** Fila de cosecha por lote (id real del backend). */
+export type PrecioCosecha = { loteId: number; loteNombre: string; precioPorKg: number };
+export type RangoAbonada  = { gramosMinimo: number; gramosMaximo: number; precioPorPalma: number };
+
+/**
+ * Precios configurables en el wizard.
+ *
+ * - `cosecha`: una fila por lote del tenant (precargada desde `wizard-init`).
+ * - `abonada`: rangos de gramos → precio/palma (override del tercero).
+ * - `plateo`/`poda`/`sanidad`: precios simples por labor fija. Los IDs reales
+ *   de cada labor viven en `bundle.labores_contexto` y se buscan por `tipo`
+ *   al persistir; aquí solo guardamos el valor en pesos.
+ */
+export type PreciosLabores = {
   cosecha: PrecioCosecha[];
   abonada: RangoAbonada[];
   plateo: number; poda: number; sanidad: number;
 };
 
-const preciosVacios = (): PreciosLabores => ({
-  cosecha: [
-    { lote: 'Lote 1 – Norte', sublote: 'Sublote A', precioPorKg: 0 },
-    { lote: 'Lote 2 – Sur',   sublote: 'Sublote B', precioPorKg: 0 },
-    { lote: 'Lote 3 – Este',  sublote: 'Sublote C', precioPorKg: 0 },
-    { lote: 'Lote 4 – Oeste', sublote: 'Sublote D', precioPorKg: 0 },
-  ],
+export const preciosVacios = (): PreciosLabores => ({
+  cosecha: [],
   abonada: [
     { gramosMinimo: 0,    gramosMaximo: 500,  precioPorPalma: 0 },
     { gramosMinimo: 501,  gramosMaximo: 1000, precioPorPalma: 0 },
@@ -56,7 +85,7 @@ const preciosVacios = (): PreciosLabores => ({
 
 // ─── Paso 1: Datos del Tercero ────────────────────────────────────────────────
 
-function Paso1({ data, onChange }: { data: Partial<EmpresaTercero>; onChange: (d: Partial<EmpresaTercero>) => void }) {
+export function Paso1({ data, onChange }: { data: Partial<EmpresaTercero>; onChange: (d: Partial<EmpresaTercero>) => void }) {
   const set = (k: keyof EmpresaTercero, v: string) => onChange({ ...data, [k]: v });
   const esNatural = data.tipoPersona === 'Natural';
 
@@ -100,6 +129,16 @@ function Paso1({ data, onChange }: { data: Partial<EmpresaTercero>; onChange: (d
             <Input value={data.razonSocial ?? ''} onChange={e => set('razonSocial', e.target.value)}
               placeholder={esNatural ? 'Juan Carlos Pérez' : 'Servicios Agro S.A.S'} />
           </div>
+          {esNatural && (
+            <div className="space-y-2">
+              <Label>Nombre Comercial</Label>
+              <Input
+                value={data.nombreComercial ?? ''}
+                onChange={e => set('nombreComercial', e.target.value)}
+                placeholder="Opcional"
+              />
+            </div>
+          )}
           {!esNatural && (
             <div className="space-y-2">
               <Label>Representante Legal</Label>
@@ -110,6 +149,15 @@ function Paso1({ data, onChange }: { data: Partial<EmpresaTercero>; onChange: (d
             <Label>Teléfono</Label>
             <Input value={data.telefono ?? ''} onChange={e => set('telefono', e.target.value)} placeholder="3001234567" />
           </div>
+          <div className="space-y-2">
+            <Label>Correo electrónico</Label>
+            <Input
+              type="email"
+              value={data.email ?? ''}
+              onChange={e => set('email', e.target.value)}
+              placeholder={esNatural ? 'juan.perez@correo.com' : 'contacto@empresa.com'}
+            />
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -118,7 +166,7 @@ function Paso1({ data, onChange }: { data: Partial<EmpresaTercero>; onChange: (d
 
 // ─── Paso 2: Precios por Labor ────────────────────────────────────────────────
 
-function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange: (p: PreciosLabores) => void }) {
+export function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange: (p: PreciosLabores) => void }) {
   const setCosecha = (idx: number, val: number) =>
     onChange({ ...precios, cosecha: precios.cosecha.map((r, i) => i === idx ? { ...r, precioPorKg: val } : r) });
   const setAbonada = (idx: number, field: keyof RangoAbonada, val: number) =>
@@ -161,15 +209,20 @@ function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange: (p: P
                     <thead className="bg-muted/50">
                       <tr>
                         <th className="text-left p-3 font-semibold text-xs">Lote</th>
-                        <th className="text-left p-3 font-semibold text-xs">Sublote</th>
                         <th className="text-right p-3 font-semibold text-xs">Precio / Kg</th>
                       </tr>
                     </thead>
                     <tbody>
+                      {precios.cosecha.length === 0 && (
+                        <tr>
+                          <td colSpan={2} className="p-4 text-center text-xs text-muted-foreground italic">
+                            No hay lotes registrados. Crea lotes en "Mi Plantación" para configurar precios de cosecha.
+                          </td>
+                        </tr>
+                      )}
                       {precios.cosecha.map((item, i) => (
-                        <tr key={i} className="border-t border-border">
-                          <td className="p-3">{item.lote}</td>
-                          <td className="p-3 text-muted-foreground">{item.sublote}</td>
+                        <tr key={item.loteId} className="border-t border-border">
+                          <td className="p-3">{item.loteNombre}</td>
                           <td className="p-3">
                             <div className="flex items-center justify-end gap-1.5">
                               <span className="text-muted-foreground text-xs">$</span>
@@ -264,7 +317,19 @@ function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange: (p: P
 
 // ─── Paso 3: Operarios ────────────────────────────────────────────────────────
 
-function Paso3({ operarios, onChange }: { operarios: Partial<ColaboradorTercero>[]; onChange: (ops: Partial<ColaboradorTercero>[]) => void }) {
+export function Paso3({
+  operarios, onChange, epsOptions, arlOptions,
+}: {
+  operarios: Partial<ColaboradorTercero>[];
+  onChange: (ops: Partial<ColaboradorTercero>[]) => void;
+  /** `null` = aún cargando o no disponible. Los `<Select>` lo reflejan. */
+  epsOptions: string[] | null;
+  arlOptions: string[] | null;
+}) {
+  const epsLista = epsOptions ?? [];
+  const arlLista = arlOptions ?? [];
+  const epsCargando = epsOptions === null;
+  const arlCargando = arlOptions === null;
   const [nuevo, setNuevo] = useState<Partial<ColaboradorTercero>>({ estado: 'Activo' });
   const [agregando, setAgregando] = useState(false);
 
@@ -348,16 +413,28 @@ function Paso3({ operarios, onChange }: { operarios: Partial<ColaboradorTercero>
               </div>
               <div className="space-y-2">
                 <Label className="flex items-center gap-1"><ShieldCheck className="h-3.5 w-3.5 text-primary" /> EPS</Label>
-                <Select value={nuevo.eps ?? ''} onValueChange={v => setNuevo(p => ({ ...p, eps: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Seleccionar EPS" /></SelectTrigger>
-                  <SelectContent>{EPS_OPTIONS.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
+                <Select
+                  value={nuevo.eps ?? ''}
+                  onValueChange={(v: string) => setNuevo((p: Partial<ColaboradorTercero>) => ({ ...p, eps: v }))}
+                  disabled={epsCargando || epsLista.length === 0}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={epsCargando ? 'Cargando…' : (epsLista.length ? 'Seleccionar EPS' : 'Sin catálogo')} />
+                  </SelectTrigger>
+                  <SelectContent>{epsLista.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
                 <Label className="flex items-center gap-1"><HardHat className="h-3.5 w-3.5 text-amber-600" /> ARL</Label>
-                <Select value={nuevo.arl ?? ''} onValueChange={v => setNuevo(p => ({ ...p, arl: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Seleccionar ARL" /></SelectTrigger>
-                  <SelectContent>{ARL_OPTIONS.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
+                <Select
+                  value={nuevo.arl ?? ''}
+                  onValueChange={(v: string) => setNuevo((p: Partial<ColaboradorTercero>) => ({ ...p, arl: v }))}
+                  disabled={arlCargando || arlLista.length === 0}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={arlCargando ? 'Cargando…' : (arlLista.length ? 'Seleccionar ARL' : 'Sin catálogo')} />
+                  </SelectTrigger>
+                  <SelectContent>{arlLista.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             </div>
@@ -388,6 +465,59 @@ export default function NuevoTerceroWizard() {
   const [datos, setDatos] = useState<Partial<EmpresaTercero>>({ tipoPersona: 'Jurídica', estado: 'Activa' });
   const [precios, setPrecios] = useState<PreciosLabores>(preciosVacios());
   const [operarios, setOperarios] = useState<Partial<ColaboradorTercero>[]>([]);
+  const [guardando, setGuardando] = useState(false);
+  /**
+   * Bundle `/terceros/wizard-init` — provee los IDs reales de labores, lotes y
+   * los catálogos EPS/ARL.
+   *  - `null`        → aún cargando.
+   *  - `'error'`     → la llamada falló (sin red, sin permisos). El paso 2 y 3
+   *                    quedan informativos pero no bloquean al paso 1, que es
+   *                    independiente del bundle.
+   *  - `TerceroWizardInit` → datos listos.
+   */
+  const [bundle, setBundle] = useState<TerceroWizardInit | null | 'error'>(null);
+
+  useEffect(() => {
+    let cancelado = false;
+    cached(TercerosCacheKeys.WIZARD_INIT, () => tercerosApi.wizardInit())
+      .then((res) => {
+        if (cancelado) return;
+        setBundle(res.data);
+        // Prellena la tabla de cosecha con los lotes reales del tenant.
+        if (res.data.lotes_contexto.length > 0) {
+          setPrecios((prev) => ({
+            ...prev,
+            cosecha: res.data.lotes_contexto.map((l) => ({
+              loteId: l.id,
+              loteNombre: l.nombre,
+              precioPorKg: 0,
+            })),
+          }));
+        }
+        // Si vienen rangos de abono de referencia, los precarga vacíos.
+        if (res.data.precios_abono_referencia.length > 0) {
+          setPrecios((prev) => ({
+            ...prev,
+            abonada: res.data.precios_abono_referencia.map((r) => ({
+              gramosMinimo: Number(r.gramos_min),
+              gramosMaximo: Number(r.gramos_max),
+              precioPorPalma: 0,
+            })),
+          }));
+        }
+      })
+      .catch((e) => {
+        if (cancelado) return;
+        console.error('[NuevoTerceroWizard] wizard-init falló:', e);
+        setBundle('error');
+      });
+    return () => { cancelado = true; };
+  }, []);
+
+  /** Catálogos del bundle. `null` = cargando o no disponible. Sin hardcoded. */
+  const bundleListo = bundle !== null && bundle !== 'error';
+  const epsOptions: string[] | null = bundleListo ? bundle.eps.map((e) => e.nombre) : null;
+  const arlOptions: string[] | null = bundleListo ? bundle.arl.map((a) => a.nombre) : null;
 
   const pasoValido = paso === 1 ? !!datos.nit && !!datos.razonSocial : true;
 
@@ -397,9 +527,184 @@ export default function NuevoTerceroWizard() {
     precios.plateo > 0, precios.poda > 0, precios.sanidad > 0,
   ].filter(Boolean).length;
 
-  const handleGuardar = () => {
-    // TODO: conectar a `tercerosApi.crear` cuando exista el endpoint.
-    navigate('/configuracion');
+  /**
+   * Construye el payload de creación del tercero según el `tipoPersona`. El
+   * form interno usa los mismos inputs (`nit`, `razonSocial`) para ambos
+   * tipos para no complicar la UI; aquí los mapeamos al shape del backend.
+   *
+   * - Jurídica → `nit` + `razon_social` (+ `representante` desde `contacto`).
+   * - Natural  → `cedula` (toma valor del input nit) + `nombre_completo`
+   *              (toma valor del input razonSocial).
+   */
+  const construirPayload = (): CrearTerceroPayload | null => {
+    const nitOcedula = (datos.nit ?? '').trim();
+    const nombre = (datos.razonSocial ?? '').trim();
+    if (!nitOcedula || !nombre) return null;
+
+    const common = {
+      nombre_comercial: datos.nombreComercial?.trim() || undefined,
+      telefono: datos.telefono?.trim() || undefined,
+      email: datos.email?.trim() || undefined,
+    };
+
+    if (datos.tipoPersona === 'Natural') {
+      return {
+        tipo_persona: 'NATURAL',
+        cedula: nitOcedula,
+        nombre_completo: nombre,
+        ...common,
+      };
+    }
+    return {
+      tipo_persona: 'JURIDICA',
+      nit: nitOcedula,
+      razon_social: nombre,
+      representante: datos.contacto?.trim() || undefined,
+      ...common,
+    };
+  };
+
+  /**
+   * Resuelve `labor_id` real para las labores simples (Plateo, Poda, Sanidad)
+   * buscándolas en `bundle.labores_contexto` por el campo `tipo`. Devuelve
+   * `null` si la labor no está en el catálogo del tenant (caso en el que
+   * simplemente se omite la persistencia de ese override).
+   */
+  const findLaborId = (tipo: 'PLATEO' | 'PODA' | 'SANIDAD'): number | null => {
+    if (!bundleListo) return null;
+    const item = bundle.labores_contexto.find((l) => l.tipo === tipo);
+    return item?.id ?? null;
+  };
+
+  /**
+   * Flujo de guardado completo (paso 1 + 2 + 3 en una sola operación):
+   *  1. POST /terceros                              (paso 1)
+   *  2. POST /terceros/{id}/precios-cosecha × lotes (paso 2 — cosecha)
+   *  3. POST /terceros/{id}/precios-abono   × rangos (paso 2 — abono)
+   *  4. POST /terceros/{id}/labor-precios   × labores (paso 2 — plateo/poda/sanidad)
+   *  5. POST /terceros/{id}/operarios       × N (paso 3)
+   *
+   * Si falla la creación del tercero, abortamos. Si fallan precios u operarios
+   * individuales, mostramos warning con el conteo pero el tercero ya quedó
+   * creado; el admin podrá completar lo que falte desde la pantalla de edición.
+   */
+  const handleGuardar = async () => {
+    const payload = construirPayload();
+    if (!payload) {
+      toast.error('Faltan datos obligatorios del tercero');
+      setPaso(1);
+      return;
+    }
+    setGuardando(true);
+    try {
+      // 1. Crear tercero
+      const resTercero = await tercerosApi.crear(payload);
+      const nuevoId = resTercero.data.id;
+
+      // 2. Precios de cosecha por lote (omite si precio = 0)
+      const tareasCosecha = precios.cosecha
+        .filter((c) => c.precioPorKg > 0)
+        .map((c) =>
+          tercerosPreciosApi.upsertPrecioCosecha(nuevoId, {
+            lote_id: c.loteId,
+            precio: c.precioPorKg,
+          }),
+        );
+
+      // 3. Rangos de abono override (omite si precio = 0)
+      const tareasAbono = precios.abonada
+        .filter((r) => r.precioPorPalma > 0)
+        .map((r) =>
+          tercerosPreciosApi.crearPrecioAbono(nuevoId, {
+            gramos_min: r.gramosMinimo,
+            gramos_max: r.gramosMaximo,
+            precio_palma: r.precioPorPalma,
+          }),
+        );
+
+      // 4. Labores simples — resolvemos labor_id desde el bundle. Si el
+      // bundle falló, no hay forma de saber el labor_id real, así que se
+      // omiten (el admin podrá configurarlas desde la pantalla de edición).
+      const tareasLabores: ReturnType<typeof tercerosPreciosApi.upsertLaborPrecio>[] = [];
+      const pushLabor = (precio: number, tipo: 'PLATEO' | 'PODA' | 'SANIDAD') => {
+        const laborId = findLaborId(tipo);
+        if (precio > 0 && laborId !== null) {
+          tareasLabores.push(
+            tercerosPreciosApi.upsertLaborPrecio(nuevoId, {
+              labor_id: laborId,
+              precio_palma: precio,
+            }),
+          );
+        }
+      };
+      pushLabor(precios.plateo, 'PLATEO');
+      pushLabor(precios.poda, 'PODA');
+      pushLabor(precios.sanidad, 'SANIDAD');
+
+      // 5. Operarios válidos (nombres + apellidos obligatorios)
+      const operariosValidos = operarios.filter(
+        (o) => o.nombres?.trim() && o.apellidos?.trim(),
+      );
+      const tareasOperarios = operariosValidos.map((op) =>
+        operariosApi.crear(nuevoId, {
+          nombres: op.nombres!.trim(),
+          apellidos: op.apellidos!.trim(),
+          cedula: op.documento?.trim() || undefined,
+          cargo: op.cargo?.trim() || undefined,
+          eps: op.eps?.trim() || undefined,
+          arl: op.arl?.trim() || undefined,
+        }),
+      );
+
+      const resultados = await Promise.allSettled([
+        ...tareasCosecha,
+        ...tareasAbono,
+        ...tareasLabores,
+        ...tareasOperarios,
+      ]);
+      const fallidos = resultados.filter((r) => r.status === 'rejected').length;
+      const total = resultados.length;
+
+      if (fallidos > 0) {
+        // Inspecciona códigos para dar feedback específico cuando aplica:
+        // RANGO_SOLAPADO (abono cruzado con uno existente del mismo tercero) y
+        // CALC_ERROR (precio no resoluble). Cualquier otro código se cuenta
+        // bajo el aviso genérico.
+        const fallidosDetalle = resultados
+          .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+          .map((r) => asApiError(r.reason));
+        console.error('[NuevoTerceroWizard] Ítems fallidos:', fallidosDetalle);
+
+        const tieneSolapado = fallidosDetalle.some(
+          (e) => e.code === TercerosErrorCodes.RANGO_SOLAPADO,
+        );
+        const tieneCalc = fallidosDetalle.some(
+          (e) => e.code === TercerosErrorCodes.CALC_ERROR,
+        );
+
+        if (tieneSolapado) {
+          toast.warning(
+            'Tercero creado. Algunos rangos de abono se solapan con rangos existentes y no se guardaron.',
+          );
+        } else if (tieneCalc) {
+          toast.warning(
+            'Tercero creado. Algunos precios no se pudieron calcular y quedaron sin guardar.',
+          );
+        } else {
+          toast.warning(
+            `Tercero creado. ${total - fallidos}/${total} ítems guardados, ${fallidos} fallidos.`,
+          );
+        }
+      } else {
+        toast.success('Tercero creado correctamente');
+      }
+      navigate('/configuracion');
+    } catch (e) {
+      console.error('[NuevoTerceroWizard] Error al crear tercero:', e);
+      toast.error(asApiError(e).message ?? 'No se pudo crear el tercero');
+    } finally {
+      setGuardando(false);
+    }
   };
 
   return (
@@ -452,23 +757,35 @@ export default function NuevoTerceroWizard() {
           {/* Contenido del paso */}
           {paso === 1 && <Paso1 data={datos} onChange={setDatos} />}
           {paso === 2 && <Paso2 precios={precios} onChange={setPrecios} />}
-          {paso === 3 && <Paso3 operarios={operarios} onChange={setOperarios} />}
+          {paso === 3 && (
+            <Paso3
+              operarios={operarios}
+              onChange={setOperarios}
+              epsOptions={epsOptions}
+              arlOptions={arlOptions}
+            />
+          )}
 
           {/* Navegación */}
           <div className="flex items-center justify-between pt-2">
             <Button variant="outline" className="gap-2"
-              onClick={() => paso === 1 ? navigate('/configuracion') : setPaso(p => p - 1)}>
+              onClick={() => paso === 1 ? navigate('/configuracion') : setPaso(p => p - 1)}
+              disabled={guardando}>
               <ArrowLeft className="h-4 w-4" />
               {paso === 1 ? 'Cancelar' : 'Anterior'}
             </Button>
             {paso < 3 ? (
-              <Button className="gap-2 bg-primary hover:bg-primary/90" disabled={!pasoValido}
+              <Button className="gap-2 bg-primary hover:bg-primary/90"
+                disabled={!pasoValido || guardando}
                 onClick={() => setPaso(p => p + 1)}>
                 Siguiente <ArrowRight className="h-4 w-4" />
               </Button>
             ) : (
-              <Button className="gap-2 bg-primary hover:bg-primary/90" onClick={handleGuardar}>
-                <Save className="h-4 w-4" /> Guardar Tercero
+              <Button className="gap-2 bg-primary hover:bg-primary/90"
+                onClick={handleGuardar}
+                disabled={guardando}>
+                <Save className="h-4 w-4" />
+                {guardando ? 'Guardando…' : 'Guardar Tercero'}
               </Button>
             )}
           </div>
@@ -501,6 +818,7 @@ export default function NuevoTerceroWizard() {
                   <p className="text-sm text-muted-foreground italic">Sin completar</p>
                 )}
                 {datos.telefono && <p className="text-xs text-muted-foreground">Tel: {datos.telefono}</p>}
+                {datos.email && <p className="text-xs text-muted-foreground">{datos.email}</p>}
               </div>
 
               {/* Precios configurados */}
