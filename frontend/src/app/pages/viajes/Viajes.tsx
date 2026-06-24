@@ -15,7 +15,7 @@ import {
 } from '../../components/ui/alert-dialog';
 import {
   Plus, Truck, Package, MapPin, Scale, Eye, TrendingUp, CheckCircle, Clock,
-  FileText, Search, Calculator, Edit, Trash2, AlertTriangle,
+  FileText, Search, Calculator, Edit, Trash2, AlertTriangle, Info,
 } from 'lucide-react';
 import {
   viajesApi, strField,
@@ -86,7 +86,7 @@ function getEstadoBadge(estado: EstadoViaje) {
       );
     case 'En Validación':
       return (
-        <Badge variant="outline" className="bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30">
+        <Badge variant="outline" className="bg-primary/10 text-primary dark:text-primary border-blue-500/30">
           <Clock className="h-3 w-3 mr-1" />
           En Validación
         </Badge>
@@ -269,43 +269,41 @@ export default function Viajes() {
 
       {/* ─── Diálogo Pasar a En Validación ──────────────────────────────── */}
       <AlertDialog open={!!viajeAValidar} onOpenChange={open => !open && setViajeAValidar(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
+        <AlertDialogContent className="max-w-xl">
+          {/* `text-left` override del `text-center` que trae por default
+              AlertDialogHeader (shadcn). Aquí necesitamos alinear a la izquierda
+              porque el callout tiene contenido en formato bloque + icono. */}
+          <AlertDialogHeader className="text-left">
             <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-yellow-600" />
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
               Pasar a En Validación
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3">
-                <p>
+                <p className="text-sm text-muted-foreground text-left">
                   ¿Confirmas que deseas cambiar el estado del viaje{' '}
                   <strong>{viajeAValidar?.remision}</strong> a{' '}
-                  <strong>"En Validación"</strong>?
+                  <span className="font-semibold text-foreground">En Validación</span>?
                 </p>
                 {/* Advertencia: cuando se salta el reconteo, el sistema toma los
                     gajos/peso reportados por el colaborador como definitivos. Eso
                     impacta el cálculo de nómina, así que el usuario debe verlo
                     claramente antes de confirmar. */}
-                <div className="rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-900">
-                  <div className="flex items-start gap-2">
-                    <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-yellow-600" />
-                    <div>
-                      <p className="font-semibold mb-1">
-                        Importante: datos que tomará el sistema
-                      </p>
-                      <p className="leading-relaxed">
-                        Si no ingresas la información de la extractora durante la
-                        validación, el sistema tomará como definitivos los{' '}
-                        <strong>gajos y kilogramos reportados por el colaborador</strong>.
-                        Estos valores serán los usados para calcular la nómina.
-                      </p>
-                    </div>
+                <div className="rounded-lg border border-amber-400/40 bg-amber-50/60 dark:bg-amber-950/20 p-4 flex gap-3 text-left">
+                  <Info className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-amber-800 dark:text-amber-400">
+                      Importante: datos que tomará el sistema
+                    </p>
+                    <p className="text-xs text-amber-700 dark:text-amber-500 leading-relaxed">
+                      Si no ingresas la información de la extractora durante la validación, el sistema tomará como definitivos los <span className="font-semibold">gajos y kilogramos reportados por el colaborador</span>. Estos valores serán los usados para calcular la nómina.
+                    </p>
                   </div>
                 </div>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="sm:justify-end">
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={confirmarValidar} className="bg-primary hover:bg-primary/90">
               Confirmar
@@ -315,10 +313,10 @@ export default function Viajes() {
       </AlertDialog>
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
+      <div className="flex items-start justify-between mb-8">
         <div>
-          <h1 className="text-4xl font-bold text-foreground">Viajes</h1>
-          <p className="text-muted-foreground mt-2">
+          <h1 className="text-3xl font-bold text-primary">Viajes</h1>
+          <p className="text-muted-foreground mt-1">
             Gestión de despachos de fruto hacia la extractora
           </p>
         </div>
@@ -565,7 +563,7 @@ export default function Viajes() {
                                     <>
                                       <Button size="sm" variant="outline"
                                         onClick={(e) => abrirDialogoValidar(viaje, e)}
-                                        className="hover:bg-blue-500/10 hover:text-blue-700 hover:border-blue-500/30"
+                                        className="hover:bg-primary/10 hover:text-primary hover:border-blue-500/30"
                                         title="Pasar a En Validación">
                                         <Clock className="h-4 w-4" />
                                       </Button>

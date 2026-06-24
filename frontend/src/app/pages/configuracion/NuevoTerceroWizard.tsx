@@ -42,8 +42,9 @@ import {
   type CrearTerceroPayload,
   type TerceroWizardInit,
 } from '../../../api/terceros';
-import { cached } from '../../../api/cache';
+import { cached, invalidate } from '../../../api/cache';
 import type { ApiError } from '../../../api/client';
+import { selectsApi } from '../../../api/operaciones';
 
 // ─── Helper de error tipado ──────────────────────────────────────────────────
 
@@ -57,6 +58,12 @@ function asApiError(e: unknown): Partial<ApiError> {
 /** Fila de cosecha por lote (id real del backend). */
 export type PrecioCosecha = { loteId: number; loteNombre: string; precioPorKg: number };
 export type RangoAbonada  = { gramosMinimo: number; gramosMaximo: number; precioPorPalma: number };
+/**
+ * Override de precio por labor de FINCA configurable por tercero. El
+ * `tipo_pago` de las labores de finca está forzado a `JORNAL_FIJO` (ver
+ * `API_OPERACIONES.md §3.3`), así que el precio es un valor plano.
+ */
+export type PrecioLaborFinca = { laborId: number; laborNombre: string; precio: number };
 
 /**
  * Precios configurables en el wizard.
@@ -67,10 +74,23 @@ export type RangoAbonada  = { gramosMinimo: number; gramosMaximo: number; precio
  *   de cada labor viven en `bundle.labores_contexto` y se buscan por `tipo`
  *   al persistir; aquí solo guardamos el valor en pesos.
  */
+/**
+ * Modo de pago override por tercero+labor. `HEREDAR` significa que NO se
+ * envía `tipo_pago` en el payload — el backend deja que el modo efectivo
+ * sea el del catálogo del tenant (ver §3 de `API_TERCEROS.md`).
+ */
+export type TipoPagoOverride = 'HEREDAR' | 'POR_PALMA' | 'JORNAL_FIJO';
+
 export type PreciosLabores = {
   cosecha: PrecioCosecha[];
   abonada: RangoAbonada[];
   plateo: number; poda: number; sanidad: number;
+  /** Override de modo de pago por labor fija. Por default todas heredan. */
+  plateoTipoPago: TipoPagoOverride;
+  podaTipoPago: TipoPagoOverride;
+  sanidadTipoPago: TipoPagoOverride;
+  /** Una entrada por cada labor de FINCA activa del tenant. Precio en COP. */
+  finca: PrecioLaborFinca[];
 };
 
 export const preciosVacios = (): PreciosLabores => ({
@@ -81,6 +101,10 @@ export const preciosVacios = (): PreciosLabores => ({
     { gramosMinimo: 1001, gramosMaximo: 1500, precioPorPalma: 0 },
   ],
   plateo: 0, poda: 0, sanidad: 0,
+  plateoTipoPago: 'HEREDAR',
+  podaTipoPago: 'HEREDAR',
+  sanidadTipoPago: 'HEREDAR',
+  finca: [],
 });
 
 // ─── Paso 1: Datos del Tercero ────────────────────────────────────────────────
@@ -177,6 +201,8 @@ export function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange
     onChange({ ...precios, abonada: [...precios.abonada, { gramosMinimo: min, gramosMaximo: min + 500, precioPorPalma: 0 }] });
   };
   const setPrecioSimple = (key: 'plateo' | 'poda' | 'sanidad', val: number) => onChange({ ...precios, [key]: val });
+  const setTipoPagoSimple = (key: 'plateoTipoPago' | 'podaTipoPago' | 'sanidadTipoPago', val: TipoPagoOverride) =>
+    onChange({ ...precios, [key]: val });
 
   return (
     <Card className="border-border">
@@ -280,10 +306,10 @@ export function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange
           </AccordionItem>
 
           {([
-            { key: 'plateo' as const, label: 'Plateo', unidad: 'palma', bg: 'from-amber-50/50 to-amber-50/10 dark:from-amber-950/20' },
-            { key: 'poda' as const,   label: 'Poda',   unidad: 'palma', bg: 'from-purple-50/50 to-purple-50/10 dark:from-purple-950/20' },
-            { key: 'sanidad' as const, label: 'Sanidad', unidad: 'jornal', bg: 'from-red-50/50 to-red-50/10 dark:from-red-950/20' },
-          ]).map(({ key, label, unidad, bg }) => (
+            { key: 'plateo' as const,  tipoKey: 'plateoTipoPago' as const,  label: 'Plateo',  unidad: 'palma',  bg: 'from-amber-50/50 to-amber-50/10 dark:from-amber-950/20' },
+            { key: 'poda' as const,    tipoKey: 'podaTipoPago' as const,    label: 'Poda',    unidad: 'palma',  bg: 'from-purple-50/50 to-purple-50/10 dark:from-purple-950/20' },
+            { key: 'sanidad' as const, tipoKey: 'sanidadTipoPago' as const, label: 'Sanidad', unidad: 'jornal', bg: 'from-red-50/50 to-red-50/10 dark:from-red-950/20' },
+          ]).map(({ key, tipoKey, label, unidad, bg }) => (
             <AccordionItem key={key} value={key} className="border-0">
               <Card className="border-border">
                 <CardHeader className={`border-b bg-gradient-to-r ${bg} py-3 px-4`}>
@@ -295,20 +321,82 @@ export function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange
                   </AccordionTrigger>
                 </CardHeader>
                 <AccordionContent>
-                  <CardContent className="p-4">
+                  <CardContent className="p-4 space-y-3">
                     <div className="flex items-center gap-2 max-w-xs">
                       <span className="text-muted-foreground">$</span>
                       <Input type="number" value={precios[key] || ''} onChange={e => setPrecioSimple(key, parseFloat(e.target.value) || 0)} placeholder="0" />
                       <span className="text-muted-foreground text-sm">/{unidad}</span>
                     </div>
                     {(precios[key] as number) > 0 && (
-                      <p className="text-xs text-success mt-1.5">${(precios[key] as number).toLocaleString('es-CO')} / {unidad}</p>
+                      <p className="text-xs text-success">${(precios[key] as number).toLocaleString('es-CO')} / {unidad}</p>
                     )}
+                    {/* Override opcional del modo de pago (§3 del doc). Por
+                        default hereda del catálogo del tenant. Permite que un
+                        tercero pague esta labor en un modo distinto al global. */}
+                    <div className="flex items-center gap-2 max-w-sm pt-2 border-t border-border/30">
+                      <Label className="text-xs whitespace-nowrap text-muted-foreground">Modo de pago:</Label>
+                      <Select value={precios[tipoKey]} onValueChange={(v: TipoPagoOverride) => setTipoPagoSimple(tipoKey, v)}>
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="HEREDAR">Heredar del catálogo</SelectItem>
+                          <SelectItem value="POR_PALMA">Por palma</SelectItem>
+                          <SelectItem value="JORNAL_FIJO">Jornal fijo</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </CardContent>
                 </AccordionContent>
               </Card>
             </AccordionItem>
           ))}
+
+          {/* Labores de Finca — override por tercero. Solo aparecen las
+              labores con `categoria=FINCA` activas en el tenant. Si el tenant
+              no tiene ninguna, este bloque no se renderiza. */}
+          {precios.finca.length > 0 && (
+            <AccordionItem value="finca" className="border-0">
+              <Card className="border-border">
+                <CardHeader className="border-b bg-gradient-to-r from-cyan-50/50 to-cyan-50/10 dark:from-cyan-950/20 py-3 px-4">
+                  <AccordionTrigger className="hover:no-underline py-0">
+                    <div className="text-left">
+                      <p className="font-semibold text-sm">Labores de Finca</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Precio plano por jornal para cada labor de finca ({precios.finca.length})
+                      </p>
+                    </div>
+                  </AccordionTrigger>
+                </CardHeader>
+                <AccordionContent>
+                  <CardContent className="p-4 space-y-3">
+                    {precios.finca.map((f, idx) => (
+                      <div key={f.laborId} className="flex items-center justify-between gap-3 pb-2 border-b border-border/40 last:border-0">
+                        <p className="text-sm font-medium flex-1 min-w-0 truncate" title={f.laborNombre}>
+                          {f.laborNombre}
+                        </p>
+                        <div className="flex items-center gap-2 w-48">
+                          <span className="text-muted-foreground">$</span>
+                          <Input
+                            type="number"
+                            value={f.precio || ''}
+                            onChange={(e) => {
+                              const next = [...precios.finca];
+                              next[idx] = { ...f, precio: parseFloat(e.target.value) || 0 };
+                              onChange({ ...precios, finca: next });
+                            }}
+                            placeholder="0"
+                            className="text-right"
+                          />
+                          <span className="text-muted-foreground text-sm whitespace-nowrap">/jornal</span>
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </AccordionContent>
+              </Card>
+            </AccordionItem>
+          )}
         </Accordion>
       </CardContent>
     </Card>
@@ -483,6 +571,7 @@ export default function NuevoTerceroWizard() {
       .then((res) => {
         if (cancelado) return;
         setBundle(res.data);
+
         // Prellena la tabla de cosecha con los lotes reales del tenant.
         if (res.data.lotes_contexto.length > 0) {
           setPrecios((prev) => ({
@@ -505,12 +594,51 @@ export default function NuevoTerceroWizard() {
             })),
           }));
         }
+
+        // Labores de FINCA — ideal: vienen en `labores_contexto` con
+        // `categoria: 'FINCA'` (ver §6.1 de API_TERCEROS.md actualizado).
+        // Fallback: si el backend aún no incluye FINCA en el bundle, hacemos
+        // una llamada extra a `/labores/select?categoria=FINCA`. Así la
+        // sección siempre se muestra al admin.
+        const fincaItems = res.data.labores_contexto.filter(
+          (l) => l.categoria === 'FINCA',
+        );
+        if (fincaItems.length > 0) {
+          setPrecios((prev) => ({
+            ...prev,
+            finca: fincaItems.map((l) => ({
+              laborId: l.id,
+              laborNombre: l.nombre,
+              precio: 0,
+            })),
+          }));
+        } else {
+          // Fallback: pedir directamente al endpoint de catálogos.
+          selectsApi.labores({ categoria: 'FINCA', estado: true })
+            .then((r) => {
+              if (cancelado) return;
+              if (r.data.length > 0) {
+                setPrecios((prev) => ({
+                  ...prev,
+                  finca: r.data.map((l) => ({
+                    laborId: l.id,
+                    laborNombre: l.nombre,
+                    precio: 0,
+                  })),
+                }));
+              }
+            })
+            .catch((err) => {
+              console.error('[NuevoTerceroWizard] fallback labores FINCA:', err);
+            });
+        }
       })
       .catch((e) => {
         if (cancelado) return;
         console.error('[NuevoTerceroWizard] wizard-init falló:', e);
         setBundle('error');
       });
+
     return () => { cancelado = true; };
   }, []);
 
@@ -525,6 +653,7 @@ export default function NuevoTerceroWizard() {
     precios.cosecha.some(c => c.precioPorKg > 0),
     precios.abonada.some(a => a.precioPorPalma > 0),
     precios.plateo > 0, precios.poda > 0, precios.sanidad > 0,
+    precios.finca.some(f => f.precio > 0),
   ].filter(Boolean).length;
 
   /**
@@ -626,20 +755,44 @@ export default function NuevoTerceroWizard() {
       // bundle falló, no hay forma de saber el labor_id real, así que se
       // omiten (el admin podrá configurarlas desde la pantalla de edición).
       const tareasLabores: ReturnType<typeof tercerosPreciosApi.upsertLaborPrecio>[] = [];
-      const pushLabor = (precio: number, tipo: 'PLATEO' | 'PODA' | 'SANIDAD') => {
+      const pushLabor = (
+        precio: number,
+        tipo: 'PLATEO' | 'PODA' | 'SANIDAD',
+        tipoPagoOverride: TipoPagoOverride,
+      ) => {
         const laborId = findLaborId(tipo);
         if (precio > 0 && laborId !== null) {
+          // Solo enviamos `tipo_pago` cuando el admin explícitamente eligió
+          // override. `HEREDAR` significa "no enviar" → el backend usa el
+          // modo del catálogo del tenant.
+          const payloadLabor: import('../../../api/terceros').UpsertLaborPrecioPayload = {
+            labor_id: laborId,
+            precio_palma: precio,
+          };
+          if (tipoPagoOverride !== 'HEREDAR') {
+            payloadLabor.tipo_pago = tipoPagoOverride;
+          }
           tareasLabores.push(
-            tercerosPreciosApi.upsertLaborPrecio(nuevoId, {
-              labor_id: laborId,
-              precio_palma: precio,
-            }),
+            tercerosPreciosApi.upsertLaborPrecio(nuevoId, payloadLabor),
           );
         }
       };
-      pushLabor(precios.plateo, 'PLATEO');
-      pushLabor(precios.poda, 'PODA');
-      pushLabor(precios.sanidad, 'SANIDAD');
+      pushLabor(precios.plateo, 'PLATEO', precios.plateoTipoPago);
+      pushLabor(precios.poda, 'PODA', precios.podaTipoPago);
+      pushLabor(precios.sanidad, 'SANIDAD', precios.sanidadTipoPago);
+
+      // 4b. Labores de FINCA — override por tercero. El `labor_id` ya viene
+      // resuelto en `precios.finca[i].laborId` (lo cargamos desde
+      // `selectsApi.labores({categoria:'FINCA'})` al montar). Solo enviamos
+      // las que el admin marcó con precio > 0.
+      const tareasLaboresFinca = precios.finca
+        .filter((f) => f.precio > 0)
+        .map((f) =>
+          tercerosPreciosApi.upsertLaborPrecio(nuevoId, {
+            labor_id: f.laborId,
+            precio_palma: f.precio,
+          }),
+        );
 
       // 5. Operarios válidos (nombres + apellidos obligatorios)
       const operariosValidos = operarios.filter(
@@ -660,6 +813,7 @@ export default function NuevoTerceroWizard() {
         ...tareasCosecha,
         ...tareasAbono,
         ...tareasLabores,
+        ...tareasLaboresFinca,
         ...tareasOperarios,
       ]);
       const fallidos = resultados.filter((r) => r.status === 'rejected').length;
@@ -698,6 +852,10 @@ export default function NuevoTerceroWizard() {
       } else {
         toast.success('Tercero creado correctamente');
       }
+      // Forzar refresh del listado al volver a Configuración — sin esto el
+      // TercerosTab serviría desde caché (TTL 60 s) y el tercero recién
+      // creado no aparecería hasta que expire.
+      invalidate(TercerosCacheKeys.LISTADO);
       navigate('/configuracion');
     } catch (e) {
       console.error('[NuevoTerceroWizard] Error al crear tercero:', e);

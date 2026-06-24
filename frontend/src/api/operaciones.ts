@@ -389,6 +389,27 @@ export interface TipoHoraExtraWizardItem {
 }
 
 /**
+ * Override por tercero+labor que viene en el bundle de Operaciones (§1.1 de
+ * `API_OPERACIONES.md`). Se usa en el frontend para resolver el precio y modo
+ * de pago efectivos cuando la persona seleccionada en un jornal es un operario
+ * de tercero (no un colaborador propio).
+ *
+ *  - `tipo_pago: 'POR_PALMA' | 'JORNAL_FIJO'` → override explícito del modo de
+ *    pago. Aplica solo a labores PALMA (FINCA siempre es JORNAL_FIJO).
+ *  - `tipo_pago: null` → override solo de monto; el modo de pago efectivo lo
+ *    hereda del catálogo (`labor.tipo_pago`).
+ *
+ * El backend hace la misma resolución al validar el POST/PUT; el preview del
+ * frontend siempre coincide con `valor_total` que devuelve el servidor.
+ */
+export interface TerceroLaborOverride {
+  tercero_id: number;
+  labor_id: number;
+  tipo_pago: 'POR_PALMA' | 'JORNAL_FIJO' | null;
+  precio_palma: string | number;
+}
+
+/**
  * Bundle único del wizard. Modo creación: `planilla` y `resumen` son `null`.
  * Modo edición: ambos vienen con la planilla y el resumen calculado.
  */
@@ -406,6 +427,43 @@ export interface WizardInitBundle {
     labores_finca: LaborWizardItem[];
     motivos_ausencia: MotivoAusenciaWizardItem[];
     tipos_hora_extra: TipoHoraExtraWizardItem[];
+    /**
+     * Todos los overrides activos de `tercero_labor_precios` del tenant
+     * (PALMA + FINCA). El frontend los usa con `resolverPrecioPersonaLabor()`
+     * para mostrar el preview correcto cuando la persona del jornal es un
+     * operario de un tercero específico.
+     */
+    tercero_labor_overrides: TerceroLaborOverride[];
+  };
+}
+
+/**
+ * Resuelve el `tipo_pago` y `precio_palma` efectivos para una combinación
+ * (labor, persona) considerando los overrides del tercero (§1.1 del doc).
+ *
+ *  - Si la persona es un colaborador propio → usa el catálogo del tenant.
+ *  - Si es un operario de tercero → busca override por (tercero_id, labor_id).
+ *    Si existe, los campos `null` del override caen al catálogo.
+ *    Si no existe, usa el catálogo igual que para colaboradores.
+ *
+ * El backend hace la misma resolución al calcular `valor_total`; este helper
+ * solo sirve para el preview en la UI.
+ */
+export function resolverPrecioPersonaLabor(
+  labor: Pick<LaborWizardItem, 'id' | 'tipo_pago' | 'precio_palma'>,
+  persona: { tipo: 'colaborador'; id: number } | { tipo: 'operario'; id: number; tercero_id: number },
+  overrides: TerceroLaborOverride[],
+): { tipo_pago: 'POR_PALMA' | 'JORNAL_FIJO'; precio_palma: string | number | null } {
+  if (persona.tipo === 'colaborador') {
+    return { tipo_pago: labor.tipo_pago, precio_palma: labor.precio_palma };
+  }
+  const ov = overrides.find(
+    (o) => o.tercero_id === persona.tercero_id && o.labor_id === labor.id,
+  );
+  if (!ov) return { tipo_pago: labor.tipo_pago, precio_palma: labor.precio_palma };
+  return {
+    tipo_pago: (ov.tipo_pago ?? labor.tipo_pago) as 'POR_PALMA' | 'JORNAL_FIJO',
+    precio_palma: ov.precio_palma ?? labor.precio_palma,
   };
 }
 

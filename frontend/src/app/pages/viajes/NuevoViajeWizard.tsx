@@ -147,7 +147,7 @@ export default function NuevoViajeWizard() {
             >
               <ArrowLeft className="h-5 w-5" />
             </Button>
-            <h1 className="text-4xl font-bold text-foreground">Nuevo Viaje</h1>
+            <h1 className="text-3xl font-bold text-primary">Nuevo Viaje</h1>
           </div>
           <p className="text-muted-foreground ml-14">
             Registra un nuevo despacho de fruto

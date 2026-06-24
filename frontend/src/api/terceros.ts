@@ -140,9 +140,21 @@ export type EditarOperarioPayload = Partial<CrearOperarioPayload>;
 // TIPOS — Overrides de precios
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Override de precio (y opcionalmente modo de pago) por tercero+labor.
+ *
+ * `tipo_pago` se introdujo en la API actualizada (ver §2 y §3 de
+ * `API_TERCEROS.md`):
+ *  - `null`        → solo override de monto. El modo de pago efectivo lo
+ *                    hereda del catálogo (`labor.tipo_pago`).
+ *  - `POR_PALMA`   → fuerza pago por palma para este tercero+labor. Solo
+ *                    válido para labores PALMA — FINCA lo rechaza con 422.
+ *  - `JORNAL_FIJO` → fuerza pago plano.
+ */
 export interface TerceroLaborPrecio {
   id: number;
   labor_id: number;
+  tipo_pago?: 'POR_PALMA' | 'JORNAL_FIJO' | null;
   precio_palma: string | number;
   estado: boolean;
 }
@@ -150,6 +162,12 @@ export interface TerceroLaborPrecio {
 export interface UpsertLaborPrecioPayload {
   labor_id: number;
   precio_palma: number;
+  /**
+   * Override explícito del modo de pago para este tercero+labor.
+   * Omitir (o enviar `null`) deja el modo heredado del catálogo del tenant.
+   * `POR_PALMA` con `labor.categoria=FINCA` → 422 ("FINCA solo admite JORNAL_FIJO").
+   */
+  tipo_pago?: 'POR_PALMA' | 'JORNAL_FIJO' | null;
 }
 
 export interface TerceroPrecioCosecha {
@@ -188,9 +206,16 @@ export type EditarPrecioAbonoPayload = Partial<CrearPrecioAbonoPayload> & {
 // TIPOS — Bundles del wizard
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Item del bundle `labores_contexto`. La API actualizada (ver §6.1 de
+ * `API_TERCEROS.md`) incluye labores PALMA + FINCA en el mismo arreglo,
+ * **excluyendo COSECHA y FERTILIZACION** (esas tienen sus flujos dedicados:
+ * `precios-cosecha` y `precios-abono`). El frontend agrupa por `categoria`.
+ */
 export interface LaborContextoItem {
   id: number;
   nombre: string;
+  categoria: 'PALMA' | 'FINCA';
   tipo: string | null;
   tipo_pago: 'POR_PALMA' | 'JORNAL_FIJO';
   precio_palma: string | number | null;

@@ -360,7 +360,7 @@ export default function ConteoCosecha() {
           <ArrowLeft className="h-4 w-4" />
           Volver a Viajes
         </Button>
-        <h1 className="text-4xl font-bold text-foreground">Conteo de Cosecha</h1>
+        <h1 className="text-3xl font-bold text-primary">Conteo de Cosecha</h1>
         <p className="text-muted-foreground mt-1">Registra las cosechas del viaje</p>
       </div>
 
