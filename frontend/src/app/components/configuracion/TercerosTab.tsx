@@ -289,6 +289,38 @@ export function TercerosTab() {
     });
   };
 
+  /**
+   * Elimina un operario del tercero (§5 del doc). Si el operario tiene
+   * jornales o cosechas, el backend devuelve 409 `OPERARIO_CON_JORNALES`
+   * y mostramos un mensaje específico.
+   */
+  const eliminarOperario = (terceroId: number, op: Operario) => {
+    const nombreCompleto = `${op.nombres} ${op.apellidos}`.trim() || 'este operario';
+    confirmDelete({
+      title: '¿Eliminar operario?',
+      description: `¿Estás seguro de eliminar "${nombreCompleto}"? Esta acción no se puede deshacer.`,
+      confirmText: 'Eliminar',
+      onConfirm: async () => {
+        try {
+          await operariosApi.eliminar(terceroId, op.id);
+          setOperariosPorTercero((p) => ({
+            ...p,
+            [terceroId]: (p[terceroId] ?? []).filter((x) => x.id !== op.id),
+          }));
+          toast.success('Operario eliminado');
+        } catch (e) {
+          console.error('[TercerosTab] Eliminar operario:', e);
+          const err = asApiError(e);
+          if (err.code === TercerosErrorCodes.OPERARIO_CON_JORNALES) {
+            toast.error('No se puede eliminar: el operario tiene jornales o cosechas registradas');
+          } else {
+            toast.error(err.message ?? 'No se pudo eliminar el operario');
+          }
+        }
+      },
+    });
+  };
+
   // Total de operarios cargados — para el subtítulo del card.
   const totalOperariosCargados = Object.values(operariosPorTercero)
     .reduce((sum, arr) => sum + arr.length, 0);
@@ -438,6 +470,7 @@ export function TercerosTab() {
                                       <span className="flex items-center gap-1"><HardHat className="h-3 w-3 text-amber-600" /> ARL</span>
                                     </th>
                                     <th className="text-center p-3 font-semibold">Estado</th>
+                                    <th className="text-center p-3 font-semibold w-16">Acciones</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -459,6 +492,17 @@ export function TercerosTab() {
                                         <Badge variant="outline" className={`text-xs ${op.estado ? 'bg-primary/10 text-primary border-primary/20' : 'bg-muted text-muted-foreground'}`}>
                                           {op.estado ? 'Activo' : 'Inactivo'}
                                         </Badge>
+                                      </td>
+                                      <td className="p-3 text-center">
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
+                                          title="Eliminar operario"
+                                          onClick={() => eliminarOperario(t.id, op)}
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        </Button>
                                       </td>
                                     </tr>
                                   ))}

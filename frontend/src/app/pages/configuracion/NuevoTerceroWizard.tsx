@@ -201,8 +201,6 @@ export function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange
     onChange({ ...precios, abonada: [...precios.abonada, { gramosMinimo: min, gramosMaximo: min + 500, precioPorPalma: 0 }] });
   };
   const setPrecioSimple = (key: 'plateo' | 'poda' | 'sanidad', val: number) => onChange({ ...precios, [key]: val });
-  const setTipoPagoSimple = (key: 'plateoTipoPago' | 'podaTipoPago' | 'sanidadTipoPago', val: TipoPagoOverride) =>
-    onChange({ ...precios, [key]: val });
 
   return (
     <Card className="border-border">
@@ -306,10 +304,10 @@ export function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange
           </AccordionItem>
 
           {([
-            { key: 'plateo' as const,  tipoKey: 'plateoTipoPago' as const,  label: 'Plateo',  unidad: 'palma',  bg: 'from-amber-50/50 to-amber-50/10 dark:from-amber-950/20' },
-            { key: 'poda' as const,    tipoKey: 'podaTipoPago' as const,    label: 'Poda',    unidad: 'palma',  bg: 'from-purple-50/50 to-purple-50/10 dark:from-purple-950/20' },
-            { key: 'sanidad' as const, tipoKey: 'sanidadTipoPago' as const, label: 'Sanidad', unidad: 'jornal', bg: 'from-red-50/50 to-red-50/10 dark:from-red-950/20' },
-          ]).map(({ key, tipoKey, label, unidad, bg }) => (
+            { key: 'plateo' as const,  label: 'Plateo',  unidad: 'palma',  bg: 'from-amber-50/50 to-amber-50/10 dark:from-amber-950/20' },
+            { key: 'poda' as const,    label: 'Poda',    unidad: 'palma',  bg: 'from-purple-50/50 to-purple-50/10 dark:from-purple-950/20' },
+            { key: 'sanidad' as const, label: 'Sanidad', unidad: 'jornal', bg: 'from-red-50/50 to-red-50/10 dark:from-red-950/20' },
+          ]).map(({ key, label, unidad, bg }) => (
             <AccordionItem key={key} value={key} className="border-0">
               <Card className="border-border">
                 <CardHeader className={`border-b bg-gradient-to-r ${bg} py-3 px-4`}>
@@ -321,31 +319,15 @@ export function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange
                   </AccordionTrigger>
                 </CardHeader>
                 <AccordionContent>
-                  <CardContent className="p-4 space-y-3">
+                  <CardContent className="p-4">
                     <div className="flex items-center gap-2 max-w-xs">
                       <span className="text-muted-foreground">$</span>
                       <Input type="number" value={precios[key] || ''} onChange={e => setPrecioSimple(key, parseFloat(e.target.value) || 0)} placeholder="0" />
                       <span className="text-muted-foreground text-sm">/{unidad}</span>
                     </div>
                     {(precios[key] as number) > 0 && (
-                      <p className="text-xs text-success">${(precios[key] as number).toLocaleString('es-CO')} / {unidad}</p>
+                      <p className="text-xs text-success mt-1.5">${(precios[key] as number).toLocaleString('es-CO')} / {unidad}</p>
                     )}
-                    {/* Override opcional del modo de pago (§3 del doc). Por
-                        default hereda del catálogo del tenant. Permite que un
-                        tercero pague esta labor en un modo distinto al global. */}
-                    <div className="flex items-center gap-2 max-w-sm pt-2 border-t border-border/30">
-                      <Label className="text-xs whitespace-nowrap text-muted-foreground">Modo de pago:</Label>
-                      <Select value={precios[tipoKey]} onValueChange={(v: TipoPagoOverride) => setTipoPagoSimple(tipoKey, v)}>
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="HEREDAR">Heredar del catálogo</SelectItem>
-                          <SelectItem value="POR_PALMA">Por palma</SelectItem>
-                          <SelectItem value="JORNAL_FIJO">Jornal fijo</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
                   </CardContent>
                 </AccordionContent>
               </Card>

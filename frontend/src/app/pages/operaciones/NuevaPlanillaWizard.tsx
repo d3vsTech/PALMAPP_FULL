@@ -867,26 +867,47 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
       // Fertilización (labor fija de PALMA con tipo='FERTILIZACION')
       const fertLaborId = palmaTipoToId.get('FERTILIZACION');
       const fertInfo = palmaFijasInfo.get('FERTILIZACION');
+      // Conteo de fertilizaciones que NO se persistieron por no poder
+      // resolver `insumo_id`. Lo reportamos al final como warning, en vez
+      // de hacer `continue` silencioso que deja al usuario sin saber qué pasó.
+      const fertSaltadas: string[] = [];
       if (fertLaborId) {
         for (const t of trabajosFertilizacion) {
           let insumoId: number | undefined;
           if (t.tipoFertilizante === 'Otro') {
             const nombreNuevo = (t.otroFertilizante || '').trim();
-            if (!nombreNuevo) continue;
+            if (!nombreNuevo) { fertSaltadas.push('fertilización sin nombre de insumo'); continue; }
             const matchLocal = Array.from(insumosMap.entries())
-              .find(([n]) => n.toLowerCase() === nombreNuevo.toLowerCase());
+              .find(([n]) => n.toLowerCase().trim() === nombreNuevo.toLowerCase());
             if (matchLocal) insumoId = matchLocal[1];
             else {
               try {
                 const res = await selectsApi.crearInsumo(nombreNuevo);
                 insumoId = res.data.id;
                 setInsumosMap(prev => new Map(prev).set(res.data.nombre, res.data.id));
-              } catch { continue; }
+              } catch (e) {
+                console.error('[NuevaPlanillaWizard] No se pudo crear insumo "' + nombreNuevo + '":', e);
+                fertSaltadas.push(nombreNuevo);
+                continue;
+              }
             }
           } else {
+            // Lookup case-insensitive + trim para tolerar diferencias mínimas
+            // entre el nombre que viene del bundle y el del dropdown.
+            const tipoNorm = (t.tipoFertilizante ?? '').toLowerCase().trim();
+            if (!tipoNorm) { fertSaltadas.push('fertilización sin tipo seleccionado'); continue; }
             insumoId = insumosMap.get(t.tipoFertilizante);
+            if (!insumoId) {
+              const matchInsensitive = Array.from(insumosMap.entries())
+                .find(([n]) => n.toLowerCase().trim() === tipoNorm);
+              insumoId = matchInsensitive?.[1];
+            }
           }
-          if (!insumoId) continue;
+          if (!insumoId) {
+            console.error('[NuevaPlanillaWizard] Fertilización descartada — insumo no encontrado:', t.tipoFertilizante);
+            fertSaltadas.push(t.tipoFertilizante || '(sin nombre)');
+            continue;
+          }
           for (let i = 0; i < t.colaboradores.length; i++) {
             const cid = t.colaboradores[i];
             const payload: any = {
@@ -1086,7 +1107,16 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
       setPlanillaPersistida(true);
       if (!silent) {
-        toast.success(planillaId ? 'Planilla actualizada' : 'Planilla guardada');
+        if (fertSaltadas.length > 0) {
+          // Antes esto fallaba en silencio. Ahora avisamos qué fertilizaciones
+          // no se persistieron y por qué (insumo no resuelto).
+          toast.warning(
+            `Planilla guardada, pero ${fertSaltadas.length} fertilización(es) no se guardaron porque no se pudo resolver el insumo: ${fertSaltadas.join(', ')}. Verifica el tipo de fertilizante seleccionado.`,
+            { duration: 8000 },
+          );
+        } else {
+          toast.success(planillaId ? 'Planilla actualizada' : 'Planilla guardada');
+        }
         navigate('/operaciones');
       }
     } catch (err: any) {

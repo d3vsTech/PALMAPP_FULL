@@ -212,6 +212,12 @@ export default function EditarTerceroWizard() {
   const [bundle, setBundle] = useState<TerceroConfiguracionInit | null>(null);
   /** Catálogo de labores de FINCA del tenant. El bundle no las trae. */
   const [laboresFinca, setLaboresFinca] = useState<LaborFincaItem[]>([]);
+  /**
+   * Snapshot de operarios cargados al montar el wizard. Se usa en
+   * `handleGuardar` para hacer el diff (crear/editar/eliminar) sin tener que
+   * volver a pedir el listado al backend.
+   */
+  const [operariosOriginalesSnapshot, setOperariosOriginalesSnapshot] = useState<Operario[]>([]);
 
   const epsOptions = bundle?.eps.map((e) => e.nombre) ?? null;
   const arlOptions = bundle?.arl.map((a) => a.nombre) ?? null;
@@ -256,6 +262,7 @@ export default function EditarTerceroWizard() {
         const anioActual = new Date().getFullYear();
         setPrecios(bundleToPrecios(b, anioActual, finca));
         setOperarios(resOps.data.map(operarioToColaboradorTercero));
+        setOperariosOriginalesSnapshot(resOps.data);
       })
       .catch((e) => {
         if (cancelado) return;
@@ -345,69 +352,124 @@ export default function EditarTerceroWizard() {
     const tareas: AnyPromise[] = [];
 
     try {
-      // 1. Editar el tercero (síncrono al inicio para detectar errores fatales).
-      await tercerosApi.editar(terceroId, construirPayloadEditar());
+      // 1. Editar el tercero solo si algo cambió en sus datos. Comparamos
+      // los campos relevantes contra `bundle.tercero` para evitar un PUT
+      // innecesario cuando el admin solo ajustó precios u operarios.
+      const datosCambiaron = (() => {
+        const t = bundle.tercero;
+        const esNatural = datos.tipoPersona === 'Natural';
+        if (esNatural) {
+          return (
+            t.tipo_persona !== 'NATURAL' ||
+            (t.cedula ?? '') !== (datos.nit ?? '').trim() ||
+            (t.nombre_completo ?? '') !== (datos.razonSocial ?? '').trim() ||
+            (t.nombre_comercial ?? '') !== (datos.nombreComercial ?? '').trim() ||
+            (t.telefono ?? '') !== (datos.telefono ?? '').trim() ||
+            (t.email ?? '') !== (datos.email ?? '').trim()
+          );
+        }
+        return (
+          t.tipo_persona !== 'JURIDICA' ||
+          (t.nit ?? '') !== (datos.nit ?? '').trim() ||
+          (t.razon_social ?? '') !== (datos.razonSocial ?? '').trim() ||
+          (t.representante ?? '') !== (datos.contacto ?? '').trim() ||
+          (t.nombre_comercial ?? '') !== (datos.nombreComercial ?? '').trim() ||
+          (t.telefono ?? '') !== (datos.telefono ?? '').trim() ||
+          (t.email ?? '') !== (datos.email ?? '').trim()
+        );
+      })();
+      if (datosCambiaron) {
+        await tercerosApi.editar(terceroId, construirPayloadEditar());
+      }
 
-      // 2. Cosechas — upsert los con valor; eliminar los puestos en 0 que tenían override.
+      // 2. Cosechas — DIFF por valor: solo upsert si el precio cambió, solo
+      // delete si tenía override y ahora está en 0. Sin esto, editar el
+      // nombre del tercero igual disparaba N peticiones de cosecha.
       const anioActual = new Date().getFullYear();
       for (const c of precios.cosecha) {
         const override = bundle.precios_cosecha.find(
           (p) => p.lote_id === c.loteId && p.anio === anioActual,
         );
         if (c.precioPorKg > 0) {
-          tareas.push(
-            tercerosPreciosApi.upsertPrecioCosecha(terceroId, {
-              lote_id: c.loteId,
-              precio: c.precioPorKg,
-            }),
-          );
+          const precioViejo = override ? Number(override.precio) : null;
+          if (precioViejo !== c.precioPorKg) {
+            tareas.push(
+              tercerosPreciosApi.upsertPrecioCosecha(terceroId, {
+                lote_id: c.loteId,
+                precio: c.precioPorKg,
+              }),
+            );
+          }
         } else if (override) {
           tareas.push(tercerosPreciosApi.eliminarPrecioCosecha(terceroId, override.id));
         }
       }
 
-      // 3. Abono — comparamos por (gramos_min, gramos_max). Lo más simple y
-      // sin riesgo de colisiones: borrar todos los rangos viejos, crear los
-      // nuevos. Esto evita lidiar con el cálculo de "qué cambió" para rangos
-      // que el usuario reordenó/extendió.
+      // 3. Abono — DIFF por (gramos_min, gramos_max):
+      //   - Match exacto con mismo precio → skip.
+      //   - Match exacto con precio distinto → PUT.
+      //   - Local sin match → POST.
+      //   - Viejo sin match → DELETE.
       const rangosViejos = bundle.precios_abono;
       const rangosNuevos = precios.abonada.filter((a) => a.precioPorPalma > 0);
-      for (const viejo of rangosViejos) {
-        tareas.push(tercerosPreciosApi.eliminarPrecioAbono(terceroId, viejo.id));
-      }
-      for (const r of rangosNuevos) {
-        tareas.push(
-          tercerosPreciosApi.crearPrecioAbono(terceroId, {
-            gramos_min: r.gramosMinimo,
-            gramos_max: r.gramosMaximo,
-            precio_palma: r.precioPorPalma,
-          }),
+      const viejosMatched = new Set<number>();
+      for (const nuevo of rangosNuevos) {
+        const viejo = rangosViejos.find(
+          (v) =>
+            Number(v.gramos_min) === nuevo.gramosMinimo &&
+            Number(v.gramos_max) === nuevo.gramosMaximo,
         );
+        if (viejo) {
+          viejosMatched.add(viejo.id);
+          if (Number(viejo.precio_palma) !== nuevo.precioPorPalma) {
+            tareas.push(
+              tercerosPreciosApi.editarPrecioAbono(terceroId, viejo.id, {
+                precio_palma: nuevo.precioPorPalma,
+              }),
+            );
+          }
+        } else {
+          tareas.push(
+            tercerosPreciosApi.crearPrecioAbono(terceroId, {
+              gramos_min: nuevo.gramosMinimo,
+              gramos_max: nuevo.gramosMaximo,
+              precio_palma: nuevo.precioPorPalma,
+            }),
+          );
+        }
+      }
+      for (const viejo of rangosViejos) {
+        if (!viejosMatched.has(viejo.id)) {
+          tareas.push(tercerosPreciosApi.eliminarPrecioAbono(terceroId, viejo.id));
+        }
       }
 
-      // 4. Labores simples.
+      // 4. Labores simples — DIFF por valor + tipo_pago.
       const upsertOrDelete = (
         precio: number,
         tipo: 'PLATEO' | 'PODA' | 'SANIDAD',
         tipoPagoOverride: import('./NuevoTerceroWizard').TipoPagoOverride,
       ) => {
         const laborId = findLaborId(tipo);
-        if (!laborId) return; // labor no existe en el catálogo del tenant.
+        if (!laborId) return;
         const override = findOverrideLabor(tipo);
         if (precio > 0) {
-          // Si el admin eligió HEREDAR, NO mandamos `tipo_pago` → el backend
-          // sabe que es un override solo de monto y respeta el modo del
-          // catálogo del tenant.
-          const payloadLabor: import('../../../api/terceros').UpsertLaborPrecioPayload = {
-            labor_id: laborId,
-            precio_palma: precio,
-          };
-          if (tipoPagoOverride !== 'HEREDAR') {
-            payloadLabor.tipo_pago = tipoPagoOverride;
+          // Solo upsert si cambió el valor o el modo de pago override.
+          const precioViejo = override ? Number(override.precio_palma) : null;
+          const tipoPagoNuevo = tipoPagoOverride === 'HEREDAR' ? null : tipoPagoOverride;
+          const tipoPagoViejo = override?.tipo_pago ?? null;
+          if (precioViejo !== precio || tipoPagoViejo !== tipoPagoNuevo) {
+            const payloadLabor: import('../../../api/terceros').UpsertLaborPrecioPayload = {
+              labor_id: laborId,
+              precio_palma: precio,
+            };
+            if (tipoPagoOverride !== 'HEREDAR') {
+              payloadLabor.tipo_pago = tipoPagoOverride;
+            }
+            tareas.push(
+              tercerosPreciosApi.upsertLaborPrecio(terceroId, payloadLabor),
+            );
           }
-          tareas.push(
-            tercerosPreciosApi.upsertLaborPrecio(terceroId, payloadLabor),
-          );
         } else if (override) {
           tareas.push(tercerosPreciosApi.eliminarLaborPrecio(terceroId, override.id));
         }
@@ -426,30 +488,38 @@ export default function EditarTerceroWizard() {
           (lp) => lp.labor_id === f.laborId,
         );
         if (f.precio > 0) {
-          tareas.push(
-            tercerosPreciosApi.upsertLaborPrecio(terceroId, {
-              labor_id: f.laborId,
-              precio_palma: f.precio,
-            }),
-          );
+          const precioViejo = override ? Number(override.precio_palma) : null;
+          if (precioViejo !== f.precio) {
+            tareas.push(
+              tercerosPreciosApi.upsertLaborPrecio(terceroId, {
+                labor_id: f.laborId,
+                precio_palma: f.precio,
+              }),
+            );
+          }
         } else if (override) {
           tareas.push(tercerosPreciosApi.eliminarLaborPrecio(terceroId, override.id));
         }
       }
 
-      // 5. Operarios — diff por id.
-      const operariosOriginales = await operariosApi.listarPorTercero(terceroId);
-      const idsOriginales = new Set(operariosOriginales.data.map((o) => o.id));
+      // 5. Operarios — DIFF por id + campos contra el snapshot cargado al
+      // montar. Antes hacíamos un GET adicional aquí; ya no hace falta.
+      const originalesPorId = new Map(
+        operariosOriginalesSnapshot.map((o) => [o.id, o] as const),
+      );
       const idsLocales = new Set(
         operarios.filter((o) => o.id !== undefined).map((o) => Number(o.id)),
       );
 
-      // Eliminar los que ya no están localmente.
-      for (const original of operariosOriginales.data) {
+      for (const original of operariosOriginalesSnapshot) {
         if (!idsLocales.has(original.id)) {
           tareas.push(operariosApi.eliminar(terceroId, original.id));
         }
       }
+
+      // Normaliza un campo trim → undefined si está vacío. Útil para comparar
+      // strings nullables con el shape del backend.
+      const norm = (s?: string | null) => (s ?? '').toString().trim() || undefined;
 
       for (const op of operarios) {
         if (!op.nombres?.trim() || !op.apellidos?.trim()) continue;
@@ -462,8 +532,19 @@ export default function EditarTerceroWizard() {
           arl: op.arl?.trim() || undefined,
         };
         const opId = op.id !== undefined ? Number(op.id) : NaN;
-        if (Number.isFinite(opId) && idsOriginales.has(opId)) {
-          tareas.push(operariosApi.editar(terceroId, opId, payload));
+        const original = Number.isFinite(opId) ? originalesPorId.get(opId) : undefined;
+        if (original) {
+          // Solo PUT si algún campo cambió.
+          const cambio =
+            norm(original.nombres) !== payload.nombres ||
+            norm(original.apellidos) !== payload.apellidos ||
+            norm(original.cedula) !== payload.cedula ||
+            norm(original.cargo) !== payload.cargo ||
+            norm(original.eps) !== payload.eps ||
+            norm(original.arl) !== payload.arl;
+          if (cambio) {
+            tareas.push(operariosApi.editar(terceroId, opId, payload));
+          }
         } else {
           tareas.push(operariosApi.crear(terceroId, payload));
         }

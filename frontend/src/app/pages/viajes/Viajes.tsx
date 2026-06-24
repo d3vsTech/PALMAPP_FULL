@@ -15,7 +15,7 @@ import {
 } from '../../components/ui/alert-dialog';
 import {
   Plus, Truck, Package, MapPin, Scale, Eye, TrendingUp, CheckCircle, Clock,
-  FileText, Search, Calculator, Edit, Trash2, AlertTriangle, Info,
+  FileText, FileUp, Search, Calculator, Edit, Trash2, AlertTriangle, Info,
 } from 'lucide-react';
 import {
   viajesApi, strField,
@@ -596,25 +596,28 @@ export default function Viajes() {
                                         <Trash2 className="h-4 w-4" />
                                       </Button>
                                     </>
+                                  ) : viaje.estado === 'En Validación' ? (
+                                    /* En Validación: el único paso útil es
+                                       cargar la remisión de la extractora.
+                                       Al abrir el detalle se sube el PDF. */
+                                    <Button size="sm" variant="outline" asChild
+                                      className="hover:bg-primary/10 hover:text-primary hover:border-primary"
+                                      title="Cargar remisión extractora">
+                                      <Link to={`/viajes/${viaje.id}`}>
+                                        <FileUp className="h-4 w-4" />
+                                      </Link>
+                                    </Button>
                                   ) : (
-                                    <>
-                                      <Button size="sm" variant="outline" asChild
-                                        className="hover:bg-primary/10 hover:text-primary hover:border-primary"
-                                        title="Visualizar">
-                                        <Link to={`/viajes/${viaje.id}`}>
-                                          <Eye className="h-4 w-4" />
-                                        </Link>
-                                      </Button>
-                                      <Button
-                                        size="sm" variant="outline"
-                                        onClick={(e) => abrirDialogoEliminar(viaje, e)}
-                                        className="hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
-                                        title="Eliminar"
-                                        disabled={viaje.estado === 'Finalizado'}
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    </>
+                                    /* Finalizado: solo lectura. No hay
+                                       eliminar porque ya está cerrado y
+                                       liquidado en nómina. */
+                                    <Button size="sm" variant="outline" asChild
+                                      className="hover:bg-primary/10 hover:text-primary hover:border-primary"
+                                      title="Visualizar">
+                                      <Link to={`/viajes/${viaje.id}`}>
+                                        <Eye className="h-4 w-4" />
+                                      </Link>
+                                    </Button>
                                   )}
                                 </div>
                               </td>
