@@ -166,22 +166,20 @@ export default function NuevoEditarViaje() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate('/viajes')}
-              className="rounded-xl"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <h1 className="text-4xl font-bold text-foreground">
-              {esEdicion ? 'Editar Viaje' : 'Nuevo Viaje'}
-            </h1>
-          </div>
-          <p className="text-muted-foreground ml-14">
+      <div className="flex items-center gap-3">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate('/viajes')}
+          className="h-12 w-12 rounded-xl border border-border/50 hover:bg-muted"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <div className="space-y-1">
+          <h1 className="text-3xl font-bold text-primary">
+            {esEdicion ? 'Editar Viaje' : 'Nuevo Viaje'}
+          </h1>
+          <p className="text-muted-foreground">
             {esEdicion
               ? 'Modifica la información del viaje'
               : 'Registra un nuevo despacho de fruto'}

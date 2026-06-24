@@ -5,6 +5,7 @@ import {
   Sprout,
   Hammer,
   Users,
+  UserCog,
   Truck,
   DollarSign,
   ChevronRight,
@@ -30,6 +31,8 @@ import { PromediosTab } from '../../components/configuracion/PromediosTab';
 import { EntidadesBancariasTab } from '../../components/configuracion/EntidadesBancariasTab';
 import { ParametrosNominaTab } from '../../components/configuracion/ParametrosNominaTab';
 import { PreciosLaboresTab } from '../../components/configuracion/PreciosLaboresTab';
+// Tab nuevo portado desde V.15 (sin backend todavía).
+import { TercerosTab } from '../../components/configuracion/TercerosTab';
 
 type SubItem = {
   id: string;
@@ -102,8 +105,17 @@ const CATEGORIAS: Categoria[] = [
     ],
   },
   {
+    // Categoría nueva del diseño V.15. Sin endpoints backend todavía: el tab
+    // funciona con datos mock locales. Cuando exista la API se conecta sin
+    // tocar el sidebar.
+    id: 'terceros',
+    nombre: 'Terceros',
+    icono: UserCog,
+    component: TercerosTab,
+  },
+  {
     id: 'nomina-liquidaciones',
-    nombre: 'Nómina y Liquidaciones',
+    nombre: 'Pagos y Liquidaciones',
     icono: DollarSign,
     items: [
       { id: 'parametros-nomina', nombre: 'Parámetros de Nómina', component: ParametrosNominaTab },

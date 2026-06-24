@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
@@ -205,8 +205,63 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
     } catch {}
   };
 
+  /**
+   * Decodifica el id local del selector de persona en el shape XOR del payload
+   * (§3.1 y §3.2 de API_OPERACIONES.md). Empleado propio = id numérico.
+   * Operario de tercero = id con prefijo 'O_'.
+   */
+  const decodeIdPersona = (cid: string): { empleado_id?: number; operario_id?: number } => {
+    if (typeof cid === 'string' && cid.startsWith('O_')) {
+      const n = parseInt(cid.slice(2), 10);
+      return Number.isFinite(n) ? { operario_id: n } : {};
+    }
+    const n = parseInt(cid, 10);
+    return Number.isFinite(n) ? { empleado_id: n } : {};
+  };
+
+  /**
+   * Codifica al revés: dado un jornal o miembro de cuadrilla del backend, lo
+   * convierte al id local del wizard (`'10'` para empleado, `'O_5'` para
+   * operario). Si el backend devuelve ambos (no debería pasar por XOR), prioriza
+   * `empleado_id` porque históricamente el wizard solo manejaba empleados.
+   */
+  const encodeIdFromBackend = (item: { empleado_id?: number | null; operario_id?: number | null }): string => {
+    if (item.empleado_id != null) return String(item.empleado_id);
+    if (item.operario_id != null) return 'O_' + String(item.operario_id);
+    return '';
+  };
+
+  /**
+   * Distingue si un id es del backend (numérico puro, ej. `'123'`) o local
+   * generado en el wizard (ej. `'plateo-1750000000000'`).
+   *
+   * Se usa en el guardado para decidir si se hace POST (crear) o PUT (editar)
+   * de cada jornal/cosecha. Sin esto, editar una planilla existente duplicaría
+   * los registros en el backend al pulsar "Guardar Planilla".
+   */
+  const isBackendId = (id: string): boolean => /^\d+$/.test(id);
+
   // ── Datos de catálogos cargados desde API (reemplazan al mockData del diseño) ──
-  const [colaboradores, setColaboradores] = useState<Array<{id: string; nombres: string; apellidos: string; nombre_completo: string; _raw?: any}>>([]);
+  /**
+   * Lista combinada de colaboradores + operarios para el selector de "Persona"
+   * en jornales y cuadrillas (§3.1 y §3.2 de API_OPERACIONES.md).
+   *  - Empleados propios: `id = String(empleado.id)`.
+   *  - Operarios de tercero: `id = 'O_' + String(operario.id)`. El prefijo nos
+   *    sirve de discriminador para decidir si al guardar enviamos `empleado_id`
+   *    u `operario_id` (XOR). Ver `decodeIdPersona()`.
+   *
+   * `terceroNombre` solo aparece en operarios — la UI lo pinta con badge
+   * naranja al lado del nombre en el dropdown.
+   */
+  const [colaboradores, setColaboradores] = useState<Array<{
+    id: string;
+    nombres: string;
+    apellidos: string;
+    nombre_completo: string;
+    /** Solo presente en operarios. */
+    terceroNombre?: string;
+    _raw?: any;
+  }>>([]);
   const [lotesData, setLotesData] = useState<Array<{id: string; nombre: string}>>([]);
   const [sublotes, setSublotes] = useState<Array<{id: string; nombre: string; loteId: string; cantidadPalmas: number}>>([]);
 
@@ -222,6 +277,41 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   const [palmaTipoToId, setPalmaTipoToId] = useState<Map<string, number>>(new Map());
   /** Snapshot de las labores fijas de PALMA para conocer su `tipo_pago`. */
   const [palmaFijasInfo, setPalmaFijasInfo] = useState<Map<string, { id: number; tipo_pago: 'POR_PALMA' | 'JORNAL_FIJO' }>>(new Map());
+  /**
+   * Overrides activos de precio/modo por tercero+labor (ver §1.1 de
+   * API_OPERACIONES.md). Vienen del bundle. Se usan en
+   * `resolverPrecioPersonaLabor` y `overrideForTerceroLabor` para preview
+   * cuando la persona elegida en un jornal es un operario de tercero.
+   */
+  const [terceroLaborOverrides, setTerceroLaborOverrides] = useState<
+    import('../../../api/operaciones').TerceroLaborOverride[]
+  >([]);
+
+  /**
+   * Lookup `(tercero_id:labor_id) → override`. Sirve para preview en O(1)
+   * en cualquier punto del wizard que quiera mostrar el precio efectivo
+   * antes de enviar al backend (el backend igualmente recalcula).
+   */
+  const overrideForTerceroLabor = useMemo(() => {
+    const map = new Map<string, import('../../../api/operaciones').TerceroLaborOverride>();
+    for (const o of terceroLaborOverrides) {
+      map.set(`${o.tercero_id}:${o.labor_id}`, o);
+    }
+    return map;
+  }, [terceroLaborOverrides]);
+
+  /**
+   * Indica si el id local del wizard corresponde a un operario con override
+   * configurado para la `labor_id` dada. Útil para mostrar un indicador
+   * "precio personalizado" junto al chip del operario en los selects.
+   */
+  const tieneOverrideOperario = (cid: string, laborId: number | undefined): boolean => {
+    if (!laborId || !cid.startsWith('O_')) return false;
+    const op = colaboradores.find((c) => c.id === cid);
+    const terceroId = (op?._raw as { tercero_id?: number } | undefined)?.tercero_id;
+    if (!terceroId) return false;
+    return overrideForTerceroLabor.has(`${terceroId}:${laborId}`);
+  };
   const [motivosMap, setMotivosMap] = useState<Map<string, number>>(new Map());
   const [tiposHoraExtraMap, setTiposHoraExtraMap] = useState<Map<string, number>>(new Map());
   const [insumosLista, setInsumosLista] = useState<string[]>([]);
@@ -297,7 +387,8 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           }));
         setLaboresOtrosOpciones(opcionesPalma);
 
-        setColaboradores((parametricas.colaboradores ?? []).map((c: any) => {
+        // 1. Colaboradores propios (empleado_id en payloads).
+        const empleadosLista = (parametricas.colaboradores ?? []).map((c: any) => {
           let nombres   = c.primer_nombre   ?? c.nombres   ?? c.nombre   ?? '';
           let apellidos = c.primer_apellido ?? c.apellidos ?? c.apellido ?? '';
           const nombreCompletoApi = c.nombre_completo ?? c.full_name ?? c.name ?? '';
@@ -317,7 +408,34 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           }
           const nombreCompleto = nombreCompletoApi || `${nombres} ${apellidos}`.trim();
           return { id: String(c.id), nombres, apellidos, nombre_completo: nombreCompleto, _raw: c };
-        }));
+        });
+
+        // 2. Operarios de terceros (operario_id en payloads). Vienen del bundle
+        // como `parametricas.operarios` (§7 de API_OPERACIONES.md). El id se
+        // prefijo con 'O_' para distinguirlo del empleado al guardar.
+        const operariosLista = (parametricas.operarios ?? []).map((op: any) => {
+          const nombreCompleto = String(op.nombre_completo ?? '').trim() || `Operario ${op.id}`;
+          const partes = nombreCompleto.split(/\s+/);
+          const mid = Math.ceil(partes.length / 2);
+          const nombres = partes.slice(0, mid).join(' ');
+          const apellidos = partes.slice(mid).join(' ');
+          return {
+            id: 'O_' + String(op.id),
+            nombres,
+            apellidos,
+            nombre_completo: nombreCompleto,
+            terceroNombre: String(op.tercero_nombre ?? ''),
+            _raw: op,
+          };
+        });
+
+        setColaboradores([...empleadosLista, ...operariosLista]);
+
+        // Overrides de precio/modo por tercero — los usaremos en
+        // `resolverPrecioPersonaLabor(labor, persona, overrides)` para mostrar
+        // el preview correcto cuando se elige un operario en un jornal.
+        const overrides = (parametricas as any).tercero_labor_overrides ?? [];
+        setTerceroLaborOverrides(overrides);
 
         setLotesData((parametricas.lotes ?? []).map((l: any) => ({ id: String(l.id), nombre: l.nombre })));
 
@@ -461,7 +579,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
         setTrabajosCosecha((p.cosechas ?? []).map((c: any) => ({
           id: String(c.id),
-          colaboradores: (c.cuadrilla ?? []).map((q: any) => String(q.empleado_id)),
+          colaboradores: (c.cuadrilla ?? []).map((q: any) => encodeIdFromBackend(q)),
           lote: c.lote_id != null ? String(c.lote_id) : '',
           sublote: c.sublote_id != null ? String(c.sublote_id) : '',
           gajosRecogidos: Number(c.gajos_reportados ?? 0),
@@ -471,21 +589,21 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         const porTipo = (tipo: string) => jornales.filter(j => j.categoria === 'PALMA' && j.tipo === tipo);
         setTrabajosPlateo(porTipo('PLATEO').map(j => ({
           id: String(j.id),
-          colaboradores: [String(j.empleado_id)],
+          colaboradores: [encodeIdFromBackend(j)],
           lote: j.lote_id != null ? String(j.lote_id) : '',
           sublote: j.sublote_id != null ? String(j.sublote_id) : '',
           numeroPalmas: Number(j.cantidad_palmas ?? 0),
         })));
         setTrabajosPoda(porTipo('PODA').map(j => ({
           id: String(j.id),
-          colaboradores: [String(j.empleado_id)],
+          colaboradores: [encodeIdFromBackend(j)],
           lote: j.lote_id != null ? String(j.lote_id) : '',
           sublote: j.sublote_id != null ? String(j.sublote_id) : '',
           numeroPalmas: Number(j.cantidad_palmas ?? 0),
         })));
         setTrabajosFertilizacion(porTipo('FERTILIZACION').map(j => ({
           id: String(j.id),
-          colaboradores: [String(j.empleado_id)],
+          colaboradores: [encodeIdFromBackend(j)],
           lote: j.lote_id != null ? String(j.lote_id) : '',
           sublote: j.sublote_id != null ? String(j.sublote_id) : '',
           palmas: Number(j.cantidad_palmas ?? 0),
@@ -495,7 +613,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         })));
         setTrabajosSanidad(porTipo('SANIDAD').map(j => ({
           id: String(j.id),
-          colaboradores: [String(j.empleado_id)],
+          colaboradores: [encodeIdFromBackend(j)],
           lote: j.lote_id != null ? String(j.lote_id) : '',
           sublote: j.sublote_id != null ? String(j.sublote_id) : '',
           trabajoRealizado: j.descripcion ?? '',
@@ -511,7 +629,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
             tipoPagoRaw === 'POR_PALMA' ? 'POR_PALMA' : 'JORNAL_FIJO';
           return {
             id: String(j.id),
-            colaboradores: [String(j.empleado_id)],
+            colaboradores: [encodeIdFromBackend(j)],
             laborOtrosKey: laborId ? `palma-${laborId}` : undefined,
             laborOtrosRawId: laborId,
             laborOtrosTipoPago: tipoPago,
@@ -525,9 +643,12 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
             sublote: j.sublote_id != null ? String(j.sublote_id) : '',
           };
         }));
+        // Labores de Finca — `nombre` ahora guarda el id local de la persona
+        // (`'10'` empleado, `'O_5'` operario) para soportar XOR al guardar.
+        // La visualización del nombre se hace via lookup en `colaboradores`.
         setTrabajosAuxiliares(jornales.filter(j => j.categoria === 'FINCA').map(j => ({
           id: String(j.id),
-          nombre: j.empleado ? `${j.empleado.primer_nombre ?? ''} ${j.empleado.primer_apellido ?? ''}`.trim() : '',
+          nombre: encodeIdFromBackend(j),
           labor: j.labor?.nombre ?? '',
           otraLabor: '',
           lugar: j.ubicacion ?? '',
@@ -638,51 +759,107 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         await operacionesApi.editar(pid, headerBody);
       }
 
-      // Cosechas
+      // Cosechas — diff por id: PUT si la cosecha ya existe en backend,
+      // POST si es nueva del wizard. Sin este check, editar duplicaba.
       for (const t of trabajosCosecha) {
         if (!t.lote || t.colaboradores.length === 0) continue;
         try {
-          await cosechasApi.crear(pid, {
-            lote_id: parseInt(t.lote),
-            sublote_id: t.sublote ? parseInt(t.sublote) : undefined,
-            gajos_reportados: t.gajosRecogidos || 0,
-            peso_confirmado: t.kilos || null,
-            cuadrilla: t.colaboradores.map(c => ({ empleado_id: parseInt(c) })),
-          });
+          if (isBackendId(t.id)) {
+            await cosechasApi.editar(parseInt(t.id), {
+              gajos_reportados: t.gajosRecogidos || 0,
+              peso_confirmado: t.kilos || null,
+              cuadrilla: t.colaboradores.map(c => decodeIdPersona(c)),
+            });
+          } else {
+            const res = await cosechasApi.crear(pid, {
+              lote_id: parseInt(t.lote),
+              sublote_id: t.sublote ? parseInt(t.sublote) : undefined,
+              gajos_reportados: t.gajosRecogidos || 0,
+              peso_confirmado: t.kilos || null,
+              cuadrilla: t.colaboradores.map(c => decodeIdPersona(c)),
+            });
+            if (res?.data?.id != null) {
+              mapeoIdsCosecha[t.id] = String(res.data.id);
+            }
+          }
         } catch {}
       }
+      // Mapeo localId → backendId acumulado durante el guardado. Al final
+      // del flujo, hacemos UN solo setState por tipo para evitar race
+      // conditions de N setState dentro de un loop async. Sin esto, al volver
+      // a pulsar "Guardar Planilla" sin recargar, los items locales conservan
+      // su id `plateo-XYZ` y se duplican en el backend.
+      const mapeoIdsPlateo: Record<string, string> = {};
+      const mapeoIdsPoda: Record<string, string> = {};
+      const mapeoIdsFert: Record<string, string> = {};
+      const mapeoIdsSanidad: Record<string, string> = {};
+      const mapeoIdsOtros: Record<string, string> = {};
+      const mapeoIdsFinca: Record<string, string> = {};
+      const mapeoIdsCosecha: Record<string, string> = {};
+      const mapeoIdsHE: Record<string, string> = {};
+      const mapeoIdsAusencia: Record<string, string> = {};
+
       // Plateo (labor fija de PALMA con tipo='PLATEO')
+      // Diff por id: PUT si el jornal existe en backend, POST si es nuevo.
+      // Si el ítem trae varios colaboradores: el primero se mapea al jornal
+      // existente (PUT), los demás se crean como jornales nuevos (POST).
+      //
+      // `cantidad_palmas` se envía siempre que el usuario haya ingresado un
+      // valor (> 0). Si la labor está en JORNAL_FIJO, el backend lo descarta
+      // sin error; si está en POR_PALMA, es requerido. Antes este campo se
+      // perdía cuando `palmaFijasInfo` no traía la entrada por algún motivo
+      // del bundle.
       const plateoLaborId = palmaTipoToId.get('PLATEO');
-      const plateoInfo = palmaFijasInfo.get('PLATEO');
       if (plateoLaborId) {
         for (const t of trabajosPlateo) {
-          for (const cid of t.colaboradores) {
+          for (let i = 0; i < t.colaboradores.length; i++) {
+            const cid = t.colaboradores[i];
+            const payload: any = {
+              labor_id: plateoLaborId,
+              ...decodeIdPersona(cid),
+              lote_id: t.lote ? parseInt(t.lote) : null,
+              sublote_id: t.sublote ? parseInt(t.sublote) : null,
+            };
+            if (t.numeroPalmas && t.numeroPalmas > 0) {
+              payload.cantidad_palmas = t.numeroPalmas;
+            }
             try {
-              await jornalesApi.crear(pid, {
-                labor_id: plateoLaborId,
-                empleado_id: parseInt(cid),
-                lote_id: t.lote ? parseInt(t.lote) : null,
-                sublote_id: t.sublote ? parseInt(t.sublote) : null,
-                ...(plateoInfo?.tipo_pago === 'POR_PALMA' ? { cantidad_palmas: t.numeroPalmas || 0 } : {}),
-              });
+              if (i === 0 && isBackendId(t.id)) {
+                await jornalesApi.editar(parseInt(t.id), payload);
+              } else {
+                const res = await jornalesApi.crear(pid, payload);
+                if (i === 0 && !isBackendId(t.id) && res?.data?.id != null) {
+                  mapeoIdsPlateo[t.id] = String(res.data.id);
+                }
+              }
             } catch {}
           }
         }
       }
       // Poda (labor fija de PALMA con tipo='PODA')
       const podaLaborId = palmaTipoToId.get('PODA');
-      const podaInfo = palmaFijasInfo.get('PODA');
       if (podaLaborId) {
         for (const t of trabajosPoda) {
-          for (const cid of t.colaboradores) {
+          for (let i = 0; i < t.colaboradores.length; i++) {
+            const cid = t.colaboradores[i];
+            const payload: any = {
+              labor_id: podaLaborId,
+              ...decodeIdPersona(cid),
+              lote_id: t.lote ? parseInt(t.lote) : null,
+              sublote_id: t.sublote ? parseInt(t.sublote) : null,
+            };
+            if (t.numeroPalmas && t.numeroPalmas > 0) {
+              payload.cantidad_palmas = t.numeroPalmas;
+            }
             try {
-              await jornalesApi.crear(pid, {
-                labor_id: podaLaborId,
-                empleado_id: parseInt(cid),
-                lote_id: t.lote ? parseInt(t.lote) : null,
-                sublote_id: t.sublote ? parseInt(t.sublote) : null,
-                ...(podaInfo?.tipo_pago === 'POR_PALMA' ? { cantidad_palmas: t.numeroPalmas || 0 } : {}),
-              });
+              if (i === 0 && isBackendId(t.id)) {
+                await jornalesApi.editar(parseInt(t.id), payload);
+              } else {
+                const res = await jornalesApi.crear(pid, payload);
+                if (i === 0 && !isBackendId(t.id) && res?.data?.id != null) {
+                  mapeoIdsPoda[t.id] = String(res.data.id);
+                }
+              }
             } catch {}
           }
         }
@@ -690,37 +867,69 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
       // Fertilización (labor fija de PALMA con tipo='FERTILIZACION')
       const fertLaborId = palmaTipoToId.get('FERTILIZACION');
       const fertInfo = palmaFijasInfo.get('FERTILIZACION');
+      // Conteo de fertilizaciones que NO se persistieron por no poder
+      // resolver `insumo_id`. Lo reportamos al final como warning, en vez
+      // de hacer `continue` silencioso que deja al usuario sin saber qué pasó.
+      const fertSaltadas: string[] = [];
       if (fertLaborId) {
         for (const t of trabajosFertilizacion) {
           let insumoId: number | undefined;
           if (t.tipoFertilizante === 'Otro') {
             const nombreNuevo = (t.otroFertilizante || '').trim();
-            if (!nombreNuevo) continue;
+            if (!nombreNuevo) { fertSaltadas.push('fertilización sin nombre de insumo'); continue; }
             const matchLocal = Array.from(insumosMap.entries())
-              .find(([n]) => n.toLowerCase() === nombreNuevo.toLowerCase());
+              .find(([n]) => n.toLowerCase().trim() === nombreNuevo.toLowerCase());
             if (matchLocal) insumoId = matchLocal[1];
             else {
               try {
                 const res = await selectsApi.crearInsumo(nombreNuevo);
                 insumoId = res.data.id;
                 setInsumosMap(prev => new Map(prev).set(res.data.nombre, res.data.id));
-              } catch { continue; }
+              } catch (e) {
+                console.error('[NuevaPlanillaWizard] No se pudo crear insumo "' + nombreNuevo + '":', e);
+                fertSaltadas.push(nombreNuevo);
+                continue;
+              }
             }
           } else {
+            // Lookup case-insensitive + trim para tolerar diferencias mínimas
+            // entre el nombre que viene del bundle y el del dropdown.
+            const tipoNorm = (t.tipoFertilizante ?? '').toLowerCase().trim();
+            if (!tipoNorm) { fertSaltadas.push('fertilización sin tipo seleccionado'); continue; }
             insumoId = insumosMap.get(t.tipoFertilizante);
+            if (!insumoId) {
+              const matchInsensitive = Array.from(insumosMap.entries())
+                .find(([n]) => n.toLowerCase().trim() === tipoNorm);
+              insumoId = matchInsensitive?.[1];
+            }
           }
-          if (!insumoId) continue;
-          for (const cid of t.colaboradores) {
+          if (!insumoId) {
+            console.error('[NuevaPlanillaWizard] Fertilización descartada — insumo no encontrado:', t.tipoFertilizante);
+            fertSaltadas.push(t.tipoFertilizante || '(sin nombre)');
+            continue;
+          }
+          for (let i = 0; i < t.colaboradores.length; i++) {
+            const cid = t.colaboradores[i];
+            const payload: any = {
+              labor_id: fertLaborId,
+              ...decodeIdPersona(cid),
+              lote_id: t.lote ? parseInt(t.lote) : null,
+              sublote_id: t.sublote ? parseInt(t.sublote) : null,
+              insumo_id: insumoId,
+              gramos_por_palma: t.cantidadGramos || 0,
+            };
+            if (t.palmas && t.palmas > 0) {
+              payload.cantidad_palmas = t.palmas;
+            }
             try {
-              await jornalesApi.crear(pid, {
-                labor_id: fertLaborId,
-                empleado_id: parseInt(cid),
-                lote_id: t.lote ? parseInt(t.lote) : null,
-                sublote_id: t.sublote ? parseInt(t.sublote) : null,
-                ...(fertInfo?.tipo_pago === 'POR_PALMA' ? { cantidad_palmas: t.palmas || 0 } : {}),
-                insumo_id: insumoId,
-                gramos_por_palma: t.cantidadGramos || 0,
-              });
+              if (i === 0 && isBackendId(t.id)) {
+                await jornalesApi.editar(parseInt(t.id), payload);
+              } else {
+                const res = await jornalesApi.crear(pid, payload);
+                if (i === 0 && !isBackendId(t.id) && res?.data?.id != null) {
+                  mapeoIdsFert[t.id] = String(res.data.id);
+                }
+              }
             } catch {}
           }
         }
@@ -730,20 +939,29 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
       const sanidadInfo = palmaFijasInfo.get('SANIDAD');
       if (sanidadLaborId) {
         for (const t of trabajosSanidad) {
-          for (const cid of t.colaboradores) {
+          for (let i = 0; i < t.colaboradores.length; i++) {
+            const cid = t.colaboradores[i];
+            const payload: any = {
+              labor_id: sanidadLaborId,
+              ...decodeIdPersona(cid),
+              lote_id: t.lote ? parseInt(t.lote) : null,
+              sublote_id: t.sublote ? parseInt(t.sublote) : null,
+              descripcion: t.trabajoRealizado || 'Sanidad',
+            };
+            // Sanidad no tiene input propio de palmas en el wizard — si está
+            // configurada como POR_PALMA, reusamos las del sublote.
+            if (sanidadInfo?.tipo_pago === 'POR_PALMA') {
+              payload.cantidad_palmas = Number(sublotes.find(s => s.id === t.sublote)?.cantidadPalmas ?? 0);
+            }
             try {
-              await jornalesApi.crear(pid, {
-                labor_id: sanidadLaborId,
-                empleado_id: parseInt(cid),
-                lote_id: t.lote ? parseInt(t.lote) : null,
-                sublote_id: t.sublote ? parseInt(t.sublote) : null,
-                descripcion: t.trabajoRealizado || 'Sanidad',
-                // Si el tenant configuró SANIDAD como POR_PALMA, el backend exige cantidad_palmas.
-                // El form no expone palmas; reusamos las del sublote como aproximación.
-                ...(sanidadInfo?.tipo_pago === 'POR_PALMA'
-                  ? { cantidad_palmas: Number(sublotes.find(s => s.id === t.sublote)?.cantidadPalmas ?? 0) }
-                  : {}),
-              });
+              if (i === 0 && isBackendId(t.id)) {
+                await jornalesApi.editar(parseInt(t.id), payload);
+              } else {
+                const res = await jornalesApi.crear(pid, payload);
+                if (i === 0 && !isBackendId(t.id) && res?.data?.id != null) {
+                  mapeoIdsSanidad[t.id] = String(res.data.id);
+                }
+              }
             } catch {}
           }
         }
@@ -754,10 +972,11 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
       //  - JORNAL_FIJO → `nombre_trabajo` y `descripcion` opcionales; sin cantidad_palmas.
       for (const t of trabajosOtros) {
         if (!t.laborOtrosRawId) continue;
-        for (const cid of t.colaboradores) {
+        for (let i = 0; i < t.colaboradores.length; i++) {
+          const cid = t.colaboradores[i];
           const base: any = {
             labor_id: t.laborOtrosRawId,
-            empleado_id: parseInt(cid),
+            ...decodeIdPersona(cid),
             lote_id: t.lote ? parseInt(t.lote) : null,
             sublote_id: t.sublote ? parseInt(t.sublote) : null,
           };
@@ -767,24 +986,42 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
             if (t.nombreTrabajo?.trim()) base.nombre_trabajo = t.nombreTrabajo.trim();
           }
           if (t.laborRealizada?.trim()) base.descripcion = t.laborRealizada.trim();
-          try { await jornalesApi.crear(pid, base); } catch {}
+          try {
+            if (i === 0 && isBackendId(t.id)) {
+              await jornalesApi.editar(parseInt(t.id), base);
+            } else {
+              const res = await jornalesApi.crear(pid, base);
+              if (i === 0 && !isBackendId(t.id) && res?.data?.id != null) {
+                mapeoIdsOtros[t.id] = String(res.data.id);
+              }
+            }
+          } catch {}
         }
       }
       // Auxiliares (FINCA — labores del catálogo unificado con categoria='FINCA')
+      // `t.nombre` ahora trae el id local de la persona (`'10'` empleado o
+      // `'O_5'` operario). `decodeIdPersona` lo expande al XOR del payload.
       for (const t of trabajosAuxiliares) {
-        if (!t.labor) continue;
+        if (!t.labor || !t.nombre) continue;
         const laborKey = t.labor === 'Otro' ? (t.otraLabor || '') : t.labor;
         const laborId = laboresMap.get(laborKey) ?? laboresMap.get(t.labor);
         if (!laborId) continue;
-        const nombreNorm = (t.nombre || '').toLowerCase().trim();
-        const colab = nombreNorm ? colaboradores.find(c => `${c.nombres} ${c.apellidos}`.toLowerCase().includes(nombreNorm)) : null;
-        if (!colab) continue;
+        const personaIds = decodeIdPersona(t.nombre);
+        if (!personaIds.empleado_id && !personaIds.operario_id) continue;
+        const payload = {
+          labor_id: laborId,
+          ...personaIds,
+          ubicacion: t.lugar || undefined,
+        };
         try {
-          await jornalesApi.crear(pid, {
-            labor_id: laborId,
-            empleado_id: parseInt(colab.id),
-            ubicacion: t.lugar || undefined,
-          });
+          if (isBackendId(t.id)) {
+            await jornalesApi.editar(parseInt(t.id), payload);
+          } else {
+            const res = await jornalesApi.crear(pid, payload);
+            if (res?.data?.id != null) {
+              mapeoIdsFinca[t.id] = String(res.data.id);
+            }
+          }
         } catch {}
       }
       // Horas extras
@@ -797,13 +1034,21 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           }
         }
         if (!tipoId) continue;
+        const payload = {
+          empleado_id: parseInt(h.colaboradorId),
+          tipo_hora_extra_id: tipoId,
+          cantidad_horas: h.numeroHoras,
+          observacion: h.observacion || undefined,
+        };
         try {
-          await horasExtraApi.crear(pid, {
-            empleado_id: parseInt(h.colaboradorId),
-            tipo_hora_extra_id: tipoId,
-            cantidad_horas: h.numeroHoras,
-            observacion: h.observacion || undefined,
-          });
+          if (isBackendId(h.id)) {
+            await horasExtraApi.editar(parseInt(h.id), payload);
+          } else {
+            const res = await horasExtraApi.crear(pid, payload);
+            if (res?.data?.id != null) {
+              mapeoIdsHE[h.id] = String(res.data.id);
+            }
+          }
         } catch {}
       }
       // Ausencias
@@ -816,18 +1061,62 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           }
         }
         if (!motivoId) continue;
+        const payload = {
+          empleado_id: parseInt(a.colaboradorId),
+          motivo_ausencia_id: motivoId,
+          motivo: a.otroMotivo || a.motivo || '',
+        };
         try {
-          await ausenciasApi.crear(pid, {
-            empleado_id: parseInt(a.colaboradorId),
-            motivo_ausencia_id: motivoId,
-            motivo: a.otroMotivo || a.motivo || '',
-          });
+          if (isBackendId(a.id)) {
+            await ausenciasApi.editar(parseInt(a.id), payload);
+          } else {
+            const res = await ausenciasApi.crear(pid, payload);
+            if (res?.data?.id != null) {
+              mapeoIdsAusencia[a.id] = String(res.data.id);
+            }
+          }
         } catch {}
       }
 
+      // ── Aplicar los mapeos localId → backendId al estado local ──
+      // Sin esto, si el usuario pulsa "Guardar Planilla" varias veces seguidas
+      // (sin recargar la pantalla), los items que tenían id local seguirían
+      // teniéndolo y se crearían duplicados en el backend.
+      const aplicarMapeo = <T extends { id: string }>(
+        items: T[], mapeo: Record<string, string>,
+      ): T[] => items.map(x => mapeo[x.id] ? { ...x, id: mapeo[x.id] } : x);
+
+      if (Object.keys(mapeoIdsCosecha).length > 0)
+        setTrabajosCosecha(prev => aplicarMapeo(prev, mapeoIdsCosecha));
+      if (Object.keys(mapeoIdsPlateo).length > 0)
+        setTrabajosPlateo(prev => aplicarMapeo(prev, mapeoIdsPlateo));
+      if (Object.keys(mapeoIdsPoda).length > 0)
+        setTrabajosPoda(prev => aplicarMapeo(prev, mapeoIdsPoda));
+      if (Object.keys(mapeoIdsFert).length > 0)
+        setTrabajosFertilizacion(prev => aplicarMapeo(prev, mapeoIdsFert));
+      if (Object.keys(mapeoIdsSanidad).length > 0)
+        setTrabajosSanidad(prev => aplicarMapeo(prev, mapeoIdsSanidad));
+      if (Object.keys(mapeoIdsOtros).length > 0)
+        setTrabajosOtros(prev => aplicarMapeo(prev, mapeoIdsOtros));
+      if (Object.keys(mapeoIdsFinca).length > 0)
+        setTrabajosAuxiliares(prev => aplicarMapeo(prev, mapeoIdsFinca));
+      if (Object.keys(mapeoIdsHE).length > 0)
+        setHorasExtras(prev => aplicarMapeo(prev, mapeoIdsHE));
+      if (Object.keys(mapeoIdsAusencia).length > 0)
+        setAusentes(prev => aplicarMapeo(prev, mapeoIdsAusencia));
+
       setPlanillaPersistida(true);
       if (!silent) {
-        toast.success(planillaId ? 'Planilla actualizada' : 'Planilla guardada');
+        if (fertSaltadas.length > 0) {
+          // Antes esto fallaba en silencio. Ahora avisamos qué fertilizaciones
+          // no se persistieron y por qué (insumo no resuelto).
+          toast.warning(
+            `Planilla guardada, pero ${fertSaltadas.length} fertilización(es) no se guardaron porque no se pudo resolver el insumo: ${fertSaltadas.join(', ')}. Verifica el tipo de fertilizante seleccionado.`,
+            { duration: 8000 },
+          );
+        } else {
+          toast.success(planillaId ? 'Planilla actualizada' : 'Planilla guardada');
+        }
         navigate('/operaciones');
       }
     } catch (err: any) {
@@ -1616,7 +1905,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                       .filter(col => !cosechaEnEdicion.colaboradores.includes(col.id))
                                       .map((col) => (
                                         <SelectItem key={col.id} value={col.id}>
-                                          {col.nombres} {col.apellidos}
+                                          {col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}
                                         </SelectItem>
                                       ))}
                                   </SelectContent>
@@ -1631,7 +1920,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                           variant="secondary"
                                           className="pl-2.5 pr-1 py-1 gap-1"
                                         >
-                                          <span>{col.nombres} {col.apellidos}</span>
+                                          <span>{col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}</span>
                                           <button
                                             type="button"
                                             onClick={() => eliminarColaboradorEnEdicion(colId)}
@@ -1843,7 +2132,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                       .filter(col => !plateoEnEdicion.colaboradores.includes(col.id))
                                       .map((col) => (
                                         <SelectItem key={col.id} value={col.id}>
-                                          {col.nombres} {col.apellidos}
+                                          {col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}
                                         </SelectItem>
                                       ))}
                                   </SelectContent>
@@ -1852,9 +2141,10 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                   <div className="flex flex-wrap gap-2 mt-2">
                                     {plateoEnEdicion.colaboradores.map((colId) => {
                                       const col = colaboradores.find(c => c.id === colId);
+                                      const conOverride = tieneOverrideOperario(colId, palmaTipoToId.get('PLATEO'));
                                       return col ? (
                                         <Badge key={colId} variant="secondary" className="pl-2.5 pr-1 py-1 gap-1">
-                                          <span>{col.nombres} {col.apellidos}</span>
+                                          <span>{col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}{conOverride ? <span className="ml-1 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-700 border border-emerald-200 font-medium align-middle" title="Este operario tiene precio personalizado para Plateo">$</span> : null}</span>
                                           <button
                                             type="button"
                                             onClick={() => setPlateoEnEdicion({ ...plateoEnEdicion, colaboradores: plateoEnEdicion.colaboradores.filter(id => id !== colId) })}
@@ -2040,7 +2330,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                       .filter(col => !podaEnEdicion.colaboradores.includes(col.id))
                                       .map((col) => (
                                         <SelectItem key={col.id} value={col.id}>
-                                          {col.nombres} {col.apellidos}
+                                          {col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}
                                         </SelectItem>
                                       ))}
                                   </SelectContent>
@@ -2051,7 +2341,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                       const col = colaboradores.find(c => c.id === colId);
                                       return col ? (
                                         <Badge key={colId} variant="secondary" className="pl-2.5 pr-1 py-1 gap-1">
-                                          <span>{col.nombres} {col.apellidos}</span>
+                                          <span>{col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}</span>
                                           <button
                                             type="button"
                                             onClick={() => setPodaEnEdicion({ ...podaEnEdicion, colaboradores: podaEnEdicion.colaboradores.filter(id => id !== colId) })}
@@ -2237,7 +2527,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                       .filter(col => !fertilizacionEnEdicion.colaboradores.includes(col.id))
                                       .map((col) => (
                                         <SelectItem key={col.id} value={col.id}>
-                                          {col.nombres} {col.apellidos}
+                                          {col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}
                                         </SelectItem>
                                       ))}
                                   </SelectContent>
@@ -2248,7 +2538,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                       const col = colaboradores.find(c => c.id === colId);
                                       return col ? (
                                         <Badge key={colId} variant="secondary" className="pl-2.5 pr-1 py-1 gap-1">
-                                          <span>{col.nombres} {col.apellidos}</span>
+                                          <span>{col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}</span>
                                           <button
                                             type="button"
                                             onClick={() => setFertilizacionEnEdicion({ ...fertilizacionEnEdicion, colaboradores: fertilizacionEnEdicion.colaboradores.filter(id => id !== colId) })}
@@ -2480,7 +2770,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                       .filter(col => !sanidadEnEdicion.colaboradores.includes(col.id))
                                       .map((col) => (
                                         <SelectItem key={col.id} value={col.id}>
-                                          {col.nombres} {col.apellidos}
+                                          {col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}
                                         </SelectItem>
                                       ))}
                                   </SelectContent>
@@ -2495,7 +2785,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                           variant="secondary"
                                           className="pl-2.5 pr-1 py-1 gap-1"
                                         >
-                                          <span>{col.nombres} {col.apellidos}</span>
+                                          <span>{col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}</span>
                                           <button
                                             type="button"
                                             onClick={() => {
@@ -2599,7 +2889,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                         const col = colaboradores.find(c => c.id === colId);
                                         return col ? (
                                           <Badge key={colId} variant="outline" className="text-xs">
-                                            {col.nombres} {col.apellidos}
+                                            {col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}
                                           </Badge>
                                         ) : null;
                                       })}
@@ -2693,7 +2983,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                       .filter(col => !otrosEnEdicion.colaboradores.includes(col.id))
                                       .map((col) => (
                                         <SelectItem key={col.id} value={col.id}>
-                                          {col.nombres} {col.apellidos}
+                                          {col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}
                                         </SelectItem>
                                       ))}
                                   </SelectContent>
@@ -2708,7 +2998,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                           variant="secondary"
                                           className="pl-2.5 pr-1 py-1 gap-1"
                                         >
-                                          <span>{col.nombres} {col.apellidos}</span>
+                                          <span>{col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}</span>
                                           <button
                                             type="button"
                                             onClick={() => {
@@ -2908,7 +3198,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                         const col = colaboradores.find(c => c.id === colId);
                                         return col ? (
                                           <Badge key={colId} variant="outline" className="text-xs">
-                                            {col.nombres} {col.apellidos}
+                                            {col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}
                                           </Badge>
                                         ) : null;
                                       })}
@@ -3010,11 +3300,22 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                 <SelectValue placeholder="Seleccionar colaborador" />
                               </SelectTrigger>
                               <SelectContent>
+                                {/* Labores de Finca §3.3 — sí soporta operarios
+                                    (mismo endpoint /jornales que palma). El
+                                    `value` es el id local (`10` o `'O_5'`)
+                                    para distinguir colaborador vs operario
+                                    al guardar. Visualmente muestra el nombre
+                                    con badge "Tercero" si aplica. */}
                                 {colaboradores.map((col) => {
                                   const fullName = `${col.nombres} ${col.apellidos}`.trim();
                                   return (
-                                    <SelectItem key={col.id} value={fullName}>
+                                    <SelectItem key={col.id} value={col.id}>
                                       {fullName}
+                                      {col.terceroNombre ? (
+                                        <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">
+                                          Tercero · {col.terceroNombre}
+                                        </span>
+                                      ) : null}
                                     </SelectItem>
                                   );
                                 })}
@@ -3094,6 +3395,13 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                   {trabajosAuxiliares.map((trabajo) => {
                     const labelLabor =
                       trabajo.labor === 'Otro' && trabajo.otraLabor ? trabajo.otraLabor : trabajo.labor;
+                    // `trabajo.nombre` ahora es el id local — resolvemos al
+                    // nombre vía lookup en `colaboradores`. Si la persona
+                    // es operario, mostramos el badge del tercero.
+                    const personaSel = colaboradores.find((c) => c.id === trabajo.nombre);
+                    const personaTexto = personaSel
+                      ? `${personaSel.nombres} ${personaSel.apellidos}`.trim()
+                      : trabajo.nombre || 'Sin colaborador';
                     return (
                       <Card key={trabajo.id} className="border-border hover:border-primary/30 transition-colors">
                         <CardContent className="p-4">
@@ -3101,7 +3409,12 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                             <div className="flex-1 min-w-0">
                               <p className="text-xs text-muted-foreground mb-1">Colaborador</p>
                               <p className="font-semibold text-sm">
-                                {trabajo.nombre || 'Sin colaborador'}
+                                {personaTexto}
+                                {personaSel?.terceroNombre ? (
+                                  <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">
+                                    Tercero · {personaSel.terceroNombre}
+                                  </span>
+                                ) : null}
                               </p>
                             </div>
                             <div className="flex-1 min-w-0">
@@ -3189,7 +3502,8 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                               <SelectValue placeholder="Seleccionar colaborador" />
                             </SelectTrigger>
                             <SelectContent>
-                              {colaboradores.map((col) => (
+                              {/* Otro selector sin XOR de operario (paso 4/5). */}
+                              {colaboradores.filter(c => !c.terceroNombre).map((col) => (
                                 <SelectItem key={col.id} value={col.id}>
                                   {col.nombres} {col.apellidos}
                                 </SelectItem>
@@ -3372,7 +3686,10 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                 <SelectValue placeholder="Seleccionar colaborador" />
                               </SelectTrigger>
                               <SelectContent>
+                                {/* Ausencias: solo empleados propios.
+                                    §5 del doc no contempla operario_id. */}
                                 {colaboradores
+                                  .filter(col => !col.terceroNombre)
                                   .filter(col => !ausentes.some(a => a.colaboradorId === col.id))
                                   .map((col) => (
                                     <SelectItem key={col.id} value={col.id}>

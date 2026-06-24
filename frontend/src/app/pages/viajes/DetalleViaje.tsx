@@ -431,10 +431,10 @@ export default function DetalleViaje() {
           Volver a Viajes
         </Button>
         <div className="flex items-center gap-3">
-          <h1 className="text-4xl font-bold text-foreground">Detalle del Viaje - {remisionId}</h1>
+          <h1 className="text-3xl font-bold text-primary">Detalle del Viaje - {remisionId}</h1>
           <Badge variant="outline" className={
             estadoActual === 'Creado' ? 'bg-muted text-muted-foreground border-muted' :
-            estadoActual === 'En Validación' ? 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30' :
+            estadoActual === 'En Validación' ? 'bg-primary/10 text-primary dark:text-primary border-blue-500/30' :
             'bg-success/10 text-success border-success/30'
           }>
             {estadoActual}
