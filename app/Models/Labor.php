@@ -157,6 +157,32 @@ class Labor extends Model
         return $this->tipo_pago === self::TIPO_PAGO_JORNAL_FIJO;
     }
 
+    /**
+     * Resuelve el tipo_pago efectivo para esta labor en el contexto de un
+     * tercero. Si el tercero tiene un override activo en `tercero_labor_precios`
+     * con `tipo_pago` no nulo, ese gana. Caso contrario, hereda del catálogo
+     * del tenant (`labores.tipo_pago`).
+     *
+     * Usado por validators y services para decidir POR_PALMA vs JORNAL_FIJO
+     * cuando el jornal o cosecha pertenece a un operario de tercero.
+     */
+    public function resolverTipoPago(?int $terceroId): string
+    {
+        if ($terceroId !== null) {
+            $override = TerceroLaborPrecio::query()
+                ->where('tercero_id', $terceroId)
+                ->where('labor_id', $this->id)
+                ->where('estado', true)
+                ->value('tipo_pago');
+
+            if ($override !== null) {
+                return $override;
+            }
+        }
+
+        return $this->tipo_pago;
+    }
+
     public function esCosecha(): bool
     {
         return $this->tipo === self::TIPO_COSECHA;

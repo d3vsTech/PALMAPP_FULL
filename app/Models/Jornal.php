@@ -48,7 +48,7 @@ class Jornal extends Model
     ];
 
     protected $fillable = [
-        'tenant_id', 'operacion_id', 'empleado_id',
+        'tenant_id', 'operacion_id', 'empleado_id', 'operario_id', 'tercero_id',
         'categoria', 'tipo', 'labor_id',
         'lote_id', 'sublote_id',
         'cantidad_palmas', 'insumo_id', 'gramos_por_palma',
@@ -67,9 +67,31 @@ class Jornal extends Model
         ];
     }
 
+    /**
+     * Atributos virtuales que se incluyen automáticamente al serializar a JSON.
+     */
+    protected $appends = ['tipo_pago_efectivo'];
+
     public function getFechaAttribute(): ?\Illuminate\Support\Carbon
     {
         return $this->operacion?->fecha;
+    }
+
+    /**
+     * Tipo de pago efectivo para este jornal: si el jornal pertenece a un
+     * operario de tercero y ese tercero tiene override en `tercero_labor_precios.tipo_pago`,
+     * ese gana; caso contrario hereda de la labor del catálogo.
+     *
+     * Se calcula desde la relación `labor` (que el controller eager-loadea) y
+     * el `tercero_id`. Devuelve null si la labor no está cargada — evita
+     * disparar lazy load oculto en serializaciones inesperadas.
+     */
+    public function getTipoPagoEfectivoAttribute(): ?string
+    {
+        if (!$this->relationLoaded('labor') || $this->labor === null) {
+            return null;
+        }
+        return $this->labor->resolverTipoPago($this->tercero_id);
     }
 
     public function isPalma(): bool
@@ -92,6 +114,21 @@ class Jornal extends Model
     public function empleado(): BelongsTo
     {
         return $this->belongsTo(Empleado::class);
+    }
+
+    public function operario(): BelongsTo
+    {
+        return $this->belongsTo(Operario::class);
+    }
+
+    public function tercero(): BelongsTo
+    {
+        return $this->belongsTo(Tercero::class);
+    }
+
+    public function esDeOperario(): bool
+    {
+        return $this->operario_id !== null;
     }
 
     public function labor(): BelongsTo

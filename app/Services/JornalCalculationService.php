@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\Labor;
 use App\Models\PrecioAbono;
+use App\Models\TerceroLaborPrecio;
+use App\Models\TerceroPrecioAbono;
 use InvalidArgumentException;
 
 /**
@@ -26,7 +28,7 @@ class JornalCalculationService
     /**
      * @return array{valor_unitario: string|null, precio_insumo_snapshot: string|null, valor_total: string|null}
      */
-    public function calcular(Labor $labor, array $data): array
+    public function calcular(Labor $labor, array $data, ?int $terceroId = null): array
     {
         if ($labor->esCosecha()) {
             throw new InvalidArgumentException(
@@ -34,21 +36,26 @@ class JornalCalculationService
             );
         }
 
-        if ($labor->esPorPalma()) {
+        // Tipo_pago efectivo: si hay tercero con override en tercero_labor_precios.tipo_pago,
+        // ese gana sobre labor.tipo_pago del tenant.
+        $tipoPagoEfectivo = $labor->resolverTipoPago($terceroId);
+
+        if ($tipoPagoEfectivo === Labor::TIPO_PAGO_POR_PALMA) {
             if ($labor->esFertilizacion()) {
                 return $this->calcularFertilizacion(
                     tenantId:       (int) $labor->tenant_id,
                     cantidadPalmas: $data['cantidad_palmas'] ?? null,
                     insumoId:       $data['insumo_id'] ?? null,
                     gramosPorPalma: $data['gramos_por_palma'] ?? null,
+                    terceroId:      $terceroId,
                 );
             }
 
-            return $this->calcularPorPalmaSimple($labor, $data['cantidad_palmas'] ?? null);
+            return $this->calcularPorPalmaSimple($labor, $data['cantidad_palmas'] ?? null, $terceroId);
         }
 
         // JORNAL_FIJO — para cualquier categoría (PALMA o FINCA).
-        return $this->calcularJornalFijo($labor);
+        return $this->calcularJornalFijo($labor, $terceroId);
     }
 
     // ────────────────────────────────────────────────────────────────────
@@ -58,7 +65,7 @@ class JornalCalculationService
     /**
      * POR_PALMA simple (PLATEO, PODA, SANIDAD, custom PALMA POR_PALMA).
      */
-    private function calcularPorPalmaSimple(Labor $labor, ?int $cantidadPalmas): array
+    private function calcularPorPalmaSimple(Labor $labor, ?int $cantidadPalmas, ?int $terceroId = null): array
     {
         if ($cantidadPalmas === null) {
             throw new InvalidArgumentException(
@@ -66,11 +73,11 @@ class JornalCalculationService
             );
         }
 
-        if ($labor->precio_palma === null) {
+        $precio = $this->resolverPrecioLabor($labor, $terceroId);
+
+        if ($precio === null) {
             return ['valor_unitario' => null, 'precio_insumo_snapshot' => null, 'valor_total' => null];
         }
-
-        $precio = (float) $labor->precio_palma;
 
         return [
             'valor_unitario'         => (string) $precio,
@@ -80,31 +87,35 @@ class JornalCalculationService
     }
 
     /**
-     * JORNAL_FIJO — valor plano de labor.precio_palma.
+     * JORNAL_FIJO — valor plano, con fallback a precio del tercero si aplica.
      */
-    private function calcularJornalFijo(Labor $labor): array
+    private function calcularJornalFijo(Labor $labor, ?int $terceroId = null): array
     {
-        if ($labor->precio_palma === null) {
+        $precio = $this->resolverPrecioLabor($labor, $terceroId);
+
+        if ($precio === null) {
             return ['valor_unitario' => null, 'precio_insumo_snapshot' => null, 'valor_total' => null];
         }
 
-        $precio = (string) (float) $labor->precio_palma;
+        $precioStr = (string) $precio;
 
         return [
-            'valor_unitario'         => $precio,
+            'valor_unitario'         => $precioStr,
             'precio_insumo_snapshot' => null,
-            'valor_total'            => $precio,
+            'valor_total'            => $precioStr,
         ];
     }
 
     /**
      * FERTILIZACION en POR_PALMA: precio por rango de gramos.
+     * Busca primero en tercero_precio_abono, fallback al tenant.
      */
     private function calcularFertilizacion(
         int $tenantId,
         ?int $cantidadPalmas,
         ?int $insumoId,
         ?int $gramosPorPalma,
+        ?int $terceroId = null,
     ): array {
         if (!$cantidadPalmas || !$insumoId || !$gramosPorPalma) {
             throw new InvalidArgumentException(
@@ -112,25 +123,67 @@ class JornalCalculationService
             );
         }
 
-        $precioAbono = PrecioAbono::query()
-            ->where('tenant_id', $tenantId)
-            ->where('gramos_min', '<=', $gramosPorPalma)
-            ->where('gramos_max', '>=', $gramosPorPalma)
-            ->where('estado', true)
-            ->first();
+        $precioPalma = null;
 
-        if (!$precioAbono) {
-            throw new InvalidArgumentException(
-                "No se encontró precio_abono para {$gramosPorPalma}g por palma."
-            );
+        // Override de tercero primero
+        if ($terceroId) {
+            $terceroAbono = TerceroPrecioAbono::query()
+                ->where('tenant_id', $tenantId)
+                ->where('tercero_id', $terceroId)
+                ->where('gramos_min', '<=', $gramosPorPalma)
+                ->where('gramos_max', '>=', $gramosPorPalma)
+                ->where('estado', true)
+                ->first();
+
+            if ($terceroAbono) {
+                $precioPalma = (float) $terceroAbono->precio_palma;
+            }
         }
 
-        $precioPalma = (float) $precioAbono->precio_palma;
+        // Fallback al precio del tenant
+        if ($precioPalma === null) {
+            $precioAbono = PrecioAbono::query()
+                ->where('tenant_id', $tenantId)
+                ->where('gramos_min', '<=', $gramosPorPalma)
+                ->where('gramos_max', '>=', $gramosPorPalma)
+                ->where('estado', true)
+                ->first();
+
+            if (!$precioAbono) {
+                throw new InvalidArgumentException(
+                    "No se encontró precio_abono para {$gramosPorPalma}g por palma."
+                );
+            }
+
+            $precioPalma = (float) $precioAbono->precio_palma;
+        }
 
         return [
             'valor_unitario'         => (string) $precioPalma,
             'precio_insumo_snapshot' => (string) $precioPalma,
             'valor_total'            => (string) round($cantidadPalmas * $precioPalma, 2),
         ];
+    }
+
+    /**
+     * Resuelve el precio de una labor con fallback:
+     *   1. Override específico del tercero (tercero_labor_precios)
+     *   2. Precio tenant (labor.precio_palma)
+     *   3. NULL — no configurado
+     */
+    private function resolverPrecioLabor(Labor $labor, ?int $terceroId): ?float
+    {
+        if ($terceroId !== null) {
+            $override = TerceroLaborPrecio::where('tercero_id', $terceroId)
+                ->where('labor_id', $labor->id)
+                ->where('estado', true)
+                ->value('precio_palma');
+
+            if ($override !== null) {
+                return (float) $override;
+            }
+        }
+
+        return $labor->precio_palma !== null ? (float) $labor->precio_palma : null;
     }
 }

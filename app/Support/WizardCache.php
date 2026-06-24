@@ -145,4 +145,100 @@ class WizardCache
     {
         Cache::forget(self::tenantUser($tenantId, $userId));
     }
+
+    // ── Wizard de Terceros (creación y configuración de precios) ────────────────
+
+    public static function terceroWizardInit(int $tenantId): string
+    {
+        return "wizard:tercero:wizard_init:t:{$tenantId}";
+    }
+
+    public static function terceroConfigBundle(int $tenantId, int $terceroId): string
+    {
+        return "wizard:tercero:config_bundle:t:{$tenantId}:tr:{$terceroId}";
+    }
+
+    public static function forgetTerceroConfigBundle(int $tenantId, int $terceroId): void
+    {
+        Cache::forget(static::terceroConfigBundle($tenantId, $terceroId));
+    }
+
+    public static function forgetTerceroWizardInit(int $tenantId): void
+    {
+        Cache::forget(static::terceroWizardInit($tenantId));
+    }
+
+    // ── Wizard de Operaciones (planilla del día) ──────────────────────────────
+    // Bundle único `GET /operaciones[/{id}]/wizard-init` reemplaza las 8
+    // peticiones que el wizard hacía a /select. Cada catálogo se cachea por
+    // tenant durante TTL_PARAMETRICA (15 min) y se invalida explícitamente en
+    // los controladores que mutan cada catálogo.
+
+    public static function operacionesColaboradores(int $tenantId): string
+    {
+        return "wizard:op:colab:t:{$tenantId}";
+    }
+
+    public static function operacionesLotes(int $tenantId): string
+    {
+        return "wizard:op:lotes:t:{$tenantId}";
+    }
+
+    public static function operacionesSublotes(int $tenantId): string
+    {
+        return "wizard:op:sublotes:t:{$tenantId}";
+    }
+
+    public static function operacionesInsumos(int $tenantId): string
+    {
+        return "wizard:op:insumos:t:{$tenantId}";
+    }
+
+    public static function operacionesLabores(int $tenantId, string $categoria): string
+    {
+        return "wizard:op:labores:t:{$tenantId}:c:{$categoria}";
+    }
+
+    public static function operacionesMotivosAusencia(int $tenantId): string
+    {
+        return "wizard:op:motivos:t:{$tenantId}";
+    }
+
+    public static function operacionesTiposHoraExtra(int $tenantId): string
+    {
+        return "wizard:op:tipos_he:t:{$tenantId}";
+    }
+
+    public static function operacionesOperarios(int $tenantId): string
+    {
+        return "wizard:op:operarios:t:{$tenantId}";
+    }
+
+    public static function operacionesTerceroLaborOverrides(int $tenantId): string
+    {
+        return "wizard:op:tercero_labor_overrides:t:{$tenantId}";
+    }
+
+    public static function forgetOperacionesKey(string $key): void
+    {
+        Cache::forget($key);
+    }
+
+    public static function forgetOperacionesBundle(int $tenantId): void
+    {
+        foreach ([
+            self::operacionesColaboradores($tenantId),
+            self::operacionesLotes($tenantId),
+            self::operacionesSublotes($tenantId),
+            self::operacionesInsumos($tenantId),
+            self::operacionesLabores($tenantId, 'PALMA'),
+            self::operacionesLabores($tenantId, 'FINCA'),
+            self::operacionesMotivosAusencia($tenantId),
+            self::operacionesTiposHoraExtra($tenantId),
+            self::operacionesOperarios($tenantId),
+            self::operacionesTerceroLaborOverrides($tenantId),
+        ] as $key) {
+            Cache::forget($key);
+        }
+    }
 }

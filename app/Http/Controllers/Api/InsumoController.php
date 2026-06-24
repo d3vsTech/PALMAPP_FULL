@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Insumo;
 use App\Services\AuditoriaService;
+use App\Support\WizardCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -85,6 +86,8 @@ class InsumoController extends Controller
 
             $this->auditoria->registrarCreacion($request, 'INSUMOS', $insumo, "Se creó el insumo '{$insumo->nombre}'");
 
+            WizardCache::forgetOperacionesKey(WizardCache::operacionesInsumos((int) app('current_tenant_id')));
+
             return response()->json([
                 'message' => 'Insumo creado correctamente',
                 'data'    => $insumo,
@@ -136,6 +139,8 @@ class InsumoController extends Controller
                 "Se creó el insumo '{$insumo->nombre}' desde el wizard de Operaciones (FERTILIZACION)"
             );
 
+            WizardCache::forgetOperacionesKey(WizardCache::operacionesInsumos((int) $tenantId));
+
             return response()->json([
                 'message' => 'Insumo creado correctamente',
                 'data'    => $insumo->only(['id', 'nombre', 'unidad_medida']),
@@ -173,6 +178,8 @@ class InsumoController extends Controller
 
             $this->auditoria->registrarEdicion($request, 'INSUMOS', $insumo, $datosAnteriores, "Se editó el insumo '{$insumo->nombre}'");
 
+            WizardCache::forgetOperacionesKey(WizardCache::operacionesInsumos((int) app('current_tenant_id')));
+
             return response()->json([
                 'message' => 'Insumo actualizado correctamente',
                 'data'    => $insumo->fresh(),
@@ -197,6 +204,8 @@ class InsumoController extends Controller
 
             $this->auditoria->registrarEliminacion($request, 'INSUMOS', $insumo, "Se eliminó el insumo '{$insumo->nombre}'");
             $insumo->delete();
+
+            WizardCache::forgetOperacionesKey(WizardCache::operacionesInsumos((int) app('current_tenant_id')));
 
             return response()->json(['message' => "Insumo '{$insumo->nombre}' eliminado correctamente"]);
         } catch (\Throwable $e) {

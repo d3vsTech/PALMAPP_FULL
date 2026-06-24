@@ -7,6 +7,7 @@ use App\Http\Requests\TipoHoraExtra\StoreTipoHoraExtraRequest;
 use App\Http\Requests\TipoHoraExtra\UpdateTipoHoraExtraRequest;
 use App\Models\TipoHoraExtra;
 use App\Services\AuditoriaService;
+use App\Support\WizardCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -94,6 +95,8 @@ class TipoHoraExtraController extends Controller
                 "Se creó el tipo de hora extra '{$tipo->codigo}' ({$tipo->nombre}) — recargo {$tipo->porcentaje_recargo}%"
             );
 
+            WizardCache::forgetOperacionesKey(WizardCache::operacionesTiposHoraExtra((int) app('current_tenant_id')));
+
             return response()->json([
                 'message' => 'Tipo de hora extra creado correctamente',
                 'data'    => $tipo,
@@ -114,6 +117,8 @@ class TipoHoraExtraController extends Controller
                 $request, 'TIPOS_HORA_EXTRA', $tipoHoraExtra, $datosAnteriores,
                 "Se editó el tipo de hora extra '{$tipoHoraExtra->codigo}'"
             );
+
+            WizardCache::forgetOperacionesKey(WizardCache::operacionesTiposHoraExtra((int) app('current_tenant_id')));
 
             return response()->json([
                 'message' => 'Tipo de hora extra actualizado correctamente',
@@ -140,6 +145,8 @@ class TipoHoraExtraController extends Controller
                 "Se eliminó el tipo de hora extra '{$tipoHoraExtra->codigo}'"
             );
             $tipoHoraExtra->delete();
+
+            WizardCache::forgetOperacionesKey(WizardCache::operacionesTiposHoraExtra((int) app('current_tenant_id')));
 
             return response()->json(['message' => "Tipo '{$tipoHoraExtra->codigo}' eliminado correctamente"]);
         } catch (\Throwable $e) {

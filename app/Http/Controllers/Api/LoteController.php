@@ -161,6 +161,7 @@ class LoteController extends Controller
             WizardCache::forgetPredioBundle((int) app('current_tenant_id'), $lote->predio_id);
             WizardCache::forgetPreciosLaboresBundle((int) app('current_tenant_id'));
             WizardCache::forgetPrediosResumenes((int) app('current_tenant_id'));
+            WizardCache::forgetOperacionesKey(WizardCache::operacionesLotes((int) app('current_tenant_id')));
 
             $this->auditoria->registrarCreacion(
                 $request,
@@ -219,6 +220,7 @@ class LoteController extends Controller
             WizardCache::forgetPredioBundle((int) app('current_tenant_id'), $lote->predio_id);
             WizardCache::forgetPreciosLaboresBundle((int) app('current_tenant_id'));
             WizardCache::forgetPrediosResumenes((int) app('current_tenant_id'));
+            WizardCache::forgetOperacionesKey(WizardCache::operacionesLotes((int) app('current_tenant_id')));
 
             $this->auditoria->registrarEdicion(
                 $request,
@@ -277,6 +279,9 @@ class LoteController extends Controller
             WizardCache::forgetPredioBundle((int) app('current_tenant_id'), $predioId);
             WizardCache::forgetPreciosLaboresBundle((int) app('current_tenant_id'));
             WizardCache::forgetPrediosResumenes((int) app('current_tenant_id'));
+            WizardCache::forgetOperacionesKey(WizardCache::operacionesLotes((int) app('current_tenant_id')));
+            // Eliminar un lote elimina cascada sus sublotes, así que también invalida sublotes.
+            WizardCache::forgetOperacionesKey(WizardCache::operacionesSublotes((int) app('current_tenant_id')));
 
             return response()->json([
                 'message' => "Lote '{$lote->nombre}' eliminado correctamente",

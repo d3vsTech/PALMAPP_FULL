@@ -13,7 +13,7 @@ class CosechaCuadrilla extends Model
     protected $table = 'cosecha_cuadrilla';
 
     protected $fillable = [
-        'tenant_id', 'cosecha_id', 'empleado_id',
+        'tenant_id', 'cosecha_id', 'empleado_id', 'operario_id', 'tercero_id',
         'peso_calculado_empleado', 'valor_calculado', 'estado',
     ];
 
@@ -34,5 +34,20 @@ class CosechaCuadrilla extends Model
     public function empleado(): BelongsTo
     {
         return $this->belongsTo(Empleado::class);
+    }
+
+    public function operario(): BelongsTo
+    {
+        return $this->belongsTo(Operario::class);
+    }
+
+    public function tercero(): BelongsTo
+    {
+        return $this->belongsTo(Tercero::class);
+    }
+
+    public function esDeOperario(): bool
+    {
+        return $this->operario_id !== null;
     }
 }

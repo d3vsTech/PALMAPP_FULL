@@ -137,7 +137,9 @@ La tabla `insumos` es el catálogo de fertilizantes / abonos al que apunta `jorn
 | `id` | bigint (PK) | No | |
 | `tenant_id` | bigint (FK) | No | |
 | `operacion_id` | bigint (FK) | **No** | `restrictOnDelete` |
-| `empleado_id` | bigint (FK) | No | |
+| `empleado_id` | bigint (FK) | **Sí** | `restrictOnDelete`. XOR obligatorio con `operario_id` — exactamente uno presente |
+| `operario_id` | bigint (FK → `operarios`) | **Sí** | `restrictOnDelete`. NULL si el jornal es de un colaborador propio |
+| `tercero_id` | bigint (FK → `terceros`) | **Sí** | Inyectado automáticamente desde `operario.tercero_id`. NULL en jornales de empleados |
 | `categoria` | enum(`PALMA`,`FINCA`) | No | Snapshot de `labor.categoria` al momento del registro |
 | `tipo` | enum(`PLATEO`,`PODA`,`FERTILIZACION`,`SANIDAD`) | Sí | Snapshot de `labor.tipo`. NULL para labores custom |
 | `labor_id` | bigint (FK) | **No** | Apunta SIEMPRE a `labores.id`. `restrictOnDelete` |
@@ -157,7 +159,9 @@ La tabla `insumos` es el catálogo de fertilizantes / abonos al que apunta `jorn
 | `sync_estado` | enum(`LOCAL`,`SINCRONIZADO`) | No | default: `SINCRONIZADO` |
 | `estado` | boolean | No | default: `true` |
 
-**Índices:** `(tenant_id, operacion_id, empleado_id)`, `(tenant_id, categoria, tipo)`, `(tenant_id, estado)`.
+**Índices:** `(tenant_id, operacion_id, empleado_id)`, `(tenant_id, operacion_id, operario_id)`, `(tenant_id, categoria, tipo)`, `(tenant_id, estado)`.
+
+**Regla XOR:** `(empleado_id IS NOT NULL AND operario_id IS NULL) OR (empleado_id IS NULL AND operario_id IS NOT NULL)`. Aplicada en `StoreJornalRequest::withValidator()` (MySQL 8+ también la tiene como CHECK constraint, pero la validación real es en el FormRequest para compatibilidad). El `tercero_id` **no se envía desde el cliente** — el backend lo inyecta automáticamente vía `$this->merge(['tercero_id' => $operario->tercero_id])` en el FormRequest.
 
 > **Snapshots `categoria` y `tipo`:** se llenan a partir de la labor cargada al crear o actualizar el jornal. Permanecen estables aunque la labor cambie luego. Sirven para el resumen de la operación y la agrupación del desprendible sin tener que hacer JOIN.
 
@@ -169,7 +173,7 @@ La tabla `insumos` es el catálogo de fertilizantes / abonos al que apunta `jorn
 | `tipo` snapshot | — | — | PLATEO/PODA | PLATEO/PODA | FERTILIZACION | FERTILIZACION | SANIDAD | SANIDAD | NULL | NULL | NULL |
 | `labor_id` | — | — | fija | fija | fija | fija | fija | fija | custom | custom | custom |
 | `lote_id`/`sublote_id` | — | — | ✔ | opc | ✔ | opc | opc | opc | opc | opc | NULL |
-| `cantidad_palmas` | — | — | ✔ | ❌ | ✔ | opc | ✔ | ❌ | ✔ | ❌ | ❌ |
+| `cantidad_palmas` | — | — | ✔ | opc | ✔ | opc | ✔ | opc | ✔ | opc | ❌ |
 | `insumo_id` | — | — | ❌ | ❌ | ✔ | opc | ❌ | ❌ | ❌ | ❌ | ❌ |
 | `gramos_por_palma` | — | — | ❌ | ❌ | ✔ | opc | ❌ | ❌ | ❌ | ❌ | ❌ |
 | `descripcion` | — | — | opc | opc | opc | opc | ✔ | ✔ | opc | opc | ❌ |
@@ -180,7 +184,27 @@ La tabla `insumos` es el catálogo de fertilizantes / abonos al que apunta `jorn
 
 ### 4.3 Fórmulas de Cálculo
 
-**`JornalCalculationService::calcular(Labor $labor, array $data)`** (`app/Services/JornalCalculationService.php`):
+**`JornalCalculationService::calcular(Labor $labor, array $data, ?int $terceroId = null)`** (`app/Services/JornalCalculationService.php`):
+
+El tercer parámetro `$terceroId` es opcional y es backward compatible. Cuando se pasa, el servicio busca primero el precio en las tablas de override del tercero antes de caer al precio del tenant:
+
+```
+Lógica de fallback de precios cuando $terceroId != null:
+  Labor (PLATEO/PODA/SANIDAD/custom PALMA):
+    1. tercero_labor_precios(tercero_id, labor_id, estado=true) → precio override
+    2. labor.precio_palma del tenant                           → fallback
+    3. NULL si ninguno configurado
+
+  Fertilización POR_PALMA:
+    1. tercero_precio_abono(tercero_id, rango gramos, estado=true) → precio override
+    2. precio_abono tenant (mismo rango)                           → fallback
+    3. 422 CALC_ERROR si no hay rango
+
+  Cosecha POR_PALMA (en CosechaCalculationService):
+    1. tercero_precios_cosecha(tercero_id, lote_id, anio)    → precio override
+    2. precios_cosecha tenant (lote_id, anio)                → fallback
+    3. 422 CALC_ERROR si NULL con peso confirmado
+```
 
 ```
 si labor.tipo === COSECHA
@@ -230,13 +254,20 @@ distribuirCuadrilla(valor_total, peso, N):
 
 El cliente envía SOLO `labor_id` — `categoria` y `tipo` se derivan en `prepareForValidation`. Reglas condicionales aplicadas en `withValidator`:
 
+**XOR persona (nuevo):**
+- `empleado_id` y `operario_id` son ambos **nullable**.
+- Si se envían ambos → `422` en `empleado_id`.
+- Si no se envía ninguno → `422` en `empleado_id`.
+- Si se envía `operario_id`, el FormRequest inyecta automáticamente `tercero_id` con `$this->merge(['tercero_id' => $operario->tercero_id])`. El cliente **nunca debe enviar `tercero_id`** directamente.
+
+**Reglas por labor (sin cambios):**
 - `labor.tipo=COSECHA` → rechaza con mensaje claro.
 - `labor.categoria=FINCA` → prohíbe `cantidad_palmas`, `insumo_id`, `gramos_por_palma`, `descripcion`. Permite `ubicacion`.
 - `labor.tipo=FERTILIZACION + POR_PALMA` → requiere `cantidad_palmas`, `insumo_id`, `gramos_por_palma`.
 - `labor.tipo=FERTILIZACION + JORNAL_FIJO` → `cantidad_palmas`, `insumo_id`, `gramos_por_palma` opcionales (tracking).
 - `labor.tipo=SANIDAD` → requiere `descripcion`.
 - `labor.tipo_pago=POR_PALMA` (PLATEO/PODA/SANIDAD/custom PALMA) → requiere `cantidad_palmas`.
-- `labor.tipo_pago=JORNAL_FIJO` (PALMA no-fertilización) → prohíbe `cantidad_palmas`.
+- `labor.tipo_pago=JORNAL_FIJO` (PALMA no-fertilización) → `cantidad_palmas` es **opcional** (tracking agronómico; no afecta el cálculo — `valor_total` sigue siendo el precio plano).
 - PALMA → prohíbe `ubicacion`.
 
 ### 4.5 Modelo `Jornal` — Relaciones y Scopes
@@ -246,11 +277,14 @@ El cliente envía SOLO `labor_id` — `categoria` y `tipo` se derivan en `prepar
 | Relación / Método | Tipo | Descripción |
 |---|---|---|
 | `operacion()` | BelongsTo | Operación padre |
-| `empleado()` | BelongsTo | Empleado |
+| `empleado()` | BelongsTo | Empleado propio (nullable — ver XOR) |
+| `operario()` | BelongsTo | Operario del tercero (nullable — ver XOR) |
+| `tercero()` | BelongsTo | Tercero contratista (nullable, derivado del operario) |
 | `labor()` | BelongsTo | Labor (palma o finca, fija o custom) |
 | `lote()` / `sublote()` | BelongsTo | |
 | `insumo()` | BelongsTo | Solo FERTILIZACION POR_PALMA |
 | `getFechaAttribute()` | Accessor | Retorna `operacion.fecha` |
+| `esDeOperario(): bool` | Helper | `true` si `operario_id !== null` |
 | `scopePalma()` / `scopeFinca()` | Scope | |
 | `scopeDeTipo($tipo)` | Scope | |
 | `scopeEnRango($q, $ini, $fin)` | Scope | |
@@ -405,9 +439,9 @@ Documentación completa con payloads, respuestas y ejemplos cURL: [API_OPERACION
                           │ 1
                           │ N
                   ┌───────┴───────┐
-                  │   jornales    │─< empleados
-                  │ categoria/tipo│
-                  │  (snapshot)   │
+                  │   jornales    │─< empleados (nullable — XOR)
+                  │ categoria/tipo│─< operarios (nullable — XOR)
+                  │  (snapshot)   │─< terceros  (derivado del operario)
                   │ labor_id      │
                   │ valor_total   │
                   └──────┬────────┘

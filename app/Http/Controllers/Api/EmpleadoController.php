@@ -223,6 +223,8 @@ class EmpleadoController extends Controller
                 "Se creó el colaborador '{$empleado->nombre_completo}' (Doc: {$empleado->documento})"
             );
 
+            WizardCache::forgetOperacionesKey(WizardCache::operacionesColaboradores((int) app('current_tenant_id')));
+
             return response()->json([
                 'message' => 'Colaborador creado correctamente',
                 'data'    => $empleado->load('predio:id,nombre', 'contratoVigente'),
@@ -298,6 +300,8 @@ class EmpleadoController extends Controller
                 "Se editó el colaborador '{$empleado->nombre_completo}'"
             );
 
+            WizardCache::forgetOperacionesKey(WizardCache::operacionesColaboradores((int) app('current_tenant_id')));
+
             return response()->json([
                 'message' => 'Colaborador actualizado correctamente',
                 'data'    => $empleado->fresh()->load('predio:id,nombre', 'contratoVigente'),
@@ -323,6 +327,8 @@ class EmpleadoController extends Controller
 
             // Soft delete: preserva jornales, nómina, cosechas, contratos, documentos y archivos.
             $empleado->delete();
+
+            WizardCache::forgetOperacionesKey(WizardCache::operacionesColaboradores((int) app('current_tenant_id')));
 
             return response()->json(['message' => "Colaborador '{$nombreCompleto}' eliminado correctamente"]);
         } catch (\Throwable $e) {
@@ -354,6 +360,8 @@ class EmpleadoController extends Controller
 
             $empleado->restore();
 
+            WizardCache::forgetOperacionesKey(WizardCache::operacionesColaboradores((int) app('current_tenant_id')));
+
             $this->auditoria->registrar(
                 request: $request,
                 accion: 'RESTAURAR',
@@ -383,6 +391,8 @@ class EmpleadoController extends Controller
                 $request, 'COLABORADORES', $empleado, $datosAnteriores,
                 "Se {$accion} el colaborador '{$empleado->nombre_completo}'"
             );
+
+            WizardCache::forgetOperacionesKey(WizardCache::operacionesColaboradores((int) app('current_tenant_id')));
 
             return response()->json([
                 'message' => "Colaborador {$accion} correctamente",

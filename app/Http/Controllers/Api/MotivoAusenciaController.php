@@ -7,6 +7,7 @@ use App\Http\Requests\MotivoAusencia\StoreMotivoAusenciaRequest;
 use App\Http\Requests\MotivoAusencia\UpdateMotivoAusenciaRequest;
 use App\Models\MotivoAusencia;
 use App\Services\AuditoriaService;
+use App\Support\WizardCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -79,6 +80,8 @@ class MotivoAusenciaController extends Controller
                 "Se creó el motivo de ausencia '{$motivo->nombre}' (tipo_base: {$motivo->tipo_base})"
             );
 
+            WizardCache::forgetOperacionesKey(WizardCache::operacionesMotivosAusencia((int) app('current_tenant_id')));
+
             return response()->json([
                 'message' => 'Motivo de ausencia creado correctamente',
                 'data'    => $motivo,
@@ -99,6 +102,8 @@ class MotivoAusenciaController extends Controller
                 $request, 'MOTIVOS_AUSENCIA', $motivoAusencia, $datosAnteriores,
                 "Se editó el motivo de ausencia '{$motivoAusencia->nombre}'"
             );
+
+            WizardCache::forgetOperacionesKey(WizardCache::operacionesMotivosAusencia((int) app('current_tenant_id')));
 
             return response()->json([
                 'message' => 'Motivo de ausencia actualizado correctamente',
@@ -125,6 +130,8 @@ class MotivoAusenciaController extends Controller
                 "Se eliminó el motivo de ausencia '{$motivoAusencia->nombre}'"
             );
             $motivoAusencia->delete();
+
+            WizardCache::forgetOperacionesKey(WizardCache::operacionesMotivosAusencia((int) app('current_tenant_id')));
 
             return response()->json(['message' => "Motivo '{$motivoAusencia->nombre}' eliminado correctamente"]);
         } catch (\Throwable $e) {
