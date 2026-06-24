@@ -30,7 +30,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   {
-    label: 'Dashboard',
+    label: 'Panel de inicio',
     href: '/',
     icon: Home,
     roles: ['dueño', 'administrador', 'jefe_campo'],
@@ -66,7 +66,7 @@ const navItems: NavItem[] = [
     permiso: 'remisiones.ver',
   },
    {
-    label: 'Nómina',
+    label: 'Pagos',
     href: '/nomina',
     icon: DollarSign,
     roles: ['dueño', 'administrador', 'jefe_campo'],
@@ -86,7 +86,7 @@ const navItems: NavItem[] = [
     roles: ['dueño', 'administrador', 'jefe_campo'],
   },
   {
-    label: 'Market',
+    label: 'Tienda de Insumos',
     href: '/market',
     icon: ShoppingCart,
     roles: ['dueño', 'administrador', 'jefe_campo'],
