@@ -14,7 +14,13 @@ use App\Models\Labor;
 use App\Models\Lote;
 use App\Models\MotivoAusencia;
 use App\Models\Operacion;
+<<<<<<< HEAD
 use App\Models\Sublote;
+=======
+use App\Models\Operario;
+use App\Models\Sublote;
+use App\Models\TerceroLaborPrecio;
+>>>>>>> fefeda6abfbda36a95fb7c45556b4fd25646534a
 use App\Models\TipoHoraExtra;
 use App\Services\AuditoriaService;
 use App\Support\WizardCache;
@@ -34,21 +40,38 @@ class OperacionController extends Controller
     public function index(Request $request): JsonResponse
     {
         try {
-            // Subquery: empleados únicos por operación (entre jornales + cosecha_cuadrilla).
+            // Subquery: personas únicas por operación (empleados + operarios, en jornales + cosecha_cuadrilla).
+            // CONCAT('E_', id) vs CONCAT('O_', id) evita colisiones de IDs entre empleados y operarios.
             $colaboradoresSub = DB::query()
                 ->fromSub(function ($q) {
                     $q->from('jornales')
-                        ->select('operacion_id', 'empleado_id')
+                        ->selectRaw("operacion_id, CONCAT('E_', empleado_id) as persona_key")
                         ->where('estado', true)
+                        ->whereNotNull('empleado_id')
+                        ->union(
+                            DB::table('jornales')
+                                ->selectRaw("operacion_id, CONCAT('O_', operario_id) as persona_key")
+                                ->where('estado', true)
+                                ->whereNotNull('operario_id')
+                        )
                         ->union(
                             DB::table('cosecha_cuadrilla')
                                 ->join('registro_cosecha', 'cosecha_cuadrilla.cosecha_id', '=', 'registro_cosecha.id')
-                                ->select('registro_cosecha.operacion_id', 'cosecha_cuadrilla.empleado_id')
+                                ->selectRaw("registro_cosecha.operacion_id, CONCAT('E_', cosecha_cuadrilla.empleado_id) as persona_key")
                                 ->where('cosecha_cuadrilla.estado', true)
                                 ->where('registro_cosecha.estado', true)
+                                ->whereNotNull('cosecha_cuadrilla.empleado_id')
+                        )
+                        ->union(
+                            DB::table('cosecha_cuadrilla')
+                                ->join('registro_cosecha', 'cosecha_cuadrilla.cosecha_id', '=', 'registro_cosecha.id')
+                                ->selectRaw("registro_cosecha.operacion_id, CONCAT('O_', cosecha_cuadrilla.operario_id) as persona_key")
+                                ->where('cosecha_cuadrilla.estado', true)
+                                ->where('registro_cosecha.estado', true)
+                                ->whereNotNull('cosecha_cuadrilla.operario_id')
                         );
-                }, 'colaboradores_union')
-                ->selectRaw('operacion_id, COUNT(DISTINCT empleado_id) as total')
+                }, 'personas_union')
+                ->selectRaw('operacion_id, COUNT(DISTINCT persona_key) as total')
                 ->groupBy('operacion_id');
 
             $operaciones = Operacion::query()
@@ -177,9 +200,19 @@ class OperacionController extends Controller
         'creadoPor:id,name',
         'aprobadoPor:id,name',
         'cosechas.cuadrilla.empleado:id,primer_nombre,primer_apellido,documento',
+<<<<<<< HEAD
         'cosechas.lote:id,nombre',
         'cosechas.sublote:id,nombre',
         'jornales.empleado:id,primer_nombre,primer_apellido,documento',
+=======
+        'cosechas.cuadrilla.operario:id,nombres,apellidos',
+        'cosechas.cuadrilla.tercero:id,tipo_persona,razon_social,nombre_completo',
+        'cosechas.lote:id,nombre',
+        'cosechas.sublote:id,nombre',
+        'jornales.empleado:id,primer_nombre,primer_apellido,documento',
+        'jornales.operario:id,nombres,apellidos',
+        'jornales.tercero:id,tipo_persona,razon_social,nombre_completo',
+>>>>>>> fefeda6abfbda36a95fb7c45556b4fd25646534a
         'jornales.labor:id,nombre,categoria,tipo,tipo_pago,precio_palma',
         'jornales.lote:id,nombre',
         'jornales.sublote:id,nombre',
@@ -511,6 +544,55 @@ class OperacionController extends Controller
                         ->get(['id', 'codigo', 'nombre', 'porcentaje_recargo', 'franja_horaria',
                                'aplica_festivo', 'es_extra', 'paga_hora_completa', 'descripcion']),
                 ),
+<<<<<<< HEAD
+=======
+
+                'operarios' => Cache::remember(
+                    WizardCache::operacionesOperarios($tenantId),
+                    WizardCache::TTL_PARAMETRICA,
+                    fn () => Operario::query()
+                        ->where('estado', true)
+                        ->with('tercero:id,tipo_persona,razon_social,nombre_completo,nombre_comercial')
+                        ->orderBy('nombres')
+                        ->orderBy('apellidos')
+                        ->get(['id', 'tercero_id', 'nombres', 'apellidos', 'cedula'])
+                        ->map(fn ($o) => [
+                            'id'              => $o->id,
+                            'tercero_id'      => $o->tercero_id,
+                            'nombre_completo' => $o->nombre_completo,
+                            'cedula'          => $o->cedula,
+                            'tercero_nombre'  => $o->tercero?->nombre_display,
+                        ])->values()->all(),
+                ),
+
+                // Overrides activos de `tercero_labor_precios`. Incluye TODOS los
+                // overrides de cualquier categoría (PALMA + FINCA), con o sin
+                // `tipo_pago` poblado:
+                //
+                //   - tipo_pago=POR_PALMA|JORNAL_FIJO → cambia el modo de pago efectivo
+                //   - tipo_pago=null                  → solo overridea precio_palma (modo de pago hereda del catálogo)
+                //
+                // El frontend resuelve, al seleccionar una persona en un tab del wizard:
+                //   1. Si es operario → busca (tercero_id, labor_id) en este array.
+                //   2. tipo_pago efectivo  = override.tipo_pago ?? labor.tipo_pago (catálogo).
+                //   3. precio_palma a mostrar = override.precio_palma (si existe el match) ?? labor.precio_palma.
+                //
+                // El backend hace la MISMA resolución al validar y calcular el POST de jornal,
+                // así que el preview del frontend siempre coincide con el cálculo persistido.
+                'tercero_labor_overrides' => Cache::remember(
+                    WizardCache::operacionesTerceroLaborOverrides($tenantId),
+                    WizardCache::TTL_PARAMETRICA,
+                    fn () => TerceroLaborPrecio::query()
+                        ->where('estado', true)
+                        ->get(['tercero_id', 'labor_id', 'tipo_pago', 'precio_palma'])
+                        ->map(fn ($p) => [
+                            'tercero_id'   => $p->tercero_id,
+                            'labor_id'     => $p->labor_id,
+                            'tipo_pago'    => $p->tipo_pago,
+                            'precio_palma' => $p->precio_palma,
+                        ])->values()->all(),
+                ),
+>>>>>>> fefeda6abfbda36a95fb7c45556b4fd25646534a
             ];
 
             return response()->json([

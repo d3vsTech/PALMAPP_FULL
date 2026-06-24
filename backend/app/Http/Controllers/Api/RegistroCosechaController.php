@@ -37,8 +37,11 @@ class RegistroCosechaController extends Controller
             $anio = (int) $operacion->fecha->format('Y');
             $peso = isset($data['peso_confirmado']) ? (float) $data['peso_confirmado'] : null;
 
+            // Derivar terceroId: del campo explícito o del primer operario de la cuadrilla
+            $terceroId = $data['tercero_id'] ?? $this->derivarTerceroIdDeCuadrilla($data['cuadrilla']);
+
             $laborCosecha = $this->resolverLaborCosecha();
-            $calc = $this->calcService->calcular($laborCosecha, $data['lote_id'], $anio, $peso);
+            $calc = $this->calcService->calcular($laborCosecha, $data['lote_id'], $anio, $peso, $terceroId);
 
             [$cosecha, $n] = DB::transaction(function () use ($operacion, $data, $peso, $calc, $laborCosecha) {
                 $cosecha = RegistroCosecha::create([
@@ -54,8 +57,10 @@ class RegistroCosechaController extends Controller
                     'estado'           => true,
                 ]);
 
-                $empleados = collect($data['cuadrilla'])->pluck('empleado_id')->unique()->values();
-                $n = $empleados->count();
+                $miembros = collect($data['cuadrilla'])->unique(function ($m) {
+                    return !empty($m['empleado_id']) ? "E_{$m['empleado_id']}" : "O_{$m['operario_id']}";
+                })->values();
+                $n = $miembros->count();
 
                 $dist = $this->calcService->distribuirCuadrilla(
                     $calc['valor_total'] !== null ? (float) $calc['valor_total'] : null,
@@ -63,10 +68,12 @@ class RegistroCosechaController extends Controller
                     $n,
                 );
 
-                foreach ($empleados as $empleadoId) {
+                foreach ($miembros as $miembro) {
                     CosechaCuadrilla::create([
                         'cosecha_id'              => $cosecha->id,
-                        'empleado_id'             => $empleadoId,
+                        'empleado_id'             => $miembro['empleado_id'] ?? null,
+                        'operario_id'             => $miembro['operario_id'] ?? null,
+                        'tercero_id'              => $miembro['tercero_id'] ?? null,
                         'peso_calculado_empleado' => $dist['peso_por_empleado'],
                         'valor_calculado'         => $dist['valor_por_empleado'],
                         'estado'                  => true,
@@ -77,14 +84,18 @@ class RegistroCosechaController extends Controller
             });
 
             $descripcion = $cosecha->valor_total !== null
-                ? "Se agregó cosecha con peso {$cosecha->peso_confirmado} kg (valor_total \${$cosecha->valor_total}, distribuido entre {$n} empleados) en planilla {$operacion->fecha->format('Y-m-d')} (lote {$cosecha->lote_id})"
-                : "Se agregó cosecha pendiente de peso (solo gajos={$cosecha->gajos_reportados}, {$n} empleados) en planilla {$operacion->fecha->format('Y-m-d')} (lote {$cosecha->lote_id})";
+                ? "Se agregó cosecha con peso {$cosecha->peso_confirmado} kg (valor_total \${$cosecha->valor_total}, distribuido entre {$n} miembros) en planilla {$operacion->fecha->format('Y-m-d')} (lote {$cosecha->lote_id})"
+                : "Se agregó cosecha pendiente de peso (solo gajos={$cosecha->gajos_reportados}, {$n} miembros) en planilla {$operacion->fecha->format('Y-m-d')} (lote {$cosecha->lote_id})";
 
             $this->auditoria->registrarCreacion($request, 'COSECHAS', $cosecha, $descripcion);
 
             return response()->json([
                 'message' => 'Cosecha registrada correctamente',
-                'data'    => $cosecha->load('cuadrilla.empleado:id,primer_nombre,primer_apellido,documento'),
+                'data'    => $cosecha->load(
+                    'cuadrilla.empleado:id,primer_nombre,primer_apellido,documento',
+                    'cuadrilla.operario:id,nombres,apellidos',
+                    'cuadrilla.tercero:id,tipo_persona,razon_social,nombre_completo',
+                ),
             ], 201);
         } catch (\InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage(), 'code' => 'CALC_ERROR'], 422);
@@ -175,15 +186,19 @@ class RegistroCosechaController extends Controller
                 if (isset($validated['cuadrilla'])) {
                     $cosecha->cuadrilla()->delete();
 
-                    $empleados = collect($validated['cuadrilla'])->pluck('empleado_id')->unique()->values();
-                    $n = $empleados->count();
+                    $miembros = collect($validated['cuadrilla'])->unique(function ($m) {
+                        return !empty($m['empleado_id']) ? "E_{$m['empleado_id']}" : "O_{$m['operario_id']}";
+                    })->values();
+                    $n = $miembros->count();
 
                     $dist = $this->calcService->distribuirCuadrilla($valorTotal, $pesoEfectivo, $n);
 
-                    foreach ($empleados as $empleadoId) {
+                    foreach ($miembros as $miembro) {
                         CosechaCuadrilla::create([
                             'cosecha_id'              => $cosecha->id,
-                            'empleado_id'             => $empleadoId,
+                            'empleado_id'             => $miembro['empleado_id'] ?? null,
+                            'operario_id'             => $miembro['operario_id'] ?? null,
+                            'tercero_id'              => $miembro['tercero_id'] ?? null,
                             'peso_calculado_empleado' => $dist['peso_por_empleado'],
                             'valor_calculado'         => $dist['valor_por_empleado'],
                             'estado'                  => true,
@@ -217,7 +232,11 @@ class RegistroCosechaController extends Controller
 
             return response()->json([
                 'message' => 'Cosecha actualizada correctamente',
-                'data'    => $cosecha->fresh()->load('cuadrilla.empleado:id,primer_nombre,primer_apellido,documento'),
+                'data'    => $cosecha->fresh()->load(
+                    'cuadrilla.empleado:id,primer_nombre,primer_apellido,documento',
+                    'cuadrilla.operario:id,nombres,apellidos',
+                    'cuadrilla.tercero:id,tipo_persona,razon_social,nombre_completo',
+                ),
             ]);
         } catch (\InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage(), 'code' => 'CALC_ERROR'], 422);
@@ -276,5 +295,19 @@ class RegistroCosechaController extends Controller
             ->where('tipo', Labor::TIPO_COSECHA)
             ->where('es_sistema', true)
             ->firstOrFail();
+    }
+
+    /**
+     * Deriva el terceroId de la cuadrilla si todos los miembros son operarios.
+     * Usa el tercero_id del primer operario encontrado.
+     */
+    private function derivarTerceroIdDeCuadrilla(array $cuadrilla): ?int
+    {
+        foreach ($cuadrilla as $miembro) {
+            if (!empty($miembro['tercero_id'])) {
+                return (int) $miembro['tercero_id'];
+            }
+        }
+        return null;
     }
 }

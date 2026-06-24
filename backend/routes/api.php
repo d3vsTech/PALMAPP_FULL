@@ -54,6 +54,9 @@ use App\Http\Controllers\Api\Nomina\NominaConceptoController;
 use App\Http\Controllers\Api\Nomina\NominaController;
 use App\Http\Controllers\Api\Nomina\NominaEmpleadoController;
 use App\Http\Controllers\Api\TipoHoraExtraController;
+use App\Http\Controllers\Api\TerceroController;
+use App\Http\Controllers\Api\OperarioController;
+use App\Http\Controllers\Api\TerceroConfiguracionController;
 use App\Http\Controllers\Api\TransportadorController;
 use App\Http\Controllers\Api\ViajeController;
 use App\Http\Controllers\Api\ViajeDocumentoBasculaController;
@@ -552,6 +555,16 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
     Route::get('tipos-hora-extra/select', [TipoHoraExtraController::class, 'select'])
         ->middleware('check.permission:configuracion.editar,operaciones.crear,operaciones.editar');
 
+    // ── Operarios select (dropdown del wizard de Operaciones) ──
+    // Fuera del grupo configuracion.editar para que operadores con permiso de
+    // operaciones puedan poblar el dropdown del wizard sin acceso a Configuración.
+    Route::get('operarios/select', [OperarioController::class, 'selectStandalone'])
+        ->middleware('check.permission:configuracion.editar,operaciones.crear,operaciones.editar');
+
+    // ── Terceros select (dropdown de contexto en wizard / operaciones) ──
+    Route::get('terceros/select', [TerceroController::class, 'select'])
+        ->middleware('check.permission:configuracion.editar,operaciones.crear,operaciones.editar');
+
     // ── Tipos de hora extra codigos (lista estática de los 7 códigos legales colombianos) ──
     Route::get('tipos-hora-extra/codigos', [TipoHoraExtraController::class, 'codigos'])
         ->middleware('check.permission:configuracion.editar');
@@ -713,6 +726,38 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
         // ── Auditoría del Tenant ──
         Route::get('auditorias', [TenantAuditoriaController::class, 'index']);
         Route::get('auditorias/{auditoria}', [TenantAuditoriaController::class, 'show']);
+
+        // ── Terceros y Operarios (Configuración → Terceros) ──
+        // CRUD completo bajo configuracion.editar.
+        // Los selects para el wizard de Operaciones están fuera de este grupo.
+        Route::get('terceros/wizard-init', [TerceroConfiguracionController::class, 'wizardInit']);
+        Route::get('terceros', [TerceroController::class, 'index']);
+        Route::get('terceros/{tercero}', [TerceroController::class, 'show']);
+        Route::post('terceros', [TerceroController::class, 'store']);
+        Route::put('terceros/{tercero}', [TerceroController::class, 'update']);
+        Route::delete('terceros/{tercero}', [TerceroController::class, 'destroy']);
+        Route::patch('terceros/{tercero}/toggle', [TerceroController::class, 'toggle']);
+
+        Route::get('terceros/{tercero}/operarios/select', [OperarioController::class, 'select']);
+        Route::get('terceros/{tercero}/operarios', [OperarioController::class, 'index']);
+        Route::get('terceros/{tercero}/operarios/{operario}', [OperarioController::class, 'show']);
+        Route::post('terceros/{tercero}/operarios', [OperarioController::class, 'store']);
+        Route::put('terceros/{tercero}/operarios/{operario}', [OperarioController::class, 'update']);
+        Route::delete('terceros/{tercero}/operarios/{operario}', [OperarioController::class, 'destroy']);
+        Route::patch('terceros/{tercero}/operarios/{operario}/toggle', [OperarioController::class, 'toggle']);
+
+        // Configuración de precios diferenciados del tercero
+        Route::get('terceros/{tercero}/configuracion/init', [TerceroConfiguracionController::class, 'bundleInit']);
+        Route::get('terceros/{tercero}/labor-precios', [TerceroConfiguracionController::class, 'indexLaborPrecios']);
+        Route::post('terceros/{tercero}/labor-precios', [TerceroConfiguracionController::class, 'storeLaborPrecio']);
+        Route::delete('terceros/{tercero}/labor-precios/{precio}', [TerceroConfiguracionController::class, 'destroyLaborPrecio']);
+        Route::get('terceros/{tercero}/precios-cosecha', [TerceroConfiguracionController::class, 'indexPreciosCosecha']);
+        Route::post('terceros/{tercero}/precios-cosecha', [TerceroConfiguracionController::class, 'storePrecioCosecha']);
+        Route::delete('terceros/{tercero}/precios-cosecha/{precio}', [TerceroConfiguracionController::class, 'destroyPrecioCosecha']);
+        Route::get('terceros/{tercero}/precios-abono', [TerceroConfiguracionController::class, 'indexPreciosAbono']);
+        Route::post('terceros/{tercero}/precios-abono', [TerceroConfiguracionController::class, 'storePrecioAbono']);
+        Route::put('terceros/{tercero}/precios-abono/{precio}', [TerceroConfiguracionController::class, 'updatePrecioAbono']);
+        Route::delete('terceros/{tercero}/precios-abono/{precio}', [TerceroConfiguracionController::class, 'destroyPrecioAbono']);
     });
 
     // ── Perfil de Usuario (sin permiso especial, solo autenticado) ──

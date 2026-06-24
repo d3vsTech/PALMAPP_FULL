@@ -146,6 +146,31 @@ class WizardCache
         Cache::forget(self::tenantUser($tenantId, $userId));
     }
 
+<<<<<<< HEAD
+=======
+    // ── Wizard de Terceros (creación y configuración de precios) ────────────────
+
+    public static function terceroWizardInit(int $tenantId): string
+    {
+        return "wizard:tercero:wizard_init:t:{$tenantId}";
+    }
+
+    public static function terceroConfigBundle(int $tenantId, int $terceroId): string
+    {
+        return "wizard:tercero:config_bundle:t:{$tenantId}:tr:{$terceroId}";
+    }
+
+    public static function forgetTerceroConfigBundle(int $tenantId, int $terceroId): void
+    {
+        Cache::forget(static::terceroConfigBundle($tenantId, $terceroId));
+    }
+
+    public static function forgetTerceroWizardInit(int $tenantId): void
+    {
+        Cache::forget(static::terceroWizardInit($tenantId));
+    }
+
+>>>>>>> fefeda6abfbda36a95fb7c45556b4fd25646534a
     // ── Wizard de Operaciones (planilla del día) ──────────────────────────────
     // Bundle único `GET /operaciones[/{id}]/wizard-init` reemplaza las 8
     // peticiones que el wizard hacía a /select. Cada catálogo se cachea por
@@ -187,6 +212,19 @@ class WizardCache
         return "wizard:op:tipos_he:t:{$tenantId}";
     }
 
+<<<<<<< HEAD
+=======
+    public static function operacionesOperarios(int $tenantId): string
+    {
+        return "wizard:op:operarios:t:{$tenantId}";
+    }
+
+    public static function operacionesTerceroLaborOverrides(int $tenantId): string
+    {
+        return "wizard:op:tercero_labor_overrides:t:{$tenantId}";
+    }
+
+>>>>>>> fefeda6abfbda36a95fb7c45556b4fd25646534a
     public static function forgetOperacionesKey(string $key): void
     {
         Cache::forget($key);
@@ -203,6 +241,11 @@ class WizardCache
             self::operacionesLabores($tenantId, 'FINCA'),
             self::operacionesMotivosAusencia($tenantId),
             self::operacionesTiposHoraExtra($tenantId),
+<<<<<<< HEAD
+=======
+            self::operacionesOperarios($tenantId),
+            self::operacionesTerceroLaborOverrides($tenantId),
+>>>>>>> fefeda6abfbda36a95fb7c45556b4fd25646534a
         ] as $key) {
             Cache::forget($key);
         }

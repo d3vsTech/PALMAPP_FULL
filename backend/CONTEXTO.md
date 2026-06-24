@@ -159,7 +159,7 @@ Cada login bloquea a los actores que no le corresponden (p. ej. el `tenant-auth/
 
 ## 5. Estructura de la Base de Datos
 
-### 5.1 Resumen: 44 tablas organizadas en 15 migraciones
+### 5.1 Resumen: 49 tablas organizadas en 15+ migraciones
 
 **Migración 1 — Tenants:** `tenants` (core multi-tenant)
 
@@ -205,6 +205,8 @@ Cada login bloquea a los actores que no le corresponden (p. ej. el `tenant-auth/
 **Migración 22 — Sub-módulo Configuración → Nómina (3 alters):** Cierra los gaps entre la pantalla del frontend "Configuración → Nómina" y el modelo de datos. (1) `motivos_ausencia`: agrega `color` (`varchar(7)` nullable, hex tipo `#3b82f6`) usado por la UI para el punto de color del listado y del modal "Nuevo Tipo de Novedad"; `MotivoAusenciaSeeder` asigna un color por defecto a los 11 motivos base. (2) `tipos_hora_extra`: agrega `descripcion` (`varchar(150)` nullable) para que cada tipo declare su franja horaria en texto libre (ej. "Lunes a sábado 6:00 AM - 9:00 PM"); `TipoHoraExtraSeeder` pre-llena los 7 sembrados. (3) `tenant_config`: agrega 4 columnas `unsignedTinyInteger` (`dia_inicio_q1=1`, `dia_fin_q1=15`, `dia_inicio_q2=16`, `dia_fin_q2=31`) que hacen configurables las fechas de corte de cada quincena. `Nomina::calcularRangoFechas()` ahora las lee desde `tenant_config` y clampea `dia_fin_q2` al último día real del mes (febrero → 28/29, abril → 30). Nóminas ya creadas conservan su `fecha_inicio`/`fecha_fin` originales — solo afecta nuevas. `ConfiguracionNominaController::update` valida coherencia cruzada (sin solapamiento Q1/Q2, fin ≥ inicio); si falla devuelve `422 CORTE_QUINCENA_INVALIDO`. También se extrae la validación inline de `NominaConceptoController` a FormRequests dedicados (`StoreNominaConceptoRequest`/`UpdateNominaConceptoRequest`) — sin cambio funcional, solo alineación con el patrón del resto del proyecto.
 
 **Migración 23 — Unificación de Labores (6 sub-migraciones, junio 2026):** Fusiona las dos tablas `labores` (finca) y `precios_palma` (palma fijas + custom) en un **catálogo único** `labores` con discriminador `categoria` (`PALMA`/`FINCA`) + `tipo` (5 fijas: COSECHA/PLATEO/PODA/FERTILIZACION/SANIDAD, NULL en custom) + `tipo_pago` (POR_PALMA/JORNAL_FIJO) + `es_sistema` (true en fijas inmutables). **Cambio clave:** todas las labores fijas del core ahora pueden configurarse como POR_PALMA o JORNAL_FIJO, incluyendo COSECHA (mantiene flujo especial `registro_cosecha`+cuadrilla cuando POR_PALMA, valor plano cuando JORNAL_FIJO) y FERTILIZACION (mantiene `precio_abono` cuando POR_PALMA, valor plano cuando JORNAL_FIJO; `insumo_id`+`gramos_por_palma` se vuelven opcionales en JORNAL_FIJO como tracking). El tipo OTROS desaparece — las labores custom de palma quedan con `tipo=NULL`. Cadena conservadora de 6 migraciones (`2026_06_03_000001..000006`): (1) extiende `labores` con `categoria`+`tipo`+`es_sistema`, renombra `valor_base → precio_palma`, crea índice parcial UNIQUE `(tenant_id, tipo) WHERE tipo IS NOT NULL`; (2) por cada tenant siembra las 5 fijas con `firstOrCreate`, migra `precios_palma` custom (`es_sistema=false`) a `labores` custom, persiste mapping `_lp_migration_map(precios_palma_id, labor_id)`; (3) agrega `registro_cosecha.labor_id` (FK a `labores`, nullable) como snapshot de la labor COSECHA del tenant, backfilleado para cosechas históricas; (4) re-apunta `jornales.labor_id`: catálogo OTROS vía mapping, fijas vía `(tenant, tipo, es_sistema=true)`, OTROS legacy (sin `labor_palma_id`) → labor custom auto-creada "Otros (legacy)" con `estado=false`; (5) drop `jornales.labor_palma_id` + FK, hace `labor_id` NOT NULL, recrea CHECK del enum `tipo` sin `OTROS` (UPDATE previo `tipo=NULL WHERE tipo='OTROS'`); (6) drop tabla `precios_palma` y tabla temporal de mapping. Elimina modelos/controllers/requests: `PrecioPalma`, `PrecioPalmaController`, `LaborPalmaController`, `StoreLaborPalmaRequest`. `JornalCalculationService` queda con una sola entrada `calcular(Labor, array)` que despacha por `labor.tipo` y `labor.tipo_pago`. `Labor::booted()` aplica invariantes (FINCA fuerza `JORNAL_FIJO`+`tipo=NULL`; fijas blindan `nombre` canónico; borrado de fijas lanza `DomainException`). Ver [docs/LABORES_JORNALES.md](docs/LABORES_JORNALES.md) y [docs/API_PARAMETRICAS.md §4](docs/API_PARAMETRICAS.md).
+
+**Migración 24 — Terceros y Operarios (5 tablas nuevas + 2 alters, junio 2026):** Incorpora el modelo de **contratistas externos** (terceros) cuyos trabajadores (operarios) pueden registrarse en jornales y cosechas con precios diferenciados. Crea: `terceros` (empresas o personas naturales contratistas: `tipo_persona` enum `JURIDICA/NATURAL`, `nit` único por tenant con nullable, `razon_social`, `representante`, `cedula` único por tenant, `nombre_completo`, `nombre_comercial`, `telefono`, `email`, `estado`), `operarios` (trabajadores del tercero: `nombres`, `apellidos`, `cedula`, `cargo`, `eps`/`arl` como strings — igual que en Empleado, para preservar histórico), `tercero_labor_precios` (override de `labores.precio_palma` por tercero+labor, UNIQUE `(tenant_id, tercero_id, labor_id)`), `tercero_precios_cosecha` (override de precio de cosecha por tercero+lote+año, UNIQUE `(tenant_id, tercero_id, lote_id, anio)`), `tercero_precio_abono` (rangos gramos→precio para abonos por tercero, con validación de solapamiento). Altera: (1) `jornales` — hace `empleado_id` nullable, agrega `operario_id` FK `restrictOnDelete` y `tercero_id` FK `restrictOnDelete`; (2) `cosecha_cuadrilla` — mismo patrón XOR. **Regla XOR:** exactamente uno de `empleado_id` u `operario_id` debe estar presente en cada jornal / fila de cuadrilla. El `tercero_id` se inyecta automáticamente por el backend a partir del `operario_id`. **Lógica de fallback de precios:** para un jornal de operario, el servicio busca primero en `tercero_labor_precios` (o `tercero_precio_abono` para fertilización, o `tercero_precios_cosecha` para cosecha), y si no hay override cae al precio del tenant. Ver [docs/API_TERCEROS.md](docs/API_TERCEROS.md).
 
 **Migración 14 — Chat del Agente IA (2 tablas nuevas):** Crea `agro_chat_sessions` (conversaciones del usuario con el agente IA: `user_id` + `tenant_id` con `ON DELETE CASCADE`, `titulo`, `created_at`/`updated_at` como `TIMESTAMPTZ`) y `agro_chat_messages` (mensajes individuales: `session_id` FK cascade a sessions, `user_id`, `tenant_id`, `role` `user|assistant|system|tool`, `content` texto, `tool_calls` JSONB para auditar qué consultas SQL hizo el agente, `tokens_in`/`tokens_out` opcionales para telemetría, `created_at` TIMESTAMPTZ). Índices: `(user_id, tenant_id, updated_at)` en sesiones; `(session_id, created_at)` y `(user_id, created_at)` en mensajes. Usadas por un agente IA externo que se conecta a la BD: **solo escribe** en estas dos tablas (4 operaciones: crear sesión, insertar mensaje, tocar `updated_at` de la sesión, eliminar sesión con cascada) y **solo lee** el resto del esquema Laravel (users, tenants, predios, lotes, palmas, etc.).
 
@@ -386,7 +388,11 @@ Este módulo es **crítico para offline** — los supervisores registran jornale
 Modelos: Jornal, Labor, PrecioAbono, PrecioCosecha. Servicios: JornalCalculationService, CosechaCalculationService.
 
 **API expuesta (Paso 1 + Paso 2 + Paso 3 del wizard):**
+<<<<<<< HEAD
 - `OperacionController`: `GET/POST/PUT/DELETE /operaciones`, `POST /operaciones/{id}/aprobar`, `GET /operaciones/{id}/resumen`. En `resumen()` el bucket "otros" se llena con jornales `categoria='PALMA' AND tipo IS NULL` (labores custom de palma). **Bundle de apertura del wizard:** `GET /operaciones[/{id}]/wizard-init` (permiso `operaciones.ver`) devuelve en una sola respuesta `{ planilla, resumen, parametricas: { colaboradores, lotes, sublotes, insumos, labores_palma, labores_finca, motivos_ausencia, tipos_hora_extra } }`. Reemplaza las ~10 peticiones que el frontend hacía al abrir el detalle. Los 8 catálogos se cachean por tenant con `WizardCache::operacionesXxx()` (TTL 15 min) y se invalidan automáticamente en los controllers que mutan cada catálogo (Empleado, Lote, Sublote, Insumo, Labor, MotivoAusencia, TipoHoraExtra) mediante `WizardCache::forgetOperacionesKey()`. El resumen se calcula reutilizando las relaciones eager-loaded del show (1 sola query SQL extra para `horas_extra.SUM`). Los endpoints `/select` originales siguen vivos sin cambios para otros consumidores.
+=======
+- `OperacionController`: `GET/POST/PUT/DELETE /operaciones`, `POST /operaciones/{id}/aprobar`, `GET /operaciones/{id}/resumen`. En `resumen()` el bucket "otros" se llena con jornales `categoria='PALMA' AND tipo IS NULL` (labores custom de palma). **Bundle de apertura del wizard:** `GET /operaciones[/{id}]/wizard-init` (permiso `operaciones.ver`) devuelve en una sola respuesta `{ planilla, resumen, parametricas: { colaboradores, operarios, lotes, sublotes, insumos, labores_palma, labores_finca, motivos_ausencia, tipos_hora_extra } }`. La clave `operarios` lista todos los operarios activos del tenant con `{id, tercero_id, nombre_completo, cedula, tercero_nombre}` — el frontend los mezcla con `colaboradores` en el mismo dropdown del selector de persona. Reemplaza las ~10 peticiones que el frontend hacía al abrir el detalle. Los **9 catálogos** se cachean por tenant con `WizardCache::operacionesXxx()` (TTL 15 min) y se invalidan automáticamente en los controllers que mutan cada catálogo (Empleado, Operario, Lote, Sublote, Insumo, Labor, MotivoAusencia, TipoHoraExtra) mediante `WizardCache::forgetOperacionesKey()`. El resumen se calcula reutilizando las relaciones eager-loaded del show (1 sola query SQL extra para `horas_extra.SUM`). Los endpoints `/select` originales siguen vivos sin cambios para otros consumidores.
+>>>>>>> fefeda6abfbda36a95fb7c45556b4fd25646534a
 - `RegistroCosechaController`: `POST /operaciones/{id}/cosechas`, `PUT|DELETE /cosechas/{id}`. Resuelve la labor fija COSECHA del tenant y la pasa a `CosechaCalculationService`. Si la labor está en `POR_PALMA` (default) usa `precios_cosecha` y peso × precio como siempre. Si está en `JORNAL_FIJO`, `valor_total = labor.precio_palma` plano (peso opcional, persistido solo como tracking). Distribuye `valor_total / N` entre la cuadrilla. Usa `StoreRegistroCosechaRequest` y `UpdateRegistroCosechaRequest` (FormRequests dedicados).
 - `JornalController`: `POST /operaciones/{id}/jornales`, `PUT|DELETE /jornales/{id}`. Carga la labor, delega a `JornalCalculationService::calcular(Labor, array)`. Devuelve 422 `CALC_ERROR` si la labor es COSECHA.
 - `LaborController`: CRUD unificado de `labores` (palma fijas + custom + finca custom) bajo `configuracion.editar`. `GET /labores/select?categoria=PALMA|FINCA` abierto a `operaciones.crear|editar` para dropdowns del wizard. Bloquea borrar fijas (403 `LABOR_DEL_SISTEMA`), borrar custom con jornales (409 `LABOR_CON_JORNALES`) y borrar la fija COSECHA con cosechas asociadas (409 `LABOR_CON_COSECHAS`).
@@ -680,6 +686,48 @@ Si el empleado no tiene `salario_base` (modalidad PRODUCCION sin pactar), se cae
 
 Modelos: TipoHoraExtra, HoraExtra, NominaHoraExtraRef. Contrato completo con payloads y ejemplos: [docs/API_HORAS_EXTRA.md](docs/API_HORAS_EXTRA.md).
 
+### 6.14 Módulo Terceros y Operarios
+
+Las fincas pueden contratar **terceros** (empresas o personas naturales contratistas) cuyos **operarios** realizan las mismas labores que los colaboradores propios, pero con **precios diferenciados por tercero**. Un jornal o cosecha es asignado a un colaborador O a un operario — nunca ambos (regla XOR).
+
+**Entidades principales:**
+- **Tercero** (`app/Models/Tercero.php`): empresa o persona natural. `tipo_persona` ∈ {`JURIDICA`, `NATURAL`}. Accessors `nombre_display` y `documento_display` para UI genérica. Relaciones: `operarios()`, `laborPrecios()`, `preciosCosecha()`, `preciosAbono()`.
+- **Operario** (`app/Models/Operario.php`): trabajador del tercero. Accessor `nombre_completo`. EPS/ARL guardadas como strings (igual que en Empleado). Relaciones: `tercero()`, `jornales()`, `cosechasCuadrilla()`.
+- **TerceroLaborPrecio** — override por tercero+labor (upsert). Sobreescribe **monto** (`precio_palma`) y opcionalmente el **modo de pago** (`tipo_pago` nullable: `POR_PALMA`/`JORNAL_FIJO`/`NULL`). Si `tipo_pago=NULL` hereda `labores.tipo_pago`; si está poblado, ese gana para jornales y cosechas de operarios de ese tercero. **Aplica a labores PALMA y FINCA** (mismo schema, mismo endpoint): un colaborador propio paga `labor.precio_palma` del catálogo, un operario del tercero paga el override si existe (caso típico FINCA: un mismo "Transporte interno" cobrado distinto por colaboradores vs operarios de un contratista). FINCA rechaza override a `POR_PALMA` por invariante del modelo (`Labor::booted()` fuerza JORNAL_FIJO).
+- **TerceroPrecioCosecha** — override de precio de cosecha por tercero+lote+año (upsert).
+- **TerceroPrecioAbono** — rangos gramos→precio para fertilización del tercero (con validación de solapamiento igual que `precio_abono` tenant).
+
+**Lógica de fallback de precios:** para cualquier labor de un operario, el `JornalCalculationService` y el `CosechaCalculationService` aceptan `?int $terceroId = null` como parámetro adicional (backward compatible). Si hay override configurado para ese tercero, se usa; si no, cae al precio del tenant. La decisión POR_PALMA vs JORNAL_FIJO se centraliza en `Labor::resolverTipoPago(?int $terceroId): string` — único punto de verdad consumido por validator (StoreJornalRequest), services (Jornal/Cosecha) y wizards (frontend vía `parametricas.tercero_labor_overrides`).
+
+**Impacto en modelos existentes:**
+- `Jornal` y `CosechaCuadrilla`: `empleado_id` ahora nullable. Añadidos `operario_id` y `tercero_id`. Helper `esDeOperario(): bool`.
+- `StoreJornalRequest` / `StoreRegistroCosechaRequest` / `UpdateRegistroCosechaRequest`: validación XOR con auto-inyección de `tercero_id` desde el `operario`.
+- `OperacionController`: `wizard-init` devuelve `parametricas.operarios` y `parametricas.tercero_labor_overrides` (ambos cacheados). `colaboradores_count` en listado incluye operarios via `CONCAT('E_', empleado_id)` / `CONCAT('O_', operario_id)` para evitar colisiones.
+- `Jornal` modelo: accessor virtual `tipo_pago_efectivo` (aplicado en `$appends`) que devuelve el resultado de `Labor::resolverTipoPago($tercero_id)` cuando la relación `labor` está cargada. Permite que la UI re-abra jornales históricos de terceros con override y pinte los inputs consistentemente.
+- `WizardCache`: claves `operacionesOperarios(tenantId)` y `operacionesTerceroLaborOverrides(tenantId)`, incluidas en `forgetOperacionesBundle()`. Las mutaciones de `tercero_labor_precios` en `TerceroConfiguracionController` invalidan **ambos** bundles (config del tercero y operaciones del tenant). El array `parametricas.tercero_labor_overrides` del wizard de Operaciones incluye **todos** los overrides activos (PALMA + FINCA), con `tipo_pago` poblado o `null` — el frontend resuelve el modo y precio efectivo combinando con `labor.tipo_pago` / `labor.precio_palma` del catálogo.
+
+**API expuesta (34 rutas):**
+- `TerceroController`: CRUD + toggle + select. Permiso `configuracion.editar` (el módulo vive en Configuración). Bloquea eliminar si tiene operarios (409 `TERCERO_CON_OPERARIOS`).
+- `OperarioController`: CRUD nested bajo `/terceros/{tercero}/operarios`, más standalone `GET /operarios/select` para el wizard (acepta también `operaciones.crear,operaciones.editar`). Invalida caché del wizard en mutaciones. Bloquea eliminar si tiene jornales/cosechas (409 `OPERARIO_CON_JORNALES`).
+- `TerceroConfiguracionController`: **wizard-init** (nuevo) + `bundleInit` + CRUD de los 3 tipos de precios. Valida solapamiento en `precios-abono` (409 `RANGO_SOLAPADO`).
+
+**Wizard de creación de Terceros (3 pasos):**
+El flujo de creación es ahora un wizard guiado. Step 1 crea el tercero (`POST /terceros`). Step 2 configura precios usando el nuevo endpoint de contexto + los endpoints individuales existentes. Step 3 añade operarios.
+- `GET /terceros/wizard-init` — bundle sin `tercero_id`: labores PALMA **y FINCA** (excluye solo COSECHA y FERTILIZACION, que tienen flujos dedicados), lotes+sublotes, escalas abono del tenant como referencia, `anio_actual`, EPS, ARL. Cada labor trae `categoria` para que el frontend agrupe en sub-secciones (Labores de Palma + Labores de Finca). Cacheado 60 s por tenant (`WizardCache::terceroWizardInit`).
+- `POST /terceros/{id}/precios-cosecha` — `anio` ahora nullable; si se omite usa `now()->year` (el wizard no muestra campo de año).
+- EPS/ARL en el paso de Operarios son dropdowns alimentados por catálogos (`Eps`, `Arl`); el frontend envía el `nombre` (string), no el `id`.
+
+**Caché en `TerceroConfiguracionController`:**
+- `wizardInit()` → `WizardCache::terceroWizardInit(tenantId)` — TTL 60 s. Datos tenant-level (labores, lotes, precios_abono). EPS/ARL con sus propios TTL de 15 min.
+- `bundleInit()` → `WizardCache::terceroConfigBundle(tenantId, terceroId)` — TTL 60 s. Invalida explícitamente en las 7 mutaciones del controller (`forgetTerceroConfigBundle`). El `tercero` siempre fresco (fuera del cache, via route model binding).
+- `WizardCache`: nuevas claves `terceroWizardInit`, `terceroConfigBundle` y helpers `forgetTerceroConfigBundle`, `forgetTerceroWizardInit`.
+
+**Códigos de error nuevos:** `TERCERO_CON_OPERARIOS` (409), `OPERARIO_CON_JORNALES` (409), `RANGO_SOLAPADO` (409).
+
+**Pendiente (siguiente fase):** `AgrupadorJornalesTerceroService` — agrupa jornales por `tercero_id` para la liquidación de terceros en nómina (lista de pago al tercero por operario).
+
+Modelos: Tercero, Operario, TerceroLaborPrecio, TerceroPrecioCosecha, TerceroPrecioAbono. Contrato completo: [docs/API_TERCEROS.md](docs/API_TERCEROS.md).
+
 ---
 
 ## 7. Permisos y Control de Acceso
@@ -719,6 +767,7 @@ Los permisos están agrupados por módulo y son los mismos para todos los tenant
 - **Colaboradores:** `colaboradores.*`, `contratos.*`
 - **Operaciones:** `operaciones.*`, `cosecha.*`, `jornales.*`, `auxiliares.*`
 - **Viajes:** `viajes.*`
+- **Terceros y Operarios:** `configuracion.editar` — el módulo vive en Configuración, igual que labores, precios de abono y demás paramétricas. Los selects `/terceros/select` y `/operarios/select` también aceptan `operaciones.crear,operaciones.editar` para el wizard.
 - **Nómina:** `nomina.ver`, `nomina.crear`, `nomina.editar`, `nomina.eliminar`, `nomina.liquidar`, `nomina.cerrar`, `nomina-conceptos.ver`, `nomina-conceptos.gestionar`
 - **Usuarios:** `usuarios.ver`, `usuarios.crear`, `usuarios.editar`, `usuarios.eliminar`, `usuarios.ver_permisos`, `usuarios.editar_permisos`, `usuarios.desactivar`
 - **Configuración:** `configuracion.editar`
@@ -1126,7 +1175,7 @@ PUT    /api/v1/market/proveedor/perfil/password           → Cambiar contraseñ
 ## 12. Estado Actual del Proyecto
 
 **Implementado y listo para usar:**
-- Todas las migraciones (37 tablas, incluyendo `lineas` entre sublotes y palmas, `empleado_contratos` y `empleado_documentos`)
+- Todas las migraciones (49 tablas, incluyendo `lineas` entre sublotes y palmas, `empleado_contratos` y `empleado_documentos`, y las 5 nuevas tablas del módulo Terceros+Operarios)
 - Todos los modelos (37+ modelos con relaciones y scopes, incluyendo Linea, SemillaLote, EmpleadoContrato, EmpleadoDocumento)
 - Trait BelongsToTenant
 - Middleware SetTenant, SuperAdmin y CheckPermission
@@ -1169,6 +1218,8 @@ PUT    /api/v1/market/proveedor/perfil/password           → Cambiar contraseñ
   - Variable `BOT_USER_PASSWORD` en `.env` para el password del bot
   - Documentación completa para el desarrollador del bot Python en `docs/API_BOT.md` (login, select-tenant, headers, manejo de errores, cliente Python de referencia)
 
+- **Módulo Terceros y Operarios** — `TerceroController` (CRUD + toggle + select), `OperarioController` (CRUD nested + select standalone para wizard), `TerceroConfiguracionController` (bundleInit + CRUD de 3 tipos de precios diferenciados). 5 nuevos modelos (Tercero, Operario, TerceroLaborPrecio, TerceroPrecioCosecha, TerceroPrecioAbono). 7 migraciones. 33 rutas bajo `configuracion.editar` (selects también aceptan `operaciones.crear,operaciones.editar` para el wizard). `JornalCalculationService` y `CosechaCalculationService` actualizados con fallback de precios por tercero. XOR `empleado_id`/`operario_id` en jornales y cosecha_cuadrilla. `wizard-init` incluye `operarios` en parametricas. Documentación: `docs/API_TERCEROS.md`.
+
 **Pendiente:**
 - Controllers de: contratos del empleado, vacaciones, liquidación (al retiro)
 - Sync offline (SyncController)
@@ -1199,6 +1250,7 @@ PUT    /api/v1/market/proveedor/perfil/password           → Cambiar contraseñ
 | Documento | Ruta | Contenido |
 |---|---|---|
 | Tablas Paramétricas de Configuración | `docs/API_PARAMETRICAS.md` | Todos los catálogos paramétricos del tenant: Semillas, Insumos, Precios de Abono, Labores, Promedios por Lote, Cargos, Modalidades de Contrato, Config Nómina, Precios de Cosecha, Auditoría, Tipos de Hora Extra, EPS/Pensión/ARL/Bancos, Info Empresa, Constantes Legales, Tablas Legales, **Paramétricas de Viajes (Extractoras, Empresas Transportadoras, Transportadores) §16** |
+| Terceros y Operarios | `docs/API_TERCEROS.md` | CRUD terceros + operarios, configuración de precios diferenciados (labor, cosecha, abono), integración con wizard de operaciones, XOR empleado/operario en jornales y cosechas, códigos de error |
 | Plantación (Predios, Lotes, Sublotes, Líneas, Palmas) | `docs/API_PLANTACION.md` | Endpoints CRUD con ejemplos de request/response, permisos, validación de hectáreas, semillas, códigos de palma y errores |
 | Usuarios del Tenant | `docs/API_USUARIOS_TENANT.md` | CRUD usuarios, activar/desactivar, gestión de permisos directos, guía de implementación frontend |
 | Colaboradores | `docs/API_COLABORADORES.md` | CRUD colaboradores con soft delete + restaurar + filtros `incluir_eliminados`/`solo_eliminados`, toggle estado, campo `subsidio_transporte` (boolean, default `true`), avatar (upload/delete), carga/descarga/preview/eliminación de documentos por categoría, categorías de documentos, reemplazo automático en `DATOS_BASE`, paramétricas (EPS/Pensiones/ARL/Bancos), guía de uso del frontend para descargas y previsualizaciones por blob |

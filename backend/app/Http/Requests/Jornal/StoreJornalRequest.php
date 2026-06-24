@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Jornal;
 
 use App\Models\Labor;
+use App\Models\Operario;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -16,7 +17,7 @@ use Illuminate\Foundation\Http\FormRequest;
  *   - labor.tipo=FERTILIZACION + POR_PALMA → requiere cantidad_palmas + insumo_id + gramos_por_palma.
  *   - labor.tipo=FERTILIZACION + JORNAL_FIJO → cantidad_palmas/insumo_id/gramos opcionales (tracking).
  *   - labor.tipo=PLATEO/PODA + POR_PALMA → requiere cantidad_palmas.
- *   - labor.tipo=PLATEO/PODA + JORNAL_FIJO → prohíbe cantidad_palmas/insumo/gramos.
+ *   - labor.tipo=PLATEO/PODA + JORNAL_FIJO → cantidad_palmas opcional (tracking); insumo/gramos prohibidos.
  *   - labor.tipo=SANIDAD → requiere descripcion. cantidad_palmas según tipo_pago.
  *   - custom PALMA: según tipo_pago.
  *   - custom FINCA: permite ubicacion; prohíbe campos de palma.
@@ -44,7 +45,8 @@ class StoreJornalRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'empleado_id'      => 'required|exists:empleados,id',
+            'empleado_id'      => 'nullable|exists:empleados,id',
+            'operario_id'      => 'nullable|exists:operarios,id',
             'labor_id'         => 'required|exists:labores,id',
 
             'lote_id'          => 'nullable|exists:lotes,id',
@@ -66,6 +68,27 @@ class StoreJornalRequest extends FormRequest
     public function withValidator($validator): void
     {
         $validator->after(function ($validator) {
+            // XOR: exactamente uno de empleado_id u operario_id
+            $tieneEmpleado = $this->filled('empleado_id');
+            $tieneOperario = $this->filled('operario_id');
+
+            if (!$tieneEmpleado && !$tieneOperario) {
+                $validator->errors()->add('empleado_id', 'Debe proveer empleado_id o operario_id.');
+                return;
+            }
+            if ($tieneEmpleado && $tieneOperario) {
+                $validator->errors()->add('empleado_id', 'Solo puede proveer empleado_id o operario_id, no ambos.');
+                return;
+            }
+
+            // Si es operario, inyectar tercero_id automáticamente
+            if ($tieneOperario) {
+                $operario = Operario::find($this->input('operario_id'));
+                if ($operario) {
+                    $this->merge(['tercero_id' => $operario->tercero_id]);
+                }
+            }
+
             $labor = $this->labor;
             if (!$labor) {
                 return;
@@ -97,11 +120,22 @@ class StoreJornalRequest extends FormRequest
             $validator->errors()->add('ubicacion', 'PALMA no usa ubicacion.');
         }
 
+        // tipo_pago efectivo: si el jornal es de un operario y su tercero tiene
+        // override en `tercero_labor_precios.tipo_pago`, ese gana. Si no, hereda
+        // del catálogo del tenant (labor.tipo_pago).
+        $terceroId = $this->input('tercero_id');
+        $tipoPagoEfectivo = $labor->resolverTipoPago($terceroId ? (int) $terceroId : null);
+        $esPorPalmaEfectivo  = $tipoPagoEfectivo === Labor::TIPO_PAGO_POR_PALMA;
+        $sufijoTercero       = $terceroId ? ' para este tercero' : '';
+
         if ($labor->esFertilizacion()) {
-            if ($labor->esPorPalma()) {
+            if ($esPorPalmaEfectivo) {
                 foreach (['cantidad_palmas', 'insumo_id', 'gramos_por_palma'] as $campo) {
                     if (!$this->filled($campo)) {
-                        $validator->errors()->add($campo, "FERTILIZACION en POR_PALMA requiere {$campo}.");
+                        $validator->errors()->add(
+                            $campo,
+                            "FERTILIZACION en POR_PALMA{$sufijoTercero} requiere {$campo}."
+                        );
                     }
                 }
             }
@@ -115,23 +149,16 @@ class StoreJornalRequest extends FormRequest
             }
         }
 
-        // Resto de PALMA (PLATEO, PODA, SANIDAD, custom): cantidad_palmas + tipo_pago.
-        if ($labor->esPorPalma()) {
+        // Resto de PALMA (PLATEO, PODA, SANIDAD, custom): cantidad_palmas + tipo_pago efectivo.
+        if ($esPorPalmaEfectivo) {
             if (!$this->filled('cantidad_palmas')) {
                 $validator->errors()->add(
                     'cantidad_palmas',
-                    "La labor '{$labor->nombre}' está configurada como POR_PALMA: cantidad_palmas es obligatoria."
-                );
-            }
-        } else {
-            // JORNAL_FIJO
-            if ($this->filled('cantidad_palmas')) {
-                $validator->errors()->add(
-                    'cantidad_palmas',
-                    "La labor '{$labor->nombre}' está configurada como JORNAL_FIJO: cantidad_palmas no aplica."
+                    "La labor '{$labor->nombre}' está configurada como POR_PALMA{$sufijoTercero}: cantidad_palmas es obligatoria."
                 );
             }
         }
+        // JORNAL_FIJO: cantidad_palmas es opcional (tracking agronómico, no afecta el cálculo).
 
         // Insumo y gramos solo aplican a FERTILIZACION POR_PALMA.
         if (!$labor->esFertilizacion()) {
@@ -154,7 +181,7 @@ class StoreJornalRequest extends FormRequest
     }
 
     /**
-     * Inyecta los snapshots `categoria` y `tipo` derivados de la labor.
+     * Inyecta snapshots de categoria/tipo y tercero_id si aplica.
      */
     public function validated($key = null, $default = null)
     {
@@ -163,6 +190,11 @@ class StoreJornalRequest extends FormRequest
         if ($this->labor) {
             $data['categoria'] = $this->labor->categoria;
             $data['tipo']      = $this->labor->tipo; // NULL para custom
+        }
+
+        // tercero_id fue inyectado por withValidator si el jornal es de un operario
+        if ($this->has('tercero_id')) {
+            $data['tercero_id'] = $this->input('tercero_id');
         }
 
         return $data;

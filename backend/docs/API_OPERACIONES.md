@@ -55,7 +55,12 @@ Cada "Agregar X" del UI dispara un POST inmediato. El backend devuelve el id cre
 ┌ Apertura del wizard ──────────────────────────────────┐
 │  GET /operaciones[/{id}]/wizard-init                  │
 │  → { planilla, resumen, parametricas: {               │
+<<<<<<< HEAD
 │       colaboradores, lotes, sublotes, insumos,        │
+=======
+│       colaboradores, operarios,                       │
+│       lotes, sublotes, insumos,                       │
+>>>>>>> fefeda6abfbda36a95fb7c45556b4fd25646534a
 │       labores_palma, labores_finca,                   │
 │       motivos_ausencia, tipos_hora_extra              │
 │    } }                                                │
@@ -131,13 +136,26 @@ Cada "Agregar X" del UI dispara un POST inmediato. El backend devuelve el id cre
     "resumen":  { ... } | null,
     "parametricas": {
       "colaboradores":    [{ "id": 10, "nombre_completo": "Carlos Rodríguez", "documento": "1098765432", "modalidad_pago": "PRODUCCION" }, ...],
+<<<<<<< HEAD
+=======
+      "operarios":        [{ "id": 5, "tercero_id": 1, "nombre_completo": "Carlos Ramírez Gómez", "cedula": "87654321", "tercero_nombre": "Contratistas del Norte SAS" }, ...],
+>>>>>>> fefeda6abfbda36a95fb7c45556b4fd25646534a
       "lotes":            [{ "id": 1,  "nombre": "Lote 1", "predio_id": 1, "predio": { "id": 1, "nombre": "Finca La Esperanza" } }, ...],
       "sublotes":         [{ "id": 3,  "nombre": "Lote 1.1", "lote_id": 1, "cantidad_palmas": 240 }, ...],
       "insumos":          [{ "id": 5,  "nombre": "Urea 46%", "unidad_medida": "GRAMOS" }, ...],
       "labores_palma":    [{ "id": 13, "nombre": "Plateo", "categoria": "PALMA", "tipo": "PLATEO", "tipo_pago": "POR_PALMA", "precio_palma": "50.00", "es_sistema": true, "requiere_cosecha_workflow": false }, ...],
       "labores_finca":    [{ "id": 7,  "nombre": "Reparación portón", "categoria": "FINCA", "tipo": null, "tipo_pago": "JORNAL_FIJO", "precio_palma": "50000.00", "es_sistema": false, "requiere_cosecha_workflow": false }, ...],
       "motivos_ausencia": [{ "id": 3,  "nombre": "Incapacidad EPS - General", "tipo_base": "INCAPACIDAD_EPS", "es_remunerada": true, "afecta_nomina": true, "porcentaje_pago_default": "66.67", "requiere_soporte": true, "color": "#FF6B6B", "afecta_seguridad_social": true, "afecta_parafiscales": false, "afecta_prestaciones": true }, ...],
+<<<<<<< HEAD
       "tipos_hora_extra": [{ "id": 1,  "codigo": "HED", "nombre": "Hora Extra Diurna", "porcentaje_recargo": "25.00", "franja_horaria": "06:00-21:00", "aplica_festivo": false, "es_extra": true, "paga_hora_completa": true, "descripcion": "6:00 AM – 9:00 PM, días hábiles" }, ...]
+=======
+      "tipos_hora_extra": [{ "id": 1,  "codigo": "HED", "nombre": "Hora Extra Diurna", "porcentaje_recargo": "25.00", "franja_horaria": "06:00-21:00", "aplica_festivo": false, "es_extra": true, "paga_hora_completa": true, "descripcion": "6:00 AM – 9:00 PM, días hábiles" }, ...],
+      "tercero_labor_overrides": [
+        { "tercero_id": 1, "labor_id": 13, "tipo_pago": "POR_PALMA",   "precio_palma": "200.00"   },
+        { "tercero_id": 1, "labor_id": 7,  "tipo_pago": null,          "precio_palma": "60000.00" },
+        { "tercero_id": 2, "labor_id": 13, "tipo_pago": "JORNAL_FIJO", "precio_palma": "45000.00" }
+      ]
+>>>>>>> fefeda6abfbda36a95fb7c45556b4fd25646534a
     }
   }
 }
@@ -145,7 +163,38 @@ Cada "Agregar X" del UI dispara un POST inmediato. El backend devuelve el id cre
 
 - En modo **creación** (sin id), `planilla` y `resumen` vienen `null` y `parametricas` viene completo.
 - En modo **edición/lectura**, `planilla` es el mismo payload que [§2.4 `GET /operaciones/{id}`](#24-ver-detalle) (cosechas + jornales + ausencias con todas sus relaciones eager-loaded) y `resumen` es el mismo shape de [§6 `GET /operaciones/{id}/resumen`](#6-resumen-panel-derecho-del-wizard).
+<<<<<<< HEAD
 - Los 8 catálogos se cachean en backend por tenant durante **15 min** (`WizardCache::TTL_PARAMETRICA`) y se invalidan automáticamente cuando se crea/edita/elimina cualquier colaborador, lote, sublote, insumo, labor, motivo de ausencia o tipo de hora extra. El cliente percibe los cambios al primer refresh siguiente del bundle.
+=======
+- Los **10 catálogos** se cachean en backend por tenant durante **15 min** (`WizardCache::TTL_PARAMETRICA`) y se invalidan automáticamente cuando se crea/edita/elimina cualquier colaborador, operario, lote, sublote, insumo, labor, motivo de ausencia, tipo de hora extra o configuración de precios de un tercero. El cliente percibe los cambios al primer refresh siguiente del bundle.
+- **`operarios`**: lista de operarios activos de todos los terceros contratistas del tenant. Cada item trae `{id, tercero_id, nombre_completo, cedula, tercero_nombre}`. La UI muestra colaboradores y operarios en el **mismo dropdown** del selector de persona, diferenciados visualmente por `tercero_nombre`. Ver [§3.1 Cosecha](#31-cosecha) y [§3.2 Jornales](#32-jornal-de-palma-plateo--poda--fertilización--sanidad--custom) para el uso de `operario_id` en lugar de `empleado_id`.
+- **`tercero_labor_overrides`**: **todos** los overrides activos (`estado=true`) de `tercero_labor_precios`, sin importar la categoría (PALMA + FINCA) ni si tienen `tipo_pago` definido. Tres formas válidas por item:
+  - `tipo_pago: "POR_PALMA"` o `"JORNAL_FIJO"` → override **explícito** del modo de pago. Aplica solo a labores PALMA (FINCA siempre es JORNAL_FIJO por invariante del modelo).
+  - `tipo_pago: null` → override **solo de monto**. El modo de pago efectivo lo hereda del catálogo (`labor.tipo_pago`). Caso típico para FINCA, o para PALMA cuando el tercero solo paga distinto pero mantiene el mismo modo.
+
+  **Algoritmo de resolución del frontend** al seleccionar una persona en un tab del Paso 2 (Plateo / Poda / Otros / Finca):
+  ```js
+  function resolverPrecioYModo(labor, persona, overrides) {
+    if (persona.tipo === 'colaborador') {
+      return { tipo_pago: labor.tipo_pago, precio_palma: labor.precio_palma };
+    }
+    const ov = overrides.find(o =>
+      o.tercero_id === persona.tercero_id && o.labor_id === labor.id
+    );
+    if (!ov) {
+      return { tipo_pago: labor.tipo_pago, precio_palma: labor.precio_palma };
+    }
+    return {
+      tipo_pago:    ov.tipo_pago    ?? labor.tipo_pago,
+      precio_palma: ov.precio_palma ?? labor.precio_palma,
+    };
+  }
+  ```
+
+  El backend hace **exactamente** la misma resolución al validar el POST/PUT de jornal o cosecha (`Labor::resolverTipoPago` + `JornalCalculationService::resolverPrecioLabor`). El preview del frontend siempre coincide con `valor_total` calculado en el servidor; si por caché stale hubiese discrepancia, gana el backend (el frontend re-renderiza con `tipo_pago_efectivo` y `valor_total` que llegan en la respuesta del POST).
+
+  **Aplica a Labores de Finca del Paso 3 igual que a Labores de Palma del Paso 2** — mismo array, mismo algoritmo.
+>>>>>>> fefeda6abfbda36a95fb7c45556b4fd25646534a
 - El header de respuesta incluye `Cache-Control: private, max-age=0, must-revalidate` — fuerza al navegador a revalidar (no a guardar en caché del cliente).
 - Los endpoints `/select` listados en §8 **siguen vivos** sin cambios para otros consumidores (apps móviles, exports, módulos administrativos). El wizard de Operaciones es el único que pasa por el bundle.
 
@@ -410,9 +459,26 @@ Caso B — gajos + kilos confirmados:
 ```
 → `valor_total = 1800.50 × 800 = 1440400.00`, `cuadrilla[*].valor_calculado = 720200.00`.
 
+Caso C — cuadrilla mixta (colaboradores y operarios de tercero):
+```json
+{
+  "lote_id": 1,
+  "sublote_id": 3,
+  "gajos_reportados": 120,
+  "peso_confirmado": 1800.50,
+  "cuadrilla": [
+    { "empleado_id": 10 },
+    { "empleado_id": 11 },
+    { "operario_id": 5 },
+    { "operario_id": 6 }
+  ]
+}
+```
+Cada miembro de la cuadrilla usa XOR: **exactamente uno** de `empleado_id` u `operario_id` (nunca ambos, nunca ninguno). El `tercero_id` del operario es inyectado automáticamente por el backend. El precio de cosecha usado para el cálculo se deriva del primer `tercero_id` encontrado en la cuadrilla (para cuadrillas 100% de un mismo tercero); para cuadrillas mixtas sin precio de tercero configurado, cae al precio del tenant.
+
 Reglas:
 - `peso_confirmado` corresponde al campo UI "Kilos (opcional)".
-- `cuadrilla` debe tener al menos 1 empleado; no admite empleados duplicados.
+- `cuadrilla` debe tener al menos 1 miembro; no admite duplicados (la clave de dedup es `CONCAT('E_', empleado_id)` o `CONCAT('O_', operario_id)`).
 - `sublote_id` debe pertenecer al `lote_id` (el backend valida).
 
 **Respuesta 201 (caso B con peso):**
@@ -463,6 +529,17 @@ Reglas:
 
 Endpoint unificado. **El cliente solo envía `labor_id`**: el backend deriva `categoria` y `tipo` desde la labor y los snapshotea en el jornal. La matriz de campos requeridos se resuelve a partir de `(labor.categoria, labor.tipo, labor.tipo_pago)`.
 
+**Selector de persona — `empleado_id` vs `operario_id` (XOR):**
+
+Desde la lista combinada `parametricas.colaboradores` + `parametricas.operarios` del wizard, el usuario elige una persona. El frontend envía **exactamente uno** de los dos campos:
+
+```json
+{ "empleado_id": 10,  "labor_id": 13, ... }   ← colaborador propio
+{ "operario_id": 5,   "labor_id": 13, ... }   ← operario de tercero
+```
+
+Si se envían ambos o ninguno → `422` con error en `empleado_id`. El `tercero_id` se inyecta automáticamente por el backend a partir del `operario_id` — **no lo envíes**.
+
 **Crear:** `POST /operaciones/{id}/jornales`
 
 **Payload base (común a todos):**
@@ -495,7 +572,7 @@ Endpoint unificado. **El cliente solo envía `labor_id`**: el backend deriva `ca
 }
 ```
 - Si `labor.tipo_pago = POR_PALMA` (default): `cantidad_palmas` es requerido. `valor_total = cantidad_palmas × labor.precio_palma`.
-- Si `labor.tipo_pago = JORNAL_FIJO`: NO enviar `cantidad_palmas`. `valor_total = labor.precio_palma` (plano).
+- Si `labor.tipo_pago = JORNAL_FIJO`: `cantidad_palmas` es **opcional** (tracking agronómico). `valor_total = labor.precio_palma` (plano, sin multiplicar).
 
 #### FERTILIZACION
 

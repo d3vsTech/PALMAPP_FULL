@@ -33,7 +33,8 @@ class JornalController extends Controller
             $data  = $request->validated();
             $labor = $request->getLabor() ?? Labor::findOrFail($data['labor_id']);
 
-            $calc = $this->calcService->calcular($labor, $data);
+            $terceroId = $data['tercero_id'] ?? null;
+            $calc = $this->calcService->calcular($labor, $data, $terceroId);
 
             $jornal = Jornal::create(array_merge($data, [
                 'operacion_id'           => $operacion->id,
@@ -56,6 +57,8 @@ class JornalController extends Controller
                 'message' => 'Jornal creado correctamente',
                 'data'    => $jornal->load(
                     'empleado:id,primer_nombre,primer_apellido',
+                    'operario:id,nombres,apellidos',
+                    'tercero:id,tipo_persona,razon_social,nombre_completo',
                     'labor:id,nombre,categoria,tipo,tipo_pago,precio_palma',
                     'lote:id,nombre',
                     'sublote:id,nombre',
@@ -86,7 +89,8 @@ class JornalController extends Controller
             $labor           = $request->getLabor() ?? Labor::findOrFail($data['labor_id']);
             $datosAnteriores = $jornal->toArray();
 
-            $calc = $this->calcService->calcular($labor, $data);
+            $terceroId = $data['tercero_id'] ?? null;
+            $calc = $this->calcService->calcular($labor, $data, $terceroId);
 
             $jornal->update(array_merge($data, [
                 'valor_unitario'         => $calc['valor_unitario'],
