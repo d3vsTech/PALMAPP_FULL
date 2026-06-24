@@ -643,9 +643,12 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
             sublote: j.sublote_id != null ? String(j.sublote_id) : '',
           };
         }));
+        // Labores de Finca — `nombre` ahora guarda el id local de la persona
+        // (`'10'` empleado, `'O_5'` operario) para soportar XOR al guardar.
+        // La visualización del nombre se hace via lookup en `colaboradores`.
         setTrabajosAuxiliares(jornales.filter(j => j.categoria === 'FINCA').map(j => ({
           id: String(j.id),
-          nombre: j.empleado ? `${j.empleado.primer_nombre ?? ''} ${j.empleado.primer_apellido ?? ''}`.trim() : '',
+          nombre: encodeIdFromBackend(j),
           labor: j.labor?.nombre ?? '',
           otraLabor: '',
           lugar: j.ubicacion ?? '',
@@ -975,17 +978,18 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         }
       }
       // Auxiliares (FINCA — labores del catálogo unificado con categoria='FINCA')
+      // `t.nombre` ahora trae el id local de la persona (`'10'` empleado o
+      // `'O_5'` operario). `decodeIdPersona` lo expande al XOR del payload.
       for (const t of trabajosAuxiliares) {
-        if (!t.labor) continue;
+        if (!t.labor || !t.nombre) continue;
         const laborKey = t.labor === 'Otro' ? (t.otraLabor || '') : t.labor;
         const laborId = laboresMap.get(laborKey) ?? laboresMap.get(t.labor);
         if (!laborId) continue;
-        const nombreNorm = (t.nombre || '').toLowerCase().trim();
-        const colab = nombreNorm ? colaboradores.find(c => `${c.nombres} ${c.apellidos}`.toLowerCase().includes(nombreNorm)) : null;
-        if (!colab) continue;
+        const personaIds = decodeIdPersona(t.nombre);
+        if (!personaIds.empleado_id && !personaIds.operario_id) continue;
         const payload = {
           labor_id: laborId,
-          ...decodeIdPersona(colab.id),
+          ...personaIds,
           ubicacion: t.lugar || undefined,
         };
         try {
@@ -3266,13 +3270,22 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                 <SelectValue placeholder="Seleccionar colaborador" />
                               </SelectTrigger>
                               <SelectContent>
-                                {/* Horas extras: solo empleados propios.
-                                    §4 del doc no contempla operario_id. */}
-                                {colaboradores.filter(c => !c.terceroNombre).map((col) => {
+                                {/* Labores de Finca §3.3 — sí soporta operarios
+                                    (mismo endpoint /jornales que palma). El
+                                    `value` es el id local (`10` o `'O_5'`)
+                                    para distinguir colaborador vs operario
+                                    al guardar. Visualmente muestra el nombre
+                                    con badge "Tercero" si aplica. */}
+                                {colaboradores.map((col) => {
                                   const fullName = `${col.nombres} ${col.apellidos}`.trim();
                                   return (
-                                    <SelectItem key={col.id} value={fullName}>
+                                    <SelectItem key={col.id} value={col.id}>
                                       {fullName}
+                                      {col.terceroNombre ? (
+                                        <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">
+                                          Tercero · {col.terceroNombre}
+                                        </span>
+                                      ) : null}
                                     </SelectItem>
                                   );
                                 })}
@@ -3352,6 +3365,13 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                   {trabajosAuxiliares.map((trabajo) => {
                     const labelLabor =
                       trabajo.labor === 'Otro' && trabajo.otraLabor ? trabajo.otraLabor : trabajo.labor;
+                    // `trabajo.nombre` ahora es el id local — resolvemos al
+                    // nombre vía lookup en `colaboradores`. Si la persona
+                    // es operario, mostramos el badge del tercero.
+                    const personaSel = colaboradores.find((c) => c.id === trabajo.nombre);
+                    const personaTexto = personaSel
+                      ? `${personaSel.nombres} ${personaSel.apellidos}`.trim()
+                      : trabajo.nombre || 'Sin colaborador';
                     return (
                       <Card key={trabajo.id} className="border-border hover:border-primary/30 transition-colors">
                         <CardContent className="p-4">
@@ -3359,7 +3379,12 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                             <div className="flex-1 min-w-0">
                               <p className="text-xs text-muted-foreground mb-1">Colaborador</p>
                               <p className="font-semibold text-sm">
-                                {trabajo.nombre || 'Sin colaborador'}
+                                {personaTexto}
+                                {personaSel?.terceroNombre ? (
+                                  <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">
+                                    Tercero · {personaSel.terceroNombre}
+                                  </span>
+                                ) : null}
                               </p>
                             </div>
                             <div className="flex-1 min-w-0">
