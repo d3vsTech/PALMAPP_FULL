@@ -22,32 +22,6 @@ export default defineConfig({
    */
   build: {
     chunkSizeWarningLimit: 800,
-    rollupOptions: {
-      output: {
-        manualChunks(id: string) {
-          if (!id.includes('node_modules')) return undefined;
-
-          // React core: lo necesita la pantalla inicial.
-          if (id.includes('react-dom') || id.includes('react/') || id.includes('react-router') || id.includes('scheduler')) {
-            return 'react-vendor';
-          }
-          // shadcn/Radix: lo usa casi todo, pero pesa mucho como bloque separado.
-          if (id.includes('@radix-ui')) return 'radix-vendor';
-          // Recharts (gráficos) — solo lo usan métricas/dashboard.
-          if (id.includes('recharts') || id.includes('d3-')) return 'recharts-vendor';
-          // jsPDF + html2canvas (exportar desprendibles) — solo en algunas pantallas.
-          if (id.includes('jspdf') || id.includes('html2canvas')) return 'pdf-vendor';
-          // xlsx (importar/exportar colaboradores y reportes).
-          if (id.includes('xlsx') || id.includes('exceljs')) return 'xlsx-vendor';
-          // Lucide (íconos) — usado en todo.
-          if (id.includes('lucide-react')) return 'icons-vendor';
-          // date-fns — usado por calendarios y formatters.
-          if (id.includes('date-fns')) return 'date-vendor';
-          // Resto de vendors.
-          return 'vendor';
-        },
-      },
-    },
   },
   server: {
     port: 5173,
