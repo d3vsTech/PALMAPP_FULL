@@ -8,11 +8,8 @@
  *
  * Al montar, carga `tercerosApi.wizardInit()` para obtener los IDs reales de
  * lotes y labores (sin esto los precios no podrían persistirse). Al guardar:
- *  - POST /terceros                         con datos del paso 1
- *  - POST /terceros/{id}/precios-cosecha    por cada lote con precio > 0
- *  - POST /terceros/{id}/precios-abono      por cada rango con precio > 0
- *  - POST /terceros/{id}/labor-precios      por cada labor simple > 0
- *  - POST /terceros/{id}/operarios          por cada operario válido
+ *  - POST /terceros                          con datos del paso 1
+ *  - POST /terceros/{id}/wizard-complete     toda la configuración en una sola petición
  */
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
@@ -35,12 +32,11 @@ import {
 import type { EmpresaTercero, ColaboradorTercero } from '../../components/configuracion/TercerosTab';
 import {
   tercerosApi,
-  operariosApi,
-  tercerosPreciosApi,
   TercerosErrorCodes,
   TercerosCacheKeys,
   type CrearTerceroPayload,
   type TerceroWizardInit,
+  type WizardCompletePayload,
 } from '../../../api/terceros';
 import { cached, invalidate } from '../../../api/cache';
 import type { ApiError } from '../../../api/client';
@@ -688,16 +684,9 @@ export default function NuevoTerceroWizard() {
   };
 
   /**
-   * Flujo de guardado completo (paso 1 + 2 + 3 en una sola operación):
-   *  1. POST /terceros                              (paso 1)
-   *  2. POST /terceros/{id}/precios-cosecha × lotes (paso 2 — cosecha)
-   *  3. POST /terceros/{id}/precios-abono   × rangos (paso 2 — abono)
-   *  4. POST /terceros/{id}/labor-precios   × labores (paso 2 — plateo/poda/sanidad)
-   *  5. POST /terceros/{id}/operarios       × N (paso 3)
-   *
-   * Si falla la creación del tercero, abortamos. Si fallan precios u operarios
-   * individuales, mostramos warning con el conteo pero el tercero ya quedó
-   * creado; el admin podrá completar lo que falte desde la pantalla de edición.
+   * Flujo de guardado completo (2 peticiones totales):
+   *  1. POST /terceros                         — crea el tercero
+   *  2. POST /terceros/{id}/wizard-complete    — toda la configuración en una sola petición atómica
    */
   const handleGuardar = async () => {
     const payload = construirPayload();
@@ -707,141 +696,86 @@ export default function NuevoTerceroWizard() {
       return;
     }
     setGuardando(true);
+    let nuevoId: number | null = null;
     try {
-      // 1. Crear tercero
+      // 1. Crear el tercero
       const resTercero = await tercerosApi.crear(payload);
-      const nuevoId = resTercero.data.id;
+      nuevoId = resTercero.data.id;
 
-      // 2. Precios de cosecha por lote (omite si precio = 0)
-      const tareasCosecha = precios.cosecha
-        .filter((c) => c.precioPorKg > 0)
-        .map((c) =>
-          tercerosPreciosApi.upsertPrecioCosecha(nuevoId, {
-            lote_id: c.loteId,
-            precio: c.precioPorKg,
-          }),
-        );
+      // 2. Construir payload de configuración consolidado
+      const laborPreciosPayload: WizardCompletePayload['labor_precios'] = [];
 
-      // 3. Rangos de abono override (omite si precio = 0)
-      const tareasAbono = precios.abonada
-        .filter((r) => r.precioPorPalma > 0)
-        .map((r) =>
-          tercerosPreciosApi.crearPrecioAbono(nuevoId, {
-            gramos_min: r.gramosMinimo,
-            gramos_max: r.gramosMaximo,
-            precio_palma: r.precioPorPalma,
-          }),
-        );
-
-      // 4. Labores simples — resolvemos labor_id desde el bundle. Si el
-      // bundle falló, no hay forma de saber el labor_id real, así que se
-      // omiten (el admin podrá configurarlas desde la pantalla de edición).
-      const tareasLabores: ReturnType<typeof tercerosPreciosApi.upsertLaborPrecio>[] = [];
-      const pushLabor = (
-        precio: number,
-        tipo: 'PLATEO' | 'PODA' | 'SANIDAD',
-        tipoPagoOverride: TipoPagoOverride,
-      ) => {
+      // Labores palma fijas (plateo/poda/sanidad) — labor_id resuelto desde el bundle
+      const laboresPalma = [
+        { tipo: 'PLATEO'  as const, precio: precios.plateo,  tipoPago: precios.plateoTipoPago  },
+        { tipo: 'PODA'    as const, precio: precios.poda,    tipoPago: precios.podaTipoPago    },
+        { tipo: 'SANIDAD' as const, precio: precios.sanidad, tipoPago: precios.sanidadTipoPago },
+      ];
+      for (const { tipo, precio, tipoPago } of laboresPalma) {
         const laborId = findLaborId(tipo);
         if (precio > 0 && laborId !== null) {
-          // Solo enviamos `tipo_pago` cuando el admin explícitamente eligió
-          // override. `HEREDAR` significa "no enviar" → el backend usa el
-          // modo del catálogo del tenant.
-          const payloadLabor: import('../../../api/terceros').UpsertLaborPrecioPayload = {
+          laborPreciosPayload.push({
             labor_id: laborId,
             precio_palma: precio,
-          };
-          if (tipoPagoOverride !== 'HEREDAR') {
-            payloadLabor.tipo_pago = tipoPagoOverride;
-          }
-          tareasLabores.push(
-            tercerosPreciosApi.upsertLaborPrecio(nuevoId, payloadLabor),
-          );
+            ...(tipoPago !== 'HEREDAR' ? { tipo_pago: tipoPago } : {}),
+          });
         }
-      };
-      pushLabor(precios.plateo, 'PLATEO', precios.plateoTipoPago);
-      pushLabor(precios.poda, 'PODA', precios.podaTipoPago);
-      pushLabor(precios.sanidad, 'SANIDAD', precios.sanidadTipoPago);
-
-      // 4b. Labores de FINCA — override por tercero. El `labor_id` ya viene
-      // resuelto en `precios.finca[i].laborId` (lo cargamos desde
-      // `selectsApi.labores({categoria:'FINCA'})` al montar). Solo enviamos
-      // las que el admin marcó con precio > 0.
-      const tareasLaboresFinca = precios.finca
-        .filter((f) => f.precio > 0)
-        .map((f) =>
-          tercerosPreciosApi.upsertLaborPrecio(nuevoId, {
-            labor_id: f.laborId,
-            precio_palma: f.precio,
-          }),
-        );
-
-      // 5. Operarios válidos (nombres + apellidos obligatorios)
-      const operariosValidos = operarios.filter(
-        (o) => o.nombres?.trim() && o.apellidos?.trim(),
-      );
-      const tareasOperarios = operariosValidos.map((op) =>
-        operariosApi.crear(nuevoId, {
-          nombres: op.nombres!.trim(),
-          apellidos: op.apellidos!.trim(),
-          cedula: op.documento?.trim() || undefined,
-          cargo: op.cargo?.trim() || undefined,
-          eps: op.eps?.trim() || undefined,
-          arl: op.arl?.trim() || undefined,
-        }),
-      );
-
-      const resultados = await Promise.allSettled([
-        ...tareasCosecha,
-        ...tareasAbono,
-        ...tareasLabores,
-        ...tareasLaboresFinca,
-        ...tareasOperarios,
-      ]);
-      const fallidos = resultados.filter((r) => r.status === 'rejected').length;
-      const total = resultados.length;
-
-      if (fallidos > 0) {
-        // Inspecciona códigos para dar feedback específico cuando aplica:
-        // RANGO_SOLAPADO (abono cruzado con uno existente del mismo tercero) y
-        // CALC_ERROR (precio no resoluble). Cualquier otro código se cuenta
-        // bajo el aviso genérico.
-        const fallidosDetalle = resultados
-          .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
-          .map((r) => asApiError(r.reason));
-        console.error('[NuevoTerceroWizard] Ítems fallidos:', fallidosDetalle);
-
-        const tieneSolapado = fallidosDetalle.some(
-          (e) => e.code === TercerosErrorCodes.RANGO_SOLAPADO,
-        );
-        const tieneCalc = fallidosDetalle.some(
-          (e) => e.code === TercerosErrorCodes.CALC_ERROR,
-        );
-
-        if (tieneSolapado) {
-          toast.warning(
-            'Tercero creado. Algunos rangos de abono se solapan con rangos existentes y no se guardaron.',
-          );
-        } else if (tieneCalc) {
-          toast.warning(
-            'Tercero creado. Algunos precios no se pudieron calcular y quedaron sin guardar.',
-          );
-        } else {
-          toast.warning(
-            `Tercero creado. ${total - fallidos}/${total} ítems guardados, ${fallidos} fallidos.`,
-          );
-        }
-      } else {
-        toast.success('Tercero creado correctamente');
       }
-      // Forzar refresh del listado al volver a Configuración — sin esto el
-      // TercerosTab serviría desde caché (TTL 60 s) y el tercero recién
-      // creado no aparecería hasta que expire.
+
+      // Labores FINCA — labor_id ya resuelto en el estado
+      for (const f of precios.finca.filter((f) => f.precio > 0)) {
+        laborPreciosPayload.push({ labor_id: f.laborId, precio_palma: f.precio });
+      }
+
+      const wizardPayload: WizardCompletePayload = {
+        precios_cosecha: precios.cosecha
+          .filter((c) => c.precioPorKg > 0)
+          .map((c) => ({ lote_id: c.loteId, precio: c.precioPorKg })),
+        precios_abono: precios.abonada
+          .filter((r) => r.precioPorPalma > 0)
+          .map((r) => ({ gramos_min: r.gramosMinimo, gramos_max: r.gramosMaximo, precio_palma: r.precioPorPalma })),
+        labor_precios: laborPreciosPayload,
+        operarios: operarios
+          .filter((o) => o.nombres?.trim() && o.apellidos?.trim())
+          .map((op) => ({
+            nombres:   op.nombres!.trim(),
+            apellidos: op.apellidos!.trim(),
+            cedula:    op.documento?.trim() || undefined,
+            cargo:     op.cargo?.trim()     || undefined,
+            eps:       op.eps?.trim()       || undefined,
+            arl:       op.arl?.trim()       || undefined,
+          })),
+      };
+
+      const hayConfiguracion =
+        wizardPayload.precios_cosecha.length > 0 ||
+        wizardPayload.precios_abono.length > 0 ||
+        wizardPayload.labor_precios.length > 0 ||
+        wizardPayload.operarios.length > 0;
+
+      if (hayConfiguracion) {
+        await tercerosApi.wizardComplete(nuevoId, wizardPayload);
+      }
+
+      toast.success('Tercero creado correctamente');
+      // Forzar refresh del listado — sin esto TercerosTab serviría desde caché
       invalidate(TercerosCacheKeys.LISTADO);
       navigate('/configuracion');
     } catch (e) {
-      console.error('[NuevoTerceroWizard] Error al crear tercero:', e);
-      toast.error(asApiError(e).message ?? 'No se pudo crear el tercero');
+      console.error('[NuevoTerceroWizard] Error al guardar:', e);
+      const err = asApiError(e);
+      if (nuevoId !== null) {
+        // Tercero creado, wizard-complete falló — el tercero existe pero sin configuración
+        if (err.code === TercerosErrorCodes.RANGO_SOLAPADO) {
+          toast.warning('Tercero creado. Los rangos de abono se solapan; configúralos desde la pantalla de edición.');
+        } else {
+          toast.warning('Tercero creado. La configuración de precios/operarios falló; puedes completarla desde edición.');
+        }
+        invalidate(TercerosCacheKeys.LISTADO);
+        navigate('/configuracion');
+      } else {
+        toast.error(err.message ?? 'No se pudo crear el tercero');
+      }
     } finally {
       setGuardando(false);
     }

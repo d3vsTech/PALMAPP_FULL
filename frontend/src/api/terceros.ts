@@ -268,6 +268,27 @@ export interface TerceroConfiguracionInit {
   arl: ParametricaSelectItem[];
 }
 
+/**
+ * Payload para `POST /terceros/{id}/wizard-complete`.
+ * Consolida toda la configuración del wizard en una sola petición,
+ * eliminando las ~15 peticiones individuales del flujo anterior.
+ * El backend lo procesa dentro de una DB transaction.
+ */
+export interface WizardCompletePayload {
+  precios_cosecha: Pick<UpsertPrecioCosechaPayload, 'lote_id' | 'precio'>[];
+  precios_abono: CrearPrecioAbonoPayload[];
+  labor_precios: UpsertLaborPrecioPayload[];
+  operarios: CrearOperarioPayload[];
+}
+
+/** Resumen de ítems persistidos por `wizard-complete`. */
+export interface WizardCompleteResult {
+  labor_precios: number;
+  precios_cosecha: number;
+  precios_abono: number;
+  operarios: number;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers internos
 // ─────────────────────────────────────────────────────────────────────────────
@@ -334,6 +355,18 @@ export const tercerosApi = {
   configuracionInit: (terceroId: number) =>
     apiClient.get<{ data: TerceroConfiguracionInit }>(
       `${BASE}/terceros/${terceroId}/configuracion/init`,
+      T,
+    ),
+
+  /**
+   * Consolida precios-cosecha, precios-abono, labor-precios y operarios en
+   * una sola petición atómica. Reemplaza las N peticiones individuales del
+   * wizard de creación. Ver `WIZARD_COMPLETE_ENDPOINT.md` para la spec del backend.
+   */
+  wizardComplete: (terceroId: number, payload: WizardCompletePayload) =>
+    apiClient.post<Mutation<WizardCompleteResult>>(
+      `${BASE}/terceros/${terceroId}/wizard-complete`,
+      payload,
       T,
     ),
 };
