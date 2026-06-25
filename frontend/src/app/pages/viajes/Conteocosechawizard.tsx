@@ -215,7 +215,7 @@ export default function ConteoCosechaWizard({ viaje, onClose }: ConteoCosechaWiz
         }
         // Aprobar reconteo
         const aprRes = await viajesApi.aprobarReconteo(viajeId, detalleId);
-        if (aprRes.data.auto_despachado) {
+        if (aprRes.data.auto_en_validacion) {
           toast.success('Conteo finalizado — viaje en camino');
           onClose();
           navigate('/viajes');

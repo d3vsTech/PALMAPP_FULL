@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
@@ -51,9 +51,9 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    proxy: buildDevProxy(),
+    proxy: buildDevProxy(loadEnv(mode, process.cwd(), 'VITE_')),
   },
-});
+}));
 
 /**
  * Proxies del dev server. Todos los targets se leen del `.env` cargado con

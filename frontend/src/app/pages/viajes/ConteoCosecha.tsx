@@ -307,7 +307,7 @@ export default function ConteoCosecha() {
       for (const c of pendientes) {
         if (c.detalleId) {
           const r = await viajesApi.aprobarReconteo(viaje.id, c.detalleId);
-          if (r.data.auto_despachado) {
+          if (r.data.auto_en_validacion) {
             toast.success('Conteo registrado exitosamente', {
               description: 'El viaje ahora está en camino hacia la extractora.',
             });

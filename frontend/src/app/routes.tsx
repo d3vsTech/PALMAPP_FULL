@@ -115,7 +115,6 @@ const VerPlanilla = lazyWithRetry(() => import('./pages/operaciones/Verplanilla'
 const Viajes = lazyWithRetry(() => import('./pages/viajes/Viajes'));
 const DetalleViaje = lazyWithRetry(() => import('./pages/viajes/DetalleViaje'));
 const ConteoCosecha = lazyWithRetry(() => import('./pages/viajes/ConteoCosecha'));
-const ConteoCosechaWizard = lazyWithRetry(() => import('./pages/viajes/Conteocosechawizard'));
 const NuevoEditarViaje = lazyWithRetry(() => import('./pages/viajes/Nuevoeditarviaje'));
 
 // Market
@@ -161,7 +160,7 @@ const ProveedorLogin = lazyWithRetry(() => import('./pages/proveedor/ProveedorLo
 const ProveedorRecuperarPassword = lazyWithRetry(() => import('./pages/proveedor/ProveedorRecuperarPassword'));
 const ProveedorRestablecerPassword = lazyWithRetry(() => import('./pages/proveedor/ProveedorRestablecerPassword'));
 const SeleccionarProveedor = lazyWithRetry(() => import('./pages/proveedor/SeleccionarProveedor'));
-const ProveedorLayout = lazyWithRetry(() => import('./pages/proveedor/ProveedorLayout'));
+const ProveedorLayout = lazyWithRetry(() => import('./pages/proveedor/Proveedorlayout'));
 const ProveedorDashboard = lazyWithRetry(() => import('./pages/proveedor/ProveedorDashboard'));
 const ProveedorProductos = lazyWithRetry(() => import('./pages/proveedor/ProveedorProductos'));
 const ProveedorPedidos = lazyWithRetry(() => import('./pages/proveedor/ProveedorPedidos'));
@@ -170,7 +169,7 @@ const ProveedorConfiguracion = lazyWithRetry(() => import('./pages/proveedor/Pro
 const MiPerfilProveedor = lazyWithRetry(() => import('./pages/proveedor/MiPerfilProveedor'));
 const NuevoProductoProv = lazyWithRetry(() => import('./pages/proveedor/NuevoProducto'));
 const EditarProductoProv = lazyWithRetry(() => import('./pages/proveedor/EditarProducto'));
-const ProductoDetalleProv = lazyWithRetry(() => import('./pages/proveedor/ProductoDetalle'));
+const ProductoDetalleProv = lazyWithRetry(() => import('./pages/proveedor/Productodetalle'));
 const CargaMasivaProductos = lazyWithRetry(() => import('./pages/proveedor/CargaMasivaProductos'));
 const PedidoDetalleProv = lazyWithRetry(() => import('./pages/proveedor/PedidoDetalle'));
 const ConfiguracionInicialWizard = lazyWithRetry(() => import('./pages/proveedor/ConfiguracionInicialWizard'));
@@ -308,7 +307,6 @@ export const router = createBrowserRouter([
       { path: 'viajes/nuevo',              element: L(<NuevoEditarViaje />) },
       { path: 'viajes/editar/:id',         element: L(<NuevoEditarViaje />) },
       { path: 'viajes/:id/conteo',         element: L(<ConteoCosecha />) },
-      { path: 'viajes/:id/conteo-wizard',  element: L(<ConteoCosechaWizard />) },
       { path: 'viajes/:id',                element: L(<DetalleViaje />) },
       { path: 'remisiones',                element: L(<Viajes />) },
       { path: 'remisiones/:id',            element: L(<DetalleViaje />) },

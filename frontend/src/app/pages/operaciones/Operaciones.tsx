@@ -22,7 +22,7 @@ import StatusBadge from '../../components/common/StatusBadge';
 import { toast } from 'sonner';
 import {
   operacionesApi, cosechasApi, jornalesApi, horasExtraApi, ausenciasApi,
-  type Planilla, type Indicadores, type PeriodoIndicadores, type EstadoPlanilla,
+  type Planilla, type Indicadores, type Periodo as PeriodoIndicadores, type EstadoPlanilla,
 } from '../../../api/operaciones';
 
 const PER_PAGE = 50;
@@ -144,7 +144,7 @@ export default function Operaciones() {
     return `$${num.toLocaleString('es-CO', { maximumFractionDigits: 0 })}`;
   };
 
-  const mapEstadoUI = (e: EstadoPlanilla): string =>
+  const mapEstadoUI = (e: EstadoPlanilla): 'BORRADOR' | 'APROBADO' =>
     e === 'BORRADOR' ? 'BORRADOR' : 'APROBADO';
 
   return (

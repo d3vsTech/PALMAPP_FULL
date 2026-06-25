@@ -759,6 +759,21 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         await operacionesApi.editar(pid, headerBody);
       }
 
+      // Mapeo localId → backendId acumulado durante el guardado. Al final
+      // del flujo, hacemos UN solo setState por tipo para evitar race
+      // conditions de N setState dentro de un loop async. Sin esto, al volver
+      // a pulsar "Guardar Planilla" sin recargar, los items locales conservan
+      // su id `plateo-XYZ` y se duplican en el backend.
+      const mapeoIdsPlateo: Record<string, string> = {};
+      const mapeoIdsPoda: Record<string, string> = {};
+      const mapeoIdsFert: Record<string, string> = {};
+      const mapeoIdsSanidad: Record<string, string> = {};
+      const mapeoIdsOtros: Record<string, string> = {};
+      const mapeoIdsFinca: Record<string, string> = {};
+      const mapeoIdsCosecha: Record<string, string> = {};
+      const mapeoIdsHE: Record<string, string> = {};
+      const mapeoIdsAusencia: Record<string, string> = {};
+
       // Cosechas — diff por id: PUT si la cosecha ya existe en backend,
       // POST si es nueva del wizard. Sin este check, editar duplicaba.
       for (const t of trabajosCosecha) {
@@ -784,20 +799,6 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           }
         } catch {}
       }
-      // Mapeo localId → backendId acumulado durante el guardado. Al final
-      // del flujo, hacemos UN solo setState por tipo para evitar race
-      // conditions de N setState dentro de un loop async. Sin esto, al volver
-      // a pulsar "Guardar Planilla" sin recargar, los items locales conservan
-      // su id `plateo-XYZ` y se duplican en el backend.
-      const mapeoIdsPlateo: Record<string, string> = {};
-      const mapeoIdsPoda: Record<string, string> = {};
-      const mapeoIdsFert: Record<string, string> = {};
-      const mapeoIdsSanidad: Record<string, string> = {};
-      const mapeoIdsOtros: Record<string, string> = {};
-      const mapeoIdsFinca: Record<string, string> = {};
-      const mapeoIdsCosecha: Record<string, string> = {};
-      const mapeoIdsHE: Record<string, string> = {};
-      const mapeoIdsAusencia: Record<string, string> = {};
 
       // Plateo (labor fija de PALMA con tipo='PLATEO')
       // Diff por id: PUT si el jornal existe en backend, POST si es nuevo.
