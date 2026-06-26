@@ -1,27 +1,33 @@
+/**
+ * Pantalla Pagos — listado de períodos de nómina.
+ *
+ * Diseño portado de V.15 (PalmApp - V220626/src/app/pages/nomina/Nomina.tsx)
+ * manteniendo las conexiones a la API existente en V.2 (`nominaApi.listar`
+ * y `nominaApi.indicadores`).
+ *
+ * Rutas:
+ *  - `/nomina`                          → este listado
+ *  - `/nomina/nueva`                    → crear nuevo período
+ *  - `/nomina/planilla-diaria`          → planilla diaria
+ *  - `/nomina/nuevo-prestamo`           → CRUD préstamos (futuro: `/nomina/prestamos`)
+ *  - `/nomina/:id`                      → detalle
+ *
+ * Nota sobre KPIs: V.15 usa 4 indicadores filtrables por período (Pagado a
+ * Colaboradores, Pagado a Terceros, Neto a Pagar, Pendiente). V.2 todavía no
+ * tiene terceros pagados desde nómina, así que ese KPI muestra "—". El resto
+ * se calcula con los datos de las nóminas listadas.
+ */
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
 import {
-  Plus,
-  FileText,
-  Calculator,
-  TrendingUp,
-  TrendingDown,
-  Eye,
-  Search,
-  Filter,
-  DollarSign,
-  Calendar,
-  Receipt,
+  Plus, FileText, Calculator, TrendingUp, TrendingDown, Eye, Search, Filter,
+  DollarSign, Receipt, Users, Building2, Check,
 } from 'lucide-react';
 import StatusBadge from '../../components/common/StatusBadge';
 import { Badge } from '../../components/ui/badge';
@@ -48,15 +54,25 @@ function toNumber(v: string | number): number {
   return parseFloat(v) || 0;
 }
 
+/** Formato compacto en millones para los mini-KPIs (igual que V.15). */
+function fmtMillones(n: number): string {
+  if (!n || n <= 0) return '—';
+  return `$${(n / 1_000_000).toFixed(2)}M`;
+}
+
 export default function Nomina() {
   const navigate = useNavigate();
 
+  // ── Filtros de la tabla ───────────────────────────────────────────────────
   const [filtroEstado, setFiltroEstado] = useState<string>('todos');
   const [filtroMes, setFiltroMes] = useState<string>('todos');
   const [filtroBusqueda, setFiltroBusqueda] = useState('');
 
+  // ── Filtro de KPIs (período independiente, igual a V.15) ──────────────────
+  const [periodoKpi, setPeriodoKpi] = useState<string>('todos');
+
   const [nominas, setNominas] = useState<NominaT[]>([]);
-  const [indicadores, setIndicadores] = useState<NominaIndicadores | null>(null);
+  const [, setIndicadores] = useState<NominaIndicadores | null>(null);
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
@@ -91,13 +107,43 @@ export default function Nomina() {
     return nominas.filter((n) => periodoLabel(n).toLowerCase().includes(q));
   }, [nominas, filtroBusqueda]);
 
-  const totalDevengadoCard = indicadores?.total_devengado ?? 0;
+  // ── Opciones del dropdown de período para KPIs ───────────────────────────
+  const opcionesPeriodo = useMemo(() => {
+    return [
+      { value: 'todos', label: 'Todos' },
+      ...nominas.map((n) => ({ value: String(n.id), label: periodoLabel(n) })),
+    ];
+  }, [nominas]);
+
+  // ── Cálculo de los 4 mini-KPIs sobre el período seleccionado ─────────────
+  const kpis = useMemo(() => {
+    const filtradas = periodoKpi === 'todos'
+      ? nominas
+      : nominas.filter((n) => String(n.id) === periodoKpi);
+
+    const cerradas = filtradas.filter((n) => n.estado === 'CERRADA');
+    const borradores = filtradas.filter((n) => n.estado === 'BORRADOR');
+
+    const totalColaboradores = cerradas.reduce((s, n) => s + toNumber(n.total_general), 0);
+    // Pagado a Terceros: aún no hay módulo de terceros pagados desde nómina.
+    // Se muestra "—" hasta que el backend exponga el dato.
+    const totalTerceros = 0;
+    const netoAPagar = borradores.reduce((s, n) => s + toNumber(n.total_general), 0);
+    const totalPendiente = netoAPagar; // sin terceros pendientes mientras no haya endpoint
+
+    const labelBorrador = borradores.length === 1
+      ? periodoLabel(borradores[0])
+      : `${borradores.length} períodos abiertos`;
+
+    return { totalColaboradores, totalTerceros, netoAPagar, totalPendiente, labelBorrador, borradoresLen: borradores.length };
+  }, [nominas, periodoKpi]);
 
   return (
     <div className="space-y-6">
+      {/* Header con botón de crear */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-4xl font-bold text-foreground">Nómina</h1>
+          <h1 className="text-3xl font-bold text-primary">Pagos</h1>
           <p className="text-muted-foreground mt-2">
             Gestión de períodos de nómina y desprendibles de pago
           </p>
@@ -107,7 +153,7 @@ export default function Nomina() {
             onClick={() => navigate('/nomina/planilla-diaria')}
             size="lg"
             variant="outline"
-            className="gap-2"
+            className="gap-2 border-primary text-primary hover:bg-primary/10"
           >
             <Receipt className="h-4 w-4" />
             Planilla Diaria
@@ -119,87 +165,104 @@ export default function Nomina() {
             className="gap-2 border-primary text-primary hover:bg-primary/10"
           >
             <DollarSign className="h-5 w-5" />
-            Nuevo Préstamo
+            Préstamos
           </Button>
           <Button onClick={() => navigate('/nomina/nueva')} size="lg" className="gap-2">
             <Plus className="h-5 w-5" />
-            Nueva Nómina
+            Nuevo Período de Pago
           </Button>
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="border-border">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
+      {/* Resumen de pagos con filtro por período */}
+      <Card className="border-border">
+        <CardContent className="p-5">
+          <div className="flex items-center justify-between mb-5">
+            <p className="text-sm font-semibold text-foreground">Resumen de pagos</p>
+            <select
+              value={periodoKpi}
+              onChange={(e) => setPeriodoKpi(e.target.value)}
+              className="text-sm border border-border rounded-lg px-3 py-1.5 bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+            >
+              {opcionesPeriodo.map((op) => (
+                <option key={op.value} value={op.value}>{op.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* 4 mini-KPIs */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {/* Pagado a Colaboradores */}
+            <div className="flex items-center justify-between p-4 rounded-xl bg-primary/5 border border-primary/20">
               <div>
-                <p className="text-sm font-medium text-muted-foreground mb-2">Total Períodos</p>
-                <p className="text-3xl font-bold text-foreground">
-                  {indicadores?.total_periodos ?? 0}
+                <p className="text-xs font-medium text-muted-foreground mb-1">Pagado a Colaboradores</p>
+                <p className="text-2xl font-bold text-primary">
+                  {fmtMillones(kpis.totalColaboradores)}
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">Histórico</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Neto entregado a internos</p>
               </div>
-              <div className="h-14 w-14 rounded-xl bg-primary/10 flex items-center justify-center">
-                <Calendar className="h-7 w-7 text-primary" />
+              <div className="h-11 w-11 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <Users className="h-5 w-5 text-primary" />
               </div>
             </div>
-          </CardContent>
-        </Card>
 
-        <Card className="border-border">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
+            {/* Pagado a Terceros (placeholder hasta que haya endpoint) */}
+            <div className="flex items-center justify-between p-4 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-300/40">
               <div>
-                <p className="text-sm font-medium text-muted-foreground mb-2">
-                  Nóminas en Borrador
+                <p className="text-xs font-medium text-muted-foreground mb-1">Pagado a Terceros</p>
+                <p className="text-2xl font-bold text-amber-700">
+                  {fmtMillones(kpis.totalTerceros)}
                 </p>
-                <p className="text-3xl font-bold text-foreground">
-                  {indicadores?.borradores ?? 0}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">Pendientes de cerrar</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Empresas contratistas</p>
               </div>
-              <div className="h-14 w-14 rounded-xl bg-amber-500/10 flex items-center justify-center">
-                <FileText className="h-7 w-7 text-amber-600" />
+              <div className="h-11 w-11 rounded-xl bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+                <Building2 className="h-5 w-5 text-amber-600" />
               </div>
             </div>
-          </CardContent>
-        </Card>
 
-        <Card className="border-border">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
+            {/* Neto a Pagar (períodos abiertos) */}
+            <div className="flex items-center justify-between p-4 rounded-xl bg-success/5 border border-success/20">
               <div>
-                <p className="text-sm font-medium text-muted-foreground mb-2">Nóminas Cerradas</p>
-                <p className="text-3xl font-bold text-foreground">
-                  {indicadores?.cerradas ?? 0}
+                <p className="text-xs font-medium text-muted-foreground mb-1">Neto a Pagar</p>
+                <p className="text-2xl font-bold text-success">
+                  {fmtMillones(kpis.netoAPagar)}
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">Completadas</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {kpis.borradoresLen > 0 ? kpis.labelBorrador : 'Sin períodos abiertos'}
+                </p>
               </div>
-              <div className="h-14 w-14 rounded-xl bg-success/10 flex items-center justify-center">
-                <FileText className="h-7 w-7 text-success" />
+              <div className="h-11 w-11 rounded-xl bg-success/10 flex items-center justify-center flex-shrink-0">
+                <DollarSign className="h-5 w-5 text-success" />
               </div>
             </div>
-          </CardContent>
-        </Card>
 
-        <Card className="border-border">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
+            {/* Pendiente por Pagar */}
+            <div className={`flex items-center justify-between p-4 rounded-xl border ${
+              kpis.totalPendiente > 0
+                ? 'bg-destructive/5 border-destructive/20'
+                : 'bg-muted/30 border-border'
+            }`}>
               <div>
-                <p className="text-sm font-medium text-muted-foreground mb-2">Total Devengado</p>
-                <p className="text-3xl font-bold text-foreground">
-                  ${(totalDevengadoCard / 1_000_000).toFixed(1)}M
+                <p className="text-xs font-medium text-muted-foreground mb-1">Pendiente por Pagar</p>
+                <p className={`text-2xl font-bold ${kpis.totalPendiente > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                  {kpis.totalPendiente > 0 ? fmtMillones(kpis.totalPendiente) : 'Al día'}
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">Acumulado cerradas</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Internos + terceros sin pagar</p>
               </div>
-              <div className="h-14 w-14 rounded-xl bg-green-500/10 flex items-center justify-center">
-                <DollarSign className="h-7 w-7 text-green-600" />
+              <div className={`h-11 w-11 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                kpis.totalPendiente > 0 ? 'bg-destructive/10' : 'bg-muted'
+              }`}>
+                {kpis.totalPendiente > 0
+                  ? <TrendingDown className="h-5 w-5 text-destructive" />
+                  : <Check className="h-5 w-5 text-muted-foreground" />
+                }
               </div>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </CardContent>
+      </Card>
 
+      {/* Filtros */}
       <Card className="border-border">
         <CardContent className="p-6">
           <div className="flex items-center gap-3 mb-4">
@@ -243,9 +306,7 @@ export default function Nomina() {
                 <SelectContent>
                   <SelectItem value="todos">Todos</SelectItem>
                   {Object.entries(MESES_NOMBRE).map(([k, v]) => (
-                    <SelectItem key={k} value={k}>
-                      {v}
-                    </SelectItem>
+                    <SelectItem key={k} value={k}>{v}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -273,6 +334,7 @@ export default function Nomina() {
         </CardContent>
       </Card>
 
+      {/* Listado de nóminas */}
       <div className="space-y-4">
         <div>
           <h2 className="mb-2">Nóminas Creadas</h2>
@@ -402,7 +464,7 @@ export default function Nomina() {
               </p>
               <Button onClick={() => navigate('/nomina/nueva')} className="gap-2">
                 <Plus className="h-4 w-4" />
-                Crear Primera Nómina
+                Crear Primer Período
               </Button>
             </CardContent>
           </Card>

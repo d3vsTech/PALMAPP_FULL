@@ -22,6 +22,10 @@ import {
   Calendar,
   UserPlus,
   Loader2,
+  Settings2,
+  ChevronDown,
+  ChevronUp,
+  AlertCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { nominaApi, Periodicidad } from '../../../api/nomina';
@@ -76,8 +80,9 @@ const MESES = [
 
 const pasos = [
   { numero: 1, titulo: 'Información del Período', icono: Calendar },
-  { numero: 2, titulo: 'Seleccionar Empleados', icono: Users },
-  { numero: 3, titulo: 'Confirmación', icono: Check },
+  { numero: 2, titulo: 'Seleccionar Colaboradores', icono: Users },
+  { numero: 3, titulo: 'Validar Cosecha', icono: FileText },
+  { numero: 4, titulo: 'Confirmación', icono: Check },
 ];
 
 export default function NuevaNominaWizard() {
@@ -97,7 +102,11 @@ export default function NuevaNominaWizard() {
   const [empleadosSeleccionados, setEmpleadosSeleccionados] = useState<number[]>([]);
   const [cargandoEmpleados, setCargandoEmpleados] = useState(false);
 
-  // Paso 3
+  // Paso 3 — Validar Cosecha (UI lista, pendiente conectar API)
+  const [empleadoExpandido, setEmpleadoExpandido] = useState<number | null>(null);
+  const [, setMostrarAjustePromedios] = useState(false);
+
+  // Paso 4 — Confirmación
   const [creando, setCreando] = useState(false);
 
   // Calcular fechas automáticamente
@@ -146,7 +155,7 @@ export default function NuevaNominaWizard() {
   const quitarTodos = () => setEmpleadosSeleccionados([]);
 
   const handleSiguiente = () => {
-    if (pasoActual < 3) setPasoActual(pasoActual + 1);
+    if (pasoActual < 4) setPasoActual(pasoActual + 1);
   };
   const handleAtras = () => {
     if (pasoActual > 1) setPasoActual(pasoActual - 1);
@@ -221,7 +230,7 @@ export default function NuevaNominaWizard() {
           <ArrowLeft className="h-4 w-4" />
           Volver
         </Button>
-        <h1 className="text-4xl font-bold text-foreground">Nueva Nómina</h1>
+        <h1 className="text-3xl font-bold text-primary">Nuevo Período de Pago</h1>
         <p className="text-muted-foreground mt-2">
           Crea un nuevo período de nómina paso a paso
         </p>
@@ -414,10 +423,10 @@ export default function NuevaNominaWizard() {
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold text-foreground">
-                      Seleccionar Empleados
+                      Seleccionar Colaboradores
                     </h2>
                     <p className="text-sm text-muted-foreground">
-                      Agrega empleados a este período de nómina
+                      Agrega colaboradores a este período de nómina
                     </p>
                   </div>
                 </div>
@@ -567,8 +576,163 @@ export default function NuevaNominaWizard() {
             </div>
           )}
 
-          {/* Paso 3: Confirmación */}
+          {/* ── PASO 3: Validar Cosecha ──
+              UI portada de V.15. Aún SIN datos reales — espera endpoint que
+              devuelva, por colaborador y por sublote, los kg registrados vs.
+              los del reporte de la extractora. Por ahora los totales muestran
+              "—" y la lista expandible queda vacía.
+              TODO: conectar a `nominaApi.resumenTrabajo` (o nuevo endpoint
+              `nominaApi.cosechaPorColaborador`) cuando esté listo. */}
           {pasoActual === 3 && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <FileText className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-foreground">Validar Cosecha</h2>
+                    <p className="text-sm text-muted-foreground">
+                      Compara lo registrado por cada colaborador con el reporte de la extractora
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => setMostrarAjustePromedios(true)}
+                  className="gap-2 border-primary/50 text-primary hover:bg-primary/5"
+                >
+                  <Settings2 className="h-4 w-4" />
+                  Ajustar Promedios
+                </Button>
+              </div>
+
+              {/* Card resumen totales — datos a la espera del backend */}
+              <div className="rounded-xl border border-border bg-card overflow-hidden">
+                <div className="flex items-center justify-between px-5 py-3 border-b border-border bg-muted/30">
+                  <p className="text-sm font-semibold text-foreground">Resumen de Cosecha</p>
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
+                    <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />
+                    Pendiente conectar datos
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 divide-x divide-border">
+                  <div className="px-6 py-5 space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Colaboradores</p>
+                    <div className="flex items-end gap-1.5">
+                      <p className="text-3xl font-bold text-foreground leading-none">—</p>
+                      <p className="text-sm text-muted-foreground mb-0.5">kg</p>
+                    </div>
+                    <div className="flex items-center gap-1.5 pt-1 border-t border-border/50">
+                      <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                      <p className="text-xs text-muted-foreground">
+                        {empleadosSeleccionados.length} colaborador{empleadosSeleccionados.length !== 1 ? 'es' : ''} incluidos
+                      </p>
+                    </div>
+                  </div>
+                  <div className="px-6 py-5 space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Extractora</p>
+                    <div className="flex items-end gap-1.5">
+                      <p className="text-3xl font-bold text-foreground leading-none">—</p>
+                      <p className="text-sm text-muted-foreground mb-0.5">kg</p>
+                    </div>
+                    <div className="flex items-center gap-1.5 pt-1 border-t border-border/50">
+                      <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />
+                      <p className="text-xs text-muted-foreground">0 remisiones registradas</p>
+                    </div>
+                  </div>
+                  <div className="px-6 py-5 space-y-2 bg-muted/10">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Diferencia</p>
+                    <div className="flex items-end gap-1.5">
+                      <p className="text-3xl font-bold text-muted-foreground leading-none">—</p>
+                      <p className="text-sm text-muted-foreground mb-0.5">kg</p>
+                    </div>
+                    <div className="flex items-center gap-1.5 pt-1 border-t border-border/50">
+                      <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />
+                      <p className="text-xs font-medium text-muted-foreground">Sin datos</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Detalle por Colaborador */}
+              <div className="space-y-4">
+                <h3 className="text-base font-semibold text-foreground">Detalle por Colaborador</h3>
+                {empleadosSeleccionados.map((id) => {
+                  const emp = empleados.find((e) => e.id === id);
+                  if (!emp) return null;
+                  const { nombres, apellidos } = nombreApellidoDe(emp);
+                  const nombre = `${nombres} ${apellidos}`.trim();
+                  const cargo = emp.cargo ?? '—';
+                  const iniciales = (nombres[0] ?? '') + (apellidos[0] ?? '');
+                  const expandido = empleadoExpandido === id;
+
+                  return (
+                    <Card key={id} className="border-border overflow-hidden">
+                      <button
+                        type="button"
+                        className="w-full text-left"
+                        onClick={() => setEmpleadoExpandido(expandido ? null : id)}
+                      >
+                        <div className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                              <span className="text-sm font-bold">{iniciales.toUpperCase() || '?'}</span>
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <p className="font-semibold text-foreground">{nombre}</p>
+                              </div>
+                              <p className="text-xs text-muted-foreground">{cargo}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <div className="text-right hidden sm:block">
+                              <p className="text-xs text-muted-foreground">Registrado</p>
+                              <p className="text-sm font-semibold">— kg</p>
+                            </div>
+                            <div className="text-right hidden sm:block">
+                              <p className="text-xs text-muted-foreground">Transportadora</p>
+                              <p className="text-sm font-semibold">— kg</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xs text-muted-foreground">Diferencia</p>
+                              <p className="text-sm font-bold text-muted-foreground">— kg</p>
+                            </div>
+                            {expandido ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                          </div>
+                        </div>
+                      </button>
+                      {expandido && (
+                        <div className="border-t border-border p-4 space-y-3 bg-muted/10">
+                          <div className="flex items-start gap-2 rounded-lg p-3 text-sm bg-muted text-muted-foreground border border-border">
+                            <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                            <span>
+                              <strong>Pendiente conectar API.</strong>{' '}
+                              Aquí se mostrará el detalle por actividad cruzado contra el reporte de la extractora cuando el backend lo exponga.
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </Card>
+                  );
+                })}
+                {empleadosSeleccionados.length === 0 && (
+                  <Card className="bg-gradient-to-br from-muted/20 to-muted/5 border-dashed border-2">
+                    <CardContent className="flex flex-col items-center justify-center py-12">
+                      <Users className="h-12 w-12 text-muted-foreground mb-3" />
+                      <p className="text-sm text-muted-foreground">
+                        No hay colaboradores seleccionados. Regresa al paso anterior.
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Paso 4: Confirmación */}
+          {pasoActual === 4 && (
             <div className="space-y-6">
               <div className="flex items-center gap-3 mb-6">
                 <div className="h-12 w-12 rounded-xl bg-success/10 flex items-center justify-center">
@@ -694,7 +858,7 @@ export default function NuevaNominaWizard() {
           Atrás
         </Button>
 
-        {pasoActual < 3 ? (
+        {pasoActual < 4 ? (
           <Button onClick={handleSiguiente} disabled={!puedeAvanzar()} className="gap-2">
             Siguiente
             <ArrowRight className="h-4 w-4" />

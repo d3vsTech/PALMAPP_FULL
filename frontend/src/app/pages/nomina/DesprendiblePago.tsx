@@ -123,6 +123,12 @@ export default function DesprendiblePago() {
         </div>
       </div>
 
+      {/* Header H1 igual que V.15 — no se imprime */}
+      <div className="print:hidden">
+        <h1 className="text-3xl font-bold text-primary">Desprendible Generado</h1>
+        <p className="text-muted-foreground mt-2">Liquidación confirmada exitosamente</p>
+      </div>
+
       <Card className="border-2 border-success bg-success/5 print:hidden">
         <CardContent className="p-4 flex items-center gap-3">
           <div className="h-10 w-10 rounded-full bg-success/20 flex items-center justify-center">

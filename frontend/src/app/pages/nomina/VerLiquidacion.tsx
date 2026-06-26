@@ -180,7 +180,7 @@ export default function VerLiquidacion() {
               </span>
             </div>
             <div>
-              <h1 className="text-4xl font-bold text-foreground">{empleado.nombre_completo}</h1>
+              <h1 className="text-3xl font-bold text-primary">{empleado.nombre_completo}</h1>
               <div className="flex items-center gap-3 mt-2">
                 <Badge variant="outline">{empleado.salario_tipo}</Badge>
                 <span className="text-muted-foreground">·</span>

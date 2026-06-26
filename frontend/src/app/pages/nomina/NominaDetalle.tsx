@@ -193,7 +193,7 @@ export default function NominaDetalle() {
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-4xl font-bold text-foreground">{periodoLabel(nomina)}</h1>
+              <h1 className="text-3xl font-bold text-primary">{periodoLabel(nomina)}</h1>
               <StatusBadge status={nomina.estado as any} />
             </div>
             <p className="text-muted-foreground">
