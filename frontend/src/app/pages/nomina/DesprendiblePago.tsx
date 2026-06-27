@@ -1,14 +1,23 @@
+/**
+ * Desprendible de pago — diseño portado de V.15.
+ *
+ * Layout V.15:
+ *  - Header del desprendible: grid 3 columnas con panel logo + título
+ *  - Grid 3x2 mini-cards con info (Nombre, Cédula, Base, Fecha, Período, Días)
+ *  - Detalle de días trabajados (tabla completa para VARIABLE) — pendiente API
+ *  - Bloques DEVENGADO / DEDUCCIONES / BONIFICACIÓN con border-l-3 y colores
+ *  - TOTAL NETO grande
+ *  - Footer con firma y huella
+ *
+ * Acciones: Aceptar, Imprimir, WhatsApp, Descargar PDF.
+ * Conexiones API: `nominaApi.desprendible`, `desprendiblePdf`, `desprendibleWhatsapp`.
+ */
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import {
-  Check,
-  Printer,
-  Download,
-  MessageCircle,
-  ArrowLeft,
-  Loader2,
+  Check, Printer, Download, MessageCircle, ArrowLeft, Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { nominaApi, DesprendibleData } from '../../../api/nomina';
@@ -75,6 +84,11 @@ export default function DesprendiblePago() {
     }
   };
 
+  const handleAceptar = () => {
+    toast.success('Desprendible aceptado');
+    navigate(`/nomina/${nominaId}`);
+  };
+
   if (cargando) {
     return (
       <div className="flex items-center justify-center py-20 gap-2 text-muted-foreground">
@@ -93,9 +107,26 @@ export default function DesprendiblePago() {
   }
 
   const { empleado, nomina, liquidacion } = data;
+  const fechaActual = new Date().toLocaleDateString('es-CO', {
+    day: '2-digit', month: 'long', year: 'numeric',
+  });
+  const totalBruto =
+    liquidacion.total_jornales + liquidacion.total_cosecha +
+    liquidacion.total_horas_extra + liquidacion.total_recargos +
+    liquidacion.total_incapacidades;
+  const adelantos = liquidacion.deducciones
+    .filter((d) => /adelant|prestam/i.test(d.nombre))
+    .reduce((s, d) => s + d.valor, 0);
+  const ahorros = liquidacion.deducciones
+    .filter((d) => /ahorr/i.test(d.nombre))
+    .reduce((s, d) => s + d.valor, 0);
+  const salud = liquidacion.deducciones.find((d) => /salud/i.test(d.nombre))?.valor ?? 0;
+  const pension = liquidacion.deducciones.find((d) => /pensi/i.test(d.nombre))?.valor ?? 0;
+  const otras = liquidacion.total_deducciones - adelantos - ahorros - salud - pension;
 
   return (
     <div className="space-y-6 print:space-y-2">
+      {/* Header de acciones - NO SE IMPRIME */}
       <div className="flex items-center justify-between print:hidden">
         <Button
           variant="ghost"
@@ -123,12 +154,13 @@ export default function DesprendiblePago() {
         </div>
       </div>
 
-      {/* Header H1 igual que V.15 — no se imprime */}
+      {/* Título H1 - NO SE IMPRIME */}
       <div className="print:hidden">
         <h1 className="text-3xl font-bold text-primary">Desprendible Generado</h1>
         <p className="text-muted-foreground mt-2">Liquidación confirmada exitosamente</p>
       </div>
 
+      {/* Banner confirmación - NO SE IMPRIME */}
       <Card className="border-2 border-success bg-success/5 print:hidden">
         <CardContent className="p-4 flex items-center gap-3">
           <div className="h-10 w-10 rounded-full bg-success/20 flex items-center justify-center">
@@ -143,139 +175,174 @@ export default function DesprendiblePago() {
         </CardContent>
       </Card>
 
-      <Card className="border-border max-w-3xl mx-auto">
-        <CardContent className="p-8 space-y-6">
-          <div className="text-center border-b border-border pb-4">
-            <h2 className="text-xl font-bold uppercase">{data.finca}</h2>
-            <p className="text-sm text-muted-foreground">Desprendible de pago</p>
-          </div>
+      {/* DESPRENDIBLE - SE IMPRIME */}
+      <Card className="border border-border shadow-lg max-w-4xl mx-auto">
+        <CardContent className="p-8">
+          {/* Header del desprendible: grid 3 col con panel finca + título */}
+          <div className="mb-8">
+            <div className="grid grid-cols-3 mb-6">
+              <div className="col-span-1 p-6 flex items-center justify-center bg-primary/5 rounded-l-lg">
+                <p className="font-bold text-primary text-center uppercase">{data.finca}</p>
+              </div>
+              <div className="col-span-2 p-6 flex items-center justify-center bg-muted/30 rounded-r-lg">
+                <h2 className="text-2xl font-bold text-center">DESPRENDIBLE DE NÓMINA</h2>
+              </div>
+            </div>
 
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <p className="text-xs text-muted-foreground">Empleado</p>
-              <p className="font-semibold">{empleado.nombre_completo}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Documento</p>
-              <p className="font-semibold">{empleado.documento}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Cargo</p>
-              <p className="font-semibold">{empleado.cargo}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Tipo de salario</p>
-              <p className="font-semibold">{empleado.salario_tipo}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Período</p>
-              <p className="font-semibold">{nomina.periodo_label}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Fechas</p>
-              <p className="font-semibold">
-                {nomina.fecha_inicio} → {nomina.fecha_fin}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Días trabajados</p>
-              <p className="font-semibold">{liquidacion.dias_trabajados}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Liquidado</p>
-              <p className="font-semibold">{liquidacion.fecha_humana}</p>
+            {/* Grid 3x2 de info — mini-cards */}
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              <InfoMini label="Nombre" value={empleado.nombre_completo} />
+              <InfoMini label="Cédula" value={empleado.documento} />
+              <InfoMini label="Base" value={empleado.salario_tipo} />
+              <InfoMini label="Fecha" value={fechaActual} />
+              <InfoMini label="Período" value={nomina.periodo_label} />
+              <InfoMini label="Días Cancelados" value={String(liquidacion.dias_trabajados)} />
             </div>
           </div>
 
-          <div className="border-l-4 border-success pl-4 space-y-2">
-            <h3 className="font-semibold text-success">Devengado</h3>
-            {liquidacion.total_jornales > 0 && (
-              <Row label="Jornales / Salario base" value={fmt(liquidacion.total_jornales)} />
-            )}
-            {liquidacion.total_cosecha > 0 && (
-              <Row label="Cosecha" value={fmt(liquidacion.total_cosecha)} />
-            )}
-            {liquidacion.total_horas_extra > 0 && (
-              <Row label="Horas extra" value={fmt(liquidacion.total_horas_extra)} />
-            )}
-            {liquidacion.total_recargos > 0 && (
-              <Row label="Recargos" value={fmt(liquidacion.total_recargos)} />
-            )}
-            {liquidacion.total_incapacidades > 0 && (
-              <Row label="Incapacidades" value={fmt(liquidacion.total_incapacidades)} />
-            )}
-            {liquidacion.bonificaciones.map((b, i) => (
-              <Row
-                key={i}
-                label={`Bonificación: ${b.nombre}${b.observacion ? ` (${b.observacion})` : ''}`}
-                value={fmt(b.valor)}
-              />
-            ))}
-            <Row label="Subsidio de transporte" value={fmt(liquidacion.subsidio_transporte)} />
-            <div className="border-t pt-2 flex justify-between font-bold">
-              <span>Total devengado</span>
-              <span className="text-success">
-                {fmt(
-                  liquidacion.total_devengado +
-                    liquidacion.total_bonificaciones +
-                    liquidacion.subsidio_transporte,
-                )}
-              </span>
-            </div>
-          </div>
-
-          <div className="border-l-4 border-destructive pl-4 space-y-2">
-            <h3 className="font-semibold text-destructive">Deducciones</h3>
-            {liquidacion.deducciones.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No aplica</p>
-            ) : (
-              liquidacion.deducciones.map((d, i) => (
-                <Row
-                  key={i}
-                  label={
-                    d.nombre +
-                    (d.porcentaje !== undefined && d.base !== undefined
-                      ? ` (${d.porcentaje}%)`
-                      : '') +
-                    (d.observacion ? ` — ${d.observacion}` : '')
-                  }
-                  value={fmt(d.valor)}
-                  destructivo
+          {/* Bloques de liquidación */}
+          <div className="space-y-3 mt-4">
+            {/* DEVENGADO */}
+            <div className="bg-success/5 rounded-lg p-3 border-l-4 border-success">
+              <h3 className="font-bold text-xs text-success mb-2 uppercase">Devengado</h3>
+              <div className="space-y-1.5">
+                <RowSmall
+                  label={empleado.salario_tipo === 'VARIABLE' ? 'Base (Jornales)' : 'Sueldo Básico'}
+                  value={fmt(liquidacion.total_jornales)}
                 />
-              ))
+                {liquidacion.total_cosecha > 0 && (
+                  <RowSmall label="Cosecha" value={fmt(liquidacion.total_cosecha)} />
+                )}
+                {(liquidacion.total_horas_extra + liquidacion.total_recargos) > 0 && (
+                  <RowSmall
+                    label="Extras (Horas/Domin)"
+                    value={fmt(liquidacion.total_horas_extra + liquidacion.total_recargos)}
+                  />
+                )}
+                <RowSmall label="Incapacidades" value={fmt(liquidacion.total_incapacidades)} />
+                <div className="border-t border-success/30 pt-2 mt-2">
+                  <div className="flex justify-between items-center bg-success/10 p-2 rounded">
+                    <span className="font-bold text-success text-xs">Total Bruto</span>
+                    <span className="font-bold text-base text-success">{fmt(totalBruto)}</span>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center pt-1">
+                  <span className="font-medium text-xs">Subsidio Transporte</span>
+                  <span className="font-bold text-sm">{fmt(liquidacion.subsidio_transporte)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* DEDUCCIONES */}
+            <div className="bg-destructive/5 rounded-lg p-3 border-l-4 border-destructive">
+              <h3 className="font-bold text-xs text-destructive mb-2 uppercase">Deducciones</h3>
+              <div className="space-y-1.5">
+                <RowSmall label="Descuento Salud (4%)" value={fmt(salud)} destructivo />
+                <RowSmall label="Descuento Pensión (4%)" value={fmt(pension)} destructivo />
+                <RowSmall label="Dcto Adelantos" value={fmt(adelantos)} destructivo />
+                <RowSmall label="Ahorro" value={fmt(ahorros)} destructivo />
+                {otras > 0 && (
+                  <RowSmall label="Otras deducciones" value={fmt(otras)} destructivo />
+                )}
+                <div className="border-t border-destructive/30 pt-2 mt-2">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-xs">Total Deducciones</span>
+                    <span className="font-bold text-sm text-destructive">
+                      {fmt(liquidacion.total_deducciones)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* BONIFICACIÓN */}
+            {liquidacion.total_bonificaciones > 0 && (
+              <div className="bg-primary/5 rounded-lg p-3 border-l-4 border-primary">
+                <h3 className="font-bold text-xs text-primary mb-2 uppercase">Bonificación</h3>
+                <div className="flex justify-between items-center">
+                  <span className="font-medium text-xs">Total Bonificaciones</span>
+                  <span className="font-bold text-sm text-primary">
+                    {fmt(liquidacion.total_bonificaciones)}
+                  </span>
+                </div>
+              </div>
             )}
-            <div className="border-t pt-2 flex justify-between font-bold">
-              <span>Total deducciones</span>
-              <span className="text-destructive">{fmt(liquidacion.total_deducciones)}</span>
+
+            {/* TOTAL NETO */}
+            <div className="bg-primary/10 rounded-lg p-4 border-2 border-primary mt-4">
+              <div className="flex justify-between items-center">
+                <span className="font-bold text-lg">TOTAL NETO</span>
+                <span className="font-bold text-3xl text-primary">{fmt(liquidacion.total_neto)}</span>
+              </div>
             </div>
           </div>
 
-          <div className="bg-primary/10 p-4 rounded-lg flex justify-between items-center">
-            <span className="font-bold text-lg">Total neto a pagar</span>
-            <span className="font-bold text-2xl text-primary">
-              {fmt(liquidacion.total_neto)}
-            </span>
+          {/* Footer: firmas */}
+          <div className="mt-12 pt-8 border-t border-border">
+            <div className="grid grid-cols-2 gap-8">
+              <div className="text-center">
+                <div className="h-20 border-b-2 border-muted-foreground/30 mb-3"></div>
+                <p className="text-sm font-semibold text-muted-foreground">FIRMA RECIBIDO</p>
+              </div>
+              <div className="text-center">
+                <div className="h-20 border-b-2 border-muted-foreground/30 mb-3"></div>
+                <p className="text-sm font-semibold text-muted-foreground">HUELLA</p>
+              </div>
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-8 pt-8 mt-8 border-t border-border">
-            <div className="text-center">
-              <div className="border-t border-foreground pt-2">
-                <p className="text-xs text-muted-foreground">Recibido conforme</p>
-              </div>
-            </div>
-            <div className="text-center">
-              <div className="border-t border-foreground pt-2">
-                <p className="text-xs text-muted-foreground">Huella</p>
-              </div>
-            </div>
+          {/* Nota al pie */}
+          <div className="mt-6 text-xs text-center text-muted-foreground italic">
+            <p>Este desprendible es un documento oficial de pago. Consérvelo para sus registros.</p>
           </div>
         </CardContent>
       </Card>
+
+      {/* Acciones duplicadas abajo - NO SE IMPRIME */}
+      <div className="print:hidden grid grid-cols-2 lg:grid-cols-4 gap-4 max-w-4xl mx-auto">
+        <Button onClick={handleAceptar} size="lg" className="gap-2 bg-success hover:bg-success/90">
+          <Check className="h-5 w-5" />
+          Aceptar
+        </Button>
+        <Button onClick={() => window.print()} variant="outline" size="lg" className="gap-2">
+          <Printer className="h-5 w-5" />
+          Imprimir
+        </Button>
+        <Button
+          onClick={enviarWhatsapp}
+          disabled={generandoWa}
+          variant="outline"
+          size="lg"
+          className="gap-2 text-primary border-primary hover:bg-primary/5"
+        >
+          {generandoWa ? <Loader2 className="h-5 w-5 animate-spin" /> : <MessageCircle className="h-5 w-5" />}
+          WhatsApp
+        </Button>
+        <Button
+          onClick={descargarPdf}
+          disabled={descargando}
+          variant="outline"
+          size="lg"
+          className="gap-2"
+        >
+          {descargando ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
+          PDF
+        </Button>
+      </div>
     </div>
   );
 }
 
-function Row({
+function InfoMini({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="p-1.5 bg-muted/20 rounded">
+      <span className="font-semibold text-muted-foreground text-[10px] uppercase">{label}</span>
+      <div className="font-semibold text-xs">{value}</div>
+    </div>
+  );
+}
+
+function RowSmall({
   label,
   value,
   destructivo,
@@ -285,9 +352,9 @@ function Row({
   destructivo?: boolean;
 }) {
   return (
-    <div className="flex justify-between text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <span className={`font-semibold ${destructivo ? 'text-destructive' : ''}`}>{value}</span>
+    <div className="flex justify-between items-center">
+      <span className="font-medium text-xs">{label}</span>
+      <span className={`font-bold text-sm ${destructivo ? 'text-destructive' : ''}`}>{value}</span>
     </div>
   );
 }

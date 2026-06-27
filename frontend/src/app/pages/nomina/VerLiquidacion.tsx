@@ -384,13 +384,42 @@ export default function VerLiquidacion() {
         </CardContent>
       </Card>
 
+      {/* Resumen Final — layout V.15: 2 columnas */}
       <Card className="border-2 border-primary bg-primary/5">
-        <CardContent className="p-6 flex items-center justify-between">
-          <div>
-            <p className="text-sm text-muted-foreground">Total neto a pagar</p>
-            <p className="text-xs text-muted-foreground">{liquidacion.fecha_humana}</p>
+        <CardContent className="p-6 space-y-4">
+          <div className="grid grid-cols-2 gap-8">
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold text-success mb-3">+ INGRESOS</h4>
+              <div>
+                <p className="text-sm text-muted-foreground">Devengado</p>
+                <p className="font-bold text-lg text-success">{fmt(liquidacion.total_devengado)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Subsidio Transporte</p>
+                <p className="font-bold text-lg text-success">{fmt(liquidacion.subsidio_transporte)}</p>
+              </div>
+              {liquidacion.total_bonificaciones > 0 && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Bonificaciones</p>
+                  <p className="font-bold text-lg text-success">{fmt(liquidacion.total_bonificaciones)}</p>
+                </div>
+              )}
+            </div>
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold text-destructive mb-3">- DEDUCCIONES</h4>
+              <div>
+                <p className="text-sm text-muted-foreground">Total Deducciones</p>
+                <p className="font-bold text-lg text-destructive">-{fmt(liquidacion.total_deducciones)}</p>
+              </div>
+            </div>
           </div>
-          <p className="text-4xl font-bold text-primary">{fmt(liquidacion.total_neto)}</p>
+          <div className="flex justify-between pt-4 border-t-2 border-primary/30">
+            <div>
+              <span className="font-bold text-2xl">TOTAL NETO</span>
+              <p className="text-xs text-muted-foreground mt-1">{liquidacion.fecha_humana}</p>
+            </div>
+            <span className="font-bold text-3xl text-primary">{fmt(liquidacion.total_neto)}</span>
+          </div>
         </CardContent>
       </Card>
     </div>

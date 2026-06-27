@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router';
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -72,7 +72,10 @@ function getIniciales(nombre: string): string {
 export default function LiquidarColaborador() {
   const { nominaId, colaboradorId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const nominaEmpleadoId = colaboradorId ? parseInt(colaboradorId) : null;
+  /** Si la URL trae ?reliquidar=1, se usa PUT en vez de POST (re-liquidar). */
+  const esReliquidacion = searchParams.get('reliquidar') === '1';
 
   const [preview, setPreview] = useState<PreviewLiquidacion | null>(null);
   const [resumen, setResumen] = useState<ResumenTrabajo | null>(null);
@@ -163,7 +166,7 @@ export default function LiquidarColaborador() {
 
     setEnviando(true);
     try {
-      const res = await nominaApi.liquidar(nominaEmpleadoId, {
+      const payload = {
         dias_trabajados: diasTrabajados === '' ? undefined : Number(diasTrabajados),
         bonificaciones: bonificaciones.map((b) => ({ nombre: b.nombre, valor: Number(b.valor) })),
         deducciones_voluntarias: deducciones.map((d) => ({
@@ -171,8 +174,14 @@ export default function LiquidarColaborador() {
           valor: Number(d.valor),
           observacion: d.observacion || undefined,
         })),
-      });
-      toast.success(res.message ?? 'Empleado liquidado');
+      };
+      // Si vino ?reliquidar=1, usar PUT (re-liquidar). Si no, POST (liquidar).
+      // El backend acepta ambos; la diferencia es que re-liquidar borra los
+      // conceptos previos y reescribe (doc §5.3).
+      const res = esReliquidacion
+        ? await nominaApi.reLiquidar(nominaEmpleadoId, payload)
+        : await nominaApi.liquidar(nominaEmpleadoId, payload);
+      toast.success(res.message ?? (esReliquidacion ? 'Liquidación actualizada' : 'Empleado liquidado'));
       navigate(`/nomina/${nominaId}/desprendible/${nominaEmpleadoId}`);
     } catch (err) {
       const e = err as ApiError;
@@ -364,12 +373,12 @@ export default function LiquidarColaborador() {
         </Card>
       )}
 
-      {/* Liquidación */}
+      {/* Desprendible */}
       <Card className="border-border">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-xl">
             <Calculator className="h-6 w-6 text-primary" />
-            Liquidación
+            {esReliquidacion ? 'Re-liquidación' : 'Desprendible de Nómina'}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -601,29 +610,53 @@ export default function LiquidarColaborador() {
             )}
           </div>
 
-          {/* Resumen final */}
+          {/* Resumen final — layout V.15: 2 columnas (Ingresos / Deducciones) */}
           {totales && (
-            <div className="pt-4 border-t-2">
-              <div className="space-y-2 bg-primary/10 p-4 rounded-lg border-2 border-primary/30">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Devengado</span>
-                  <span className="font-semibold">${totales.devengado.toLocaleString('es-CO')}</span>
+            <div className="pt-6 border-t-2">
+              <div className="space-y-4 bg-primary/10 p-6 rounded-lg border-2 border-primary/30">
+                <div className="grid grid-cols-2 gap-8">
+                  {/* INGRESOS */}
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-semibold text-success mb-3">+ INGRESOS</h4>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Devengado</p>
+                      <p className="font-bold text-lg text-success">${totales.devengado.toLocaleString('es-CO')}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Subsidio Transporte</p>
+                      <p className="font-bold text-lg text-success">${preview.subsidio_transporte.toLocaleString('es-CO')}</p>
+                    </div>
+                    {totales.totalBoni > 0 && (
+                      <div>
+                        <p className="text-sm text-muted-foreground">Bonificaciones</p>
+                        <p className="font-bold text-lg text-success">${totales.totalBoni.toLocaleString('es-CO')}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* DEDUCCIONES */}
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-semibold text-destructive mb-3">- DEDUCCIONES</h4>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Deducciones legales</p>
+                      <p className="font-bold text-lg text-destructive">-${preview.total_deducciones_legales.toLocaleString('es-CO')}</p>
+                    </div>
+                    {totales.totalDedVol > 0 && (
+                      <div>
+                        <p className="text-sm text-muted-foreground">Deducciones voluntarias</p>
+                        <p className="font-bold text-lg text-destructive">-${totales.totalDedVol.toLocaleString('es-CO')}</p>
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total deducciones</p>
+                      <p className="font-bold text-lg text-destructive">-${totales.deduccionesTot.toLocaleString('es-CO')}</p>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Subsidio transporte</span>
-                  <span className="font-semibold">
-                    ${preview.subsidio_transporte.toLocaleString('es-CO')}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Deducciones</span>
-                  <span className="font-semibold text-destructive">
-                    -${totales.deduccionesTot.toLocaleString('es-CO')}
-                  </span>
-                </div>
-                <div className="flex justify-between pt-3 border-t-2 border-primary/30">
-                  <span className="font-bold text-lg">Neto a pagar</span>
-                  <span className="font-bold text-2xl text-primary">
+
+                <div className="flex justify-between pt-4 border-t-2 border-primary/30">
+                  <span className="font-bold text-2xl">TOTAL NETO</span>
+                  <span className="font-bold text-3xl text-primary">
                     ${totales.neto.toLocaleString('es-CO')}
                   </span>
                 </div>
@@ -646,7 +679,7 @@ export default function LiquidarColaborador() {
               className="flex-1 gap-2 bg-success hover:bg-success/90"
             >
               {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Confirmar liquidación
+              {esReliquidacion ? 'Guardar cambios' : 'Confirmar liquidación'}
             </Button>
           </div>
         </CardContent>

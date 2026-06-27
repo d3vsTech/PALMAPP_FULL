@@ -185,7 +185,7 @@ export default function NuevaLiquidacionWizard() {
           <ArrowLeft className="h-4 w-4" />
           Volver
         </Button>
-        <h1 className="text-4xl font-bold text-foreground">Nueva Liquidación</h1>
+        <h1 className="text-3xl font-bold text-primary">Nueva Liquidación</h1>
         <p className="text-muted-foreground mt-2">
           Crea una nueva liquidación de prestaciones sociales
         </p>

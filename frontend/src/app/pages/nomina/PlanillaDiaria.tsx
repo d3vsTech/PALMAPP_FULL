@@ -267,7 +267,7 @@ export default function PlanillaDiaria() {
 
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-4xl font-bold text-foreground">Planilla Diaria de Trabajo</h1>
+            <h1 className="text-3xl font-bold text-primary">Planilla Diaria de Trabajo</h1>
             <p className="text-muted-foreground mt-2">
               Registro diario de operaciones y cosecha
             </p>

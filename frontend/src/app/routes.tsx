@@ -91,6 +91,8 @@ const Nomina = lazyWithRetry(() => import('./pages/nomina/Nomina'));
 const NominaDetalle = lazyWithRetry(() => import('./pages/nomina/NominaDetalle'));
 const NuevaNominaWizard = lazyWithRetry(() => import('./pages/nomina/NuevaNominaWizard'));
 const NuevoPrestamo = lazyWithRetry(() => import('./pages/nomina/NuevoPrestamo'));
+const Prestamos = lazyWithRetry(() => import('./pages/nomina/Prestamos'));
+const LiquidarTerceros = lazyWithRetry(() => import('./pages/nomina/LiquidarTerceros'));
 const NuevaLiquidacionWizard = lazyWithRetry(() => import('./pages/nomina/NuevaLiquidacionWizard'));
 const LiquidarColaborador = lazyWithRetry(() => import('./pages/nomina/LiquidarColaborador'));
 const VerLiquidacion = lazyWithRetry(() => import('./pages/nomina/VerLiquidacion'));
@@ -277,6 +279,7 @@ export const router = createBrowserRouter([
 
       { path: 'nomina',                     element: <ProtectedRoute permiso="nomina.ver">{L(<Nomina />)}</ProtectedRoute> },
       { path: 'nomina/nueva',               element: L(<NuevaNominaWizard />) },
+      { path: 'nomina/prestamos',           element: L(<Prestamos />) },
       { path: 'nomina/nuevo-prestamo',      element: L(<NuevoPrestamo />) },
       { path: 'nomina/planilla-diaria',     element: L(<PlanillaDiaria />) },
       { path: 'nomina/liquidacion/nueva',   element: L(<NuevaLiquidacionWizard />) },
@@ -284,6 +287,7 @@ export const router = createBrowserRouter([
       { path: 'nomina/:nominaId/liquidar/:colaboradorId',     element: L(<LiquidarColaborador />) },
       { path: 'nomina/:nominaId/ver/:colaboradorId',          element: L(<VerLiquidacion />) },
       { path: 'nomina/:nominaId/desprendible/:colaboradorId', element: L(<DesprendiblePago />) },
+      { path: 'nomina/:nominaId/liquidar-terceros',           element: L(<LiquidarTerceros />) },
 
       {
         path: 'liquidaciones',

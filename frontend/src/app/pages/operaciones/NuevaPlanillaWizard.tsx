@@ -46,15 +46,11 @@ import { useAuth } from '../../contexts/AuthContext';
 import { operacionesApi, cosechasApi, jornalesApi, horasExtraApi, ausenciasApi, selectsApi } from '../../../api/operaciones';
 import { toast } from 'sonner';
 
-// Tipos de fertilizantes
-const fertilizantes = [
-  'NPK 15-15-15',
-  'Urea',
-  'KCl (Cloruro de Potasio)',
-  'Sulfato de Magnesio',
-  'Boro',
-  'Otro'
-];
+// Los fertilizantes se cargan desde Configuración → Insumos vía el bundle
+// `selectsApi.wizardInit` (campo `parametricas.insumos`). Se persisten en
+// `insumosLista` (nombres) e `insumosMap` (nombre → id). El Select de tipo
+// de fertilizante usa `insumosLista`. La opción "Otro" queda como fallback
+// para texto libre.
 
 // Las labores de Finca se cargan desde el API (`/v1/tenant/labores/select`,
 // §4 del doc paramétricas) — se guardan en `laboresLista` al montar el wizard.
@@ -2032,7 +2028,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                         const col = colaboradores.find(c => c.id === colId);
                                         return col ? (
                                           <Badge key={colId} variant="outline" className="text-xs">
-                                            {col.nombres.split(' ')[0]} {col.apellidos.split(' ')[0]}
+                                            {col.nombres} {col.apellidos.split(' ')[0]}
                                           </Badge>
                                         ) : null;
                                       })}
@@ -2245,7 +2241,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                         const col = colaboradores.find(c => c.id === colId);
                                         return col ? (
                                           <Badge key={colId} variant="outline" className="text-xs">
-                                            {col.nombres.split(' ')[0]} {col.apellidos.split(' ')[0]}
+                                            {col.nombres} {col.apellidos.split(' ')[0]}
                                           </Badge>
                                         ) : null;
                                       })}
@@ -2442,7 +2438,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                         const col = colaboradores.find(c => c.id === colId);
                                         return col ? (
                                           <Badge key={colId} variant="outline" className="text-xs">
-                                            {col.nombres.split(' ')[0]} {col.apellidos.split(' ')[0]}
+                                            {col.nombres} {col.apellidos.split(' ')[0]}
                                           </Badge>
                                         ) : null;
                                       })}
@@ -2615,14 +2611,23 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                   onValueChange={(value) => setFertilizacionEnEdicion({ ...fertilizacionEnEdicion, tipoFertilizante: value, otroFertilizante: value !== 'Otro' ? '' : fertilizacionEnEdicion.otroFertilizante })}
                                 >
                                   <SelectTrigger>
-                                    <SelectValue placeholder="Seleccionar tipo" />
+                                    <SelectValue placeholder={insumosLista.length === 0 ? 'Sin insumos registrados' : 'Seleccionar tipo'} />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    {fertilizantes.map((fert) => (
-                                      <SelectItem key={fert} value={fert}>
-                                        {fert}
-                                      </SelectItem>
-                                    ))}
+                                    {insumosLista.length === 0 ? (
+                                      <div className="px-2 py-3 text-xs text-muted-foreground">
+                                        No hay insumos registrados. Agrégalos en Configuración → Insumos.
+                                      </div>
+                                    ) : (
+                                      <>
+                                        {insumosLista.map((fert) => (
+                                          <SelectItem key={fert} value={fert}>
+                                            {fert}
+                                          </SelectItem>
+                                        ))}
+                                        <SelectItem value="Otro">Otro (especificar)</SelectItem>
+                                      </>
+                                    )}
                                   </SelectContent>
                                 </Select>
                               </div>
@@ -2677,7 +2682,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                         const col = colaboradores.find(c => c.id === colId);
                                         return col ? (
                                           <Badge key={colId} variant="outline" className="text-xs">
-                                            {col.nombres.split(' ')[0]} {col.apellidos.split(' ')[0]}
+                                            {col.nombres} {col.apellidos.split(' ')[0]}
                                           </Badge>
                                         ) : null;
                                       })}

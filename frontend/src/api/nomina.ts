@@ -85,7 +85,16 @@ export interface NominaIndicadores {
   total_periodos: number;
   borradores: number;
   cerradas: number;
+  /** Deprecated — quedará una versión más para compatibilidad (doc §2.3). */
   total_devengado: number;
+  /** Neto pagado a colaboradores internos (nóminas CERRADAS). */
+  total_colaboradores: number;
+  /** Total transferido a terceros (estado_pago=PAGADO en nóminas CERRADAS). */
+  total_terceros: number;
+  /** Suma de los dos anteriores. */
+  neto_pagar: number;
+  /** Total a transferir a terceros aún en estado_pago=PENDIENTE. */
+  pendiente_pagar: number;
 }
 
 export interface EmpleadoDisponible {
@@ -96,6 +105,23 @@ export interface EmpleadoDisponible {
   modalidad_pago: ModalidadPago;
   salario_base: number;
   predio: { id: number; nombre: string } | null;
+}
+
+/** Operario de empresa contratista disponible para agregar a una nómina (doc §3.1). */
+export interface OperarioDisponible {
+  id: number;
+  nombre_completo: string;
+  cedula: string;
+  cargo: string;
+  tercero: { id: number; razon_social: string };
+  /** Tarifa diaria estimada (tomada de la labor JORNAL_FIJO más frecuente del tercero). */
+  tarifa_dia_estimada?: number;
+}
+
+/** Respuesta del endpoint /empleados-disponibles con bloques separados (doc §3.1). */
+export interface EmpleadosDisponiblesResponse {
+  empleados: EmpleadoDisponible[];
+  operarios: OperarioDisponible[];
 }
 
 export interface NominaEmpleadoConcepto {
@@ -113,8 +139,14 @@ export interface NominaEmpleadoConcepto {
 export interface NominaEmpleado {
   id: number;
   nomina_id: number;
-  empleado_id: number;
-  salario_tipo: SalarioTipo;
+  /** XOR con `operario_id` — solo uno de los dos viene poblado (doc §3.2). */
+  empleado_id: number | null;
+  /** XOR con `empleado_id` — fila de operario de empresa contratista. */
+  operario_id: number | null;
+  /** Snapshot del tercero al que pertenece el operario. null si la fila es de empleado. */
+  tercero_id: number | null;
+  /** null cuando la fila es de operario (sin clasificación FIJO/VARIABLE). */
+  salario_tipo: SalarioTipo | null;
   salario_base: string;
   estado: EstadoNominaEmpleado;
   dias_trabajados: number | null;
@@ -141,7 +173,14 @@ export interface NominaEmpleado {
     documento?: string;
     cargo?: string;
     predio?: { id: number; nombre: string } | null;
-  };
+  } | null;
+  operario?: {
+    id: number;
+    nombre_completo?: string;
+    cedula?: string;
+    cargo?: string;
+    tercero?: { id: number; razon_social: string };
+  } | null;
   conceptos?: NominaEmpleadoConcepto[];
 }
 
@@ -282,6 +321,122 @@ export interface DesprendibleData {
   resumen_trabajo: ResumenTrabajo | null;
 }
 
+// ─── Paso 3 — Validar Cosecha (doc §4) ────────────────────────────────────────
+
+export interface ValidacionCosechaDetalleColaborador {
+  tipo: 'EMPLEADO' | 'OPERARIO';
+  colaborador_id: number;
+  nombre_completo: string;
+  cargo: string;
+  kg: number;
+}
+
+/** Bundle calculado de comparación: lo registrado vs el reporte de la extractora. */
+export interface ValidacionCosechaBundle {
+  total_kg_colaboradores: number;
+  total_kg_extractora: number;
+  diferencia_kg: number;
+  detalle_por_colaborador: ValidacionCosechaDetalleColaborador[];
+  /** null si el paso aún no fue confirmado. */
+  validado_at: string | null;
+  /** null si el paso aún no fue confirmado. */
+  validado_por: string | null;
+}
+
+export interface PromedioLoteAjustado {
+  id: number;
+  lote_id: number;
+  viaje_id: number | null;
+  promedio: string;
+  anio: number;
+  fecha: string;
+}
+
+export interface ValidacionCosechaConfirmada {
+  id: number;
+  nomina_id: number;
+  total_kg_colaboradores: string;
+  total_kg_extractora: string;
+  diferencia_kg: string;
+  validado_por: number;
+  validado_at: string;
+}
+
+// ─── Liquidación de Terceros (doc §6 — agregado por PR-4 del roadmap) ─────────
+
+export type EstadoPagoTercero = 'PENDIENTE' | 'PAGADO';
+export type MetodoPagoTercero = 'TRANSFERENCIA' | 'EFECTIVO' | 'CHEQUE';
+
+export interface NominaTerceroOperario {
+  id: number;
+  nomina_tercero_id: number;
+  operario_id: number;
+  dias: number;
+  tarifa_dia: string;
+  ajuste: string;
+  subtotal: string;
+  /** Labores realizadas (JSON con tipo + lote + sublote + cantidad). */
+  labores_realizadas: Array<{
+    tipo: string;
+    lote?: string;
+    sublote?: string;
+    cantidad: number;
+    precio_unitario?: number;
+    total?: number;
+  }>;
+  observacion?: string | null;
+  operario?: {
+    id: number;
+    nombre_completo: string;
+    cedula: string;
+    cargo: string;
+  };
+}
+
+export interface NominaTercero {
+  id: number;
+  nomina_id: number;
+  tercero_id: number;
+  total_a_transferir: string;
+  estado_pago: EstadoPagoTercero;
+  metodo_pago: MetodoPagoTercero | null;
+  referencia_pago: string | null;
+  orden_pago_numero: string | null;
+  pagado_at: string | null;
+  pagado_por: number | null;
+  observacion: string | null;
+  tercero?: {
+    id: number;
+    razon_social: string;
+    nit: string;
+    contacto?: string;
+    telefono?: string;
+    banco?: string | null;
+    tipo_cuenta?: 'AHORROS' | 'CORRIENTE' | null;
+    numero_cuenta?: string | null;
+    titular_cuenta?: string | null;
+    datos_bancarios_completos?: boolean;
+  };
+  operarios?: NominaTerceroOperario[];
+}
+
+export interface ActualizarOperarioActaPayload {
+  dias?: number;
+  tarifa_dia?: number;
+  ajuste?: number;
+  observacion?: string;
+}
+
+export interface RegistrarPagoTerceroPayload {
+  metodo_pago: MetodoPagoTercero;
+  /** Requerido si metodo_pago=TRANSFERENCIA. */
+  referencia_pago?: string;
+  /** Datetime ISO. Default: ahora. */
+  pagado_at?: string;
+  orden_pago_numero?: string;
+  observacion?: string;
+}
+
 export interface NominaConcepto {
   id: number;
   codigo: string;
@@ -354,15 +509,130 @@ export const nominaApi = {
   cerrar: (id: number) =>
     apiClient.post<{ data: Nomina; message: string }>(`/v1/tenant/nominas/${id}/cerrar`, undefined, T),
 
-  empleadosDisponibles: (id: number) =>
-    apiClient.get<{ data: EmpleadoDisponible[] }>(`/v1/tenant/nominas/${id}/empleados-disponibles`, T),
-
-  agregarEmpleados: (id: number, empleado_ids: number[]) =>
-    apiClient.post<{ data: NominaEmpleado[]; message: string }>(
-      `/v1/tenant/nominas/${id}/empleados`,
-      { empleado_ids },
+  /**
+   * Lista empleados internos y operarios de terceros disponibles para esta nómina.
+   * Respuesta extendida (doc §3.1): { empleados: [...], operarios: [...] }.
+   *
+   * Opcional `?tercero_id=N` para filtrar solo operarios de un tercero.
+   */
+  empleadosDisponibles: (id: number, params?: { tercero_id?: number }) =>
+    apiClient.get<{ data: EmpleadosDisponiblesResponse }>(
+      `/v1/tenant/nominas/${id}/empleados-disponibles${toQuery(params)}`,
       T,
     ),
+
+  /**
+   * Agrega cualquier combinación de empleados internos y operarios de terceros.
+   * Al menos uno de los dos arrays debe traer elementos (doc §3.2).
+   */
+  agregarEmpleados: (
+    id: number,
+    payload: { empleado_ids?: number[]; operario_ids?: number[] } | number[],
+  ) => {
+    const body = Array.isArray(payload) ? { empleado_ids: payload } : payload;
+    return apiClient.post<{ data: NominaEmpleado[]; message: string }>(
+      `/v1/tenant/nominas/${id}/empleados`,
+      body,
+      T,
+    );
+  },
+
+  // ─── Paso 3 — Validar Cosecha (doc §4) ─────────────────────────────────────
+  /**
+   * Bundle con totales kg colaboradores vs kg extractora.
+   * Recalcula en cada llamada — no persiste.
+   */
+  validarCosecha: (nominaId: number) =>
+    apiClient.get<{ data: ValidacionCosechaBundle }>(
+      `/v1/tenant/nominas/${nominaId}/validar-cosecha`,
+      T,
+    ),
+
+  /**
+   * Ajusta el promedio baseline de un lote (kg/gajo). Solo en BORRADOR.
+   * Idempotente (upsert sobre `promedio_lote` con viaje_id=null).
+   */
+  ajustarPromedioLote: (nominaId: number, loteId: number, promedio: number) =>
+    apiClient.put<{ data: PromedioLoteAjustado; message: string }>(
+      `/v1/tenant/nominas/${nominaId}/promedios-lote/${loteId}`,
+      { promedio },
+      T,
+    ),
+
+  /**
+   * Persiste el snapshot del bundle calculado. Idempotente (upsert).
+   * El cierre de nómina exige este paso si hay cosechas en el período.
+   */
+  confirmarValidacionCosecha: (nominaId: number) =>
+    apiClient.post<{ data: ValidacionCosechaConfirmada; message: string }>(
+      `/v1/tenant/nominas/${nominaId}/validar-cosecha/confirmar`,
+      undefined,
+      T,
+    ),
+
+  // ─── Terceros — actas, pagos, PDF (doc §6 / roadmap PR-4) ──────────────────
+  terceros: {
+    /** GET /nominas/{id}/terceros — listado agrupado por empresa contratista. */
+    listar: (nominaId: number) =>
+      apiClient.get<{ data: NominaTercero[] }>(
+        `/v1/tenant/nominas/${nominaId}/terceros`,
+        T,
+      ),
+
+    /** GET /nominas/{id}/terceros/{terceroId} — acta detallada con operarios. */
+    ver: (nominaId: number, terceroId: number) =>
+      apiClient.get<{ data: NominaTercero }>(
+        `/v1/tenant/nominas/${nominaId}/terceros/${terceroId}`,
+        T,
+      ),
+
+    /**
+     * POST .../liquidar — calcula totales y crea/actualiza la acta del tercero.
+     * Idempotente: re-ejecutar reescribe `nomina_tercero_operario`.
+     */
+    liquidar: (nominaId: number, terceroId: number) =>
+      apiClient.post<{ data: NominaTercero; message: string }>(
+        `/v1/tenant/nominas/${nominaId}/terceros/${terceroId}/liquidar`,
+        undefined,
+        T,
+      ),
+
+    /** PUT .../operarios/{op} — ajustar dias, tarifa, ajuste, observación. */
+    actualizarOperario: (
+      nominaId: number,
+      terceroId: number,
+      operarioId: number,
+      payload: ActualizarOperarioActaPayload,
+    ) =>
+      apiClient.put<{ data: NominaTerceroOperario; message: string }>(
+        `/v1/tenant/nominas/${nominaId}/terceros/${terceroId}/operarios/${operarioId}`,
+        payload,
+        T,
+      ),
+
+    /**
+     * POST .../registrar-pago — marca el acta como pagada.
+     * Permitido aunque la nómina esté CERRADA (excepción documentada al patrón
+     * "CERRADA = inmutable", doc §6).
+     */
+    registrarPago: (
+      nominaId: number,
+      terceroId: number,
+      payload: RegistrarPagoTerceroPayload,
+    ) =>
+      apiClient.post<{ data: NominaTercero; message: string }>(
+        `/v1/tenant/nominas/${nominaId}/terceros/${terceroId}/registrar-pago`,
+        payload,
+        T,
+      ),
+
+    /** GET .../acta/pdf — descarga el PDF del acta (DomPDF). */
+    actaPdf: (nominaId: number, terceroId: number) =>
+      apiClient.getBlob(
+        `/v1/tenant/nominas/${nominaId}/terceros/${terceroId}/acta/pdf`,
+        T,
+      ),
+  },
 
   // ─── NominaEmpleado ────────────────────────────────────────────────────────
   quitarEmpleado: (nominaEmpleadoId: number) =>
@@ -472,6 +742,18 @@ export const NominaErrorCodes = {
   CONCEPTO_EN_USO: 'CONCEPTO_EN_USO',
   /** Concepto obligatorio (SALUD/PENSIÓN/etc.) — no se puede eliminar. */
   CONCEPTO_OBLIGATORIO: 'CONCEPTO_OBLIGATORIO',
+  /** Cierre falla porque hay cosechas y no se confirmó el paso 3. */
+  NOMINA_VALIDACION_COSECHA_REQUERIDA: 'NOMINA_VALIDACION_COSECHA_REQUERIDA',
+  /** Cierre falla porque hay un tercero presente sin `nomina_tercero` calculado. */
+  NOMINA_TERCERO_NO_LIQUIDADO: 'NOMINA_TERCERO_NO_LIQUIDADO',
+  /** El operario reportó una labor sin precio en `tercero_labor_precios`. */
+  TERCERO_LABOR_SIN_PRECIO: 'TERCERO_LABOR_SIN_PRECIO',
+  /** `operario_ids[]` incluye un operario cuyo `tercero_id` no está habilitado. */
+  OPERARIO_NO_PERTENECE_A_TERCERO: 'OPERARIO_NO_PERTENECE_A_TERCERO',
+  /** Intento de quitar un operario con `nomina_tercero` ya liquidado. */
+  OPERARIO_LIQUIDADO_EN_TERCERO: 'OPERARIO_LIQUIDADO_EN_TERCERO',
+  /** `metodo_pago=TRANSFERENCIA` sin `banco`/`numero_cuenta`/etc. en el tercero. */
+  TERCERO_SIN_DATOS_BANCARIOS: 'TERCERO_SIN_DATOS_BANCARIOS',
   /** Usuario sin permiso para la acción. */
   PERMISSION_DENIED: 'PERMISSION_DENIED',
 } as const;

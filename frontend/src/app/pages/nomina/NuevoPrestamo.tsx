@@ -135,7 +135,7 @@ export default function NuevoPrestamo() {
             <DollarSign className="h-8 w-8 text-primary" />
           </div>
           <div>
-            <h1 className="text-4xl font-bold text-foreground">Nuevo Préstamo</h1>
+            <h1 className="text-2xl font-bold text-primary">Nuevo Préstamo</h1>
             <p className="text-muted-foreground mt-1">
               Registra un descuento de préstamo que se aplicará automáticamente en las liquidaciones
             </p>

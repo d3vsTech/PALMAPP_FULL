@@ -72,7 +72,7 @@ export default function Nomina() {
   const [periodoKpi, setPeriodoKpi] = useState<string>('todos');
 
   const [nominas, setNominas] = useState<NominaT[]>([]);
-  const [, setIndicadores] = useState<NominaIndicadores | null>(null);
+  const [indicadores, setIndicadores] = useState<NominaIndicadores | null>(null);
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
@@ -116,7 +116,27 @@ export default function Nomina() {
   }, [nominas]);
 
   // ── Cálculo de los 4 mini-KPIs sobre el período seleccionado ─────────────
+  // "todos" → usa los indicadores agregados del backend (más precisos: incluyen
+  //   total_terceros pagados / pendientes que vienen de `nomina_tercero`).
+  // Período específico → cálculo en cliente con la data ya listada (los KPIs de
+  //   terceros por nómina vendrían del endpoint /nominas/{id}/terceros).
   const kpis = useMemo(() => {
+    if (periodoKpi === 'todos' && indicadores) {
+      const borradores = nominas.filter((n) => n.estado === 'BORRADOR');
+      const labelBorrador = borradores.length === 1
+        ? periodoLabel(borradores[0])
+        : `${borradores.length} períodos abiertos`;
+      return {
+        totalColaboradores: indicadores.total_colaboradores ?? 0,
+        totalTerceros: indicadores.total_terceros ?? 0,
+        netoAPagar: indicadores.neto_pagar ?? 0,
+        totalPendiente: indicadores.pendiente_pagar ?? 0,
+        labelBorrador,
+        borradoresLen: borradores.length,
+      };
+    }
+
+    // Filtro por período específico — cálculo derivado de la lista.
     const filtradas = periodoKpi === 'todos'
       ? nominas
       : nominas.filter((n) => String(n.id) === periodoKpi);
@@ -125,18 +145,16 @@ export default function Nomina() {
     const borradores = filtradas.filter((n) => n.estado === 'BORRADOR');
 
     const totalColaboradores = cerradas.reduce((s, n) => s + toNumber(n.total_general), 0);
-    // Pagado a Terceros: aún no hay módulo de terceros pagados desde nómina.
-    // Se muestra "—" hasta que el backend exponga el dato.
-    const totalTerceros = 0;
+    const totalTerceros = 0; // requiere /nominas/{id}/terceros — se carga al ver el detalle
     const netoAPagar = borradores.reduce((s, n) => s + toNumber(n.total_general), 0);
-    const totalPendiente = netoAPagar; // sin terceros pendientes mientras no haya endpoint
+    const totalPendiente = netoAPagar;
 
     const labelBorrador = borradores.length === 1
       ? periodoLabel(borradores[0])
       : `${borradores.length} períodos abiertos`;
 
     return { totalColaboradores, totalTerceros, netoAPagar, totalPendiente, labelBorrador, borradoresLen: borradores.length };
-  }, [nominas, periodoKpi]);
+  }, [nominas, periodoKpi, indicadores]);
 
   return (
     <div className="space-y-6">
@@ -159,7 +177,7 @@ export default function Nomina() {
             Planilla Diaria
           </Button>
           <Button
-            onClick={() => navigate('/nomina/nuevo-prestamo')}
+            onClick={() => navigate('/nomina/prestamos')}
             size="lg"
             variant="outline"
             className="gap-2 border-primary text-primary hover:bg-primary/10"
