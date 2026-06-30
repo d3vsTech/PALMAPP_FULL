@@ -98,9 +98,34 @@ export function PromediosTab() {
     setEditados((prev) => ({ ...prev, [loteId]: valor }));
   };
 
+  /**
+   * Promedio más reciente por lote del año seleccionado.
+   *
+   * El backend permite varios baselines por (lote, año) más los auto-generados
+   * por viajes — un mismo `lote_id` puede aparecer N veces. Agrupamos por lote
+   * y nos quedamos con el de `updated_at` más reciente (fallback: `id` mayor),
+   * que es el que la UI debe mostrar y editar.
+   */
+  const promedioMasRecientePorLote = useMemo(() => {
+    const map = new Map<number, PromedioRow>();
+    for (const p of promedios) {
+      const existente = map.get(p.lote_id);
+      if (!existente) {
+        map.set(p.lote_id, p);
+        continue;
+      }
+      const tsNuevo = p.updated_at ? new Date(p.updated_at).getTime() : 0;
+      const tsViejo = existente.updated_at ? new Date(existente.updated_at).getTime() : 0;
+      if (tsNuevo > tsViejo || (tsNuevo === tsViejo && p.id > existente.id)) {
+        map.set(p.lote_id, p);
+      }
+    }
+    return map;
+  }, [promedios]);
+
   const valorActual = (loteId: number): number => {
     if (editados[loteId] !== undefined) return editados[loteId];
-    const p = promedios.find((pr) => pr.lote_id === loteId);
+    const p = promedioMasRecientePorLote.get(loteId);
     return p ? Number(p.promedio) : 0;
   };
 
@@ -109,7 +134,8 @@ export function PromediosTab() {
   const handleGuardar = async () => {
     const tareas = Object.entries(editados).map(async ([loteIdStr, valor]) => {
       const loteId = Number(loteIdStr);
-      const existente = promedios.find((p) => p.lote_id === loteId);
+      // Editar el registro más reciente del lote (no el primero que aparezca).
+      const existente = promedioMasRecientePorLote.get(loteId);
       try {
         if (existente) {
           await configuracionApi.promediosLote.editar(existente.id, {
@@ -161,13 +187,13 @@ export function PromediosTab() {
   };
 
   /**
-   * Última fecha de actualización entre los promedios del año seleccionado.
-   * Usa el `updated_at` ISO completo para que `formatearFecha` lo parsee en
-   * hora local (si pasamos solo YYYY-MM-DD JS lo trata como UTC y en COT
-   * podríamos ver el día anterior).
+   * Última fecha de actualización entre los promedios mostrados en la tabla
+   * (uno por lote — el más reciente). Se usa el ISO completo para que
+   * `formatearFecha` lo parsee en hora local (si pasamos solo YYYY-MM-DD JS
+   * lo trata como UTC y en COT podríamos ver el día anterior).
    */
   const obtenerUltimaActualizacion = () => {
-    const fechas = promedios
+    const fechas = Array.from(promedioMasRecientePorLote.values())
       .map((p) => p.updated_at)
       .filter((f): f is string => !!f)
       .map((f) => new Date(f).getTime())
@@ -301,7 +327,10 @@ export function PromediosTab() {
             </TableHeader>
             <TableBody>
               {lotes.map((lote) => {
-                const promedioLote = promedios.find((p) => p.lote_id === lote.id);
+                // Promedio más reciente del año seleccionado para este lote.
+                // Si hay varios baselines por (lote, año), se elige por
+                // `updated_at` desc (mismo criterio que `valorActual`).
+                const promedioLote = promedioMasRecientePorLote.get(lote.id);
                 const historial = historicoPorLote.get(lote.id) ?? [];
                 const estaExpandido = expandido === lote.id;
                 const valor = valorActual(lote.id);

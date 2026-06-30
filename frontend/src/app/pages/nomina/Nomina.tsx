@@ -27,12 +27,18 @@ import {
 } from '../../components/ui/select';
 import {
   Plus, FileText, Calculator, TrendingUp, TrendingDown, Eye, Search, Filter,
-  DollarSign, Receipt, Users, Building2, Check,
+  DollarSign, Receipt, Users, Building2, Check, Trash2, Pencil,
 } from 'lucide-react';
 import StatusBadge from '../../components/common/StatusBadge';
 import { Badge } from '../../components/ui/badge';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '../../components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { nominaApi, Nomina as NominaT, NominaIndicadores } from '../../../api/nomina';
+import {
+  nominaApi, Nomina as NominaT, NominaIndicadores, NominaErrorCodes,
+} from '../../../api/nomina';
 import type { ApiError } from '../../../api/client';
 
 const MESES_NOMBRE: Record<number, string> = {
@@ -75,10 +81,18 @@ export default function Nomina() {
   const [indicadores, setIndicadores] = useState<NominaIndicadores | null>(null);
   const [cargando, setCargando] = useState(true);
 
-  useEffect(() => {
-    let activo = true;
+  // Eliminar nómina (solo BORRADOR sin liquidados — el backend bloquea con
+  // NOMINA_CON_LIQUIDADOS/NOMINA_CERRADA si no se cumple, lo manejamos abajo).
+  const [nominaAEliminar, setNominaAEliminar] = useState<NominaT | null>(null);
+  const [eliminando, setEliminando] = useState(false);
+
+  // Editar nómina: navega a `/nomina/:id/editar` que carga el wizard completo
+  // en modo edición (paso 1 pre-poblado, paso 2 con colaboradores ya agregados,
+  // paso 3 validar cosecha, paso 4 confirmar).
+
+  const cargarNominas = () => {
     setCargando(true);
-    Promise.all([
+    return Promise.all([
       nominaApi.listar({
         estado: filtroEstado !== 'todos' ? (filtroEstado as 'BORRADOR' | 'CERRADA') : undefined,
         mes: filtroMes !== 'todos' ? parseInt(filtroMes) : undefined,
@@ -87,19 +101,42 @@ export default function Nomina() {
       nominaApi.indicadores(),
     ])
       .then(([listRes, indRes]) => {
-        if (!activo) return;
         setNominas(listRes.data);
         setIndicadores(indRes.data);
       })
       .catch((err: ApiError) => {
-        if (!activo) return;
         toast.error(err.message ?? 'Error al cargar nóminas');
       })
-      .finally(() => activo && setCargando(false));
-    return () => {
-      activo = false;
-    };
+      .finally(() => setCargando(false));
+  };
+
+  useEffect(() => {
+    cargarNominas();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtroEstado, filtroMes]);
+
+  const confirmarEliminar = async () => {
+    if (!nominaAEliminar) return;
+    setEliminando(true);
+    try {
+      await nominaApi.eliminar(nominaAEliminar.id);
+      toast.success('Nómina eliminada');
+      setNominaAEliminar(null);
+      cargarNominas();
+    } catch (err) {
+      const e = err as ApiError;
+      if (e.code === NominaErrorCodes.NOMINA_CON_LIQUIDADOS) {
+        toast.error('No se puede eliminar: hay colaboradores liquidados');
+      } else if (e.code === NominaErrorCodes.NOMINA_CERRADA) {
+        toast.error('No se puede eliminar una nómina cerrada');
+      } else {
+        toast.error(e.message ?? 'Error al eliminar nómina');
+      }
+    } finally {
+      setEliminando(false);
+    }
+  };
+
 
   const nominasFiltradas = useMemo(() => {
     if (!filtroBusqueda) return nominas;
@@ -443,14 +480,39 @@ export default function Nomina() {
                           <td className="p-4">
                             <div className="flex gap-2 justify-end">
                               {n.estado === 'BORRADOR' ? (
-                                <Button
-                                  size="sm"
-                                  onClick={() => navigate(`/nomina/${n.id}`)}
-                                  className="gap-1 bg-primary hover:bg-primary/90"
-                                >
-                                  <Calculator className="h-4 w-4" />
-                                  Liquidar
-                                </Button>
+                                <>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => navigate(`/nomina/${n.id}`)}
+                                    className="gap-1 bg-primary hover:bg-primary/90"
+                                  >
+                                    <Calculator className="h-4 w-4" />
+                                    Liquidar
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigate(`/nomina/${n.id}/editar`);
+                                    }}
+                                    title="Editar nómina"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setNominaAEliminar(n);
+                                    }}
+                                    className="text-destructive hover:bg-destructive/10 hover:text-destructive hover:border-destructive/50"
+                                    title="Eliminar nómina"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </>
                               ) : (
                                 <Button
                                   size="sm"
@@ -508,6 +570,37 @@ export default function Nomina() {
           </Card>
         )}
       </div>
+
+      {/* Confirmar eliminar nómina */}
+      <AlertDialog
+        open={!!nominaAEliminar}
+        onOpenChange={(o) => !o && setNominaAEliminar(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar nómina</AlertDialogTitle>
+            <AlertDialogDescription>
+              {nominaAEliminar && (
+                <>
+                  Se eliminará el período <strong>{periodoLabel(nominaAEliminar)}</strong> y
+                  todos sus colaboradores pendientes. Esta acción no podrá deshacerse.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={eliminando}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmarEliminar}
+              disabled={eliminando}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              {eliminando ? 'Eliminando...' : 'Eliminar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </div>
   );
 }

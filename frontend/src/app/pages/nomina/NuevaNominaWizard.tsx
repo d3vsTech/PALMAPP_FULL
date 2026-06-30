@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import { Checkbox } from '../../components/ui/checkbox';
@@ -37,6 +37,7 @@ import {
   NominaErrorCodes,
 } from '../../../api/nomina';
 import { lotesApi } from '../../../api/plantacion';
+import { configuracionApi } from '../../../api/configuracion';
 import type { ApiError } from '../../../api/client';
 import {
   Dialog,
@@ -94,12 +95,59 @@ const pasos = [
   { numero: 4, titulo: 'Confirmación', icono: Check },
 ];
 
+/**
+ * Clave de localStorage para persistir el progreso del wizard al salir y
+ * volver. Guardamos `{nominaId, pasoActual}`; el resto del estado se
+ * rehidrata desde el backend cuando el modo edición carga la nómina.
+ */
+const STORAGE_KEY_NOMINA_WIZARD = 'palmapp:nomina-wizard:progreso';
+
+interface ProgresoWizardPersistido {
+  nominaId: number;
+  pasoActual: number;
+}
+
+function leerProgresoPersistido(): ProgresoWizardPersistido | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_NOMINA_WIZARD);
+    if (!raw) return null;
+    const obj = JSON.parse(raw) as Partial<ProgresoWizardPersistido>;
+    if (typeof obj.nominaId !== 'number' || typeof obj.pasoActual !== 'number') return null;
+    if (obj.pasoActual < 1 || obj.pasoActual > 4) return null;
+    return { nominaId: obj.nominaId, pasoActual: obj.pasoActual };
+  } catch {
+    return null;
+  }
+}
+
 export default function NuevaNominaWizard() {
   const navigate = useNavigate();
-  const [pasoActual, setPasoActual] = useState(1);
+  /**
+   * Si la URL viene como `/nomina/:id/editar`, `id` trae la nómina existente
+   * y el wizard arranca en modo edición: pre-pobla el paso 1, carga los
+   * colaboradores ya agregados y permite continuar con el flujo normal sin
+   * volver a crear.
+   */
+  const { id: idEditar } = useParams<{ id?: string }>();
+  const esEdicion = !!idEditar;
+  /**
+   * Restauración inicial del paso al volver al wizard:
+   *  - URL `/nomina/:id/editar` → si en localStorage el progreso es del mismo
+   *    `nominaId`, arrancamos en `pasoActual` guardado. Si no, paso 1.
+   *  - URL `/nomina/nueva` → siempre paso 1.
+   * El paso queda al final de este hook (no rompe lazy initialization).
+   */
+  const [pasoActual, setPasoActual] = useState<number>(() => {
+    if (esEdicion && idEditar) {
+      const p = leerProgresoPersistido();
+      if (p && p.nominaId === parseInt(idEditar)) return p.pasoActual;
+    }
+    return 1;
+  });
 
   // ── Paso 1 ────────────────────────────────────────────────────────────────
-  const ano = new Date().getFullYear().toString();
+  const [anoEdit, setAnoEdit] = useState<string | null>(null);
+  const ano = anoEdit ?? new Date().getFullYear().toString();
   const [mes, setMes] = useState('');
   const [periodicidad, setPeriodicidad] = useState<Periodicidad>('QUINCENAL');
   const [quincena, setQuincena] = useState<'1' | '2' | ''>('');
@@ -108,7 +156,11 @@ export default function NuevaNominaWizard() {
 
   // ── Estado global del wizard ──────────────────────────────────────────────
   /** ID de la nómina creada al pasar del paso 1 al 2. null antes de eso. */
-  const [nominaId, setNominaId] = useState<number | null>(null);
+  const [nominaId, setNominaId] = useState<number | null>(
+    idEditar ? parseInt(idEditar) : null,
+  );
+  /** True mientras se hidrata el estado del wizard con la nómina existente. */
+  const [cargandoEdicion, setCargandoEdicion] = useState(esEdicion);
   /** Procesando paso (crear nómina, agregar empleados, confirmar cosecha…). */
   const [procesando, setProcesando] = useState(false);
 
@@ -118,6 +170,9 @@ export default function NuevaNominaWizard() {
   const [empleadosSeleccionados, setEmpleadosSeleccionados] = useState<number[]>([]);
   const [operariosSeleccionados, setOperariosSeleccionados] = useState<number[]>([]);
   const [cargandoEmpleados, setCargandoEmpleados] = useState(false);
+  /** Solo en modo edición: cantidad de colaboradores ya en la nómina
+   *  (no aparecen en la tabla porque `/empleados-disponibles` los excluye). */
+  const [colaboradoresYaAgregados, setColaboradoresYaAgregados] = useState(0);
   /** Filtro de la tabla de operarios por empresa (?tercero_id=N). */
   const [filtroTerceroId, setFiltroTerceroId] = useState<string>('todos');
 
@@ -127,9 +182,92 @@ export default function NuevaNominaWizard() {
   const [empleadoExpandido, setEmpleadoExpandido] = useState<number | null>(null);
   const [mostrarAjustePromedios, setMostrarAjustePromedios] = useState(false);
   const [lotes, setLotes] = useState<Array<{ id: number; nombre: string; predio?: { nombre: string } }>>([]);
-  const [loteSeleccionado, setLoteSeleccionado] = useState<string>('');
-  const [promedioInput, setPromedioInput] = useState<string>('');
+  /** Año del modal de Ajustar Promedios. Default al año de la nómina. */
+  const [anioPromedios, setAnioPromedios] = useState<number>(parseInt(ano));
+  /** Mapa lote_id → registro de promedio existente del año seleccionado
+   *  (incluye id, promedio, fecha de actualización). */
+  const [promediosExistentes, setPromediosExistentes] = useState<
+    Map<number, { id: number; promedio: number; updated_at?: string }>
+  >(new Map());
+  /** Ediciones locales lote_id → nuevo valor (solo lotes modificados). */
+  const [promediosEditados, setPromediosEditados] = useState<Record<number, number>>({});
+  const [cargandoPromedios, setCargandoPromedios] = useState(false);
   const [ajustandoPromedio, setAjustandoPromedio] = useState(false);
+
+  /**
+   * Persistir progreso en localStorage cada vez que cambia `nominaId` o
+   * `pasoActual`. Esto permite restaurar el wizard al volver desde otra
+   * página sin perder en qué paso iba el usuario.
+   */
+  useEffect(() => {
+    if (nominaId == null) return;
+    try {
+      localStorage.setItem(
+        STORAGE_KEY_NOMINA_WIZARD,
+        JSON.stringify({ nominaId, pasoActual }),
+      );
+    } catch {
+      // ignore (storage lleno, modo privado, etc.)
+    }
+  }, [nominaId, pasoActual]);
+
+  /**
+   * Si el usuario entra a `/nomina/nueva` y hay un wizard a medio terminar
+   * de otra sesión, lo redirigimos a `/nomina/:id/editar` para continuar
+   * donde se quedó. Si la nómina ya no existe en backend (404), limpiamos
+   * el storage y dejamos arrancar el flujo normal.
+   */
+  useEffect(() => {
+    if (esEdicion) return;
+    const p = leerProgresoPersistido();
+    if (!p) return;
+    nominaApi
+      .ver(p.nominaId)
+      .then((res) => {
+        if (res.data.estado === 'CERRADA') {
+          localStorage.removeItem(STORAGE_KEY_NOMINA_WIZARD);
+          return;
+        }
+        navigate(`/nomina/${p.nominaId}/editar`, { replace: true });
+      })
+      .catch(() => {
+        localStorage.removeItem(STORAGE_KEY_NOMINA_WIZARD);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Modo edición — hidrata el wizard con la nómina existente ─────────────
+  // Carga la nómina con sus empleados, pre-puebla paso 1 y marca los
+  // colaboradores ya agregados como pre-seleccionados.
+  useEffect(() => {
+    if (!esEdicion || !idEditar) return;
+    setCargandoEdicion(true);
+    nominaApi
+      .ver(parseInt(idEditar))
+      .then((res) => {
+        const n = res.data;
+        if (n.estado === 'CERRADA') {
+          toast.error('No se puede editar una nómina cerrada');
+          navigate(`/nomina/${n.id}`);
+          return;
+        }
+        setAnoEdit(String(n.anio));
+        setMes(String(n.mes));
+        setPeriodicidad(n.tipo_pago_snapshot);
+        setQuincena(n.quincena ? (String(n.quincena) as '1' | '2') : '');
+        // Contar los ya agregados — el endpoint /empleados-disponibles los
+        // excluye, pero queremos mostrarle al usuario cuántos ya hay y
+        // permitir avanzar aunque no agregue más.
+        const empleadosYa = (n.empleados ?? []).filter((e) => e.empleado_id).length;
+        const operariosYa = (n.empleados ?? []).filter((e) => e.operario_id).length;
+        setColaboradoresYaAgregados(empleadosYa + operariosYa);
+      })
+      .catch((err: ApiError) => {
+        toast.error(err.message ?? 'No se pudo cargar la nómina');
+        navigate('/nomina');
+      })
+      .finally(() => setCargandoEdicion(false));
+  }, [esEdicion, idEditar, navigate]);
 
   // Calcular fechas automáticamente
   useEffect(() => {
@@ -183,43 +321,87 @@ export default function NuevaNominaWizard() {
       .finally(() => setCargandoBundle(false));
   }, [pasoActual, nominaId]);
 
-  // Cargar lotes al abrir el modal "Ajustar Promedios".
+  // Cargar lotes y promedios existentes al abrir el modal "Ajustar Promedios".
+  // Se recarga cuando cambia el año seleccionado dentro del modal.
   useEffect(() => {
-    if (!mostrarAjustePromedios || lotes.length > 0) return;
-    lotesApi
-      .select({ estado: true })
-      .then((res) => setLotes(res.data))
-      .catch((err: ApiError) => toast.error(err.message ?? 'Error al cargar lotes'));
-  }, [mostrarAjustePromedios, lotes.length]);
+    if (!mostrarAjustePromedios) return;
+    setCargandoPromedios(true);
+    Promise.all([
+      lotes.length === 0
+        ? lotesApi.select({ estado: true })
+        : Promise.resolve({ data: lotes }),
+      configuracionApi.promediosLote.listar({ anio: anioPromedios, per_page: 200 }),
+    ])
+      .then(([resLotes, resPromedios]) => {
+        if (lotes.length === 0) setLotes(resLotes.data as any);
+        // Agrupar por lote_id quedándonos con el más reciente (updated_at desc).
+        const map = new Map<number, { id: number; promedio: number; updated_at?: string }>();
+        for (const p of resPromedios.data as any[]) {
+          const existente = map.get(p.lote_id);
+          const valorNum = Number(p.promedio);
+          const updated = p.updated_at as string | undefined;
+          if (!existente) {
+            map.set(p.lote_id, { id: p.id, promedio: valorNum, updated_at: updated });
+            continue;
+          }
+          const tsNuevo = updated ? new Date(updated).getTime() : 0;
+          const tsViejo = existente.updated_at ? new Date(existente.updated_at).getTime() : 0;
+          if (tsNuevo > tsViejo || (tsNuevo === tsViejo && p.id > existente.id)) {
+            map.set(p.lote_id, { id: p.id, promedio: valorNum, updated_at: updated });
+          }
+        }
+        setPromediosExistentes(map);
+        setPromediosEditados({});
+      })
+      .catch((err: ApiError) => toast.error(err.message ?? 'Error al cargar promedios'))
+      .finally(() => setCargandoPromedios(false));
+  }, [mostrarAjustePromedios, anioPromedios]);
 
-  /** Persiste un nuevo promedio baseline para el lote y recarga el bundle. */
-  const ajustarPromedio = async () => {
-    if (!nominaId || !loteSeleccionado || !promedioInput) {
-      toast.error('Selecciona un lote y un promedio válido');
-      return;
-    }
-    const valor = parseFloat(promedioInput);
-    if (isNaN(valor) || valor <= 0) {
-      toast.error('El promedio debe ser un número mayor a 0');
+  /** Guarda los promedios editados — un PUT por cada lote modificado.
+   *  Solo se persiste lo que cambió respecto al valor original. */
+  const guardarPromedios = async () => {
+    if (!nominaId) return;
+    const cambios = Object.entries(promediosEditados)
+      .map(([loteId, valor]) => ({ loteId: parseInt(loteId), valor }))
+      .filter(({ loteId, valor }) => {
+        const original = promediosExistentes.get(loteId)?.promedio ?? 0;
+        return valor !== original && valor > 0;
+      });
+    if (cambios.length === 0) {
+      toast.info('No hay cambios para guardar');
       return;
     }
     setAjustandoPromedio(true);
     try {
-      await nominaApi.ajustarPromedioLote(nominaId, parseInt(loteSeleccionado), valor);
-      toast.success('Promedio actualizado. Recalculando comparación...');
-      // Recargar bundle para reflejar el ajuste
+      await Promise.all(
+        cambios.map(({ loteId, valor }) =>
+          nominaApi.ajustarPromedioLote(nominaId, loteId, valor),
+        ),
+      );
+      toast.success(`${cambios.length} promedio${cambios.length !== 1 ? 's' : ''} actualizado${cambios.length !== 1 ? 's' : ''}`);
+      // Recargar bundle de validación cosecha para reflejar la nueva diferencia.
       const res = await nominaApi.validarCosecha(nominaId);
       setBundleCosecha(res.data);
       setMostrarAjustePromedios(false);
-      setLoteSeleccionado('');
-      setPromedioInput('');
     } catch (err) {
       const e = err as ApiError;
-      toast.error(e.message ?? 'No se pudo ajustar el promedio');
+      toast.error(e.message ?? 'No se pudieron guardar los promedios');
     } finally {
       setAjustandoPromedio(false);
     }
   };
+
+  const promedioValorActual = (loteId: number): number => {
+    if (promediosEditados[loteId] !== undefined) return promediosEditados[loteId];
+    return promediosExistentes.get(loteId)?.promedio ?? 0;
+  };
+
+  const hayCambiosPromedios = Object.keys(promediosEditados).some((k) => {
+    const id = parseInt(k);
+    const valor = promediosEditados[id];
+    const original = promediosExistentes.get(id)?.promedio ?? 0;
+    return valor !== original;
+  });
 
   const agregarEmpleado = (id: number) =>
     setEmpleadosSeleccionados((prev) => (prev.includes(id) ? prev : [...prev, id]));
@@ -237,17 +419,50 @@ export default function NuevaNominaWizard() {
     if (pasoActual > 1) setPasoActual(pasoActual - 1);
   };
 
-  /** Paso 1 → 2: crea la nómina si todavía no existe. */
+  /**
+   * Paso 1 → 2:
+   *  - Modo crear: POST si todavía no hay nómina.
+   *  - Modo edición: PUT solo si los datos del paso 1 cambiaron respecto a
+   *    la nómina cargada (mes / quincena / periodicidad). Si no hay cambios,
+   *    avanza sin tocar el backend.
+   */
   const crearNominaSiHaceFalta = async (): Promise<boolean> => {
-    if (nominaId) return true;
+    const payload = {
+      mes: parseInt(mes),
+      anio: parseInt(ano),
+      periodicidad,
+      quincena: periodicidad === 'QUINCENAL' ? (parseInt(quincena) as 1 | 2) : null,
+    };
+
+    if (nominaId) {
+      // Si estamos editando, intentamos PUT con los datos del paso 1.
+      if (!esEdicion) return true; // ya creada en una sesión anterior del wizard
+      setProcesando(true);
+      try {
+        await nominaApi.editar(nominaId, payload);
+        return true;
+      } catch (err) {
+        const e = err as ApiError;
+        if (e.code === NominaErrorCodes.NOMINA_CON_LIQUIDADOS) {
+          // Hay liquidados — no se puede cambiar el período. Igual avanzamos
+          // para que el usuario pueda agregar más colaboradores.
+          toast.warning('No se pudo actualizar el período (hay liquidados), continúa con el resto');
+          return true;
+        }
+        if (e.code === NominaErrorCodes.NOMINA_DUPLICADA) {
+          toast.error('Ya existe otra nómina para ese período');
+          return false;
+        }
+        toast.error(e.message ?? 'No se pudo actualizar la nómina');
+        return false;
+      } finally {
+        setProcesando(false);
+      }
+    }
+
     setProcesando(true);
     try {
-      const res = await nominaApi.crear({
-        mes: parseInt(mes),
-        anio: parseInt(ano),
-        periodicidad,
-        quincena: periodicidad === 'QUINCENAL' ? (parseInt(quincena) as 1 | 2) : null,
-      });
+      const res = await nominaApi.crear(payload);
       setNominaId(res.data.id);
       toast.success('Nómina creada en borrador');
       return true;
@@ -267,7 +482,10 @@ export default function NuevaNominaWizard() {
   /** Paso 2 → 3: agrega empleados y operarios a la nómina. */
   const agregarColaboradores = async (): Promise<boolean> => {
     if (!nominaId) return false;
-    if (empleadosSeleccionados.length === 0 && operariosSeleccionados.length === 0) {
+    const hayNuevos = empleadosSeleccionados.length > 0 || operariosSeleccionados.length > 0;
+    // En modo edición se permite avanzar sin agregar más (basta con los ya agregados).
+    if (!hayNuevos) {
+      if (esEdicion && colaboradoresYaAgregados > 0) return true;
       toast.error('Selecciona al menos un colaborador');
       return false;
     }
@@ -328,6 +546,8 @@ export default function NuevaNominaWizard() {
       toast.error('La nómina no se ha creado correctamente');
       return;
     }
+    // Wizard completado → limpiar progreso persistido.
+    try { localStorage.removeItem(STORAGE_KEY_NOMINA_WIZARD); } catch {}
     toast.success('Nómina lista. Continúa con las liquidaciones.');
     navigate(`/nomina/${nominaId}`);
   };
@@ -339,6 +559,8 @@ export default function NuevaNominaWizard() {
       return true;
     }
     if (pasoActual === 2) {
+      // En modo edición, basta con que ya haya colaboradores agregados.
+      if (esEdicion && colaboradoresYaAgregados > 0) return true;
       return empleadosSeleccionados.length > 0 || operariosSeleccionados.length > 0;
     }
     return true;
@@ -361,6 +583,16 @@ export default function NuevaNominaWizard() {
     return ini || '?';
   };
 
+  // Mostrar estado de carga mientras se hidrata el wizard en modo edición.
+  if (cargandoEdicion) {
+    return (
+      <div className="flex items-center justify-center py-20 gap-2 text-muted-foreground">
+        <Loader2 className="h-5 w-5 animate-spin" />
+        Cargando nómina...
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
       <div>
@@ -373,9 +605,13 @@ export default function NuevaNominaWizard() {
           <ArrowLeft className="h-4 w-4" />
           Volver
         </Button>
-        <h1 className="text-3xl font-bold text-primary">Nuevo Período de Pago</h1>
+        <h1 className="text-3xl font-bold text-primary">
+          {esEdicion ? 'Editar Período de Pago' : 'Nuevo Período de Pago'}
+        </h1>
         <p className="text-muted-foreground mt-2">
-          Crea un nuevo período de nómina paso a paso
+          {esEdicion
+            ? 'Modifica el período, agrega más colaboradores y vuelve a validar la cosecha'
+            : 'Crea un nuevo período de nómina paso a paso'}
         </p>
       </div>
 
@@ -569,7 +805,9 @@ export default function NuevaNominaWizard() {
                       Seleccionar Colaboradores
                     </h2>
                     <p className="text-sm text-muted-foreground">
-                      Agrega colaboradores a este período de nómina
+                      {esEdicion && colaboradoresYaAgregados > 0
+                        ? `Esta nómina ya tiene ${colaboradoresYaAgregados} colaborador${colaboradoresYaAgregados !== 1 ? 'es' : ''} agregado${colaboradoresYaAgregados !== 1 ? 's' : ''}. Puedes agregar más o continuar.`
+                        : 'Agrega colaboradores a este período de nómina'}
                     </p>
                   </div>
                 </div>
@@ -1195,9 +1433,16 @@ export default function NuevaNominaWizard() {
         <Button
           variant="outline"
           onClick={handleAtras}
-          disabled={pasoActual === 1 || procesando || (pasoActual === 2 && !!nominaId)}
+          disabled={
+            pasoActual === 1 || procesando ||
+            // En modo CREAR: una vez creada (paso 2+), no se puede volver atrás
+            // porque cambiar el período de una nómina existente requiere PUT y
+            // si hay liquidados el backend lo rechazaría.
+            // En modo EDITAR: sí permitimos volver al paso 1 para reintentar PUT.
+            (!esEdicion && pasoActual === 2 && !!nominaId)
+          }
           className="gap-2"
-          title={pasoActual === 2 && nominaId ? 'La nómina ya está creada, no puedes cambiar el período' : undefined}
+          title={!esEdicion && pasoActual === 2 && nominaId ? 'La nómina ya está creada, no puedes cambiar el período' : undefined}
         >
           <ArrowLeft className="h-4 w-4" />
           Atrás
@@ -1221,66 +1466,157 @@ export default function NuevaNominaWizard() {
         )}
       </div>
 
-      {/* Modal — Ajustar Promedios baseline por lote (doc §4.2) */}
+      {/* Modal — Ajustar Promedios (tabla de todos los lotes, doc §4.2) */}
       <Dialog open={mostrarAjustePromedios} onOpenChange={setMostrarAjustePromedios}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Settings2 className="h-5 w-5 text-primary" />
-              Ajustar Promedio de Lote
-            </DialogTitle>
-            <DialogDescription>
-              Modifica el promedio baseline (kg/gajo) de un lote para esta nómina. El nuevo valor se usa
-              al recalcular la comparación con la extractora.
-            </DialogDescription>
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <Settings2 className="h-6 w-6 text-primary" />
+                <div>
+                  <DialogTitle>Promedios Anuales</DialogTitle>
+                  <DialogDescription className="mt-1">
+                    Kg promedio por gajo para cada lote
+                  </DialogDescription>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <Label className="text-sm whitespace-nowrap">Año:</Label>
+                <Select
+                  value={String(anioPromedios)}
+                  onValueChange={(v) => setAnioPromedios(parseInt(v))}
+                >
+                  <SelectTrigger className="w-28 h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 5 }, (_, i) => parseInt(ano) - 2 + i).map((a) => (
+                      <SelectItem key={a} value={String(a)}>
+                        {a}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="lote">Lote *</Label>
-              <Select value={loteSeleccionado} onValueChange={setLoteSeleccionado}>
-                <SelectTrigger id="lote">
-                  <SelectValue placeholder="Selecciona un lote" />
-                </SelectTrigger>
-                <SelectContent>
-                  {lotes.length === 0 ? (
-                    <SelectItem value="loading" disabled>
-                      Cargando lotes...
-                    </SelectItem>
-                  ) : (
-                    lotes.map((l) => (
-                      <SelectItem key={l.id} value={String(l.id)}>
-                        {l.nombre}
-                        {l.predio?.nombre && ` (${l.predio.nombre})`}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
+          {/* Card resumen de cosecha (datos del bundle de validación) */}
+          {bundleCosecha && (() => {
+            const totalColabs = bundleCosecha.total_kg_colaboradores ?? 0;
+            const totalExtr = bundleCosecha.total_kg_extractora ?? 0;
+            const diff = bundleCosecha.diferencia_kg ?? 0;
+            const estado: 'ok' | 'critico' | 'atencion' =
+              diff === 0 ? 'ok' : Math.abs(diff) > 500 ? 'critico' : 'atencion';
+            const colorPunto = estado === 'ok' ? 'bg-success' : estado === 'critico' ? 'bg-destructive' : 'bg-amber-500';
+            const colorTexto = estado === 'ok' ? 'text-success' : estado === 'critico' ? 'text-destructive' : 'text-amber-700';
+            const label = estado === 'ok' ? 'Sin diferencias' : estado === 'critico' ? 'Revisar remisiones' : 'Verificar registros';
+            return (
+              <div className="rounded-xl border border-border bg-card overflow-hidden">
+                <div className="flex items-center justify-between px-5 py-3 border-b border-border bg-muted/30">
+                  <p className="text-sm font-semibold">Resumen de Cosecha</p>
+                  <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${colorTexto}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${colorPunto}`} />
+                    {label}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 divide-x divide-border">
+                  <div className="px-6 py-4">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+                      Colaboradores
+                    </p>
+                    <p className="text-2xl font-bold">
+                      {totalColabs.toLocaleString('es-CO')} <span className="text-sm text-muted-foreground font-normal">kg</span>
+                    </p>
+                  </div>
+                  <div className="px-6 py-4">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+                      Extractora
+                    </p>
+                    <p className="text-2xl font-bold">
+                      {totalExtr.toLocaleString('es-CO')} <span className="text-sm text-muted-foreground font-normal">kg</span>
+                    </p>
+                  </div>
+                  <div className={`px-6 py-4 ${estado === 'ok' ? 'bg-success/5' : estado === 'critico' ? 'bg-destructive/5' : 'bg-amber-500/5'}`}>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+                      Diferencia
+                    </p>
+                    <p className={`text-2xl font-bold ${colorTexto}`}>
+                      {diff > 0 ? '+' : ''}{diff.toLocaleString('es-CO')}
+                      <span className="text-sm text-muted-foreground font-normal ml-1">kg</span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
-            <div className="space-y-2">
-              <Label htmlFor="promedio">Promedio (kg/gajo) *</Label>
-              <Input
-                id="promedio"
-                type="number"
-                step="0.1"
-                min="0"
-                placeholder="Ej: 18.5"
-                value={promedioInput}
-                onChange={(e) => setPromedioInput(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Valor recomendado entre 14 y 22 kg/gajo según el lote.
-              </p>
-            </div>
-
-            <div className="rounded-lg border border-amber-400/40 bg-amber-50/60 p-3 flex gap-2">
-              <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-700">
-                El ajuste sobrescribe el promedio baseline del lote para todo el año.
-              </p>
-            </div>
+          {/* Tabla de promedios por lote */}
+          <div className="rounded-lg border overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border bg-muted/50 text-xs text-muted-foreground">
+                  <th className="text-left p-3 pl-5 font-semibold">Lote</th>
+                  <th className="text-left p-3 font-semibold">Año</th>
+                  <th className="text-right p-3 font-semibold">Kg Promedio por Gajo</th>
+                  <th className="text-left p-3 pr-5 font-semibold">Fecha Actualización</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cargandoPromedios ? (
+                  <tr>
+                    <td colSpan={4} className="text-center py-8 text-sm text-muted-foreground">
+                      <Loader2 className="h-5 w-5 animate-spin inline mr-2" />
+                      Cargando promedios...
+                    </td>
+                  </tr>
+                ) : lotes.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="text-center py-8 text-sm text-muted-foreground">
+                      No hay lotes activos.
+                    </td>
+                  </tr>
+                ) : (
+                  lotes.map((lote) => {
+                    const existente = promediosExistentes.get(lote.id);
+                    const valor = promedioValorActual(lote.id);
+                    const fecha = existente?.updated_at
+                      ? new Date(existente.updated_at).toLocaleDateString('es-CO', {
+                          day: 'numeric', month: 'short', year: 'numeric',
+                        })
+                      : 'N/A';
+                    return (
+                      <tr key={lote.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                        <td className="p-3 pl-5 font-medium text-sm">{lote.nombre}</td>
+                        <td className="p-3 text-sm">{anioPromedios}</td>
+                        <td className="p-3 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Input
+                              type="number"
+                              step="0.1"
+                              min="0"
+                              className="w-24 h-8 text-right text-sm"
+                              value={valor || ''}
+                              placeholder="0"
+                              onChange={(e) =>
+                                setPromediosEditados((prev) => ({
+                                  ...prev,
+                                  [lote.id]: parseFloat(e.target.value) || 0,
+                                }))
+                              }
+                            />
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">kg/gajo</span>
+                          </div>
+                        </td>
+                        <td className="p-3 pr-5 text-sm text-muted-foreground">
+                          {fecha}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           </div>
 
           <DialogFooter>
@@ -1292,12 +1628,12 @@ export default function NuevaNominaWizard() {
               Cancelar
             </Button>
             <Button
-              onClick={ajustarPromedio}
-              disabled={ajustandoPromedio || !loteSeleccionado || !promedioInput}
+              onClick={guardarPromedios}
+              disabled={ajustandoPromedio || !hayCambiosPromedios}
               className="gap-2"
             >
               {ajustandoPromedio ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-              Guardar promedio
+              Guardar Cambios
             </Button>
           </DialogFooter>
         </DialogContent>

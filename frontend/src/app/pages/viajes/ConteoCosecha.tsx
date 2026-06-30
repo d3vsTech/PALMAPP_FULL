@@ -21,6 +21,7 @@ import {
   type Viaje, type ViajeDetalle, type OperacionDisponible, type CosechaLibre,
 } from '../../../api/viajes';
 import { selectsApi, operacionesApi } from '../../../api/operaciones';
+import { tercerosApi } from '../../../api/terceros';
 
 const ETAPAS = [
   { numero: 1, nombre: 'Info. Viaje' },
@@ -96,7 +97,37 @@ export default function ConteoCosecha() {
   // Catálogo de colaboradores y mapa cosecha→empleado_ids
   const [colaboradoresMap, setColaboradoresMap] = useState<Map<string, { nombres: string; apellidos: string; nombre_completo: string }>>(new Map());
   const [cuadrillaPorCosecha, setCuadrillaPorCosecha] = useState<Map<number, number[]>>(new Map());
+  /**
+   * Detalle de la cuadrilla por cosecha enriquecido — usado para mostrar
+   * nombres y empresa contratista en el dropdown de "Cuadrilla Reconteo".
+   * Incluye empleados internos y operarios de terceros.
+   */
+  const [miembrosPorCosecha, setMiembrosPorCosecha] = useState<
+    Map<number, Array<{
+      tipo: 'EMP' | 'OP';
+      id: number;
+      nombre: string;
+      terceroNombre?: string;
+    }>>
+  >(new Map());
+  /** Map terceroId → nombre_display (razón social), para resolver operarios. */
+  const [terceroMap, setTerceroMap] = useState<Map<number, string>>(new Map());
   const [cuadrillaSeleccionada, setCuadrillaSeleccionada] = useState<string[]>([]);
+
+  // Cargar terceros al montar (para resolver nombres de empresas contratistas
+  // cuando la cuadrilla incluye operarios).
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await tercerosApi.select();
+        const m = new Map<number, string>();
+        for (const t of (r.data ?? [])) {
+          m.set(t.id, t.nombre_display);
+        }
+        setTerceroMap(m);
+      } catch {}
+    })();
+  }, []);
 
   // Cargar colaboradores al montar (para resolver nombres)
   useEffect(() => {
@@ -179,18 +210,54 @@ export default function ConteoCosecha() {
       .catch(() => setCosechasLibres([]))
       .finally(() => setCargandoCosechas(false));
 
-    // Traer la planilla completa para extraer empleados de cada cuadrilla
+    // Traer la planilla completa para extraer la cuadrilla de cada cosecha.
+    // La cuadrilla puede tener empleados internos (`empleado_id`) o operarios
+    // de terceros (`operario_id` + `tercero_id`). XOR: solo uno de los dos.
     operacionesApi.ver(Number(cosechaEnEdicion.planillaId))
       .then((r: any) => {
         const m = new Map<number, number[]>();
+        const mi = new Map<number, Array<{
+          tipo: 'EMP' | 'OP';
+          id: number;
+          nombre: string;
+          terceroNombre?: string;
+        }>>();
         for (const c of (r?.data?.cosechas ?? []) as any[]) {
-          const ids = (c.cuadrilla ?? []).map((q: any) => Number(q.empleado_id)).filter(Boolean);
+          const ids: number[] = [];
+          const miembros: Array<{
+            tipo: 'EMP' | 'OP';
+            id: number;
+            nombre: string;
+            terceroNombre?: string;
+          }> = [];
+          for (const q of (c.cuadrilla ?? []) as any[]) {
+            if (q.empleado_id) {
+              ids.push(Number(q.empleado_id));
+              const emp = q.empleado ?? {};
+              const nombre = emp.nombre_completo
+                || `${emp.primer_nombre ?? ''} ${emp.primer_apellido ?? ''}`.trim()
+                || ''; // queda vacío y se resuelve después vía colaboradoresMap
+              miembros.push({ tipo: 'EMP', id: Number(q.empleado_id), nombre });
+            } else if (q.operario_id) {
+              const op = q.operario ?? {};
+              const nombre = op.nombre_completo
+                || `${op.nombres ?? ''} ${op.apellidos ?? ''}`.trim()
+                || `Operario ${q.operario_id}`;
+              const terceroNombre = q.tercero_id ? terceroMap.get(Number(q.tercero_id)) : undefined;
+              miembros.push({ tipo: 'OP', id: Number(q.operario_id), nombre, terceroNombre });
+            }
+          }
           m.set(Number(c.id), ids);
+          mi.set(Number(c.id), miembros);
         }
         setCuadrillaPorCosecha(m);
+        setMiembrosPorCosecha(mi);
       })
-      .catch(() => setCuadrillaPorCosecha(new Map()));
-  }, [cosechaEnEdicion?.planillaId]);
+      .catch(() => {
+        setCuadrillaPorCosecha(new Map());
+        setMiembrosPorCosecha(new Map());
+      });
+  }, [cosechaEnEdicion?.planillaId, terceroMap]);
 
   // ── handlers
   const siguienteEtapa = () => etapaActual < ETAPAS.length && setEtapaActual(etapaActual + 1);
@@ -538,29 +605,65 @@ export default function ConteoCosecha() {
                           </Select>
                         </div>
 
-                        {/* Colaboradores */}
+                        {/* Colaboradores — muestra empleados internos y operarios
+                            de terceros (con badge color amber + empresa). */}
                         <div className="space-y-2 md:col-span-2">
                           <Label>Colaboradores</Label>
                           <div className="flex flex-wrap gap-2">
-                            {cuadrillaSeleccionada.length > 0 ? (
-                              cuadrillaSeleccionada.map((empId) => {
-                                const col = colaboradoresMap.get(empId);
-                                const label = col
-                                  ? (col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${empId}`)
-                                  : `Colaborador ${empId}`;
+                            {(() => {
+                              const miembros = cosechaEnEdicion.cosechaId
+                                ? miembrosPorCosecha.get(Number(cosechaEnEdicion.cosechaId)) ?? []
+                                : [];
+                              if (miembros.length === 0 && cuadrillaSeleccionada.length > 0) {
+                                // Fallback al map original cuando solo hay empleados internos.
+                                return cuadrillaSeleccionada.map((empId) => {
+                                  const col = colaboradoresMap.get(empId);
+                                  const label = col
+                                    ? (col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${empId}`)
+                                    : `Colaborador ${empId}`;
+                                  return (
+                                    <Badge key={empId} variant="secondary" className="text-xs">
+                                      {label}
+                                    </Badge>
+                                  );
+                                });
+                              }
+                              if (miembros.length > 0) {
+                                return miembros.map((mm) => {
+                                  if (mm.tipo === 'OP') {
+                                    const sufijo = mm.terceroNombre ? ` · ${mm.terceroNombre}` : '';
+                                    return (
+                                      <Badge
+                                        key={`OP-${mm.id}`}
+                                        className="text-xs bg-amber-500/10 text-amber-700 border-amber-300"
+                                      >
+                                        {mm.nombre}{sufijo}
+                                      </Badge>
+                                    );
+                                  }
+                                  const nombre = mm.nombre
+                                    || (() => {
+                                      const col = colaboradoresMap.get(String(mm.id));
+                                      return col
+                                        ? (col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${mm.id}`)
+                                        : `Colaborador ${mm.id}`;
+                                    })();
+                                  return (
+                                    <Badge key={`EMP-${mm.id}`} variant="secondary" className="text-xs">
+                                      {nombre}
+                                    </Badge>
+                                  );
+                                });
+                              }
+                              if (cosechaEnEdicion.cuadrillaCount > 0) {
                                 return (
-                                  <Badge key={empId} variant="secondary" className="text-xs">
-                                    {label}
+                                  <Badge variant="outline" className="text-xs">
+                                    {cosechaEnEdicion.cuadrillaCount} colaborador{cosechaEnEdicion.cuadrillaCount !== 1 ? 'es' : ''}
                                   </Badge>
                                 );
-                              })
-                            ) : cosechaEnEdicion.cuadrillaCount > 0 ? (
-                              <Badge variant="outline" className="text-xs">
-                                {cosechaEnEdicion.cuadrillaCount} colaborador{cosechaEnEdicion.cuadrillaCount !== 1 ? 'es' : ''}
-                              </Badge>
-                            ) : (
-                              <p className="text-sm text-muted-foreground">No hay colaboradores</p>
-                            )}
+                              }
+                              return <p className="text-sm text-muted-foreground">No hay colaboradores</p>;
+                            })()}
                           </div>
                         </div>
 

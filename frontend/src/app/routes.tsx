@@ -279,6 +279,7 @@ export const router = createBrowserRouter([
 
       { path: 'nomina',                     element: <ProtectedRoute permiso="nomina.ver">{L(<Nomina />)}</ProtectedRoute> },
       { path: 'nomina/nueva',               element: L(<NuevaNominaWizard />) },
+      { path: 'nomina/:id/editar',          element: L(<NuevaNominaWizard />) },
       { path: 'nomina/prestamos',           element: L(<Prestamos />) },
       { path: 'nomina/nuevo-prestamo',      element: L(<NuevoPrestamo />) },
       { path: 'nomina/planilla-diaria',     element: L(<PlanillaDiaria />) },
