@@ -270,7 +270,6 @@ export default function UsuarioPermisos() {
 
   // ── Guardar ─────────────────────────────────────────────────────────────────
   const handleGuardar = async () => {
-    if (isAdmin) return;
     setSaving(true);
     try {
       const finales = Array.from(expandirConDependencias(activos));
@@ -291,7 +290,6 @@ export default function UsuarioPermisos() {
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
   const togglePermiso = (permisoId: string) => {
-    if (isAdmin) return;
     setActivos(prev => {
       const n = new Set(prev);
       n.has(permisoId) ? n.delete(permisoId) : n.add(permisoId);
@@ -300,7 +298,6 @@ export default function UsuarioPermisos() {
   };
 
   const toggleModulo = (modulo: Modulo) => {
-    if (isAdmin) return;
     const ids = permisosDeModulo(modulo).map(p => p.id);
     if (ids.length === 0) return;
     const todosActivos = ids.every(pid => activos.has(pid));
@@ -312,12 +309,10 @@ export default function UsuarioPermisos() {
   };
 
   const seleccionarTodos = () => {
-    if (isAdmin) return;
     setActivos(new Set(MODULOS.flatMap(m => permisosDeModulo(m).map(p => p.id))));
   };
 
   const quitarTodos = () => {
-    if (isAdmin) return;
     setActivos(new Set());
   };
 
@@ -371,16 +366,16 @@ export default function UsuarioPermisos() {
         </div>
       </div>
 
-      {/* Aviso para usuarios ADMIN — todos los permisos vienen del rol */}
+      {/* Info para usuarios ADMIN — arrancan con todos los permisos del rol */}
       {isAdmin && (
         <Card className="border-amber-500/40 bg-amber-50/50 dark:bg-amber-950/30">
           <CardContent className="p-4 flex items-start gap-3">
             <Shield className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
             <div>
-              <p className="font-semibold text-sm">Este usuario es administrador</p>
+              <p className="font-semibold text-sm">Usuario administrador</p>
               <p className="text-sm text-muted-foreground mt-1">
-                Tiene todos los permisos del sistema y no se pueden editar desde aquí.
-                Para cambiar su rol contacta al super_admin.
+                Arranca con todos los permisos del rol. Puedes ajustar los que
+                quieras revocar o agregar y guardar los cambios.
               </p>
             </div>
           </CardContent>
@@ -393,7 +388,6 @@ export default function UsuarioPermisos() {
           variant="outline"
           onClick={seleccionarTodos}
           className="gap-2"
-          disabled={isAdmin}
         >
           <CheckSquare className="h-4 w-4" /> Seleccionar Todos
         </Button>
@@ -401,7 +395,6 @@ export default function UsuarioPermisos() {
           variant="outline"
           onClick={quitarTodos}
           className="gap-2"
-          disabled={isAdmin}
         >
           <Square className="h-4 w-4" /> Quitar Todos
         </Button>
@@ -467,8 +460,7 @@ export default function UsuarioPermisos() {
                         permiso={permiso}
                         isActivo={activos.has(permiso.id)}
                         onToggle={() => togglePermiso(permiso.id)}
-                        disabled={isAdmin}
-                      />
+                                    />
                     ))}
                   </div>
                 )}
@@ -486,8 +478,7 @@ export default function UsuarioPermisos() {
                           permiso={permiso}
                           isActivo={activos.has(permiso.id)}
                           onToggle={() => togglePermiso(permiso.id)}
-                          disabled={isAdmin}
-                        />
+                                        />
                       ))}
                     </div>
                   </div>
@@ -501,11 +492,11 @@ export default function UsuarioPermisos() {
       {/* Botones de acción */}
       <div className="flex justify-end gap-3 pt-6 border-t">
         <Button variant="outline" onClick={() => navigate(`/usuarios/${id}`)}>
-          {isAdmin ? 'Volver' : 'Cancelar'}
+          Cancelar
         </Button>
         <Button
           onClick={handleGuardar}
-          disabled={saving || isAdmin}
+          disabled={saving}
           className="gap-2 bg-primary hover:bg-primary/90"
         >
           <Save className="h-4 w-4" /> {saving ? 'Guardando...' : 'Guardar Permisos'}

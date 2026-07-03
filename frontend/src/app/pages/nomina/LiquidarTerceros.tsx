@@ -1,16 +1,17 @@
 /**
- * Liquidación de Terceros — conectada a la API (doc API_NOMINA.md §6).
+ * Liquidación de Terceros — conectada a la API (doc API_NOMINA.md §7).
  *
  * Permite ver las actas agrupadas por empresa contratista, ajustar días/tarifa/
  * ajuste/observación por operario, registrar el pago de cada acta y descargar
  * el PDF.
  *
  * Endpoints usados:
- *  - GET  /nominas/{id}/terceros                          → listar todas las actas
- *  - POST /nominas/{id}/terceros/{terceroId}/liquidar     → calcular acta
- *  - PUT  .../operarios/{op}                              → ajustar fila
- *  - POST .../registrar-pago                              → marcar pagado
- *  - GET  .../acta/pdf                                    → descargar PDF
+ *  - GET  /nominas/{id}/terceros-actas                    → listar resumen (§7.1)
+ *  - GET  /nominas/{id}/terceros/{terceroId}              → detalle acta + operarios (§7.2)
+ *  - POST /nominas/{id}/terceros/{terceroId}/liquidar     → calcular acta (§7.3)
+ *  - PUT  .../operarios/{op}                              → ajustar fila (§7.4)
+ *  - POST .../registrar-pago                              → marcar PAGADO (§7.5)
+ *  - GET  .../acta/pdf                                    → descargar PDF (§7.6)
  *
  * El pago se puede registrar aunque la nómina esté CERRADA — es excepción
  * documentada al patrón "CERRADA = inmutable".
@@ -38,7 +39,11 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  nominaApi, NominaTercero, NominaTerceroOperario, MetodoPagoTercero,
+  nominaApi,
+  NominaTerceroActaResumen,
+  NominaTerceroActaDetalle,
+  NominaTerceroOperario,
+  MetodoPagoTercero,
   NominaErrorCodes,
 } from '../../../api/nomina';
 import type { ApiError } from '../../../api/client';
@@ -66,7 +71,17 @@ export default function LiquidarTerceros() {
   const navigate = useNavigate();
   const nominaId = nominaIdParam ? parseInt(nominaIdParam) : null;
 
-  const [actas, setActas] = useState<NominaTercero[]>([]);
+  /**
+   * Listado resumen (§7.1) — una fila por contratista con totales y estado.
+   * NO trae operarios ni datos bancarios; para eso usamos `detalles`.
+   */
+  const [actas, setActas] = useState<NominaTerceroActaResumen[]>([]);
+  /**
+   * Detalle completo del acta (§7.2) indexado por `tercero_id`. Se carga en
+   * paralelo tras el listado para poder renderizar la tabla de operarios y
+   * los datos del tercero (banco, contacto, etc.) sin cambiar la UI.
+   */
+  const [detalles, setDetalles] = useState<Map<number, NominaTerceroActaDetalle>>(new Map());
   const [cargando, setCargando] = useState(true);
   const [edits, setEdits] = useState<Record<number, OperarioEditState>>({});
 
@@ -84,33 +99,48 @@ export default function LiquidarTerceros() {
   });
   const [registrandoPago, setRegistrandoPago] = useState(false);
 
-  const cargar = () => {
+  const cargar = async () => {
     if (!nominaId) return;
     setCargando(true);
-    nominaApi.terceros
-      .listar(nominaId)
-      .then((res) => {
-        setActas(res.data ?? []);
-        // Inicializar estado de edición con valores actuales
-        const init: Record<number, OperarioEditState> = {};
-        (res.data ?? []).forEach((acta) => {
-          (acta.operarios ?? []).forEach((op) => {
-            init[op.id] = {
-              dias: op.dias,
-              tarifa_dia: toNumber(op.tarifa_dia),
-              ajuste: toNumber(op.ajuste),
-              observacion: op.observacion ?? '',
-            };
-          });
-        });
-        setEdits(init);
-      })
-      .catch((err: ApiError) => {
-        if (err.status !== 404) {
-          toast.error(err.message ?? 'Error al cargar terceros');
+    try {
+      const listRes = await nominaApi.terceros.listar(nominaId);
+      const actasResumen = listRes.data ?? [];
+      setActas(actasResumen);
+
+      // Fase 2 — para cada acta pedimos el detalle (con operarios + tercero).
+      // Se hace en paralelo para no bloquear la UI.
+      const detallesPares = await Promise.all(
+        actasResumen.map((a) =>
+          nominaApi.terceros
+            .ver(nominaId, a.tercero_id)
+            .then((r) => ({ terceroId: a.tercero_id, detalle: r.data }))
+            .catch(() => null),
+        ),
+      );
+      const map = new Map<number, NominaTerceroActaDetalle>();
+      const init: Record<number, OperarioEditState> = {};
+      for (const par of detallesPares) {
+        if (!par) continue;
+        map.set(par.terceroId, par.detalle);
+        for (const op of par.detalle.operarios) {
+          init[op.id] = {
+            dias: op.dias,
+            tarifa_dia: toNumber(op.tarifa_dia),
+            ajuste: toNumber(op.ajuste),
+            observacion: op.observacion ?? '',
+          };
         }
-      })
-      .finally(() => setCargando(false));
+      }
+      setDetalles(map);
+      setEdits(init);
+    } catch (err) {
+      const e = err as ApiError;
+      if (e.status !== 404) {
+        toast.error(e.message ?? 'Error al cargar terceros');
+      }
+    } finally {
+      setCargando(false);
+    }
   };
 
   useEffect(() => {
@@ -227,6 +257,21 @@ export default function LiquidarTerceros() {
   const terceroSeleccionadoPago = modalPagoTerceroId
     ? actas.find((a) => a.tercero_id === modalPagoTerceroId)
     : null;
+  /** Detalle del tercero seleccionado en el modal — trae banco/nit/etc. */
+  const detallePagoSeleccionado = modalPagoTerceroId
+    ? detalles.get(modalPagoTerceroId)
+    : null;
+  /**
+   * Datos bancarios completos = los 4 campos requeridos por §7.5 cuando
+   * `metodo_pago=TRANSFERENCIA`. Sirve para pintar el warning inline.
+   */
+  const datosBancariosCompletos = !!(
+    detallePagoSeleccionado
+    && detallePagoSeleccionado.tercero.banco
+    && detallePagoSeleccionado.tercero.tipo_cuenta
+    && detallePagoSeleccionado.tercero.numero_cuenta
+    && detallePagoSeleccionado.tercero.titular_cuenta
+  );
 
   return (
     <div className="space-y-6">
@@ -302,12 +347,15 @@ export default function LiquidarTerceros() {
         </Card>
       ) : (
         actas.map((acta) => {
+          const detalle = detalles.get(acta.tercero_id);
           const estaPagada = acta.estado_pago === 'PAGADO';
-          const razonSocial = acta.tercero?.razon_social ?? `Tercero #${acta.tercero_id}`;
-          const nit = acta.tercero?.nit ?? '—';
-          const contacto = acta.tercero?.contacto ?? '';
-          const telefono = acta.tercero?.telefono ?? '';
-          const operarios = acta.operarios ?? [];
+          const razonSocial = detalle?.tercero.nombre
+            ?? acta.tercero_nombre
+            ?? `Tercero #${acta.tercero_id}`;
+          const nit = detalle?.tercero.nit ?? detalle?.tercero.cedula ?? '—';
+          const contacto = detalle?.tercero.representante ?? detalle?.tercero.email ?? '';
+          const telefono = detalle?.tercero.telefono ?? '';
+          const operarios = detalle?.operarios ?? [];
           const subtotalAcatual = toNumber(acta.total_a_transferir);
 
           return (
@@ -402,7 +450,7 @@ export default function LiquidarTerceros() {
                           observacion: op.observacion ?? '',
                         };
                         const subtotal = edit.dias * edit.tarifa_dia + edit.ajuste;
-                        const iniciales = ((op.operario?.nombre_completo ?? '').split(' ').slice(0, 2).map((n) => n[0] ?? '').join('')).toUpperCase() || '?';
+                        const iniciales = (op.nombre_completo ?? '').split(' ').slice(0, 2).map((n) => n[0] ?? '').join('').toUpperCase() || '?';
                         return (
                           <tr
                             key={op.id}
@@ -416,12 +464,12 @@ export default function LiquidarTerceros() {
                                   {iniciales}
                                 </div>
                                 <div>
-                                  <p className="font-medium">{op.operario?.nombre_completo ?? `Operario #${op.operario_id}`}</p>
-                                  <p className="text-xs text-muted-foreground">{op.operario?.cedula ?? '—'}</p>
+                                  <p className="font-medium">{op.nombre_completo || `Operario #${op.operario_id}`}</p>
+                                  <p className="text-xs text-muted-foreground">{op.cedula || '—'}</p>
                                 </div>
                               </div>
                             </td>
-                            <td className="p-3 text-muted-foreground">{op.operario?.cargo ?? '—'}</td>
+                            <td className="p-3 text-muted-foreground">{op.cargo || '—'}</td>
                             <td className="p-3 text-right">
                               <Input
                                 type="number"
@@ -524,7 +572,7 @@ export default function LiquidarTerceros() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Building2 className="h-5 w-5 text-primary" />
-                Registrar Pago — {terceroSeleccionadoPago.tercero?.razon_social}
+                Registrar Pago — {detallePagoSeleccionado?.tercero.nombre ?? terceroSeleccionadoPago.tercero_nombre}
               </DialogTitle>
               <DialogDescription>
                 Confirma que se realizó la transferencia a la empresa
@@ -535,15 +583,21 @@ export default function LiquidarTerceros() {
               <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Empresa</span>
-                  <span className="font-medium">{terceroSeleccionadoPago.tercero?.razon_social}</span>
+                  <span className="font-medium">
+                    {detallePagoSeleccionado?.tercero.nombre ?? terceroSeleccionadoPago.tercero_nombre}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">NIT</span>
-                  <span>{terceroSeleccionadoPago.tercero?.nit ?? '—'}</span>
+                  <span>
+                    {detallePagoSeleccionado?.tercero.nit
+                      ?? detallePagoSeleccionado?.tercero.cedula
+                      ?? '—'}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Operarios</span>
-                  <span>{terceroSeleccionadoPago.operarios?.length ?? 0} personas</span>
+                  <span>{detallePagoSeleccionado?.operarios.length ?? 0} personas</span>
                 </div>
                 <div className="flex justify-between pt-2 border-t border-border">
                   <span className="font-semibold">Total a transferir</span>
@@ -582,12 +636,11 @@ export default function LiquidarTerceros() {
                     }
                     placeholder="Ej: TRF-2026-001"
                   />
-                  {terceroSeleccionadoPago.tercero &&
-                    terceroSeleccionadoPago.tercero.datos_bancarios_completos === false && (
-                      <p className="text-xs text-destructive">
-                        Falta configurar los datos bancarios del tercero.
-                      </p>
-                    )}
+                  {detallePagoSeleccionado && !datosBancariosCompletos && (
+                    <p className="text-xs text-destructive">
+                      Falta configurar los datos bancarios del tercero.
+                    </p>
+                  )}
                 </div>
               )}
 

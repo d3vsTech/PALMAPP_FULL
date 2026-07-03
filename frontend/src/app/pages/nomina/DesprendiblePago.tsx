@@ -72,13 +72,22 @@ export default function DesprendiblePago() {
   const enviarWhatsapp = async () => {
     if (!nominaEmpleadoId) return;
     setGenerandoWa(true);
+    // Mensaje base con la data del desprendible — siempre se puede armar
+    const nombre = data?.empleado.nombre_completo ?? 'Colaborador';
+    const periodo = data?.nomina.periodo_label ?? '';
+    const neto = data?.liquidacion.total_neto ?? 0;
+    const resumen =
+      `Hola ${nombre}, adjunto tu desprendible de pago del período ${periodo}. `
+      + `Neto a pagar: $${neto.toLocaleString('es-CO')}.`;
     try {
       const res = await nominaApi.desprendibleWhatsapp(nominaEmpleadoId);
-      const text = encodeURIComponent(`Desprendible de pago: ${res.data.url}`);
+      const text = encodeURIComponent(`${resumen}\n\nDescarga el PDF: ${res.data.url}`);
       window.open(`https://wa.me/?text=${text}`, '_blank');
-    } catch (err) {
-      const e = err as ApiError;
-      toast.error(e.message ?? 'Error al generar enlace');
+    } catch {
+      // Backend no pudo generar el PDF — abrir WhatsApp con solo el resumen
+      const text = encodeURIComponent(resumen);
+      window.open(`https://wa.me/?text=${text}`, '_blank');
+      toast.info('No se pudo adjuntar el PDF. Abriendo WhatsApp con el resumen.');
     } finally {
       setGenerandoWa(false);
     }

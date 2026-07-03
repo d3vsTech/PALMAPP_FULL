@@ -2027,8 +2027,18 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                       {trabajo.colaboradores?.map((colId) => {
                                         const col = colaboradores.find(c => c.id === colId);
                                         return col ? (
-                                          <Badge key={colId} variant="outline" className="text-xs">
+                                          <Badge
+                                            key={colId}
+                                            variant="outline"
+                                            className={`text-xs ${col.terceroNombre ? 'bg-orange-50 text-orange-800 border-orange-300' : ''}`}
+                                            title={col.terceroNombre ? `Tercero · ${col.terceroNombre}` : 'Colaborador interno'}
+                                          >
                                             {col.nombres} {col.apellidos.split(' ')[0]}
+                                            {col.terceroNombre && (
+                                              <span className="ml-1.5 text-[9px] font-semibold uppercase tracking-wide bg-orange-200/70 text-orange-900 rounded px-1 py-[1px]">
+                                                {col.terceroNombre}
+                                              </span>
+                                            )}
                                           </Badge>
                                         ) : null;
                                       })}
@@ -2240,8 +2250,18 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                       {trabajo.colaboradores?.map((colId) => {
                                         const col = colaboradores.find(c => c.id === colId);
                                         return col ? (
-                                          <Badge key={colId} variant="outline" className="text-xs">
+                                          <Badge
+                                            key={colId}
+                                            variant="outline"
+                                            className={`text-xs ${col.terceroNombre ? 'bg-orange-50 text-orange-800 border-orange-300' : ''}`}
+                                            title={col.terceroNombre ? `Tercero · ${col.terceroNombre}` : 'Colaborador interno'}
+                                          >
                                             {col.nombres} {col.apellidos.split(' ')[0]}
+                                            {col.terceroNombre && (
+                                              <span className="ml-1.5 text-[9px] font-semibold uppercase tracking-wide bg-orange-200/70 text-orange-900 rounded px-1 py-[1px]">
+                                                {col.terceroNombre}
+                                              </span>
+                                            )}
                                           </Badge>
                                         ) : null;
                                       })}
@@ -2437,8 +2457,18 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                       {trabajo.colaboradores?.map((colId) => {
                                         const col = colaboradores.find(c => c.id === colId);
                                         return col ? (
-                                          <Badge key={colId} variant="outline" className="text-xs">
+                                          <Badge
+                                            key={colId}
+                                            variant="outline"
+                                            className={`text-xs ${col.terceroNombre ? 'bg-orange-50 text-orange-800 border-orange-300' : ''}`}
+                                            title={col.terceroNombre ? `Tercero · ${col.terceroNombre}` : 'Colaborador interno'}
+                                          >
                                             {col.nombres} {col.apellidos.split(' ')[0]}
+                                            {col.terceroNombre && (
+                                              <span className="ml-1.5 text-[9px] font-semibold uppercase tracking-wide bg-orange-200/70 text-orange-900 rounded px-1 py-[1px]">
+                                                {col.terceroNombre}
+                                              </span>
+                                            )}
                                           </Badge>
                                         ) : null;
                                       })}
@@ -2681,8 +2711,18 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                       {trabajo.colaboradores?.map((colId) => {
                                         const col = colaboradores.find(c => c.id === colId);
                                         return col ? (
-                                          <Badge key={colId} variant="outline" className="text-xs">
+                                          <Badge
+                                            key={colId}
+                                            variant="outline"
+                                            className={`text-xs ${col.terceroNombre ? 'bg-orange-50 text-orange-800 border-orange-300' : ''}`}
+                                            title={col.terceroNombre ? `Tercero · ${col.terceroNombre}` : 'Colaborador interno'}
+                                          >
                                             {col.nombres} {col.apellidos.split(' ')[0]}
+                                            {col.terceroNombre && (
+                                              <span className="ml-1.5 text-[9px] font-semibold uppercase tracking-wide bg-orange-200/70 text-orange-900 rounded px-1 py-[1px]">
+                                                {col.terceroNombre}
+                                              </span>
+                                            )}
                                           </Badge>
                                         ) : null;
                                       })}
@@ -2894,8 +2934,18 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                       {trabajo.colaboradores?.map((colId) => {
                                         const col = colaboradores.find(c => c.id === colId);
                                         return col ? (
-                                          <Badge key={colId} variant="outline" className="text-xs">
-                                            {col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}
+                                          <Badge
+                                            key={colId}
+                                            variant="outline"
+                                            className={`text-xs ${col.terceroNombre ? 'bg-orange-50 text-orange-800 border-orange-300' : ''}`}
+                                            title={col.terceroNombre ? `Tercero · ${col.terceroNombre}` : 'Colaborador interno'}
+                                          >
+                                            {col.nombres} {col.apellidos}
+                                            {col.terceroNombre && (
+                                              <span className="ml-1.5 text-[9px] font-semibold uppercase tracking-wide bg-orange-200/70 text-orange-900 rounded px-1 py-[1px]">
+                                                {col.terceroNombre}
+                                              </span>
+                                            )}
                                           </Badge>
                                         ) : null;
                                       })}
@@ -3203,8 +3253,18 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                       {trabajo.colaboradores?.map((colId) => {
                                         const col = colaboradores.find(c => c.id === colId);
                                         return col ? (
-                                          <Badge key={colId} variant="outline" className="text-xs">
-                                            {col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}
+                                          <Badge
+                                            key={colId}
+                                            variant="outline"
+                                            className={`text-xs ${col.terceroNombre ? 'bg-orange-50 text-orange-800 border-orange-300' : ''}`}
+                                            title={col.terceroNombre ? `Tercero · ${col.terceroNombre}` : 'Colaborador interno'}
+                                          >
+                                            {col.nombres} {col.apellidos}
+                                            {col.terceroNombre && (
+                                              <span className="ml-1.5 text-[9px] font-semibold uppercase tracking-wide bg-orange-200/70 text-orange-900 rounded px-1 py-[1px]">
+                                                {col.terceroNombre}
+                                              </span>
+                                            )}
                                           </Badge>
                                         ) : null;
                                       })}

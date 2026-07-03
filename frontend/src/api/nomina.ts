@@ -193,29 +193,69 @@ export interface ConceptoLegalPreview {
   valor: number;
 }
 
+/**
+ * Preview del cálculo de liquidación (doc §5.1).
+ *
+ * Para EMPLEADOS internos viene todo poblado.
+ *
+ * Para OPERARIOS de terceros (`empleado.salario_tipo === null`), la respuesta
+ * omite los campos legales: `conceptos_legales`, `subsidio_transporte`,
+ * `dias_ausencia_*`, `total_incapacidades`, `total_horas_extra`,
+ * `total_recargos` y `total_deducciones_legales`. Tampoco aplica subsidio.
+ * Por eso esos campos quedan opcionales en el tipo.
+ *
+ * `total_neto_propuesto === total_devengado` cuando es operario (sin
+ * deducciones). El campo `empleado.tercero` viene poblado cuando aplica.
+ */
+/**
+ * Cuota pendiente de préstamo para el período (doc §5.1 y §15).
+ * Solo aparece para colaboradores internos (no operarios). El liquidador
+ * decide en cada quincena si aplica la cuota como deducción voluntaria.
+ * Al confirmar, pasa el `prestamo_cuota_id` en `deducciones_voluntarias[]`
+ * y el backend marca la cuota como APLICADA + actualiza el saldo.
+ */
+export interface PrestamoCuotaPendiente {
+  prestamo_cuota_id: number;
+  prestamo_id: number;
+  concepto: string;
+  numero_cuota: number;
+  total_cuotas: number;
+  monto: number;
+  saldo_restante_prestamo: number;
+}
+
 export interface PreviewLiquidacion {
   dias_periodo: number;
   dias_trabajados: number;
   salario_base: number;
   total_jornales: number;
   total_cosecha: number;
-  total_horas_extra: number;
-  total_recargos: number;
-  total_incapacidades: number;
-  dias_ausencia_descontados: number;
-  total_ausencias_descuento: number;
+  total_horas_extra?: number;
+  total_recargos?: number;
+  total_incapacidades?: number;
+  dias_ausencia_descontados?: number;
+  total_ausencias_descuento?: number;
   total_devengado: number;
-  subsidio_transporte: number;
-  conceptos_legales: ConceptoLegalPreview[];
-  total_deducciones_legales: number;
+  subsidio_transporte?: number;
+  conceptos_legales?: ConceptoLegalPreview[];
+  total_deducciones_legales?: number;
   total_neto_propuesto: number;
+  /**
+   * Cuotas de préstamos VIGENTES cuyo período coincide con el de la nómina
+   * actual (doc §5.1). Solo aparece en preview de empleados internos.
+   * Puede llegar vacío `[]`.
+   */
+  prestamos_pendientes?: PrestamoCuotaPendiente[];
   empleado: {
     id: number;
     nombre_completo: string;
     documento: string;
     cargo: string;
-    salario_tipo: SalarioTipo;
+    /** null = operario de tercero (sin deducciones legales ni subsidio). */
+    salario_tipo: SalarioTipo | null;
     predio: { id: number; nombre: string } | null;
+    /** Solo presente para operarios. */
+    tercero?: { id: number; razon_social: string };
   };
 }
 
@@ -263,6 +303,15 @@ export interface DeduccionVoluntariaInput {
   concepto_id: number;
   valor: number;
   observacion?: string;
+  /**
+   * Vincula la deducción a una cuota de préstamo (doc §5.3 + §15). Si se
+   * envía, el backend marca `PrestamoCuota` como APLICADA y actualiza el
+   * saldo del préstamo. Cuando `cuotas_pagadas == num_cuotas`, el préstamo
+   * pasa a `estado=PAGADO` automáticamente.
+   *
+   * Errores posibles: `PRESTAMO_CUOTA_NO_PENDIENTE`, `PRESTAMO_CUOTA_EMPLEADO_MISMATCH`.
+   */
+  prestamo_cuota_id?: number;
 }
 
 export interface LiquidarPayload {
@@ -278,7 +327,8 @@ export interface DesprendibleData {
     nombre_completo: string;
     documento: string;
     cargo: string;
-    salario_tipo: SalarioTipo;
+    /** null = operario de tercero. */
+    salario_tipo: SalarioTipo | null;
     salario_base: number;
   };
   nomina: {
@@ -323,12 +373,53 @@ export interface DesprendibleData {
 
 // ─── Paso 3 — Validar Cosecha (doc §4) ────────────────────────────────────────
 
+/**
+ * Detalle de una cosecha individual del colaborador en el período (doc §4.1).
+ * Comparación gajos/kg trabajados vs gajos/kg verificados (extractora).
+ */
+export interface ValidacionCosechaItem {
+  fecha: string;
+  lote: string;
+  sublote: string | null;
+  /** `viaje.numero_remision_extractora` — null si no hay viaje vinculado. */
+  remision: string | null;
+  gajos_trabajados: number;
+  gajos_verificados: number;
+  diferencia_gajos: number;
+  /** floor(gajos_efectivos / N) × promedio_efectivo_del_lote */
+  kg_trabajado: number;
+  /** peso_calculado_empleado del viaje, o fallback legacy, o 0. */
+  kg_extractora: number;
+  diferencia_kg: number;
+}
+
 export interface ValidacionCosechaDetalleColaborador {
   tipo: 'EMPLEADO' | 'OPERARIO';
   colaborador_id: number;
   nombre_completo: string;
   cargo: string;
   kg: number;
+  /** Detalle por cosecha (doc §4.1). */
+  cosechas?: ValidacionCosechaItem[];
+}
+
+/**
+ * Promedios efectivos por lote en esta nómina (doc §4.1).
+ *
+ * Origen del `promedio_efectivo` (orden de prioridad):
+ *  1. `promedio_manual` (override admin en `nomina_promedio_lote`).
+ *  2. AVG de `promedio_lote` auto-generado por viajes en el período.
+ *  3. Baseline del año con `viaje_id IS NULL`.
+ */
+export interface ValidacionCosechaPromedioLote {
+  lote_id: number;
+  lote_nombre: string;
+  /** AVG calculado por backend desde `promedio_lote` en el período. */
+  promedio_auto: number;
+  /** Override manual del admin para esta nómina × lote (null = sin ajuste). */
+  promedio_manual: number | null;
+  /** El que realmente se usa en los cálculos de pago y cierre. */
+  promedio_efectivo: number;
 }
 
 /** Bundle calculado de comparación: lo registrado vs el reporte de la extractora. */
@@ -336,6 +427,8 @@ export interface ValidacionCosechaBundle {
   total_kg_colaboradores: number;
   total_kg_extractora: number;
   diferencia_kg: number;
+  /** Promedios efectivos por lote del período (con auto/manual/efectivo). */
+  promedios_por_lote: ValidacionCosechaPromedioLote[];
   detalle_por_colaborador: ValidacionCosechaDetalleColaborador[];
   /** null si el paso aún no fue confirmado. */
   validado_at: string | null;
@@ -343,13 +436,23 @@ export interface ValidacionCosechaBundle {
   validado_por: string | null;
 }
 
+/**
+ * Respuesta del PUT /promedios-lote/{lote} (doc §4.2).
+ *
+ * Persiste en `nomina_promedio_lote` (override admin por nómina × lote).
+ * **NO** escribe en `promedio_lote` global — esa tabla es solo lectura,
+ * la mantiene `ViajeCalculationService` al finalizar viajes.
+ *
+ * El frontend debe volver a llamar GET /validar-cosecha tras este PUT para
+ * refrescar la tabla de diferencias y los totales.
+ */
 export interface PromedioLoteAjustado {
-  id: number;
   lote_id: number;
-  viaje_id: number | null;
-  promedio: string;
-  anio: number;
-  fecha: string;
+  lote_nombre: string;
+  promedio_auto: number;
+  promedio_manual: number;
+  promedio_efectivo: number;
+  ajustado_at: string;
 }
 
 export interface ValidacionCosechaConfirmada {
@@ -362,63 +465,108 @@ export interface ValidacionCosechaConfirmada {
   validado_at: string;
 }
 
-// ─── Liquidación de Terceros (doc §6 — agregado por PR-4 del roadmap) ─────────
+// ─── Liquidación de Terceros / Acta (doc §7) ──────────────────────────────────
 
 export type EstadoPagoTercero = 'PENDIENTE' | 'PAGADO';
 export type MetodoPagoTercero = 'TRANSFERENCIA' | 'EFECTIVO' | 'CHEQUE';
 
+/**
+ * Línea de operario dentro del acta (doc §7.2 - `operarios[]`).
+ * Los campos `dias`, `tarifa_dia`, `ajuste`, `subtotal` y `observacion` son
+ * editables individualmente vía §7.4 `PUT .../operarios/{op}`.
+ */
 export interface NominaTerceroOperario {
+  /** ID de la fila `nomina_tercero_operario`. */
   id: number;
-  nomina_tercero_id: number;
   operario_id: number;
+  nombre_completo: string;
+  cedula: string;
+  cargo: string;
   dias: number;
-  tarifa_dia: string;
-  ajuste: string;
-  subtotal: string;
-  /** Labores realizadas (JSON con tipo + lote + sublote + cantidad). */
-  labores_realizadas: Array<{
-    tipo: string;
-    lote?: string;
-    sublote?: string;
-    cantidad: number;
-    precio_unitario?: number;
-    total?: number;
-  }>;
-  observacion?: string | null;
-  operario?: {
-    id: number;
-    nombre_completo: string;
-    cedula: string;
-    cargo: string;
-  };
+  tarifa_dia: number;
+  ajuste: number;
+  subtotal: number;
+  /** Snapshot JSON de labores realizadas por el operario en el período. */
+  labores_realizadas: string[];
+  observacion: string | null;
 }
 
-export interface NominaTercero {
+/**
+ * Fila de resumen del acta (doc §7.1 - `terceros-actas`).
+ * Una por contratista con operarios en la nómina.
+ */
+export interface NominaTerceroActaResumen {
   id: number;
-  nomina_id: number;
   tercero_id: number;
-  total_a_transferir: string;
+  tercero_nombre: string;
+  total_dias: number;
+  total_jornales: number;
+  total_cosecha: number;
+  total_bruto: number;
+  total_a_transferir: number;
   estado_pago: EstadoPagoTercero;
-  metodo_pago: MetodoPagoTercero | null;
-  referencia_pago: string | null;
   orden_pago_numero: string | null;
+  metodo_pago: MetodoPagoTercero | null;
   pagado_at: string | null;
-  pagado_por: number | null;
-  observacion: string | null;
-  tercero?: {
-    id: number;
-    razon_social: string;
-    nit: string;
-    contacto?: string;
-    telefono?: string;
-    banco?: string | null;
-    tipo_cuenta?: 'AHORROS' | 'CORRIENTE' | null;
-    numero_cuenta?: string | null;
-    titular_cuenta?: string | null;
-    datos_bancarios_completos?: boolean;
-  };
-  operarios?: NominaTerceroOperario[];
 }
+
+/** Bloque `resumen` que trae el listado `terceros-actas` (doc §7.1). */
+export interface NominaTerceroActaResumenGlobal {
+  total_a_transferir_global: number;
+  pendiente: number;
+  pagado: number;
+  contratistas: number;
+}
+
+/** Detalle del acta (doc §7.2 - `GET /nominas/{id}/terceros/{tercero}`). */
+export interface NominaTerceroActaDetalle {
+  tercero: {
+    id: number;
+    tipo_persona: 'NATURAL' | 'JURIDICA';
+    nombre: string;
+    nit: string | null;
+    cedula: string | null;
+    representante: string | null;
+    telefono: string | null;
+    email: string | null;
+    banco: string | null;
+    tipo_cuenta: 'AHORROS' | 'CORRIENTE' | null;
+    numero_cuenta: string | null;
+    titular_cuenta: string | null;
+  };
+  nomina: {
+    id: number;
+    periodo_label: string;
+    mes: number;
+    anio: number;
+    quincena: number | null;
+    fecha_inicio: string;
+    fecha_fin: string;
+    estado: EstadoNomina;
+  };
+  acta: {
+    id: number;
+    total_dias: number;
+    total_jornales: number;
+    total_cosecha: number;
+    total_bruto: number;
+    total_a_transferir: number;
+    estado_pago: EstadoPagoTercero;
+    orden_pago_numero: string | null;
+    metodo_pago: MetodoPagoTercero | null;
+    referencia_pago: string | null;
+    pagado_at: string | null;
+    pagado_por: number | null;
+    observacion: string | null;
+  };
+  operarios: NominaTerceroOperario[];
+}
+
+/**
+ * Alias tipográfico para el shape original. Mantiene la compatibilidad con
+ * código que aún referencia `NominaTercero` — apunta al nuevo shape combinado.
+ */
+export type NominaTercero = NominaTerceroActaResumen;
 
 export interface ActualizarOperarioActaPayload {
   dias?: number;
@@ -429,12 +577,47 @@ export interface ActualizarOperarioActaPayload {
 
 export interface RegistrarPagoTerceroPayload {
   metodo_pago: MetodoPagoTercero;
-  /** Requerido si metodo_pago=TRANSFERENCIA. */
+  /** Requerido si metodo_pago=TRANSFERENCIA (doc §7.5). */
   referencia_pago?: string;
-  /** Datetime ISO. Default: ahora. */
+  /** Datetime ISO. Default: `now()`. */
   pagado_at?: string;
   orden_pago_numero?: string;
   observacion?: string;
+}
+
+// ─── Alias §3.4 — agregar solo operarios con 3 shapes ─────────────────────────
+
+/** Shape A — lista plana de operarios individuales (doc §3.4). */
+export interface AgregarTercerosPayloadA {
+  operario_ids: number[];
+}
+
+/** Shape B — contratistas (expande a TODOS sus operarios activos). */
+export interface AgregarTercerosPayloadB {
+  tercero_ids: number[];
+}
+
+/** Shape C — anidado (validación XOR de pertenencia). */
+export interface AgregarTercerosPayloadC {
+  terceros: Array<{ tercero_id: number; operario_ids: number[] }>;
+}
+
+export type AgregarTercerosPayload =
+  | AgregarTercerosPayloadA
+  | AgregarTercerosPayloadB
+  | AgregarTercerosPayloadC;
+
+// ─── Checklist paso 4 wizard (doc §3.6) ───────────────────────────────────────
+
+export interface PasoCuatroChecklist {
+  nomina_empleado_empleados: number;
+  nomina_empleado_operarios: number;
+  nomina_tercero_creados: number;
+  nomina_tercero_operario_creados: number;
+  nomina_promedio_lote_ajustados: number;
+  nomina_validacion_cosecha_confirmada: boolean;
+  requiere_validacion_cosecha: boolean;
+  listo_para_cerrar: boolean;
 }
 
 export interface NominaConcepto {
@@ -479,8 +662,20 @@ export const nominaApi = {
   listar: (params?: { estado?: EstadoNomina; mes?: number; anio?: number; per_page?: number; page?: number }) =>
     apiClient.get<PaginatedResponse<Nomina>>(`/v1/tenant/nominas${toQuery(params)}`, T),
 
-  indicadores: () =>
-    apiClient.get<{ data: NominaIndicadores }>(`/v1/tenant/nominas/indicadores`, T),
+  /**
+   * Indicadores (cards superiores). Filtros opcionales combinables (doc §2.3).
+   * Response incluye `meta.filtros` con los filtros aplicados (útil para
+   * pintar chips en la UI).
+   */
+  indicadores: (params?: {
+    anio?: number;
+    mes?: number;
+    estado?: EstadoNomina;
+  }) =>
+    apiClient.get<{
+      data: NominaIndicadores;
+      meta?: { filtros: Partial<{ anio: number; mes: number; estado: EstadoNomina }> };
+    }>(`/v1/tenant/nominas/indicadores${toQuery(params)}`, T),
 
   ver: (id: number) =>
     apiClient.get<{ data: Nomina & { empleados?: NominaEmpleado[] } }>(`/v1/tenant/nominas/${id}`, T),
@@ -570,34 +765,44 @@ export const nominaApi = {
       T,
     ),
 
-  // ─── Terceros — actas, pagos, PDF (doc §6 / roadmap PR-4) ──────────────────
+  // ─── Terceros — actas, pagos, PDF (doc §7) ─────────────────────────────────
   terceros: {
-    /** GET /nominas/{id}/terceros — listado agrupado por empresa contratista. */
+    /**
+     * GET /nominas/{id}/terceros-actas (doc §7.1) — resumen agrupado por
+     * contratista + bloque global `resumen`.
+     *
+     * Nota de ruta: la ruta cambió de `/terceros` a `/terceros-actas` porque
+     * `POST /nominas/{id}/terceros` (doc §3.4) ahora es el alias para
+     * AGREGAR operarios en el paso 4 del wizard.
+     */
     listar: (nominaId: number) =>
-      apiClient.get<{ data: NominaTercero[] }>(
-        `/v1/tenant/nominas/${nominaId}/terceros`,
-        T,
-      ),
+      apiClient.get<{
+        data: NominaTerceroActaResumen[];
+        resumen: NominaTerceroActaResumenGlobal;
+      }>(`/v1/tenant/nominas/${nominaId}/terceros-actas`, T),
 
-    /** GET /nominas/{id}/terceros/{terceroId} — acta detallada con operarios. */
+    /**
+     * GET /nominas/{id}/terceros/{terceroId} (doc §7.2) — detalle del acta
+     * con datos del contratista, nómina, acta y líneas por operario.
+     */
     ver: (nominaId: number, terceroId: number) =>
-      apiClient.get<{ data: NominaTercero }>(
+      apiClient.get<{ data: NominaTerceroActaDetalle }>(
         `/v1/tenant/nominas/${nominaId}/terceros/${terceroId}`,
         T,
       ),
 
     /**
-     * POST .../liquidar — calcula totales y crea/actualiza la acta del tercero.
-     * Idempotente: re-ejecutar reescribe `nomina_tercero_operario`.
+     * POST .../liquidar (doc §7.3) — calcula totales del acta y persiste.
+     * Idempotente. Preserva `ajuste` y `observacion` manuales.
      */
     liquidar: (nominaId: number, terceroId: number) =>
-      apiClient.post<{ data: NominaTercero; message: string }>(
+      apiClient.post<{ data: NominaTerceroActaDetalle; message: string }>(
         `/v1/tenant/nominas/${nominaId}/terceros/${terceroId}/liquidar`,
         undefined,
         T,
       ),
 
-    /** PUT .../operarios/{op} — ajustar dias, tarifa, ajuste, observación. */
+    /** PUT .../operarios/{op} (doc §7.4) — ajustar días, tarifa, ajuste, observación. */
     actualizarOperario: (
       nominaId: number,
       terceroId: number,
@@ -611,28 +816,63 @@ export const nominaApi = {
       ),
 
     /**
-     * POST .../registrar-pago — marca el acta como pagada.
-     * Permitido aunque la nómina esté CERRADA (excepción documentada al patrón
-     * "CERRADA = inmutable", doc §6).
+     * POST .../registrar-pago (doc §7.5) — marca el acta como PAGADO.
+     * Requiere permiso `nomina.pagar-tercero`. Permitido incluso con la
+     * nómina CERRADA (excepción documentada).
      */
     registrarPago: (
       nominaId: number,
       terceroId: number,
       payload: RegistrarPagoTerceroPayload,
     ) =>
-      apiClient.post<{ data: NominaTercero; message: string }>(
+      apiClient.post<{ data: NominaTerceroActaDetalle; message: string }>(
         `/v1/tenant/nominas/${nominaId}/terceros/${terceroId}/registrar-pago`,
         payload,
         T,
       ),
 
-    /** GET .../acta/pdf — descarga el PDF del acta (DomPDF). */
+    /** GET .../acta/pdf (doc §7.6) — descarga el PDF del acta (DomPDF). */
     actaPdf: (nominaId: number, terceroId: number) =>
       apiClient.getBlob(
         `/v1/tenant/nominas/${nominaId}/terceros/${terceroId}/acta/pdf`,
         T,
       ),
+
+    /**
+     * POST /nominas/{id}/terceros (doc §3.4) — alias de agregar operarios,
+     * acepta 3 shapes (A: operario_ids, B: tercero_ids, C: terceros anidados).
+     * Pre-hidrata `nomina_tercero` y `nomina_tercero_operario` con totales 0.
+     */
+    agregar: (nominaId: number, payload: AgregarTercerosPayload) =>
+      apiClient.post<{ data: NominaEmpleado[]; message: string }>(
+        `/v1/tenant/nominas/${nominaId}/terceros`,
+        payload,
+        T,
+      ),
+
+    /**
+     * DELETE /nominas/{id}/terceros/{tercero} (doc §3.5) — elimina TODOS
+     * los operarios pendientes del contratista + su acta + líneas. Falla si
+     * al menos un operario ya fue LIQUIDADO.
+     */
+    eliminarPorContratista: (nominaId: number, terceroId: number) =>
+      apiClient.delete<{ message: string }>(
+        `/v1/tenant/nominas/${nominaId}/terceros/${terceroId}`,
+        T,
+      ),
   },
+
+  /**
+   * GET /nominas/{id}/paso-4-checklist (doc §3.6) — diagnóstico del estado de
+   * hidratación de las 4 tablas que el paso 4 del wizard debe dejar
+   * consistentes antes de cerrar la nómina. Útil para mostrar banner
+   * "Acciones pendientes antes de cerrar".
+   */
+  pasoCuatroChecklist: (nominaId: number) =>
+    apiClient.get<{ data: PasoCuatroChecklist }>(
+      `/v1/tenant/nominas/${nominaId}/paso-4-checklist`,
+      T,
+    ),
 
   // ─── NominaEmpleado ────────────────────────────────────────────────────────
   quitarEmpleado: (nominaEmpleadoId: number) =>
@@ -754,6 +994,37 @@ export const NominaErrorCodes = {
   OPERARIO_LIQUIDADO_EN_TERCERO: 'OPERARIO_LIQUIDADO_EN_TERCERO',
   /** `metodo_pago=TRANSFERENCIA` sin `banco`/`numero_cuenta`/etc. en el tercero. */
   TERCERO_SIN_DATOS_BANCARIOS: 'TERCERO_SIN_DATOS_BANCARIOS',
+  /**
+   * Intento de eliminar/liquidar un tercero que no tiene operarios en esa
+   * nómina. Aplica a DELETE /nominas/{id}/terceros/{tercero} y POST /liquidar
+   * (doc §3.5 y §7.3). HTTP 404 o 422.
+   */
+  TERCERO_SIN_OPERARIOS_EN_NOMINA: 'TERCERO_SIN_OPERARIOS_EN_NOMINA',
+  /** Intento de registrar pago sobre un acta ya en PAGADO (doc §7.5). */
+  ACTA_TERCERO_YA_PAGADA: 'ACTA_TERCERO_YA_PAGADA',
+  /** Acta no calculada aún; ejecutar `POST /liquidar` primero (doc §7.2). */
+  ACTA_NO_CALCULADA: 'ACTA_NO_CALCULADA',
+  /**
+   * Intento de editar `valor_total`/`num_cuotas`/fechas de un préstamo con
+   * cuotas ya aplicadas (doc §15). Solo se permiten cambios en `concepto`
+   * y `observaciones` en ese estado.
+   */
+  PRESTAMO_NO_EDITABLE: 'PRESTAMO_NO_EDITABLE',
+  /**
+   * `prestamo_cuota_id` en `deducciones_voluntarias[]` referencia una cuota
+   * que ya está APLICADA (doc §5.3 + §15).
+   */
+  PRESTAMO_CUOTA_NO_PENDIENTE: 'PRESTAMO_CUOTA_NO_PENDIENTE',
+  /**
+   * La cuota de préstamo no pertenece al empleado que se está liquidando
+   * (doc §15).
+   */
+  PRESTAMO_CUOTA_EMPLEADO_MISMATCH: 'PRESTAMO_CUOTA_EMPLEADO_MISMATCH',
+  /**
+   * Intento de crear un préstamo para un operario de tercero — solo
+   * colaboradores internos son elegibles (API_PRESTAMOS §0).
+   */
+  PRESTAMO_SOLO_COLABORADORES: 'PRESTAMO_SOLO_COLABORADORES',
   /** Usuario sin permiso para la acción. */
   PERMISSION_DENIED: 'PERMISSION_DENIED',
 } as const;

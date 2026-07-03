@@ -249,12 +249,11 @@ export default function Usuarios() {
                               className="hover:bg-accent/10 hover:text-accent hover:border-accent" title="Editar">
                               <Edit className="h-4 w-4" />
                             </Button>
-                            {!u.is_admin && (
-                              <Button size="sm" variant="outline" onClick={() => navigate(`/usuarios/permisos/${u.id}`)}
-                                className="hover:bg-blue-500/10 hover:text-blue-600 hover:border-blue-500" title="Permisos">
-                                <Shield className="h-4 w-4" />
-                              </Button>
-                            )}
+                            <Button size="sm" variant="outline" onClick={() => navigate(`/usuarios/permisos/${u.id}`)}
+                              className="hover:bg-blue-500/10 hover:text-blue-600 hover:border-blue-500"
+                              title={u.is_admin ? 'Permisos (Admin del tenant)' : 'Permisos'}>
+                              <Shield className="h-4 w-4" />
+                            </Button>
                             <Button size="sm" variant="outline" onClick={() => handleToggleEstado(u)}
                               className={u.estado ? 'border-destructive/50 text-destructive hover:bg-destructive hover:text-white' : 'border-success/50 text-success hover:bg-success hover:text-primary'}
                               title={u.estado ? 'Desactivar' : 'Activar'}>

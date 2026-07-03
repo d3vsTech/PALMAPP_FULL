@@ -66,10 +66,10 @@ function formToPayload(f: FormState): ConstantesLegalesPayload {
   };
 }
 
-const formatNumber = (value: string) => {
-  const num = (value ?? '').toString().replace(/\./g, '');
-  return num.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-};
+// Usa `formatThousands` de lib/format que distingue "1750905.00" (decimal API)
+// de "1.750.905" (separadores de miles CO). El helper local anterior hacía
+// strip de todo punto, multiplicando por 100 el valor mostrado.
+const formatNumber = (value: string) => formatThousands(value);
 
 export function ConstantesLegalesTab() {
   const [constantes, setConstantes] = useState<FormState>(FORM_VACIO);

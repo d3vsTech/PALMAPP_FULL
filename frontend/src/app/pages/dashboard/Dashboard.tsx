@@ -4,12 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/ca
 import { KPICard } from '../../components/dashboard/KPICard';
 import { Label } from '../../components/ui/label';
 import { Input } from '../../components/ui/input';
-import { Truck, Cloud } from 'lucide-react';
+import { Truck, Cloud, Sparkles, TrendingDown, AlertTriangle, PackageOpen } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '../../components/ui/button';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { dashboardApi, type DashboardData, type PeriodoDashboard } from '../../../api/dashboard';
+import { nominaApi, type Nomina } from '../../../api/nomina';
+import { viajesApi, type Viaje } from '../../../api/viajes';
 
 type FilterPreset = 'semanal' | 'quincenal' | 'mensual' | 'personalizado';
 
@@ -21,6 +23,9 @@ export default function Dashboard() {
   const [fechaFin, setFechaFin] = useState('');
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  // Datos para el bloque "Análisis Inteligente"
+  const [nominaBorrador, setNominaBorrador] = useState<Nomina | null>(null);
+  const [viajesEnPlanta, setViajesEnPlanta] = useState<Viaje[]>([]);
 
   const cargar = useCallback(async (
     preset: FilterPreset,
@@ -44,6 +49,21 @@ export default function Dashboard() {
 
   useEffect(() => { cargar('semanal', '', ''); }, [cargar]);
 
+  // Cargar señales para el bloque "Análisis Inteligente" (una sola vez)
+  useEffect(() => {
+    nominaApi.listar({ estado: 'BORRADOR', per_page: 1 })
+      .then((res) => {
+        const primera = res.data?.[0] ?? null;
+        setNominaBorrador(primera);
+      })
+      .catch(() => void 0);
+    viajesApi.listar({ estado: 'EN_VALIDACION', per_page: 20 })
+      .then((res: any) => {
+        setViajesEnPlanta(res.data ?? []);
+      })
+      .catch(() => void 0);
+  }, []);
+
   const handlePresetChange = (preset: FilterPreset) => {
     setFilterPreset(preset);
     if (preset !== 'personalizado') cargar(preset, '', '');
@@ -62,6 +82,140 @@ export default function Dashboard() {
         <h1>¡Bienvenido, {user?.nombre}!</h1>
         <p className="text-lead">Resumen de producción de tu plantación</p>
       </div>
+
+      {/* ── ANÁLISIS INTELIGENTE ─────────────────────────────────────────── */}
+      {(() => {
+        // Detectar el lote más rezagado vs el promedio general
+        const lotes = data?.lotes ?? [];
+        const promedioGral = lotes.length > 0
+          ? lotes.reduce((s, l) => s + Number(l.kg_promedio ?? 0), 0) / lotes.length
+          : 0;
+        const loteBajo = lotes.length > 0
+          ? [...lotes].sort((a, b) => Number(a.kg_promedio) - Number(b.kg_promedio))[0]
+          : null;
+        const diffLote = loteBajo && promedioGral > 0
+          ? promedioGral - Number(loteBajo.kg_promedio)
+          : 0;
+        const alertaProduccion = loteBajo && diffLote / promedioGral > 0.1;
+
+        // Nómina
+        const nominaAbierta = nominaBorrador;
+        const nominaLabel = nominaAbierta
+          ? (() => {
+              const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+              const mes = meses[(nominaAbierta.mes ?? 1) - 1];
+              const q = nominaAbierta.tipo_pago_snapshot === 'QUINCENAL'
+                ? ` – ${nominaAbierta.quincena === 1 ? 'Primera' : 'Segunda'} quincena`
+                : '';
+              return `${mes} ${nominaAbierta.anio}${q}`;
+            })()
+          : null;
+        const totalNomina = nominaAbierta
+          ? Number(nominaAbierta.total_general ?? 0) + Number(nominaAbierta.total_deducciones ?? 0)
+          : 0;
+
+        // Viajes en planta (EN_VALIDACION) sin liquidar
+        const pesoTotalViajes = viajesEnPlanta.reduce(
+          (s, v) => s + Number(v.peso_viaje ?? 0),
+          0,
+        );
+
+        return (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              <h3 className="font-semibold">Análisis Inteligente</h3>
+              <span className="text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-primary rounded px-2 py-0.5">
+                IA
+              </span>
+            </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              {/* Producción */}
+              <Card className={`border-2 ${alertaProduccion ? 'border-red-300 bg-red-50/60 dark:bg-red-950/10' : 'border-border'}`}>
+                <CardContent className="p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold uppercase tracking-wider text-red-600">Producción</p>
+                    {alertaProduccion && <TrendingDown className="h-4 w-4 text-red-600" />}
+                  </div>
+                  <p className="text-2xl font-bold text-red-700">
+                    {data ? `${Number(data.indicadores.promedio_kg_gajo).toFixed(1)} kg/gajo` : '—'}
+                  </p>
+                  {alertaProduccion && loteBajo ? (
+                    <>
+                      <p className="text-xs text-foreground">
+                        {loteBajo.nombre} bajó {diffLote.toFixed(1)} kg/gajo
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Posible problema fitosanitario o de polinización.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Todos los lotes están dentro del rango esperado.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Nómina */}
+              <Card className={`border-2 ${nominaAbierta ? 'border-amber-300 bg-amber-50/60 dark:bg-amber-950/10' : 'border-border'}`}>
+                <CardContent className="p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold uppercase tracking-wider text-amber-600">Nómina</p>
+                    {nominaAbierta && <AlertTriangle className="h-4 w-4 text-amber-600" />}
+                  </div>
+                  <p className="text-2xl font-bold text-amber-700">
+                    {nominaAbierta ? `$${totalNomina.toLocaleString('es-CO')}` : 'Sin nómina abierta'}
+                  </p>
+                  {nominaAbierta ? (
+                    <>
+                      <p className="text-xs text-foreground">
+                        "{nominaLabel}" sin cerrar
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Los colaboradores no reciben pago hasta que se cierre.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      No hay nóminas en borrador pendientes.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Viajes */}
+              <Card className={`border-2 ${viajesEnPlanta.length > 0 ? 'border-orange-300 bg-orange-50/60 dark:bg-orange-950/10' : 'border-border'}`}>
+                <CardContent className="p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold uppercase tracking-wider text-orange-600">Viajes</p>
+                    {viajesEnPlanta.length > 0 && <PackageOpen className="h-4 w-4 text-orange-600" />}
+                  </div>
+                  <p className="text-2xl font-bold text-orange-700">
+                    {viajesEnPlanta.length > 0
+                      ? `${pesoTotalViajes.toLocaleString('es-CO')} kg`
+                      : 'Sin pendientes'}
+                  </p>
+                  {viajesEnPlanta.length > 0 ? (
+                    <>
+                      <p className="text-xs text-foreground">
+                        {viajesEnPlanta.length} viaje{viajesEnPlanta.length !== 1 ? 's' : ''} en planta sin liquidar
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Sin cierre, la producción no queda confirmada en el sistema.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Todos los viajes han sido validados.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Filtro de Fechas */}
       <Card className="border-border">

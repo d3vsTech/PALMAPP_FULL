@@ -40,6 +40,7 @@ import {
   nominaApi, Nomina as NominaT, NominaIndicadores, NominaErrorCodes,
 } from '../../../api/nomina';
 import type { ApiError } from '../../../api/client';
+import { cached, invalidate } from '../../../api/cache';
 
 const MESES_NOMBRE: Record<number, string> = {
   1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril', 5: 'Mayo', 6: 'Junio',
@@ -58,6 +59,21 @@ function periodoLabel(n: NominaT): string {
 function toNumber(v: string | number): number {
   if (typeof v === 'number') return v;
   return parseFloat(v) || 0;
+}
+
+/**
+ * Formatea una fecha del backend a `dd/mm/yyyy`. Acepta tanto ISO
+ * (`2026-06-16T05:00:00.000000Z`) como solo fecha (`2026-06-16`).
+ * Si recibe un ISO con `Z`, se construye con `[Y, M-1, D]` para evitar el
+ * corrimiento por zona horaria (en COT podría retroceder un día).
+ */
+function fmtFecha(s: string | null | undefined): string {
+  if (!s) return '—';
+  // Tomar solo la parte YYYY-MM-DD del inicio.
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return s;
+  const [, y, mes, d] = m;
+  return `${d}/${mes}/${y}`;
 }
 
 /** Formato compacto en millones para los mini-KPIs (igual que V.15). */
@@ -86,9 +102,92 @@ export default function Nomina() {
   const [nominaAEliminar, setNominaAEliminar] = useState<NominaT | null>(null);
   const [eliminando, setEliminando] = useState(false);
 
+  /**
+   * Estimados de Devengado/Deducciones/Neto por nómina (calculados en cliente
+   * para las que están en BORRADOR con 0 liquidados — el backend devuelve $0
+   * en `total_general` hasta que se liquide cada empleado).
+   *
+   * Aproximación:
+   *   Devengado = Σ salario_base de todos los empleados de la nómina
+   *   Deducciones = 8% del devengado (SALUD 4% + PENSIÓN 4% — sin subsidio
+   *     ni FSP, que dependen del IBC)
+   *   Neto = Devengado − Deducciones
+   *
+   * Cuando la nómina tiene al menos un liquidado, usamos los valores reales
+   * del backend (que ya suman lo liquidado + esto sería doble contarlo).
+   */
+  const [estimados, setEstimados] = useState<Map<number, {
+    devengado: number;
+    deducciones: number;
+    neto: number;
+  }>>(new Map());
+
   // Editar nómina: navega a `/nomina/:id/editar` que carga el wizard completo
   // en modo edición (paso 1 pre-poblado, paso 2 con colaboradores ya agregados,
   // paso 3 validar cosecha, paso 4 confirmar).
+
+  /**
+   * Calcula los estimados exactos de una nómina en BORRADOR sin liquidar.
+   *
+   * Estrategia por empleado:
+   *  1. Intenta `preview()` — devuelve el cálculo exacto del backend.
+   *  2. Si falla (ej: CALC_ERROR por falta de salario mínimo vigente en la
+   *     config del tenant), cae a estimación local con `salario_base` y 8%
+   *     de deducciones (SALUD 4% + PENSIÓN 4%).
+   *
+   * Usa `cached()` con TTL de 5 min. Se cachea SOLO si el resultado tiene
+   * datos reales (`devengado > 0` o `empleados === 0`) — un $0 con
+   * empleados > 0 significa que algo falló y no queremos ese valor
+   * congelado.
+   */
+  const cargarEstimadoNomina = async (id: number) => {
+    const cacheKey = `nomina:estimado:${id}`;
+    const result = await cached(
+      cacheKey,
+      async () => {
+        const detalle = await nominaApi.ver(id);
+        const empleados = detalle.data.empleados ?? [];
+        if (empleados.length === 0) {
+          return { devengado: 0, deducciones: 0, neto: 0, empleadosCount: 0 };
+        }
+        const previews = await Promise.all(
+          empleados.map((emp) =>
+            nominaApi.preview(emp.id).then(
+              (r) => ({ tipo: 'ok' as const, data: r.data }),
+              (err) => {
+                console.warn(`[preview ${emp.id}] falló:`, err);
+                return { tipo: 'fallback' as const, salarioBase: toNumber(emp.salario_base) };
+              },
+            ),
+          ),
+        );
+        let dev = 0;
+        let ded = 0;
+        let neto = 0;
+        for (const p of previews) {
+          if (p.tipo === 'ok') {
+            dev += p.data.total_devengado + (p.data.subsidio_transporte ?? 0);
+            ded += p.data.total_deducciones_legales ?? 0;
+            neto += p.data.total_neto_propuesto;
+          } else {
+            // Fallback: salario base + ~8% deducciones legales.
+            dev += p.salarioBase;
+            const dedFallback = Math.round(p.salarioBase * 0.08);
+            ded += dedFallback;
+            neto += p.salarioBase - dedFallback;
+          }
+        }
+        return { devengado: dev, deducciones: ded, neto, empleadosCount: empleados.length };
+      },
+      5 * 60_000,
+    );
+    // Si vino con empleados pero devengado en 0, algo falló al calcular.
+    // Invalidamos para que el próximo intento pueda funcionar.
+    if (result.empleadosCount > 0 && result.devengado === 0) {
+      invalidate(cacheKey);
+    }
+    return { devengado: result.devengado, deducciones: result.deducciones, neto: result.neto };
+  };
 
   const cargarNominas = () => {
     setCargando(true);
@@ -103,11 +202,37 @@ export default function Nomina() {
       .then(([listRes, indRes]) => {
         setNominas(listRes.data);
         setIndicadores(indRes.data);
+        // Render inmediato — no bloqueamos aquí. Los estimados se calculan
+        // en background y pueden venir del caché (instantáneo si ya se
+        // cargaron antes en esta sesión).
+        setCargando(false);
+
+        const borradores = listRes.data.filter(
+          (n) => n.estado === 'BORRADOR'
+            && (n.empleados_liquidados_count ?? 0) === 0
+            && toNumber(n.total_general) === 0,
+        );
+
+        // Cargar estimados en background con caché por nómina.
+        // Los que ya están en caché se resuelven sincrónicamente.
+        borradores.forEach((n) => {
+          cargarEstimadoNomina(n.id)
+            .then((est) => {
+              setEstimados((prev) => {
+                const next = new Map(prev);
+                next.set(n.id, est);
+                return next;
+              });
+            })
+            .catch(() => {
+              // silencioso — si falla, el usuario ve $0 hasta que refresque
+            });
+        });
       })
       .catch((err: ApiError) => {
         toast.error(err.message ?? 'Error al cargar nóminas');
-      })
-      .finally(() => setCargando(false));
+        setCargando(false);
+      });
   };
 
   useEffect(() => {
@@ -115,12 +240,23 @@ export default function Nomina() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtroEstado, filtroMes]);
 
+  /**
+   * Al montar la pantalla, purgar caché viejo de estimados que pudieran
+   * haber quedado en $0 por fallos anteriores del preview. Así el próximo
+   * fetch recalcula desde cero.
+   */
+  useEffect(() => {
+    setEstimados(new Map());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const confirmarEliminar = async () => {
     if (!nominaAEliminar) return;
     setEliminando(true);
     try {
       await nominaApi.eliminar(nominaAEliminar.id);
       toast.success('Nómina eliminada');
+      invalidate(`nomina:estimado:${nominaAEliminar.id}`);
       setNominaAEliminar(null);
       cargarNominas();
     } catch (err) {
@@ -419,9 +555,17 @@ export default function Nomina() {
                   </thead>
                   <tbody>
                     {nominasFiltradas.map((n, index) => {
-                      const total = toNumber(n.total_general);
-                      const ded = toNumber(n.total_deducciones);
-                      const dev = total + ded;
+                      const totalReal = toNumber(n.total_general);
+                      const dedReal = toNumber(n.total_deducciones);
+                      // Si el backend trae $0 (BORRADOR sin liquidar), usamos
+                      // el estimado calculado en cliente. Si ya hay al menos
+                      // un liquidado, esos valores reales son la fuente.
+                      const est = estimados.get(n.id);
+                      const usarEstimado =
+                        totalReal === 0 && dedReal === 0 && !!est;
+                      const total = usarEstimado ? est!.neto : totalReal;
+                      const ded = usarEstimado ? est!.deducciones : dedReal;
+                      const dev = usarEstimado ? est!.devengado : totalReal + dedReal;
                       return (
                         <tr
                           key={n.id}
@@ -437,7 +581,7 @@ export default function Nomina() {
                               <div className="flex flex-col">
                                 <span className="font-semibold text-sm">{periodoLabel(n)}</span>
                                 <span className="text-xs text-muted-foreground">
-                                  {n.fecha_inicio} → {n.fecha_fin}
+                                  {fmtFecha(n.fecha_inicio)} → {fmtFecha(n.fecha_fin)}
                                   {typeof n.empleados_count === 'number' &&
                                     ` · ${n.empleados_liquidados_count ?? 0}/${n.empleados_count} liquidados`}
                                 </span>
@@ -454,7 +598,7 @@ export default function Nomina() {
                               </span>
                               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                 <TrendingUp className="h-3 w-3 text-success" />
-                                Ingresos
+                                {usarEstimado ? 'Ingresos estimados' : 'Ingresos'}
                               </div>
                             </div>
                           </td>
@@ -465,7 +609,7 @@ export default function Nomina() {
                               </span>
                               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                 <TrendingDown className="h-3 w-3 text-destructive" />
-                                Descuentos
+                                {usarEstimado ? 'Descuentos estimados' : 'Descuentos'}
                               </div>
                             </div>
                           </td>
@@ -474,7 +618,9 @@ export default function Nomina() {
                               <span className="text-sm font-bold text-primary">
                                 ${total.toLocaleString('es-CO')}
                               </span>
-                              <span className="text-xs text-muted-foreground">A pagar</span>
+                              <span className="text-xs text-muted-foreground">
+                                {usarEstimado ? 'A pagar (est.)' : 'A pagar'}
+                              </span>
                             </div>
                           </td>
                           <td className="p-4">
