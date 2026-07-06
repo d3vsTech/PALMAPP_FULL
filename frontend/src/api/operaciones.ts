@@ -774,6 +774,21 @@ export const jornalesApi = {
  * `empleado_id`/`tipo_hora_extra_id`/`cantidad_horas` al editar.
  */
 export const horasExtraApi = {
+  /**
+   * Lista horas extras con filtros. Usado por el desprendible de nómina para
+   * mostrar el tipo específico (HED, HEN, etc.) junto al total.
+   */
+  listar: (params?: {
+    empleado_id?: number;
+    fecha_desde?: string;
+    fecha_hasta?: string;
+    estado?: string;
+    per_page?: number;
+  }) =>
+    requestConToken<{ data: HoraExtra[] }>(
+      `${BASE}/horas-extra${qs(params as Record<string, unknown>)}`
+    ),
+
   crear: (operacionId: number, payload: HoraExtraPayload) =>
     smartRequest<{ data: HoraExtra; message?: string }>(
       `${BASE}/operaciones/${operacionId}/horas-extra`, {
@@ -842,6 +857,26 @@ export function calcularValorHoraExtra(input: {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const ausenciasApi = {
+  /**
+   * Lista ausencias con filtros. Útil para el desprendible de nómina cuando
+   * necesitamos mostrar el motivo específico junto al total de incapacidades.
+   *
+   * Filtros aceptados por el backend (§5 API_OPERACIONES / API_AUSENCIAS):
+   *  - empleado_id: ausencias de un colaborador específico.
+   *  - fecha_desde / fecha_hasta: rango del período.
+   *  - estado: `PENDIENTE|APROBADA|RECHAZADA|LIQUIDADA`.
+   */
+  listar: (params?: {
+    empleado_id?: number;
+    fecha_desde?: string;
+    fecha_hasta?: string;
+    estado?: string;
+    per_page?: number;
+  }) =>
+    requestConToken<{ data: Ausencia[] }>(
+      `${BASE}/ausencias${qs(params as Record<string, unknown>)}`
+    ),
+
   crear: (operacionId: number, payload: {
     empleado_id: number;
     motivo_ausencia_id: number;

@@ -224,6 +224,63 @@ export interface PrestamoCuotaPendiente {
   saldo_restante_prestamo: number;
 }
 
+/**
+ * Item del detalle de horas extras que aparece en el preview de liquidación
+ * (doc §5.1). Solo colaboradores internos. Cada entrada corresponde a una
+ * hora extra APROBADA que está siendo incluida en el cálculo.
+ */
+export interface DetalleHoraExtraPreview {
+  id: number;
+  /** Fecha de la planilla (YYYY-MM-DD). */
+  fecha: string;
+  /** HED, HEN, HEDF, HENF, RN, RD, RND. */
+  codigo: string;
+  tipo_nombre: string;
+  /** true = hora extra legal; false = solo recargo. */
+  es_extra: boolean;
+  cantidad_horas: number;
+  valor_hora_base: number;
+  porcentaje_recargo: number;
+  paga_hora_completa: boolean;
+  valor_calculado: number;
+  observacion?: string | null;
+}
+
+/**
+ * Item del detalle de ausencias que aparece en el preview de liquidación
+ * (doc §5.1). Solo colaboradores internos. Cada entrada corresponde a una
+ * ausencia APROBADA que afecta al empleado en el rango de la nómina.
+ */
+export interface DetalleAusenciaPreview {
+  id: number;
+  /** Constante del modelo, ej. INCAPACIDAD_EPS / AUSENCIA_INJUSTIFICADA. */
+  tipo: string;
+  /** Nombre del motivo del catálogo. */
+  motivo_nombre: string;
+  fecha_inicio: string;
+  fecha_fin: string;
+  /** Días de la ausencia que caen dentro del período de la nómina. */
+  dias_en_rango: number;
+  es_remunerada: boolean;
+  porcentaje_pago: number;
+  /** Monto que suma (INCAPACIDAD) o descuenta (DESCUENTO) del pago. */
+  valor_calculado: number;
+  /** `INCAPACIDAD` = remunerada, suma al devengado.
+   *  `DESCUENTO`   = no remunerada, descuenta del salario. */
+  afecta: 'INCAPACIDAD' | 'DESCUENTO';
+}
+
+/**
+ * Conteos de horas extras y ausencias que están en estado PENDIENTE del
+ * empleado dentro del período — quedan FUERA del cálculo hasta que alguien
+ * las apruebe (doc §5.1). El frontend debe mostrar una advertencia clara
+ * si alguno de los conteos es > 0. Solo se envía para colaboradores internos.
+ */
+export interface PendientesPorAprobar {
+  horas_extra: number;
+  ausencias: number;
+}
+
 export interface PreviewLiquidacion {
   dias_periodo: number;
   dias_trabajados: number;
@@ -246,6 +303,24 @@ export interface PreviewLiquidacion {
    * Puede llegar vacío `[]`.
    */
   prestamos_pendientes?: PrestamoCuotaPendiente[];
+  /**
+   * Horas extras APROBADAS del empleado que están siendo incluidas en el
+   * cálculo actual (doc §5.1). Permite mostrar el tipo real (HED, HEN, etc.)
+   * en el desprendible. Solo empleados internos. Puede llegar vacío `[]`.
+   */
+  detalle_horas_extra?: DetalleHoraExtraPreview[];
+  /**
+   * Ausencias APROBADAS del empleado que afectan el cálculo en el rango
+   * (doc §5.1). Muestra el motivo real y si suma (INCAPACIDAD) o descuenta
+   * (DESCUENTO). Solo empleados internos. Puede llegar vacío `[]`.
+   */
+  detalle_ausencias?: DetalleAusenciaPreview[];
+  /**
+   * Conteos de horas extras y ausencias PENDIENTES de aprobar del período.
+   * Si alguno es > 0, el frontend debe mostrar advertencia (esos registros
+   * NO están incluidos en el cálculo actual). Solo empleados internos.
+   */
+  pendientes_por_aprobar?: PendientesPorAprobar;
   empleado: {
     id: number;
     nombre_completo: string;
@@ -367,6 +442,21 @@ export interface DesprendibleData {
       es_manual: boolean;
       observacion?: string;
     }[];
+    /**
+     * Mismo shape que en el preview (§5.1). En el desprendible la fuente es
+     * la BD (registros ya con `nomina_id` porque la nómina está CERRADA).
+     * Array vacío `[]` si el empleado no tuvo horas extras en el período.
+     */
+    detalle_horas_extra?: DetalleHoraExtraPreview[];
+    /**
+     * Detalle de ausencias en el desprendible (§6.2). En este endpoint el
+     * campo `dias_calendario` reemplaza a `dias_en_rango` — son los días
+     * totales de la ausencia, no los que caen en el período.
+     * Array vacío `[]` si no hubo ausencias.
+     */
+    detalle_ausencias?: (Omit<DetalleAusenciaPreview, 'dias_en_rango' | 'valor_calculado'> & {
+      dias_calendario: number;
+    })[];
   };
   resumen_trabajo: ResumenTrabajo | null;
 }

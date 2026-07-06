@@ -301,40 +301,48 @@ export function LaboresTab() {
               </p>
             ) : (
               <div className="space-y-2">
-                {laboresPalma.map((labor) => (
-                  <div
-                    key={labor.id}
-                    className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border hover:bg-muted/50 transition-colors"
-                  >
-                    <div className="flex-1">
-                      <p className="font-semibold">{labor.nombre}</p>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {labelTipoPago(labor.tipo_pago, labor.tipo)}
-                        {labor.es_sistema && ' · Predefinida'}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => abrirEditar(labor)}
-                        className="h-8 w-8 p-0"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      {!labor.es_sistema && (
+                {laboresPalma.map((labor) => {
+                  // "Otros" es labor especial: el wizard la crea automáticamente
+                  // y sirve como contenedor genérico. La tratamos como fija
+                  // (no eliminable, badge "Predefinida") aunque el backend la
+                  // guarde con es_sistema=false.
+                  const esOtros = (labor.nombre ?? '').trim().toLowerCase() === 'otros';
+                  const esFija = labor.es_sistema || esOtros;
+                  return (
+                    <div
+                      key={labor.id}
+                      className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex-1">
+                        <p className="font-semibold">{labor.nombre}</p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {labelTipoPago(labor.tipo_pago, labor.tipo)}
+                          {esFija && ' · Predefinida'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1">
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDelete(labor)}
+                          onClick={() => abrirEditar(labor)}
                           className="h-8 w-8 p-0"
                         >
-                          <Trash2 className="h-4 w-4 text-destructive" />
+                          <Edit className="h-4 w-4" />
                         </Button>
-                      )}
+                        {!esFija && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(labor)}
+                            className="h-8 w-8 p-0"
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>

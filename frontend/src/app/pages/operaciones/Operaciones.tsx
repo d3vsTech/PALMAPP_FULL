@@ -21,7 +21,7 @@ import { Plus, Eye, FileText, Loader2, Trash2 } from 'lucide-react';
 import StatusBadge from '../../components/common/StatusBadge';
 import { toast } from 'sonner';
 import {
-  operacionesApi, cosechasApi, jornalesApi, horasExtraApi, ausenciasApi,
+  operacionesApi,
   type Planilla, type Indicadores, type Periodo as PeriodoIndicadores, type EstadoPlanilla,
 } from '../../../api/operaciones';
 
@@ -83,40 +83,22 @@ export default function Operaciones() {
     setEliminando(true);
     const id = planillaAEliminar.id;
     try {
-      // Intento directo (planilla sin hijos)
+      // §2.5 del doc — DELETE ahora es RECURSIVO: el backend borra en
+      // cascada jornales + cosechas + ausencias + horas extras en una
+      // transacción atómica. Solo bloquea si la planilla está APROBADA o
+      // si alguna cosecha está asignada a un viaje.
       await operacionesApi.eliminar(id);
     } catch (e: any) {
       const code = e?.code ?? e?.error_code;
       if (code === 'OPERACION_APROBADA') {
         toast.error('No se puede eliminar una planilla aprobada');
-        setEliminando(false);
-        return;
-      }
-      if (code !== 'OPERACION_CON_HIJOS') {
+      } else if (code === 'COSECHA_EN_VIAJE') {
+        toast.error('Hay cosechas asignadas a un viaje. Desasocia las cosechas del viaje primero.');
+      } else {
         toast.error(e?.message ?? 'Error al eliminar la planilla');
-        setEliminando(false);
-        return;
       }
-      // Cascade: elimino todos los hijos y reintento
-      try {
-        const det = await operacionesApi.ver(id);
-        const p: any = det.data ?? {};
-        const cosechas: any[] = p.cosechas ?? [];
-        const jornales: any[] = p.jornales ?? [];
-        const horasExtra: any[] = p.horas_extra ?? p.horasExtra ?? [];
-        const ausencias: any[] = p.ausencias ?? [];
-        await Promise.all([
-          ...cosechas.map((c) => cosechasApi.eliminar(Number(c.id)).catch(() => null)),
-          ...jornales.map((j) => jornalesApi.eliminar(Number(j.id)).catch(() => null)),
-          ...horasExtra.map((h) => horasExtraApi.eliminar(Number(h.id)).catch(() => null)),
-          ...ausencias.map((a) => ausenciasApi.eliminar(Number(a.id)).catch(() => null)),
-        ]);
-        await operacionesApi.eliminar(id);
-      } catch (err: any) {
-        toast.error(err?.message ?? 'Error al eliminar la planilla');
-        setEliminando(false);
-        return;
-      }
+      setEliminando(false);
+      return;
     }
     toast.success('Planilla eliminada');
     setPlanillaAEliminar(null);

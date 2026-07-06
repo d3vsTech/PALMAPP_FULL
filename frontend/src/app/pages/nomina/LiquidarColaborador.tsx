@@ -30,6 +30,7 @@ import {
   Calendar as CalendarIcon,
   Save,
   Loader2,
+  Check,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -109,15 +110,37 @@ export default function LiquidarColaborador() {
         setPreview(prev.data);
         setDiasTrabajados(prev.data.dias_trabajados);
 
+        // Los detalles de horas extras y ausencias (con motivo, tipo, etc.)
+        // ahora vienen directamente en el preview (§5.1 nuevos campos
+        // `detalle_horas_extra`, `detalle_ausencias`, `pendientes_por_aprobar`).
+        // Ya no consultamos los endpoints separados.
+
         const aplicaA = prev.data.empleado.salario_tipo;
         // Para operarios (`salario_tipo === null`) no aplican deducciones
         // voluntarias ni bonificaciones (doc §5.3 — backend rechaza con 422).
         if (aplicaA !== null) {
-          const conceptosRes = await nominaApi.conceptos.select({
+          // 1) Intento con filtro aplica_a. Algunos backends no incluyen
+          //    los conceptos con aplica_a=AMBOS al filtrar por FIJO/VARIABLE,
+          //    así que si viene vacío o corto, hacemos fallback sin filtro.
+          let conceptosRes = await nominaApi.conceptos.select({
             tipo: 'DEDUCCION_VOLUNTARIA',
             aplica_a: aplicaA,
           });
-          setConceptos(conceptosRes.data);
+          if (!conceptosRes.data || conceptosRes.data.length === 0) {
+            conceptosRes = await nominaApi.conceptos.select({
+              tipo: 'DEDUCCION_VOLUNTARIA',
+            });
+          }
+          // 2) Si el select sigue vacío (algunos tenants no tienen sembrado el
+          //    catálogo activo), intentamos con `listar` que trae también los
+          //    conceptos inactivos — mejor mostrarlos que dejar el dropdown vacío.
+          if (!conceptosRes.data || conceptosRes.data.length === 0) {
+            const listRes = await nominaApi.conceptos.listar({
+              tipo: 'DEDUCCION_VOLUNTARIA',
+            });
+            conceptosRes = { data: listRes.data ?? [] } as any;
+          }
+          setConceptos(conceptosRes.data ?? []);
 
           if (aplicaA === 'VARIABLE') {
             const res = await nominaApi.resumenTrabajo(nominaEmpleadoId);
@@ -184,18 +207,53 @@ export default function LiquidarColaborador() {
    * (`DCTO_ADELANTO` sembrado por default) si existe en el catálogo del tenant.
    * El backend valida `prestamo_cuota_id` al confirmar (doc §5.3).
    */
-  const aplicarCuotaPrestamo = (cuota: PrestamoCuotaPendiente) => {
+  const aplicarCuotaPrestamo = async (cuota: PrestamoCuotaPendiente) => {
     if (deducciones.some((d) => d.prestamo_cuota_id === cuota.prestamo_cuota_id)) {
       toast.info('Esta cuota ya fue agregada a las deducciones');
       return;
     }
-    const conceptoPrestamo = conceptos.find(
+    // Prioridad para el `concepto_id`:
+    // 1) DCTO_ADELANTO / subtipo=PRESTAMO del catálogo del tenant.
+    // 2) Primer concepto DEDUCCION_VOLUNTARIA disponible (fallback).
+    // 3) Si el catálogo está vacío o no tiene ninguno, lo creamos on-the-fly.
+    //    El módulo de Préstamos maneja las cuotas, pero el backend de nómina
+    //    exige `concepto_id` en cada deducción voluntaria (§5.3). Sembramos
+    //    automáticamente para no bloquear al liquidador.
+    let conceptoPrestamo: NominaConcepto | undefined = conceptos.find(
       (c) => c.subtipo === 'PRESTAMO' || c.codigo === 'DCTO_ADELANTO',
-    );
+    ) ?? conceptos[0];
+
+    if (!conceptoPrestamo) {
+      try {
+        const creado = await nominaApi.conceptos.crear({
+          codigo: 'DCTO_ADELANTO',
+          nombre: 'Descuento Adelantos / Préstamo',
+          tipo: 'DEDUCCION_VOLUNTARIA',
+          subtipo: 'PRESTAMO',
+          operacion: 'RESTA',
+          calculo: 'VALOR_FIJO',
+          aplica_a: 'AMBOS',
+          activo: true,
+        } as Partial<NominaConcepto>);
+        conceptoPrestamo = creado.data;
+        // Refrescamos el catálogo local para que futuras cuotas y el UI lo vean.
+        setConceptos((prev) => [...prev, creado.data]);
+        toast.success('Concepto "DCTO_ADELANTO" activado automáticamente');
+      } catch (err) {
+        const e = err as ApiError;
+        toast.error(
+          e.message
+            ?? 'No se pudo activar el concepto para préstamos. Ve a Configuración → Conceptos de nómina.',
+          { duration: 6000 },
+        );
+        return;
+      }
+    }
+
     setDeducciones((prev) => [
       ...prev,
       {
-        concepto_id: conceptoPrestamo?.id ?? '',
+        concepto_id: conceptoPrestamo!.id,
         valor: cuota.monto,
         observacion: `Cuota ${cuota.numero_cuota}/${cuota.total_cuotas} - ${cuota.concepto}`,
         prestamo_cuota_id: cuota.prestamo_cuota_id,
@@ -214,13 +272,42 @@ export default function LiquidarColaborador() {
   const liquidar = async () => {
     if (!nominaEmpleadoId || !preview) return;
     const esOperario = preview.empleado.salario_tipo === null;
+    // Ignoramos las filas "vacías" (sin valor o sin concepto) — el usuario
+    // pudo agregar una por error desde el botón "+ Agregar" y no llenarla.
+    // Las cuotas de préstamo se incluyen siempre que tengan `prestamo_cuota_id`,
+    // aunque `concepto_id` esté vacío por catálogo no sembrado (el backend
+    // las procesa como cuotas y aplica el descuento).
+    const deduccionesEfectivas = esOperario
+      ? []
+      : deducciones.filter((d) =>
+          d.prestamo_cuota_id != null
+            || (d.concepto_id && d.valor > 0),
+        );
+    const bonificacionesEfectivas = esOperario
+      ? []
+      : bonificaciones.filter((b) => b.nombre.trim() && b.valor > 0);
     if (!esOperario) {
-      if (deducciones.some((d) => !d.concepto_id || d.valor <= 0)) {
-        toast.error('Cada deducción voluntaria requiere concepto y valor');
+      // Solo validamos ítems del usuario (sin `prestamo_cuota_id`): valor > 0
+      // sin concepto, o concepto sin valor. Las cuotas de préstamo se
+      // aplicaron desde el botón "Aplicar" y ya vienen con datos válidos.
+      const dedManuales = deducciones.filter((d) => d.prestamo_cuota_id == null);
+      if (dedManuales.some((d) => (d.concepto_id && d.valor <= 0)
+        || (!d.concepto_id && d.valor > 0))) {
+        toast.error('Completa el concepto y el valor en las deducciones agregadas');
         return;
       }
-      if (bonificaciones.some((b) => !b.nombre.trim() || b.valor <= 0)) {
-        toast.error('Cada bonificación requiere nombre y valor');
+      if (bonificaciones.some((b) => (b.nombre.trim() && b.valor <= 0)
+        || (!b.nombre.trim() && b.valor > 0))) {
+        toast.error('Completa el nombre y el valor en las bonificaciones agregadas');
+        return;
+      }
+      // Si hay cuotas de préstamo sin concepto asignado (el catálogo del
+      // tenant no tiene DCTO_ADELANTO), avisamos con acción clara.
+      if (deducciones.some((d) => d.prestamo_cuota_id != null && !d.concepto_id)) {
+        toast.error(
+          'Falta activar un concepto de deducción voluntaria (ej. DCTO_ADELANTO) en Configuración → Conceptos de nómina para aplicar la cuota de préstamo.',
+          { duration: 6000 },
+        );
         return;
       }
     }
@@ -235,8 +322,11 @@ export default function LiquidarColaborador() {
           }
         : {
             dias_trabajados: diasTrabajados === '' ? undefined : Number(diasTrabajados),
-            bonificaciones: bonificaciones.map((b) => ({ nombre: b.nombre, valor: Number(b.valor) })),
-            deducciones_voluntarias: deducciones.map((d) => ({
+            bonificaciones: bonificacionesEfectivas.map((b) => ({
+              nombre: b.nombre,
+              valor: Number(b.valor),
+            })),
+            deducciones_voluntarias: deduccionesEfectivas.map((d) => ({
               concepto_id: Number(d.concepto_id),
               valor: Number(d.valor),
               observacion: d.observacion || undefined,
@@ -324,29 +414,25 @@ export default function LiquidarColaborador() {
         </Button>
 
         <div className="flex items-center gap-4">
-          <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center border-2 border-primary/20">
-            <span className="text-xl font-bold text-primary">
+          <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center border-2 border-primary/20">
+            <span className="text-lg font-bold text-primary">
               {getIniciales(empleado.nombre_completo)}
             </span>
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-primary">{empleado.nombre_completo}</h1>
-            <div className="flex items-center gap-3 mt-2">
+            <h1 className="text-2xl font-bold text-primary">{empleado.nombre_completo}</h1>
+            <div className="flex items-center gap-2 mt-1 text-sm">
               {esOperario ? (
-                <Badge className="bg-amber-500/10 text-amber-700 border-amber-300">
+                <Badge className="bg-amber-500/10 text-amber-700 border-amber-300 text-[10px] font-bold uppercase">
                   Tercero{empleado.tercero ? ` · ${empleado.tercero.razon_social}` : ''}
                 </Badge>
               ) : (
-                <Badge variant="outline">{empleado.salario_tipo}</Badge>
+                <Badge className="bg-amber-500/10 text-amber-700 border-amber-300 text-[10px] font-bold uppercase">
+                  {empleado.salario_tipo}
+                </Badge>
               )}
               <span className="text-muted-foreground">·</span>
-              <span className="text-muted-foreground">{empleado.cargo}</span>
-              {empleado.predio && (
-                <>
-                  <span className="text-muted-foreground">·</span>
-                  <span className="text-muted-foreground">{empleado.predio.nombre}</span>
-                </>
-              )}
+              <span className="text-muted-foreground">Período de liquidación</span>
             </div>
           </div>
         </div>
@@ -459,7 +545,7 @@ export default function LiquidarColaborador() {
         </Card>
       )}
 
-      {/* Desprendible */}
+      {/* Desprendible — layout tipo mockup */}
       <Card className="border-border">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-xl">
@@ -468,385 +554,498 @@ export default function LiquidarColaborador() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Días trabajados */}
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="space-y-2">
-              <Label htmlFor="dias">Días trabajados</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="dias"
-                  type="number"
-                  value={diasTrabajados}
-                  onChange={(e) =>
-                    setDiasTrabajados(e.target.value === '' ? '' : Number(e.target.value))
-                  }
-                  onBlur={refetchPreview}
-                  max={preview.dias_periodo}
-                />
-                <span className="text-xs text-muted-foreground self-center whitespace-nowrap">
-                  / {preview.dias_periodo} del período
-                </span>
-              </div>
+          {/* Grid: Nombre | Cédula | Días Trabajados */}
+          <div className="grid gap-6 sm:grid-cols-3 p-4 bg-muted/30 rounded-lg">
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Nombre</p>
+              <p className="font-semibold">{empleado.nombre_completo}</p>
             </div>
-            <div className="space-y-2">
-              <Label>Salario base</Label>
-              <Input value={`$${preview.salario_base.toLocaleString('es-CO')}`} disabled />
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Cédula</p>
+              <p className="font-semibold">{empleado.documento || '—'}</p>
             </div>
-            {!esOperario && (
-              <div className="space-y-2">
-                <Label>Subsidio transporte</Label>
-                <Input
-                  value={`$${(preview.subsidio_transporte ?? 0).toLocaleString('es-CO')}`}
-                  disabled
-                />
-              </div>
-            )}
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Días Trabajados</p>
+              <Input
+                type="number"
+                value={diasTrabajados}
+                onChange={(e) =>
+                  setDiasTrabajados(e.target.value === '' ? '' : Number(e.target.value))
+                }
+                onBlur={refetchPreview}
+                max={preview.dias_periodo}
+                className="h-9 text-lg font-semibold border-0 bg-transparent px-0 focus-visible:ring-0"
+              />
+            </div>
           </div>
 
-          {/* Devengado */}
+          {/* Aviso de horas extras / ausencias PENDIENTES por aprobar. Doc
+              §5.1: estos registros NO se incluyen en el cálculo actual hasta
+              que se aprueben desde la planilla. */}
+          {!esOperario
+            && preview.pendientes_por_aprobar
+            && ((preview.pendientes_por_aprobar.horas_extra ?? 0) > 0
+              || (preview.pendientes_por_aprobar.ausencias ?? 0) > 0) && (
+            <div className="flex items-start gap-3 p-4 rounded-lg border border-amber-400/40 bg-amber-50/60 dark:bg-amber-950/20">
+              <TrendingDown className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 text-sm">
+                <p className="font-semibold text-amber-800 dark:text-amber-300">
+                  Registros pendientes de aprobar
+                </p>
+                <p className="text-amber-700 dark:text-amber-400 mt-1">
+                  Este colaborador tiene{' '}
+                  {preview.pendientes_por_aprobar.horas_extra > 0 && (
+                    <strong>
+                      {preview.pendientes_por_aprobar.horas_extra} hora
+                      {preview.pendientes_por_aprobar.horas_extra !== 1 ? 's' : ''} extra
+                    </strong>
+                  )}
+                  {preview.pendientes_por_aprobar.horas_extra > 0
+                    && preview.pendientes_por_aprobar.ausencias > 0
+                    && ' y '}
+                  {preview.pendientes_por_aprobar.ausencias > 0 && (
+                    <strong>
+                      {preview.pendientes_por_aprobar.ausencias} ausencia
+                      {preview.pendientes_por_aprobar.ausencias !== 1 ? 's' : ''}
+                    </strong>
+                  )}
+                  {' '}en estado PENDIENTE — no se incluyen en el cálculo hasta que
+                  se aprueben desde la planilla correspondiente.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ── DEVENGADO ─────────────────────────────────────────────── */}
           <div>
-            <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-success" />
+            <h3 className="font-semibold text-sm mb-2 flex items-center gap-2 text-success">
+              <TrendingUp className="h-4 w-4" />
               Devengado
             </h3>
-            <div className="space-y-2 bg-success/5 p-4 rounded-lg border border-success/20">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">
-                  {empleado.salario_tipo === 'FIJO' ? 'Salario base prorrateado' : 'Jornales'}
-                </span>
-                <span className="font-semibold">
-                  ${preview.total_jornales.toLocaleString('es-CO')}
-                </span>
+            <div className="rounded-lg border border-success/20 overflow-hidden bg-success/5">
+              <div className="flex justify-between px-4 py-3 border-b border-success/10">
+                <span className="text-xs uppercase tracking-wide text-muted-foreground">Sueldo base</span>
+                <span className="font-semibold">${preview.salario_base.toLocaleString('es-CO')}</span>
               </div>
+              {(preview.total_jornales > 0 && empleado.salario_tipo !== 'FIJO') && (
+                <div className="flex justify-between px-4 py-3 border-b border-success/10">
+                  <span className="text-xs uppercase tracking-wide text-muted-foreground">Jornales</span>
+                  <span className="font-semibold">${preview.total_jornales.toLocaleString('es-CO')}</span>
+                </div>
+              )}
               {preview.total_cosecha > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Cosecha</span>
+                <div className="flex justify-between px-4 py-3 border-b border-success/10">
+                  <span className="text-xs uppercase tracking-wide text-muted-foreground">Cosecha</span>
                   <span className="font-semibold">${preview.total_cosecha.toLocaleString('es-CO')}</span>
                 </div>
               )}
               {preview.total_horas_extra > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Horas extra</span>
+                <div className="flex justify-between px-4 py-3 border-b border-success/10">
+                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Horas extra
+                    {(preview.detalle_horas_extra?.length ?? 0) > 0 && (
+                      <span className="ml-2 normal-case tracking-normal text-muted-foreground/80">
+                        · {Array.from(new Set(
+                          preview.detalle_horas_extra!
+                            .map((h) => h.tipo_nombre || h.codigo)
+                            .filter(Boolean),
+                        )).join(', ')}
+                      </span>
+                    )}
+                  </span>
                   <span className="font-semibold">${preview.total_horas_extra.toLocaleString('es-CO')}</span>
                 </div>
               )}
               {preview.total_recargos > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Recargos</span>
+                <div className="flex justify-between px-4 py-3 border-b border-success/10">
+                  <span className="text-xs uppercase tracking-wide text-muted-foreground">Recargos</span>
                   <span className="font-semibold">${preview.total_recargos.toLocaleString('es-CO')}</span>
                 </div>
               )}
               {preview.total_incapacidades > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Incapacidades</span>
+                <div className="flex justify-between px-4 py-3 border-b border-success/10">
+                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Incapacidades
+                    {(preview.detalle_ausencias?.length ?? 0) > 0 && (
+                      <span className="ml-2 normal-case tracking-normal text-muted-foreground/80">
+                        · {Array.from(new Set(
+                          preview.detalle_ausencias!
+                            // Solo las que suman al devengado (INCAPACIDAD).
+                            .filter((a) => a.afecta === 'INCAPACIDAD')
+                            .map((a) => a.motivo_nombre)
+                            .filter(Boolean),
+                        )).join(', ')}
+                      </span>
+                    )}
+                  </span>
                   <span className="font-semibold">${preview.total_incapacidades.toLocaleString('es-CO')}</span>
                 </div>
               )}
-              <div className="flex justify-between pt-2 border-t border-success/30">
-                <span className="font-bold text-success">Total devengado</span>
+              <div className="flex justify-between px-4 py-3 border-b border-success/10 bg-success/10">
+                <span className="text-xs uppercase tracking-wide font-bold text-success">Total bruto</span>
                 <span className="font-bold text-lg text-success">
                   ${preview.total_devengado.toLocaleString('es-CO')}
                 </span>
               </div>
+              {!esOperario && (
+                <div className="flex justify-between px-4 py-3">
+                  <span className="text-xs uppercase tracking-wide text-muted-foreground">Subsidio transporte</span>
+                  <span className="font-semibold">${(preview.subsidio_transporte ?? 0).toLocaleString('es-CO')}</span>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Bonificaciones — ocultas para operarios (doc §5.3) */}
+          {/* ── DEDUCCIONES ───────────────────────────────────────────── */}
           {!esOperario && (
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-sm flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-amber-600" />
-                Bonificaciones
+            <div>
+              <h3 className="font-semibold text-sm mb-2 flex items-center gap-2 text-destructive">
+                <TrendingDown className="h-4 w-4" />
+                Deducciones
               </h3>
-              <Button size="sm" variant="outline" onClick={agregarBonificacion} className="gap-1">
-                <Plus className="h-4 w-4" />
-                Agregar
-              </Button>
-            </div>
-            {bonificaciones.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-3 bg-muted/20 rounded-lg">
-                Sin bonificaciones.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {bonificaciones.map((b, i) => (
-                  <div key={i} className="flex items-center gap-2 p-3 bg-muted/30 rounded-lg">
-                    <Input
-                      placeholder="Nombre"
-                      value={b.nombre}
-                      onChange={(e) => actualizarBonificacion(i, 'nombre', e.target.value)}
-                      className="flex-1"
-                    />
-                    <Input
-                      type="number"
-                      placeholder="Valor"
-                      value={b.valor || ''}
-                      onChange={(e) => actualizarBonificacion(i, 'valor', Number(e.target.value))}
-                      className="w-40"
-                    />
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => quitarBonificacion(i)}
-                      className="text-destructive hover:bg-destructive/10"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          )}
-
-          {/* Deducciones legales — solo empleados internos (doc §8.8) */}
-          {!esOperario && (
-          <div>
-            <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
-              <TrendingDown className="h-4 w-4 text-destructive" />
-              Deducciones legales (calculadas automáticamente)
-            </h3>
-            <div className="space-y-2 bg-destructive/5 p-4 rounded-lg border border-destructive/20">
-              {!preview.conceptos_legales || preview.conceptos_legales.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center">No aplica</p>
-              ) : (
-                preview.conceptos_legales.map((c) => (
-                  <div key={c.concepto_id} className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">
-                      {c.nombre} ({c.porcentaje}% sobre ${c.base.toLocaleString('es-CO')})
+              <div className="rounded-lg border border-destructive/20 overflow-hidden bg-destructive/5">
+                {/* Legales automáticas */}
+                {(preview.conceptos_legales ?? []).map((c) => (
+                  <div key={c.concepto_id} className="flex justify-between px-4 py-3 border-b border-destructive/10">
+                    <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                      {c.nombre}
                     </span>
                     <span className="font-semibold text-destructive">
                       ${c.valor.toLocaleString('es-CO')}
                     </span>
                   </div>
-                ))
-              )}
-              <div className="flex justify-between pt-2 border-t border-destructive/30">
-                <span className="font-semibold">Subtotal</span>
-                <span className="font-semibold text-destructive">
-                  ${(preview.total_deducciones_legales ?? 0).toLocaleString('es-CO')}
-                </span>
-              </div>
-            </div>
-          </div>
-          )}
-
-          {/* Cuotas de préstamos pendientes para el período — doc §5.1 y §15 */}
-          {!esOperario && (preview.prestamos_pendientes?.length ?? 0) > 0 && (
-            <div>
-              <h3 className="font-semibold text-sm flex items-center gap-2 mb-3">
-                <TrendingDown className="h-4 w-4 text-amber-600" />
-                Cuotas de préstamos pendientes
-              </h3>
-              <div className="space-y-2">
-                {preview.prestamos_pendientes!.map((cuota) => {
+                ))}
+                {/* Cuotas de préstamos (aplicables como deducciones) */}
+                {(preview.prestamos_pendientes ?? []).map((cuota) => {
                   const yaAplicada = cuotasAplicadas.has(cuota.prestamo_cuota_id);
                   return (
                     <div
-                      key={cuota.prestamo_cuota_id}
-                      className={`flex items-center justify-between gap-3 p-3 rounded-lg border ${
-                        yaAplicada
-                          ? 'bg-success/5 border-success/30'
-                          : 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-300/60'
-                      }`}
+                      key={`cuota-${cuota.prestamo_cuota_id}`}
+                      className="border-b border-destructive/10"
                     >
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold">{cuota.concepto}</p>
-                        <p className="text-xs text-muted-foreground">
-                          Cuota {cuota.numero_cuota}/{cuota.total_cuotas} · Saldo restante $
-                          {cuota.saldo_restante_prestamo.toLocaleString('es-CO')}
-                        </p>
+                      <div className="flex justify-between items-center px-4 py-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                            {cuota.concepto}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            Cuota {cuota.numero_cuota}/{cuota.total_cuotas} · Saldo restante ${cuota.saldo_restante_prestamo.toLocaleString('es-CO')}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className={`font-semibold ${yaAplicada ? 'text-destructive' : 'text-muted-foreground'}`}>
+                            ${cuota.monto.toLocaleString('es-CO')}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant={yaAplicada ? 'outline' : 'default'}
+                            onClick={() => aplicarCuotaPrestamo(cuota)}
+                            disabled={yaAplicada}
+                            className={yaAplicada ? 'text-success border-success/50 h-7' : 'bg-primary hover:bg-primary/90 h-7'}
+                          >
+                            {yaAplicada ? 'Aplicada' : 'Aplicar'}
+                          </Button>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-xs text-muted-foreground">Monto cuota</p>
-                        <p className="text-sm font-bold text-amber-700">
-                          ${cuota.monto.toLocaleString('es-CO')}
-                        </p>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant={yaAplicada ? 'outline' : 'default'}
-                        onClick={() => aplicarCuotaPrestamo(cuota)}
-                        disabled={yaAplicada}
-                        className={yaAplicada ? 'text-success border-success/50' : 'bg-primary hover:bg-primary/90'}
-                      >
-                        {yaAplicada ? 'Aplicada' : 'Aplicar cuota'}
-                      </Button>
                     </div>
                   );
                 })}
-              </div>
-            </div>
-          )}
-
-          {/* Deducciones voluntarias — ocultas para operarios (doc §5.3) */}
-          {!esOperario && (
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-sm flex items-center gap-2">
-                <TrendingDown className="h-4 w-4 text-amber-600" />
-                Deducciones voluntarias
-              </h3>
-              <Button size="sm" variant="outline" onClick={agregarDeduccion} className="gap-1">
-                <Plus className="h-4 w-4" />
-                Agregar
-              </Button>
-            </div>
-            {deducciones.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-3 bg-muted/20 rounded-lg">
-                Sin deducciones voluntarias.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {deducciones.map((d, i) => (
-                  <div
-                    key={i}
-                    className={`grid grid-cols-12 gap-2 p-3 rounded-lg items-end ${
-                      d.prestamo_cuota_id
-                        ? 'bg-amber-50/60 dark:bg-amber-950/20 border border-amber-300/60'
-                        : 'bg-muted/30'
-                    }`}
-                  >
-                    {d.prestamo_cuota_id && (
-                      <div className="col-span-12 -mb-1">
-                        <Badge className="text-[10px] bg-amber-500/10 text-amber-700 border-amber-300">
-                          Cuota de préstamo
-                        </Badge>
+                {/* Deducciones voluntarias por concepto del catálogo. Cada
+                    fila muestra un "+ Agregar" que crea una sub-fila con
+                    valor + observación. */}
+                {conceptos.map((concepto) => {
+                  const filas = deducciones
+                    .map((d, idx) => ({ d, idx }))
+                    .filter(({ d }) => d.concepto_id === concepto.id);
+                  const totalConcepto = filas.reduce((s, { d }) => s + (Number(d.valor) || 0), 0);
+                  return (
+                    <div key={concepto.id} className="border-b border-destructive/10 last:border-0">
+                      <div className="flex justify-between items-center px-4 py-3">
+                        <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                          {concepto.nombre}
+                        </span>
+                        <div className="flex items-center gap-3">
+                          <span className={`text-sm font-semibold ${totalConcepto > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                            ${totalConcepto.toLocaleString('es-CO')}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 gap-1 text-primary hover:bg-primary/10"
+                            onClick={() =>
+                              setDeducciones((prev) => [
+                                ...prev,
+                                { concepto_id: concepto.id, valor: 0, observacion: '' },
+                              ])
+                            }
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            Agregar
+                          </Button>
+                        </div>
                       </div>
-                    )}
-                    <div className="col-span-4">
-                      <Label className="text-xs">Concepto</Label>
-                      <Select
-                        value={d.concepto_id === '' ? '' : String(d.concepto_id)}
-                        onValueChange={(v) => actualizarDeduccion(i, 'concepto_id', Number(v))}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecciona" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {conceptos.map((c) => (
-                            <SelectItem key={c.id} value={String(c.id)}>
-                              {c.nombre}
-                            </SelectItem>
+                      {filas.length > 0 && (
+                        <div className="bg-background/60 border-t border-destructive/10 divide-y divide-destructive/10">
+                          {filas.map(({ d, idx }) => (
+                            <div key={idx} className="grid grid-cols-12 gap-2 items-center px-4 py-2">
+                              <div className="col-span-4">
+                                <Input
+                                  type="number"
+                                  value={d.valor || ''}
+                                  onChange={(e) => actualizarDeduccion(idx, 'valor', Number(e.target.value))}
+                                  placeholder="Valor"
+                                  className="h-8 text-sm"
+                                  disabled={!!d.prestamo_cuota_id}
+                                />
+                              </div>
+                              <div className="col-span-7">
+                                <Input
+                                  value={d.observacion}
+                                  onChange={(e) => actualizarDeduccion(idx, 'observacion', e.target.value)}
+                                  placeholder="Observación"
+                                  className="h-8 text-sm"
+                                />
+                              </div>
+                              <div className="col-span-1 flex justify-end">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => quitarDeduccion(idx)}
+                                  className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
                           ))}
-                        </SelectContent>
-                      </Select>
+                        </div>
+                      )}
                     </div>
-                    <div className="col-span-3">
-                      <Label className="text-xs">Valor</Label>
-                      <Input
-                        type="number"
-                        value={d.valor || ''}
-                        onChange={(e) => actualizarDeduccion(i, 'valor', Number(e.target.value))}
-                      />
-                    </div>
-                    <div className="col-span-4">
-                      <Label className="text-xs">Observación</Label>
-                      <Input
-                        value={d.observacion}
-                        onChange={(e) => actualizarDeduccion(i, 'observacion', e.target.value)}
-                        placeholder="Opcional"
-                      />
-                    </div>
-                    <div className="col-span-1">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => quitarDeduccion(i)}
-                        className="text-destructive hover:bg-destructive/10 w-full"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          )}
+                  );
+                })}
 
-          {/* Resumen final — layout V.15: 2 columnas (Ingresos / Deducciones) */}
-          {totales && (
-            <div className="pt-6 border-t-2">
-              <div className="space-y-4 bg-primary/10 p-6 rounded-lg border-2 border-primary/30">
-                <div className="grid grid-cols-2 gap-8">
-                  {/* INGRESOS */}
-                  <div className="space-y-3">
-                    <h4 className="text-sm font-semibold text-success mb-3">+ INGRESOS</h4>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Devengado</p>
-                      <p className="font-bold text-lg text-success">${totales.devengado.toLocaleString('es-CO')}</p>
-                    </div>
-                    {!esOperario && (
-                      <div>
-                        <p className="text-sm text-muted-foreground">Subsidio Transporte</p>
-                        <p className="font-bold text-lg text-success">${totales.subsidio.toLocaleString('es-CO')}</p>
-                      </div>
-                    )}
-                    {totales.totalBoni > 0 && (
-                      <div>
-                        <p className="text-sm text-muted-foreground">Bonificaciones</p>
-                        <p className="font-bold text-lg text-success">${totales.totalBoni.toLocaleString('es-CO')}</p>
-                      </div>
-                    )}
+                {/* Fallback genérico — siempre presente: sirve para agregar
+                    una deducción libre eligiendo el concepto en el select.
+                    Cubre el caso en que `conceptos` viene vacío del backend
+                    (catálogo no sembrado en el tenant) o cuando el usuario
+                    quiere agregar sin un botón dedicado por concepto. */}
+                <div className="border-t border-destructive/20 px-4 py-3 bg-destructive/[0.02]">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs text-muted-foreground italic">
+                      {conceptos.length === 0
+                        ? 'No hay conceptos activos en el catálogo — agrega deducciones manualmente.'
+                        : 'Agregar otra deducción voluntaria'}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={agregarDeduccion}
+                      className="h-7 gap-1"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Nueva deducción
+                    </Button>
                   </div>
-
-                  {/* DEDUCCIONES */}
-                  <div className="space-y-3">
-                    <h4 className="text-sm font-semibold text-destructive mb-3">- DEDUCCIONES</h4>
-                    {!esOperario && (
-                      <div>
-                        <p className="text-sm text-muted-foreground">Deducciones legales</p>
-                        <p className="font-bold text-lg text-destructive">-${totales.dedLegales.toLocaleString('es-CO')}</p>
+                  {/* Filas sin concepto asignado — muestran select + valor +
+                      observación para que el usuario elija todo. Excluimos
+                      las cuotas de préstamo (ya se renderizan arriba con su
+                      propia fila y badge "Aplicada" — mostrarlas otra vez
+                      aquí duplicaría el monto en pantalla). */}
+                  {deducciones
+                    .map((d, idx) => ({ d, idx }))
+                    .filter(({ d }) => !d.concepto_id && !d.prestamo_cuota_id)
+                    .map(({ d, idx }) => (
+                      <div key={idx} className="grid grid-cols-12 gap-2 items-end mt-3 p-3 bg-background rounded-md border border-border">
+                        <div className="col-span-4">
+                          <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Concepto</Label>
+                          <Select
+                            value={d.concepto_id === '' ? '' : String(d.concepto_id)}
+                            onValueChange={(v) => actualizarDeduccion(idx, 'concepto_id', Number(v))}
+                          >
+                            <SelectTrigger className="h-8">
+                              <SelectValue placeholder="Selecciona" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {conceptos.length === 0 ? (
+                                <div className="px-3 py-2 text-xs text-muted-foreground">
+                                  No hay conceptos activos. Actívalos en Configuración → Conceptos de nómina.
+                                </div>
+                              ) : (
+                                conceptos.map((c) => (
+                                  <SelectItem key={c.id} value={String(c.id)}>
+                                    {c.nombre}
+                                    {c.codigo && (
+                                      <span className="text-[10px] text-muted-foreground ml-1">({c.codigo})</span>
+                                    )}
+                                  </SelectItem>
+                                ))
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="col-span-3">
+                          <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Valor</Label>
+                          <Input
+                            type="number"
+                            value={d.valor || ''}
+                            onChange={(e) => actualizarDeduccion(idx, 'valor', Number(e.target.value))}
+                            className="h-8 text-sm"
+                            placeholder="0"
+                          />
+                        </div>
+                        <div className="col-span-4">
+                          <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Observación</Label>
+                          <Input
+                            value={d.observacion}
+                            onChange={(e) => actualizarDeduccion(idx, 'observacion', e.target.value)}
+                            className="h-8 text-sm"
+                            placeholder="Opcional"
+                          />
+                        </div>
+                        <div className="col-span-1 flex justify-end">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => quitarDeduccion(idx)}
+                            className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </div>
-                    )}
-                    {esOperario && (
-                      <div>
-                        <p className="text-sm text-muted-foreground italic">
-                          No aplican deducciones legales para operarios de terceros.
-                        </p>
-                      </div>
-                    )}
-                    {totales.totalDedVol > 0 && (
-                      <div>
-                        <p className="text-sm text-muted-foreground">Deducciones voluntarias</p>
-                        <p className="font-bold text-lg text-destructive">-${totales.totalDedVol.toLocaleString('es-CO')}</p>
-                      </div>
-                    )}
-                    <div>
-                      <p className="text-sm text-muted-foreground">Total deducciones</p>
-                      <p className="font-bold text-lg text-destructive">-${totales.deduccionesTot.toLocaleString('es-CO')}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex justify-between pt-4 border-t-2 border-primary/30">
-                  <span className="font-bold text-2xl">TOTAL NETO</span>
-                  <span className="font-bold text-3xl text-primary">
-                    ${totales.neto.toLocaleString('es-CO')}
-                  </span>
+                    ))}
                 </div>
               </div>
             </div>
           )}
 
-          <div className="flex gap-3 pt-4">
+          {/* ── BONIFICACIÓN ──────────────────────────────────────────── */}
+          {!esOperario && (
+            <div>
+              <h3 className="font-semibold text-sm mb-2 flex items-center gap-2 text-success">
+                <TrendingUp className="h-4 w-4" />
+                Bonificación
+              </h3>
+              <div className="rounded-lg border border-success/20 overflow-hidden bg-success/5">
+                <div className="flex justify-between items-center px-4 py-3 border-b border-success/10">
+                  <span className="text-xs uppercase tracking-wide text-muted-foreground">Bonificaciones</span>
+                  <Button size="sm" variant="ghost" onClick={agregarBonificacion} className="h-7 gap-1 text-primary hover:bg-primary/10">
+                    <Plus className="h-3.5 w-3.5" />
+                    Agregar
+                  </Button>
+                </div>
+                {bonificaciones.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No hay bonificaciones
+                  </p>
+                ) : (
+                  <div className="divide-y divide-success/10 bg-background/60">
+                    {bonificaciones.map((b, i) => (
+                      <div key={i} className="grid grid-cols-12 gap-2 items-center px-4 py-2">
+                        <div className="col-span-6">
+                          <Input
+                            placeholder="Nombre"
+                            value={b.nombre}
+                            onChange={(e) => actualizarBonificacion(i, 'nombre', e.target.value)}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                        <div className="col-span-5">
+                          <Input
+                            type="number"
+                            placeholder="Valor"
+                            value={b.valor || ''}
+                            onChange={(e) => actualizarBonificacion(i, 'valor', Number(e.target.value))}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                        <div className="col-span-1 flex justify-end">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => quitarBonificacion(i)}
+                            className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── RESUMEN INGRESOS / DEDUCCIONES / TOTAL NETO ─────────── */}
+          {totales && (
+            <div className="rounded-lg bg-muted/40 border border-border p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <p className="text-xs uppercase tracking-wider font-bold text-success">+ INGRESOS</p>
+                  <div className="text-sm">
+                    <p className="text-muted-foreground">Total Bruto</p>
+                    <p className="font-bold text-success text-base">
+                      ${totales.devengado.toLocaleString('es-CO')}
+                    </p>
+                  </div>
+                  {!esOperario && (
+                    <div className="text-sm">
+                      <p className="text-muted-foreground">Subsidio Transporte</p>
+                      <p className="font-bold text-success text-base">
+                        ${totales.subsidio.toLocaleString('es-CO')}
+                      </p>
+                    </div>
+                  )}
+                  <div className="text-sm">
+                    <p className="text-muted-foreground">Bonificaciones</p>
+                    <p className="font-bold text-success text-base">
+                      ${totales.totalBoni.toLocaleString('es-CO')}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-xs uppercase tracking-wider font-bold text-destructive">- DEDUCCIONES</p>
+                  <div className="text-sm">
+                    <p className="text-muted-foreground">Total Deducciones</p>
+                    <p className="font-bold text-destructive text-base">
+                      -${totales.deduccionesTot.toLocaleString('es-CO')}
+                    </p>
+                  </div>
+                  {esOperario && (
+                    <p className="text-xs text-muted-foreground italic">
+                      No aplican deducciones legales para operarios de terceros.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-4 border-t border-border">
+                <span className="font-bold text-lg tracking-wide">TOTAL NETO</span>
+                <span className="font-bold text-3xl text-success">
+                  ${totales.neto.toLocaleString('es-CO')}
+                </span>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-4">
             <Button
               variant="outline"
               onClick={() => navigate(`/nomina/${nominaId}`)}
-              className="flex-1"
               disabled={enviando}
+              className="h-12 text-base"
             >
               Cancelar
             </Button>
             <Button
               onClick={liquidar}
               disabled={enviando}
-              className="flex-1 gap-2 bg-success hover:bg-success/90"
+              className="h-12 text-base gap-2 bg-[#a3d34a] hover:bg-[#93c33d] text-white"
             >
-              {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {esReliquidacion ? 'Guardar cambios' : 'Confirmar liquidación'}
+              {enviando ? <Loader2 className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />}
+              {esReliquidacion ? 'Guardar cambios' : 'Confirmar y Guardar Liquidación'}
             </Button>
           </div>
         </CardContent>

@@ -41,9 +41,11 @@ import {
   Trash2,
   Pencil,
   X,
+  Loader2,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { operacionesApi, cosechasApi, jornalesApi, horasExtraApi, ausenciasApi, selectsApi } from '../../../api/operaciones';
+import { configuracionApi } from '../../../api/configuracion';
 import { toast } from 'sonner';
 
 // Los fertilizantes se cargan desde Configuración → Insumos vía el bundle
@@ -154,6 +156,13 @@ interface AusenteRegistro {
   colaboradorId: string;
   motivo: string;
   otroMotivo?: string;
+  /**
+   * ID del motivo del catálogo (`motivos_ausencia.id`) — se guarda al cargar
+   * la planilla desde el backend para que el render pueda resolver el nombre
+   * contra `motivosMap` incluso si al momento del prefill ese mapa no estaba
+   * listo (evita mostrar texto libre viejo en lugar del nombre correcto).
+   */
+  motivoAusenciaId?: number;
 }
 
 interface HoraExtra {
@@ -649,19 +658,61 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           otraLabor: '',
           lugar: j.ubicacion ?? '',
         })));
-        setHorasExtras((p.horas_extra ?? p.horasExtra ?? []).map((h: any) => ({
-          id: String(h.id),
-          colaboradorId: String(h.empleado_id),
-          tipoHora: h.tipoHoraExtra?.nombre ?? h.tipo_hora_extra?.nombre ?? '',
-          numeroHoras: Number(h.cantidad_horas ?? 0),
-          observacion: h.observacion ?? '',
-        })));
-        setAusentes((p.ausencias ?? []).map((a: any) => ({
-          id: String(a.id),
-          colaboradorId: String(a.empleado_id),
-          motivo: a.motivo_ausencia?.nombre ?? '',
-          otroMotivo: a.motivo ?? '',
-        })));
+        // Horas extras — según §1.1 del doc, el bundle wizard-init trae las
+        // tarjetas en `planilla.horas_extra` (snake_case) con eager-load de
+        // `horasExtra.tipoHoraExtra` (camelCase). Probamos varios nombres por
+        // si el serializer cambia de convención.
+        const horasExtraRaw: any[] =
+          p.horas_extra
+          ?? p.horasExtra
+          ?? p.horas_extras
+          ?? p.horasExtras
+          ?? [];
+        setHorasExtras(horasExtraRaw.map((h: any) => {
+          let nombreTipo = h.tipoHoraExtra?.nombre
+            ?? h.tipo_hora_extra?.nombre
+            ?? h.tipo_hora?.nombre
+            ?? '';
+          if (!nombreTipo && h.tipo_hora_extra_id != null) {
+            for (const [n, id] of tiposHoraExtraMap.entries()) {
+              if (id === Number(h.tipo_hora_extra_id)) { nombreTipo = n; break; }
+            }
+          }
+          return {
+            id: String(h.id),
+            colaboradorId: String(h.empleado_id ?? ''),
+            tipoHora: nombreTipo,
+            numeroHoras: Number(h.cantidad_horas ?? 0),
+            observacion: h.observacion ?? '',
+          };
+        }));
+
+        // Horas extras — según §4 del doc, `NO existe GET /operaciones/{id}/horas-extra`
+        // (responde 405). Las tarjetas vienen dentro de `planilla.horas_extra`
+        // del bundle wizard-init. Si el array llegó vacío pero la BD sí tiene
+        // registros, es problema del backend — no hacemos petición separada.
+        // Ausencias — el campo `motivo` (texto libre) es la fuente de verdad
+        // para mostrar al usuario: es lo que el operario escribió/seleccionó
+        // cuando creó la ausencia. Los IDs del catálogo (`motivo_ausencia_id`)
+        // pueden desincronizarse si el admin renombra o reasigna motivos.
+        // Guardamos `motivo` (texto libre) en `otroMotivo` y el nombre del
+        // catálogo en `motivo` para tener ambos disponibles.
+        setAusentes((p.ausencias ?? []).map((a: any) => {
+          const nombreCatalogo = a.motivoAusencia?.nombre
+            ?? a.motivo_ausencia?.nombre
+            ?? a.motivo_ausencia_nombre
+            ?? '';
+          return {
+            id: String(a.id),
+            colaboradorId: String(a.empleado_id ?? ''),
+            motivo: nombreCatalogo,
+            // El texto libre del backend es la fuente primaria de display.
+            otroMotivo: a.motivo ?? '',
+            motivoAusenciaId: a.motivo_ausencia_id != null
+              ? Number(a.motivo_ausencia_id)
+              : undefined,
+          };
+        }));
         // El resumen ya se hidrató en el effect de `wizard-init` arriba.
       } catch (err: any) {
         if (!cancelled) toast.error(err?.message ?? 'Error al cargar la planilla');
@@ -967,8 +1018,15 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
       // §3.2 del doc: el payload depende del tipo_pago de la labor:
       //  - POR_PALMA   → `cantidad_palmas` requerido.
       //  - JORNAL_FIJO → `nombre_trabajo` y `descripcion` opcionales; sin cantidad_palmas.
+      const erroresGuardado: string[] = [];
+      let otrosSinLabor = 0;
       for (const t of trabajosOtros) {
-        if (!t.laborOtrosRawId) continue;
+        if (!t.laborOtrosRawId) {
+          // El usuario no eligió labor (o el catálogo del tenant está vacío).
+          // Antes se saltaba en silencio — ahora acumulamos para avisar al final.
+          otrosSinLabor++;
+          continue;
+        }
         for (let i = 0; i < t.colaboradores.length; i++) {
           const cid = t.colaboradores[i];
           const base: any = {
@@ -992,17 +1050,29 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                 mapeoIdsOtros[t.id] = String(res.data.id);
               }
             }
-          } catch {}
+          } catch (err: any) {
+            erroresGuardado.push(`Otros: ${err?.message ?? 'error desconocido'}`);
+          }
         }
+      }
+      if (otrosSinLabor > 0 && !silent) {
+        toast.error(
+          `${otrosSinLabor} registro(s) de "Otros" no se guardaron: falta configurar labores custom en Configuración → Labores de Palma.`,
+          { duration: 6000 },
+        );
       }
       // Auxiliares (FINCA — labores del catálogo unificado con categoria='FINCA')
       // `t.nombre` ahora trae el id local de la persona (`'10'` empleado o
       // `'O_5'` operario). `decodeIdPersona` lo expande al XOR del payload.
+      let fincaSinLabor = 0;
       for (const t of trabajosAuxiliares) {
         if (!t.labor || !t.nombre) continue;
         const laborKey = t.labor === 'Otro' ? (t.otraLabor || '') : t.labor;
         const laborId = laboresMap.get(laborKey) ?? laboresMap.get(t.labor);
-        if (!laborId) continue;
+        if (!laborId) {
+          fincaSinLabor++;
+          continue;
+        }
         const personaIds = decodeIdPersona(t.nombre);
         if (!personaIds.empleado_id && !personaIds.operario_id) continue;
         const payload = {
@@ -1019,22 +1089,46 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
               mapeoIdsFinca[t.id] = String(res.data.id);
             }
           }
-        } catch {}
+        } catch (err: any) {
+          erroresGuardado.push(`Finca: ${err?.message ?? 'error desconocido'}`);
+        }
       }
-      // Horas extras
+      if (fincaSinLabor > 0 && !silent) {
+        toast.error(
+          `${fincaSinLabor} registro(s) de "Finca" no se guardaron: la labor seleccionada no existe en el catálogo. Configúrala en Configuración → Labores de Finca.`,
+          { duration: 6000 },
+        );
+      }
+      // Horas extras — endpoint `POST /operaciones/{id}/horas-extra` (§4.1).
+      // Payload: { empleado_id, tipo_hora_extra_id, cantidad_horas (0.25–12), observacion? }.
+      // Los operarios de tercero no aplican (§4 solo empleado_id).
+      let heOperarios = 0;
+      let heSinTipo = 0;
+      let heSinColab = 0;
+      let heHorasInvalidas = 0;
       for (const h of horasExtras) {
-        if (!h.colaboradorId || !h.tipoHora || !h.numeroHoras) continue;
+        // Validaciones específicas para que el usuario sepa qué falta.
+        if (!h.colaboradorId) { heSinColab++; continue; }
+        if (!h.tipoHora) { heSinTipo++; continue; }
+        // El backend exige rango 0.25–12 (§4.1). Antes se aceptaba 0 y
+        // el bucle lo saltaba silenciosamente.
+        const horas = Number(h.numeroHoras);
+        if (!horas || horas < 0.25 || horas > 12) { heHorasInvalidas++; continue; }
+        // Detectar operario por prefijo 'O_' — no tienen id numérico directo.
+        if (h.colaboradorId.startsWith('O_')) { heOperarios++; continue; }
+        const empleadoId = parseInt(h.colaboradorId);
+        if (Number.isNaN(empleadoId)) { heSinColab++; continue; }
         let tipoId = tiposHoraExtraMap.get(h.tipoHora);
         if (!tipoId) {
           for (const [n, i] of tiposHoraExtraMap.entries()) {
             if (n.toLowerCase().includes(h.tipoHora.toLowerCase())) { tipoId = i; break; }
           }
         }
-        if (!tipoId) continue;
+        if (!tipoId) { heSinTipo++; continue; }
         const payload = {
-          empleado_id: parseInt(h.colaboradorId),
+          empleado_id: empleadoId,
           tipo_hora_extra_id: tipoId,
-          cantidad_horas: h.numeroHoras,
+          cantidad_horas: horas,
           observacion: h.observacion || undefined,
         };
         try {
@@ -1046,7 +1140,32 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
               mapeoIdsHE[h.id] = String(res.data.id);
             }
           }
-        } catch {}
+        } catch (err: any) {
+          erroresGuardado.push(`Horas extra: ${err?.message ?? 'error desconocido'}`);
+        }
+      }
+      if (!silent) {
+        const heMsgs: string[] = [];
+        if (heSinColab > 0)       heMsgs.push(`${heSinColab} sin colaborador`);
+        if (heSinTipo > 0)        heMsgs.push(`${heSinTipo} sin tipo de hora`);
+        if (heHorasInvalidas > 0) heMsgs.push(`${heHorasInvalidas} con cantidad fuera de rango (0.25–12)`);
+        if (heOperarios > 0)      heMsgs.push(`${heOperarios} de operarios de tercero (no permitido)`);
+        if (heMsgs.length > 0) {
+          toast.error(
+            `Horas extras no guardadas: ${heMsgs.join(', ')}.`,
+            { duration: 6000 },
+          );
+        }
+      }
+      // Resumen final de errores de guardado — antes se tragaban silenciosos.
+      if (erroresGuardado.length > 0 && !silent) {
+        const primeros = erroresGuardado.slice(0, 3).join(' · ');
+        toast.error(
+          `${erroresGuardado.length} error(es) al guardar: ${primeros}${
+            erroresGuardado.length > 3 ? ` (+${erroresGuardado.length - 3} más)` : ''
+          }`,
+          { duration: 7000 },
+        );
       }
       // Ausencias
       for (const a of ausentes) {
@@ -1058,10 +1177,16 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           }
         }
         if (!motivoId) continue;
+        // `motivo` en el backend es texto LIBRE (observación) según §5.1
+        // del doc, NO el nombre del motivo del catálogo. Solo se envía
+        // cuando el usuario eligió "Otro" y escribió texto propio; para
+        // motivos del catálogo mandamos '' (evita que al recargar el
+        // fallback lo muestre pisando al nombre real).
+        const esMotivoOtro = a.motivo === 'Otro';
         const payload = {
           empleado_id: parseInt(a.colaboradorId),
           motivo_ausencia_id: motivoId,
-          motivo: a.otroMotivo || a.motivo || '',
+          motivo: esMotivoOtro ? (a.otroMotivo ?? '') : '',
         };
         try {
           if (isBackendId(a.id)) {
@@ -1297,11 +1422,51 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
     setSanidadEnEdicion(null);
   };
 
-  const agregarOtros = () => {
+  const agregarOtros = async () => {
+    // Buscamos SIEMPRE la labor cuyo nombre es "Otros" (case-insensitive).
+    // Es la labor genérica del tenant: el precio configurado en
+    // "Configuración → Precios de labores → Otros" es el que aplicará a
+    // todos los registros que se creen desde este tab.
+    let primera = laboresOtrosOpciones.find(
+      (l) => l.nombre.trim().toLowerCase() === 'otros',
+    ) ?? laboresOtrosOpciones[0];
+    if (!primera) {
+      // Fallback: creamos automáticamente una labor custom "Otros"
+      // (categoria=PALMA, es_sistema=false, tipo_pago=JORNAL_FIJO) para que
+      // el operador pueda registrar sin salir del wizard. Si el backend
+      // rechaza por permisos (`configuracion.editar`), avisamos.
+      try {
+        const res = await configuracionApi.labores.crear({
+          categoria: 'PALMA',
+          nombre: 'Otros',
+          tipo_pago: 'JORNAL_FIJO',
+          precio_palma: 0,
+        });
+        const nueva = res.data;
+        primera = {
+          key: `palma-${nueva.id}`,
+          nombre: nueva.nombre,
+          rawId: nueva.id,
+          tipo_pago: 'JORNAL_FIJO',
+        };
+        setLaboresOtrosOpciones((prev) => [...prev, primera!]);
+        toast.success('Labor "Otros" creada automáticamente');
+      } catch (err: any) {
+        toast.error(
+          err?.message
+            ?? 'No se pudo crear una labor "Otros". Ve a Configuración → Labores de Palma y créala manualmente.',
+          { duration: 6000 },
+        );
+        return;
+      }
+    }
     setOtrosEnEdicion({
       id: `otros-${Date.now()}`,
       colaboradores: [],
-      nombre: '',
+      nombre: primera.nombre,
+      laborOtrosKey: primera.key,
+      laborOtrosRawId: primera.rawId,
+      laborOtrosTipoPago: primera.tipo_pago,
       laborRealizada: '',
       lote: '',
       sublote: ''
@@ -1598,7 +1763,16 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   const puedeAvanzarEtapa1 = fecha && elaboradoPor;
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-7xl">
+    <div className="container mx-auto py-8 px-4 max-w-7xl relative">
+      {/* Overlay de carga durante el guardado */}
+      {guardando && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-card p-8 shadow-xl">
+            <Loader2 className="h-10 w-10 animate-spin text-primary" />
+            <p className="font-semibold text-foreground">Guardando planilla...</p>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="mb-8">
         <Button
@@ -3074,49 +3248,6 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                 )}
                               </div>
                               <div className="space-y-2 md:col-span-2">
-                                <Label>Nombre</Label>
-                                <Select
-                                  value={otrosEnEdicion.laborOtrosKey ?? ''}
-                                  onValueChange={(value) => {
-                                    const op = laboresOtrosOpciones.find(o => o.key === value);
-                                    // Autofill de "Número de Palmas" si la labor es POR_PALMA
-                                    // y el sublote ya está seleccionado (§10 doc API_OPERACIONES.md).
-                                    const sub = otrosEnEdicion.sublote
-                                      ? sublotes.find(s => s.id === otrosEnEdicion.sublote)
-                                      : null;
-                                    setOtrosEnEdicion({
-                                      ...otrosEnEdicion,
-                                      laborOtrosKey: value,
-                                      laborOtrosRawId: op?.rawId,
-                                      laborOtrosTipoPago: op?.tipo_pago,
-                                      nombre: op?.nombre ?? '',
-                                      // Al cambiar de labor, limpiamos los campos que dependen del tipo_pago.
-                                      numeroPalmas: op?.tipo_pago === 'POR_PALMA'
-                                        ? Number(sub?.cantidadPalmas ?? 0)
-                                        : undefined,
-                                      nombreTrabajo: op?.tipo_pago === 'JORNAL_FIJO'
-                                        ? (otrosEnEdicion.nombreTrabajo ?? '')
-                                        : undefined,
-                                    });
-                                  }}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder={
-                                      laboresOtrosOpciones.length === 0
-                                        ? 'No hay labores configuradas'
-                                        : 'Seleccionar labor'
-                                    } />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {laboresOtrosOpciones.map((op) => (
-                                      <SelectItem key={op.key} value={op.key}>
-                                        {op.nombre}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-2 md:col-span-2">
                                 <Label>Labor Realizada</Label>
                                 <Input
                                   placeholder="Descripción de la labor"
@@ -3207,21 +3338,6 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                 </div>
                               )}
 
-                              {otrosEnEdicion.laborOtrosTipoPago === 'JORNAL_FIJO' && (
-                                <div className="space-y-2">
-                                  <Label>Nombre del Trabajo</Label>
-                                  <Input
-                                    placeholder="Ej. Pintura de postes"
-                                    value={otrosEnEdicion.nombreTrabajo ?? ''}
-                                    onChange={(e) =>
-                                      setOtrosEnEdicion({
-                                        ...otrosEnEdicion,
-                                        nombreTrabajo: e.target.value,
-                                      })
-                                    }
-                                  />
-                                </div>
-                              )}
                             </div>
                             <div className="flex justify-end gap-2 pt-4">
                               <Button variant="outline" onClick={cancelarOtros}>
@@ -3587,10 +3703,17 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                             }}
                           >
                             <SelectTrigger>
-                              <SelectValue placeholder="Seleccionar tipo de hora" />
+                              <SelectValue placeholder={
+                                tiposHoraExtraLista.length === 0
+                                  ? 'No hay tipos configurados'
+                                  : 'Seleccionar tipo de hora'
+                              } />
                             </SelectTrigger>
                             <SelectContent>
-                              {tiposHoraExtra.map((tipo) => (
+                              {/* Usa los nombres reales del tenant traídos por
+                                  `wizard-init`; el hardcoded viejo `tiposHoraExtra`
+                                  no matcheaba con `tiposHoraExtraMap` al guardar. */}
+                              {tiposHoraExtraLista.map((tipo) => (
                                 <SelectItem key={tipo} value={tipo}>
                                   {tipo}
                                 </SelectItem>
@@ -3829,9 +3952,22 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                           <tbody>
                             {ausentes.map((ausente) => {
                               const col = colaboradores.find(c => c.id === ausente.colaboradorId);
-                              const motivoMostrar = ausente.motivo === 'Otro' && ausente.otroMotivo
-                                ? `Otro: ${ausente.otroMotivo}`
-                                : ausente.motivo;
+                              // El campo `motivo` (texto libre) del backend
+                              // es la fuente de verdad — es lo que el usuario
+                              // escribió/eligió al crear la ausencia. Se
+                              // carga en `otroMotivo` desde el prefill.
+                              // Prioridad de display:
+                              // 1) texto libre del backend (`otroMotivo`).
+                              // 2) nombre del catálogo (fallback).
+                              // 3) lookup por ID contra `motivosMap`.
+                              // 4) '—' si nada.
+                              let motivoMostrar = ausente.otroMotivo || ausente.motivo;
+                              if (!motivoMostrar && ausente.motivoAusenciaId != null) {
+                                for (const [n, id] of motivosMap.entries()) {
+                                  if (id === ausente.motivoAusenciaId) { motivoMostrar = n; break; }
+                                }
+                              }
+                              motivoMostrar = motivoMostrar || '—';
                               return (
                                 <tr key={ausente.id} className="border-t border-border">
                                   <td className="p-3 text-sm">
@@ -3893,8 +4029,17 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                 <Button
                   onClick={() => guardarTodo()} disabled={guardando} className="gap-2 bg-success hover:bg-success/90"
                 >
-                  <Save className="h-4 w-4" />
-                  Guardar Planilla
+                  {guardando ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Guardando...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4" />
+                      Guardar Planilla
+                    </>
+                  )}
                 </Button>
               )}
             </div>
@@ -4265,9 +4410,15 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                       <div className="space-y-2">
                         {ausentes.map((ausente) => {
                           const col = colaboradores.find(c => c.id === ausente.colaboradorId);
-                          const motivoMostrar = ausente.motivo === 'Otro' && ausente.otroMotivo
-                            ? ausente.otroMotivo
-                            : ausente.motivo;
+                          // Mismo criterio que la tabla principal — el texto
+                          // libre del backend (`otroMotivo`) es primario.
+                          let motivoMostrar = ausente.otroMotivo || ausente.motivo;
+                          if (!motivoMostrar && ausente.motivoAusenciaId != null) {
+                            for (const [n, id] of motivosMap.entries()) {
+                              if (id === ausente.motivoAusenciaId) { motivoMostrar = n; break; }
+                            }
+                          }
+                          motivoMostrar = motivoMostrar || '—';
                           return (
                             <div key={ausente.id} className="p-2 bg-muted/30 rounded-md">
                               <div className="text-xs font-medium">

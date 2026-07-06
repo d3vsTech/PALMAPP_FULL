@@ -305,7 +305,9 @@ export default function ConteoCosecha() {
 
   const guardarCosecha = async () => {
     if (!viaje || !cosechaEnEdicion) return;
-    if (!cosechaEnEdicion.reconteoGajos || cosechaEnEdicion.reconteoGajos <= 0) {
+    // El 0 es un reconteo válido (ej: la cuadrilla reportó gajos que no
+    // llegaron al viaje). Solo rechazamos negativos o null/undefined.
+    if (cosechaEnEdicion.reconteoGajos == null || cosechaEnEdicion.reconteoGajos < 0) {
       toast.error('Ingresa el reconteo de gajos');
       return;
     }
@@ -365,7 +367,8 @@ export default function ConteoCosecha() {
     if (!viaje) { return; }
     if (cosechas.length === 0) { toast.error('Agrega al menos una cosecha'); return; }
     const pendientes = cosechas.filter(c => !c.aprobado);
-    if (pendientes.some(c => !c.reconteoGajos || c.reconteoGajos <= 0)) {
+    // El 0 es un reconteo válido — solo rechazamos negativos o sin registrar.
+    if (pendientes.some(c => c.reconteoGajos == null || c.reconteoGajos < 0)) {
       toast.error('Todas las cosechas deben tener reconteo antes de aprobar');
       return;
     }
@@ -690,12 +693,29 @@ export default function ConteoCosecha() {
                           <Label>Reconteo de Gajos</Label>
                           <Input
                             type="number"
+                            min={0}
                             placeholder="0"
-                            value={cosechaEnEdicion.reconteoGajos || ''}
+                            // Al enfocar, seleccionamos el contenido — así si
+                            // el valor era 0, al empezar a escribir se reemplaza
+                            // en vez de quedar como "0190".
+                            onFocus={(e) => e.currentTarget.select()}
+                            value={cosechaEnEdicion.reconteoGajos ?? ''}
                             onChange={(e) => {
+                              const raw = e.target.value;
+                              if (raw === '') {
+                                // Campo vacío: quedamos en 0 (que es un
+                                // reconteo válido según el usuario).
+                                setCosechaEnEdicion({
+                                  ...cosechaEnEdicion,
+                                  reconteoGajos: 0,
+                                });
+                                return;
+                              }
+                              const parsed = parseInt(raw);
+                              if (Number.isNaN(parsed) || parsed < 0) return;
                               setCosechaEnEdicion({
                                 ...cosechaEnEdicion,
-                                reconteoGajos: parseInt(e.target.value) || 0,
+                                reconteoGajos: parsed,
                               });
                             }}
                           />

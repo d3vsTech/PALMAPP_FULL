@@ -361,13 +361,34 @@ export default function VerLiquidacion() {
               <Item label="Cosecha" value={fmt(liquidacion.total_cosecha)} />
             )}
             {liquidacion.total_horas_extra > 0 && (
-              <Item label="Horas extra" value={fmt(liquidacion.total_horas_extra)} />
+              <Item
+                label={
+                  (liquidacion as any).detalle_horas_extra?.length > 0
+                    ? `Horas extra · ${Array.from(new Set(
+                        ((liquidacion as any).detalle_horas_extra as any[])
+                          .map((h) => h.tipo_nombre || h.codigo).filter(Boolean),
+                      )).join(', ')}`
+                    : 'Horas extra'
+                }
+                value={fmt(liquidacion.total_horas_extra)}
+              />
             )}
             {liquidacion.total_recargos > 0 && (
               <Item label="Recargos" value={fmt(liquidacion.total_recargos)} />
             )}
             {liquidacion.total_incapacidades > 0 && (
-              <Item label="Incapacidades" value={fmt(liquidacion.total_incapacidades)} />
+              <Item
+                label={
+                  (liquidacion as any).detalle_ausencias?.length > 0
+                    ? `Incapacidades · ${Array.from(new Set(
+                        ((liquidacion as any).detalle_ausencias as any[])
+                          .filter((a) => a.afecta === 'INCAPACIDAD')
+                          .map((a) => a.motivo_nombre).filter(Boolean),
+                      )).join(', ')}`
+                    : 'Incapacidades'
+                }
+                value={fmt(liquidacion.total_incapacidades)}
+              />
             )}
             {liquidacion.bonificaciones.length > 0 && (
               <>
