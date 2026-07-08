@@ -1911,34 +1911,14 @@ export default function NuevaNominaWizard() {
           style={{ width: 'min(780px, 95vw)', maxWidth: 'min(780px, 95vw)' }}
         >
           <DialogHeader>
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-2">
-                <Settings2 className="h-6 w-6 text-primary mt-0.5" />
-                <div>
-                  <DialogTitle>Promedios Anuales por Lote</DialogTitle>
-                  <DialogDescription className="mt-1">
-                    Kg promedio por gajo para cada lote. El "Auto" lo calcula el sistema
-                    desde los viajes del período; el "Manual" lo sobrescribe solo para esta nómina.
-                  </DialogDescription>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <Label className="text-sm">Año:</Label>
-                <Select
-                  value={anioPromedios.toString()}
-                  onValueChange={(v) => setAnioPromedios(parseInt(v))}
-                >
-                  <SelectTrigger className="w-28 h-9">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((a) => (
-                      <SelectItem key={a} value={a.toString()}>
-                        {a}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div className="flex items-start gap-2">
+              <Settings2 className="h-6 w-6 text-primary mt-0.5" />
+              <div>
+                <DialogTitle>Promedios Anuales por Lote</DialogTitle>
+                <DialogDescription className="mt-1">
+                  Kg promedio por gajo para cada lote. El "Auto" lo calcula el sistema
+                  desde los viajes del período; el "Manual" lo sobrescribe solo para esta nómina.
+                </DialogDescription>
               </div>
             </div>
           </DialogHeader>
