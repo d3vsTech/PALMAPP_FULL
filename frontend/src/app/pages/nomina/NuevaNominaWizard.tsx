@@ -276,6 +276,10 @@ export default function NuevaNominaWizard() {
    *  Se compara contra `bundleCosecha.promedios_por_lote[*].promedio_efectivo`. */
   const [promediosEditados, setPromediosEditados] = useState<Record<number, number>>({});
   const [ajustandoPromedio, setAjustandoPromedio] = useState(false);
+  /** Año seleccionado en el selector del modal — arranca en el año de la nómina. */
+  const [anioPromedios, setAnioPromedios] = useState<number>(new Date().getFullYear());
+  /** lote_id → updated_at del último promedio del año seleccionado. */
+  const [fechasPromedioLote, setFechasPromedioLote] = useState<Map<number, string>>(new Map());
 
   /**
    * Persistir progreso en localStorage cada vez que cambia `nominaId` o
@@ -418,10 +422,33 @@ export default function NuevaNominaWizard() {
   // Al abrir el modal, simplemente reseteamos las ediciones locales — los
   // promedios vienen del bundle de cosecha (`promedios_por_lote`), ya cargado.
   // Si el bundle aún no está, se cargará al entrar al paso 3.
+  // También iniciamos el selector de año en el año de la nómina (ano).
   useEffect(() => {
     if (!mostrarAjustePromedios) return;
     setPromediosEditados({});
-  }, [mostrarAjustePromedios]);
+    setAnioPromedios(parseInt(ano) || new Date().getFullYear());
+  }, [mostrarAjustePromedios, ano]);
+
+  // Traer fecha de actualización por lote del año seleccionado — pobla la
+  // columna "Fecha Actualización" del modal combinado. No bloquea la UI.
+  useEffect(() => {
+    if (!mostrarAjustePromedios) return;
+    configuracionApi.promediosLote
+      .listar({ anio: anioPromedios, per_page: 100 })
+      .then((res) => {
+        const m = new Map<number, string>();
+        for (const p of res.data ?? []) {
+          const updated = (p as any).updated_at as string | undefined;
+          if (!updated) continue;
+          const existente = m.get(p.lote_id);
+          if (!existente || new Date(updated).getTime() > new Date(existente).getTime()) {
+            m.set(p.lote_id, updated);
+          }
+        }
+        setFechasPromedioLote(m);
+      })
+      .catch(() => setFechasPromedioLote(new Map()));
+  }, [mostrarAjustePromedios, anioPromedios]);
 
   /** Guarda los promedios editados — un PUT por cada lote modificado.
    *  El valor original es el `promedio_efectivo` del bundle (que ya considera
@@ -1879,16 +1906,39 @@ export default function NuevaNominaWizard() {
           Los promedios vienen del bundle de validar-cosecha (`promedios_por_lote`).
           Solo aparecen los lotes con cosechas en el período. */}
       <Dialog open={mostrarAjustePromedios} onOpenChange={setMostrarAjustePromedios}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent
+          className="max-h-[90vh] overflow-y-auto"
+          style={{ width: 'min(780px, 95vw)', maxWidth: 'min(780px, 95vw)' }}
+        >
           <DialogHeader>
-            <div className="flex items-center gap-2">
-              <Settings2 className="h-6 w-6 text-primary" />
-              <div>
-                <DialogTitle>Ajustar Promedios por Lote</DialogTitle>
-                <DialogDescription className="mt-1">
-                  Kg promedio por gajo para esta nómina. El "Auto" lo calcula el sistema
-                  desde los viajes del período; el "Manual" lo sobrescribe solo para esta nómina.
-                </DialogDescription>
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-2">
+                <Settings2 className="h-6 w-6 text-primary mt-0.5" />
+                <div>
+                  <DialogTitle>Promedios Anuales por Lote</DialogTitle>
+                  <DialogDescription className="mt-1">
+                    Kg promedio por gajo para cada lote. El "Auto" lo calcula el sistema
+                    desde los viajes del período; el "Manual" lo sobrescribe solo para esta nómina.
+                  </DialogDescription>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Label className="text-sm">Año:</Label>
+                <Select
+                  value={anioPromedios.toString()}
+                  onValueChange={(v) => setAnioPromedios(parseInt(v))}
+                >
+                  <SelectTrigger className="w-28 h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((a) => (
+                      <SelectItem key={a} value={a.toString()}>
+                        {a}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </DialogHeader>
@@ -2011,28 +2061,32 @@ export default function NuevaNominaWizard() {
               <thead>
                 <tr className="border-b border-border bg-muted/50 text-xs text-muted-foreground">
                   <th className="text-left p-3 pl-5 font-semibold">Lote</th>
+                  <th className="text-center p-3 font-semibold">Año</th>
                   <th className="text-right p-3 font-semibold">
                     Auto <span className="font-normal text-[10px] block leading-tight">(viajes período)</span>
                   </th>
                   <th className="text-right p-3 font-semibold">
                     Manual <span className="font-normal text-[10px] block leading-tight">(esta nómina)</span>
                   </th>
-                  <th className="text-right p-3 pr-5 font-semibold">
+                  <th className="text-right p-3 font-semibold">
                     Efectivo <span className="font-normal text-[10px] block leading-tight">(kg/gajo)</span>
+                  </th>
+                  <th className="text-left p-3 pr-5 font-semibold">
+                    Fecha <span className="font-normal text-[10px] block leading-tight">Actualización</span>
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {cargandoBundle ? (
                   <tr>
-                    <td colSpan={4} className="text-center py-8 text-sm text-muted-foreground">
+                    <td colSpan={6} className="text-center py-8 text-sm text-muted-foreground">
                       <Loader2 className="h-5 w-5 animate-spin inline mr-2" />
                       Cargando promedios...
                     </td>
                   </tr>
                 ) : !bundleCosecha || bundleCosecha.promedios_por_lote.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="text-center py-8 text-sm text-muted-foreground">
+                    <td colSpan={6} className="text-center py-8 text-sm text-muted-foreground">
                       No hay lotes con cosechas en este período.
                     </td>
                   </tr>
@@ -2040,12 +2094,19 @@ export default function NuevaNominaWizard() {
                   bundleCosecha.promedios_por_lote.map((p) => {
                     const valorActual = promedioValorActual(p.lote_id);
                     const efectivoMostrado = valorActual > 0 ? valorActual : p.promedio_efectivo;
+                    const fechaAct = fechasPromedioLote.get(p.lote_id);
+                    const fechaFmt = fechaAct
+                      ? new Date(fechaAct).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })
+                      : '—';
                     return (
                       <tr
                         key={p.lote_id}
                         className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
                       >
                         <td className="p-3 pl-5 font-medium text-sm">{p.lote_nombre}</td>
+                        <td className="p-3 text-center text-sm text-muted-foreground">
+                          {anioPromedios}
+                        </td>
                         <td className="p-3 text-right text-sm text-muted-foreground">
                           {p.promedio_auto.toFixed(2)}
                         </td>
@@ -2067,8 +2128,14 @@ export default function NuevaNominaWizard() {
                             />
                           </div>
                         </td>
-                        <td className="p-3 pr-5 text-right text-sm font-semibold text-primary">
+                        <td className="p-3 text-right text-sm font-semibold text-primary">
                           {efectivoMostrado.toFixed(2)}
+                        </td>
+                        <td className="p-3 pr-5 text-left text-xs text-muted-foreground">
+                          <span className="inline-flex items-center gap-1.5">
+                            <Calendar className="h-3 w-3" />
+                            {fechaFmt}
+                          </span>
                         </td>
                       </tr>
                     );

@@ -438,8 +438,10 @@ export default function LiquidarColaborador() {
         </div>
       </div>
 
-      {/* Resumen de trabajo (solo VARIABLE) */}
-      {empleado.salario_tipo === 'VARIABLE' && resumen && (
+      {/* Resumen de trabajo — ocultado a pedido del usuario. Se deja en el
+          código detrás de `false && ...` para reactivar fácilmente si se
+          necesita más adelante. */}
+      {false && empleado.salario_tipo === 'VARIABLE' && resumen && (
         <Card className="border-border">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-xl">

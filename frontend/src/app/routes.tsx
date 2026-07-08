@@ -94,6 +94,7 @@ const NuevoPrestamo = lazyWithRetry(() => import('./pages/nomina/NuevoPrestamo')
 const Prestamos = lazyWithRetry(() => import('./pages/nomina/Prestamos'));
 const PrestamoDetalle = lazyWithRetry(() => import('./pages/nomina/PrestamoDetalle'));
 const LiquidarTerceros = lazyWithRetry(() => import('./pages/nomina/LiquidarTerceros'));
+const LiquidarTerceroDetalle = lazyWithRetry(() => import('./pages/nomina/LiquidarTerceroDetalle'));
 const NuevaLiquidacionWizard = lazyWithRetry(() => import('./pages/nomina/NuevaLiquidacionWizard'));
 const LiquidarColaborador = lazyWithRetry(() => import('./pages/nomina/LiquidarColaborador'));
 const VerLiquidacion = lazyWithRetry(() => import('./pages/nomina/VerLiquidacion'));
@@ -291,6 +292,7 @@ export const router = createBrowserRouter([
       { path: 'nomina/:nominaId/ver/:colaboradorId',          element: L(<VerLiquidacion />) },
       { path: 'nomina/:nominaId/desprendible/:colaboradorId', element: L(<DesprendiblePago />) },
       { path: 'nomina/:nominaId/liquidar-terceros',           element: L(<LiquidarTerceros />) },
+      { path: 'nomina/:nominaId/tercero/:terceroId/liquidar', element: L(<LiquidarTerceroDetalle />) },
 
       {
         path: 'liquidaciones',
