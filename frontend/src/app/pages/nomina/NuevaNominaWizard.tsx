@@ -2145,11 +2145,6 @@ export default function NuevaNominaWizard() {
             </table>
           </div>
 
-          <p className="text-xs text-muted-foreground">
-            <strong>Manual</strong> sobrescribe el promedio efectivo solo para esta nómina —
-            no afecta los promedios históricos de viajes (tabla `promedio_lote` es de solo lectura).
-          </p>
-
           <DialogFooter>
             <Button
               variant="outline"
