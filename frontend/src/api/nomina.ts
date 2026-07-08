@@ -562,8 +562,14 @@ export type MetodoPagoTercero = 'TRANSFERENCIA' | 'EFECTIVO' | 'CHEQUE';
 
 /**
  * Línea de operario dentro del acta (doc §7.2 - `operarios[]`).
- * Los campos `dias`, `tarifa_dia`, `ajuste`, `subtotal` y `observacion` son
- * editables individualmente vía §7.4 `PUT .../operarios/{op}`.
+ * Los campos `dias`, `tarifa_dia`, `ajuste`, `subtotal`, `observacion` y el
+ * descuento estructurado (`descuento_concepto_id`, `descuento_valor`,
+ * `descuento_observacion`) son editables individualmente vía §7.4
+ * `PUT .../operarios/{op}`.
+ *
+ * `subtotal = (dias × tarifa_dia) + ajuste − descuento_valor`.
+ * `ajuste` puede ser negativo (correcciones libres sin concepto).
+ * `descuento_valor` siempre ≥ 0 y siempre resta.
  */
 export interface NominaTerceroOperario {
   /** ID de la fila `nomina_tercero_operario`. */
@@ -579,6 +585,20 @@ export interface NominaTerceroOperario {
   /** Snapshot JSON de labores realizadas por el operario en el período. */
   labores_realizadas: string[];
   observacion: string | null;
+  /**
+   * Concepto de deducción voluntaria seleccionado (doc §7.2 + §7.4).
+   * Presente cuando `descuento_valor > 0`. Se pobla desde el catálogo
+   * `nomina_conceptos` con `tipo=DEDUCCION_VOLUNTARIA`.
+   */
+  descuento_concepto?: {
+    id: number;
+    codigo: string;
+    nombre: string;
+  } | null;
+  /** Valor del descuento estructurado (≥ 0). Siempre resta del subtotal. */
+  descuento_valor?: number;
+  /** Observación libre asociada al descuento (ej: "Herramienta extraviada"). */
+  descuento_observacion?: string | null;
 }
 
 /**
@@ -658,16 +678,41 @@ export interface NominaTerceroActaDetalle {
  */
 export type NominaTercero = NominaTerceroActaResumen;
 
+/**
+ * Payload para PUT `/nominas/{id}/terceros/{tercero}/operarios/{op}` (doc §7.4).
+ *
+ * Todos los campos son opcionales — solo se envían los que se editan.
+ *
+ * Reglas del descuento estructurado:
+ *  - `descuento_valor > 0` requiere `descuento_concepto_id` (si no → 422).
+ *  - Enviar `descuento_valor = 0` limpia también `descuento_concepto_id` y
+ *    `descuento_observacion` para evitar referencias huérfanas.
+ *  - El concepto debe ser `tipo=DEDUCCION_VOLUNTARIA` y `activo=true`. Se
+ *    obtiene vía `GET /nomina-conceptos/select?tipo=DEDUCCION_VOLUNTARIA`.
+ */
 export interface ActualizarOperarioActaPayload {
   dias?: number;
   tarifa_dia?: number;
+  /** Ajuste libre — puede ser positivo o negativo. */
   ajuste?: number;
   observacion?: string;
+  /** ID del `nomina_concepto` con `tipo=DEDUCCION_VOLUNTARIA`. */
+  descuento_concepto_id?: number | null;
+  /** Monto del descuento (≥ 0). Siempre resta del subtotal. */
+  descuento_valor?: number;
+  descuento_observacion?: string | null;
 }
 
+/**
+ * Payload para POST `/nominas/{id}/terceros/{tercero}/registrar-pago` (doc §7.5).
+ *
+ * Todos los campos son opcionales — body vacío `{}` es válido. El backend no
+ * valida los datos bancarios del tercero — la responsabilidad de confirmar
+ * viabilidad de la transferencia queda en el operador. Este endpoint sigue
+ * habilitado incluso con la nómina CERRADA (única excepción documentada).
+ */
 export interface RegistrarPagoTerceroPayload {
-  metodo_pago: MetodoPagoTercero;
-  /** Requerido si metodo_pago=TRANSFERENCIA (doc §7.5). */
+  metodo_pago?: MetodoPagoTercero;
   referencia_pago?: string;
   /** Datetime ISO. Default: `now()`. */
   pagado_at?: string;
@@ -1082,8 +1127,17 @@ export const NominaErrorCodes = {
   OPERARIO_NO_PERTENECE_A_TERCERO: 'OPERARIO_NO_PERTENECE_A_TERCERO',
   /** Intento de quitar un operario con `nomina_tercero` ya liquidado. */
   OPERARIO_LIQUIDADO_EN_TERCERO: 'OPERARIO_LIQUIDADO_EN_TERCERO',
-  /** `metodo_pago=TRANSFERENCIA` sin `banco`/`numero_cuenta`/etc. en el tercero. */
+  /**
+   * @deprecated Desde doc §7.5: el endpoint `POST /registrar-pago` YA NO
+   * valida los datos bancarios del tercero. Este código se mantiene por
+   * compatibilidad con backends antiguos pero no debería activarse.
+   */
   TERCERO_SIN_DATOS_BANCARIOS: 'TERCERO_SIN_DATOS_BANCARIOS',
+  /**
+   * `descuento_concepto_id` en `PUT /operarios/{op}` no existe, no es
+   * `tipo=DEDUCCION_VOLUNTARIA` o está inactivo (doc §7.4).
+   */
+  DESCUENTO_CONCEPTO_INVALIDO: 'DESCUENTO_CONCEPTO_INVALIDO',
   /**
    * Intento de eliminar/liquidar un tercero que no tiene operarios en esa
    * nómina. Aplica a DELETE /nominas/{id}/terceros/{tercero} y POST /liquidar

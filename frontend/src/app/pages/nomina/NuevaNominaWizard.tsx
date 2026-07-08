@@ -1914,7 +1914,7 @@ export default function NuevaNominaWizard() {
             <div className="flex items-start gap-2">
               <Settings2 className="h-6 w-6 text-primary mt-0.5" />
               <div>
-                <DialogTitle>Promedios Anuales por Lote</DialogTitle>
+                <DialogTitle>Promedios por Lote</DialogTitle>
                 <DialogDescription className="mt-1">
                   Kg promedio por gajo para cada lote. El "Auto" lo calcula el sistema
                   desde los viajes del período; el "Manual" lo sobrescribe solo para esta nómina.
@@ -2035,45 +2035,41 @@ export default function NuevaNominaWizard() {
             );
           })()}
 
-          {/* Tabla de promedios por lote (solo lotes con cosechas en el período) */}
+          {/* Tabla de promedios por lote (solo lotes con cosechas en el período).
+              4 columnas: Fecha Actualización | Lote | Auto | Ajuste Manual. */}
           <div className="rounded-lg border overflow-hidden">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-muted/50 text-xs text-muted-foreground">
-                  <th className="text-left p-3 pl-5 font-semibold">Lote</th>
-                  <th className="text-center p-3 font-semibold">Año</th>
+                  <th className="text-left p-3 pl-5 font-semibold">
+                    Fecha <span className="font-normal text-[10px] block leading-tight">Actualización</span>
+                  </th>
+                  <th className="text-left p-3 font-semibold">Lote</th>
                   <th className="text-right p-3 font-semibold">
                     Auto <span className="font-normal text-[10px] block leading-tight">(viajes período)</span>
                   </th>
-                  <th className="text-right p-3 font-semibold">
-                    Manual <span className="font-normal text-[10px] block leading-tight">(esta nómina)</span>
-                  </th>
-                  <th className="text-right p-3 font-semibold">
-                    Efectivo <span className="font-normal text-[10px] block leading-tight">(kg/gajo)</span>
-                  </th>
-                  <th className="text-left p-3 pr-5 font-semibold">
-                    Fecha <span className="font-normal text-[10px] block leading-tight">Actualización</span>
+                  <th className="text-right p-3 pr-5 font-semibold">
+                    Ajuste Manual <span className="font-normal text-[10px] block leading-tight">(esta nómina)</span>
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {cargandoBundle ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-8 text-sm text-muted-foreground">
+                    <td colSpan={4} className="text-center py-8 text-sm text-muted-foreground">
                       <Loader2 className="h-5 w-5 animate-spin inline mr-2" />
                       Cargando promedios...
                     </td>
                   </tr>
                 ) : !bundleCosecha || bundleCosecha.promedios_por_lote.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-8 text-sm text-muted-foreground">
+                    <td colSpan={4} className="text-center py-8 text-sm text-muted-foreground">
                       No hay lotes con cosechas en este período.
                     </td>
                   </tr>
                 ) : (
                   bundleCosecha.promedios_por_lote.map((p) => {
                     const valorActual = promedioValorActual(p.lote_id);
-                    const efectivoMostrado = valorActual > 0 ? valorActual : p.promedio_efectivo;
                     const fechaAct = fechasPromedioLote.get(p.lote_id);
                     const fechaFmt = fechaAct
                       ? new Date(fechaAct).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -2083,14 +2079,14 @@ export default function NuevaNominaWizard() {
                         key={p.lote_id}
                         className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
                       >
-                        <td className="p-3 pl-5 font-medium text-sm">{p.lote_nombre}</td>
-                        <td className="p-3 text-center text-sm text-muted-foreground">
-                          {anioPromedios}
+                        <td className="p-3 pl-5 text-xs text-muted-foreground">
+                          {fechaFmt}
                         </td>
+                        <td className="p-3 font-medium text-sm">{p.lote_nombre}</td>
                         <td className="p-3 text-right text-sm text-muted-foreground">
                           {p.promedio_auto.toFixed(2)}
                         </td>
-                        <td className="p-3 text-right">
+                        <td className="p-3 pr-5 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <Input
                               type="number"
@@ -2107,15 +2103,6 @@ export default function NuevaNominaWizard() {
                               }
                             />
                           </div>
-                        </td>
-                        <td className="p-3 text-right text-sm font-semibold text-primary">
-                          {efectivoMostrado.toFixed(2)}
-                        </td>
-                        <td className="p-3 pr-5 text-left text-xs text-muted-foreground">
-                          <span className="inline-flex items-center gap-1.5">
-                            <Calendar className="h-3 w-3" />
-                            {fechaFmt}
-                          </span>
                         </td>
                       </tr>
                     );

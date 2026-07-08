@@ -1003,7 +1003,7 @@ export default function NominaDetalle() {
       (planilla.jornales ?? []).forEach((j) => {
         if (j.operario_id == null || !operariosSet.has(j.operario_id)) return;
         const key = catDeJornal(j.categoria, j.tipo ?? null);
-        // FINCA no tiene lote/sublote — agrupamos por trabajo realizado
+        // FINCA no tiene lote/sublote — se agrupa por trabajo realizado
         // (nombre de la labor, nombre_trabajo o descripción libre).
         let loteName: string;
         let subloteName: string;
@@ -1045,13 +1045,20 @@ export default function NominaDetalle() {
     return cats.filter((c) => c.filas.length > 0);
   };
 
+  // Colores por categoría (mismo esquema visual de V.16):
+  //  - cosecha  → amber
+  //  - poda     → primary (verde)
+  //  - fertilizacion → info (azul)
+  //  - plateo   → purple
+  //  - sanidad  → success (verde éxito)
+  //  - otros/finca → gris
   const acumCategoria = (color: CategoriaLabor['color']) => {
     switch (color) {
       case 'amber': return { header: 'text-amber-600', total: 'text-amber-600' };
-      case 'green': return { header: 'text-emerald-700', total: 'text-foreground' };
-      case 'blue': return { header: 'text-sky-700', total: 'text-sky-700' };
+      case 'green': return { header: 'text-primary', total: 'text-primary' };
+      case 'blue': return { header: 'text-info', total: 'text-info' };
       case 'purple': return { header: 'text-purple-700', total: 'text-purple-700' };
-      case 'red': return { header: 'text-red-600', total: 'text-red-600' };
+      case 'red': return { header: 'text-success', total: 'text-success' };
       default: return { header: 'text-muted-foreground', total: 'text-foreground' };
     }
   };
@@ -1110,41 +1117,6 @@ export default function NominaDetalle() {
           </div>
 
           <div className="flex gap-2">
-            {/* Editar/Eliminar solo en BORRADOR sin liquidados (el backend
-                bloquea con NOMINA_CON_LIQUIDADOS si ya hay alguno cerrado). */}
-            {esBorrador && liquidados === 0 && (
-              <>
-                <Button
-                  variant="outline"
-                  className="gap-2"
-                  onClick={abrirEditar}
-                  title="Editar período de la nómina"
-                >
-                  <Pencil className="h-4 w-4" />
-                  Editar
-                </Button>
-                <Button
-                  variant="outline"
-                  className="gap-2 text-destructive hover:bg-destructive/10 hover:text-destructive hover:border-destructive/50"
-                  onClick={() => setConfirmarEliminar(true)}
-                  title="Eliminar nómina"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Eliminar
-                </Button>
-              </>
-            )}
-            {esBorrador && (
-              <Button
-                variant="default"
-                className="gap-2"
-                onClick={() => setConfirmarCerrar(true)}
-                disabled={empleados.length === 0 || pendientes > 0}
-              >
-                <Lock className="h-4 w-4" />
-                Cerrar Nómina
-              </Button>
-            )}
             <Button variant="outline" className="gap-2">
               <Download className="h-4 w-4" />
               Exportar
@@ -1445,9 +1417,10 @@ export default function NominaDetalle() {
                     </div>
                   </div>
 
-                  {/* Tabla por labor — se alimenta de las planillas del período.
-                      FINCA va en su propia tabla debajo porque no tiene
-                      lote/sublote/promedio/peso — columnas quedarían vacías. */}
+                  {/* Tabla de labores agrupadas — mismo layout que V.16.
+                      FINCA sale en su propia tabla debajo porque no tiene
+                      lote/sublote/promedio/peso. El "Total orden de pago" va
+                      al final después de ambas tablas. */}
                   {categorias.length === 0 ? (
                     <div className="py-10 text-center text-sm text-muted-foreground">
                       {planillasPeriodo.length === 0
@@ -1460,7 +1433,7 @@ export default function NominaDetalle() {
                         <div className="overflow-x-auto">
                           <table className="w-full text-sm">
                             <thead>
-                              <tr className="border-b border-border bg-muted/20 text-xs text-muted-foreground">
+                              <tr className="border-b border-border bg-muted/30 text-xs text-muted-foreground">
                                 <th className="text-left p-3 pl-5 font-semibold">Lote</th>
                                 <th className="text-left p-3 font-semibold">Sublote</th>
                                 <th className="text-right p-3 font-semibold">Cantidad</th>
@@ -1475,43 +1448,48 @@ export default function NominaDetalle() {
                                 const col = acumCategoria(cat.color);
                                 return (
                                   <React.Fragment key={cat.key}>
-                                    <tr>
-                                      <td colSpan={7} className={`px-5 pt-3 pb-1 text-xs font-bold tracking-wide ${col.header}`}>
+                                    {/* Encabezado de grupo */}
+                                    <tr className="bg-muted/40 border-b border-border">
+                                      <td colSpan={7} className={`px-5 py-1.5 text-xs font-bold uppercase tracking-wide ${col.header}`}>
                                         {cat.titulo}
                                       </td>
                                     </tr>
                                     {cat.filas.map((f, idx) => (
-                                      <tr key={`${cat.key}-${idx}`} className="border-b border-border/40 last:border-0">
-                                        <td className="p-3 pl-5 font-semibold uppercase text-xs">{f.lote}</td>
-                                        <td className="p-3 text-xs text-muted-foreground">{f.sublote}</td>
-                                        <td className="p-3 text-right">
-                                          <span className="font-semibold">{f.cantidad.toLocaleString('es-CO')}</span>
-                                          <span className="text-muted-foreground text-xs ml-1">{f.unidad}</span>
+                                      <tr
+                                        key={`${cat.key}-${idx}`}
+                                        className={`border-b border-border/40 ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}
+                                      >
+                                        <td className="p-3 pl-5 font-semibold">{f.lote}</td>
+                                        <td className="p-3 text-muted-foreground">{f.sublote}</td>
+                                        <td className="p-3 text-right font-semibold">
+                                          {f.cantidad.toLocaleString('es-CO')}
+                                          <span className="text-xs text-muted-foreground ml-1">{f.unidad}</span>
                                         </td>
-                                        <td className="p-3 text-right text-xs text-muted-foreground">
+                                        <td className="p-3 text-right text-muted-foreground">
                                           {f.promedio_kg != null && f.promedio_kg > 0
                                             ? f.promedio_kg.toFixed(1)
                                             : '—'}
                                         </td>
-                                        <td className="p-3 text-right text-xs">
+                                        <td className="p-3 text-right font-semibold">
                                           {f.peso_kg != null && f.peso_kg > 0
                                             ? f.peso_kg.toLocaleString('es-CO')
                                             : '—'}
                                         </td>
-                                        <td className="p-3 text-right text-xs text-muted-foreground">
-                                          ${f.precio.toLocaleString('es-CO')}{' '}
-                                          <span className="text-[10px]">{f.precio_unidad}</span>
+                                        <td className="p-3 text-right text-muted-foreground">
+                                          ${f.precio.toLocaleString('es-CO')}
+                                          <span className="text-xs ml-1">{f.precio_unidad}</span>
                                         </td>
-                                        <td className={`p-3 pr-5 text-right font-semibold ${col.total}`}>
+                                        <td className={`p-3 pr-5 text-right font-bold ${col.total}`}>
                                           ${f.total.toLocaleString('es-CO')}
                                         </td>
                                       </tr>
                                     ))}
-                                    <tr className="bg-muted/10">
-                                      <td colSpan={6} className="p-3 pl-5 text-right text-xs font-medium text-muted-foreground">
+                                    {/* Subtotal por grupo */}
+                                    <tr className="border-b border-border bg-muted/10">
+                                      <td colSpan={6} className="p-2 pl-5 text-right text-xs text-muted-foreground">
                                         Subtotal {cat.titulo.charAt(0) + cat.titulo.slice(1).toLowerCase()}
                                       </td>
-                                      <td className={`p-3 pr-5 text-right font-bold ${col.total}`}>
+                                      <td className={`p-2 pr-5 text-right text-sm font-bold ${col.total}`}>
                                         ${cat.subtotal.toLocaleString('es-CO')}
                                       </td>
                                     </tr>
@@ -1523,44 +1501,48 @@ export default function NominaDetalle() {
                         </div>
                       )}
 
-                      {/* Tabla aparte para labores de FINCA — sin
-                          lote/sublote/promedio/peso, con columnas propias. */}
+                      {/* Tabla aparte para labores de FINCA — mismo estilo
+                          visual que V.16 pero con columnas propias porque
+                          finca no tiene lote/sublote/promedio/peso. */}
                       {categorias.filter((c) => c.key === 'finca').map((cat) => {
                         const col = acumCategoria(cat.color);
                         return (
                           <div key={cat.key} className="overflow-x-auto border-t border-border">
                             <table className="w-full text-sm">
                               <thead>
-                                <tr className="border-b border-border bg-muted/20 text-xs text-muted-foreground">
+                                <tr className="border-b border-border bg-muted/30 text-xs text-muted-foreground">
                                   <th className="text-left p-3 pl-5 font-semibold">Trabajo realizado</th>
                                   <th className="text-right p-3 font-semibold">Precio Unit.</th>
                                   <th className="text-right p-3 pr-5 font-semibold">Total</th>
                                 </tr>
                               </thead>
                               <tbody>
-                                <tr>
-                                  <td colSpan={3} className={`px-5 pt-3 pb-1 text-xs font-bold tracking-wide ${col.header}`}>
+                                <tr className="bg-muted/40 border-b border-border">
+                                  <td colSpan={3} className={`px-5 py-1.5 text-xs font-bold uppercase tracking-wide ${col.header}`}>
                                     Trabajos de finca
                                   </td>
                                 </tr>
                                 {cat.filas.map((f, idx) => (
-                                  <tr key={`finca-${idx}`} className="border-b border-border/40 last:border-0">
-                                    <td className="p-3 pl-5 font-semibold uppercase text-xs">
+                                  <tr
+                                    key={`finca-${idx}`}
+                                    className={`border-b border-border/40 ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}
+                                  >
+                                    <td className="p-3 pl-5 font-semibold">
                                       {f.lote !== '—' ? f.lote : 'Trabajo de finca'}
                                     </td>
-                                    <td className="p-3 text-right text-xs text-muted-foreground">
+                                    <td className="p-3 text-right text-muted-foreground">
                                       ${f.precio.toLocaleString('es-CO')}
                                     </td>
-                                    <td className={`p-3 pr-5 text-right font-semibold ${col.total}`}>
+                                    <td className={`p-3 pr-5 text-right font-bold ${col.total}`}>
                                       ${f.total.toLocaleString('es-CO')}
                                     </td>
                                   </tr>
                                 ))}
-                                <tr className="bg-muted/10">
-                                  <td colSpan={2} className="p-3 pl-5 text-right text-xs font-medium text-muted-foreground">
+                                <tr className="border-b border-border bg-muted/10">
+                                  <td colSpan={2} className="p-2 pl-5 text-right text-xs text-muted-foreground">
                                     Subtotal Finca
                                   </td>
-                                  <td className={`p-3 pr-5 text-right font-bold ${col.total}`}>
+                                  <td className={`p-2 pr-5 text-right text-sm font-bold ${col.total}`}>
                                     ${cat.subtotal.toLocaleString('es-CO')}
                                   </td>
                                 </tr>
@@ -1570,11 +1552,10 @@ export default function NominaDetalle() {
                         );
                       })}
 
-                      {/* Total orden de pago — al final, después de todas las
-                          tablas (campo + finca). Sumamos `total` que ya incluye
-                          finca en su cálculo. */}
-                      <div className="border-t-2 border-border bg-muted/30 flex items-center justify-between px-5 py-3">
-                        <p className="text-xs font-bold uppercase text-primary tracking-wide">
+                      {/* Total orden de pago — al final después de ambas
+                          tablas (campo + finca). Estilo tfoot de V.16. */}
+                      <div className="border-t-2 border-primary/20 bg-muted/20 flex items-center justify-between px-5 py-3">
+                        <p className="text-sm font-bold text-primary uppercase tracking-wide">
                           Total orden de pago a {grupo.tercero_nombre}
                         </p>
                         <p className="text-lg font-bold text-primary">
@@ -1586,6 +1567,28 @@ export default function NominaDetalle() {
                 </Card>
               );
             })
+          )}
+
+          {/* Total general terceros — igual que V.16, card amber flotante
+              al final del listado. */}
+          {tercerosAgrupados.length > 0 && (
+            <div className="flex justify-end">
+              <div className="rounded-xl border border-amber-300/50 bg-amber-50/60 dark:bg-amber-950/20 px-6 py-3 flex items-center gap-6">
+                <p className="text-sm text-muted-foreground">
+                  Total a transferir a empresas terceras
+                </p>
+                <p className="text-2xl font-bold text-amber-700">
+                  ${tercerosAgrupados
+                    .reduce((s, g) => {
+                      const cats = consolidarPorTercero(g.operarios);
+                      const est = cats.reduce((a, c) => a + c.subtotal, 0);
+                      const actaTot = toNumber(g.acta?.total_a_transferir);
+                      return s + (actaTot > 0 ? actaTot : est);
+                    }, 0)
+                    .toLocaleString('es-CO')}
+                </p>
+              </div>
+            </div>
           )}
         </div>
       )}
