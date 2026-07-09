@@ -203,14 +203,26 @@ export default function ConteoCosechaWizard({ viaje, onClose }: ConteoCosechaWiz
       for (const cosecha of cosechas) {
         const cosechaId = (cosecha as any).apiCosechaId;
         if (!cosechaId) continue;
-        // Agregar detalle al viaje
-        const detRes = await viajesApi.agregarDetalle(viajeId, cosechaId);
+        // Agregar detalle al viaje pasando `gajos_en_viaje` explícito (§5.4)
+        // para que el backend haga split parcial. Si no pasáramos el valor
+        // (null = modo legacy), la cosecha quedaría 100% asignada a este
+        // viaje y no aparecería en los siguientes (aunque otros gajos
+        // quedaran pendientes).
+        const detRes = await viajesApi.agregarDetalle(
+          viajeId,
+          cosechaId,
+          cosecha.gajos && cosecha.gajos > 0 ? cosecha.gajos : null,
+        );
         const detalleId = detRes.data.id;
-        // Hidratar reconteo si tiene gajos
-        if (cosecha.gajos) {
+        // Solo llamamos `PUT /reconteo` si hay peso a confirmar.
+        // El POST ya persistió `gajos_en_viaje`; el PUT también actualiza
+        // `registro_cosecha.gajos_reconteo = SUM(splits)`, lo cual colapsa
+        // `gajos_pendientes_enviar` a 0 y hace desaparecer la cosecha del
+        // listado disponible en siguientes viajes.
+        if (cosecha.pesoKg && cosecha.pesoKg > 0) {
           await viajesApi.hidratarReconteo(viajeId, detalleId, {
-            gajos_reconteo: cosecha.gajos,
-            peso_confirmado: cosecha.pesoKg || undefined,
+            gajos_en_viaje: cosecha.gajos,
+            peso_confirmado: cosecha.pesoKg,
           });
         }
         // Aprobar reconteo

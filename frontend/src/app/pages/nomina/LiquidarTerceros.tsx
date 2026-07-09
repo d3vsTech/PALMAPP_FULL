@@ -1,19 +1,19 @@
 /**
- * Liquidación de Terceros — conectada a la API (doc API_NOMINA.md §7).
+ * Liquidación de Terceros — conectada a la API v2 (doc §7).
  *
- * Permite ver las actas agrupadas por empresa contratista, ajustar días/tarifa/
- * ajuste/observación por operario, registrar el pago de cada acta y descargar
- * el PDF.
+ * Vista de resumen: una tarjeta por empresa contratista con tabla solo-lectura
+ * de operarios (nombre + cargo + jornales + cosecha + descuentos + subtotal).
+ * Para editar descuentos por operario, el usuario navega a
+ * `/nomina/{id}/tercero/{terceroId}/liquidar` (`LiquidarTerceroDetalle`).
  *
  * Endpoints usados:
  *  - GET  /nominas/{id}/terceros-actas                    → listar resumen (§7.1)
  *  - GET  /nominas/{id}/terceros/{terceroId}              → detalle acta + operarios (§7.2)
  *  - POST /nominas/{id}/terceros/{terceroId}/liquidar     → calcular acta (§7.3)
- *  - PUT  .../operarios/{op}                              → ajustar fila (§7.4)
- *  - POST .../registrar-pago                              → marcar PAGADO (§7.5)
- *  - GET  .../acta/pdf                                    → descargar PDF (§7.6)
+ *  - POST .../registrar-pago                              → marcar PAGADO (§7.7)
+ *  - GET  .../acta/pdf                                    → descargar PDF (§7.8)
  *
- * El pago se puede registrar aunque la nómina esté CERRADA — es excepción
+ * El pago se puede registrar aunque la nómina esté CERRADA — excepción
  * documentada al patrón "CERRADA = inmutable".
  */
 import { useEffect, useMemo, useState } from 'react';
@@ -42,7 +42,6 @@ import {
   nominaApi,
   NominaTerceroActaResumen,
   NominaTerceroActaDetalle,
-  NominaTerceroOperario,
   MetodoPagoTercero,
   NominaErrorCodes,
 } from '../../../api/nomina';
@@ -52,18 +51,6 @@ function toNumber(v: string | number | null | undefined): number {
   if (v == null) return 0;
   if (typeof v === 'number') return v;
   return parseFloat(v) || 0;
-}
-
-/**
- * Estado local por operario para ediciones todavía no persistidas.
- * Las ediciones se aplican con `nominaApi.terceros.actualizarOperario` al
- * salir del input (onBlur).
- */
-interface OperarioEditState {
-  dias: number;
-  tarifa_dia: number;
-  ajuste: number;
-  observacion: string;
 }
 
 export default function LiquidarTerceros() {
@@ -83,7 +70,6 @@ export default function LiquidarTerceros() {
    */
   const [detalles, setDetalles] = useState<Map<number, NominaTerceroActaDetalle>>(new Map());
   const [cargando, setCargando] = useState(true);
-  const [edits, setEdits] = useState<Record<number, OperarioEditState>>({});
 
   const [modalPagoTerceroId, setModalPagoTerceroId] = useState<number | null>(null);
   const [pagandoForm, setPagandoForm] = useState<{
@@ -118,21 +104,11 @@ export default function LiquidarTerceros() {
         ),
       );
       const map = new Map<number, NominaTerceroActaDetalle>();
-      const init: Record<number, OperarioEditState> = {};
       for (const par of detallesPares) {
         if (!par) continue;
         map.set(par.terceroId, par.detalle);
-        for (const op of par.detalle.operarios) {
-          init[op.id] = {
-            dias: op.dias,
-            tarifa_dia: toNumber(op.tarifa_dia),
-            ajuste: toNumber(op.ajuste),
-            observacion: op.observacion ?? '',
-          };
-        }
       }
       setDetalles(map);
-      setEdits(init);
     } catch (err) {
       const e = err as ApiError;
       if (e.status !== 404) {
@@ -154,34 +130,8 @@ export default function LiquidarTerceros() {
   );
   const todasPagadas = actas.length > 0 && actas.every((a) => a.estado_pago === 'PAGADO');
 
-  const updateLocal = (operarioId: number, campo: keyof OperarioEditState, valor: any) => {
-    setEdits((prev) => ({
-      ...prev,
-      [operarioId]: { ...prev[operarioId], [campo]: valor },
-    }));
-  };
-
-  /** Persiste cambios del operario al hacer blur. Solo manda el campo modificado. */
-  const persistirOperario = async (terceroId: number, operario: NominaTerceroOperario) => {
-    if (!nominaId) return;
-    const edit = edits[operario.id];
-    if (!edit) return;
-    // Detectar qué cambió
-    const payload: { dias?: number; tarifa_dia?: number; ajuste?: number; observacion?: string } = {};
-    if (edit.dias !== operario.dias) payload.dias = edit.dias;
-    if (edit.tarifa_dia !== toNumber(operario.tarifa_dia)) payload.tarifa_dia = edit.tarifa_dia;
-    if (edit.ajuste !== toNumber(operario.ajuste)) payload.ajuste = edit.ajuste;
-    if (edit.observacion !== (operario.observacion ?? '')) payload.observacion = edit.observacion;
-    if (Object.keys(payload).length === 0) return;
-
-    try {
-      await nominaApi.terceros.actualizarOperario(nominaId, terceroId, operario.id, payload);
-      cargar();
-    } catch (err) {
-      const e = err as ApiError;
-      toast.error(e.message ?? 'No se pudo actualizar el operario');
-    }
-  };
+  // Edición de descuentos vive en la pantalla dedicada
+  // `/nomina/{id}/tercero/{terceroId}/liquidar` (§7.5 / §7.6).
 
   /** Recalcula la acta de un tercero — útil tras ajustar varios operarios. */
   const reliquidarActa = async (terceroId: number) => {
@@ -405,6 +355,16 @@ export default function LiquidarTerceros() {
                       Recalcular
                     </Button>
                   )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5"
+                    onClick={() =>
+                      navigate(`/nomina/${nominaId}/tercero/${acta.tercero_id}/liquidar`)
+                    }
+                  >
+                    Ver detalle
+                  </Button>
                   {!estaPagada ? (
                     <Button
                       size="sm"
@@ -422,7 +382,8 @@ export default function LiquidarTerceros() {
                 </div>
               </div>
 
-              {/* Tabla detalle operarios */}
+              {/* Tabla detalle operarios (solo-lectura — edición vive en la
+                  pantalla dedicada). */}
               {operarios.length === 0 ? (
                 <div className="py-8 text-center text-sm text-muted-foreground">
                   No hay operarios en esta acta todavía.
@@ -434,22 +395,18 @@ export default function LiquidarTerceros() {
                       <tr className="border-b border-border bg-muted/20 text-xs text-muted-foreground">
                         <th className="text-left p-3 pl-5 font-semibold">Colaborador</th>
                         <th className="text-left p-3 font-semibold">Cargo</th>
-                        <th className="text-right p-3 font-semibold">Días</th>
-                        <th className="text-right p-3 font-semibold">Tarifa/día</th>
-                        <th className="text-right p-3 font-semibold">Ajuste</th>
-                        <th className="text-right p-3 font-semibold">Subtotal</th>
-                        <th className="text-left p-3 font-semibold">Observación</th>
+                        <th className="text-right p-3 font-semibold">Jornales</th>
+                        <th className="text-right p-3 font-semibold">Cosecha</th>
+                        <th className="text-right p-3 font-semibold">Descuentos</th>
+                        <th className="text-right p-3 pr-5 font-semibold">Subtotal</th>
                       </tr>
                     </thead>
                     <tbody>
                       {operarios.map((op, idx) => {
-                        const edit = edits[op.id] ?? {
-                          dias: op.dias,
-                          tarifa_dia: toNumber(op.tarifa_dia),
-                          ajuste: toNumber(op.ajuste),
-                          observacion: op.observacion ?? '',
-                        };
-                        const subtotal = edit.dias * edit.tarifa_dia + edit.ajuste;
+                        const totalJornales = toNumber(op.total_jornales);
+                        const totalCosecha = toNumber(op.total_cosecha);
+                        const totalDescuentos = toNumber(op.total_descuentos);
+                        const subtotal = toNumber(op.subtotal);
                         const iniciales = (op.nombre_completo ?? '').split(' ').slice(0, 2).map((n) => n[0] ?? '').join('').toUpperCase() || '?';
                         return (
                           <tr
@@ -471,48 +428,16 @@ export default function LiquidarTerceros() {
                             </td>
                             <td className="p-3 text-muted-foreground">{op.cargo || '—'}</td>
                             <td className="p-3 text-right">
-                              <Input
-                                type="number"
-                                className="w-16 h-7 text-right text-xs"
-                                value={edit.dias}
-                                disabled={estaPagada}
-                                onChange={(e) => updateLocal(op.id, 'dias', parseInt(e.target.value) || 0)}
-                                onBlur={() => persistirOperario(acta.tercero_id, op)}
-                              />
+                              ${totalJornales.toLocaleString('es-CO')}
                             </td>
                             <td className="p-3 text-right">
-                              <Input
-                                type="number"
-                                className="w-24 h-7 text-right text-xs"
-                                value={edit.tarifa_dia}
-                                disabled={estaPagada}
-                                onChange={(e) => updateLocal(op.id, 'tarifa_dia', parseInt(e.target.value) || 0)}
-                                onBlur={() => persistirOperario(acta.tercero_id, op)}
-                              />
+                              ${totalCosecha.toLocaleString('es-CO')}
                             </td>
-                            <td className="p-3 text-right">
-                              <Input
-                                type="number"
-                                className="w-24 h-7 text-right text-xs"
-                                value={edit.ajuste || ''}
-                                placeholder="0"
-                                disabled={estaPagada}
-                                onChange={(e) => updateLocal(op.id, 'ajuste', parseInt(e.target.value) || 0)}
-                                onBlur={() => persistirOperario(acta.tercero_id, op)}
-                              />
+                            <td className="p-3 text-right text-destructive">
+                              {totalDescuentos > 0 ? `−$${totalDescuentos.toLocaleString('es-CO')}` : '$0'}
                             </td>
-                            <td className="p-3 text-right font-semibold">
+                            <td className="p-3 pr-5 text-right font-semibold text-primary">
                               ${subtotal.toLocaleString('es-CO')}
-                            </td>
-                            <td className="p-3">
-                              <Input
-                                className="h-7 text-xs w-40"
-                                value={edit.observacion}
-                                placeholder="Opcional..."
-                                disabled={estaPagada}
-                                onChange={(e) => updateLocal(op.id, 'observacion', e.target.value)}
-                                onBlur={() => persistirOperario(acta.tercero_id, op)}
-                              />
                             </td>
                           </tr>
                         );

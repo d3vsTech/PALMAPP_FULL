@@ -174,7 +174,7 @@ export default function NuevoViajeWizard() {
           <CardContent className="space-y-6">
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               <div className="space-y-2">
-                <Label htmlFor="fecha">Fecha del Viaje *</Label>
+                <Label htmlFor="fecha">Fecha del Viaje <span className="text-destructive">*</span></Label>
                 <Input
                   id="fecha"
                   type="date"
@@ -184,7 +184,7 @@ export default function NuevoViajeWizard() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="transportador">Transportador *</Label>
+                <Label htmlFor="transportador">Transportador <span className="text-destructive">*</span></Label>
                 <Select
                   value={formData.transportador}
                   onValueChange={handleTransportadorChange}
@@ -203,7 +203,7 @@ export default function NuevoViajeWizard() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="conductor">Conductor *</Label>
+                <Label htmlFor="conductor">Conductor <span className="text-destructive">*</span></Label>
                 <Input
                   id="conductor"
                   placeholder="Selecciona un transportador primero"
@@ -214,7 +214,7 @@ export default function NuevoViajeWizard() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="placaVehiculo">Placa del Vehículo *</Label>
+                <Label htmlFor="placaVehiculo">Placa del Vehículo <span className="text-destructive">*</span></Label>
                 <Input
                   id="placaVehiculo"
                   placeholder="Selecciona un transportador primero"
@@ -225,7 +225,7 @@ export default function NuevoViajeWizard() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="extractora">Extractora Destino *</Label>
+                <Label htmlFor="extractora">Extractora Destino <span className="text-destructive">*</span></Label>
                 <Select
                   value={formData.extractora}
                   onValueChange={(value) => handleInputChange('extractora', value)}
@@ -244,7 +244,7 @@ export default function NuevoViajeWizard() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="horaSalida">Hora de Salida *</Label>
+                <Label htmlFor="horaSalida">Hora de Salida <span className="text-destructive">*</span></Label>
                 <Input
                   id="horaSalida"
                   type="time"

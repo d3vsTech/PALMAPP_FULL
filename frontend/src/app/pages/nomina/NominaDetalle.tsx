@@ -1511,17 +1511,14 @@ export default function NominaDetalle() {
                             <table className="w-full text-sm">
                               <thead>
                                 <tr className="border-b border-border bg-muted/30 text-xs text-muted-foreground">
-                                  <th className="text-left p-3 pl-5 font-semibold">Trabajo realizado</th>
+                                  <th className={`text-left p-3 pl-5 font-bold uppercase tracking-wide ${col.header}`}>
+                                    Trabajos de finca
+                                  </th>
                                   <th className="text-right p-3 font-semibold">Precio Unit.</th>
                                   <th className="text-right p-3 pr-5 font-semibold">Total</th>
                                 </tr>
                               </thead>
                               <tbody>
-                                <tr className="bg-muted/40 border-b border-border">
-                                  <td colSpan={3} className={`px-5 py-1.5 text-xs font-bold uppercase tracking-wide ${col.header}`}>
-                                    Trabajos de finca
-                                  </td>
-                                </tr>
                                 {cat.filas.map((f, idx) => (
                                   <tr
                                     key={`finca-${idx}`}

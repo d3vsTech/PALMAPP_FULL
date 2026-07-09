@@ -153,11 +153,26 @@ export interface ExtractoraSelect {
 
 // ── Viaje y detalles ────────────────────────────────────────────────────────
 
-/** Detalle (pivot viaje ↔ cosecha) */
+/**
+ * Detalle (pivot viaje ↔ cosecha). Soporta cosechas partidas (§2.5):
+ * una misma cosecha puede repartirse entre múltiples viajes, cada uno con
+ * su propio `gajos_en_viaje`.
+ *
+ * - `gajos_en_viaje = null` → todos los gajos disponibles van en este viaje
+ *   (modo legacy, sin split).
+ * - `gajos_en_viaje = N`    → solo N gajos de esa cosecha van en este viaje.
+ *
+ * Al guardar/editar, el backend recalcula
+ * `registro_cosecha.gajos_reconteo = SUM(viaje_detalle.gajos_en_viaje)` sobre
+ * los splits activos, para que la nómina siempre lea el total verificado
+ * acumulado.
+ */
 export interface ViajeDetalle {
   id: number;
   viaje_id: number;
   cosecha_id: number;
+  /** Gajos de esa cosecha que van en ESTE viaje. NULL = todos (sin split). */
+  gajos_en_viaje?: number | null;
   reconteo_aprobado: boolean;
   reconteo_aprobado_at?: string | null;
   reconteo_aprobado_por?: number | null;
@@ -263,8 +278,30 @@ export interface EditarViajePayload {
   observaciones?: string | null;
 }
 
-/** Payload para hidratar el reconteo de un detalle */
+/**
+ * Payload para `PUT /viajes/{id}/detalles/{detalleId}/reconteo` (§5.5).
+ *
+ * Representa el conteo verificado de gajos de ESTA cosecha en ESTE viaje
+ * (reemplaza al antiguo `gajos_reconteo` a nivel de registro_cosecha para
+ * soportar splits). El backend recalcula
+ * `registro_cosecha.gajos_reconteo = SUM(viaje_detalle.gajos_en_viaje)` de
+ * todos los splits activos automáticamente.
+ *
+ * Errores posibles: 422 `GAJOS_INSUFICIENTES` si `gajos_en_viaje` supera los
+ * gajos disponibles restantes de la cosecha; 409 `VIAJE_NO_EDITABLE` /
+ * `DETALLE_APROBADO` según el estado.
+ */
 export interface HidratarReconteoPayload {
+  /** Reconteo verificado de esta cosecha en este viaje (obligatorio). */
+  gajos_en_viaje: number;
+  peso_confirmado?: number | null;
+}
+
+/**
+ * @deprecated Usar `HidratarReconteoPayload` con `gajos_en_viaje`. Se mantiene
+ * el alias por compatibilidad con código legacy que aún manda `gajos_reconteo`.
+ */
+export interface HidratarReconteoLegacyPayload {
   gajos_reconteo: number;
   peso_confirmado?: number | null;
 }
@@ -297,11 +334,27 @@ export interface OperacionDisponible {
   cosechas_disponibles_count: number;
 }
 
-/** Cosecha libre (sin viaje activo) de una operación */
+/**
+ * Cosecha con gajos pendientes de enviar en una operación (§5.3).
+ *
+ * Cubre dos escenarios:
+ *  - Cosechas sin ningún `viaje_detalle` activo → `gajos_pendientes_enviar`
+ *    = `gajos_reconteo ?? gajos_reportados`.
+ *  - Cosechas con splits parciales → `gajos_pendientes_enviar` = total menos
+ *    la suma de gajos_en_viaje ya asignados a otros viajes.
+ *
+ * Las cosechas completamente asignadas NO aparecen en el listado.
+ */
 export interface CosechaLibre {
   id: number;
   gajos_reportados: number;
   gajos_reconteo?: number | null;
+  /**
+   * Campo computado (no persiste). Gajos que aún se pueden asignar a nuevos
+   * viajes. Fórmula:
+   *   `COALESCE(gajos_reconteo, gajos_reportados) − SUM(gajos_en_viaje activos con valor explícito)`
+   */
+  gajos_pendientes_enviar?: number;
   peso_confirmado?: string | null;
   cuadrilla_count?: number;
   lote?: { id: number; nombre: string };
@@ -570,9 +623,25 @@ export const viajesApi = {
 
   // ── Detalles (cosechas enlazadas al viaje) ───────────────────────────────
 
-  /** POST /viajes/{id}/detalles — enlazar cosecha al viaje (solo CREADO) */
-  agregarDetalle: (viajeId: number, cosechaId: number) =>
-    post<{ data: ViajeDetalle }>(`/viajes/${viajeId}/detalles`, { cosecha_id: cosechaId }),
+  /**
+   * POST /viajes/{id}/detalles — enlazar cosecha al viaje (solo CREADO).
+   *
+   * Acepta `gajos_en_viaje` opcional para splits parciales (§5.4):
+   *  - Omitido / null → todos los gajos restantes de la cosecha van en este
+   *    viaje (modo legacy).
+   *  - Valor entero → split parcial. Solo esa cantidad va en este camión.
+   *    El backend valida contra `gajos_pendientes_enviar` de la cosecha
+   *    (422 `GAJOS_INSUFICIENTES` si excede).
+   */
+  agregarDetalle: (
+    viajeId: number,
+    cosechaId: number,
+    gajosEnViaje?: number | null,
+  ) =>
+    post<{ data: ViajeDetalle }>(`/viajes/${viajeId}/detalles`, {
+      cosecha_id: cosechaId,
+      ...(gajosEnViaje != null ? { gajos_en_viaje: gajosEnViaje } : {}),
+    }),
 
   /** DELETE /viajes/{id}/detalles/{detalleId} — quitar cosecha (solo CREADO, no aprobado) */
   eliminarDetalle: (viajeId: number, detalleId: number) =>
@@ -680,6 +749,12 @@ export const ErrorCodes = {
   REMISION_DUPLICADA:     'REMISION_DUPLICADA',
   COSECHA_FUERA_DE_VIAJE: 'COSECHA_FUERA_DE_VIAJE',
   COSECHA_YA_ASIGNADA:    'COSECHA_YA_ASIGNADA',
+  /**
+   * `gajos_en_viaje` supera los gajos disponibles restantes de la cosecha
+   * (§9). Ocurre cuando el operador intenta asignar más gajos de los que
+   * quedan en `gajos_pendientes_enviar`.
+   */
+  GAJOS_INSUFICIENTES:    'GAJOS_INSUFICIENTES',
   OPERACION_NO_APROBADA:  'OPERACION_NO_APROBADA',
   TRANSPORTADOR_INACTIVO: 'TRANSPORTADOR_INACTIVO',
   EXTRACTORA_INACTIVA:    'EXTRACTORA_INACTIVA',

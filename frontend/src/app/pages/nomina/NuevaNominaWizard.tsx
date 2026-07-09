@@ -1283,15 +1283,16 @@ export default function NuevaNominaWizard() {
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium">
-                      Colaboradores Terceros{' '}
-                      <span className="text-xs text-muted-foreground font-normal">
-                        ({operariosSeleccionados.length} seleccionado{operariosSeleccionados.length !== 1 ? 's' : ''})
-                      </span>
-                    </p>
+                    <p className="text-sm font-medium">Operarios Terceros</p>
                     <Badge className="text-xs bg-amber-500/10 text-amber-700 border-amber-300">
                       Prestación de Servicios
                     </Badge>
+                    {operariosSeleccionados.length > 0 && (
+                      <span className="text-xs text-muted-foreground">
+                        ({operariosSeleccionados.length} seleccionado
+                        {operariosSeleccionados.length !== 1 ? 's' : ''})
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     {tercerosUnicos.length > 1 && (
@@ -1361,6 +1362,9 @@ export default function NuevaNominaWizard() {
                               <th className="text-left p-4 font-semibold text-sm text-muted-foreground">
                                 Cargo
                               </th>
+                              <th className="text-right p-4 font-semibold text-sm text-muted-foreground">
+                                Tarifa/Día
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
@@ -1406,6 +1410,13 @@ export default function NuevaNominaWizard() {
                                   </td>
                                   <td className="p-4">
                                     <span className="text-sm font-medium">{op.cargo}</span>
+                                  </td>
+                                  <td className="p-4 text-right">
+                                    <span className="text-sm font-medium">
+                                      {op.tarifa_dia_estimada && op.tarifa_dia_estimada > 0
+                                        ? `$${op.tarifa_dia_estimada.toLocaleString('es-CO')}`
+                                        : '—'}
+                                    </span>
                                   </td>
                                 </tr>
                               );

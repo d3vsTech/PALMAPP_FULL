@@ -562,12 +562,6 @@ export default function Viajes() {
                                   {viaje.estado === 'Creado' ? (
                                     <>
                                       <Button size="sm" variant="outline"
-                                        onClick={(e) => abrirDialogoValidar(viaje, e)}
-                                        className="hover:bg-primary/10 hover:text-primary hover:border-blue-500/30"
-                                        title="Pasar a En Validación">
-                                        <Clock className="h-4 w-4" />
-                                      </Button>
-                                      <Button size="sm" variant="outline"
                                         onClick={() => navigate(`/viajes/${viaje.id}/conteo`, {
                                           state: {
                                             viaje: {
