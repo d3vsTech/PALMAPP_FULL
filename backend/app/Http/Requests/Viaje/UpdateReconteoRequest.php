@@ -14,7 +14,7 @@ class UpdateReconteoRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'gajos_reconteo'  => 'required|integer|min:0',
+            'gajos_en_viaje'  => 'required|integer|min:0',
             'peso_confirmado' => 'nullable|numeric|min:0|max:99999999.99',
         ];
     }
@@ -22,9 +22,9 @@ class UpdateReconteoRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'gajos_reconteo.required' => 'Los gajos del reconteo son obligatorios.',
-            'gajos_reconteo.integer'  => 'Los gajos deben ser un número entero.',
-            'gajos_reconteo.min'      => 'Los gajos no pueden ser negativos.',
+            'gajos_en_viaje.required' => 'Los gajos en viaje son obligatorios.',
+            'gajos_en_viaje.integer'  => 'Los gajos deben ser un número entero.',
+            'gajos_en_viaje.min'      => 'Los gajos no pueden ser negativos.',
         ];
     }
 }

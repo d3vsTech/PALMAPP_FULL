@@ -585,16 +585,15 @@ class TenantController extends Controller
     }
 
     /**
-     * Provisiona los conceptos legales obligatorios (SALUD, PENSION, ARL, FSP_*)
-     * para un tenant recién creado. Sin esto el motor de NominaCalculationService
-     * no podría liquidar empleados del tenant.
-     *
-     * La plantilla inactiva (RETEFUENTE, LIBRANZA, AUX_*, etc.) queda fuera —
-     * el admin la activa desde Configuración → Nómina cuando la necesite.
+     * Provisiona el catálogo completo de conceptos de nómina para un tenant recién
+     * creado: legales activos (SALUD, PENSION, ARL, FSP_*) + plantilla con conceptos
+     * activos por defecto (DCTO_ADELANTO, BONIFICACION, etc.).
+     * Los conceptos inactivos de la plantilla (RETEFUENTE, LIBRANZA, etc.) quedan
+     * disponibles pero desactivados; el admin los activa desde Configuración → Nómina.
      */
     private function seedNominaConceptos(Tenant $tenant): void
     {
-        (new NominaConceptoSeeder())->sembrarParaTenant($tenant, soloActivos: true);
+        (new NominaConceptoSeeder())->sembrarParaTenant($tenant, soloActivos: false);
     }
 
     private function seedMotivosAusencia(Tenant $tenant): void

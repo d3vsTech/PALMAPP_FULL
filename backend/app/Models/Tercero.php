@@ -18,6 +18,7 @@ class Tercero extends Model
         'nit', 'razon_social', 'representante',
         'cedula', 'nombre_completo',
         'nombre_comercial', 'telefono', 'email', 'estado',
+        'banco', 'tipo_cuenta', 'numero_cuenta', 'titular_cuenta',
     ];
 
     protected function casts(): array
@@ -25,6 +26,14 @@ class Tercero extends Model
         return [
             'estado' => 'boolean',
         ];
+    }
+
+    public function getDatosBancariosCompletosAttribute(): bool
+    {
+        return !empty($this->banco)
+            && !empty($this->tipo_cuenta)
+            && !empty($this->numero_cuenta)
+            && !empty($this->titular_cuenta);
     }
 
     public function getNombreDisplayAttribute(): string

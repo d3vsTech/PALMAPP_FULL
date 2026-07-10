@@ -106,6 +106,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'nomina.eliminar',
             'nomina.liquidar',
             'nomina.cerrar',
+            'nomina.pagar-tercero',
 
             'nomina-conceptos.ver',
             'nomina-conceptos.gestionar',

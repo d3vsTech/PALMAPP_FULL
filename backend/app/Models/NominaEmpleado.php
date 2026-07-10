@@ -20,7 +20,7 @@ class NominaEmpleado extends Model
     public const SALARIO_VARIABLE = 'VARIABLE';
 
     protected $fillable = [
-        'tenant_id', 'nomina_id', 'empleado_id', 'salario_tipo',
+        'tenant_id', 'nomina_id', 'empleado_id', 'operario_id', 'tercero_id', 'salario_tipo',
         'salario_base', 'dias_trabajados',
         'total_jornales', 'total_cosecha',
         'dias_ausencia_descontados', 'total_ausencias_descuento', 'total_ausencias_remunerado',
@@ -38,6 +38,8 @@ class NominaEmpleado extends Model
         return [
             'salario_base' => 'decimal:2',
             'dias_trabajados' => 'integer',
+            'operario_id' => 'integer',
+            'tercero_id' => 'integer',
             'total_jornales' => 'decimal:2',
             'total_cosecha' => 'decimal:2',
             'dias_ausencia_descontados' => 'decimal:2',
@@ -71,6 +73,16 @@ class NominaEmpleado extends Model
         return $this->salario_tipo === self::SALARIO_VARIABLE;
     }
 
+    public function esDeOperario(): bool
+    {
+        return $this->operario_id !== null;
+    }
+
+    public function esDeEmpleado(): bool
+    {
+        return $this->empleado_id !== null;
+    }
+
     public function scopePendientes($query)
     {
         return $query->where('estado', self::ESTADO_PENDIENTE);
@@ -89,6 +101,16 @@ class NominaEmpleado extends Model
     public function empleado(): BelongsTo
     {
         return $this->belongsTo(Empleado::class);
+    }
+
+    public function operario(): BelongsTo
+    {
+        return $this->belongsTo(Operario::class);
+    }
+
+    public function tercero(): BelongsTo
+    {
+        return $this->belongsTo(Tercero::class);
     }
 
     public function conceptos(): HasMany
