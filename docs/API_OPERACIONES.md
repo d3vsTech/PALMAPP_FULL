@@ -31,7 +31,7 @@ Accept: application/json
 ```
 Códigos especiales del módulo:
 - `OPERACION_APROBADA` (409) — intento de mutar una planilla ya aprobada.
-- `OPERACION_CON_HIJOS` (409) — intento de eliminar planilla con jornales/cosechas/ausencias/horas extras.
+- `OPERACION_CON_HIJOS` (409) — (obsoleto para `DELETE /operaciones/{id}`, que ahora es recursivo). Reservado para otros consumidores que validen existencia de hijos.
 - `COSECHA_EN_VIAJE` (409) — cosecha está asignada a un viaje.
 - `CALC_ERROR` (422) — error de cálculo (falta precio configurado, insumo sin rango en precio_abono, `precios_cosecha` sin registro para el lote+año cuando se envía `peso_confirmado`, o empleado sin `salario_base` y tenant sin SMLV al registrar hora extra).
 - `AUSENCIA_LIQUIDADA` (409) — intento de editar/eliminar una ausencia ya liquidada en nómina.
@@ -151,7 +151,13 @@ Cada "Agregar X" del UI dispara un POST inmediato. El backend devuelve el id cre
 ```
 
 - En modo **creación** (sin id), `planilla` y `resumen` vienen `null` y `parametricas` viene completo.
-- En modo **edición/lectura**, `planilla` es el mismo payload que [§2.4 `GET /operaciones/{id}`](#24-ver-detalle) (cosechas + jornales + ausencias con todas sus relaciones eager-loaded) y `resumen` es el mismo shape de [§6 `GET /operaciones/{id}/resumen`](#6-resumen-panel-derecho-del-wizard).
+- En modo **edición/lectura**, `planilla` es el mismo payload que [§2.4 `GET /operaciones/{id}`](#24-ver-detalle) con todas las relaciones eager-loaded:
+  - `cosechas` → cuadrilla (empleado + operario + tercero), lote, sublote
+  - `jornales` → empleado, operario, tercero, labor, lote, sublote, insumo
+  - `ausencias` → empleado, **motivoAusencia** (`{id, nombre, tipo_base}`)
+  - **`horasExtra`** → empleado, tipoHoraExtra (`{id, codigo, nombre, porcentaje_recargo}`)
+
+  `resumen` es el mismo shape de [§6 `GET /operaciones/{id}/resumen`](#6-resumen-panel-derecho-del-wizard).
 - Los **10 catálogos** se cachean en backend por tenant durante **15 min** (`WizardCache::TTL_PARAMETRICA`) y se invalidan automáticamente cuando se crea/edita/elimina cualquier colaborador, operario, lote, sublote, insumo, labor, motivo de ausencia, tipo de hora extra o configuración de precios de un tercero. El cliente percibe los cambios al primer refresh siguiente del bundle.
 - **`operarios`**: lista de operarios activos de todos los terceros contratistas del tenant. Cada item trae `{id, tercero_id, nombre_completo, cedula, tercero_nombre}`. La UI muestra colaboradores y operarios en el **mismo dropdown** del selector de persona, diferenciados visualmente por `tercero_nombre`. Ver [§3.1 Cosecha](#31-cosecha) y [§3.2 Jornales](#32-jornal-de-palma-plateo--poda--fertilización--sanidad--custom) para el uso de `operario_id` en lugar de `empleado_id`.
 - **`tercero_labor_overrides`**: **todos** los overrides activos (`estado=true`) de `tercero_labor_precios`, sin importar la categoría (PALMA + FINCA) ni si tienen `tipo_pago` definido. Tres formas válidas por item:
@@ -359,13 +365,35 @@ Cada item del listado trae los agregados necesarios para pintar la tabla "Planil
 
 ### 2.4 Ver detalle
 
-`GET /operaciones/{id}` — devuelve la planilla con `cosechas.cuadrilla.empleado`, `jornales.empleado`, `jornales.labor`, `jornales.lote`, `jornales.sublote`, `jornales.insumo`, `ausencias.empleado`, `creado_por_rel`, `aprobado_por_rel`.
+`GET /operaciones/{id}` — devuelve la planilla con todas sus relaciones eager-loaded:
+
+| Relación | Campos |
+|---|---|
+| `cosechas.cuadrilla.empleado` | `id, primer_nombre, primer_apellido, documento` |
+| `cosechas.cuadrilla.operario` | `id, nombres, apellidos` |
+| `cosechas.cuadrilla.tercero` | `id, tipo_persona, razon_social, nombre_completo` |
+| `cosechas.lote` / `cosechas.sublote` | `id, nombre` |
+| `jornales.empleado` | `id, primer_nombre, primer_apellido, documento` |
+| `jornales.operario` / `jornales.tercero` | identificadores y nombre |
+| `jornales.labor` | `id, nombre, categoria, tipo, tipo_pago, precio_palma` |
+| `jornales.lote` / `jornales.sublote` / `jornales.insumo` | `id, nombre` |
+| `ausencias.empleado` | `id, primer_nombre, primer_apellido` |
+| `ausencias.motivoAusencia` | `id, nombre, tipo_base` |
+| `horasExtra.empleado` | `id, primer_nombre, primer_apellido` |
+| `horasExtra.tipoHoraExtra` | `id, codigo, nombre, porcentaje_recargo` |
+| `creadoPor` / `aprobadoPor` | `id, name` |
+
+> **No existe `GET /operaciones/{id}/horas-extra`** — las tarjetas individuales de horas extra vienen dentro de `planilla.horas_extra` en el bundle del wizard-init. El resumen (conteos + totales) viene en `resumen.horas_extra`. **No hacer petición separada.**
 
 > El **wizard del frontend** no llama a este endpoint directamente al abrir el detalle — la misma data viene dentro del bundle `GET /operaciones/{id}/wizard-init` (§1.1). Este endpoint sigue disponible para otros consumidores (apps móviles, exports, integraciones).
 
 ### 2.5 Eliminar
 
-`DELETE /operaciones/{id}` — solo permite si está en BORRADOR **y sin hijos**. En otros casos devuelve 409 con `code: OPERACION_APROBADA` o `code: OPERACION_CON_HIJOS`.
+`DELETE /operaciones/{id}` — elimina la planilla y **todos sus registros hijos** (jornales, cosechas, cuadrilla de cosecha, ausencias, horas extras) en una sola operación atómica.
+
+Solo bloquea en dos casos:
+- **409 `OPERACION_APROBADA`** — la planilla ya fue aprobada (es inmutable).
+- **409 `COSECHA_EN_VIAJE`** — una o más cosechas de la planilla están asignadas a un viaje. Desasocia la cosecha del viaje primero y vuelve a intentarlo.
 
 ---
 
@@ -662,7 +690,7 @@ El admin crea labores personalizadas de palma desde Configuración (`POST /labor
 ```
 - `cantidad_palmas` no se envía.
 - `descripcion` y `nombre_trabajo` opcionales (útiles para detallar el trabajo).
-- `valor_total = labor.precio_palma` (plano).
+- `valor_total = labor.precio_palma` (plano). **Si `precio_palma` es `null`, el backend guarda con `valor_total = "0.00"` — la labor se registra igualmente** (puede ser una labor no remunerada). El frontend no debe bloquear el POST por este motivo.
 
 > **Migración del modo legacy:** los jornales viejos con `tipo='OTROS'` y sin `labor_palma_id` fueron re-apuntados automáticamente a una labor custom "Otros (legacy)" con `estado=false` por tenant. Aparecen en reportes históricos pero no en dropdowns nuevos.
 
@@ -721,8 +749,9 @@ Reglas:
 
 Cálculo (centralizado en `JornalCalculationService::calcular()`):
 - Las labores de FINCA siempre tienen `tipo_pago=JORNAL_FIJO` (forzado por el modelo).
-- `valor_unitario = labor.precio_palma`
-- `valor_total   = labor.precio_palma`
+- `valor_unitario = labor.precio_palma ?? 0.00`
+- `valor_total   = labor.precio_palma ?? 0.00`
+- Si `precio_palma` no está configurado, el backend guarda `"0.00"` — **no se bloquea el registro**.
 
 **Respuesta 201:**
 ```json
@@ -763,6 +792,8 @@ Cálculo (centralizado en `JornalCalculationService::calcular()`):
 ## 4. Paso 4 — Horas Extras
 
 El wizard registra horas extras del día con una UI de 4 campos: tipo de hora, número de horas, colaborador y observación. Los 7 tipos legales colombianos vienen precargados en el catálogo paramétrico `tipos_hora_extra` (ver [API_HORAS_EXTRA.md §1](./API_HORAS_EXTRA.md)).
+
+> **Carga inicial (modo edición):** las tarjetas de horas extra ya registradas vienen en `planilla.horas_extra` dentro del bundle `GET /operaciones/{id}/wizard-init`. **No existe `GET /operaciones/{id}/horas-extra`** — no hacer esa petición (responde 405). El array de tarjetas está disponible en el objeto `planilla` del bundle.
 
 ### 4.1 Crear hora extra
 
@@ -1165,7 +1196,7 @@ curl -X POST "$BASE/operaciones/12/aprobar" "${H[@]}"
 - **Una sola petición al abrir el wizard:** llamar `GET /operaciones[/{id}]/wizard-init` (§1.1) al montar la pantalla. Trae los 8 catálogos (incluyendo `labores_palma` y `labores_finca` separados) + la planilla con relaciones + el resumen. El frontend filtra por `tipo` y `tipo_pago` en memoria al cambiar de tab dentro del Paso 2. No volver a pedir `/labores/select` ni los demás `/select` para abrir el detalle.
 - **Repintar el form según `labor.tipo_pago` y `labor.requiere_cosecha_workflow`:** son los dos flags que vienen en el payload del select y reemplazan la lógica fija por tipo. No hardcodear "PLATEO siempre pide cantidad_palmas" — ahora `PLATEO + JORNAL_FIJO` no la pide. Decide en runtime con `labor.tipo_pago`.
 - **Tab Cosecha:** si el operador elige una labor con `requiere_cosecha_workflow=true`, redirigir al sub-form de cosecha (con cuadrilla + peso opcional) y enviar a `/cosechas`, no a `/jornales`. Si por error se manda a `/jornales`, el backend responde 422 `CALC_ERROR`.
-- **Tab Otros (custom de palma):** el dropdown filtra `tipo === null`. Si el tenant no ha creado labores custom todavía, la lista viene vacía — mostrar un CTA "Crear labor desde Configuración → Labores".
+- **Tab Otros (custom de palma):** el dropdown filtra `tipo === null`. Si el tenant no ha creado labores custom todavía, la lista viene vacía — mostrar un CTA "Crear labor desde Configuración → Labores". **No bloquear el guardado por `precio_palma === null`** — el backend guarda con `valor_total = "0.00"` (una labor custom puede ser no remunerada). El frontend debe renderizar la tarjeta con `$0` o `—` si el total es cero, sin mostrar error.
 - **Estado local del wizard:** mantén los ids de cada tarjeta creada (cosechas, jornales) para soportar edición/eliminación inline.
 - **Re-fetch del resumen:** llama `GET /resumen` después de cada mutación exitosa. Es un endpoint barato (solo COUNT).
 - **Validación previa en UI:** decidir los campos visibles/requeridos solo a partir de la labor cargada (`labor.tipo`, `labor.tipo_pago`). Reglas resumidas:
@@ -1176,7 +1207,7 @@ curl -X POST "$BASE/operaciones/12/aprobar" "${H[@]}"
   - `tipo='SANIDAD'` → mostrar y requerir `descripcion`.
   - `categoria='FINCA'` → mostrar `ubicacion` (texto libre, opcional).
 - **No envíes `categoria` ni `tipo` en el POST:** el backend los deriva de `labor_id`. Si los mandas, son silenciosamente descartados, pero conviene omitirlos.
-- **`labor.precio_palma === null`:** la labor aún no tiene precio configurado. El POST se acepta y el jornal se guarda con `valor_total = null` (queda "en limbo"). Cuando el admin configure el precio, los jornales viejos **no se recalculan** automáticamente. Muestra un aviso visual en la tarjeta del wizard ("Pendiente de precio") para que el supervisor lo sepa.
+- **`labor.precio_palma === null` en labores `JORNAL_FIJO`:** el backend guarda con `valor_total = "0.00"` — **no bloquear el POST**. Aplica a: labores custom de palma (OTROS), labores de finca y SANIDAD sin precio configurado. Si `precio_palma === null` en una labor `POR_PALMA` (PLATEO, PODA, etc.), el backend sí guarda con `valor_total = null` ("en limbo"); en ese caso muestra un aviso visual en la tarjeta ("Pendiente de precio"). En ningún caso el frontend debe impedir el envío al API — deja que el backend decida y re-renderiza con el `valor_total` que llega en la respuesta.
 - **Manejo de 409 `OPERACION_APROBADA`:** si aparece, desactiva todos los botones de edición y muestra un banner "Planilla aprobada (solo lectura)".
 - **Fecha única por tenant:** si `fecha.unique` devuelve 422, el usuario está intentando crear una planilla que ya existe — redirígelo a abrir la existente.
 - **Migración del frontend desde el modelo viejo:** los payloads `categoria`/`tipo`/`labor_palma_id` ya no se aceptan. Reemplazar por `labor_id` apuntando al catálogo unificado. Endpoints removidos: `/precios-palma/*` y `/labores-palma/*` → ahora todo es `/labores/*`. Detalles en [API_PARAMETRICAS.md §4](./API_PARAMETRICAS.md).

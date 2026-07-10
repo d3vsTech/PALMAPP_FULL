@@ -122,8 +122,8 @@ class ViajeController extends Controller
      */
     private function recalcularHomogeneidad(Viaje $viaje): void
     {
-        $lotesDistintos = ViajeDetalle::where('viaje_id', $viaje->id)
-            ->where('estado', true)
+        $lotesDistintos = ViajeDetalle::where('viaje_detalle.viaje_id', $viaje->id)
+            ->where('viaje_detalle.estado', true)
             ->join('registro_cosecha', 'viaje_detalle.cosecha_id', '=', 'registro_cosecha.id')
             ->distinct()
             ->count('registro_cosecha.lote_id');
@@ -155,24 +155,33 @@ class ViajeController extends Controller
     public function operacionesDisponibles(Request $request): JsonResponse
     {
         try {
+            // Incluye operaciones con cosechas que aún tienen gajos pendientes de asignar,
+            // incluyendo cosechas parcialmente asignadas a otros viajes (splits).
+            $conGajosPendientes = function ($q) {
+                $q->where('registro_cosecha.estado', true)
+                  ->where(function ($sub) {
+                      $sub->whereNotIn('registro_cosecha.id', function ($vd) {
+                              $vd->select('cosecha_id')
+                                 ->from('viaje_detalle')
+                                 ->where('estado', true);
+                          })
+                          ->orWhereRaw('
+                              COALESCE(gajos_reportados, 0) >
+                              COALESCE((
+                                  SELECT SUM(vd.gajos_en_viaje)
+                                  FROM viaje_detalle vd
+                                  WHERE vd.cosecha_id = registro_cosecha.id
+                                    AND vd.estado = true
+                                    AND vd.gajos_en_viaje IS NOT NULL
+                              ), 0)
+                          ');
+                  });
+            };
+
             $operaciones = Operacion::query()
                 ->aprobadas()
-                ->whereHas('cosechas', function ($q) {
-                    $q->where('registro_cosecha.estado', true)
-                      ->whereNotIn('registro_cosecha.id', function ($sub) {
-                          $sub->select('cosecha_id')
-                              ->from('viaje_detalle')
-                              ->where('estado', true);
-                      });
-                })
-                ->withCount(['cosechas as cosechas_disponibles_count' => function ($q) {
-                    $q->where('registro_cosecha.estado', true)
-                      ->whereNotIn('registro_cosecha.id', function ($sub) {
-                          $sub->select('cosecha_id')
-                              ->from('viaje_detalle')
-                              ->where('estado', true);
-                      });
-                }])
+                ->whereHas('cosechas', $conGajosPendientes)
+                ->withCount(['cosechas as cosechas_disponibles_count' => $conGajosPendientes])
                 ->when($request->fecha_desde, fn ($q, $v) => $q->where('fecha', '>=', $v))
                 ->when($request->fecha_hasta, fn ($q, $v) => $q->where('fecha', '<=', $v))
                 ->orderByDesc('fecha')
@@ -188,17 +197,51 @@ class ViajeController extends Controller
     public function cosechasDisponibles(Operacion $operacion): JsonResponse
     {
         try {
+            // Incluye cosechas parcialmente asignadas (splits) con gajos restantes.
+            // Excluye cosechas cuyo detalle tiene gajos_en_viaje=NULL (modo legacy = todos asignados)
+            // y cosechas donde SUM(gajos_en_viaje) >= gajos totales.
             $cosechas = RegistroCosecha::query()
                 ->where('operacion_id', $operacion->id)
                 ->where('estado', true)
-                ->whereNotIn('id', function ($sub) {
-                    $sub->select('cosecha_id')
-                        ->from('viaje_detalle')
-                        ->where('estado', true);
+                ->whereNotIn('id', function ($vd) {
+                    $vd->select('cosecha_id')
+                       ->from('viaje_detalle')
+                       ->where('estado', true)
+                       ->whereNull('gajos_en_viaje');
+                })
+                ->where(function ($q) {
+                    $q->whereNotIn('id', function ($vd) {
+                          $vd->select('cosecha_id')
+                             ->from('viaje_detalle')
+                             ->where('estado', true);
+                      })
+                      ->orWhereRaw('
+                          COALESCE(gajos_reportados, 0) >
+                          COALESCE((
+                              SELECT SUM(vd.gajos_en_viaje)
+                              FROM viaje_detalle vd
+                              WHERE vd.cosecha_id = registro_cosecha.id
+                                AND vd.estado = true
+                                AND vd.gajos_en_viaje IS NOT NULL
+                          ), 0)
+                      ');
                 })
                 ->with(['lote:id,nombre', 'sublote:id,nombre'])
                 ->withCount(['cuadrilla as cuadrilla_count' => fn ($q) => $q->where('estado', true)])
                 ->get(['id', 'operacion_id', 'lote_id', 'sublote_id', 'gajos_reportados', 'gajos_reconteo', 'peso_confirmado']);
+
+            // Calcular gajos_pendientes_enviar como campo computado (no persiste en BD).
+            // Techo = gajos_reportados (dato físico de campo). NO usar gajos_reconteo
+            // como techo porque updateReconteo lo sincroniza a SUM(gajos_en_viaje),
+            // lo que volvería la resta circular (pendientes siempre 0 tras el primer split).
+            $cosechas->each(function ($c) {
+                $gajosTotales   = (int) ($c->gajos_reportados ?? 0);
+                $gajosAsignados = (int) ViajeDetalle::activos()
+                    ->where('cosecha_id', $c->id)
+                    ->whereNotNull('gajos_en_viaje')
+                    ->sum('gajos_en_viaje');
+                $c->gajos_pendientes_enviar = max(0, $gajosTotales - $gajosAsignados);
+            });
 
             return response()->json(['data' => $cosechas]);
         } catch (\Throwable $e) {
@@ -405,37 +448,76 @@ class ViajeController extends Controller
                 ], 422);
             }
 
-            $yaAsignada = ViajeDetalle::activos()
-                ->where('cosecha_id', $cosecha->id)
-                ->exists();
-
-            if ($yaAsignada) {
-                return response()->json([
-                    'message' => 'Esta cosecha ya está asignada a otro viaje',
-                    'code'    => 'COSECHA_YA_ASIGNADA',
-                ], 422);
-            }
-
             try {
-                $detalle = DB::transaction(function () use ($viaje, $cosecha) {
+                $detalle = DB::transaction(function () use ($viaje, $cosecha, $request) {
+                    // Techo físico del campo. NO usar gajos_reconteo: en el flujo de splits
+                    // ese campo se sincroniza a SUM(gajos_en_viaje) tras cada updateReconteo,
+                    // así que como techo produciría restantes=0 desde el primer split.
+                    $gajosTotales = (int) ($cosecha->gajos_reportados ?? 0);
+
+                    // Lock pesimista para serializar inserts concurrentes de la misma cosecha.
+                    // Postgres no permite FOR UPDATE con funciones de agregado (SUM), así que
+                    // bloqueamos primero las filas y computamos el agregado en memoria.
+                    $detallesActivos = ViajeDetalle::activos()
+                        ->where('cosecha_id', $cosecha->id)
+                        ->lockForUpdate()
+                        ->get(['id', 'gajos_en_viaje']);
+
+                    $gajosYaAsignados = (int) $detallesActivos
+                        ->whereNotNull('gajos_en_viaje')
+                        ->sum('gajos_en_viaje');
+
+                    // Si existe un detalle con gajos_en_viaje=NULL → toda la cosecha ya asignada
+                    $tieneDetalleTotal = $detallesActivos
+                        ->whereNull('gajos_en_viaje')
+                        ->isNotEmpty();
+
+                    if ($tieneDetalleTotal) {
+                        throw new \DomainException('COSECHA_YA_ASIGNADA');
+                    }
+
+                    if ($request->gajos_en_viaje !== null) {
+                        $gajosRestantes = $gajosTotales - $gajosYaAsignados;
+                        if ($request->gajos_en_viaje > $gajosRestantes) {
+                            throw new \DomainException("GAJOS_INSUFICIENTES:{$gajosRestantes}");
+                        }
+                    }
+
                     $detalle = ViajeDetalle::create([
-                        'viaje_id'   => $viaje->id,
-                        'cosecha_id' => $cosecha->id,
-                        'estado'     => true,
+                        'viaje_id'       => $viaje->id,
+                        'cosecha_id'     => $cosecha->id,
+                        'gajos_en_viaje' => $request->gajos_en_viaje, // NULL = todos
+                        'estado'         => true,
                     ]);
                     $this->recalcularHomogeneidad($viaje);
                     return $detalle;
                 });
+            } catch (\DomainException $e) {
+                $code = explode(':', $e->getMessage());
+                if ($code[0] === 'COSECHA_YA_ASIGNADA') {
+                    return response()->json([
+                        'message' => 'Esta cosecha ya está completamente asignada a otro viaje',
+                        'code'    => 'COSECHA_YA_ASIGNADA',
+                    ], 422);
+                }
+                // GAJOS_INSUFICIENTES
+                $restantes = $code[1] ?? 0;
+                return response()->json([
+                    'message' => "Solo quedan {$restantes} gajos disponibles para asignar a este viaje",
+                    'code'    => 'GAJOS_INSUFICIENTES',
+                    'gajos_restantes' => (int) $restantes,
+                ], 422);
             } catch (UniqueConstraintViolationException $e) {
                 return response()->json([
-                    'message' => 'Esta cosecha ya está asignada a otro viaje',
+                    'message' => 'Esta cosecha ya está asignada a este viaje',
                     'code'    => 'COSECHA_YA_ASIGNADA',
                 ], 422);
             }
 
             $this->auditoria->registrarCreacion(
                 $request, 'VIAJES', $detalle,
-                "Se asignó cosecha #{$cosecha->id} al viaje {$viaje->remision}",
+                "Se asignó cosecha #{$cosecha->id} al viaje {$viaje->remision}" .
+                ($request->gajos_en_viaje !== null ? " ({$request->gajos_en_viaje} gajos)" : ''),
             );
 
             return response()->json([
@@ -514,22 +596,35 @@ class ViajeController extends Controller
             $data = $request->validated();
 
             DB::transaction(function () use ($viaje, $detalle, $data) {
+                // 1. Actualizar gajos_en_viaje en el detalle (nivel por-viaje)
+                $detalle->update(['gajos_en_viaje' => $data['gajos_en_viaje']]);
+
+                // 2. Sincronizar gajos_reconteo de la cosecha = SUM(gajos_en_viaje)
+                //    de todos sus viaje_detalle activos con valor explícito.
+                //    Así la nómina siempre ve el total verificado acumulado de todos los splits.
+                $totalVerificado = (int) ViajeDetalle::activos()
+                    ->where('cosecha_id', $detalle->cosecha_id)
+                    ->whereNotNull('gajos_en_viaje')
+                    ->sum('gajos_en_viaje');
+
                 $cosecha = RegistroCosecha::findOrFail($detalle->cosecha_id);
-                $datosCosecha = ['gajos_reconteo' => $data['gajos_reconteo']];
+                $datosCosecha = ['gajos_reconteo' => $totalVerificado];
                 if (array_key_exists('peso_confirmado', $data) && $data['peso_confirmado'] !== null) {
                     $datosCosecha['peso_confirmado'] = $data['peso_confirmado'];
                 }
                 $cosecha->update($datosCosecha);
 
-                // Refrescar cantidad_gajos_total del viaje
-                $total = DB::table('registro_cosecha')
-                    ->whereIn('id', function ($sub) use ($viaje) {
-                        $sub->select('cosecha_id')->from('viaje_detalle')
-                            ->where('viaje_id', $viaje->id)->where('estado', true);
-                    })
-                    ->sum('gajos_reconteo');
+                // 3. Refrescar cantidad_gajos_total del viaje desde gajos_en_viaje del detalle
+                $totalViaje = DB::table('viaje_detalle')
+                    ->join('registro_cosecha', 'viaje_detalle.cosecha_id', '=', 'registro_cosecha.id')
+                    ->where('viaje_detalle.viaje_id', $viaje->id)
+                    ->where('viaje_detalle.estado', true)
+                    ->selectRaw('SUM(COALESCE(viaje_detalle.gajos_en_viaje,
+                                               registro_cosecha.gajos_reconteo,
+                                               registro_cosecha.gajos_reportados)) as total')
+                    ->value('total');
 
-                $viaje->update(['cantidad_gajos_total' => (int) $total]);
+                $viaje->update(['cantidad_gajos_total' => (int) $totalViaje]);
             });
 
             $this->auditoria->registrar(
@@ -573,10 +668,9 @@ class ViajeController extends Controller
                 ], 409);
             }
 
-            $cosecha = RegistroCosecha::findOrFail($detalle->cosecha_id);
-            if (is_null($cosecha->gajos_reconteo)) {
+            if (is_null($detalle->gajos_en_viaje)) {
                 return response()->json([
-                    'message' => 'Debe hidratar el reconteo (gajos) antes de aprobarlo',
+                    'message' => 'Debe hidratar los gajos en viaje antes de aprobar el reconteo',
                     'code'    => 'RECONTEO_PENDIENTE',
                 ], 422);
             }

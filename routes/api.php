@@ -53,6 +53,10 @@ use App\Http\Controllers\Api\HoraExtraController;
 use App\Http\Controllers\Api\Nomina\NominaConceptoController;
 use App\Http\Controllers\Api\Nomina\NominaController;
 use App\Http\Controllers\Api\Nomina\NominaEmpleadoController;
+use App\Http\Controllers\Api\Nomina\NominaTerceroController;
+use App\Http\Controllers\Api\Nomina\PrestamoController;
+use App\Http\Controllers\Api\Nomina\ValidarCosechaController;
+use App\Http\Controllers\Api\Nomina\NominaPlanillaDiariaController;
 use App\Http\Controllers\Api\TipoHoraExtraController;
 use App\Http\Controllers\Api\TerceroController;
 use App\Http\Controllers\Api\OperarioController;
@@ -442,12 +446,73 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
     Route::post('nominas/{nomina}/cerrar', [NominaController::class, 'cerrar'])
         ->middleware('check.permission:nomina.cerrar');
 
+    // ── Nómina: Planilla Diaria ──
+    Route::get('nominas/{nomina}/planilla-diaria/lotes', [NominaPlanillaDiariaController::class, 'lotes'])
+        ->middleware('check.permission:nomina.ver');
+    Route::get('nominas/{nomina}/planilla-diaria/exportar', [NominaPlanillaDiariaController::class, 'exportar'])
+        ->middleware('check.permission:nomina.ver');
+    Route::get('nominas/{nomina}/planilla-diaria', [NominaPlanillaDiariaController::class, 'index'])
+        ->middleware('check.permission:nomina.ver');
+
+    // ── Nómina: Paso 3 — Validar Cosecha ──
+    Route::get('nominas/{nomina}/validar-cosecha', [ValidarCosechaController::class, 'bundle'])
+        ->middleware('check.permission:nomina.editar');
+    Route::put('nominas/{nomina}/promedios-lote/{lote}', [ValidarCosechaController::class, 'ajustarPromedio'])
+        ->middleware('check.permission:nomina.editar');
+    Route::post('nominas/{nomina}/validar-cosecha/confirmar', [ValidarCosechaController::class, 'confirmar'])
+        ->middleware('check.permission:nomina.editar');
+
     // ── Nómina: empleados de la nómina ──
     Route::get('nominas/{nomina}/empleados-disponibles', [NominaEmpleadoController::class, 'empleadosDisponibles'])
         ->middleware('check.permission:nomina.editar');
     Route::post('nominas/{nomina}/empleados', [NominaEmpleadoController::class, 'agregar'])
         ->middleware('check.permission:nomina.editar');
     Route::delete('nomina-empleado/{nominaEmpleado}', [NominaEmpleadoController::class, 'eliminar'])
+        ->middleware('check.permission:nomina.editar');
+
+    // ── Nómina: alias de asignación de terceros al paso 4 (PR-3.5) ──
+    // Fachada de POST /nominas/{id}/empleados aceptando operario_ids | tercero_ids | terceros[].
+    // Además pre-hidrata nomina_tercero y nomina_tercero_operario con totales 0.
+    Route::post('nominas/{nomina}/terceros', [NominaEmpleadoController::class, 'agregarTerceros'])
+        ->middleware('check.permission:nomina.editar');
+    Route::delete('nominas/{nomina}/terceros/{tercero}', [NominaEmpleadoController::class, 'eliminarTercero'])
+        ->middleware('check.permission:nomina.editar');
+    Route::get('nominas/{nomina}/paso-4-checklist', [NominaEmpleadoController::class, 'paso4Checklist'])
+        ->middleware('check.permission:nomina.editar');
+
+    // ── Nómina: acta de liquidación por tercero (PR-4) ──
+    // Nota: `POST /nominas/{nomina}/terceros` (PR-3.5, arriba) sirve para AGREGAR operarios al paso 4.
+    // Los siguientes GET/POST bajo `/terceros/{tercero}` gestionan el ACTA agrupada de pago.
+    Route::get('nominas/{nomina}/terceros/{tercero}/acta/pdf', [NominaTerceroController::class, 'actaPdf'])
+        ->middleware('check.permission:nomina.ver')
+        ->name('nomina.acta_tercero.descarga');
+    Route::get('nominas/{nomina}/terceros/{tercero}', [NominaTerceroController::class, 'show'])
+        ->middleware('check.permission:nomina.ver');
+    Route::get('nominas/{nomina}/terceros-actas', [NominaTerceroController::class, 'index'])
+        ->middleware('check.permission:nomina.ver');
+    Route::post('nominas/{nomina}/terceros/{tercero}/liquidar', [NominaTerceroController::class, 'liquidar'])
+        ->middleware('check.permission:nomina.liquidar');
+    Route::get('nominas/{nomina}/terceros/{tercero}/operarios/{operario}/detalle', [NominaTerceroController::class, 'detalleOperario'])
+        ->middleware('check.permission:nomina.ver');
+    Route::post('nominas/{nomina}/terceros/{tercero}/operarios/{operario}/descuentos', [NominaTerceroController::class, 'agregarDescuento'])
+        ->middleware('check.permission:nomina.liquidar');
+    Route::delete('nominas/{nomina}/terceros/{tercero}/operarios/{operario}/descuentos/{descuento}', [NominaTerceroController::class, 'eliminarDescuento'])
+        ->middleware('check.permission:nomina.liquidar');
+    Route::post('nominas/{nomina}/terceros/{tercero}/registrar-pago', [NominaTerceroController::class, 'registrarPago'])
+        ->middleware('check.permission:nomina.pagar-tercero');
+
+    // ── Préstamos a colaboradores ──
+    Route::get('prestamos/indicadores', [PrestamoController::class, 'indicadores'])
+        ->middleware('check.permission:nomina.ver');
+    Route::get('prestamos', [PrestamoController::class, 'index'])
+        ->middleware('check.permission:nomina.ver');
+    Route::post('prestamos', [PrestamoController::class, 'store'])
+        ->middleware('check.permission:nomina.editar');
+    Route::get('prestamos/{prestamo}', [PrestamoController::class, 'show'])
+        ->middleware('check.permission:nomina.ver');
+    Route::put('prestamos/{prestamo}', [PrestamoController::class, 'update'])
+        ->middleware('check.permission:nomina.editar');
+    Route::delete('prestamos/{prestamo}', [PrestamoController::class, 'destroy'])
         ->middleware('check.permission:nomina.editar');
 
     // ── Nómina: liquidación de empleado ──
@@ -758,6 +823,7 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
         Route::post('terceros/{tercero}/precios-abono', [TerceroConfiguracionController::class, 'storePrecioAbono']);
         Route::put('terceros/{tercero}/precios-abono/{precio}', [TerceroConfiguracionController::class, 'updatePrecioAbono']);
         Route::delete('terceros/{tercero}/precios-abono/{precio}', [TerceroConfiguracionController::class, 'destroyPrecioAbono']);
+        Route::post('terceros/{tercero}/wizard-complete', [TerceroConfiguracionController::class, 'wizardComplete']);
     });
 
     // ── Perfil de Usuario (sin permiso especial, solo autenticado) ──

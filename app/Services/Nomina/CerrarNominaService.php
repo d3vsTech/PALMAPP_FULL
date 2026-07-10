@@ -11,6 +11,9 @@ use App\Models\NominaCosechaRef;
 use App\Models\NominaEmpleado;
 use App\Models\NominaHoraExtraRef;
 use App\Models\NominaJornalRef;
+use App\Models\NominaPromedioLote;
+use App\Models\NominaTercero;
+use App\Models\NominaValidacionCosecha;
 use App\Models\Operacion;
 use App\Models\PrecioCosecha;
 use App\Models\PromedioLote;
@@ -48,6 +51,9 @@ class CerrarNominaService
             );
         }
 
+        $this->validarCosechaConfirmada($nomina);
+        $this->validarActasTercerosLiquidadas($nomina);
+
         return DB::transaction(function () use ($nomina, $userId) {
             $empleados = NominaEmpleado::where('nomina_id', $nomina->id)
                 ->where('estado', NominaEmpleado::ESTADO_LIQUIDADO)
@@ -59,8 +65,10 @@ class CerrarNominaService
             foreach ($empleados as $ne) {
                 $this->snapshotJornales($ne, $inicio, $fin);
                 $this->snapshotCosechas($ne, $inicio, $fin);
-                $this->snapshotYLiquidarHorasExtra($ne, $nomina->id, $inicio, $fin);
-                $this->liquidarAusencias($ne, $nomina->id, $inicio, $fin);
+                if (! $ne->esDeOperario()) {
+                    $this->snapshotYLiquidarHorasExtra($ne, $nomina->id, $inicio, $fin);
+                    $this->liquidarAusencias($ne, $nomina->id, $inicio, $fin);
+                }
             }
 
             // Recalcular totales finales (en caso de que falten)
@@ -76,9 +84,83 @@ class CerrarNominaService
         });
     }
 
+    /**
+     * Cada contratista con operarios en la nómina DEBE tener su `nomina_tercero`
+     * calculada (via `POST /nominas/{id}/terceros/{tercero}/liquidar`).
+     * Estados aceptados: PENDIENTE o PAGADO. `PENDIENTE` significa "acta lista,
+     * pago aún no coordinado" y es un cierre válido (registrar-pago post-cierre
+     * es la única excepción documentada al patrón CERRADA = inmutable).
+     *
+     * PR-3.5 pre-hidrata las filas con totales 0 al agregar operarios, así que
+     * el fallo por "acta ausente" indica que la fila fue borrada manualmente o
+     * que la nómina es previa al deploy de PR-3.5.
+     * Fallo por "acta no calculada": la fila existe pero `total_a_transferir=0`
+     * y hay jornales/cosechas de sus operarios que valen algo → el usuario
+     * debe pasar por la pantalla PR-4 y ejecutar liquidar.
+     */
+    private function validarActasTercerosLiquidadas(Nomina $nomina): void
+    {
+        $tercerosEnNomina = NominaEmpleado::where('nomina_id', $nomina->id)
+            ->whereNotNull('tercero_id')
+            ->pluck('tercero_id')
+            ->unique()
+            ->values();
+
+        if ($tercerosEnNomina->isEmpty()) {
+            return;
+        }
+
+        $actas = NominaTercero::withoutGlobalScope('tenant')
+            ->where('nomina_id', $nomina->id)
+            ->whereIn('tercero_id', $tercerosEnNomina)
+            ->get(['tercero_id', 'total_a_transferir', 'total_dias']);
+
+        $conActa       = $actas->pluck('tercero_id')->all();
+        $sinActa       = $tercerosEnNomina->diff($conActa)->values();
+        $sinCalculo    = $actas->filter(fn ($a) => (float) $a->total_a_transferir <= 0 && (int) $a->total_dias === 0)
+            ->pluck('tercero_id')
+            ->values();
+
+        if ($sinActa->isNotEmpty() || $sinCalculo->isNotEmpty()) {
+            throw new \DomainException(
+                'NOMINA_TERCERO_NO_LIQUIDADO: cada contratista con operarios debe tener su acta liquidada. '
+                . 'Falta ejecutar `POST /nominas/' . $nomina->id . '/terceros/{tercero}/liquidar` para tercero(s): '
+                . $sinActa->merge($sinCalculo)->unique()->values()->join(', ')
+            );
+        }
+    }
+
+    private function validarCosechaConfirmada(Nomina $nomina): void
+    {
+        $tieneCosechas = CosechaCuadrilla::withoutGlobalScope('tenant')
+            ->where('tenant_id', $nomina->tenant_id)
+            ->where('estado', true)
+            ->whereHas('cosecha.operacion', function ($q) use ($nomina) {
+                $q->where('estado', Operacion::ESTADO_APROBADA)
+                  ->whereBetween('fecha', [$nomina->fecha_inicio, $nomina->fecha_fin]);
+            })
+            ->exists();
+
+        if (! $tieneCosechas) {
+            return;
+        }
+
+        $validacion = NominaValidacionCosecha::withoutGlobalScope('tenant')
+            ->where('nomina_id', $nomina->id)
+            ->first();
+
+        if (! $validacion || ! $validacion->isConfirmado()) {
+            throw new \DomainException(
+                'NOMINA_VALIDACION_COSECHA_REQUERIDA: debe confirmar la validación de cosecha antes de cerrar la nómina.'
+            );
+        }
+    }
+
     private function snapshotJornales(NominaEmpleado $ne, $inicio, $fin): void
     {
-        $jornales = Jornal::where('empleado_id', $ne->empleado_id)
+        $field    = $ne->esDeOperario() ? 'operario_id' : 'empleado_id';
+        $value    = $ne->esDeOperario() ? $ne->operario_id : $ne->empleado_id;
+        $jornales = Jornal::where($field, $value)
             ->where('estado', true)
             ->whereHas('operacion', function ($q) use ($inicio, $fin) {
                 $q->where('estado', Operacion::ESTADO_APROBADA)
@@ -103,7 +185,9 @@ class CerrarNominaService
 
     private function snapshotCosechas(NominaEmpleado $ne, $inicio, $fin): void
     {
-        $cuadrillas = CosechaCuadrilla::where('empleado_id', $ne->empleado_id)
+        $field      = $ne->esDeOperario() ? 'operario_id' : 'empleado_id';
+        $value      = $ne->esDeOperario() ? $ne->operario_id : $ne->empleado_id;
+        $cuadrillas = CosechaCuadrilla::where($field, $value)
             ->where('estado', true)
             ->with(['cosecha:id,lote_id,gajos_reportados,gajos_reconteo'])
             ->whereHas('cosecha.operacion', function ($q) use ($inicio, $fin) {
@@ -126,11 +210,21 @@ class CerrarNominaService
                 ? (int) floor($gajosEfectivos / $N)
                 : 0;
 
-            // Promedio de promedios del lote en el período (con fallback a baseline admin)
-            $promedioPromedio = PromedioLote::where('tenant_id', $tenantId)
+            // Preferir promedio efectivo guardado para esta nómina (ajustado por admin en wizard)
+            $promedioPromedio = NominaPromedioLote::where('nomina_id', $ne->nomina_id)
                 ->where('lote_id', $loteId)
-                ->whereBetween('fecha', [$inicio, $fin])
-                ->avg('promedio');
+                ->value('promedio_efectivo');
+            if ($promedioPromedio) {
+                $promedioPromedio = (float) $promedioPromedio;
+            }
+
+            // Fallback: promedio de promedios del lote en el período (con fallback a baseline admin)
+            if (! $promedioPromedio) {
+                $promedioPromedio = PromedioLote::where('tenant_id', $tenantId)
+                    ->where('lote_id', $loteId)
+                    ->whereBetween('fecha', [$inicio, $fin])
+                    ->avg('promedio');
+            }
 
             if (! $promedioPromedio) {
                 $promedioPromedio = PromedioLote::where('tenant_id', $tenantId)
