@@ -1,18 +1,12 @@
 /**
  * Crear Nuevo Préstamo — conectado a `prestamosApi.crear` (doc API_NOMINA.md §15).
  *
- * Campos que exige el backend:
- *  - `empleado_id`   : colaborador interno (NO operarios de terceros)
- *  - `concepto`      : descripción libre
- *  - `valor_total`   : monto total del préstamo
- *  - `num_cuotas`    : cantidad de cuotas
- *  - `inicio_anio`, `inicio_mes`, `inicio_quincena?` : cuándo arranca el descuento
- *  - `observaciones` : opcional
- *
- * El backend calcula automáticamente `cuota_valor = floor(valor_total / num_cuotas)`
- * y genera el calendario. La última cuota absorbe el residuo del redondeo.
+ * Diseño portado de V.18 conservando las conexiones:
+ *  - Periodicidad viene del tenant (readonly, no editable por UI).
+ *  - Cuota se calcula en cliente para preview; backend recalcula al guardar.
+ *  - Observaciones opcionales, se guardan en el backend.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { Button } from '../../components/ui/button';
@@ -23,7 +17,9 @@ import { Textarea } from '../../components/ui/textarea';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
-import { ArrowLeft, Save, DollarSign, Search, X, Loader2 } from 'lucide-react';
+import {
+  ArrowLeft, Save, DollarSign, Search, X, Loader2, CalendarDays, Info,
+} from 'lucide-react';
 import { colaboradoresApi } from '../../../api/colaboradores';
 import type { ColaboradorSelectItem } from '../../../api/colaboradores';
 import { prestamosApi, PrestamoErrorCodes } from '../../../api/prestamos';
@@ -32,40 +28,67 @@ import type { ApiError } from '../../../api/client';
 import { formatThousands, parseCOP } from '../../components/lib/format';
 
 const MESES = [
-  { value: 1, nombre: 'Enero' }, { value: 2, nombre: 'Febrero' }, { value: 3, nombre: 'Marzo' },
-  { value: 4, nombre: 'Abril' }, { value: 5, nombre: 'Mayo' }, { value: 6, nombre: 'Junio' },
-  { value: 7, nombre: 'Julio' }, { value: 8, nombre: 'Agosto' }, { value: 9, nombre: 'Septiembre' },
-  { value: 10, nombre: 'Octubre' }, { value: 11, nombre: 'Noviembre' }, { value: 12, nombre: 'Diciembre' },
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ];
+const ANIO_ACTUAL = new Date().getFullYear();
+const ANIOS = [ANIO_ACTUAL, ANIO_ACTUAL + 1];
+
+function labelQuincena(anio: number, mes: number, quincena: 1 | 2) {
+  return `${MESES[mes - 1]} ${anio} · ${quincena === 1 ? '1ª quincena' : '2ª quincena'}`;
+}
+
+/**
+ * Calcula la quincena final dado un inicio (quincena) y un número de cuotas
+ * (todas las cuotas son consecutivas: q1 → q2 → q1 mes+1 → …).
+ */
+function calcularQuincenaFin(anio: number, mes: number, q: 1 | 2, numQuincenas: number) {
+  let y = anio, m = mes, cur: 1 | 2 = q;
+  for (let i = 1; i < numQuincenas; i++) {
+    if (cur === 1) { cur = 2; }
+    else { cur = 1; m++; if (m > 12) { m = 1; y++; } }
+  }
+  return { anio: y, mes: m, quincena: cur };
+}
+
+/**
+ * Calcula el mes final para descuentos mensuales.
+ */
+function calcularMesFin(anio: number, mes: number, numMeses: number) {
+  let y = anio, m = mes;
+  for (let i = 1; i < numMeses; i++) {
+    m++; if (m > 12) { m = 1; y++; }
+  }
+  return { anio: y, mes: m };
+}
 
 export default function NuevoPrestamo() {
   const navigate = useNavigate();
   const searchRef = useRef<HTMLDivElement>(null);
 
-  // ── Estado del formulario ──────────────────────────────────────────────
+  // ── Colaborador ────────────────────────────────────────────────────────
   const [colaboradores, setColaboradores] = useState<ColaboradorSelectItem[]>([]);
   const [busquedaColaborador, setBusquedaColaborador] = useState('');
   const [mostrarSugerencias, setMostrarSugerencias] = useState(false);
   const [empleadoId, setEmpleadoId] = useState<number | null>(null);
   const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState<ColaboradorSelectItem | null>(null);
 
+  // ── Campos ─────────────────────────────────────────────────────────────
   const [concepto, setConcepto] = useState('');
   const [valorTotal, setValorTotal] = useState('');
   const [numCuotas, setNumCuotas] = useState('');
-  const now = new Date();
-  const [inicioAnio, setInicioAnio] = useState<number>(now.getFullYear());
-  const [inicioMes, setInicioMes] = useState<number>(now.getMonth() + 1);
+  const [cuotaManual, setCuotaManual] = useState('');
+  const [inicioAnio, setInicioAnio] = useState<number>(ANIO_ACTUAL);
+  const [inicioMes, setInicioMes] = useState<number>(new Date().getMonth() + 1);
   const [inicioQuincena, setInicioQuincena] = useState<1 | 2 | null>(1);
   const [observaciones, setObservaciones] = useState('');
 
   const [periodicidadTenant, setPeriodicidadTenant] = useState<'QUINCENAL' | 'MENSUAL'>('QUINCENAL');
-  /** Días de corte de quincenas configurados en el tenant. Se usan para
-   *  construir las etiquetas dinámicas del select (API_PRESTAMOS §8). */
   const [q1Range, setQ1Range] = useState<{ inicio: number; fin: number }>({ inicio: 1, fin: 15 });
   const [q2Range, setQ2Range] = useState<{ inicio: number; fin: number }>({ inicio: 16, fin: 31 });
   const [guardando, setGuardando] = useState(false);
 
-  // ── Cargar colaboradores + periodicidad del tenant ─────────────────────
+  // ── Cargar catálogos ───────────────────────────────────────────────────
   useEffect(() => {
     colaboradoresApi
       .selectListado()
@@ -75,36 +98,26 @@ export default function NuevoPrestamo() {
       .obtener()
       .then((res) => {
         const cfg = res.data as any;
-        const tipo = cfg?.tipo_pago_nomina;
-        if (tipo === 'MENSUAL') {
+        if (cfg?.tipo_pago_nomina === 'MENSUAL') {
           setPeriodicidadTenant('MENSUAL');
           setInicioQuincena(null);
         }
-        // Días de corte reales del tenant (default 1/15/16/31 si backend no los devuelve)
-        setQ1Range({
-          inicio: Number(cfg?.dia_inicio_q1 ?? 1),
-          fin: Number(cfg?.dia_fin_q1 ?? 15),
-        });
-        setQ2Range({
-          inicio: Number(cfg?.dia_inicio_q2 ?? 16),
-          fin: Number(cfg?.dia_fin_q2 ?? 31),
-        });
+        setQ1Range({ inicio: Number(cfg?.dia_inicio_q1 ?? 1), fin: Number(cfg?.dia_fin_q1 ?? 15) });
+        setQ2Range({ inicio: Number(cfg?.dia_inicio_q2 ?? 16), fin: Number(cfg?.dia_fin_q2 ?? 31) });
       })
       .catch(() => void 0);
   }, []);
 
-  // Cerrar sugerencias al hacer clic fuera
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+    const fn = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
         setMostrarSugerencias(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('mousedown', fn);
+    return () => document.removeEventListener('mousedown', fn);
   }, []);
 
-  // Sin texto muestra los primeros 8; con texto filtra por nombre o documento.
   const colaboradoresFiltrados = colaboradores
     .filter((c) => {
       const q = busquedaColaborador.toLowerCase().trim();
@@ -130,13 +143,26 @@ export default function NuevoPrestamo() {
     setMostrarSugerencias(false);
   };
 
-  // ── Cálculo previo de la cuota ─────────────────────────────────────────
-  const cuotaEstimada = (() => {
+  // ── Cálculo previo ─────────────────────────────────────────────────────
+  const cuotaCalculada = useMemo(() => {
     const total = Number(valorTotal) || 0;
     const cuotas = Number(numCuotas) || 0;
     if (total <= 0 || cuotas <= 0) return 0;
     return Math.floor(total / cuotas);
-  })();
+  }, [valorTotal, numCuotas]);
+
+  const cuotaFinal = cuotaManual ? parseFloat(cuotaManual) || 0 : cuotaCalculada;
+  const numCuotasNum = parseInt(numCuotas) || 0;
+  const totalCalculado = cuotaFinal * numCuotasNum;
+  const totalIngresado = parseFloat(valorTotal) || 0;
+
+  const periodoFin = useMemo(() => {
+    if (numCuotasNum <= 0) return null;
+    if (periodicidadTenant === 'QUINCENAL' && inicioQuincena) {
+      return calcularQuincenaFin(inicioAnio, inicioMes, inicioQuincena, numCuotasNum);
+    }
+    return calcularMesFin(inicioAnio, inicioMes, numCuotasNum);
+  }, [numCuotasNum, inicioAnio, inicioMes, inicioQuincena, periodicidadTenant]);
 
   const handleSave = async () => {
     if (!empleadoId) return toast.error('Selecciona un colaborador');
@@ -176,264 +202,331 @@ export default function NuevoPrestamo() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-4">
         <Button
           variant="ghost"
           size="icon"
           onClick={() => navigate('/nomina/prestamos')}
-          className="h-12 w-12 rounded-xl hover:bg-muted border border-border/50"
+          className="h-10 w-10 rounded-xl hover:bg-muted border border-border/50"
         >
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <div className="flex items-center gap-4">
-          <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center border border-primary/30 shadow-lg">
-            <DollarSign className="h-8 w-8 text-primary" />
+        <div className="flex items-center gap-3">
+          <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+            <DollarSign className="h-6 w-6 text-primary" />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-primary">Nuevo Préstamo</h1>
-            <p className="text-muted-foreground mt-1">
-              El backend genera automáticamente las cuotas — cada cuota aparecerá en la liquidación del colaborador en la quincena correspondiente.
+            <p className="text-sm text-muted-foreground">
+              Registra el préstamo y programa los descuentos por quincena
             </p>
           </div>
         </div>
       </div>
 
-      {/* Formulario */}
-      <Card className="border-border/50 shadow-xl">
-        <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
-          <CardTitle className="text-2xl">Información del Préstamo</CardTitle>
+      <Card className="border-border/50">
+        <CardHeader className="border-b bg-muted/20 py-4">
+          <CardTitle className="text-base">Información del Préstamo</CardTitle>
         </CardHeader>
-        <CardContent className="p-8">
-          <div className="space-y-8">
-            {/* Buscar Colaborador */}
-            <div className="space-y-3">
-              <Label className="text-base font-semibold">
-                Colaborador <span className="text-destructive">*</span>
-              </Label>
-              <div className="relative" ref={searchRef}>
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar por nombre o documento..."
-                  value={busquedaColaborador}
-                  onChange={(e) => {
-                    setBusquedaColaborador(e.target.value);
-                    setMostrarSugerencias(true);
-                    // Al borrar texto solo desmarcamos la selección, sin
-                    // cerrar el dropdown — el usuario puede querer elegir otro.
-                    if (!e.target.value) {
-                      setEmpleadoId(null);
-                      setEmpleadoSeleccionado(null);
-                    }
-                  }}
-                  onFocus={() => setMostrarSugerencias(true)}
-                  onClick={() => setMostrarSugerencias(true)}
-                  className="pl-12 pr-12 h-12 text-base"
-                />
-                {empleadoSeleccionado && (
-                  <button
-                    type="button"
-                    onClick={limpiarSeleccion}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                )}
-                {mostrarSugerencias && colaboradoresFiltrados.length > 0 && (
-                  <div className="absolute z-50 w-full mt-2 bg-background border border-border rounded-lg shadow-lg max-h-64 overflow-y-auto">
-                    {colaboradoresFiltrados.map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => seleccionar(c)}
-                        className="w-full px-4 py-3 text-left hover:bg-muted transition-colors border-b border-border last:border-0 flex items-center gap-3"
-                      >
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary border border-primary/20">
-                          <span className="text-sm font-bold">
-                            {c.nombre_completo.split(' ').slice(0, 2).map((p) => p[0]).join('').toUpperCase()}
-                          </span>
-                        </div>
-                        <div className="flex-1">
-                          <p className="font-semibold text-sm">{c.nombre_completo}</p>
-                          <p className="text-xs text-muted-foreground">
-                            CC {c.documento} · {c.modalidad_pago}
-                          </p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+        <CardContent className="p-6 space-y-6">
+
+          {/* Colaborador */}
+          <div className="space-y-2">
+            <Label className="font-semibold">
+              Colaborador <span className="text-destructive">*</span>
+            </Label>
+            <div className="relative" ref={searchRef}>
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nombre o cédula..."
+                value={busquedaColaborador}
+                onChange={(e) => {
+                  setBusquedaColaborador(e.target.value);
+                  setMostrarSugerencias(true);
+                  if (!e.target.value) {
+                    setEmpleadoId(null);
+                    setEmpleadoSeleccionado(null);
+                  }
+                }}
+                onFocus={() => setMostrarSugerencias(true)}
+                onClick={() => setMostrarSugerencias(true)}
+                className="pl-9 pr-9"
+              />
               {empleadoSeleccionado && (
-                <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg flex items-center gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary border border-primary/20">
-                    <span className="text-base font-bold">
-                      {empleadoSeleccionado.nombre_completo.split(' ').slice(0, 2).map((p) => p[0]).join('').toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-semibold">{empleadoSeleccionado.nombre_completo}</p>
-                    <p className="text-sm text-muted-foreground">
-                      CC {empleadoSeleccionado.documento} · {empleadoSeleccionado.modalidad_pago}
-                    </p>
-                  </div>
+                <button
+                  type="button"
+                  onClick={limpiarSeleccion}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+              {mostrarSugerencias && colaboradoresFiltrados.length > 0 && (
+                <div className="absolute z-50 w-full mt-1 bg-background border border-border rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                  {colaboradoresFiltrados.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => seleccionar(c)}
+                      className="w-full px-4 py-2.5 text-left hover:bg-muted flex items-center gap-3 border-b border-border/50 last:border-0"
+                    >
+                      <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
+                        {c.nombre_completo.split(' ').slice(0, 2).map((p) => p[0]).join('').toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">{c.nombre_completo}</p>
+                        <p className="text-xs text-muted-foreground">
+                          CC {c.documento} · {c.modalidad_pago}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
-
-            {/* Valor + Cuotas */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="space-y-3">
-                <Label className="text-base font-semibold">
-                  Valor total <span className="text-destructive">*</span>
-                </Label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground text-lg">$</span>
-                  <Input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="1.500.000"
-                    value={formatThousands(valorTotal)}
-                    onChange={(e) => setValorTotal(parseCOP(e.target.value))}
-                    className="pl-8 h-12 text-base"
-                  />
+            {empleadoSeleccionado && (
+              <div className="flex items-center gap-3 p-3 bg-primary/5 border border-primary/20 rounded-lg">
+                <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold flex-shrink-0">
+                  {empleadoSeleccionado.nombre_completo.split(' ').slice(0, 2).map((p) => p[0]).join('').toUpperCase()}
+                </div>
+                <div>
+                  <p className="font-semibold text-sm">{empleadoSeleccionado.nombre_completo}</p>
+                  <p className="text-xs text-muted-foreground">
+                    CC {empleadoSeleccionado.documento} · {empleadoSeleccionado.modalidad_pago}
+                  </p>
                 </div>
               </div>
-              <div className="space-y-3">
-                <Label className="text-base font-semibold">
-                  Número de cuotas <span className="text-destructive">*</span>
-                </Label>
+            )}
+          </div>
+
+          {/* Concepto y valor */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label className="font-semibold">Concepto <span className="text-destructive">*</span></Label>
+              <Input
+                placeholder="Ej: Préstamo personal, Anticipo de nómina..."
+                value={concepto}
+                onChange={(e) => setConcepto(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="font-semibold">
+                Valor total del préstamo <span className="text-destructive">*</span>
+              </Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
                 <Input
-                  type="number"
-                  placeholder="10"
-                  value={numCuotas}
-                  onChange={(e) => setNumCuotas(e.target.value)}
-                  min="1"
-                  className="h-12 text-base"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="1.500.000"
+                  value={formatThousands(valorTotal)}
+                  onChange={(e) => { setValorTotal(parseCOP(e.target.value)); setCuotaManual(''); }}
+                  className="pl-7"
                 />
               </div>
-              <div className="space-y-3">
-                <Label className="text-base font-semibold">Cuota estimada</Label>
-                <div className="h-12 flex items-center px-4 rounded-md border border-border bg-muted/40 text-base font-semibold text-primary">
-                  ${cuotaEstimada.toLocaleString('es-CO')}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  El backend puede ajustar la última cuota para absorber el residuo del redondeo.
-                </p>
-              </div>
             </div>
+          </div>
 
-            {/* Frecuencia (solo lectura, según config del tenant) */}
-            <div className="rounded-lg bg-muted/30 border border-border/50 p-4 flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Frecuencia de descuento
-                </p>
-              </div>
-              <div className="text-sm font-bold px-3 py-1.5 rounded-md bg-primary/10 text-primary border border-primary/20">
-                {periodicidadTenant}
-              </div>
-            </div>
-
-            {/* Inicio del descuento */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="space-y-3">
-                <Label className="text-base font-semibold">
-                  Año de inicio <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  type="number"
-                  value={inicioAnio}
-                  onChange={(e) => setInicioAnio(Number(e.target.value))}
-                  min={2020}
-                  max={2100}
-                  className="h-12 text-base"
-                />
-              </div>
-              <div className="space-y-3">
-                <Label className="text-base font-semibold">
-                  Mes de inicio <span className="text-destructive">*</span>
-                </Label>
-                <Select
-                  value={String(inicioMes)}
-                  onValueChange={(v) => setInicioMes(Number(v))}
+          {/* Frecuencia de descuento (viene del tenant, readonly) */}
+          <div className="space-y-2">
+            <Label className="font-semibold">
+              Frecuencia de descuento <span className="text-destructive">*</span>
+            </Label>
+            <div className="flex rounded-xl border border-border overflow-hidden">
+              {(['QUINCENAL', 'MENSUAL'] as const).map((tipo) => (
+                <button
+                  key={tipo}
+                  type="button"
+                  disabled
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-all ${
+                    periodicidadTenant === tipo
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-background text-muted-foreground'
+                  } cursor-not-allowed`}
                 >
-                  <SelectTrigger className="h-12 text-base">
-                    <SelectValue />
-                  </SelectTrigger>
+                  {tipo === 'QUINCENAL' ? 'Quincenal (cada 15 días)' : 'Mensual (1 vez al mes)'}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              La frecuencia se configura en Configuración → Pagos y Liquidaciones.
+            </p>
+          </div>
+
+          {/* Inicio del descuento */}
+          <div className="space-y-2">
+            <Label className="font-semibold flex items-center gap-1.5">
+              <CalendarDays className="h-4 w-4 text-primary" />
+              {periodicidadTenant === 'QUINCENAL' ? 'Desde qué quincena' : 'Desde qué mes'} se descuenta
+              <span className="text-destructive">*</span>
+            </Label>
+            {periodicidadTenant === 'QUINCENAL' ? (
+              <div className="grid grid-cols-3 gap-3">
+                <Select value={String(inicioAnio)} onValueChange={(v) => setInicioAnio(parseInt(v))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {MESES.map((m) => (
-                      <SelectItem key={m.value} value={String(m.value)}>{m.nombre}</SelectItem>
-                    ))}
+                    {ANIOS.map((a) => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="space-y-3">
-                <Label className="text-base font-semibold">
-                  Quincena {periodicidadTenant === 'QUINCENAL' && <span className="text-destructive">*</span>}
-                </Label>
+                <Select value={String(inicioMes)} onValueChange={(v) => setInicioMes(parseInt(v))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {MESES.map((m, i) => <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>)}
+                  </SelectContent>
+                </Select>
                 <Select
                   value={inicioQuincena ? String(inicioQuincena) : ''}
-                  onValueChange={(v) => setInicioQuincena(Number(v) as 1 | 2)}
-                  disabled={periodicidadTenant === 'MENSUAL'}
+                  onValueChange={(v) => setInicioQuincena(parseInt(v) as 1 | 2)}
                 >
-                  <SelectTrigger className="h-12 text-base">
-                    <SelectValue placeholder={periodicidadTenant === 'MENSUAL' ? 'No aplica (mensual)' : 'Selecciona'} />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Quincena" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="1">1ª quincena ({q1Range.inicio}–{q1Range.fin})</SelectItem>
                     <SelectItem value="2">2ª quincena ({q2Range.inicio}–{q2Range.fin})</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-
-            {/* Concepto */}
-            <div className="space-y-3">
-              <Label className="text-base font-semibold">
-                Concepto <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                placeholder="Préstamo personal, Adelanto de nómina, etc."
-                value={concepto}
-                onChange={(e) => setConcepto(e.target.value)}
-                className="h-12 text-base"
-              />
-            </div>
-
-            {/* Observaciones */}
-            <div className="space-y-3">
-              <Label className="text-base font-semibold">Observaciones (opcional)</Label>
-              <Textarea
-                placeholder="Aprobado por gerencia, motivo del préstamo, etc."
-                value={observaciones}
-                onChange={(e) => setObservaciones(e.target.value)}
-                rows={3}
-                className="resize-none text-base"
-              />
-            </div>
-
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <Select value={String(inicioAnio)} onValueChange={(v) => setInicioAnio(parseInt(v))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {ANIOS.map((a) => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={String(inicioMes)} onValueChange={(v) => setInicioMes(parseInt(v))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {MESES.map((m, i) => <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
 
-          <div className="flex justify-between items-center gap-4 pt-8 mt-8 border-t">
+          {/* Número de cuotas y cuota */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label className="font-semibold">
+                Número de {periodicidadTenant === 'QUINCENAL' ? 'quincenas' : 'meses'}
+                <span className="text-destructive"> *</span>
+              </Label>
+              <Input
+                type="number"
+                placeholder="Ej: 4"
+                min="1"
+                max="48"
+                value={numCuotas}
+                onChange={(e) => { setNumCuotas(e.target.value); setCuotaManual(''); }}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="font-semibold">
+                Cuota por {periodicidadTenant === 'QUINCENAL' ? 'quincena' : 'mes'}
+              </Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder={cuotaCalculada > 0 ? cuotaCalculada.toLocaleString('es-CO') : '0'}
+                  value={formatThousands(cuotaManual)}
+                  onChange={(e) => {
+                    const nuevoValor = parseCOP(e.target.value);
+                    setCuotaManual(nuevoValor);
+                    // Al escribir cuota, calcular automáticamente el número de
+                    // períodos si hay valor total del préstamo.
+                    const cuotaN = parseFloat(nuevoValor) || 0;
+                    const totalN = parseFloat(valorTotal) || 0;
+                    if (cuotaN > 0 && totalN > 0) {
+                      setNumCuotas(String(Math.ceil(totalN / cuotaN)));
+                    }
+                  }}
+                  className="pl-7"
+                />
+              </div>
+              {cuotaCalculada > 0 && !cuotaManual && (
+                <p className="text-xs text-muted-foreground">
+                  Calculado: <span className="font-semibold text-primary">${cuotaCalculada.toLocaleString('es-CO')}</span>
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Resumen calculado */}
+          {numCuotasNum > 0 && periodoFin && (
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3">
+              <p className="text-sm font-semibold text-primary flex items-center gap-2">
+                <Info className="h-4 w-4" /> Resumen del descuento
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Desde</p>
+                  <p className="text-sm font-semibold">
+                    {periodicidadTenant === 'QUINCENAL' && inicioQuincena
+                      ? labelQuincena(inicioAnio, inicioMes, inicioQuincena)
+                      : `${MESES[inicioMes - 1]} ${inicioAnio}`}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Hasta</p>
+                  <p className="text-sm font-semibold text-primary">
+                    {periodicidadTenant === 'QUINCENAL' && 'quincena' in periodoFin
+                      ? labelQuincena(periodoFin.anio, periodoFin.mes, periodoFin.quincena as 1 | 2)
+                      : `${MESES[periodoFin.mes - 1]} ${periodoFin.anio}`}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Cuota</p>
+                  <p className="text-sm font-semibold">
+                    ${cuotaFinal > 0 ? cuotaFinal.toLocaleString('es-CO') : '—'} / {periodicidadTenant === 'QUINCENAL' ? 'quincena' : 'mes'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Total descontado</p>
+                  <p className="text-sm font-semibold text-primary">${totalCalculado.toLocaleString('es-CO')}</p>
+                </div>
+              </div>
+              {totalCalculado !== totalIngresado && totalIngresado > 0 && (
+                <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/30 px-3 py-1.5 rounded-lg">
+                  El total descontado (${totalCalculado.toLocaleString('es-CO')}) difiere del valor del préstamo (${totalIngresado.toLocaleString('es-CO')}).
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Observaciones */}
+          <div className="space-y-2">
+            <Label className="font-semibold">Observaciones (opcional)</Label>
+            <Textarea
+              placeholder="Aprobado por gerencia, motivo del préstamo, etc."
+              value={observaciones}
+              onChange={(e) => setObservaciones(e.target.value)}
+              rows={3}
+              className="resize-none"
+            />
+          </div>
+
+          {/* Acciones */}
+          <div className="flex justify-between items-center pt-2 border-t">
             <Button
               variant="outline"
               onClick={() => navigate('/nomina/prestamos')}
-              className="h-12 px-6 text-base"
               disabled={guardando}
             >
               Cancelar
             </Button>
             <Button
               onClick={handleSave}
-              className="h-12 px-8 text-base gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20"
               disabled={guardando}
+              className="gap-2 bg-primary hover:bg-primary/90"
             >
-              {guardando ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
+              {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Guardar Préstamo
             </Button>
           </div>
+
         </CardContent>
       </Card>
     </div>

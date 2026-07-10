@@ -61,21 +61,6 @@ function toNumber(v: string | number): number {
   return parseFloat(v) || 0;
 }
 
-/**
- * Formatea una fecha del backend a `dd/mm/yyyy`. Acepta tanto ISO
- * (`2026-06-16T05:00:00.000000Z`) como solo fecha (`2026-06-16`).
- * Si recibe un ISO con `Z`, se construye con `[Y, M-1, D]` para evitar el
- * corrimiento por zona horaria (en COT podría retroceder un día).
- */
-function fmtFecha(s: string | null | undefined): string {
-  if (!s) return '—';
-  // Tomar solo la parte YYYY-MM-DD del inicio.
-  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!m) return s;
-  const [, y, mes, d] = m;
-  return `${d}/${mes}/${y}`;
-}
-
 /** Formato compacto en millones para los mini-KPIs (igual que V.15). */
 function fmtMillones(n: number): string {
   if (!n || n <= 0) return '—';
@@ -581,9 +566,8 @@ export default function Nomina() {
                               <div className="flex flex-col">
                                 <span className="font-semibold text-sm">{periodoLabel(n)}</span>
                                 <span className="text-xs text-muted-foreground">
-                                  {fmtFecha(n.fecha_inicio)} → {fmtFecha(n.fecha_fin)}
-                                  {typeof n.empleados_count === 'number' &&
-                                    ` · ${n.empleados_liquidados_count ?? 0}/${n.empleados_count} liquidados`}
+                                  {n.mes}/{n.anio}
+                                  {n.quincena ? ` - Quincena ${n.quincena}` : ''}
                                 </span>
                               </div>
                             </div>

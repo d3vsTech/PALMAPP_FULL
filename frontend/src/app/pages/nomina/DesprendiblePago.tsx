@@ -297,54 +297,23 @@ export default function DesprendiblePago() {
 
   return (
     <div className="space-y-6 print:space-y-2">
-      {/* Header de acciones - NO SE IMPRIME */}
-      <div className="flex items-center justify-between print:hidden">
+      {/* Header - NO SE IMPRIME */}
+      <div className="print:hidden">
         <Button
           variant="ghost"
           size="sm"
           onClick={() => navigate(`/nomina/${nominaId}`)}
-          className="gap-2"
+          className="mb-4 gap-2"
         >
           <ArrowLeft className="h-4 w-4" />
-          Volver a la nómina
+          Volver
         </Button>
 
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => window.print()} className="gap-2">
-            <Printer className="h-4 w-4" />
-            Imprimir
-          </Button>
-          <Button onClick={descargarPdf} disabled={descargando} className="gap-2">
-            {descargando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-            Descargar PDF
-          </Button>
-          <Button variant="outline" onClick={enviarWhatsapp} disabled={generandoWa} className="gap-2">
-            {generandoWa ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
-            WhatsApp
-          </Button>
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-primary">Desprendible Generado</h1>
+          <p className="text-muted-foreground mt-2">Liquidación confirmada exitosamente</p>
         </div>
       </div>
-
-      {/* Título H1 - NO SE IMPRIME */}
-      <div className="print:hidden">
-        <h1 className="text-3xl font-bold text-primary">Desprendible Generado</h1>
-        <p className="text-muted-foreground mt-2">Liquidación confirmada exitosamente</p>
-      </div>
-
-      {/* Banner confirmación - NO SE IMPRIME */}
-      <Card className="border-2 border-success bg-success/5 print:hidden">
-        <CardContent className="p-4 flex items-center gap-3">
-          <div className="h-10 w-10 rounded-full bg-success/20 flex items-center justify-center">
-            <Check className="h-5 w-5 text-success" />
-          </div>
-          <div>
-            <p className="font-semibold text-success">Liquidación confirmada</p>
-            <p className="text-xs text-muted-foreground">
-              El empleado ha sido liquidado correctamente.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* DESPRENDIBLE - SE IMPRIME */}
       <Card className="border border-border shadow-lg max-w-4xl mx-auto">

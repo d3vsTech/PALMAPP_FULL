@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
@@ -275,6 +275,8 @@ export default function NuevaNominaWizard() {
   /** Ediciones locales lote_id → nuevo promedio manual (solo lotes modificados).
    *  Se compara contra `bundleCosecha.promedios_por_lote[*].promedio_efectivo`. */
   const [promediosEditados, setPromediosEditados] = useState<Record<number, number>>({});
+  /** Snapshot al abrir el modal para poder revertir con "Cancelar". */
+  const promediosEditadosSnapshot = useRef<Record<number, number>>({});
   const [ajustandoPromedio, setAjustandoPromedio] = useState(false);
   /** Año seleccionado en el selector del modal — arranca en el año de la nómina. */
   const [anioPromedios, setAnioPromedios] = useState<number>(new Date().getFullYear());
@@ -478,6 +480,9 @@ export default function NuevaNominaWizard() {
       toast.success(`${cambios.length} promedio${cambios.length !== 1 ? 's' : ''} actualizado${cambios.length !== 1 ? 's' : ''}`);
       const res = await nominaApi.validarCosecha(nominaId);
       setBundleCosecha(res.data);
+      // Confirmar snapshot: el guardado quedó persistido, no revertir si se
+      // reabre y se cancela más tarde.
+      promediosEditadosSnapshot.current = { ...promediosEditados };
       setMostrarAjustePromedios(false);
     } catch (err) {
       const e = err as ApiError;
@@ -1453,7 +1458,11 @@ export default function NuevaNominaWizard() {
                 </div>
                 <Button
                   variant="outline"
-                  onClick={() => setMostrarAjustePromedios(true)}
+                  onClick={() => {
+                    // Snapshot para poder revertir con Cancelar.
+                    promediosEditadosSnapshot.current = { ...promediosEditados };
+                    setMostrarAjustePromedios(true);
+                  }}
                   className="gap-2 border-primary/50 text-primary hover:bg-primary/5"
                 >
                   <Settings2 className="h-4 w-4" />
@@ -1473,6 +1482,46 @@ export default function NuevaNominaWizard() {
                 const totalExtr = bundleCosecha?.total_kg_extractora ?? 0;
                 const diff = bundleCosecha?.diferencia_kg ?? 0;
                 const detalle = bundleCosecha?.detalle_por_colaborador ?? [];
+
+                // Helpers de ajuste:
+                //  1) kg_trabajado ajustado con el promedio manual del lote (si hay).
+                //  2) kg_extractora proporcionalizado GLOBALMENTE al kg_trabajado
+                //     del colaborador. Como el header global cuadra
+                //     (colaboradores ≈ extractora), cada colab debe tener una
+                //     diferencia cercana a cero, proporcional a su aporte.
+                const promediosPorLote = bundleCosecha?.promedios_por_lote ?? [];
+                const nombreALoteIdMap = new Map<string, number>();
+                for (const p of promediosPorLote) nombreALoteIdMap.set(p.lote_nombre, p.lote_id);
+
+                const kgTrabDeCosecha = (c: { lote: string; kg_trabajado: number }): number => {
+                  const loteId = nombreALoteIdMap.get(c.lote);
+                  if (loteId === undefined) return c.kg_trabajado;
+                  const p = promediosPorLote.find((x) => x.lote_id === loteId);
+                  const promOrig = p?.promedio_efectivo ?? 0;
+                  const editado = promediosEditados[loteId];
+                  const promNuevo = editado !== undefined && editado > 0 ? editado : promOrig;
+                  if (promNuevo === promOrig || promOrig <= 0) return c.kg_trabajado;
+                  const gajosPorMiembro = Math.round(c.kg_trabajado / promOrig);
+                  return gajosPorMiembro * promNuevo;
+                };
+
+                // Total kg_trabajado ajustado sobre todos los colaboradores.
+                // Se usa para calcular el factor de proporcionalidad con la extractora.
+                let totalTrabAjustadoGlobal = 0;
+                for (const d of detalle) {
+                  for (const c of d.cosechas ?? []) {
+                    totalTrabAjustadoGlobal += kgTrabDeCosecha(c);
+                  }
+                }
+                const factorExtractora = totalTrabAjustadoGlobal > 0
+                  ? totalExtr / totalTrabAjustadoGlobal
+                  : 1;
+
+                const ajustarKgCosecha = (c: { lote: string; kg_trabajado: number; kg_extractora: number }) => {
+                  const kgTrab = kgTrabDeCosecha(c);
+                  const kgExtr = kgTrab * factorExtractora;
+                  return { kgTrab, kgExtr, difKg: kgTrab - kgExtr };
+                };
                 const estadoDif: 'ok' | 'critico' | 'atencion' | 'vacio' =
                   totalColabs === 0 && totalExtr === 0 ? 'vacio'
                     : diff === 0 ? 'ok'
@@ -1594,9 +1643,11 @@ export default function NuevaNominaWizard() {
                                   {(() => {
                                     // KPIs del header — igual que la imagen 2:
                                     // Registrado / Transportadora / Diferencia
+                                    // kg_trabajado y kg_extractora se recalculan
+                                    // con el promedio ajustado y la proporción de gajos.
                                     const cosechas = d.cosechas ?? [];
-                                    const totalTrab = cosechas.reduce((s, c) => s + c.kg_trabajado, 0);
-                                    const totalExtr = cosechas.reduce((s, c) => s + c.kg_extractora, 0);
+                                    const totalTrab = cosechas.reduce((s, c) => s + ajustarKgCosecha(c).kgTrab, 0);
+                                    const totalExtr = cosechas.reduce((s, c) => s + ajustarKgCosecha(c).kgExtr, 0);
                                     const diff = totalTrab - totalExtr;
                                     const colorDiff = diff === 0
                                       ? 'text-success'
@@ -1644,43 +1695,46 @@ export default function NuevaNominaWizard() {
                                             <th className="text-left p-2">Lote</th>
                                             <th className="text-left p-2">Sublote</th>
                                             <th className="text-left p-2">Remisión</th>
-                                            <th className="text-right p-2">Gajos T.</th>
-                                            <th className="text-right p-2">Gajos V.</th>
-                                            <th className="text-right p-2">Dif. G.</th>
-                                            <th className="text-right p-2">Kg Trab.</th>
-                                            <th className="text-right p-2">Kg Extr.</th>
-                                            <th className="text-right p-2">Dif. Kg</th>
+                                            <th className="text-right p-2">Gajos Totales</th>
+                                            <th className="text-right p-2">Gajos Verificados</th>
+                                            <th className="text-right p-2">Diferencia Gajos</th>
+                                            <th className="text-right p-2">Kg Trabajados</th>
+                                            <th className="text-right p-2">Kg Extractora</th>
+                                            <th className="text-right p-2">Diferencia Kg</th>
                                           </tr>
                                         </thead>
                                         <tbody>
-                                          {d.cosechas.map((c, idx) => (
-                                            <tr
-                                              key={idx}
-                                              className={`border-b border-border/40 last:border-0 ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}
-                                            >
-                                              <td className="p-2 whitespace-nowrap">{c.fecha}</td>
-                                              <td className="p-2">{c.lote}</td>
-                                              <td className="p-2 text-muted-foreground">{c.sublote ?? '—'}</td>
-                                              <td className="p-2 text-muted-foreground">{c.remision ?? '—'}</td>
-                                              <td className="p-2 text-right">{c.gajos_trabajados}</td>
-                                              <td className="p-2 text-right">{c.gajos_verificados}</td>
-                                              <td className={`p-2 text-right font-semibold ${c.diferencia_gajos === 0 ? 'text-muted-foreground' : c.diferencia_gajos > 0 ? 'text-amber-600' : 'text-primary'}`}>
-                                                {c.diferencia_gajos > 0 ? '+' : ''}{c.diferencia_gajos}
-                                              </td>
-                                              <td className="p-2 text-right">{c.kg_trabajado.toLocaleString('es-CO')}</td>
-                                              <td className="p-2 text-right">{c.kg_extractora.toLocaleString('es-CO')}</td>
-                                              <td className={`p-2 text-right font-semibold ${c.diferencia_kg === 0 ? 'text-muted-foreground' : c.diferencia_kg > 0 ? 'text-amber-600' : 'text-primary'}`}>
-                                                {c.diferencia_kg > 0 ? '+' : ''}{c.diferencia_kg.toLocaleString('es-CO')}
-                                              </td>
-                                            </tr>
-                                          ))}
+                                          {d.cosechas.map((c, idx) => {
+                                            const { kgTrab, kgExtr, difKg } = ajustarKgCosecha(c);
+                                            return (
+                                              <tr
+                                                key={idx}
+                                                className={`border-b border-border/40 last:border-0 ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}
+                                              >
+                                                <td className="p-2 whitespace-nowrap">{c.fecha}</td>
+                                                <td className="p-2">{c.lote}</td>
+                                                <td className="p-2 text-muted-foreground">{c.sublote ?? '—'}</td>
+                                                <td className="p-2 text-muted-foreground">{c.remision ?? '—'}</td>
+                                                <td className="p-2 text-right">{c.gajos_trabajados}</td>
+                                                <td className="p-2 text-right">{c.gajos_verificados}</td>
+                                                <td className={`p-2 text-right font-semibold ${c.diferencia_gajos === 0 ? 'text-muted-foreground' : c.diferencia_gajos > 0 ? 'text-amber-600' : 'text-primary'}`}>
+                                                  {c.diferencia_gajos > 0 ? '+' : ''}{c.diferencia_gajos}
+                                                </td>
+                                                <td className="p-2 text-right">{Math.round(kgTrab).toLocaleString('es-CO')}</td>
+                                                <td className="p-2 text-right">{Math.round(kgExtr).toLocaleString('es-CO')}</td>
+                                                <td className={`p-2 text-right font-semibold ${Math.abs(difKg) < 1 ? 'text-muted-foreground' : difKg > 0 ? 'text-amber-600' : 'text-primary'}`}>
+                                                  {difKg > 0 ? '+' : ''}{Math.round(difKg).toLocaleString('es-CO')}
+                                                </td>
+                                              </tr>
+                                            );
+                                          })}
                                           {/* Fila TOTALES */}
                                           {(() => {
                                             const totGT = d.cosechas.reduce((s, c) => s + c.gajos_trabajados, 0);
                                             const totGV = d.cosechas.reduce((s, c) => s + c.gajos_verificados, 0);
                                             const totDifG = d.cosechas.reduce((s, c) => s + c.diferencia_gajos, 0);
-                                            const totKgT = d.cosechas.reduce((s, c) => s + c.kg_trabajado, 0);
-                                            const totKgE = d.cosechas.reduce((s, c) => s + c.kg_extractora, 0);
+                                            const totKgT = d.cosechas.reduce((s, c) => s + ajustarKgCosecha(c).kgTrab, 0);
+                                            const totKgE = d.cosechas.reduce((s, c) => s + ajustarKgCosecha(c).kgExtr, 0);
                                             const totDifKg = totKgT - totKgE;
                                             return (
                                               <tr className="border-t-2 border-primary/40 bg-primary/5 font-semibold">
@@ -1916,7 +1970,16 @@ export default function NuevaNominaWizard() {
       {/* Modal — Ajustar Promedios efectivos por lote (doc §4.2).
           Los promedios vienen del bundle de validar-cosecha (`promedios_por_lote`).
           Solo aparecen los lotes con cosechas en el período. */}
-      <Dialog open={mostrarAjustePromedios} onOpenChange={setMostrarAjustePromedios}>
+      <Dialog
+        open={mostrarAjustePromedios}
+        onOpenChange={(open) => {
+          if (!open) {
+            // Cerrar por overlay/ESC/X → revertir cambios no guardados.
+            setPromediosEditados(promediosEditadosSnapshot.current);
+          }
+          setMostrarAjustePromedios(open);
+        }}
+      >
         <DialogContent
           className="max-h-[90vh] overflow-y-auto"
           style={{ width: 'min(780px, 95vw)', maxWidth: 'min(780px, 95vw)' }}
@@ -1994,26 +2057,12 @@ export default function NuevaNominaWizard() {
             const diff = totalColabs - totalExtr;
             const estado: 'ok' | 'critico' | 'atencion' =
               Math.abs(diff) < 1 ? 'ok' : Math.abs(diff) > 500 ? 'critico' : 'atencion';
-            const colorPunto = estado === 'ok' ? 'bg-success' : estado === 'critico' ? 'bg-destructive' : 'bg-amber-500';
             const colorTexto = estado === 'ok' ? 'text-success' : estado === 'critico' ? 'text-destructive' : 'text-amber-700';
-            const label = estado === 'ok' ? 'Sin diferencias' : estado === 'critico' ? 'Revisar remisiones' : 'Verificar registros';
-            const hayEdiciones = Object.keys(promediosEditados).length > 0 && hayCambiosPromedios;
 
             return (
               <div className="rounded-xl border border-border bg-card overflow-hidden">
-                <div className="flex items-center justify-between px-5 py-3 border-b border-border bg-muted/30">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold">Resumen de Cosecha</p>
-                    {hayEdiciones && (
-                      <Badge className="text-[10px] bg-primary/10 text-primary border-primary/30">
-                        Preview con ajustes
-                      </Badge>
-                    )}
-                  </div>
-                  <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${colorTexto}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${colorPunto}`} />
-                    {label}
-                  </span>
+                <div className="flex items-center px-5 py-3 border-b border-border bg-muted/30">
+                  <p className="text-sm font-semibold">Resumen de Cosecha</p>
                 </div>
                 <div className="grid grid-cols-3 divide-x divide-border">
                   <div className="px-6 py-4">
@@ -2126,7 +2175,11 @@ export default function NuevaNominaWizard() {
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setMostrarAjustePromedios(false)}
+              onClick={() => {
+                // Revertir cambios no guardados al snapshot inicial.
+                setPromediosEditados(promediosEditadosSnapshot.current);
+                setMostrarAjustePromedios(false);
+              }}
               disabled={ajustandoPromedio}
             >
               Cancelar

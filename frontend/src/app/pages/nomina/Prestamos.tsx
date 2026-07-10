@@ -61,14 +61,6 @@ function fmtFecha(s: string | null | undefined): string {
   return `${d}/${mes}/${y}`;
 }
 
-/** Etiqueta legible del período de inicio: "2026 - Ene Q1" / "2026 - Ene". */
-const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-function periodoInicioLabel(p: Prestamo): string {
-  const mes = MESES_CORTOS[(p.inicio_mes ?? 1) - 1] ?? '';
-  const q = p.inicio_quincena ? ` Q${p.inicio_quincena}` : '';
-  return `${p.inicio_anio} - ${mes}${q}`;
-}
-
 export default function Prestamos() {
   const navigate = useNavigate();
   const [busqueda, setBusqueda] = useState('');
@@ -311,10 +303,7 @@ export default function Prestamos() {
                           </div>
                         </td>
                         <td className="p-4 text-sm text-muted-foreground">
-                          <div>{fmtFecha(p.fecha_fin)}</div>
-                          <div className="text-[10px] text-muted-foreground/70">
-                            Inicio {periodoInicioLabel(p)} · {p.frecuencia}
-                          </div>
+                          {fmtFecha(p.fecha_fin)}
                         </td>
                         <td className="p-4 text-center">
                           <Badge variant="outline" className={`text-xs ${cfg.className}`}>

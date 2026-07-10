@@ -414,13 +414,13 @@ export default function LiquidarColaborador() {
         </Button>
 
         <div className="flex items-center gap-4">
-          <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center border-2 border-primary/20">
-            <span className="text-lg font-bold text-primary">
+          <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center border-2 border-primary/20">
+            <span className="text-xl font-bold text-primary">
               {getIniciales(empleado.nombre_completo)}
             </span>
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-primary">{empleado.nombre_completo}</h1>
+            <h1 className="text-3xl font-bold text-primary">{empleado.nombre_completo}</h1>
             <div className="flex items-center gap-2 mt-1 text-sm">
               {esOperario ? (
                 <Badge className="bg-amber-500/10 text-amber-700 border-amber-300 text-[10px] font-bold uppercase">
@@ -438,10 +438,10 @@ export default function LiquidarColaborador() {
         </div>
       </div>
 
-      {/* Resumen de trabajo — ocultado a pedido del usuario. Se deja en el
-          código detrás de `false && ...` para reactivar fácilmente si se
-          necesita más adelante. */}
-      {false && empleado.salario_tipo === 'VARIABLE' && resumen && (
+      {/* Resumen de trabajo — solo para colaboradores con salario VARIABLE.
+          Muestra los jornales agrupados por categoría (Cosecha, Poda, Plateo,
+          Sanidad, etc.) con subtotales y total general del período. */}
+      {empleado.salario_tipo === 'VARIABLE' && resumen && (
         <Card className="border-border">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-xl">
@@ -754,8 +754,14 @@ export default function LiquidarColaborador() {
                 })}
                 {/* Deducciones voluntarias por concepto del catálogo. Cada
                     fila muestra un "+ Agregar" que crea una sub-fila con
-                    valor + observación. */}
-                {conceptos.map((concepto) => {
+                    valor + observación. Se excluye "Ahorro Voluntario" por
+                    decisión de negocio — no se gestiona desde nómina. */}
+                {conceptos
+                  .filter((c) =>
+                    !/ahorro/i.test(c.nombre ?? '') &&
+                    !/AHORRO/.test(c.codigo ?? ''),
+                  )
+                  .map((concepto) => {
                   const filas = deducciones
                     .map((d, idx) => ({ d, idx }))
                     .filter(({ d }) => d.concepto_id === concepto.id);
@@ -981,7 +987,7 @@ export default function LiquidarColaborador() {
 
           {/* ── RESUMEN INGRESOS / DEDUCCIONES / TOTAL NETO ─────────── */}
           {totales && (
-            <div className="rounded-lg bg-muted/40 border border-border p-6 space-y-6">
+            <div className="rounded-lg bg-primary/10 border border-primary/30 p-6 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <p className="text-xs uppercase tracking-wider font-bold text-success">+ INGRESOS</p>
@@ -1023,9 +1029,9 @@ export default function LiquidarColaborador() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-4 border-t border-border">
+              <div className="flex items-center justify-between pt-4 border-t border-primary/30">
                 <span className="font-bold text-lg tracking-wide">TOTAL NETO</span>
-                <span className="font-bold text-3xl text-success">
+                <span className="font-bold text-3xl text-primary">
                   ${totales.neto.toLocaleString('es-CO')}
                 </span>
               </div>
@@ -1044,7 +1050,7 @@ export default function LiquidarColaborador() {
             <Button
               onClick={liquidar}
               disabled={enviando}
-              className="h-12 text-base gap-2 bg-[#a3d34a] hover:bg-[#93c33d] text-white"
+              className="h-12 text-base gap-2 bg-success hover:bg-success/90 text-white"
             >
               {enviando ? <Loader2 className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />}
               {esReliquidacion ? 'Guardar cambios' : 'Confirmar y Guardar Liquidación'}

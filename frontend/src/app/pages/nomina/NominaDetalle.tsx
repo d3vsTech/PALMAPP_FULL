@@ -1351,7 +1351,7 @@ export default function NominaDetalle() {
                   {/* Header acta */}
                   <div className={`flex items-center justify-between px-5 py-4 border-b border-border ${pagado ? 'bg-success/5' : 'bg-amber-50/60 dark:bg-amber-950/20'}`}>
                     <div className="flex items-center gap-3">
-                      <div className={`h-10 w-10 rounded-xl flex items-center justify-center font-bold ${pagado ? 'bg-success/10 text-success' : 'bg-amber-500/10 text-amber-700'}`}>
+                      <div className={`h-9 w-9 rounded-lg flex items-center justify-center font-bold ${pagado ? 'bg-success/10 text-success' : 'bg-amber-500/10 text-amber-700'}`}>
                         {grupo.tercero_nombre.charAt(0)}
                       </div>
                       <div>
@@ -1383,15 +1383,29 @@ export default function NominaDetalle() {
                         {pagado ? 'Pagado' : calculada ? 'Pendiente' : 'Sin calcular'}
                       </Badge>
                       {pagado ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="gap-1.5"
-                          onClick={() => descargarPdfTercero(grupo.tercero_id, grupo.tercero_nombre)}
-                        >
-                          <Printer className="h-3.5 w-3.5" />
-                          Generar Comprobante
-                        </Button>
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5"
+                            onClick={() => navigate(
+                              `/nomina/${nominaId}/tercero/${grupo.tercero_id}/liquidar`,
+                              { state: { totalEstimado: total, categorias } },
+                            )}
+                          >
+                            <FileText className="h-3.5 w-3.5" />
+                            Ver detalle
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5"
+                            onClick={() => descargarPdfTercero(grupo.tercero_id, grupo.tercero_nombre)}
+                          >
+                            <Printer className="h-3.5 w-3.5" />
+                            Generar Comprobante
+                          </Button>
+                        </>
                       ) : calculada && (
                         <Button
                           size="sm"

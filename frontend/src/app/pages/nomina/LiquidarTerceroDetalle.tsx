@@ -442,9 +442,10 @@ export default function LiquidarTerceroDetalle() {
                 variant="outline"
                 size="sm"
                 className="gap-1.5 text-[#1E5631] border-[#1E5631]/30"
+                onClick={descargarPdf}
               >
-                <Check className="h-3.5 w-3.5" />
-                Liquidado
+                <Download className="h-3.5 w-3.5" />
+                Descargar Comprobante
               </Button>
             )}
           </div>

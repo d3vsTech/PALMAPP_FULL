@@ -794,6 +794,116 @@ export type AgregarTercerosPayload =
   | AgregarTercerosPayloadB
   | AgregarTercerosPayloadC;
 
+// ─── Planilla Diaria de Trabajo (doc API_PLANILLA_DIARIA.md) ──────────────────
+
+/**
+ * Objeto colaborador dentro de una fila de la planilla diaria (§1).
+ * Los primeros 3 elementos del array `colaboradores` corresponden a
+ * `COL.1`, `COL.2`, `COL.3` en la UI. El resto se muestra en la columna
+ * `CUADRILLA`. Para jornales, la cuadrilla siempre viene vacía.
+ */
+export interface PlanillaDiariaColaborador {
+  id: number;
+  nombre: string;
+  tipo: 'empleado' | 'operario';
+  /** Solo presente cuando `tipo=operario`. */
+  tercero_nombre?: string;
+}
+
+/** Fila de la sección `cosecha` (§1 — fuente: `registro_cosecha`). */
+export interface PlanillaDiariaFilaCosecha {
+  id: number;
+  fecha: string;
+  lote: string;
+  colaboradores: PlanillaDiariaColaborador[];
+  gajos: number;
+  /** null si la cosecha no tiene peso confirmado. */
+  kilos: string | null;
+  /** null si sin peso. */
+  promedio: string | null;
+  precio: string;
+  /** null si sin peso. */
+  total: string | null;
+  num_colaboradores: number;
+  /** null si sin valor total. */
+  pago_por_colaborador: string | null;
+  /** Suma de valores de cosecha_cuadrilla solo para colaboradores internos. */
+  col_neto: string;
+}
+
+/**
+ * Fila de las secciones basadas en jornales (`plateo`, `poda`,
+ * `fertilizacion`, `sanidad`, `otros`, `auxiliares`). Agrupadas por
+ * `(operacion_id, labor_id, lote_id)`.
+ */
+export interface PlanillaDiariaFilaJornal {
+  id: number;
+  fecha: string;
+  lote: string | null;
+  labor: string;
+  colaboradores: PlanillaDiariaColaborador[];
+  precio: string;
+  total: string;
+  num_colaboradores: number;
+  /** = `valor_unitario` (ya es individual — cada jornal es por persona). */
+  pago_por_colaborador: string;
+  col_neto: string;
+}
+
+/** Sección genérica del reporte (count + filas + subtotales). */
+export interface PlanillaDiariaSeccion<T> {
+  count: number;
+  registros: T[];
+  subtotal_total: string;
+  subtotal_col_neto: string;
+}
+
+export interface PlanillaDiariaSecciones {
+  cosecha: PlanillaDiariaSeccion<PlanillaDiariaFilaCosecha>;
+  plateo: PlanillaDiariaSeccion<PlanillaDiariaFilaJornal>;
+  poda: PlanillaDiariaSeccion<PlanillaDiariaFilaJornal>;
+  fertilizacion: PlanillaDiariaSeccion<PlanillaDiariaFilaJornal>;
+  sanidad: PlanillaDiariaSeccion<PlanillaDiariaFilaJornal>;
+  otros: PlanillaDiariaSeccion<PlanillaDiariaFilaJornal>;
+  /** Antes se llamaba "auxiliares" — jornales con `categoria=FINCA`. */
+  auxiliares: PlanillaDiariaSeccion<PlanillaDiariaFilaJornal>;
+}
+
+export interface PlanillaDiariaTotales {
+  /** Suma de `kilos` de todas las filas de cosecha (null excluido). */
+  total_kilos: string;
+  /** Suma de `subtotal_total` de todas las secciones. */
+  total_bruto: string;
+  /** Suma de `subtotal_col_neto` de todas las secciones (solo internos). */
+  total_neto_colaboradores: string;
+}
+
+export interface PlanillaDiariaBundle {
+  periodo: {
+    id: number;
+    nombre: string;
+    fecha_inicio: string;
+    fecha_fin: string;
+  };
+  secciones: PlanillaDiariaSecciones;
+  totales: PlanillaDiariaTotales;
+}
+
+/** Filtros aceptados por §1 y §3 (los 3 son independientes y acumulativos). */
+export interface PlanillaDiariaFiltros {
+  /** Búsqueda libre por nombre/apellido (empleado u operario). */
+  colaborador?: string;
+  lote_id?: number;
+  /** Filtrar por día específico dentro del período. */
+  fecha?: string;
+}
+
+/** Item del dropdown de lotes (§2). */
+export interface PlanillaDiariaLote {
+  id: number;
+  nombre: string;
+}
+
 // ─── Checklist paso 4 wizard (doc §3.6) ───────────────────────────────────────
 
 export interface PasoCuatroChecklist {
@@ -1116,6 +1226,48 @@ export const nominaApi = {
       `/v1/tenant/nominas/${nominaId}/paso-4-checklist`,
       T,
     ),
+
+  // ─── Planilla Diaria de Trabajo (doc API_PLANILLA_DIARIA.md) ─────────────
+  /** Todo el módulo requiere permiso `nomina.ver`. */
+  planillaDiaria: {
+    /**
+     * GET /nominas/{id}/planilla-diaria (§1) — datos consolidados del reporte.
+     * Solo incluye operaciones APROBADAS del rango de la nómina.
+     *
+     * Filtros opcionales (`colaborador` search libre, `lote_id`, `fecha`).
+     * El período de la nómina viene dentro del payload (`data.periodo`) —
+     * no hace falta pedirlo por separado.
+     */
+    ver: (nominaId: number, params?: PlanillaDiariaFiltros) =>
+      apiClient.get<{ data: PlanillaDiariaBundle }>(
+        `/v1/tenant/nominas/${nominaId}/planilla-diaria${toQuery(params as Record<string, unknown>)}`,
+        T,
+      ),
+
+    /**
+     * GET /nominas/{id}/planilla-diaria/lotes (§2) — lotes únicos usados en
+     * las operaciones del período. Alimenta el dropdown "Lote" del filtro.
+     * Sin paginación. Ordenado por nombre.
+     */
+    lotes: (nominaId: number) =>
+      apiClient.get<{ data: PlanillaDiariaLote[] }>(
+        `/v1/tenant/nominas/${nominaId}/planilla-diaria/lotes`,
+        T,
+      ),
+
+    /**
+     * GET /nominas/{id}/planilla-diaria/exportar (§3) — descarga el reporte
+     * en Excel (.xlsx). Acepta los mismos filtros que `.ver`.
+     *
+     * El navegador descargará el archivo directamente. Usar el blob
+     * devuelto para forzar la descarga con un `<a download>`.
+     */
+    exportar: (nominaId: number, params?: PlanillaDiariaFiltros) =>
+      apiClient.getBlob(
+        `/v1/tenant/nominas/${nominaId}/planilla-diaria/exportar${toQuery(params as Record<string, unknown>)}`,
+        T,
+      ),
+  },
 
   // ─── NominaEmpleado ────────────────────────────────────────────────────────
   quitarEmpleado: (nominaEmpleadoId: number) =>

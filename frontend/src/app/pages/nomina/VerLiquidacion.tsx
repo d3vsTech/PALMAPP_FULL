@@ -19,7 +19,9 @@ import {
   TrendingDown,
   Calendar as CalendarIcon,
   Loader2,
-  Send,
+  MessageCircle,
+  Printer,
+  Check,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { nominaApi, DesprendibleData, CategoriaResumenTrabajo } from '../../../api/nomina';
@@ -199,16 +201,6 @@ export default function VerLiquidacion() {
           </div>
         </div>
 
-        <div className="flex gap-2">
-          <Button onClick={descargarPdf} disabled={descargando} className="gap-2">
-            {descargando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-            Descargar PDF
-          </Button>
-          <Button variant="outline" onClick={enviarWhatsapp} disabled={generandoWa} className="gap-2">
-            {generandoWa ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            WhatsApp
-          </Button>
-        </div>
       </div>
 
       <Card className="border-border">
@@ -487,6 +479,51 @@ export default function VerLiquidacion() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Botones de acción - NO SE IMPRIME */}
+      <div className="print:hidden grid grid-cols-2 lg:grid-cols-5 gap-4 max-w-4xl mx-auto">
+        <Button
+          variant="outline"
+          size="lg"
+          onClick={() => navigate(`/nomina/${nominaId}`)}
+          className="gap-2"
+        >
+          <ArrowLeft className="h-5 w-5" />
+          Volver
+        </Button>
+        <Button
+          size="lg"
+          onClick={() => navigate(`/nomina/${nominaId}`)}
+          className="gap-2 bg-success hover:bg-success/90"
+        >
+          <Check className="h-5 w-5" />
+          Aceptar
+        </Button>
+        <Button variant="outline" size="lg" onClick={() => window.print()} className="gap-2">
+          <Printer className="h-5 w-5" />
+          Imprimir
+        </Button>
+        <Button
+          variant="outline"
+          size="lg"
+          onClick={enviarWhatsapp}
+          disabled={generandoWa}
+          className="gap-2 text-primary border-primary hover:bg-primary/5"
+        >
+          {generandoWa ? <Loader2 className="h-5 w-5 animate-spin" /> : <MessageCircle className="h-5 w-5" />}
+          WhatsApp
+        </Button>
+        <Button
+          variant="outline"
+          size="lg"
+          onClick={descargarPdf}
+          disabled={descargando}
+          className="gap-2"
+        >
+          {descargando ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
+          Descargar PDF
+        </Button>
+      </div>
     </div>
   );
 }
