@@ -93,17 +93,19 @@ export default function LiquidarTerceroDetalle() {
     Map<number, DetalleLaboresOperario | 'cargando' | 'error'>
   >(new Map());
 
-  /** Modal agregar descuento. */
+  /** Modal agregar descuento. Cuando se abre desde el bloque general del acta,
+   *  `operarioId` viene null y el usuario elige a qué operario aplicar. */
   const [modalDescuento, setModalDescuento] = useState<{
-    operarioId: number;
+    operarioId: number | null;
     operarioNombre: string;
   } | null>(null);
   const [conceptosDescuento, setConceptosDescuento] = useState<NominaConcepto[]>([]);
   const [nuevoDescuento, setNuevoDescuento] = useState<{
+    operario_id: string;
     concepto_id: string;
     valor: string;
     observacion: string;
-  }>({ concepto_id: '', valor: '', observacion: '' });
+  }>({ operario_id: '', concepto_id: '', valor: '', observacion: '' });
   const [guardandoDescuento, setGuardandoDescuento] = useState(false);
   const [eliminandoDescuentoId, setEliminandoDescuentoId] = useState<number | null>(null);
 
@@ -166,13 +168,26 @@ export default function LiquidarTerceroDetalle() {
     }
   };
 
-  const abrirModalDescuento = (operarioId: number, operarioNombre: string) => {
+  const abrirModalDescuento = (operarioId: number | null, operarioNombre: string) => {
     setModalDescuento({ operarioId, operarioNombre });
-    setNuevoDescuento({ concepto_id: '', valor: '', observacion: '' });
+    setNuevoDescuento({
+      operario_id: operarioId != null ? String(operarioId) : '',
+      concepto_id: '',
+      valor: '',
+      observacion: '',
+    });
   };
 
   const guardarDescuento = async () => {
     if (!nominaId || !terceroId || !modalDescuento) return;
+    // Cuando el modal se abre desde el bloque general del acta, el operario
+    // se elige en el select. Cuando se abre desde un operario específico
+    // (flujo legacy), el operario viene fijo en `modalDescuento.operarioId`.
+    const operarioId = modalDescuento.operarioId ?? parseInt(nuevoDescuento.operario_id);
+    if (!operarioId || Number.isNaN(operarioId)) {
+      toast.error('Selecciona a qué operario aplicar el descuento');
+      return;
+    }
     if (!nuevoDescuento.concepto_id) {
       toast.error('Selecciona un concepto');
       return;
@@ -187,7 +202,7 @@ export default function LiquidarTerceroDetalle() {
       const res = await nominaApi.terceros.agregarDescuento(
         nominaId,
         terceroId,
-        modalDescuento.operarioId,
+        operarioId,
         {
           concepto_id: parseInt(nuevoDescuento.concepto_id),
           valor,
@@ -658,71 +673,100 @@ export default function LiquidarTerceroDetalle() {
                       </>
                     )}
 
-                    {/* Descuentos aplicados (§7.5 + §7.6) — al final del
-                        bloque expandido, después del desglose de labores. */}
-                    <div className="px-5 py-3 border-t border-border/40">
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          Descuentos
-                        </p>
-                        {puedeEditar && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => abrirModalDescuento(o.operario_id, o.nombre_completo)}
-                            className="h-7 gap-1.5 text-xs"
-                          >
-                            <Plus className="h-3 w-3" />
-                            Agregar descuento
-                          </Button>
-                        )}
-                      </div>
-                      {o.descuentos.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">Sin descuentos aplicados.</p>
-                      ) : (
-                        <div className="space-y-1.5">
-                          {o.descuentos.map((d) => (
-                            <div
-                              key={d.id}
-                              className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-background px-3 py-2"
-                            >
-                              <div className="flex items-center gap-2 flex-1 min-w-0">
-                                <Minus className="h-3.5 w-3.5 text-destructive flex-shrink-0" />
-                                <div className="min-w-0">
-                                  <p className="text-sm font-medium truncate">{d.concepto_nombre}</p>
-                                  {d.observacion && (
-                                    <p className="text-xs text-muted-foreground truncate">{d.observacion}</p>
-                                  )}
-                                </div>
-                              </div>
-                              <p className="text-sm font-bold text-destructive whitespace-nowrap">
-                                −${toNumber(d.valor).toLocaleString('es-CO')}
-                              </p>
-                              {puedeEditar && (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => eliminarDescuento(o.operario_id, d.id)}
-                                  disabled={eliminandoDescuentoId === d.id}
-                                  className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10 flex-shrink-0"
-                                  title="Eliminar descuento"
-                                >
-                                  {eliminandoDescuentoId === d.id
-                                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                    : <Trash2 className="h-3.5 w-3.5" />}
-                                </Button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                    {/* Los descuentos se gestionan a nivel del acta,
+                        no del operario — ver bloque general debajo. */}
                   </div>
                 )}
               </div>
             );
           })
         )}
+
+        {/* Descuentos a nivel del acta (consolidado de todos los operarios). */}
+        {(() => {
+          const todosLosDescuentos = (detalle?.operarios ?? []).flatMap((op) =>
+            (op.descuentos ?? []).map((d) => ({
+              ...d,
+              operarioId: op.operario_id,
+              operarioNombre: op.nombre_completo,
+            })),
+          );
+          const totalDescuentosActa = todosLosDescuentos.reduce(
+            (s, d) => s + toNumber(d.valor), 0,
+          );
+          return (
+            <div className="border-t border-destructive/20">
+              <div className="flex items-center justify-between px-5 py-3 bg-destructive/5">
+                <p className="text-xs font-bold uppercase tracking-wide text-destructive">
+                  Descuentos
+                </p>
+                {puedeEditar && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => abrirModalDescuento(null, nombre)}
+                    className="h-7 gap-1 text-destructive hover:bg-destructive/10 font-semibold"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Agregar
+                  </Button>
+                )}
+              </div>
+              {todosLosDescuentos.length === 0 ? (
+                <div className="py-4 text-center text-sm font-semibold text-destructive/70 bg-destructive/[0.03]">
+                  $0
+                </div>
+              ) : (
+                <div className="divide-y divide-destructive/10 bg-destructive/[0.03]">
+                  {todosLosDescuentos.map((d) => (
+                    <div
+                      key={d.id}
+                      className="flex items-center justify-between gap-3 px-5 py-2.5"
+                    >
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <Minus className="h-3.5 w-3.5 text-destructive flex-shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{d.concepto_nombre}</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {d.operarioNombre}
+                            {d.observacion ? ` · ${d.observacion}` : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-sm font-bold text-destructive whitespace-nowrap">
+                        −${toNumber(d.valor).toLocaleString('es-CO')}
+                      </p>
+                      {puedeEditar && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => eliminarDescuento(d.operarioId, d.id)}
+                          disabled={eliminandoDescuentoId === d.id}
+                          className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10 flex-shrink-0"
+                          title="Eliminar descuento"
+                        >
+                          {eliminandoDescuentoId === d.id
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            : <Trash2 className="h-3.5 w-3.5" />}
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                  {totalDescuentosActa > 0 && (
+                    <div className="flex items-center justify-end gap-3 px-5 py-2 bg-destructive/[0.06]">
+                      <span className="text-xs font-semibold uppercase text-destructive">
+                        Total descuentos
+                      </span>
+                      <span className="text-sm font-bold text-destructive">
+                        −${totalDescuentosActa.toLocaleString('es-CO')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Total general empresa */}
         <div className="border-t border-border bg-muted/20 px-5 py-3 flex justify-end items-center gap-4">
@@ -820,10 +864,34 @@ export default function LiquidarTerceroDetalle() {
               Agregar descuento
             </DialogTitle>
             <DialogDescription>
-              {modalDescuento?.operarioNombre}
+              {modalDescuento?.operarioId != null
+                ? modalDescuento.operarioNombre
+                : `Elige el operario del acta al que se aplicará`}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
+            {modalDescuento?.operarioId == null && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Operario *</Label>
+                <Select
+                  value={nuevoDescuento.operario_id}
+                  onValueChange={(v) =>
+                    setNuevoDescuento((prev) => ({ ...prev, operario_id: v }))
+                  }
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Selecciona un operario..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(detalle?.operarios ?? []).map((op) => (
+                      <SelectItem key={op.operario_id} value={String(op.operario_id)}>
+                        {op.nombre_completo}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label className="text-xs">Concepto *</Label>
               <Select

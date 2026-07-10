@@ -1095,10 +1095,22 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
       // ── Disparar bulk creates y updates en paralelo ───────────────────────────
       // 4 peticiones HTTP (una por tipo) + PUTs individuales, todo en paralelo.
       // Cada bulk es una transacción en el backend → consistencia atómica por tipo.
+      /** Detecta CALC_ERROR de precio_abono y devuelve un mensaje amigable
+       *  con el gramaje faltante, para guiar al usuario a Configuración. */
+      const parseErrorJornal = (e: any): string => {
+        const msg: string = e?.message ?? '';
+        const code: string = e?.code ?? '';
+        if (code === 'CALC_ERROR' && /precio_abono/i.test(msg)) {
+          const m = msg.match(/(\d+(?:[.,]\d+)?\s*g)/i);
+          const escala = m ? m[1] : 'la escala configurada';
+          return `Falta configurar precio de abono para ${escala}. Ve a Configuración → Precios de Abono y crea la escala con su precio antes de guardar.`;
+        }
+        return msg || 'error en bulk';
+      };
       const [jornalBulkRes, cosechaBulkRes, heBulkRes, ausenciaBulkRes] = (await Promise.all([
         newJornales.length > 0
           ? jornalesApi.bulkCrear(pid!, newJornales.map(i => i.payload))
-              .catch((e: any) => { erroresGuardado.push(`Jornales: ${e?.message ?? 'error en bulk'}`); return null; })
+              .catch((e: any) => { erroresGuardado.push(`Jornales: ${parseErrorJornal(e)}`); return null; })
           : Promise.resolve(null),
         newCosechas.length > 0
           ? cosechasApi.bulkCrear(pid!, newCosechas.map(i => i.payload))

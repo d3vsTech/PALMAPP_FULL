@@ -259,7 +259,7 @@ export default function LiquidarTerceros() {
           <div className="flex items-center gap-3">
             <div className="text-right">
               <p className="text-xs text-muted-foreground">Total a transferir</p>
-              <p className="text-2xl font-bold text-amber-600">
+              <p className="text-2xl font-bold text-primary">
                 ${totalGeneral.toLocaleString('es-CO')}
               </p>
             </div>
@@ -310,15 +310,15 @@ export default function LiquidarTerceros() {
 
           return (
             <Card key={acta.id} className="border-border overflow-hidden">
-              <div className={`flex items-center justify-between px-5 py-4 border-b border-border ${estaPagada ? 'bg-success/5' : 'bg-amber-50/50 dark:bg-amber-950/20'}`}>
+              <div className={`flex items-center justify-between px-5 py-4 border-b border-border ${estaPagada ? 'bg-[#1E5631]/5' : 'bg-amber-50/50 dark:bg-amber-950/20'}`}>
                 <div className="flex items-center gap-3">
-                  <div className={`h-10 w-10 rounded-xl flex items-center justify-center font-bold ${estaPagada ? 'bg-success/10 text-success' : 'bg-amber-500/10 text-amber-700'}`}>
+                  <div className={`h-9 w-9 rounded-lg flex items-center justify-center font-bold ${estaPagada ? 'bg-[#1E5631]/10 text-[#1E5631]' : 'bg-amber-500/10 text-amber-700'}`}>
                     {razonSocial.charAt(0)}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="font-semibold">{razonSocial}</p>
-                      <Badge className={`text-xs ${estaPagada ? 'bg-success/10 text-success border-success/20' : 'bg-amber-500/10 text-amber-700 border-amber-300'}`}>
+                      <Badge className={`text-xs ${estaPagada ? 'bg-[#1E5631]/10 text-[#1E5631] border-[#1E5631]/20' : 'bg-amber-500/10 text-amber-700 border-amber-300'}`}>
                         {estaPagada ? 'Pagado' : 'Pendiente'}
                       </Badge>
                     </div>
@@ -471,7 +471,7 @@ export default function LiquidarTerceros() {
                 <p className="text-sm text-muted-foreground">
                   Total a transferir a empresas terceras
                 </p>
-                <p className="text-3xl font-bold text-amber-600 mt-1">
+                <p className="text-3xl font-bold text-primary mt-1">
                   ${totalGeneral.toLocaleString('es-CO')}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">

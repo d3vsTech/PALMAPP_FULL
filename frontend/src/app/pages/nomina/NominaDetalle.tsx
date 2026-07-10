@@ -1110,13 +1110,26 @@ export default function NominaDetalle() {
               <StatusBadge status={nomina.estado as any} />
             </div>
             <p className="text-muted-foreground">
-              {fmtFecha(nomina.fecha_inicio)} → {fmtFecha(nomina.fecha_fin)}
-              {' · '}
-              {liquidados}/{totalColabs} liquidados
+              {nomina.mes}/{nomina.anio}
+              {nomina.quincena ? ` - Quincena ${nomina.quincena}` : ''}
             </p>
           </div>
 
           <div className="flex gap-2">
+            {esBorrador && (() => {
+              const puedeCerrar = totalColabs > 0 && liquidados === totalColabs;
+              return (
+                <Button
+                  className="gap-2 bg-primary hover:bg-primary/90"
+                  onClick={() => setConfirmarCerrar(true)}
+                  disabled={accionando || !puedeCerrar}
+                  title={!puedeCerrar ? 'Liquida todos los colaboradores antes de cerrar' : undefined}
+                >
+                  <Check className="h-4 w-4" />
+                  Cerrar Nómina
+                </Button>
+              );
+            })()}
             <Button variant="outline" className="gap-2">
               <Download className="h-4 w-4" />
               Exportar

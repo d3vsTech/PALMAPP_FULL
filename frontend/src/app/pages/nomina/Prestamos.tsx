@@ -25,7 +25,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
 import {
-  ArrowLeft, Plus, Search, DollarSign, User, Calendar, Loader2, Trash2, Eye,
+  ArrowLeft, Plus, Search, DollarSign, User, Calendar, Loader2, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -39,7 +39,7 @@ import type { ApiError } from '../../../api/client';
 const estadoConfig: Record<EstadoPrestamo, { label: string; className: string }> = {
   VIGENTE:   { label: 'Vigente',   className: 'bg-primary/10 text-primary border-primary/20' },
   PAGADO:    { label: 'Pagado',    className: 'bg-success/10 text-success border-success/20' },
-  CANCELADO: { label: 'Cancelado', className: 'bg-muted text-muted-foreground border-border' },
+  CANCELADO: { label: 'Cancelado', className: 'bg-success/10 text-success border-success/20' },
 };
 
 function toNumber(v: string | number | null | undefined): number {
@@ -234,7 +234,7 @@ export default function Prestamos() {
                     <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> Fecha fin</span>
                   </th>
                   <th className="text-center p-4 text-xs font-semibold text-muted-foreground">Estado</th>
-                  <th className="text-right p-4 text-xs font-semibold text-muted-foreground">Acciones</th>
+                  <th className="p-4"></th>
                 </tr>
               </thead>
               <tbody>
@@ -310,16 +310,16 @@ export default function Prestamos() {
                             {cfg.label}
                           </Badge>
                         </td>
-                        <td className="p-4">
+                        <td className="p-4 text-center">
                           <div className="flex gap-2 justify-end">
                             <Button
-                              size="sm"
                               variant="outline"
-                              onClick={() => navigate(`/nomina/prestamos/${p.id}`)}
-                              className="hover:bg-primary/10 hover:text-primary hover:border-primary"
-                              title="Ver detalle"
+                              size="sm"
+                              className="text-xs gap-1.5"
+                              onClick={() => navigate(`/nomina/prestamos/${p.id}/abonos`)}
                             >
-                              <Eye className="h-4 w-4" />
+                              <DollarSign className="h-3.5 w-3.5" />
+                              Abonos
                             </Button>
                             {puedeCancelar && (
                               <Button
