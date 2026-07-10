@@ -282,6 +282,89 @@ class RegistroCosechaController extends Controller
         }
     }
 
+    public function bulkStore(Request $request, Operacion $operacion): JsonResponse
+    {
+        if ($operacion->isAprobada()) {
+            return response()->json([
+                'message' => 'No se pueden agregar cosechas a una planilla aprobada',
+                'code'    => 'OPERACION_APROBADA',
+            ], 409);
+        }
+
+        $validated = $request->validate([
+            'items'                           => 'required|array|min:1|max:200',
+            'items.*.lote_id'                 => 'required|exists:lotes,id',
+            'items.*.sublote_id'              => 'nullable|exists:sublotes,id',
+            'items.*.gajos_reportados'        => 'required|integer|min:0',
+            'items.*.peso_confirmado'         => 'nullable|numeric|min:0',
+            'items.*.tercero_id'              => 'nullable|exists:terceros,id',
+            'items.*.cuadrilla'               => 'required|array|min:1',
+            'items.*.cuadrilla.*.empleado_id' => 'nullable|exists:empleados,id',
+            'items.*.cuadrilla.*.operario_id' => 'nullable|exists:operarios,id',
+            'items.*.cuadrilla.*.tercero_id'  => 'nullable|exists:terceros,id',
+        ]);
+
+        try {
+            $anio         = (int) $operacion->fecha->format('Y');
+            $laborCosecha = $this->resolverLaborCosecha();
+
+            $created = DB::transaction(function () use ($validated, $operacion, $anio, $laborCosecha) {
+                $results = [];
+                foreach ($validated['items'] as $data) {
+                    $peso      = isset($data['peso_confirmado']) ? (float) $data['peso_confirmado'] : null;
+                    $terceroId = $data['tercero_id'] ?? $this->derivarTerceroIdDeCuadrilla($data['cuadrilla']);
+                    $calc      = $this->calcService->calcular($laborCosecha, $data['lote_id'], $anio, $peso, $terceroId);
+
+                    $cosecha = RegistroCosecha::create([
+                        'operacion_id'     => $operacion->id,
+                        'lote_id'          => $data['lote_id'],
+                        'sublote_id'       => $data['sublote_id'] ?? null,
+                        'labor_id'         => $laborCosecha->id,
+                        'gajos_reportados' => $data['gajos_reportados'],
+                        'peso_confirmado'  => $data['peso_confirmado'] ?? null,
+                        'precio_cosecha'   => $calc['precio_cosecha'],
+                        'promedio_kg_gajo' => $calc['promedio_kg_gajo'],
+                        'valor_total'      => $calc['valor_total'],
+                        'estado'           => true,
+                    ]);
+
+                    $miembros = collect($data['cuadrilla'])->unique(function ($m) {
+                        return !empty($m['empleado_id']) ? "E_{$m['empleado_id']}" : "O_{$m['operario_id']}";
+                    })->values();
+                    $n = $miembros->count();
+
+                    $dist = $this->calcService->distribuirCuadrilla(
+                        $calc['valor_total'] !== null ? (float) $calc['valor_total'] : null,
+                        $peso,
+                        $n,
+                    );
+
+                    foreach ($miembros as $miembro) {
+                        CosechaCuadrilla::create([
+                            'cosecha_id'              => $cosecha->id,
+                            'empleado_id'             => $miembro['empleado_id'] ?? null,
+                            'operario_id'             => $miembro['operario_id'] ?? null,
+                            'tercero_id'              => $miembro['tercero_id'] ?? null,
+                            'peso_calculado_empleado' => $dist['peso_por_empleado'],
+                            'valor_calculado'         => $dist['valor_por_empleado'],
+                            'estado'                  => true,
+                        ]);
+                    }
+
+                    $results[] = ['id' => $cosecha->id];
+                }
+                return $results;
+            });
+
+            return response()->json(['data' => $created], 201);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage(), 'code' => 'CALC_ERROR'], 422);
+        } catch (\Throwable $e) {
+            Log::error('Error en bulk de cosechas: ' . $e->getMessage());
+            return response()->json(['message' => 'Error al crear cosechas en bulk', 'error' => $e->getMessage()], 500);
+        }
+    }
+
     /**
      * Resuelve la labor fija COSECHA del tenant actual. El seeder garantiza
      * que existe; si no se encuentra es un error de provisionamiento.

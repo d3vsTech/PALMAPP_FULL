@@ -339,6 +339,8 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
         ->middleware('check.permission:operaciones.eliminar');
 
     // ── Cosechas (anidadas a Operación) ──
+    Route::post('operaciones/{operacion}/cosechas/bulk', [RegistroCosechaController::class, 'bulkStore'])
+        ->middleware('check.permission:operaciones.crear');
     Route::post('operaciones/{operacion}/cosechas', [RegistroCosechaController::class, 'store'])
         ->middleware('check.permission:operaciones.crear');
     Route::put('cosechas/{cosecha}', [RegistroCosechaController::class, 'update'])
@@ -347,6 +349,8 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
         ->middleware('check.permission:operaciones.eliminar');
 
     // ── Jornales (anidados a Operación) ──
+    Route::post('operaciones/{operacion}/jornales/bulk', [JornalController::class, 'bulkStore'])
+        ->middleware('check.permission:operaciones.crear');
     Route::post('operaciones/{operacion}/jornales', [JornalController::class, 'store'])
         ->middleware('check.permission:operaciones.crear');
     Route::put('jornales/{jornal}', [JornalController::class, 'update'])
@@ -355,6 +359,8 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
         ->middleware('check.permission:operaciones.eliminar');
 
     // ── Ausencias (anidadas a Operación) ──
+    Route::post('operaciones/{operacion}/ausencias/bulk', [AusenciaController::class, 'bulkStore'])
+        ->middleware('check.permission:operaciones.crear');
     Route::post('operaciones/{operacion}/ausencias', [AusenciaController::class, 'store'])
         ->middleware('check.permission:operaciones.crear');
     Route::put('ausencias/{ausencia}', [AusenciaController::class, 'update'])
@@ -369,6 +375,8 @@ Route::prefix('v1/tenant')->middleware(['auth:api', SetTenant::class])->group(fu
         ->middleware('check.permission:configuracion.editar');
 
     // ── Horas Extra (anidadas a Operación) ──
+    Route::post('operaciones/{operacion}/horas-extra/bulk', [HoraExtraController::class, 'bulkStore'])
+        ->middleware('check.permission:operaciones.crear');
     Route::post('operaciones/{operacion}/horas-extra', [HoraExtraController::class, 'store'])
         ->middleware('check.permission:operaciones.crear');
     Route::put('horas-extra/{horaExtra}', [HoraExtraController::class, 'update'])

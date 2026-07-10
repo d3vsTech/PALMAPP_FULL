@@ -12,6 +12,7 @@ use App\Models\Operacion;
 use App\Services\AuditoriaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -61,6 +62,57 @@ class AusenciaController extends Controller
         } catch (\Throwable $e) {
             Log::error('Error al crear ausencia: ' . $e->getMessage());
             return response()->json(['message' => 'Error al crear la ausencia', 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function bulkStore(Request $request, Operacion $operacion): JsonResponse
+    {
+        if ($operacion->isAprobada()) {
+            return response()->json([
+                'message' => 'No se pueden agregar ausencias a una planilla aprobada',
+                'code'    => 'OPERACION_APROBADA',
+            ], 409);
+        }
+
+        $validated = $request->validate([
+            'items'                      => 'required|array|min:1|max:200',
+            'items.*.empleado_id'        => 'required|exists:empleados,id',
+            'items.*.motivo_ausencia_id' => 'required|exists:motivos_ausencia,id',
+            'items.*.motivo'             => 'nullable|string',
+            'items.*.fecha_fin'          => 'nullable|date',
+            'items.*.entidad'            => 'nullable|string|max:100',
+            'items.*.numero_radicado'    => 'nullable|string|max:50',
+            'items.*.porcentaje_pago'    => 'nullable|numeric|min:0|max:100',
+        ]);
+
+        try {
+            $created = DB::transaction(function () use ($validated, $operacion, $request) {
+                $results = [];
+                $fechaOperacion = $operacion->fecha->format('Y-m-d');
+                foreach ($validated['items'] as $itemData) {
+                    if (!empty($itemData['fecha_fin'])
+                        && strtotime($itemData['fecha_fin']) < strtotime($fechaOperacion)
+                    ) {
+                        throw new \InvalidArgumentException('fecha_fin no puede ser anterior a la fecha de la operación.');
+                    }
+
+                    $ausencia = Ausencia::create(array_merge($itemData, [
+                        'operacion_id' => $operacion->id,
+                        'estado'       => Ausencia::ESTADO_PENDIENTE,
+                        'creado_por'   => $request->user()?->id,
+                    ]));
+
+                    $results[] = ['id' => $ausencia->id];
+                }
+                return $results;
+            });
+
+            return response()->json(['data' => $created], 201);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage(), 'code' => 'VALIDATION_ERROR'], 422);
+        } catch (\Throwable $e) {
+            Log::error('Error en bulk de ausencias: ' . $e->getMessage());
+            return response()->json(['message' => 'Error al crear ausencias en bulk', 'error' => $e->getMessage()], 500);
         }
     }
 

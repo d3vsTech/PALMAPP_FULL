@@ -11,6 +11,7 @@ use App\Models\Operacion;
 use App\Services\AuditoriaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class HoraExtraController extends Controller
@@ -53,6 +54,66 @@ class HoraExtraController extends Controller
         } catch (\Throwable $e) {
             Log::error('Error al crear hora extra: ' . $e->getMessage());
             return response()->json(['message' => 'Error al crear la hora extra', 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function bulkStore(Request $request, Operacion $operacion): JsonResponse
+    {
+        if ($operacion->isAprobada()) {
+            return response()->json([
+                'message' => 'No se pueden agregar horas extra a una planilla aprobada',
+                'code'    => 'OPERACION_APROBADA',
+            ], 409);
+        }
+
+        $tenantId = app('current_tenant_id');
+
+        $validated = $request->validate([
+            'items'                      => 'required|array|min:1|max:200',
+            'items.*.empleado_id'        => 'required|exists:empleados,id',
+            'items.*.tipo_hora_extra_id' => 'required|exists:tipos_hora_extra,id',
+            'items.*.cantidad_horas'     => 'required|numeric|min:0.25|max:12',
+            'items.*.observacion'        => 'nullable|string',
+        ]);
+
+        // Validar tenant ownership de todos los tipos en una sola consulta
+        $tiposIds = collect($validated['items'])->pluck('tipo_hora_extra_id')->unique()->values()->all();
+        $tiposValidos = \App\Models\TipoHoraExtra::whereIn('id', $tiposIds)
+            ->where('tenant_id', $tenantId)
+            ->where('estado', true)
+            ->pluck('id')
+            ->flip()
+            ->all();
+
+        foreach ($validated['items'] as $idx => $item) {
+            if (!isset($tiposValidos[$item['tipo_hora_extra_id']])) {
+                return response()->json([
+                    'message' => "items.{$idx}: el tipo de hora extra no es válido o está inactivo.",
+                    'code'    => 'VALIDATION_ERROR',
+                ], 422);
+            }
+        }
+
+        try {
+            $created = DB::transaction(function () use ($validated, $operacion, $request) {
+                $results = [];
+                foreach ($validated['items'] as $itemData) {
+                    $horaExtra = HoraExtra::create(array_merge($itemData, [
+                        'operacion_id' => $operacion->id,
+                        'estado'       => HoraExtra::ESTADO_PENDIENTE,
+                        'creado_por'   => $request->user()?->id,
+                    ]));
+                    $results[] = ['id' => $horaExtra->id];
+                }
+                return $results;
+            });
+
+            return response()->json(['data' => $created], 201);
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage(), 'code' => 'CALC_ERROR'], 422);
+        } catch (\Throwable $e) {
+            Log::error('Error en bulk de horas extra: ' . $e->getMessage());
+            return response()->json(['message' => 'Error al crear horas extra en bulk', 'error' => $e->getMessage()], 500);
         }
     }
 

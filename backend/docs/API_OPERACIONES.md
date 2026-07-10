@@ -55,12 +55,8 @@ Cada "Agregar X" del UI dispara un POST inmediato. El backend devuelve el id cre
 ┌ Apertura del wizard ──────────────────────────────────┐
 │  GET /operaciones[/{id}]/wizard-init                  │
 │  → { planilla, resumen, parametricas: {               │
-<<<<<<< HEAD
-│       colaboradores, lotes, sublotes, insumos,        │
-=======
 │       colaboradores, operarios,                       │
 │       lotes, sublotes, insumos,                       │
->>>>>>> fefeda6abfbda36a95fb7c45556b4fd25646534a
 │       labores_palma, labores_finca,                   │
 │       motivos_ausencia, tipos_hora_extra              │
 │    } }                                                │
@@ -154,12 +150,6 @@ Cada "Agregar X" del UI dispara un POST inmediato. El backend devuelve el id cre
 ```
 
 - En modo **creación** (sin id), `planilla` y `resumen` vienen `null` y `parametricas` viene completo.
-<<<<<<< HEAD
-- En modo **edición/lectura**, `planilla` es el mismo payload que [§2.4 `GET /operaciones/{id}`](#24-ver-detalle) (cosechas + jornales + ausencias con todas sus relaciones eager-loaded) y `resumen` es el mismo shape de [§6 `GET /operaciones/{id}/resumen`](#6-resumen-panel-derecho-del-wizard).
-<<<<<<< HEAD
-- Los 8 catálogos se cachean en backend por tenant durante **15 min** (`WizardCache::TTL_PARAMETRICA`) y se invalidan automáticamente cuando se crea/edita/elimina cualquier colaborador, lote, sublote, insumo, labor, motivo de ausencia o tipo de hora extra. El cliente percibe los cambios al primer refresh siguiente del bundle.
-=======
-=======
 - En modo **edición/lectura**, `planilla` es el mismo payload que [§2.4 `GET /operaciones/{id}`](#24-ver-detalle) con todas las relaciones eager-loaded:
   - `cosechas` → cuadrilla (empleado + operario + tercero), lote, sublote
   - `jornales` → empleado, operario, tercero, labor, lote, sublote, insumo
@@ -167,7 +157,6 @@ Cada "Agregar X" del UI dispara un POST inmediato. El backend devuelve el id cre
   - **`horasExtra`** → empleado, tipoHoraExtra (`{id, codigo, nombre, porcentaje_recargo}`)
 
   `resumen` es el mismo shape de [§6 `GET /operaciones/{id}/resumen`](#6-resumen-panel-derecho-del-wizard).
->>>>>>> 453d3a0a66747d101dadcf9cbb8b6bff9d9eb170
 - Los **10 catálogos** se cachean en backend por tenant durante **15 min** (`WizardCache::TTL_PARAMETRICA`) y se invalidan automáticamente cuando se crea/edita/elimina cualquier colaborador, operario, lote, sublote, insumo, labor, motivo de ausencia, tipo de hora extra o configuración de precios de un tercero. El cliente percibe los cambios al primer refresh siguiente del bundle.
 - **`operarios`**: lista de operarios activos de todos los terceros contratistas del tenant. Cada item trae `{id, tercero_id, nombre_completo, cedula, tercero_nombre}`. La UI muestra colaboradores y operarios en el **mismo dropdown** del selector de persona, diferenciados visualmente por `tercero_nombre`. Ver [§3.1 Cosecha](#31-cosecha) y [§3.2 Jornales](#32-jornal-de-palma-plateo--poda--fertilización--sanidad--custom) para el uso de `operario_id` en lugar de `empleado_id`.
 - **`tercero_labor_overrides`**: **todos** los overrides activos (`estado=true`) de `tercero_labor_precios`, sin importar la categoría (PALMA + FINCA) ni si tienen `tipo_pago` definido. Tres formas válidas por item:
@@ -196,7 +185,6 @@ Cada "Agregar X" del UI dispara un POST inmediato. El backend devuelve el id cre
   El backend hace **exactamente** la misma resolución al validar el POST/PUT de jornal o cosecha (`Labor::resolverTipoPago` + `JornalCalculationService::resolverPrecioLabor`). El preview del frontend siempre coincide con `valor_total` calculado en el servidor; si por caché stale hubiese discrepancia, gana el backend (el frontend re-renderiza con `tipo_pago_efectivo` y `valor_total` que llegan en la respuesta del POST).
 
   **Aplica a Labores de Finca del Paso 3 igual que a Labores de Palma del Paso 2** — mismo array, mismo algoritmo.
->>>>>>> fefeda6abfbda36a95fb7c45556b4fd25646534a
 - El header de respuesta incluye `Cache-Control: private, max-age=0, must-revalidate` — fuerza al navegador a revalidar (no a guardar en caché del cliente).
 - Los endpoints `/select` listados en §8 **siguen vivos** sin cambios para otros consumidores (apps móviles, exports, módulos administrativos). El wizard de Operaciones es el único que pasa por el bundle.
 
@@ -1233,3 +1221,234 @@ curl -X POST "$BASE/operaciones/12/aprobar" "${H[@]}"
 - Documentación dedicada de Ausencias (catálogo + endpoints): [API_AUSENCIAS.md](./API_AUSENCIAS.md).
 - Documentación dedicada de Horas Extras (catálogo + endpoints + marco legal colombiano): [API_HORAS_EXTRA.md](./API_HORAS_EXTRA.md).
 - Reglas de nómina afectadas por las ausencias (paso 5): ver `CONTEXTO.md` §6.9.
+- Endpoints bulk para guardado masivo eficiente: ver **§12** más abajo.
+
+---
+
+## 12. Endpoints Bulk — Guardado eficiente de múltiples ítems
+
+> Disponibles desde julio 2026. Diseñados para el `guardarTodo()` del wizard: reducen N peticiones HTTP secuenciales a **4 llamadas paralelas** (una por tipo), bajando el tiempo de guardado de >15 s a <500 ms en planillas de 20-50 ítems.
+
+**Permiso:** `operaciones.crear` (igual que los `store` individuales).
+**Comportamiento:** toda la lista se inserta en una sola `DB::transaction()`. Si cualquier ítem falla, **rollback completo** — ningún ítem queda guardado.
+**Límite:** máx. 200 ítems por llamada. Para lotes mayores, dividir en chunks de 200 y enviarlos en paralelo.
+
+> Las rutas bulk se registran **antes** de las rutas individuales en `routes/api.php` para evitar conflictos de matching en Laravel: `operaciones/{operacion}/jornales/bulk` antes de `operaciones/{operacion}/jornales`.
+
+---
+
+### 12.1 POST /operaciones/{id}/jornales/bulk
+
+Crea múltiples jornales en una transacción. Acepta cualquier combinación de tipos de labor (plateo, poda, fertilización, sanidad, custom de palma, finca).
+
+**Request:**
+```json
+{
+  "items": [
+    { "labor_id": 13, "empleado_id": 10, "lote_id": 1, "sublote_id": 3, "cantidad_palmas": 200 },
+    { "labor_id": 17, "empleado_id": 11, "lote_id": 1, "descripcion": "Aplicación fungicida foliar" },
+    { "labor_id": 7,  "empleado_id": 12, "ubicacion": "Portería norte" },
+    { "labor_id": 13, "operario_id": 5,  "lote_id": 1, "sublote_id": 3, "cantidad_palmas": 150 }
+  ]
+}
+```
+
+**Response 201:**
+```json
+{
+  "data": [
+    { "id": 201, "sync_uuid": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" },
+    { "id": 202, "sync_uuid": "..." },
+    { "id": 203, "sync_uuid": "..." },
+    { "id": 204, "sync_uuid": "..." }
+  ]
+}
+```
+
+El array de respuesta está en el **mismo orden** que `items` del request: `data[i].id` corresponde a `items[i]`.
+
+Campos aceptados por ítem (mismos que `POST /operaciones/{id}/jornales` individual):
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `labor_id` | int, requerido | ID de la labor (palma o finca) |
+| `empleado_id` | int, nullable | XOR con `operario_id` |
+| `operario_id` | int, nullable | XOR con `empleado_id` |
+| `lote_id` | int, nullable | |
+| `sublote_id` | int, nullable | |
+| `cantidad_palmas` | int, nullable | Requerido si `tipo_pago=POR_PALMA` |
+| `insumo_id` | int, nullable | Requerido en FERTILIZACION con `POR_PALMA` |
+| `gramos_por_palma` | int, nullable | Requerido en FERTILIZACION con `POR_PALMA` |
+| `descripcion` | string, nullable | Requerido en SANIDAD |
+| `nombre_trabajo` | string, nullable | Opcional, max 255 |
+| `ubicacion` | string, nullable | Para labores FINCA |
+| `observacion` | string, nullable | |
+
+Errores específicos:
+
+| Escenario | HTTP | Código |
+|---|---|---|
+| Ítem sin `empleado_id` ni `operario_id` | 422 | `CALC_ERROR` (`"items.N: debe proveer empleado_id o operario_id"`) |
+| Ítem con ambos (`empleado_id` + `operario_id`) | 422 | `CALC_ERROR` |
+| `labor_id` con `tipo=COSECHA` | 422 | `CALC_ERROR` (usar `/cosechas/bulk`) |
+| Error de cálculo en cualquier ítem | 422 | `CALC_ERROR` + rollback total |
+
+---
+
+### 12.2 POST /operaciones/{id}/cosechas/bulk
+
+Crea múltiples registros de cosecha con sus cuadrillas en una transacción.
+
+**Request:**
+```json
+{
+  "items": [
+    {
+      "lote_id": 1,
+      "sublote_id": 3,
+      "gajos_reportados": 120,
+      "cuadrilla": [{ "empleado_id": 10 }, { "empleado_id": 11 }]
+    },
+    {
+      "lote_id": 2,
+      "sublote_id": 5,
+      "gajos_reportados": 80,
+      "peso_confirmado": 960.0,
+      "cuadrilla": [{ "operario_id": 5 }, { "operario_id": 6 }]
+    }
+  ]
+}
+```
+
+**Response 201:**
+```json
+{
+  "data": [
+    { "id": 55 },
+    { "id": 56 }
+  ]
+}
+```
+
+Campos por ítem: mismos que `POST /operaciones/{id}/cosechas` individual (`lote_id`, `sublote_id`, `gajos_reportados`, `peso_confirmado` opcional, `cuadrilla[]`).
+
+Reglas:
+- `cuadrilla` mínimo 1 miembro; XOR `empleado_id`/`operario_id` por miembro.
+- `sublote_id` debe pertenecer a `lote_id`.
+- Si `peso_confirmado` presente y no existe registro en `precios_cosecha` para lote+año → **422 `CALC_ERROR` + rollback total**.
+
+---
+
+### 12.3 POST /operaciones/{id}/horas-extra/bulk
+
+Crea múltiples horas extras en una transacción. El hook `HoraExtra::booted()` gestiona automáticamente los snapshots (`codigo`, `porcentaje_recargo`, `paga_hora_completa`, `valor_calculado`).
+
+**Request:**
+```json
+{
+  "items": [
+    { "empleado_id": 10, "tipo_hora_extra_id": 1, "cantidad_horas": 2, "observacion": "Cierre lote" },
+    { "empleado_id": 11, "tipo_hora_extra_id": 2, "cantidad_horas": 1.5 }
+  ]
+}
+```
+
+**Response 201:**
+```json
+{
+  "data": [
+    { "id": 77 },
+    { "id": 78 }
+  ]
+}
+```
+
+Campos por ítem: `empleado_id` (requerido), `tipo_hora_extra_id` (requerido), `cantidad_horas` (requerido, 0.25–12), `observacion` (opcional).
+
+Validación extra previa a la transacción: todos los `tipo_hora_extra_id` se verifican contra el tenant en **una sola query batch** antes de abrir la transacción. Si alguno es inválido o está inactivo → 422 `VALIDATION_ERROR` (indexado `"items.N: el tipo de hora extra no es válido o está inactivo."`).
+
+---
+
+### 12.4 POST /operaciones/{id}/ausencias/bulk
+
+Crea múltiples ausencias en una transacción.
+
+**Request:**
+```json
+{
+  "items": [
+    { "empleado_id": 10, "motivo_ausencia_id": 3, "motivo": "Reportó gripa fuerte" },
+    { "empleado_id": 12, "motivo_ausencia_id": 1, "motivo": "Cita médica", "fecha_fin": "2026-04-20" }
+  ]
+}
+```
+
+**Response 201:**
+```json
+{
+  "data": [
+    { "id": 90 },
+    { "id": 91 }
+  ]
+}
+```
+
+Campos por ítem: `empleado_id` (requerido), `motivo_ausencia_id` (requerido), `motivo` (opcional), `fecha_fin` (opcional, default = `operacion.fecha`), `entidad` (opcional), `numero_radicado` (opcional), `porcentaje_pago` (opcional).
+
+Regla: `fecha_fin` no puede ser anterior a `operacion.fecha` — si algún ítem la incumple → **422 `VALIDATION_ERROR` + rollback total**.
+
+---
+
+### 12.5 Tabla de errores bulk
+
+| Escenario | HTTP | Código |
+|---|---|---|
+| Planilla ya aprobada | 409 | `OPERACION_APROBADA` |
+| XOR inválido en jornales (ítem N) | 422 | `CALC_ERROR` (`"items.N: ..."`) |
+| Labor COSECHA enviada a `/jornales/bulk` | 422 | `CALC_ERROR` |
+| Error de cálculo (precio no configurado, etc.) | 422 | `CALC_ERROR` + rollback |
+| Tipo hora extra inválido/inactivo (ítem N) | 422 | `VALIDATION_ERROR` (`"items.N: ..."`) |
+| `fecha_fin` anterior a operación (ítem N) | 422 | `VALIDATION_ERROR` |
+| Precio cosecha no configurado para lote+año | 422 | `CALC_ERROR` + rollback |
+| Error de servidor | 500 | — |
+
+En **todos los casos de error**, ningún ítem queda persistido (transacción haciendo rollback completo).
+
+---
+
+### 12.6 Integración con el wizard (frontend)
+
+El wizard `guardarTodo()` agrupa los ítems nuevos por tipo y dispara las 4 llamadas bulk en paralelo junto con los PUTs de ediciones existentes:
+
+```typescript
+// 4 bulk (nuevos) + ediciones existentes (allSettled) → todo en paralelo
+const [jornalRes, cosechaRes, heRes, ausenciaRes] = (await Promise.all([
+  newJornales.length > 0
+    ? jornalesApi.bulkCrear(pid, newJornales.map(i => i.payload)).catch(() => null)
+    : Promise.resolve(null),
+  newCosechas.length > 0
+    ? cosechasApi.bulkCrear(pid, newCosechas.map(i => i.payload)).catch(() => null)
+    : Promise.resolve(null),
+  newHE.length > 0
+    ? horasExtraApi.bulkCrear(pid, newHE.map(i => i.payload)).catch(() => null)
+    : Promise.resolve(null),
+  newAusencias.length > 0
+    ? ausenciasApi.bulkCrear(pid, newAusencias.map(i => i.payload)).catch(() => null)
+    : Promise.resolve(null),
+  Promise.allSettled(updates),  // PUTs de ediciones existentes
+])) as [any, any, any, any, any];
+
+// Mapeo por posición: data[idx].id → newJornales[idx].localId
+jornalRes?.data?.forEach((item: { id: number }, idx: number) => {
+  const { localId, tipo } = newJornales[idx];
+  if (localId) mapeoIdsPorTipo[tipo][localId] = String(item.id);
+});
+```
+
+**Mejora de rendimiento típica con 30 ítems:**
+
+| Escenario | Peticiones | Tiempo aprox. |
+|---|---|---|
+| Antes (secuencial) | 30 POST individuales | ~15-20 s |
+| Fase 1 (paralelo) | 30 POST simultáneos | ~1-2 s |
+| Fase 2 (bulk) | 4 POST bulk + N PUT paralelos | < 500 ms |
