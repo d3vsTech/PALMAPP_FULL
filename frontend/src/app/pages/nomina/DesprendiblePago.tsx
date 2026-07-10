@@ -20,11 +20,178 @@ import {
   Check, Printer, Download, MessageCircle, ArrowLeft, Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import jsPDF from 'jspdf';
 import { nominaApi, DesprendibleData } from '../../../api/nomina';
 import type { ApiError } from '../../../api/client';
 
 function fmt(n: number): string {
   return `$${n.toLocaleString('es-CO')}`;
+}
+
+/**
+ * Genera el PDF del desprendible de nómina en el cliente. Reemplaza al
+ * `GET /desprendible/pdf` del backend cuyo template blade pegaba los
+ * valores al texto (BASE JORNALES (DESTAJO)$421.000 sin espacio ni
+ * alineación). Aquí usamos labels a la izquierda y valores alineados a la
+ * derecha del ancho utilizable.
+ */
+export function generarDesprendiblePdf(data: DesprendibleData): void {
+  const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+  const width = doc.internal.pageSize.getWidth();
+  const height = doc.internal.pageSize.getHeight();
+  const marginX = 40;
+  const rightX = width - marginX;
+  let y = 50;
+
+  // ── Cabecera ──────────────────────────────────────────────────────────
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.setTextColor(30, 86, 49);
+  doc.text('DESPRENDIBLE DE NÓMINA', width / 2, y, { align: 'center' });
+  y += 20;
+  doc.setDrawColor(30, 86, 49);
+  doc.setLineWidth(1.2);
+  doc.line(marginX, y, rightX, y);
+  y += 20;
+
+  // Info empleado (2 columnas)
+  doc.setTextColor(60);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  const halfW = (width - 2 * marginX) / 2;
+
+  const labelValue = (label: string, value: string, x: number, yy: number) => {
+    doc.setTextColor(120);
+    doc.setFont('helvetica', 'normal');
+    doc.text(label.toUpperCase(), x, yy);
+    doc.setTextColor(0);
+    doc.setFont('helvetica', 'bold');
+    doc.text(value || '—', x, yy + 12);
+  };
+
+  labelValue('Finca', data.finca ?? '—', marginX, y);
+  labelValue('Nombre', data.empleado.nombre_completo, marginX + halfW, y);
+  y += 30;
+  labelValue('Cédula', data.empleado.documento ?? '—', marginX, y);
+  labelValue('Cargo', data.empleado.cargo ?? '—', marginX + halfW, y);
+  y += 30;
+  labelValue('Período', data.nomina.periodo_label ?? '—', marginX, y);
+  labelValue(
+    'Base',
+    data.empleado.salario_tipo ?? 'OPERARIO',
+    marginX + halfW,
+    y,
+  );
+  y += 30;
+  labelValue('Fecha liquidación', data.liquidacion.fecha_humana ?? data.liquidacion.fecha, marginX, y);
+  labelValue('Días cancelados', String(data.liquidacion.dias_trabajados ?? 0), marginX + halfW, y);
+  y += 35;
+
+  // Helper para pintar fila con label izq + valor derecha alineado.
+  const filaLV = (label: string, value: string, opts?: { bold?: boolean; color?: [number, number, number] }) => {
+    doc.setFont('helvetica', opts?.bold ? 'bold' : 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(...(opts?.color ?? [40, 40, 40] as [number, number, number]));
+    doc.text(label, marginX + 8, y);
+    doc.text(value, rightX - 8, y, { align: 'right' });
+    y += 16;
+  };
+
+  const seccion = (titulo: string, color: [number, number, number]) => {
+    doc.setFillColor(...color);
+    doc.rect(marginX, y - 2, width - 2 * marginX, 18, 'F');
+    doc.setTextColor(255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.text(titulo.toUpperCase(), marginX + 8, y + 10);
+    y += 22;
+  };
+
+  // ── DEVENGADO ─────────────────────────────────────────────────────────
+  seccion('Devengado', [30, 86, 49]);
+  const liq = data.liquidacion;
+  if (data.empleado.salario_tipo === 'FIJO') {
+    filaLV('Sueldo básico', fmt(data.empleado.salario_base ?? 0));
+  }
+  if ((liq.total_jornales ?? 0) > 0) {
+    filaLV('Base jornales (destajo)', fmt(liq.total_jornales));
+  }
+  if ((liq.total_cosecha ?? 0) > 0) {
+    filaLV('Base cosecha', fmt(liq.total_cosecha));
+  }
+  if ((liq.total_horas_extra ?? 0) > 0) {
+    filaLV('Horas extra', fmt(liq.total_horas_extra));
+  }
+  if ((liq.total_recargos ?? 0) > 0) {
+    filaLV('Recargos', fmt(liq.total_recargos));
+  }
+  if ((liq.total_incapacidades ?? 0) > 0) {
+    filaLV('Incapacidades', fmt(liq.total_incapacidades));
+  }
+  (liq.bonificaciones ?? []).forEach((b) => {
+    filaLV(b.nombre ?? 'Bonificación', fmt(b.valor));
+  });
+  y += 4;
+  filaLV('TOTAL BRUTO', fmt(liq.total_devengado + (liq.total_bonificaciones ?? 0)), {
+    bold: true,
+    color: [30, 86, 49],
+  });
+  if ((liq.subsidio_transporte ?? 0) > 0) {
+    filaLV('Subsidio transporte', fmt(liq.subsidio_transporte));
+  }
+  y += 10;
+
+  // ── DEDUCCIONES ───────────────────────────────────────────────────────
+  seccion('Deducciones', [180, 40, 50]);
+  (liq.deducciones ?? []).forEach((d) => {
+    const label = d.porcentaje != null
+      ? `${d.nombre} (${d.porcentaje}%)`
+      : d.nombre;
+    filaLV(label, fmt(d.valor), { color: [180, 40, 50] });
+  });
+  y += 4;
+  filaLV('Total deducciones', fmt(liq.total_deducciones), {
+    bold: true,
+    color: [180, 40, 50],
+  });
+  y += 14;
+
+  // ── TOTAL NETO ────────────────────────────────────────────────────────
+  doc.setFillColor(30, 86, 49);
+  doc.rect(marginX, y, width - 2 * marginX, 32, 'F');
+  doc.setTextColor(255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.text('TOTAL NETO', marginX + 10, y + 20);
+  doc.setFontSize(14);
+  doc.text(fmt(liq.total_neto), rightX - 10, y + 20, { align: 'right' });
+  y += 55;
+
+  // ── Firmas ─────────────────────────────────────────────────────────────
+  const firmaW = (width - 2 * marginX - 40) / 2;
+  const firmaY = Math.max(y + 40, height - 100);
+  doc.setDrawColor(180);
+  doc.setLineWidth(0.5);
+  doc.line(marginX + 20, firmaY, marginX + 20 + firmaW, firmaY);
+  doc.line(marginX + firmaW + 60, firmaY, marginX + firmaW * 2 + 60, firmaY);
+  doc.setTextColor(120);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.text('RECIBIDO', marginX + 20 + firmaW / 2, firmaY + 12, { align: 'center' });
+  doc.text('HUELLA', marginX + firmaW + 60 + firmaW / 2, firmaY + 12, { align: 'center' });
+
+  // Footer
+  doc.setTextColor(150);
+  doc.setFontSize(7);
+  doc.text(
+    `PalmApp · Nómina #${data.nomina.id} · Liquidado por ${liq.liquidado_por ?? '—'}`,
+    width / 2,
+    height - 25,
+    { align: 'center' },
+  );
+
+  const filename = `desprendible_${data.empleado.documento}_${data.nomina.anio}_${String(data.nomina.mes).padStart(2, '0')}${data.nomina.quincena ? `_Q${data.nomina.quincena}` : ''}.pdf`;
+  doc.save(filename);
 }
 
 export default function DesprendiblePago() {
@@ -48,19 +215,14 @@ export default function DesprendiblePago() {
   }, [nominaEmpleadoId]);
 
   const descargarPdf = async () => {
-    if (!nominaEmpleadoId || !data) return;
+    if (!data) return;
     setDescargando(true);
     try {
-      const blob = await nominaApi.desprendiblePdf(nominaEmpleadoId);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      const filename = `desprendible_${data.empleado.documento}_${data.nomina.anio}_${String(data.nomina.mes).padStart(2, '0')}${data.nomina.quincena ? `_Q${data.nomina.quincena}` : ''}.pdf`;
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      // Generamos el PDF en el cliente con jsPDF para tener control total
+      // del layout (label a la izquierda, valor alineado a la derecha).
+      // El template blade del backend pegaba los valores al texto sin
+      // alineación — este fix evita ese problema.
+      generarDesprendiblePdf(data);
     } catch (err) {
       const e = err as ApiError;
       toast.error(e.message ?? 'Error al descargar');

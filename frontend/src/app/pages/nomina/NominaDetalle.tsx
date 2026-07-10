@@ -159,6 +159,15 @@ export default function NominaDetalle() {
   });
   const [registrandoPago, setRegistrandoPago] = useState(false);
 
+  // ── Modal Liquidar Tercero (con descuentos manuales) ────────────────────
+  interface DescuentoTercero {
+    concepto: string;
+    valor: number;
+  }
+  const [modalLiquidarTerceroId, setModalLiquidarTerceroId] = useState<number | null>(null);
+  const [descuentosTercero, setDescuentosTercero] = useState<DescuentoTercero[]>([]);
+  const [liquidandoTercero, setLiquidandoTercero] = useState(false);
+
   const cargar = () => {
     if (!nominaId) return;
     setCargando(true);
@@ -444,6 +453,83 @@ export default function NominaDetalle() {
       }
     } finally {
       setRegistrandoPago(false);
+    }
+  };
+
+  /**
+   * Abre el modal de "Liquidar" para un tercero. Permite al usuario agregar
+   * descuentos (concepto + valor) antes de registrar el pago.
+   */
+  const abrirLiquidarTercero = (terceroId: number) => {
+    setDescuentosTercero([]);
+    setModalLiquidarTerceroId(terceroId);
+  };
+
+  const agregarDescuentoTercero = () => {
+    setDescuentosTercero((prev) => [...prev, { concepto: '', valor: 0 }]);
+  };
+
+  const actualizarDescuentoTercero = (
+    idx: number,
+    campo: keyof DescuentoTercero,
+    valor: string | number,
+  ) => {
+    setDescuentosTercero((prev) =>
+      prev.map((d, i) => (i === idx ? { ...d, [campo]: valor } : d)),
+    );
+  };
+
+  const quitarDescuentoTercero = (idx: number) => {
+    setDescuentosTercero((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  /**
+   * Confirma la liquidación del tercero: registra el pago e incluye los
+   * descuentos como texto libre en la observación (el endpoint
+   * `POST /registrar-pago` §7.5 no acepta descuentos estructurados, así que
+   * los consolidamos en la observación para trazabilidad).
+   */
+  const confirmarLiquidarTercero = async () => {
+    if (!nominaId || !modalLiquidarTerceroId) return;
+    // Validar filas
+    const descuentosValidos = descuentosTercero.filter(
+      (d) => d.concepto.trim() && d.valor > 0,
+    );
+    if (descuentosTercero.some(
+      (d) => (d.concepto.trim() && d.valor <= 0)
+        || (!d.concepto.trim() && d.valor > 0),
+    )) {
+      toast.error('Completa concepto y valor en los descuentos agregados');
+      return;
+    }
+    setLiquidandoTercero(true);
+    try {
+      const observacion = descuentosValidos.length > 0
+        ? `Descuentos: ${descuentosValidos
+            .map((d) => `${d.concepto} $${d.valor.toLocaleString('es-CO')}`)
+            .join(', ')}`
+        : undefined;
+      await nominaApi.terceros.registrarPago(nominaId, modalLiquidarTerceroId, {
+        metodo_pago: 'TRANSFERENCIA',
+        observacion,
+      });
+      toast.success('Tercero liquidado');
+      setModalLiquidarTerceroId(null);
+      setDescuentosTercero([]);
+      cargarTerceros();
+    } catch (err) {
+      const e = err as ApiError;
+      if (e.code === NominaErrorCodes.TERCERO_SIN_DATOS_BANCARIOS) {
+        toast.error('Falta configurar los datos bancarios del tercero');
+      } else if (e.code === NominaErrorCodes.ACTA_TERCERO_YA_PAGADA) {
+        toast.error('El acta ya fue pagada');
+      } else if (e.code === NominaErrorCodes.PERMISSION_DENIED) {
+        toast.error('No tienes el permiso "nomina.pagar-tercero"');
+      } else {
+        toast.error(e.message ?? 'No se pudo liquidar el tercero');
+      }
+    } finally {
+      setLiquidandoTercero(false);
     }
   };
 
@@ -917,8 +1003,21 @@ export default function NominaDetalle() {
       (planilla.jornales ?? []).forEach((j) => {
         if (j.operario_id == null || !operariosSet.has(j.operario_id)) return;
         const key = catDeJornal(j.categoria, j.tipo ?? null);
-        const loteName = nombreLote(j.lote_id, (j as any).lote);
-        const subloteName = nombreSublote(j.sublote_id, (j as any).sublote);
+        // FINCA no tiene lote/sublote — se agrupa por trabajo realizado
+        // (nombre de la labor, nombre_trabajo o descripción libre).
+        let loteName: string;
+        let subloteName: string;
+        if (key === 'finca') {
+          const nombreLabor = (j as any).labor?.nombre as string | undefined;
+          loteName = nombreLabor
+            || j.nombre_trabajo
+            || j.descripcion
+            || 'Trabajo de finca';
+          subloteName = '—';
+        } else {
+          loteName = nombreLote(j.lote_id, (j as any).lote);
+          subloteName = nombreSublote(j.sublote_id, (j as any).sublote);
+        }
         const row = getRow(key, loteName, subloteName, false);
 
         const palmas = Number(j.cantidad_palmas ?? 0);
@@ -946,13 +1045,20 @@ export default function NominaDetalle() {
     return cats.filter((c) => c.filas.length > 0);
   };
 
+  // Colores por categoría (mismo esquema visual de V.16):
+  //  - cosecha  → amber
+  //  - poda     → primary (verde)
+  //  - fertilizacion → info (azul)
+  //  - plateo   → purple
+  //  - sanidad  → success (verde éxito)
+  //  - otros/finca → gris
   const acumCategoria = (color: CategoriaLabor['color']) => {
     switch (color) {
       case 'amber': return { header: 'text-amber-600', total: 'text-amber-600' };
-      case 'green': return { header: 'text-emerald-700', total: 'text-foreground' };
-      case 'blue': return { header: 'text-sky-700', total: 'text-sky-700' };
+      case 'green': return { header: 'text-primary', total: 'text-primary' };
+      case 'blue': return { header: 'text-info', total: 'text-info' };
       case 'purple': return { header: 'text-purple-700', total: 'text-purple-700' };
-      case 'red': return { header: 'text-red-600', total: 'text-red-600' };
+      case 'red': return { header: 'text-success', total: 'text-success' };
       default: return { header: 'text-muted-foreground', total: 'text-foreground' };
     }
   };
@@ -1011,41 +1117,6 @@ export default function NominaDetalle() {
           </div>
 
           <div className="flex gap-2">
-            {/* Editar/Eliminar solo en BORRADOR sin liquidados (el backend
-                bloquea con NOMINA_CON_LIQUIDADOS si ya hay alguno cerrado). */}
-            {esBorrador && liquidados === 0 && (
-              <>
-                <Button
-                  variant="outline"
-                  className="gap-2"
-                  onClick={abrirEditar}
-                  title="Editar período de la nómina"
-                >
-                  <Pencil className="h-4 w-4" />
-                  Editar
-                </Button>
-                <Button
-                  variant="outline"
-                  className="gap-2 text-destructive hover:bg-destructive/10 hover:text-destructive hover:border-destructive/50"
-                  onClick={() => setConfirmarEliminar(true)}
-                  title="Eliminar nómina"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Eliminar
-                </Button>
-              </>
-            )}
-            {esBorrador && (
-              <Button
-                variant="default"
-                className="gap-2"
-                onClick={() => setConfirmarCerrar(true)}
-                disabled={empleados.length === 0 || pendientes > 0}
-              >
-                <Lock className="h-4 w-4" />
-                Cerrar Nómina
-              </Button>
-            )}
             <Button variant="outline" className="gap-2">
               <Download className="h-4 w-4" />
               Exportar
@@ -1239,17 +1310,6 @@ export default function NominaDetalle() {
       {/* ── TAB TERCEROS ── */}
       {tabActivo === 'terceros' && (
         <div className="space-y-4">
-          {esBorrador && (
-            <div className="flex justify-end">
-              <Button
-                onClick={() => navigate(`/nomina/${nominaId}/liquidar-terceros`)}
-                className="bg-primary hover:bg-primary/90 gap-2"
-              >
-                <FileText className="h-4 w-4" />
-                Liquidar Terceros
-              </Button>
-            </div>
-          )}
 
           {cargandoTerceros ? (
             <Card className="border-border">
@@ -1336,19 +1396,31 @@ export default function NominaDetalle() {
                         <Button
                           size="sm"
                           className="bg-primary hover:bg-primary/90 gap-1.5"
-                          onClick={() => registrarPagoDirecto(grupo.tercero_id)}
-                          disabled={registrandoPago}
+                          onClick={() => navigate(
+                            `/nomina/${nominaId}/tercero/${grupo.tercero_id}/liquidar`,
+                            {
+                              state: {
+                                // Pasamos el total ya calculado desde el
+                                // desglose de labores para evitar el 0 del
+                                // acta cuando el motor del backend no lo
+                                // calculó bien (bug conocido).
+                                totalEstimado: total,
+                                categorias,
+                              },
+                            },
+                          )}
                         >
-                          {registrandoPago
-                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            : <FileText className="h-3.5 w-3.5" />}
-                          Registrar Pago
+                          <FileText className="h-3.5 w-3.5" />
+                          Liquidar
                         </Button>
                       )}
                     </div>
                   </div>
 
-                  {/* Tabla por labor — se alimenta de las planillas del período. */}
+                  {/* Tabla de labores agrupadas — mismo layout que V.16.
+                      FINCA sale en su propia tabla debajo porque no tiene
+                      lote/sublote/promedio/peso. El "Total orden de pago" va
+                      al final después de ambas tablas. */}
                   {categorias.length === 0 ? (
                     <div className="py-10 text-center text-sm text-muted-foreground">
                       {planillasPeriodo.length === 0
@@ -1356,84 +1428,164 @@ export default function NominaDetalle() {
                         : 'Sin registros de campo en el período para los operarios de esta empresa.'}
                     </div>
                   ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-border bg-muted/20 text-xs text-muted-foreground">
-                            <th className="text-left p-3 pl-5 font-semibold">Lote</th>
-                            <th className="text-left p-3 font-semibold">Sublote</th>
-                            <th className="text-right p-3 font-semibold">Cantidad</th>
-                            <th className="text-right p-3 font-semibold">Prom.</th>
-                            <th className="text-right p-3 font-semibold">Peso (kg)</th>
-                            <th className="text-right p-3 font-semibold">Precio Unit.</th>
-                            <th className="text-right p-3 pr-5 font-semibold">Total</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {categorias.map((cat) => {
-                            const col = acumCategoria(cat.color);
-                            return (
-                              <React.Fragment key={cat.key}>
-                                <tr>
-                                  <td colSpan={7} className={`px-5 pt-3 pb-1 text-xs font-bold tracking-wide ${col.header}`}>
-                                    {cat.titulo}
-                                  </td>
+                    <>
+                      {categorias.filter((c) => c.key !== 'finca').length > 0 && (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b border-border bg-muted/30 text-xs text-muted-foreground">
+                                <th className="text-left p-3 pl-5 font-semibold">Lote</th>
+                                <th className="text-left p-3 font-semibold">Sublote</th>
+                                <th className="text-right p-3 font-semibold">Cantidad</th>
+                                <th className="text-right p-3 font-semibold">Prom.</th>
+                                <th className="text-right p-3 font-semibold">Peso (kg)</th>
+                                <th className="text-right p-3 font-semibold">Precio Unit.</th>
+                                <th className="text-right p-3 pr-5 font-semibold">Total</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {categorias.filter((c) => c.key !== 'finca').map((cat) => {
+                                const col = acumCategoria(cat.color);
+                                return (
+                                  <React.Fragment key={cat.key}>
+                                    {/* Encabezado de grupo */}
+                                    <tr className="bg-muted/40 border-b border-border">
+                                      <td colSpan={7} className={`px-5 py-1.5 text-xs font-bold uppercase tracking-wide ${col.header}`}>
+                                        {cat.titulo}
+                                      </td>
+                                    </tr>
+                                    {cat.filas.map((f, idx) => (
+                                      <tr
+                                        key={`${cat.key}-${idx}`}
+                                        className={`border-b border-border/40 ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}
+                                      >
+                                        <td className="p-3 pl-5 font-semibold">{f.lote}</td>
+                                        <td className="p-3 text-muted-foreground">{f.sublote}</td>
+                                        <td className="p-3 text-right font-semibold">
+                                          {f.cantidad.toLocaleString('es-CO')}
+                                          <span className="text-xs text-muted-foreground ml-1">{f.unidad}</span>
+                                        </td>
+                                        <td className="p-3 text-right text-muted-foreground">
+                                          {f.promedio_kg != null && f.promedio_kg > 0
+                                            ? f.promedio_kg.toFixed(1)
+                                            : '—'}
+                                        </td>
+                                        <td className="p-3 text-right font-semibold">
+                                          {f.peso_kg != null && f.peso_kg > 0
+                                            ? f.peso_kg.toLocaleString('es-CO')
+                                            : '—'}
+                                        </td>
+                                        <td className="p-3 text-right text-muted-foreground">
+                                          ${f.precio.toLocaleString('es-CO')}
+                                          <span className="text-xs ml-1">{f.precio_unidad}</span>
+                                        </td>
+                                        <td className={`p-3 pr-5 text-right font-bold ${col.total}`}>
+                                          ${f.total.toLocaleString('es-CO')}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                    {/* Subtotal por grupo */}
+                                    <tr className="border-b border-border bg-muted/10">
+                                      <td colSpan={6} className="p-2 pl-5 text-right text-xs text-muted-foreground">
+                                        Subtotal {cat.titulo.charAt(0) + cat.titulo.slice(1).toLowerCase()}
+                                      </td>
+                                      <td className={`p-2 pr-5 text-right text-sm font-bold ${col.total}`}>
+                                        ${cat.subtotal.toLocaleString('es-CO')}
+                                      </td>
+                                    </tr>
+                                  </React.Fragment>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {/* Tabla aparte para labores de FINCA — mismo estilo
+                          visual que V.16 pero con columnas propias porque
+                          finca no tiene lote/sublote/promedio/peso. */}
+                      {categorias.filter((c) => c.key === 'finca').map((cat) => {
+                        const col = acumCategoria(cat.color);
+                        return (
+                          <div key={cat.key} className="overflow-x-auto border-t border-border">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b border-border bg-muted/30 text-xs text-muted-foreground">
+                                  <th className={`text-left p-3 pl-5 font-bold uppercase tracking-wide ${col.header}`}>
+                                    Trabajos de finca
+                                  </th>
+                                  <th className="text-right p-3 font-semibold">Precio Unit.</th>
+                                  <th className="text-right p-3 pr-5 font-semibold">Total</th>
                                 </tr>
+                              </thead>
+                              <tbody>
                                 {cat.filas.map((f, idx) => (
-                                  <tr key={`${cat.key}-${idx}`} className="border-b border-border/40 last:border-0">
-                                    <td className="p-3 pl-5 font-semibold uppercase text-xs">{f.lote}</td>
-                                    <td className="p-3 text-xs text-muted-foreground">{f.sublote}</td>
-                                    <td className="p-3 text-right">
-                                      <span className="font-semibold">{f.cantidad.toLocaleString('es-CO')}</span>
-                                      <span className="text-muted-foreground text-xs ml-1">{f.unidad}</span>
+                                  <tr
+                                    key={`finca-${idx}`}
+                                    className={`border-b border-border/40 ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}
+                                  >
+                                    <td className="p-3 pl-5 font-semibold">
+                                      {f.lote !== '—' ? f.lote : 'Trabajo de finca'}
                                     </td>
-                                    <td className="p-3 text-right text-xs text-muted-foreground">
-                                      {f.promedio_kg != null && f.promedio_kg > 0
-                                        ? f.promedio_kg.toFixed(1)
-                                        : '—'}
+                                    <td className="p-3 text-right text-muted-foreground">
+                                      ${f.precio.toLocaleString('es-CO')}
                                     </td>
-                                    <td className="p-3 text-right text-xs">
-                                      {f.peso_kg != null && f.peso_kg > 0
-                                        ? f.peso_kg.toLocaleString('es-CO')
-                                        : '—'}
-                                    </td>
-                                    <td className="p-3 text-right text-xs text-muted-foreground">
-                                      ${f.precio.toLocaleString('es-CO')}{' '}
-                                      <span className="text-[10px]">{f.precio_unidad}</span>
-                                    </td>
-                                    <td className={`p-3 pr-5 text-right font-semibold ${col.total}`}>
+                                    <td className={`p-3 pr-5 text-right font-bold ${col.total}`}>
                                       ${f.total.toLocaleString('es-CO')}
                                     </td>
                                   </tr>
                                 ))}
-                                <tr className="bg-muted/10">
-                                  <td colSpan={6} className="p-3 pl-5 text-right text-xs font-medium text-muted-foreground">
-                                    Subtotal {cat.titulo.charAt(0) + cat.titulo.slice(1).toLowerCase()}
+                                <tr className="border-b border-border bg-muted/10">
+                                  <td colSpan={2} className="p-2 pl-5 text-right text-xs text-muted-foreground">
+                                    Subtotal Finca
                                   </td>
-                                  <td className={`p-3 pr-5 text-right font-bold ${col.total}`}>
+                                  <td className={`p-2 pr-5 text-right text-sm font-bold ${col.total}`}>
                                     ${cat.subtotal.toLocaleString('es-CO')}
                                   </td>
                                 </tr>
-                              </React.Fragment>
-                            );
-                          })}
-                        </tbody>
-                        <tfoot>
-                          <tr className="bg-muted/30 border-t-2 border-border">
-                            <td colSpan={6} className="p-3 pl-5 text-right text-xs font-bold uppercase text-primary tracking-wide">
-                              Total orden de pago a {grupo.tercero_nombre}
-                            </td>
-                            <td className="p-3 pr-5 text-right text-lg font-bold text-primary">
-                              ${total.toLocaleString('es-CO')}
-                            </td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
+                              </tbody>
+                            </table>
+                          </div>
+                        );
+                      })}
+
+                      {/* Total orden de pago — al final después de ambas
+                          tablas (campo + finca). Estilo tfoot de V.16. */}
+                      <div className="border-t-2 border-primary/20 bg-muted/20 flex items-center justify-between px-5 py-3">
+                        <p className="text-sm font-bold text-primary uppercase tracking-wide">
+                          Total orden de pago a {grupo.tercero_nombre}
+                        </p>
+                        <p className="text-lg font-bold text-primary">
+                          ${total.toLocaleString('es-CO')}
+                        </p>
+                      </div>
+                    </>
                   )}
                 </Card>
               );
             })
+          )}
+
+          {/* Total general terceros — igual que V.16, card amber flotante
+              al final del listado. */}
+          {tercerosAgrupados.length > 0 && (
+            <div className="flex justify-end">
+              <div className="rounded-xl border border-amber-300/50 bg-amber-50/60 dark:bg-amber-950/20 px-6 py-3 flex items-center gap-6">
+                <p className="text-sm text-muted-foreground">
+                  Total a transferir a empresas terceras
+                </p>
+                <p className="text-2xl font-bold text-amber-700">
+                  ${tercerosAgrupados
+                    .reduce((s, g) => {
+                      const cats = consolidarPorTercero(g.operarios);
+                      const est = cats.reduce((a, c) => a + c.subtotal, 0);
+                      const actaTot = toNumber(g.acta?.total_a_transferir);
+                      return s + (actaTot > 0 ? actaTot : est);
+                    }, 0)
+                    .toLocaleString('es-CO')}
+                </p>
+              </div>
+            </div>
           )}
         </div>
       )}
@@ -1807,6 +1959,142 @@ export default function NominaDetalle() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Liquidar Tercero — reemplazado por pantalla dedicada
+          `/nomina/:id/tercero/:terceroId/liquidar`. El modal se dejó como
+          fallback opcional detrás de un flag inaccesible. */}
+      {false && modalLiquidarTerceroId != null && (() => {
+        const grupo = tercerosAgrupados.find(
+          (g) => g.tercero_id === modalLiquidarTerceroId,
+        );
+        if (!grupo) return null;
+        const categorias = consolidarPorTercero(grupo.operarios);
+        const totalEstimado = categorias.reduce((s, c) => s + c.subtotal, 0);
+        const totalActa = toNumber(grupo.acta?.total_a_transferir);
+        const totalBruto = totalActa > 0 ? totalActa : totalEstimado;
+        const totalDescuentos = descuentosTercero.reduce(
+          (s, d) => s + (Number(d.valor) || 0),
+          0,
+        );
+        const totalNeto = totalBruto - totalDescuentos;
+        return (
+          <Dialog open onOpenChange={() => setModalLiquidarTerceroId(null)}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Building2 className="h-5 w-5 text-primary" />
+                  Liquidar — {grupo.tercero_nombre}
+                </DialogTitle>
+                <DialogDescription>
+                  Agrega descuentos si aplica. Al confirmar, el acta queda pagada.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="rounded-lg border border-border bg-muted/20 p-3 flex justify-between text-sm">
+                  <span className="text-muted-foreground">Total bruto</span>
+                  <span className="font-semibold">${totalBruto.toLocaleString('es-CO')}</span>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label className="text-sm font-semibold">Descuentos</Label>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={agregarDescuentoTercero}
+                      className="h-7 gap-1"
+                    >
+                      <span className="text-base leading-none">+</span>
+                      Agregar
+                    </Button>
+                  </div>
+                  {descuentosTercero.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-3 bg-muted/20 rounded-md">
+                      Sin descuentos.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {descuentosTercero.map((d, i) => (
+                        <div key={i} className="grid grid-cols-12 gap-2 items-end">
+                          <div className="col-span-6">
+                            <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                              Concepto
+                            </Label>
+                            <Input
+                              value={d.concepto}
+                              onChange={(e) => actualizarDescuentoTercero(i, 'concepto', e.target.value)}
+                              placeholder="Ej: Herramienta extraviada"
+                              className="h-8 text-sm"
+                            />
+                          </div>
+                          <div className="col-span-5">
+                            <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                              Valor
+                            </Label>
+                            <Input
+                              type="number"
+                              value={d.valor || ''}
+                              onChange={(e) => actualizarDescuentoTercero(i, 'valor', Number(e.target.value))}
+                              className="h-8 text-sm"
+                              placeholder="0"
+                            />
+                          </div>
+                          <div className="col-span-1 flex justify-end">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => quitarDescuentoTercero(i)}
+                              className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-lg border-2 border-primary/30 bg-primary/5 p-4 space-y-2">
+                  {totalDescuentos > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Total descuentos</span>
+                      <span className="font-semibold text-destructive">
+                        -${totalDescuentos.toLocaleString('es-CO')}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between border-t border-primary/20 pt-2">
+                    <span className="font-bold">Total a pagar</span>
+                    <span className="font-bold text-xl text-primary">
+                      ${totalNeto.toLocaleString('es-CO')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setModalLiquidarTerceroId(null)}
+                  disabled={liquidandoTercero}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={confirmarLiquidarTercero}
+                  disabled={liquidandoTercero}
+                  className="bg-primary hover:bg-primary/90 gap-2"
+                >
+                  {liquidandoTercero
+                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                    : <Check className="h-4 w-4" />}
+                  Confirmar liquidación
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
 
       {/* Registrar Pago Tercero */}
       {modalPagoTerceroId && terceroSeleccionadoPago && (

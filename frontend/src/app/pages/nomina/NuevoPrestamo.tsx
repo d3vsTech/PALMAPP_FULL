@@ -330,9 +330,6 @@ export default function NuevoPrestamo() {
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Frecuencia de descuento
                 </p>
-                <p className="text-sm mt-0.5">
-                  Configurada en el tenant (no editable desde aquí)
-                </p>
               </div>
               <div className="text-sm font-bold px-3 py-1.5 rounded-md bg-primary/10 text-primary border border-primary/20">
                 {periodicidadTenant}

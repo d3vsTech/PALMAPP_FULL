@@ -258,7 +258,7 @@ class RegistroCosechaController extends Controller
                 ], 409);
             }
 
-            if ($cosecha->viajeDetalles()->exists()) {
+            if ($cosecha->viajeDetalles()->where('estado', true)->exists()) {
                 return response()->json([
                     'message' => 'No se puede eliminar: la cosecha está incluida en un viaje',
                     'code'    => 'COSECHA_EN_VIAJE',

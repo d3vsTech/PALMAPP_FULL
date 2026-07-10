@@ -276,6 +276,10 @@ export default function NuevaNominaWizard() {
    *  Se compara contra `bundleCosecha.promedios_por_lote[*].promedio_efectivo`. */
   const [promediosEditados, setPromediosEditados] = useState<Record<number, number>>({});
   const [ajustandoPromedio, setAjustandoPromedio] = useState(false);
+  /** Año seleccionado en el selector del modal — arranca en el año de la nómina. */
+  const [anioPromedios, setAnioPromedios] = useState<number>(new Date().getFullYear());
+  /** lote_id → updated_at del último promedio del año seleccionado. */
+  const [fechasPromedioLote, setFechasPromedioLote] = useState<Map<number, string>>(new Map());
 
   /**
    * Persistir progreso en localStorage cada vez que cambia `nominaId` o
@@ -418,10 +422,33 @@ export default function NuevaNominaWizard() {
   // Al abrir el modal, simplemente reseteamos las ediciones locales — los
   // promedios vienen del bundle de cosecha (`promedios_por_lote`), ya cargado.
   // Si el bundle aún no está, se cargará al entrar al paso 3.
+  // También iniciamos el selector de año en el año de la nómina (ano).
   useEffect(() => {
     if (!mostrarAjustePromedios) return;
     setPromediosEditados({});
-  }, [mostrarAjustePromedios]);
+    setAnioPromedios(parseInt(ano) || new Date().getFullYear());
+  }, [mostrarAjustePromedios, ano]);
+
+  // Traer fecha de actualización por lote del año seleccionado — pobla la
+  // columna "Fecha Actualización" del modal combinado. No bloquea la UI.
+  useEffect(() => {
+    if (!mostrarAjustePromedios) return;
+    configuracionApi.promediosLote
+      .listar({ anio: anioPromedios, per_page: 100 })
+      .then((res) => {
+        const m = new Map<number, string>();
+        for (const p of res.data ?? []) {
+          const updated = (p as any).updated_at as string | undefined;
+          if (!updated) continue;
+          const existente = m.get(p.lote_id);
+          if (!existente || new Date(updated).getTime() > new Date(existente).getTime()) {
+            m.set(p.lote_id, updated);
+          }
+        }
+        setFechasPromedioLote(m);
+      })
+      .catch(() => setFechasPromedioLote(new Map()));
+  }, [mostrarAjustePromedios, anioPromedios]);
 
   /** Guarda los promedios editados — un PUT por cada lote modificado.
    *  El valor original es el `promedio_efectivo` del bundle (que ya considera
@@ -1256,15 +1283,16 @@ export default function NuevaNominaWizard() {
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium">
-                      Colaboradores Terceros{' '}
-                      <span className="text-xs text-muted-foreground font-normal">
-                        ({operariosSeleccionados.length} seleccionado{operariosSeleccionados.length !== 1 ? 's' : ''})
-                      </span>
-                    </p>
+                    <p className="text-sm font-medium">Operarios Terceros</p>
                     <Badge className="text-xs bg-amber-500/10 text-amber-700 border-amber-300">
                       Prestación de Servicios
                     </Badge>
+                    {operariosSeleccionados.length > 0 && (
+                      <span className="text-xs text-muted-foreground">
+                        ({operariosSeleccionados.length} seleccionado
+                        {operariosSeleccionados.length !== 1 ? 's' : ''})
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     {tercerosUnicos.length > 1 && (
@@ -1334,6 +1362,9 @@ export default function NuevaNominaWizard() {
                               <th className="text-left p-4 font-semibold text-sm text-muted-foreground">
                                 Cargo
                               </th>
+                              <th className="text-right p-4 font-semibold text-sm text-muted-foreground">
+                                Tarifa/Día
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
@@ -1379,6 +1410,13 @@ export default function NuevaNominaWizard() {
                                   </td>
                                   <td className="p-4">
                                     <span className="text-sm font-medium">{op.cargo}</span>
+                                  </td>
+                                  <td className="p-4 text-right">
+                                    <span className="text-sm font-medium">
+                                      {op.tarifa_dia_estimada && op.tarifa_dia_estimada > 0
+                                        ? `$${op.tarifa_dia_estimada.toLocaleString('es-CO')}`
+                                        : '—'}
+                                    </span>
                                   </td>
                                 </tr>
                               );
@@ -1879,14 +1917,17 @@ export default function NuevaNominaWizard() {
           Los promedios vienen del bundle de validar-cosecha (`promedios_por_lote`).
           Solo aparecen los lotes con cosechas en el período. */}
       <Dialog open={mostrarAjustePromedios} onOpenChange={setMostrarAjustePromedios}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent
+          className="max-h-[90vh] overflow-y-auto"
+          style={{ width: 'min(780px, 95vw)', maxWidth: 'min(780px, 95vw)' }}
+        >
           <DialogHeader>
-            <div className="flex items-center gap-2">
-              <Settings2 className="h-6 w-6 text-primary" />
+            <div className="flex items-start gap-2">
+              <Settings2 className="h-6 w-6 text-primary mt-0.5" />
               <div>
-                <DialogTitle>Ajustar Promedios por Lote</DialogTitle>
+                <DialogTitle>Promedios por Lote</DialogTitle>
                 <DialogDescription className="mt-1">
-                  Kg promedio por gajo para esta nómina. El "Auto" lo calcula el sistema
+                  Kg promedio por gajo para cada lote. El "Auto" lo calcula el sistema
                   desde los viajes del período; el "Manual" lo sobrescribe solo para esta nómina.
                 </DialogDescription>
               </div>
@@ -2005,20 +2046,21 @@ export default function NuevaNominaWizard() {
             );
           })()}
 
-          {/* Tabla de promedios por lote (solo lotes con cosechas en el período) */}
+          {/* Tabla de promedios por lote (solo lotes con cosechas en el período).
+              4 columnas: Fecha Actualización | Lote | Auto | Ajuste Manual. */}
           <div className="rounded-lg border overflow-hidden">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-muted/50 text-xs text-muted-foreground">
-                  <th className="text-left p-3 pl-5 font-semibold">Lote</th>
+                  <th className="text-left p-3 pl-5 font-semibold">
+                    Fecha <span className="font-normal text-[10px] block leading-tight">Actualización</span>
+                  </th>
+                  <th className="text-left p-3 font-semibold">Lote</th>
                   <th className="text-right p-3 font-semibold">
                     Auto <span className="font-normal text-[10px] block leading-tight">(viajes período)</span>
                   </th>
-                  <th className="text-right p-3 font-semibold">
-                    Manual <span className="font-normal text-[10px] block leading-tight">(esta nómina)</span>
-                  </th>
                   <th className="text-right p-3 pr-5 font-semibold">
-                    Efectivo <span className="font-normal text-[10px] block leading-tight">(kg/gajo)</span>
+                    Ajuste Manual <span className="font-normal text-[10px] block leading-tight">(esta nómina)</span>
                   </th>
                 </tr>
               </thead>
@@ -2039,17 +2081,23 @@ export default function NuevaNominaWizard() {
                 ) : (
                   bundleCosecha.promedios_por_lote.map((p) => {
                     const valorActual = promedioValorActual(p.lote_id);
-                    const efectivoMostrado = valorActual > 0 ? valorActual : p.promedio_efectivo;
+                    const fechaAct = fechasPromedioLote.get(p.lote_id);
+                    const fechaFmt = fechaAct
+                      ? new Date(fechaAct).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })
+                      : '—';
                     return (
                       <tr
                         key={p.lote_id}
                         className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
                       >
-                        <td className="p-3 pl-5 font-medium text-sm">{p.lote_nombre}</td>
+                        <td className="p-3 pl-5 text-xs text-muted-foreground">
+                          {fechaFmt}
+                        </td>
+                        <td className="p-3 font-medium text-sm">{p.lote_nombre}</td>
                         <td className="p-3 text-right text-sm text-muted-foreground">
                           {p.promedio_auto.toFixed(2)}
                         </td>
-                        <td className="p-3 text-right">
+                        <td className="p-3 pr-5 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <Input
                               type="number"
@@ -2067,9 +2115,6 @@ export default function NuevaNominaWizard() {
                             />
                           </div>
                         </td>
-                        <td className="p-3 pr-5 text-right text-sm font-semibold text-primary">
-                          {efectivoMostrado.toFixed(2)}
-                        </td>
                       </tr>
                     );
                   })
@@ -2077,11 +2122,6 @@ export default function NuevaNominaWizard() {
               </tbody>
             </table>
           </div>
-
-          <p className="text-xs text-muted-foreground">
-            <strong>Manual</strong> sobrescribe el promedio efectivo solo para esta nómina —
-            no afecta los promedios históricos de viajes (tabla `promedio_lote` es de solo lectura).
-          </p>
 
           <DialogFooter>
             <Button

@@ -11,8 +11,12 @@ use App\Models\Nomina;
 use App\Models\NominaConcepto;
 use App\Models\NominaEmpleado;
 use App\Models\NominaEmpleadoConcepto;
+use App\Models\PrestamoCuota;
+use App\Services\Nomina\PrestamoService;
 use App\Models\Operacion;
+use App\Models\Operario;
 use App\Models\PrecioCosecha;
+use App\Models\NominaPromedioLote;
 use App\Models\PromedioLote;
 use App\Models\TenantConfig;
 use Illuminate\Support\Carbon;
@@ -61,6 +65,10 @@ class NominaCalculationService
      */
     public function previewLiquidacion(NominaEmpleado $ne): array
     {
+        if ($ne->esDeOperario()) {
+            return $this->previewLiquidacionOperario($ne);
+        }
+
         $nomina   = $ne->nomina ?? Nomina::findOrFail($ne->nomina_id);
         $empleado = $ne->empleado ?? Empleado::findOrFail($ne->empleado_id);
         $config   = $this->tenantConfig($ne->tenant_id);
@@ -86,12 +94,12 @@ class NominaCalculationService
             $devengadoBase = (float) $empleado->salario_base * ($diasTrabajados / $diasPeriodo);
         } else {
             $totalJornales = $this->sumarJornales($empleado, $inicio, $fin);
-            $totalCosecha  = $this->sumarCosecha($empleado, $inicio, $fin);
+            $totalCosecha  = $this->sumarCosecha($empleado, $inicio, $fin, $ne->nomina_id);
             $devengadoBase = $totalJornales + $totalCosecha;
         }
 
         // 4) Horas extras y recargos
-        [$totalHorasExtra, $totalRecargos] = $this->sumarHorasExtraYRecargos($empleado, $inicio, $fin);
+        [$totalHorasExtra, $totalRecargos, $detalleHorasExtra] = $this->sumarHorasExtraYRecargos($empleado, $inicio, $fin);
 
         // 5) Total devengado (sin subsidio de transporte — el subsidio NO es salario)
         $totalDevengado = round(
@@ -123,6 +131,8 @@ class NominaCalculationService
         $totalDeduccionesLegales = array_sum(array_column($conceptosLegales, 'valor'));
         $totalNeto = round($totalDevengado + $subsidioTransporte - $totalDeduccionesLegales, 2);
 
+        $pendientes = $this->contarPendientesNoIncluidos($empleado, $inicio, $fin);
+
         return [
             'dias_periodo'              => $diasPeriodo,
             'dias_trabajados'           => $diasTrabajados,
@@ -139,6 +149,9 @@ class NominaCalculationService
             'conceptos_legales'         => $conceptosLegales,
             'total_deducciones_legales' => round($totalDeduccionesLegales, 2),
             'total_neto_propuesto'      => $totalNeto,
+            'detalle_horas_extra'       => $detalleHorasExtra,
+            'detalle_ausencias'         => $ausenciasInfo['detalle'],
+            'pendientes_por_aprobar'    => $pendientes,
         ];
     }
 
@@ -154,6 +167,10 @@ class NominaCalculationService
      */
     public function liquidar(NominaEmpleado $ne, array $payload, int $userId): NominaEmpleado
     {
+        if ($ne->esDeOperario()) {
+            return $this->liquidarOperario($ne, $payload, $userId);
+        }
+
         if ($ne->nomina->isCerrada()) {
             throw new \DomainException('NOMINA_CERRADA: la nómina ya fue cerrada y no admite nuevas liquidaciones.');
         }
@@ -242,14 +259,19 @@ class NominaCalculationService
                 if ($valor <= 0) {
                     continue;
                 }
-                $concepto = NominaConcepto::where('tenant_id', $ne->tenant_id)
-                    ->where('id', $dv['concepto_id'])
-                    ->where('tipo', 'DEDUCCION_VOLUNTARIA')
-                    ->first();
-                if (! $concepto) {
-                    throw new InvalidArgumentException("Concepto de deducción voluntaria inválido: {$dv['concepto_id']}");
+                // Si viene con prestamo_cuota_id pero sin concepto_id, auto-resolver DCTO_ADELANTO
+                if (! empty($dv['prestamo_cuota_id']) && empty($dv['concepto_id'])) {
+                    $concepto = $this->resolveConceptoPrestamo($ne->tenant_id);
+                } else {
+                    $concepto = NominaConcepto::where('tenant_id', $ne->tenant_id)
+                        ->where('id', $dv['concepto_id'])
+                        ->where('tipo', 'DEDUCCION_VOLUNTARIA')
+                        ->first();
+                    if (! $concepto) {
+                        throw new InvalidArgumentException("Concepto de deducción voluntaria inválido: {$dv['concepto_id']}");
+                    }
                 }
-                NominaEmpleadoConcepto::create([
+                $conceptoEntry = NominaEmpleadoConcepto::create([
                     'tenant_id'          => $ne->tenant_id,
                     'nomina_empleado_id' => $ne->id,
                     'concepto_id'        => $concepto->id,
@@ -259,6 +281,19 @@ class NominaCalculationService
                     'observacion'        => $dv['observacion'] ?? null,
                 ]);
                 $totalDeduccionesVoluntarias += $valor;
+
+                // Enlazar con cuota de préstamo si se indicó
+                if (! empty($dv['prestamo_cuota_id'])) {
+                    $cuota = PrestamoCuota::find((int) $dv['prestamo_cuota_id']);
+                    if ($cuota && $cuota->isPendiente()) {
+                        app(PrestamoService::class)->aplicarCuota(
+                            $cuota,
+                            $ne->id,
+                            $conceptoEntry->id,
+                            $userId
+                        );
+                    }
+                }
             }
 
             // 4) Sumar totales finales
@@ -351,7 +386,7 @@ class NominaCalculationService
     /**
      * Procesa ausencias APROBADAS del empleado en el rango de la nómina.
      *
-     * @return array{dias_no_remunerados:int,total_descuento:float,total_remunerado:float}
+     * @return array{dias_no_remunerados:int,total_descuento:float,total_remunerado:float,detalle:array}
      */
     private function procesarAusencias(Empleado $empleado, Carbon $inicio, Carbon $fin, int $diasPeriodo): array
     {
@@ -359,12 +394,14 @@ class NominaCalculationService
             ->aprobadas()
             ->afectanNomina()
             ->enRango($inicio->toDateString(), $fin->toDateString())
+            ->with('motivoAusencia:id,nombre')
             ->get();
 
         $diasNoRemunerados = 0;
         $totalDescuento    = 0.0;
         $totalRemunerado   = 0.0;
         $valorDia          = (float) $empleado->salario_base / 30;
+        $detalle           = [];
 
         foreach ($ausencias as $a) {
             $dias = $a->getDiasEnRango($inicio, $fin);
@@ -375,30 +412,74 @@ class NominaCalculationService
             $porcentaje = (float) ($a->porcentaje_pago ?? 0);
 
             if (! $a->es_remunerada) {
-                // PERMISO_NO_REMUNERADO, AUSENCIA_INJUSTIFICADA, SUSPENSION_DISCIPLINARIA
+                $descuento          = round($valorDia * $dias, 2);
                 $diasNoRemunerados += $dias;
-                $totalDescuento    += $valorDia * $dias;
+                $totalDescuento    += $descuento;
+
+                $detalle[] = [
+                    'id'             => $a->id,
+                    'tipo'           => $a->tipo,
+                    'motivo_nombre'  => $a->motivoAusencia?->nombre,
+                    'fecha_inicio'   => $a->fecha_inicio?->format('Y-m-d'),
+                    'fecha_fin'      => $a->fecha_fin?->format('Y-m-d'),
+                    'dias_en_rango'  => $dias,
+                    'es_remunerada'  => false,
+                    'porcentaje_pago'=> 0.0,
+                    'valor_calculado'=> $descuento,
+                    'afecta'         => 'DESCUENTO',
+                ];
                 continue;
             }
 
-            // Ausencia remunerada: incapacidad o licencia
             // EPS: días 1-2 = 100%, días 3+ = 66.67%
             if ($a->tipo === Ausencia::TIPO_INCAPACIDAD_EPS) {
                 $diasFullPay   = min($dias, 2);
                 $diasParcial   = max(0, $dias - 2);
-                $totalRemunerado += $valorDia * $diasFullPay;
-                $totalRemunerado += $valorDia * $diasParcial * (self::PORCENTAJE_INCAPACIDAD_EPS_DESDE_DIA_3 / 100);
+                $valorLinea    = round(
+                    $valorDia * $diasFullPay
+                    + $valorDia * $diasParcial * (self::PORCENTAJE_INCAPACIDAD_EPS_DESDE_DIA_3 / 100),
+                    2
+                );
+                $totalRemunerado += $valorLinea;
+
+                $detalle[] = [
+                    'id'             => $a->id,
+                    'tipo'           => $a->tipo,
+                    'motivo_nombre'  => $a->motivoAusencia?->nombre,
+                    'fecha_inicio'   => $a->fecha_inicio?->format('Y-m-d'),
+                    'fecha_fin'      => $a->fecha_fin?->format('Y-m-d'),
+                    'dias_en_rango'  => $dias,
+                    'es_remunerada'  => true,
+                    'porcentaje_pago'=> self::PORCENTAJE_INCAPACIDAD_EPS_DESDE_DIA_3,
+                    'valor_calculado'=> $valorLinea,
+                    'afecta'         => 'INCAPACIDAD',
+                ];
                 continue;
             }
 
-            // ARL, licencias, calamidad, permiso remunerado: aplica el % del motivo (típicamente 100%)
-            $totalRemunerado += $valorDia * $dias * ($porcentaje / 100);
+            // ARL, licencias, calamidad, permiso remunerado
+            $valorLinea       = round($valorDia * $dias * ($porcentaje / 100), 2);
+            $totalRemunerado += $valorLinea;
+
+            $detalle[] = [
+                'id'             => $a->id,
+                'tipo'           => $a->tipo,
+                'motivo_nombre'  => $a->motivoAusencia?->nombre,
+                'fecha_inicio'   => $a->fecha_inicio?->format('Y-m-d'),
+                'fecha_fin'      => $a->fecha_fin?->format('Y-m-d'),
+                'dias_en_rango'  => $dias,
+                'es_remunerada'  => true,
+                'porcentaje_pago'=> $porcentaje,
+                'valor_calculado'=> $valorLinea,
+                'afecta'         => 'INCAPACIDAD',
+            ];
         }
 
         return [
             'dias_no_remunerados' => $diasNoRemunerados,
             'total_descuento'     => $totalDescuento,
             'total_remunerado'    => $totalRemunerado,
+            'detalle'             => $detalle,
         ];
     }
 
@@ -408,7 +489,7 @@ class NominaCalculationService
     private function contarDiasConJornal(Empleado $empleado, Carbon $inicio, Carbon $fin): int
     {
         return (int) Jornal::where('empleado_id', $empleado->id)
-            ->where('estado', true)
+            ->where('jornales.estado', true)
             ->whereHas('operacion', function ($q) use ($inicio, $fin) {
                 $q->where('estado', Operacion::ESTADO_APROBADA)
                   ->whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()]);
@@ -443,7 +524,7 @@ class NominaCalculationService
      * promedio_de_promedios = AVG(PromedioLote.promedio WHERE lote_id=X AND fecha IN período).
      * Si no hay promedios de viajes en el período, usa el baseline admin más reciente del año.
      */
-    private function sumarCosecha(Empleado $empleado, Carbon $inicio, Carbon $fin): float
+    private function sumarCosecha(Empleado $empleado, Carbon $inicio, Carbon $fin, ?int $nominaId = null): float
     {
         $cuadrillas = CosechaCuadrilla::where('empleado_id', $empleado->id)
             ->where('estado', true)
@@ -486,13 +567,26 @@ class NominaCalculationService
                 continue;
             }
 
-            // Promedio de promedios del lote en el período (generados por viajes)
-            $promedioPromedio = PromedioLote::where('tenant_id', $tenantId)
-                ->where('lote_id', $loteId)
-                ->whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()])
-                ->avg('promedio');
+            // Preferir promedio efectivo guardado para esta nómina (ajustado por admin)
+            $promedioPromedio = null;
+            if ($nominaId) {
+                $promedioPromedio = NominaPromedioLote::where('nomina_id', $nominaId)
+                    ->where('lote_id', $loteId)
+                    ->value('promedio_efectivo');
+                if ($promedioPromedio) {
+                    $promedioPromedio = (float) $promedioPromedio;
+                }
+            }
 
-            // Fallback: baseline admin más reciente del año si no hay promedios de viajes
+            // Fallback: promedio de promedios del lote en el período (generados por viajes)
+            if (! $promedioPromedio) {
+                $promedioPromedio = PromedioLote::where('tenant_id', $tenantId)
+                    ->where('lote_id', $loteId)
+                    ->whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()])
+                    ->avg('promedio');
+            }
+
+            // Fallback 2: baseline admin más reciente del año
             if (! $promedioPromedio) {
                 $promedioPromedio = PromedioLote::where('tenant_id', $tenantId)
                     ->where('lote_id', $loteId)
@@ -523,7 +617,7 @@ class NominaCalculationService
     }
 
     /**
-     * @return array{0:float,1:float} [total_horas_extra, total_recargos]
+     * @return array{0:float,1:float,2:array} [total_horas_extra, total_recargos, detalle_por_linea]
      */
     private function sumarHorasExtraYRecargos(Empleado $empleado, Carbon $inicio, Carbon $fin): array
     {
@@ -533,21 +627,39 @@ class NominaCalculationService
                 $q->where('estado', Operacion::ESTADO_APROBADA)
                   ->whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()]);
             })
-            ->with('tipoHoraExtra')
+            ->with(['tipoHoraExtra', 'operacion:id,fecha'])
             ->get();
 
         $totalExtra    = 0.0;
         $totalRecargos = 0.0;
+        $detalle       = [];
+
         foreach ($horas as $h) {
-            $valor = (float) ($h->valor_calculado ?? 0);
-            if ($h->tipoHoraExtra?->es_extra) {
+            $valor   = (float) ($h->valor_calculado ?? 0);
+            $esExtra = (bool) ($h->tipoHoraExtra?->es_extra ?? true);
+
+            if ($esExtra) {
                 $totalExtra += $valor;
             } else {
                 $totalRecargos += $valor;
             }
+
+            $detalle[] = [
+                'id'                 => $h->id,
+                'fecha'              => $h->operacion?->fecha?->format('Y-m-d'),
+                'codigo'             => $h->codigo,
+                'tipo_nombre'        => $h->tipoHoraExtra?->nombre,
+                'es_extra'           => $esExtra,
+                'cantidad_horas'     => (float) $h->cantidad_horas,
+                'valor_hora_base'    => (float) $h->valor_hora_base,
+                'porcentaje_recargo' => (float) $h->porcentaje_recargo,
+                'paga_hora_completa' => (bool) $h->paga_hora_completa,
+                'valor_calculado'    => $valor,
+                'observacion'        => $h->observacion,
+            ];
         }
 
-        return [$totalExtra, $totalRecargos];
+        return [$totalExtra, $totalRecargos, $detalle];
     }
 
     /**
@@ -684,5 +796,243 @@ class NominaCalculationService
             $ibcEnSmlv > 4  => 'FSP_1',
             default         => null,
         };
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Operarios de terceros — sin deducciones legales ni subsidio
+    // ──────────────────────────────────────────────────────────────────────
+
+    private function previewLiquidacionOperario(NominaEmpleado $ne): array
+    {
+        $nomina   = $ne->nomina   ?? Nomina::findOrFail($ne->nomina_id);
+        $operario = $ne->operario ?? Operario::findOrFail($ne->operario_id);
+
+        $diasPeriodo    = $this->diasPeriodo($nomina);
+        $inicio         = Carbon::parse($nomina->fecha_inicio);
+        $fin            = Carbon::parse($nomina->fecha_fin);
+
+        $diasTrabajados = $this->contarDiasConJornalOperario($operario, $inicio, $fin);
+        $totalJornales  = $this->sumarJornalesOperario($operario, $inicio, $fin);
+        $totalCosecha   = $this->sumarCosechaOperario($operario, $inicio, $fin, $ne->nomina_id);
+        $totalDevengado = round($totalJornales + $totalCosecha, 2);
+
+        return [
+            'dias_periodo'         => $diasPeriodo,
+            'dias_trabajados'      => $diasTrabajados,
+            'salario_base'         => 0.0,
+            'total_jornales'       => round($totalJornales, 2),
+            'total_cosecha'        => round($totalCosecha, 2),
+            'total_devengado'      => $totalDevengado,
+            'total_neto_propuesto' => $totalDevengado,
+        ];
+    }
+
+    private function liquidarOperario(NominaEmpleado $ne, array $payload, int $userId): NominaEmpleado
+    {
+        if ($ne->nomina->isCerrada()) {
+            throw new \DomainException('NOMINA_CERRADA: la nómina ya fue cerrada y no admite nuevas liquidaciones.');
+        }
+
+        return DB::transaction(function () use ($ne, $payload, $userId) {
+            $operario = $ne->operario ?? Operario::findOrFail($ne->operario_id);
+            $preview  = $this->previewLiquidacionOperario($ne);
+
+            $diasTrabajados = $payload['dias_trabajados'] ?? $preview['dias_trabajados'];
+
+            NominaEmpleadoConcepto::where('nomina_empleado_id', $ne->id)->delete();
+
+            $ne->update([
+                'dias_trabajados'         => $diasTrabajados,
+                'salario_base'            => 0,
+                'total_jornales'          => $preview['total_jornales'],
+                'total_cosecha'           => $preview['total_cosecha'],
+                'cargo_snapshot'          => $operario->cargo,
+                'predio_snapshot'         => null,
+                'salario_minimo_snapshot' => null,
+                'total_devengado'         => $preview['total_devengado'],
+                'total_bonificaciones'    => 0,
+                'total_deducciones'       => 0,
+                'total_neto'              => $preview['total_devengado'],
+                'estado'                  => NominaEmpleado::ESTADO_LIQUIDADO,
+                'liquidado_por'           => $userId,
+                'liquidado_at'            => now(),
+            ]);
+
+            $this->recalcularTotalesNomina($ne->nomina);
+
+            return $ne->fresh(['operario', 'conceptos.concepto', 'liquidadoPor']);
+        });
+    }
+
+    private function contarDiasConJornalOperario(Operario $operario, Carbon $inicio, Carbon $fin): int
+    {
+        return (int) Jornal::where('operario_id', $operario->id)
+            ->where('jornales.estado', true)
+            ->whereHas('operacion', function ($q) use ($inicio, $fin) {
+                $q->where('estado', Operacion::ESTADO_APROBADA)
+                  ->whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()]);
+            })
+            ->join('operaciones', 'jornales.operacion_id', '=', 'operaciones.id')
+            ->distinct('operaciones.fecha')
+            ->count('operaciones.fecha');
+    }
+
+    private function sumarJornalesOperario(Operario $operario, Carbon $inicio, Carbon $fin): float
+    {
+        return (float) Jornal::where('operario_id', $operario->id)
+            ->where('estado', true)
+            ->whereHas('operacion', function ($q) use ($inicio, $fin) {
+                $q->where('estado', Operacion::ESTADO_APROBADA)
+                  ->whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()]);
+            })
+            ->sum('valor_total');
+    }
+
+    /**
+     * Cuenta horas extras y ausencias del empleado en el rango que están en PENDIENTE
+     * (no rechazadas, pero tampoco aprobadas aún) y por tanto NO entran al cálculo.
+     * Se expone en el preview para que el frontend pueda advertir al liquidador.
+     *
+     * @return array{horas_extra:int,ausencias:int}
+     */
+    private function contarPendientesNoIncluidos(Empleado $empleado, Carbon $inicio, Carbon $fin): array
+    {
+        $horasExtraPendientes = HoraExtra::where('empleado_id', $empleado->id)
+            ->where('estado', HoraExtra::ESTADO_PENDIENTE)
+            ->whereHas('operacion', function ($q) use ($inicio, $fin) {
+                $q->where('estado', Operacion::ESTADO_APROBADA)
+                  ->whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()]);
+            })
+            ->count();
+
+        $ausenciasPendientes = Ausencia::where('empleado_id', $empleado->id)
+            ->where('estado', Ausencia::ESTADO_PENDIENTE)
+            ->afectanNomina()
+            ->enRango($inicio->toDateString(), $fin->toDateString())
+            ->count();
+
+        return [
+            'horas_extra' => $horasExtraPendientes,
+            'ausencias'   => $ausenciasPendientes,
+        ];
+    }
+
+    private function sumarCosechaOperario(Operario $operario, Carbon $inicio, Carbon $fin, ?int $nominaId = null): float
+    {
+        $cuadrillas = CosechaCuadrilla::where('operario_id', $operario->id)
+            ->where('estado', true)
+            ->with([
+                'cosecha:id,lote_id,gajos_reportados,gajos_reconteo,operacion_id',
+                'cosecha.operacion:id,fecha,estado',
+            ])
+            ->whereHas('cosecha.operacion', function ($q) use ($inicio, $fin) {
+                $q->where('estado', Operacion::ESTADO_APROBADA)
+                  ->whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()]);
+            })
+            ->get();
+
+        if ($cuadrillas->isEmpty()) {
+            return 0.0;
+        }
+
+        $tenantId = $operario->tenant_id;
+        $anio     = $inicio->year;
+        $total    = 0.0;
+
+        foreach ($cuadrillas as $cc) {
+            $cosecha = $cc->cosecha;
+            $loteId  = $cosecha->lote_id;
+
+            $gajosEfectivos = $cosecha->gajos_reconteo ?? $cosecha->gajos_reportados;
+            if (! $gajosEfectivos || $gajosEfectivos <= 0) {
+                continue;
+            }
+
+            $N = $cosecha->cuadrilla()->where('estado', true)->count();
+            if ($N <= 0) {
+                continue;
+            }
+
+            $gajosOperario = (int) floor($gajosEfectivos / $N);
+            if ($gajosOperario <= 0) {
+                continue;
+            }
+
+            // Preferir promedio efectivo guardado para esta nómina (ajustado por admin)
+            $promedioPromedio = null;
+            if ($nominaId) {
+                $promedioPromedio = NominaPromedioLote::where('nomina_id', $nominaId)
+                    ->where('lote_id', $loteId)
+                    ->value('promedio_efectivo');
+                if ($promedioPromedio) {
+                    $promedioPromedio = (float) $promedioPromedio;
+                }
+            }
+
+            // Fallback: promedio de promedios del lote en el período
+            if (! $promedioPromedio) {
+                $promedioPromedio = PromedioLote::where('tenant_id', $tenantId)
+                    ->where('lote_id', $loteId)
+                    ->whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()])
+                    ->avg('promedio');
+            }
+
+            // Fallback 2: baseline admin más reciente del año
+            if (! $promedioPromedio) {
+                $promedioPromedio = PromedioLote::where('tenant_id', $tenantId)
+                    ->where('lote_id', $loteId)
+                    ->where('anio', $anio)
+                    ->whereNull('viaje_id')
+                    ->orderByDesc('created_at')
+                    ->value('promedio');
+            }
+
+            if (! $promedioPromedio) {
+                continue;
+            }
+
+            $precio = PrecioCosecha::where('tenant_id', $tenantId)
+                ->where('lote_id', $loteId)
+                ->where('anio', $anio)
+                ->value('precio');
+
+            if (! $precio) {
+                continue;
+            }
+
+            $total += round($gajosOperario * (float) $promedioPromedio * (float) $precio, 2);
+        }
+
+        return $total;
+    }
+
+    /**
+     * Devuelve (o crea si no existe) el concepto DCTO_ADELANTO para el tenant.
+     * Garantiza que siempre haya un concepto de tipo PRESTAMO disponible al liquidar,
+     * incluso si el NominaConceptoSeeder no se ejecutó para este tenant.
+     */
+    private function resolveConceptoPrestamo(int $tenantId): NominaConcepto
+    {
+        return NominaConcepto::firstOrCreate(
+            ['tenant_id' => $tenantId, 'codigo' => 'DCTO_ADELANTO'],
+            [
+                'nombre'                => 'Descuento Adelantos / Préstamo',
+                'tipo'                  => 'DEDUCCION_VOLUNTARIA',
+                'subtipo'               => 'PRESTAMO',
+                'operacion'             => 'RESTA',
+                'calculo'               => 'VALOR_FIJO',
+                'base_calculo'          => 'MANUAL',
+                'aplica_a'              => 'AMBOS',
+                'activo'                => true,
+                'valor_referencia'      => 0,
+                'es_obligatorio'        => false,
+                'porcentaje_empleado'   => null,
+                'porcentaje_empresa'    => null,
+                'vigente_desde'         => null,
+                'vigente_hasta'         => null,
+                'afecta_salario_minimo' => false,
+                'tipo_remuneracion'     => 'REMUNERADO',
+            ]
+        );
     }
 }

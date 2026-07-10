@@ -68,6 +68,21 @@ export default function Operaciones() {
     setCargandoLista(true);
     try {
       const res = await operacionesApi.listar({ per_page: PER_PAGE, page: 1 });
+      // DEBUG: log de los conteos que devuelve el backend por planilla.
+      // Sirve para verificar si el count viene mal desde el backend.
+      // eslint-disable-next-line no-console
+      console.log('[DEBUG] Planillas del backend:', res.data?.map(p => ({
+        id: p.id,
+        fecha: p.fecha,
+        estado: p.estado,
+        colaboradores_count: p.colaboradores_count,
+        jornales_count: p.jornales_count,
+        cosechas_count: p.cosechas_count,
+        ausencias_count: p.ausencias_count,
+        total_jornales_sum: p.total_jornales_sum,
+        total_cosechas_sum: p.total_cosechas_sum,
+        total_general: p.total_general,
+      })));
       setPlanillas(res.data);
     } catch (e: any) {
       toast.error(e?.message ?? 'Error al cargar planillas');

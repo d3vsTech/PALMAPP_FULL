@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { nominaApi, DesprendibleData, CategoriaResumenTrabajo } from '../../../api/nomina';
+import { generarDesprendiblePdf } from './DesprendiblePago';
 import type { ApiError } from '../../../api/client';
 
 const CATEGORIAS: { key: keyof Omit<NonNullable<DesprendibleData['resumen_trabajo']>, 'total_general'>; titulo: string }[] = [
@@ -42,8 +43,13 @@ function getIniciales(nombre: string): string {
   return `${partes[0][0]}${partes[1][0]}`.toUpperCase();
 }
 
-function fmt(n: number): string {
-  return `$${n.toLocaleString('es-CO')}`;
+function fmt(n: number | null | undefined): string {
+  // Guardamos contra null/undefined que llegan del backend cuando la
+  // liquidación aún no está totalmente calculada (bono/deducciones en null).
+  if (n == null) return '$0';
+  const num = typeof n === 'string' ? parseFloat(n) : n;
+  if (!Number.isFinite(num)) return '$0';
+  return `$${num.toLocaleString('es-CO')}`;
 }
 
 function Item({
@@ -84,19 +90,12 @@ export default function VerLiquidacion() {
   }, [nominaEmpleadoId]);
 
   const descargarPdf = async () => {
-    if (!nominaEmpleadoId || !data) return;
+    if (!data) return;
     setDescargando(true);
     try {
-      const blob = await nominaApi.desprendiblePdf(nominaEmpleadoId);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      const filename = `desprendible_${data.empleado.documento}_${data.nomina.anio}_${String(data.nomina.mes).padStart(2, '0')}${data.nomina.quincena ? `_Q${data.nomina.quincena}` : ''}.pdf`;
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      // Generado en el cliente con jsPDF — el template blade del backend
+      // pegaba los valores al texto sin alineación (BASE JORNALES$421.000).
+      generarDesprendiblePdf(data);
     } catch (err) {
       const e = err as ApiError;
       toast.error(e.message ?? 'Error al descargar PDF');
@@ -243,7 +242,7 @@ export default function VerLiquidacion() {
         </CardContent>
       </Card>
 
-      {esVariable && resumen_trabajo && (
+      {false && esVariable && resumen_trabajo && (
         <Card className="border-border">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-xl">
@@ -281,7 +280,7 @@ export default function VerLiquidacion() {
                   <div className="bg-primary/10 px-3 py-2 border-b border-border flex justify-between items-center">
                     <h4 className="font-semibold text-sm text-primary">{titulo}</h4>
                     <span className="font-semibold text-sm text-success">
-                      ${subtotal.toLocaleString('es-CO')}
+                      ${(subtotal ?? 0).toLocaleString('es-CO')}
                     </span>
                   </div>
                   <div className="overflow-x-auto">
@@ -336,7 +335,7 @@ export default function VerLiquidacion() {
               <div className="flex items-center gap-3">
                 <span className="font-bold">Total General:</span>
                 <span className="text-2xl font-bold text-success">
-                  ${resumen_trabajo.total_general.toLocaleString('es-CO')}
+                  ${(resumen_trabajo.total_general ?? 0).toLocaleString('es-CO')}
                 </span>
               </div>
             </div>
@@ -405,7 +404,7 @@ export default function VerLiquidacion() {
             <div className="flex justify-between pt-2 border-t border-success/30">
               <span className="font-bold text-success">Total devengado</span>
               <span className="font-bold text-lg text-success">
-                {fmt(liquidacion.total_devengado + liquidacion.total_bonificaciones)}
+                {fmt((liquidacion.total_devengado ?? 0) + (liquidacion.total_bonificaciones ?? 0))}
               </span>
             </div>
             <Item label="Subsidio transporte" value={fmt(liquidacion.subsidio_transporte)} />

@@ -1,20 +1,20 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useNavigate, useParams, Link } from 'react-router';
 import { Button } from '../../components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import {
+  Card, CardContent, CardDescription, CardHeader, CardTitle,
+} from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
 import {
-  ArrowLeft,
-  Check,
-  Truck,
+  Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
+  BreadcrumbPage, BreadcrumbSeparator,
+} from '../../components/ui/breadcrumb';
+import {
+  ArrowLeft, Truck, User, MapPin, Calendar, Save, X,
 } from 'lucide-react';
 import {
   viajesApi,
@@ -27,15 +27,15 @@ import {
 import { toast } from 'sonner';
 
 /**
- * Pantalla "Crear Nuevo Viaje" — replica exacta del diseño .zip,
- * conectada con el contrato de API_VIAJES.md (3 estados).
+ * Pantalla "Crear/Editar Viaje" — diseño V.17 (glass card, breadcrumb,
+ * labels con iconos inline), conectada al contrato de API_VIAJES.md
+ * (modelo de 3 estados).
  *
  * Flujo:
  *  1. Carga empresas + extractoras al montar.
  *  2. Para cada empresa, carga sus transportadores (conductores).
- *  3. El usuario elige un transportador del único Select "Transportador".
- *  4. Conductor y Placa se rellenan automáticamente (disabled, bg-muted).
- *  5. Submit envía: { fecha_viaje, hora_salida, transportador_id, extractora_id }.
+ *  3. El usuario elige un transportador; Conductor y Placa se rellenan solos.
+ *  4. Submit envía { fecha_viaje, hora_salida, transportador_id, extractora_id }.
  */
 export default function NuevoEditarViaje() {
   const navigate = useNavigate();
@@ -50,17 +50,16 @@ export default function NuevoEditarViaje() {
     extractoraId: '',
     horaSalida: '',
   });
-
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [guardando, setGuardando] = useState(false);
 
-  // Datos del API
   const [empresas, setEmpresas] = useState<EmpresaTransportadoraSelect[]>([]);
   const [transportadores, setTransportadores] = useState<
     Array<TransportadorSelect & { empresaRazonSocial: string }>
   >([]);
   const [extractoras, setExtractoras] = useState<ExtractoraSelect[]>([]);
 
-  // Carga inicial
+  // Carga inicial: empresas + extractoras + transportadores por empresa.
   useEffect(() => {
     (async () => {
       try {
@@ -88,7 +87,7 @@ export default function NuevoEditarViaje() {
     })();
   }, []);
 
-  // Modo edición: cargar viaje existente
+  // Modo edición: cargar viaje existente.
   useEffect(() => {
     if (!esEdicion || !id) return;
     (async () => {
@@ -111,6 +110,13 @@ export default function NuevoEditarViaje() {
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    if (errors[field]) {
+      setErrors(prev => {
+        const n = { ...prev };
+        delete n[field];
+        return n;
+      });
+    }
   };
 
   const handleTransportadorChange = (transportadorId: string) => {
@@ -125,18 +131,30 @@ export default function NuevoEditarViaje() {
     } else {
       setFormData(prev => ({ ...prev, transportadorId }));
     }
+    if (errors.transportadorId) {
+      setErrors(prev => {
+        const n = { ...prev };
+        delete n.transportadorId;
+        return n;
+      });
+    }
   };
 
-  const puedeGuardar =
-    formData.fecha !== '' &&
-    formData.placaVehiculo.trim() !== '' &&
-    formData.conductor.trim() !== '' &&
-    formData.transportadorId !== '' &&
-    formData.extractoraId !== '' &&
-    formData.horaSalida !== '';
+  const validateForm = (): boolean => {
+    const n: Record<string, string> = {};
+    if (!formData.fecha) n.fecha = 'La fecha es requerida';
+    if (!formData.transportadorId) n.transportadorId = 'El transportador es requerido';
+    if (!formData.conductor.trim()) n.conductor = 'El conductor es requerido';
+    if (!formData.placaVehiculo.trim()) n.placaVehiculo = 'La placa del vehículo es requerida';
+    if (!formData.extractoraId) n.extractoraId = 'Debe seleccionar una extractora';
+    if (!formData.horaSalida) n.horaSalida = 'La hora de salida es requerida';
+    setErrors(n);
+    return Object.keys(n).length === 0;
+  };
 
-  const guardarViaje = async () => {
-    if (!puedeGuardar) return;
+  const guardarViaje = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateForm()) return;
     setGuardando(true);
     try {
       // `es_homogeneo` no va en el payload: lo calcula el backend al agregar /
@@ -164,9 +182,24 @@ export default function NuevoEditarViaje() {
   };
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="flex items-center gap-3">
+    <div className="space-y-4">
+      {/* Breadcrumb */}
+      <Breadcrumb>
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbLink asChild>
+              <Link to="/viajes">Viajes</Link>
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbPage>{esEdicion ? 'Editar Viaje' : 'Nuevo Viaje'}</BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
+
+      {/* Header con botón atrás */}
+      <div className="flex items-start gap-4">
         <Button
           variant="ghost"
           size="icon"
@@ -180,145 +213,177 @@ export default function NuevoEditarViaje() {
             {esEdicion ? 'Editar Viaje' : 'Nuevo Viaje'}
           </h1>
           <p className="text-muted-foreground">
-            {esEdicion
-              ? 'Modifica la información del viaje'
-              : 'Registra un nuevo despacho de fruto'}
+            {esEdicion ? 'Modifica la información del viaje' : 'Registra un nuevo despacho de fruto'}
           </p>
         </div>
       </div>
 
       {/* Formulario */}
-      <div className="max-w-5xl mx-auto">
-        <Card className="border-border">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                <Truck className="h-6 w-6 text-primary" />
+      <form onSubmit={guardarViaje}>
+        <div className="max-w-5xl mx-auto">
+          <Card className="glass-subtle border-border shadow-lg">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/20">
+                  <Truck className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg">Información del Viaje</CardTitle>
+                  <CardDescription className="text-xs">Datos básicos del despacho</CardDescription>
+                </div>
               </div>
-              <div>
-                <CardTitle>Información General</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Datos básicos del viaje
-                </p>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {/* Fecha */}
-              <div className="space-y-2">
-                <Label htmlFor="fecha">Fecha del Viaje *</Label>
-                <Input
-                  id="fecha"
-                  type="date"
-                  value={formData.fecha}
-                  onChange={(e) => handleInputChange('fecha', e.target.value)}
-                />
-              </div>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {/* Fecha */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="fecha" className="flex items-center gap-2 text-sm">
+                    <Calendar className="h-3.5 w-3.5" />
+                    Fecha del Viaje
+                  </Label>
+                  <Input
+                    id="fecha"
+                    type="date"
+                    value={formData.fecha}
+                    onChange={(e) => handleInputChange('fecha', e.target.value)}
+                    className={errors.fecha ? 'border-destructive' : ''}
+                  />
+                  {errors.fecha && <p className="text-xs text-destructive">{errors.fecha}</p>}
+                </div>
 
-              {/* Transportador */}
-              <div className="space-y-2">
-                <Label htmlFor="transportador">Transportador *</Label>
-                <Select
-                  value={formData.transportadorId}
-                  onValueChange={handleTransportadorChange}
-                >
-                  <SelectTrigger id="transportador">
-                    <SelectValue placeholder="Seleccionar transportador..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {transportadores.map((t) => (
-                      <SelectItem key={t.id} value={String(t.id)}>
-                        {t.empresaRazonSocial}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                {/* Transportador (empresa) */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="transportador" className="flex items-center gap-2 text-sm">
+                    <Truck className="h-3.5 w-3.5" />
+                    Transportador
+                  </Label>
+                  <Select
+                    value={formData.transportadorId}
+                    onValueChange={handleTransportadorChange}
+                  >
+                    <SelectTrigger
+                      id="transportador"
+                      className={errors.transportadorId ? 'border-destructive' : ''}
+                    >
+                      <SelectValue placeholder="Seleccionar transportador..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {transportadores.map((t) => (
+                        <SelectItem key={t.id} value={String(t.id)}>
+                          {t.empresaRazonSocial}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.transportadorId && (
+                    <p className="text-xs text-destructive">{errors.transportadorId}</p>
+                  )}
+                </div>
 
-              {/* Conductor (auto) */}
-              <div className="space-y-2">
-                <Label htmlFor="conductor">Conductor *</Label>
-                <Input
-                  id="conductor"
-                  placeholder="Selecciona un transportador primero"
-                  value={formData.conductor}
-                  disabled
-                  className="bg-muted"
-                />
-              </div>
+                {/* Conductor (auto) */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="conductor" className="flex items-center gap-2 text-sm">
+                    <User className="h-3.5 w-3.5" />
+                    Conductor
+                  </Label>
+                  <Input
+                    id="conductor"
+                    placeholder="Selecciona un transportador primero"
+                    value={formData.conductor}
+                    disabled
+                    className={`bg-muted ${errors.conductor ? 'border-destructive' : ''}`}
+                  />
+                  {errors.conductor && <p className="text-xs text-destructive">{errors.conductor}</p>}
+                </div>
 
-              {/* Placa (auto) */}
-              <div className="space-y-2">
-                <Label htmlFor="placaVehiculo">Placa del Vehículo *</Label>
-                <Input
-                  id="placaVehiculo"
-                  placeholder="Selecciona un transportador primero"
-                  value={formData.placaVehiculo}
-                  disabled
-                  className="bg-muted"
-                />
-              </div>
+                {/* Placa (auto) */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="placaVehiculo" className="flex items-center gap-2 text-sm">
+                    <Truck className="h-3.5 w-3.5" />
+                    Placa del Vehículo
+                  </Label>
+                  <Input
+                    id="placaVehiculo"
+                    placeholder="Selecciona un transportador primero"
+                    value={formData.placaVehiculo}
+                    disabled
+                    className={`bg-muted ${errors.placaVehiculo ? 'border-destructive' : ''}`}
+                  />
+                  {errors.placaVehiculo && (
+                    <p className="text-xs text-destructive">{errors.placaVehiculo}</p>
+                  )}
+                </div>
 
-              {/* Extractora */}
-              <div className="space-y-2">
-                <Label htmlFor="extractora">Extractora Destino *</Label>
-                <Select
-                  value={formData.extractoraId}
-                  onValueChange={(value) => handleInputChange('extractoraId', value)}
-                >
-                  <SelectTrigger id="extractora">
-                    <SelectValue placeholder="Seleccionar extractora..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {extractoras.map((ext) => (
-                      <SelectItem key={ext.id} value={String(ext.id)}>
-                        {ext.razon_social}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                {/* Extractora */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="extractora" className="flex items-center gap-2 text-sm">
+                    <MapPin className="h-3.5 w-3.5" />
+                    Extractora Destino
+                  </Label>
+                  <Select
+                    value={formData.extractoraId}
+                    onValueChange={(v) => handleInputChange('extractoraId', v)}
+                  >
+                    <SelectTrigger
+                      id="extractora"
+                      className={errors.extractoraId ? 'border-destructive' : ''}
+                    >
+                      <SelectValue placeholder="Seleccionar extractora..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {extractoras.map((ext) => (
+                        <SelectItem key={ext.id} value={String(ext.id)}>
+                          {ext.razon_social}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.extractoraId && (
+                    <p className="text-xs text-destructive">{errors.extractoraId}</p>
+                  )}
+                </div>
 
-              {/* Hora de salida */}
-              <div className="space-y-2">
-                <Label htmlFor="horaSalida">Hora de Salida *</Label>
-                <Input
-                  id="horaSalida"
-                  type="time"
-                  value={formData.horaSalida}
-                  onChange={(e) => handleInputChange('horaSalida', e.target.value)}
-                />
+                {/* Hora de Salida */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="horaSalida" className="flex items-center gap-2 text-sm">
+                    <Calendar className="h-3.5 w-3.5" />
+                    Hora de Salida
+                  </Label>
+                  <Input
+                    id="horaSalida"
+                    type="time"
+                    value={formData.horaSalida}
+                    onChange={(e) => handleInputChange('horaSalida', e.target.value)}
+                    className={errors.horaSalida ? 'border-destructive' : ''}
+                  />
+                  {errors.horaSalida && <p className="text-xs text-destructive">{errors.horaSalida}</p>}
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Botones de acción */}
         <div className="flex justify-end gap-3 mt-6">
           <Button
+            type="button"
             variant="outline"
             onClick={() => navigate('/viajes')}
             className="gap-2"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <X className="h-4 w-4" />
             Cancelar
           </Button>
-
           <Button
-            onClick={guardarViaje}
-            disabled={!puedeGuardar || guardando}
-            className="gap-2 bg-success hover:bg-success/90"
+            type="submit"
+            disabled={guardando}
+            className="gap-2 bg-primary hover:bg-primary/90"
           >
-            <Check className="h-4 w-4" />
-            {guardando
-              ? 'Guardando...'
-              : esEdicion
-              ? 'Guardar Cambios'
-              : 'Crear Viaje'}
+            <Save className="h-4 w-4" />
+            {guardando ? 'Guardando...' : esEdicion ? 'Guardar Cambios' : 'Crear Viaje'}
           </Button>
         </div>
-      </div>
+      </form>
     </div>
   );
 }

@@ -118,27 +118,36 @@ El campo `remision` (formato `REM-{YYYY}-{NNN}`) se autogenera al crear el viaje
 
 ### 2.5 `viaje_detalle` (pivot — ampliado)
 
-Conecta `viajes` con `registro_cosecha` (N:M). El reconteo de gajos y peso sigue viviendo en `registro_cosecha.gajos_reconteo` / `registro_cosecha.peso_confirmado`; el pivot solo añade el flag de aprobación del reconteo.
+Conecta `viajes` con `registro_cosecha` (N:M). Soporta **cosechas partidas**: una misma cosecha puede repartirse en múltiples viajes (camiones distintos), cada uno con su propio `gajos_en_viaje`.
 
 | Campo | Tipo | Obligatorio | Notas |
 |---|---|---|---|
 | `tenant_id` | FK | sí | |
 | `viaje_id` | FK viajes | sí | |
-| `cosecha_id` | FK registro_cosecha | sí | Únicamente 1 activo a la vez (ver abajo) |
+| `cosecha_id` | FK registro_cosecha | sí | |
+| `gajos_en_viaje` | integer | no | Gajos de esta cosecha que van en **este** viaje. `NULL` = todos los gajos (modo legacy / sin split). Se usa como reconteo por viaje; al guardar, `registro_cosecha.gajos_reconteo` se actualiza al `SUM` acumulado de todos los splits. |
 | `reconteo_aprobado` | boolean | no | default `false` · marca que el supervisor aceptó el conteo |
 | `reconteo_aprobado_at` | timestamp | no | |
 | `reconteo_aprobado_por` | FK users | no | `nullOnDelete` |
 | `estado` | boolean | no | default `true` (soft delete interno) |
 
-**Unicidad por cosecha activa (Postgres partial unique):**
+**Índice único parcial (Postgres):**
 
 ```sql
-CREATE UNIQUE INDEX viaje_detalle_cosecha_activa_unique
-ON viaje_detalle (cosecha_id)
+-- Una cosecha NO puede estar dos veces en el mismo viaje activo,
+-- pero SÍ puede estar en varios viajes distintos (split).
+CREATE UNIQUE INDEX viaje_detalle_cosecha_viaje_unique
+ON viaje_detalle (cosecha_id, viaje_id)
 WHERE estado = true;
 ```
 
-Esto garantiza que **una cosecha solo puede estar en un viaje activo**. Si el viaje se soft-deletea (`estado_activo = false`) y sus detalles se marcan `estado = false`, la cosecha queda liberada para otro viaje nuevo.
+Si el viaje se soft-deletea (`estado_activo = false`) y sus detalles se marcan `estado = false`, los gajos del split quedan liberados para otros viajes.
+
+**Gajos pendientes por enviar (campo computado — no persiste):**
+El endpoint `GET /viajes/operaciones/{id}/cosechas` devuelve `gajos_pendientes_enviar`:
+```
+gajos_pendientes = COALESCE(gajos_reconteo, gajos_reportados) − SUM(gajos_en_viaje de detalles activos con valor explícito)
+```
 
 ---
 
@@ -259,8 +268,8 @@ DELETE /extractoras/{id}                      Soft delete
 ```
 GET    /viajes                                          Listado + filtros
 GET    /viajes/indicadores                              KPIs del dashboard
-GET    /viajes/operaciones-disponibles                  Operaciones APROBADAS con cosechas aún sin viaje
-GET    /viajes/operaciones/{operacionId}/cosechas       Cosechas de una operación que aún no están asignadas a un viaje activo
+GET    /viajes/operaciones-disponibles                  Operaciones APROBADAS con cosechas con gajos pendientes de enviar
+GET    /viajes/operaciones/{operacionId}/cosechas       Cosechas de una operación con gajos pendientes (sin viaje o con split parcial)
 
 POST   /viajes                                          Crear (estado=CREADO)
 GET    /viajes/{id}                                     Detalle con detalles + transportador + extractora
@@ -270,7 +279,7 @@ DELETE /viajes/{id}                                     Soft delete
 POST   /viajes/{id}/detalles                            Agregar cosecha al viaje (solo CREADO)
 DELETE /viajes/{id}/detalles/{detalleId}                Quitar cosecha (solo CREADO, detalle no aprobado)
 
-PUT    /viajes/{id}/detalles/{detalleId}/reconteo       Hidratar gajos_reconteo + peso_confirmado (solo CREADO, detalle no aprobado)
+PUT    /viajes/{id}/detalles/{detalleId}/reconteo       Hidratar gajos_en_viaje + peso_confirmado (solo CREADO, detalle no aprobado)
 POST   /viajes/{id}/detalles/{detalleId}/aprobar-reconteo  Aprueba el reconteo de ese detalle (auto-transiciona a EN_VALIDACION si es el último)
 
 POST   /viajes/{id}/saltar-validacion                   CREADO → EN_VALIDACION (sin reconteo, fincas paga-por-jornal)
@@ -333,7 +342,7 @@ GET    /viajes/{id}/documento-bascula/{docId}           Polling del estado OCR +
 
 ### 5.2 `GET /viajes/operaciones-disponibles` — Operaciones con cosechas libres
 
-Alimenta el primer dropdown del form "Asignar cosecha al viaje". Lista operaciones `APROBADAS` del tenant que tengan **al menos una** cosecha (`registro_cosecha`) sin `viaje_detalle` activo.
+Alimenta el primer dropdown del form "Asignar cosecha al viaje". Lista operaciones `APROBADAS` del tenant que tengan **al menos una** cosecha (`registro_cosecha`) con gajos pendientes de asignar (sin viaje activo, o con split parcial donde aún quedan gajos por enviar).
 
 **Query params:** `search` (parcial sobre `observaciones`/`fecha`), `fecha_desde`, `fecha_hasta`.
 
@@ -351,9 +360,14 @@ Alimenta el primer dropdown del form "Asignar cosecha al viaje". Lista operacion
 }
 ```
 
-### 5.3 `GET /viajes/operaciones/{operacionId}/cosechas` — Cosechas libres de una operación
+### 5.3 `GET /viajes/operaciones/{operacionId}/cosechas` — Cosechas disponibles de una operación
 
-Alimenta el segundo dropdown. Lista `registro_cosecha` de esa operación que **no** estén en ningún `viaje_detalle` activo.
+Alimenta el segundo dropdown. Lista `registro_cosecha` de esa operación que tengan **gajos pendientes de enviar**: cosechas sin ningún `viaje_detalle` activo, o con splits parciales donde `gajos_pendientes_enviar > 0`. Cosechas completamente asignadas no aparecen.
+
+`gajos_pendientes_enviar` es un campo computado (no persiste):
+```
+gajos_pendientes_enviar = COALESCE(gajos_reconteo, gajos_reportados) − SUM(gajos_en_viaje de detalles activos con valor explícito)
+```
 
 **Response:**
 ```json
@@ -365,6 +379,7 @@ Alimenta el segundo dropdown. Lista `registro_cosecha` de esa operación que **n
       "sublote": {"id": 14, "nombre": "S-14"},
       "gajos_reportados": 250,
       "gajos_reconteo": null,
+      "gajos_pendientes_enviar": 250,
       "peso_confirmado": null,
       "cuadrilla_count": 4
     }
@@ -376,35 +391,40 @@ Alimenta el segundo dropdown. Lista `registro_cosecha` de esa operación que **n
 
 **Request:**
 ```json
-{ "cosecha_id": 142 }
+{ "cosecha_id": 142, "gajos_en_viaje": 50 }
 ```
 
-**Validación:**
+`gajos_en_viaje` es **opcional**. `null` (o ausente) = todos los gajos restantes van en este viaje (modo legacy). Valor explícito = split parcial: solo esa cantidad de gajos va en este camión.
+
+**Validación (dentro de `DB::transaction` con lock pesimista):**
 - `viaje.estado = CREADO` → si no, 409 `VIAJE_NO_EDITABLE`.
 - `cosecha_id` pertenece al tenant.
 - Operación padre de la cosecha está `APROBADA`.
-- No existe otro `viaje_detalle` activo con ese `cosecha_id` (lo refuerza el unique parcial; si hay carrera, capturamos `UniqueConstraintViolationException` → 422 `COSECHA_YA_ASIGNADA`).
+- Si ya existe un `viaje_detalle` activo con `gajos_en_viaje = NULL` para esa cosecha → 422 `COSECHA_YA_ASIGNADA` (la cosecha completa ya fue asignada en modo legacy).
+- Si `gajos_en_viaje` tiene valor, se calcula `gajos_restantes = total − SUM(gajos_en_viaje activos)` con `lockForUpdate()`; si `gajos_en_viaje > gajos_restantes` → 422 `GAJOS_INSUFICIENTES`.
+- El índice único `(cosecha_id, viaje_id) WHERE estado = true` previene insertar la misma cosecha dos veces en el mismo viaje → 422 `COSECHA_YA_ASIGNADA`.
 - `es_homogeneo` se recalcula automáticamente tras cada operación en detalles (ver §6).
 
-### 5.5 `PUT /viajes/{id}/detalles/{detalleId}/reconteo` — Hidratar reconteo
+### 5.5 `PUT /viajes/{id}/detalles/{detalleId}/reconteo` — Hidratar gajos en viaje
 
 **Request:**
 ```json
 {
-  "gajos_reconteo": 245,
+  "gajos_en_viaje": 245,
   "peso_confirmado": 4120.50
 }
 ```
 
-`peso_confirmado` es opcional; `gajos_reconteo` es obligatorio.
+`peso_confirmado` es opcional; `gajos_en_viaje` es obligatorio. Representa el conteo verificado de gajos de **esta cosecha en este camión específico** (equivalente al antiguo `gajos_reconteo` pero a nivel de viaje_detalle para soportar splits).
 
 **Backend hace (transaccional):**
 1. Verifica `viaje.estado = CREADO` y `detalle.reconteo_aprobado = false` → si no, 409.
 2. Verifica que `detalleId` pertenezca al `viaje_id` → si no, 404.
-3. `UPDATE registro_cosecha SET gajos_reconteo = ?, peso_confirmado = COALESCE(?, peso_confirmado) WHERE id = detalle.cosecha_id`.
-4. Si `peso_confirmado` llega y dispara recálculo (ver `CosechaCalculationService`), se refresca `registro_cosecha.valor_total` y `cosecha_cuadrilla`.
-5. Refresca `viajes.cantidad_gajos_total = SUM(registro_cosecha.gajos_reconteo)` sobre los detalles activos.
-6. Auditoría `EDITAR` módulo `VIAJES`.
+3. `UPDATE viaje_detalle SET gajos_en_viaje = ? WHERE id = ?`.
+4. Recalcula `registro_cosecha.gajos_reconteo = SUM(viaje_detalle.gajos_en_viaje WHERE cosecha_id = X AND estado = true AND gajos_en_viaje IS NOT NULL)`. Esto garantiza que la nómina siempre lea el total verificado acumulado de todos los splits.
+5. Si llega `peso_confirmado`, actualiza `registro_cosecha.peso_confirmado`.
+6. Refresca `viajes.cantidad_gajos_total = SUM(COALESCE(viaje_detalle.gajos_en_viaje, registro_cosecha.gajos_reconteo, registro_cosecha.gajos_reportados))` sobre los detalles activos del viaje.
+7. Auditoría `EDITAR` módulo `VIAJES`.
 
 ### 5.6 `POST /viajes/{id}/detalles/{detalleId}/aprobar-reconteo` — Aprobar y auto-despacho
 
@@ -412,7 +432,7 @@ Alimenta el segundo dropdown. Lista `registro_cosecha` de esa operación que **n
 
 **Backend hace (transaccional):**
 1. Verifica `viaje.estado = CREADO`.
-2. Verifica que la cosecha tenga `gajos_reconteo IS NOT NULL` → si no, 422 `RECONTEO_PENDIENTE`.
+2. Verifica que el **detalle** tenga `gajos_en_viaje IS NOT NULL` → si no, 422 `RECONTEO_PENDIENTE`. El reconteo ahora vive en `viaje_detalle.gajos_en_viaje`, no en `registro_cosecha.gajos_reconteo`.
 3. `UPDATE viaje_detalle SET reconteo_aprobado = true, reconteo_aprobado_at = NOW(), reconteo_aprobado_por = userId WHERE id = ?`.
 4. Si **todos** los detalles activos del viaje tienen `reconteo_aprobado = true`, se dispara auto-transición:
    - `UPDATE viajes SET estado = 'EN_VALIDACION', validacion_at = NOW() WHERE id = ?`.
@@ -543,15 +563,18 @@ es_homogeneo    = (lotes_distintos <= 1)
 Cuando un viaje finaliza con `es_homogeneo = true` se crea un registro en `promedio_lote` **por cada lote** involucrado:
 
 ```
-gajos_efectivos_por_cosecha  = gajos_reconteo ?? gajos_reportados
-total_gajos_lote             = SUM(gajos_efectivos) de cosechas del mismo lote en el viaje
+gajos_efectivos_detalle      = detalle.gajos_en_viaje ?? cosecha.gajos_reconteo ?? cosecha.gajos_reportados
+total_gajos_lote             = SUM(gajos_efectivos_detalle) de detalles del mismo lote en el viaje
 promedio                     = peso_viaje / total_gajos_lote
 
 → PromedioLote::create { tenant_id, lote_id, viaje_id, promedio, fecha, anio }
 → UPDATE registro_cosecha SET promedio_kg_gajo = promedio  (snapshot visual)
+→ cosecha_cuadrilla.peso_calculado_empleado += floor(gajos_detalle / N) × promedio  (COALESCE acumulado para splits)
 ```
 
 Estos registros en `promedio_lote` son los que usa `NominaCalculationService` para calcular el pago de cosecha en el período (`AVG(promedio WHERE lote_id=X AND fecha BETWEEN inicio AND fin)`).
+
+> **Cosechas partidas:** cuando la misma cosecha viaja en múltiples camiones, cada viaje crea su propio `PromedioLote` y acumula `peso_calculado_empleado` con `COALESCE(existente, 0) + nuevo`. La nómina promedia los registros de `promedio_lote` del período y obtiene el promedio ponderado real.
 
 ### 6.2 NO_HOMOGENEO (`es_homogeneo = false`)
 
@@ -593,10 +616,11 @@ Cuando `tenant_config.modulo_viajes = false`, todos los endpoints retornan **403
 | 409 | `VIAJE_NO_EDITABLE` | PUT/DELETE/reconteo con estado ≠ CREADO |
 | 409 | `DETALLE_APROBADO` | Intento de editar/eliminar un detalle con `reconteo_aprobado = true` |
 | 422 | `VIAJE_INCOMPLETO` | Finalizar viaje **con detalles** sin `peso_viaje` o sin `cantidad_gajos_total` |
-| 422 | `RECONTEO_PENDIENTE` | Aprobar reconteo sin haber hidratado `gajos_reconteo` |
+| 422 | `RECONTEO_PENDIENTE` | Aprobar reconteo sin haber hidratado `gajos_en_viaje` del detalle |
 | 422 | `REMISION_DUPLICADA` | Colisión de remisión (muy raro, fallback por concurrencia) |
 | 422 | `COSECHA_FUERA_DE_VIAJE` | `reconteo` con una `cosecha_id` que no está en el `viaje_detalle` |
-| 422 | `COSECHA_YA_ASIGNADA` | La cosecha ya está en otro `viaje_detalle` activo (partial unique) |
+| 422 | `COSECHA_YA_ASIGNADA` | La cosecha ya está asignada completa (modo legacy) o dos veces en el mismo viaje |
+| 422 | `GAJOS_INSUFICIENTES` | `gajos_en_viaje` supera los gajos disponibles restantes de la cosecha |
 | 422 | `OPERACION_NO_APROBADA` | La operación padre de la cosecha no está `APROBADA` |
 | 422 | `TRANSPORTADOR_INACTIVO` | `transportador.estado = false` al crear viaje |
 | 422 | `EXTRACTORA_INACTIVA` | `extractora.estado = false` al crear viaje |
@@ -612,11 +636,11 @@ Cuando `tenant_config.modulo_viajes = false`, todos los endpoints retornan **403
 - `App\Models\Transportador`
 - `App\Models\Extractora`
 - `App\Models\Viaje` (actualizado)
-- `App\Models\ViajeDetalle` (sin cambios)
+- `App\Models\ViajeDetalle` — añadido `gajos_en_viaje` (integer nullable) en `$fillable` y `casts`
 - `App\Models\ViajeDocumentoBascula` — tickets/remisiones de báscula adjuntos + estado del OCR
 - `App\Constants\ViajeEstado` — constantes + `transiciones()` + `siguienteEstado()`
-- `App\Services\ViajeCalculationService` *(a crear)* — cálculo homogeneo/no_homogeneo al finalizar
-- `App\Services\RemisionGeneratorService` *(a crear)* — generación atómica de `REM-{YYYY}-{NNN}`
+- `App\Services\ViajeCalculationService` — cálculo HOMOGENEO/NO_HOMOGENEO al finalizar; soporta splits con acumulación COALESCE en cuadrilla
+- `App\Services\RemisionGeneratorService` — generación atómica de `REM-{YYYY}-{NNN}`
 - `App\Services\ClaudeVisionService` — cliente HTTP contra `api.anthropic.com` para OCR del formulario de extractora (10 campos)
 - `App\Jobs\ProcesarFormularioExtractoraJob` — extrae los 10 campos del formulario y los guarda en `viaje_documento_bascula.datos_extraidos`. **No toca la tabla `viajes`**: la hidratación y el cierre los hace el operador con `PATCH /validar` + `POST /finalizar` después de revisar los datos en el frontend.
 
@@ -635,7 +659,7 @@ Cuando `tenant_config.modulo_viajes = false`, todos los endpoints retornan **403
 
 ## 12. Plan de implementación (backend)
 
-### 12.1 Migración pendiente: `2026_04_22_000003_add_reconteo_to_viaje_detalle.php`
+### 12.1 Migración: `2026_04_22_000003_add_reconteo_to_viaje_detalle.php`
 
 ```php
 Schema::table('viaje_detalle', function (Blueprint $table) {
@@ -647,6 +671,46 @@ Schema::table('viaje_detalle', function (Blueprint $table) {
 
 DB::statement('CREATE UNIQUE INDEX viaje_detalle_cosecha_activa_unique
                ON viaje_detalle (cosecha_id) WHERE estado = true');
+```
+
+### 12.1.2 Migración (cosechas partidas): `2026_07_09_000001_add_gajos_en_viaje_to_viaje_detalle.php`
+
+Permite que una misma cosecha se reparta entre múltiples viajes (camiones distintos).
+
+```php
+public function up(): void
+{
+    Schema::table('viaje_detalle', function (Blueprint $table) {
+        $table->integer('gajos_en_viaje')->nullable()->after('cosecha_id');
+        // NULL = todos los gajos (modo legacy). Valor explícito = split parcial.
+    });
+
+    // Una cosecha puede estar en múltiples viajes, pero NO dos veces en el mismo.
+    DB::statement('DROP INDEX IF EXISTS viaje_detalle_cosecha_activa_unique');
+    DB::statement('
+        CREATE UNIQUE INDEX viaje_detalle_cosecha_viaje_unique
+        ON viaje_detalle (cosecha_id, viaje_id)
+        WHERE estado = true
+    ');
+}
+
+public function down(): void
+{
+    DB::statement('DROP INDEX IF EXISTS viaje_detalle_cosecha_viaje_unique');
+    DB::statement('
+        CREATE UNIQUE INDEX viaje_detalle_cosecha_activa_unique
+        ON viaje_detalle (cosecha_id) WHERE estado = true
+    ');
+    Schema::table('viaje_detalle', function (Blueprint $table) {
+        $table->dropColumn('gajos_en_viaje');
+    });
+}
+```
+
+Ejecutar con:
+
+```bash
+php artisan migrate --path=database/migrations/2026_07_09_000001_add_gajos_en_viaje_to_viaje_detalle.php
 ```
 
 ### 12.1.1 Migración: `2026_04_22_000004_make_cantidad_gajos_total_nullable_on_viajes.php`
@@ -686,8 +750,8 @@ php artisan migrate --path=database/migrations/2026_04_22_000004_make_cantidad_g
 |---|---|
 | `StoreViajeRequest` | `fecha_viaje` date required, `hora_salida` time required, `transportador_id` exists required, `extractora_id` exists required, `observaciones` nullable, `sync_uuid` uuid nullable unique. `es_homogeneo` **no se acepta** — el sistema lo calcula. |
 | `UpdateViajeRequest` | Mismos campos pero todos `sometimes`. `es_homogeneo` excluido también. Bloqueo por estado se valida en controller. |
-| `StoreViajeDetalleRequest` | `cosecha_id` exists required + rule custom de unicidad activa |
-| `UpdateReconteoRequest` | `gajos_reconteo` integer min:0 required, `peso_confirmado` decimal nullable |
+| `StoreViajeDetalleRequest` | `cosecha_id` exists required; `gajos_en_viaje` integer min:1 nullable (opcional — split parcial) |
+| `UpdateReconteoRequest` | `gajos_en_viaje` integer min:0 required (reconteo verificado de esta cosecha en este viaje); `peso_confirmado` decimal nullable |
 
 ### 12.4 Services a crear (en `app/Services/`)
 
@@ -696,9 +760,11 @@ php artisan migrate --path=database/migrations/2026_04_22_000004_make_cantidad_g
 
 - **`ViajeCalculationService::calcularAlFinalizar(Viaje $viaje): void`**
   Al finalizar el viaje, si `es_homogeneo = true` y hay detalles con peso:
-  Agrupa cosechas por lote. Por cada lote: `promedio = peso_viaje / SUM(gajos_efectivos_del_lote)`.
+  Agrupa detalles por lote. Por cada lote: `promedio = peso_viaje / SUM(gajosEfectivosDetalle)` donde `gajosEfectivosDetalle = detalle.gajos_en_viaje ?? cosecha.gajos_reconteo ?? cosecha.gajos_reportados`.
   Crea un registro en `promedio_lote` (`viaje_id`, `fecha`, `anio`) para trazabilidad de nómina.
-  Update masivo de `registro_cosecha.promedio_kg_gajo` (snapshot visual). Si `es_homogeneo = false`, no hace nada.
+  Update masivo de `registro_cosecha.promedio_kg_gajo` (snapshot visual).
+  Acumula `cosecha_cuadrilla.peso_calculado_empleado` con `COALESCE(existente, 0) + pesoPersona` para soportar splits correctamente.
+  Si `es_homogeneo = false`, usa baseline del `promedio_lote` del año pero también acumula en cuadrilla.
 
 ### 12.5 Patrón obligatorio en cada método del controller
 

@@ -16,9 +16,7 @@
         .section.deducciones { background: #fef2f2; border-left-color: #ef4444; }
         .section h3 { color: #166534; font-size: 11px; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.5px; }
         .section.deducciones h3 { color: #991b1b; }
-        .row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 11px; }
-        .row.bold { font-weight: 700; border-top: 1px solid #d1d5db; padding-top: 6px; margin-top: 6px; font-size: 12px; }
-        .total { background: #f3f4f6; border: 1px solid #d1d5db; padding: 12px; margin-top: 12px; font-size: 16px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; color: #166534; }
+        .total { background: #f3f4f6; border: 1px solid #d1d5db; padding: 12px; margin-top: 12px; font-size: 16px; font-weight: 700; color: #166534; }
         .firma-table { width: 100%; margin-top: 32px; }
         .firma-cell { border-top: 1px solid #6b7280; padding-top: 6px; text-align: center; font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 1px; }
         .footer { text-align: center; font-size: 10px; color: #6b7280; margin-top: 16px; }
@@ -203,42 +201,61 @@
 
     <h2>Devengado</h2>
     <div class="section">
-        @if ($d['empleado']['salario_tipo'] === 'FIJO')
-            <div class="row"><span>SUELDO BÁSICO</span><span>{{ $fmt($d['empleado']['salario_base']) }}</span></div>
-        @else
-            <div class="row"><span>BASE (JORNALES)</span><span>{{ $fmt($d['liquidacion']['total_jornales'] + $d['liquidacion']['total_cosecha']) }}</span></div>
-        @endif
-        @if ($d['liquidacion']['total_horas_extra'] > 0)
-            <div class="row"><span>HORAS EXTRA</span><span>{{ $fmt($d['liquidacion']['total_horas_extra']) }}</span></div>
-        @endif
-        @if ($d['liquidacion']['total_recargos'] > 0)
-            <div class="row"><span>RECARGOS</span><span>{{ $fmt($d['liquidacion']['total_recargos']) }}</span></div>
-        @endif
-        @if ($d['liquidacion']['total_incapacidades'] > 0)
-            <div class="row"><span>INCAPACIDADES</span><span>{{ $fmt($d['liquidacion']['total_incapacidades']) }}</span></div>
-        @endif
-        @foreach ($d['liquidacion']['bonificaciones'] as $b)
-            <div class="row"><span>{{ strtoupper($b['observacion'] ?? $b['nombre']) }}</span><span>{{ $fmt($b['valor']) }}</span></div>
-        @endforeach
-        <div class="row bold"><span>TOTAL BRUTO</span><span>{{ $fmt($d['liquidacion']['total_devengado'] + $d['liquidacion']['total_bonificaciones']) }}</span></div>
-        @if ($d['liquidacion']['subsidio_transporte'] > 0)
-            <div class="row"><span>SUBSIDIO TRANSPORTE</span><span>{{ $fmt($d['liquidacion']['subsidio_transporte']) }}</span></div>
-        @endif
+        <table style="width:100%; border-collapse:collapse; font-size:11px;">
+            @if ($d['empleado']['salario_tipo'] === 'FIJO')
+                <tr><td style="padding:3px 0;">SUELDO BÁSICO</td><td style="text-align:right; white-space:nowrap; padding:3px 0;">{{ $fmt($d['empleado']['salario_base']) }}</td></tr>
+            @else
+                @if ($d['liquidacion']['total_jornales'] > 0)
+                    <tr><td style="padding:3px 0;">BASE JORNALES (DESTAJO)</td><td style="text-align:right; white-space:nowrap; padding:3px 0;">{{ $fmt($d['liquidacion']['total_jornales']) }}</td></tr>
+                @endif
+                @if ($d['liquidacion']['total_cosecha'] > 0)
+                    <tr><td style="padding:3px 0;">BASE COSECHA</td><td style="text-align:right; white-space:nowrap; padding:3px 0;">{{ $fmt($d['liquidacion']['total_cosecha']) }}</td></tr>
+                @endif
+            @endif
+            @if ($d['liquidacion']['total_horas_extra'] > 0)
+                <tr><td style="padding:3px 0;">HORAS EXTRA</td><td style="text-align:right; white-space:nowrap; padding:3px 0;">{{ $fmt($d['liquidacion']['total_horas_extra']) }}</td></tr>
+            @endif
+            @if ($d['liquidacion']['total_recargos'] > 0)
+                <tr><td style="padding:3px 0;">RECARGOS</td><td style="text-align:right; white-space:nowrap; padding:3px 0;">{{ $fmt($d['liquidacion']['total_recargos']) }}</td></tr>
+            @endif
+            @if ($d['liquidacion']['total_incapacidades'] > 0)
+                <tr><td style="padding:3px 0;">INCAPACIDADES</td><td style="text-align:right; white-space:nowrap; padding:3px 0;">{{ $fmt($d['liquidacion']['total_incapacidades']) }}</td></tr>
+            @endif
+            @foreach ($d['liquidacion']['bonificaciones'] as $b)
+                <tr><td style="padding:3px 0;">{{ strtoupper($b['observacion'] ?? $b['nombre']) }}</td><td style="text-align:right; white-space:nowrap; padding:3px 0;">{{ $fmt($b['valor']) }}</td></tr>
+            @endforeach
+            <tr style="font-weight:700; font-size:12px; border-top:1px solid #d1d5db;">
+                <td style="padding:6px 0 3px;">TOTAL BRUTO</td>
+                <td style="text-align:right; white-space:nowrap; padding:6px 0 3px;">{{ $fmt($d['liquidacion']['total_devengado'] + $d['liquidacion']['total_bonificaciones']) }}</td>
+            </tr>
+            @if ($d['liquidacion']['subsidio_transporte'] > 0)
+                <tr><td style="padding:3px 0;">SUBSIDIO TRANSPORTE</td><td style="text-align:right; white-space:nowrap; padding:3px 0;">{{ $fmt($d['liquidacion']['subsidio_transporte']) }}</td></tr>
+            @endif
+        </table>
     </div>
 
     <h2>Deducciones</h2>
     <div class="section deducciones">
-        @forelse ($d['liquidacion']['deducciones'] as $de)
-            <div class="row">
-                <span>{{ strtoupper($de['nombre']) }}{{ $de['porcentaje'] ? ' (' . number_format($de['porcentaje'], 0) . '%)' : '' }}</span>
-                <span>{{ $fmt($de['valor']) }}</span>
-            </div>
-        @empty
-            <div class="row"><span>Sin deducciones</span><span>$0</span></div>
-        @endforelse
+        <table style="width:100%; border-collapse:collapse; font-size:11px;">
+            @forelse ($d['liquidacion']['deducciones'] as $de)
+                <tr>
+                    <td style="padding:3px 0;">{{ strtoupper($de['nombre']) }}{{ $de['porcentaje'] ? ' (' . number_format($de['porcentaje'], 0) . '%)' : '' }}</td>
+                    <td style="text-align:right; white-space:nowrap; padding:3px 0;">{{ $fmt($de['valor']) }}</td>
+                </tr>
+            @empty
+                <tr><td style="padding:3px 0;">Sin deducciones</td><td style="text-align:right; padding:3px 0;">$0</td></tr>
+            @endforelse
+        </table>
     </div>
 
-    <div class="total"><span>TOTAL NETO</span><span>{{ $fmt($d['liquidacion']['total_neto']) }}</span></div>
+    <div class="total">
+        <table style="width:100%; border-collapse:collapse;">
+            <tr>
+                <td>TOTAL NETO</td>
+                <td style="text-align:right; white-space:nowrap; font-weight:700; color:#166534;">{{ $fmt($d['liquidacion']['total_neto']) }}</td>
+            </tr>
+        </table>
+    </div>
 
     <table class="firma-table">
         <tr>

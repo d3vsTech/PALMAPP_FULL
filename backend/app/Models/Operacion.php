@@ -50,6 +50,11 @@ class Operacion extends Model
         return $this->hasMany(Ausencia::class, 'operacion_id');
     }
 
+    public function horasExtra(): HasMany
+    {
+        return $this->hasMany(HoraExtra::class, 'operacion_id');
+    }
+
     /**
      * Ausencias aprobadas que cubren la fecha de esta operación,
      * incluyendo las reportadas en operaciones anteriores cuyo

@@ -11,6 +11,7 @@ use App\Services\AuditoriaService;
 use App\Services\Nomina\CerrarNominaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class NominaController extends Controller
@@ -53,20 +54,110 @@ class NominaController extends Controller
         ]);
     }
 
-    public function indicadores(): JsonResponse
+    /**
+     * Indicadores del listado de nóminas — cards superiores.
+     *
+     * Filtros opcionales (todos combinables):
+     *   ?anio=2026        — solo nóminas del año
+     *   ?mes=7            — solo nóminas del mes
+     *   ?estado=BORRADOR  — solo nóminas en ese estado
+     *
+     * Response:
+     *   total_periodos, borradores, cerradas                  (siempre)
+     *   total_devengado                                        (@deprecated, usar total_colaboradores)
+     *   total_colaboradores                                    (SUM total_neto de empleados propios en nóminas CERRADAS filtradas)
+     *   total_terceros                                         (SUM total_a_transferir de actas PAGADO en nóminas CERRADAS filtradas)
+     *   neto_pagar                                             (total_colaboradores + total_terceros — lo ya efectivamente pagado)
+     *   pendiente_pagar                                        (SUM total_a_transferir de actas PENDIENTE con total > 0 en nóminas filtradas)
+     */
+    public function indicadores(Request $request): JsonResponse
     {
-        $borradores = Nomina::where('estado', Nomina::ESTADO_BORRADOR)->count();
-        $cerradas   = Nomina::where('estado', Nomina::ESTADO_CERRADA)->count();
-        $totalDevengado = (float) Nomina::where('estado', Nomina::ESTADO_CERRADA)->sum('total_general');
+        $filtros = $this->extraerFiltrosIndicadores($request);
+
+        // 1) Conteos y total_devengado (una sola query agregada sobre `nominas`).
+        $stats = Nomina::selectRaw(
+            "COUNT(CASE WHEN estado = ? THEN 1 END) AS borradores, "
+            . "COUNT(CASE WHEN estado = ? THEN 1 END) AS cerradas, "
+            . "COALESCE(SUM(CASE WHEN estado = ? THEN total_general END), 0) AS total_devengado",
+            [Nomina::ESTADO_BORRADOR, Nomina::ESTADO_CERRADA, Nomina::ESTADO_CERRADA]
+        );
+        $this->aplicarFiltrosIndicadores($stats, $filtros);
+        $stats = $stats->first();
+
+        $borradores     = (int) ($stats->borradores ?? 0);
+        $cerradas       = (int) ($stats->cerradas ?? 0);
+        $totalDevengado = (float) ($stats->total_devengado ?? 0);
+
+        // 2) Ids de nóminas CERRADAS filtradas (subquery para no traer todo el listado).
+        $nominasCerradas = Nomina::where('estado', Nomina::ESTADO_CERRADA);
+        $this->aplicarFiltrosIndicadores($nominasCerradas, $filtros);
+        $nominasCerradasIds = $nominasCerradas->pluck('id');
+
+        // 3) Total pagado a colaboradores propios (empleado_id !== null) en nóminas CERRADAS.
+        $totalColaboradores = $nominasCerradasIds->isEmpty()
+            ? 0.0
+            : (float) NominaEmpleado::whereIn('nomina_id', $nominasCerradasIds)
+                ->whereNotNull('empleado_id')
+                ->sum('total_neto');
+
+        // 4) Total pagado a terceros (actas PAGADO) en nóminas CERRADAS.
+        $totalTercerosPagados = $nominasCerradasIds->isEmpty()
+            ? 0.0
+            : (float) DB::table('nomina_tercero')
+                ->whereIn('nomina_id', $nominasCerradasIds)
+                ->where('estado_pago', 'PAGADO')
+                ->sum('total_a_transferir');
+
+        // 5) Pendiente por pagar a terceros — actas PENDIENTE con total > 0.
+        //    Se excluyen las pre-hidratadas por PR-3.5 (totales 0). Considera
+        //    tanto nóminas BORRADOR (acta ya liquidada, aún sin cerrar) como
+        //    CERRADA (giro post-cierre no realizado — excepción documentada).
+        $pendienteQuery = DB::table('nomina_tercero as nt')
+            ->join('nominas as n', 'n.id', '=', 'nt.nomina_id')
+            ->where('nt.estado_pago', 'PENDIENTE')
+            ->where('nt.total_a_transferir', '>', 0);
+        $this->aplicarFiltrosIndicadores($pendienteQuery, $filtros, 'n');
+        $pendientePagar = (float) $pendienteQuery->sum('nt.total_a_transferir');
 
         return response()->json([
             'data' => [
                 'total_periodos'      => $borradores + $cerradas,
                 'borradores'          => $borradores,
                 'cerradas'            => $cerradas,
-                'total_devengado'     => round($totalDevengado, 2),
+                'total_devengado'     => round($totalDevengado, 2),   // @deprecated — usar total_colaboradores
+                'total_colaboradores' => round($totalColaboradores, 2),
+                'total_terceros'      => round($totalTercerosPagados, 2),
+                'neto_pagar'          => round($totalColaboradores + $totalTercerosPagados, 2),
+                'pendiente_pagar'     => round($pendientePagar, 2),
+            ],
+            'meta' => [
+                'filtros' => array_filter($filtros, fn ($v) => $v !== null),
             ],
         ]);
+    }
+
+    /**
+     * Normaliza los filtros de indicadores desde el request.
+     */
+    private function extraerFiltrosIndicadores(Request $request): array
+    {
+        return [
+            'anio'   => $request->filled('anio')   ? (int) $request->input('anio')   : null,
+            'mes'    => $request->filled('mes')    ? (int) $request->input('mes')    : null,
+            'estado' => $request->filled('estado') ? (string) $request->input('estado') : null,
+        ];
+    }
+
+    /**
+     * Aplica los filtros a una query builder de `nominas`. `$alias` permite
+     * usar el helper sobre JOINs (ej. `n.anio` en vez de `anio`).
+     */
+    private function aplicarFiltrosIndicadores($query, array $filtros, ?string $alias = null): void
+    {
+        $prefix = $alias ? "{$alias}." : '';
+        if (! is_null($filtros['anio']))   $query->where($prefix . 'anio', $filtros['anio']);
+        if (! is_null($filtros['mes']))    $query->where($prefix . 'mes', $filtros['mes']);
+        if (! is_null($filtros['estado'])) $query->where($prefix . 'estado', $filtros['estado']);
     }
 
     public function store(StoreNominaRequest $request): JsonResponse
@@ -208,15 +299,45 @@ class NominaController extends Controller
                 ], 409);
             }
 
-            $datosAnteriores = $nomina->toArray();
+            $descripcion = "Se eliminó nómina #{$nomina->id} ({$nomina->anio}-{$nomina->mes})";
 
-            // Eliminar empleados PENDIENTES vinculados
-            $nomina->empleados()->delete();
-            $nomina->delete();
+            DB::transaction(function () use ($nomina) {
+                $nominaId = $nomina->id;
+
+                // 1) Refs por nomina_empleado (jornales, cosechas, horas extra, conceptos)
+                $empleadoIds = $nomina->empleados()->pluck('id');
+                if ($empleadoIds->isNotEmpty()) {
+                    DB::table('nomina_jornal_ref')->whereIn('nomina_empleado_id', $empleadoIds)->delete();
+                    DB::table('nomina_cosecha_ref')->whereIn('nomina_empleado_id', $empleadoIds)->delete();
+                    DB::table('nomina_hora_extra_ref')->whereIn('nomina_empleado_id', $empleadoIds)->delete();
+                    DB::table('nomina_empleado_concepto')->whereIn('nomina_empleado_id', $empleadoIds)->delete();
+                }
+
+                // 2) Acta de terceros → primero operarios, luego actas
+                $terceroIds = DB::table('nomina_tercero')->where('nomina_id', $nominaId)->pluck('id');
+                if ($terceroIds->isNotEmpty()) {
+                    DB::table('nomina_tercero_operario')->whereIn('nomina_tercero_id', $terceroIds)->delete();
+                    DB::table('nomina_tercero')->whereIn('id', $terceroIds)->delete();
+                }
+
+                // 3) Snapshot del paso 3 (Validar Cosecha)
+                DB::table('nomina_validacion_cosecha')->where('nomina_id', $nominaId)->delete();
+
+                // 4) Overrides manuales de promedio por lote
+                DB::table('nomina_promedio_lote')->where('nomina_id', $nominaId)->delete();
+
+                // 5) Desvincular ausencias/horas_extra defensivamente (en BORRADOR
+                //    no deberían estar asociadas, pero evitamos violar restrictOnDelete).
+                DB::table('ausencias')->where('nomina_id', $nominaId)->update(['nomina_id' => null]);
+                DB::table('horas_extra')->where('nomina_id', $nominaId)->update(['nomina_id' => null]);
+
+                // 6) Filas de colaboradores (empleados + operarios) y la nómina misma
+                $nomina->empleados()->delete();
+                $nomina->delete();
+            });
 
             $this->auditoria->registrarEliminacion(
-                $request, 'NOMINA', $nomina, $datosAnteriores,
-                "Se eliminó nómina #{$nomina->id} ({$nomina->anio}-{$nomina->mes})",
+                $request, 'NOMINA', $nomina, $descripcion,
             );
 
             return response()->json(['message' => 'Nómina eliminada correctamente']);
@@ -248,11 +369,15 @@ class NominaController extends Controller
                 'data'    => $nominaCerrada->load('cerradaPor:id,name'),
             ]);
         } catch (\DomainException $e) {
-            $code = str_contains($e->getMessage(), 'NOMINA_CERRADA')
-                ? 'NOMINA_CERRADA'
-                : (str_contains($e->getMessage(), 'NOMINA_CON_PENDIENTES') ? 'NOMINA_CON_PENDIENTES' : 'NOMINA_ERROR');
+            $msg  = $e->getMessage();
+            $code = match (true) {
+                str_contains($msg, 'NOMINA_CERRADA')                      => 'NOMINA_CERRADA',
+                str_contains($msg, 'NOMINA_CON_PENDIENTES')               => 'NOMINA_CON_PENDIENTES',
+                str_contains($msg, 'NOMINA_VALIDACION_COSECHA_REQUERIDA') => 'NOMINA_VALIDACION_COSECHA_REQUERIDA',
+                default                                                    => 'NOMINA_ERROR',
+            };
             return response()->json([
-                'message' => $e->getMessage(),
+                'message' => $msg,
                 'code'    => $code,
             ], 409);
         } catch (\Throwable $e) {

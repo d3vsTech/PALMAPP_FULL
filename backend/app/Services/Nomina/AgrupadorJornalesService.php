@@ -203,6 +203,7 @@ class AgrupadorJornalesService
     private function mapearJornalesMixto($items, string $tipo): array
     {
         $filas = [];
+        $subValor  = 0.0;
         $subJornal = 0.0;
         $subPalmas = 0;
 
@@ -223,6 +224,7 @@ class AgrupadorJornalesService
                     'es_por_palma'   => true,
                 ];
                 $subPalmas += $palmas;
+                $subValor  += $valor;
             } else {
                 // JORNAL_FIJO
                 $fila = [
@@ -244,6 +246,7 @@ class AgrupadorJornalesService
 
         return [
             'filas'           => $filas,
+            'subtotal_valor'  => round($subValor, 2),
             'subtotal_jornal' => round($subJornal, 2),
             'subtotal_palmas' => $subPalmas,
         ];
@@ -348,6 +351,7 @@ class AgrupadorJornalesService
     {
         return [
             'filas'           => [],
+            'subtotal_valor'  => 0.0,
             'subtotal_jornal' => 0.0,
             'subtotal_palmas' => 0,
         ];

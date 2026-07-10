@@ -14,6 +14,7 @@ class ViajeDetalle extends Model
 
     protected $fillable = [
         'tenant_id', 'viaje_id', 'cosecha_id',
+        'gajos_en_viaje',
         'reconteo_aprobado', 'reconteo_aprobado_at', 'reconteo_aprobado_por',
         'estado',
     ];
@@ -21,9 +22,10 @@ class ViajeDetalle extends Model
     protected function casts(): array
     {
         return [
-            'reconteo_aprobado' => 'boolean',
+            'gajos_en_viaje'      => 'integer',
+            'reconteo_aprobado'   => 'boolean',
             'reconteo_aprobado_at' => 'datetime',
-            'estado' => 'boolean',
+            'estado'              => 'boolean',
         ];
     }
 

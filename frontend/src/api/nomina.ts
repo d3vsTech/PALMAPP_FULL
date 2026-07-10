@@ -561,9 +561,31 @@ export type EstadoPagoTercero = 'PENDIENTE' | 'PAGADO';
 export type MetodoPagoTercero = 'TRANSFERENCIA' | 'EFECTIVO' | 'CHEQUE';
 
 /**
+ * Descuento aplicado a un operario dentro del acta de tercero (doc §7.2 —
+ * tabla `nomina_tercero_operario_descuento`). Un operario puede tener N
+ * descuentos del mismo o distinto concepto. Se agregan/eliminan con los
+ * endpoints §7.5 y §7.6.
+ */
+export interface DescuentoOperarioActa {
+  /** ID de la fila `nomina_tercero_operario_descuento`. */
+  id: number;
+  concepto_id: number;
+  concepto_codigo: string;
+  concepto_nombre: string;
+  valor: number;
+  observacion: string | null;
+}
+
+/**
  * Línea de operario dentro del acta (doc §7.2 - `operarios[]`).
- * Los campos `dias`, `tarifa_dia`, `ajuste`, `subtotal` y `observacion` son
- * editables individualmente vía §7.4 `PUT .../operarios/{op}`.
+ *
+ * **Vista solo-lectura:** los campos NO son editables directamente. El único
+ * ajuste manual permitido son los descuentos con concepto (§7.5 y §7.6).
+ *
+ * Fórmula del subtotal (doc §7.0):
+ * ```
+ * subtotal = total_jornales + total_cosecha − SUM(descuentos.valor)
+ * ```
  */
 export interface NominaTerceroOperario {
   /** ID de la fila `nomina_tercero_operario`. */
@@ -572,13 +594,54 @@ export interface NominaTerceroOperario {
   nombre_completo: string;
   cedula: string;
   cargo: string;
-  dias: number;
-  tarifa_dia: number;
-  ajuste: number;
-  subtotal: number;
   /** Snapshot JSON de labores realizadas por el operario en el período. */
   labores_realizadas: string[];
+  /** Total de jornales del operario en el período. */
+  total_jornales: number;
+  /** Total de cosecha del operario en el período. */
+  total_cosecha: number;
+  /** SUM(descuentos.valor). Calculado por el backend. */
+  total_descuentos: number;
+  /** Lista de descuentos del operario. Puede llegar vacía `[]`. */
+  descuentos: DescuentoOperarioActa[];
+  /** total_jornales + total_cosecha − total_descuentos. Puede ser negativo. */
+  subtotal: number;
   observacion: string | null;
+}
+
+/**
+ * Fila del desglose de labores de un operario (doc §7.4). Devuelto por
+ * `GET /nominas/{id}/terceros/{tercero}/operarios/{op}/detalle`. Usado
+ * por el frontend para el acordeón de detalle al expandir una fila.
+ */
+export interface DetalleLaborCosecha {
+  lote_id: number;
+  lote: string;
+  sublote_id: number | null;
+  sublote: string | null;
+  gajos: number;
+  promedio_kg_gajo: number;
+  peso_kg: number;
+  precio_unit_kg: number;
+  total: number;
+}
+
+export interface DetalleLaborJornal {
+  labor_id: number;
+  labor_nombre: string;
+  categoria: 'PALMA' | 'FINCA';
+  tipo_pago: string;
+  lote: string | null;
+  sublote: string | null;
+  unidades: number;
+  unidad: string;
+  precio_unit: number;
+  total: number;
+}
+
+export interface DetalleLaboresOperario {
+  cosecha: DetalleLaborCosecha[];
+  jornales: DetalleLaborJornal[];
 }
 
 /**
@@ -658,16 +721,50 @@ export interface NominaTerceroActaDetalle {
  */
 export type NominaTercero = NominaTerceroActaResumen;
 
+/**
+ * Payload para `POST /nominas/{id}/terceros/{tercero}/operarios/{op}/descuentos`
+ * (doc §7.5). Agrega un descuento con concepto identificado a la línea del
+ * operario. El backend recalcula subtotal y total_a_transferir.
+ *
+ * Reglas:
+ *  - `concepto_id` debe existir en el catálogo con `tipo=DEDUCCION_VOLUNTARIA`
+ *    y `activo=true`. Usar `GET /nomina-conceptos/select?tipo=DEDUCCION_VOLUNTARIA`
+ *    para el dropdown.
+ *  - `valor` > 0 (sin límite superior — el subtotal puede quedar negativo).
+ *  - Un operario puede tener N descuentos del mismo o distinto concepto.
+ */
+export interface AgregarDescuentoOperarioPayload {
+  concepto_id: number;
+  valor: number;
+  observacion?: string;
+}
+
+/**
+ * @deprecated Removido en la nueva versión del acta (doc §7). El endpoint
+ * `PUT /operarios/{op}` ya no existe. Los días/tarifa/ajuste ya no son
+ * editables directamente — el subtotal se calcula desde `total_jornales +
+ * total_cosecha` con descuentos que se agregan/eliminan vía §7.5 y §7.6.
+ */
 export interface ActualizarOperarioActaPayload {
   dias?: number;
   tarifa_dia?: number;
   ajuste?: number;
   observacion?: string;
+  descuento_concepto_id?: number | null;
+  descuento_valor?: number;
+  descuento_observacion?: string | null;
 }
 
+/**
+ * Payload para POST `/nominas/{id}/terceros/{tercero}/registrar-pago` (doc §7.5).
+ *
+ * Todos los campos son opcionales — body vacío `{}` es válido. El backend no
+ * valida los datos bancarios del tercero — la responsabilidad de confirmar
+ * viabilidad de la transferencia queda en el operador. Este endpoint sigue
+ * habilitado incluso con la nómina CERRADA (única excepción documentada).
+ */
 export interface RegistrarPagoTerceroPayload {
-  metodo_pago: MetodoPagoTercero;
-  /** Requerido si metodo_pago=TRANSFERENCIA (doc §7.5). */
+  metodo_pago?: MetodoPagoTercero;
   referencia_pago?: string;
   /** Datetime ISO. Default: `now()`. */
   pagado_at?: string;
@@ -883,7 +980,8 @@ export const nominaApi = {
 
     /**
      * POST .../liquidar (doc §7.3) — calcula totales del acta y persiste.
-     * Idempotente. Preserva `ajuste` y `observacion` manuales.
+     * Idempotente. Auto-liquida operarios PENDIENTES si los encuentra.
+     * Preserva descuentos existentes al recalcular.
      */
     liquidar: (nominaId: number, terceroId: number) =>
       apiClient.post<{ data: NominaTerceroActaDetalle; message: string }>(
@@ -892,7 +990,62 @@ export const nominaApi = {
         T,
       ),
 
-    /** PUT .../operarios/{op} (doc §7.4) — ajustar días, tarifa, ajuste, observación. */
+    /**
+     * GET .../operarios/{op}/detalle (doc §7.4) — desglose de lo que hizo el
+     * operario en el período (cosecha por lote + jornales por labor). Usado
+     * por el frontend para el acordeón de detalle. Solo-lectura.
+     */
+    detalleOperario: (nominaId: number, terceroId: number, operarioId: number) =>
+      apiClient.get<{ data: DetalleLaboresOperario }>(
+        `/v1/tenant/nominas/${nominaId}/terceros/${terceroId}/operarios/${operarioId}/detalle`,
+        T,
+      ),
+
+    /**
+     * POST .../operarios/{op}/descuentos (doc §7.5) — agrega un descuento
+     * con concepto identificado a la línea del operario. El backend recalcula
+     * subtotal y total_a_transferir. Devuelve el acta completa actualizada.
+     *
+     * Errores: 422 `DESCUENTO_CONCEPTO_INVALIDO`, 422 `OPERARIO_NO_PERTENECE_A_TERCERO`,
+     * 404 `ACTA_NO_CALCULADA`, 409 `NOMINA_CERRADA`.
+     */
+    agregarDescuento: (
+      nominaId: number,
+      terceroId: number,
+      operarioId: number,
+      payload: AgregarDescuentoOperarioPayload,
+    ) =>
+      apiClient.post<{ data: NominaTerceroActaDetalle; message?: string }>(
+        `/v1/tenant/nominas/${nominaId}/terceros/${terceroId}/operarios/${operarioId}/descuentos`,
+        payload,
+        T,
+      ),
+
+    /**
+     * DELETE .../operarios/{op}/descuentos/{descuento} (doc §7.6) — elimina
+     * un descuento de la línea del operario. Recalcula subtotal y
+     * total_a_transferir. Devuelve el acta completa actualizada.
+     *
+     * Errores: 404 `DESCUENTO_NO_ENCONTRADO`, 422 `OPERARIO_NO_PERTENECE_A_TERCERO`,
+     * 404 `ACTA_NO_CALCULADA`, 409 `NOMINA_CERRADA`.
+     */
+    eliminarDescuento: (
+      nominaId: number,
+      terceroId: number,
+      operarioId: number,
+      descuentoId: number,
+    ) =>
+      apiClient.delete<{ data: NominaTerceroActaDetalle; message?: string }>(
+        `/v1/tenant/nominas/${nominaId}/terceros/${terceroId}/operarios/${operarioId}/descuentos/${descuentoId}`,
+        T,
+      ),
+
+    /**
+     * @deprecated Removido en la nueva API (doc §7). El endpoint
+     * `PUT /operarios/{op}` ya no existe. Usar `agregarDescuento` /
+     * `eliminarDescuento` para modificar los descuentos del operario; el resto
+     * de campos no son editables directamente.
+     */
     actualizarOperario: (
       nominaId: number,
       terceroId: number,
@@ -906,7 +1059,7 @@ export const nominaApi = {
       ),
 
     /**
-     * POST .../registrar-pago (doc §7.5) — marca el acta como PAGADO.
+     * POST .../registrar-pago (doc §7.7) — marca el acta como PAGADO.
      * Requiere permiso `nomina.pagar-tercero`. Permitido incluso con la
      * nómina CERRADA (excepción documentada).
      */
@@ -921,7 +1074,7 @@ export const nominaApi = {
         T,
       ),
 
-    /** GET .../acta/pdf (doc §7.6) — descarga el PDF del acta (DomPDF). */
+    /** GET .../acta/pdf (doc §7.8) — descarga el PDF del acta (DomPDF). */
     actaPdf: (nominaId: number, terceroId: number) =>
       apiClient.getBlob(
         `/v1/tenant/nominas/${nominaId}/terceros/${terceroId}/acta/pdf`,
@@ -1082,8 +1235,22 @@ export const NominaErrorCodes = {
   OPERARIO_NO_PERTENECE_A_TERCERO: 'OPERARIO_NO_PERTENECE_A_TERCERO',
   /** Intento de quitar un operario con `nomina_tercero` ya liquidado. */
   OPERARIO_LIQUIDADO_EN_TERCERO: 'OPERARIO_LIQUIDADO_EN_TERCERO',
-  /** `metodo_pago=TRANSFERENCIA` sin `banco`/`numero_cuenta`/etc. en el tercero. */
+  /**
+   * @deprecated Desde doc §7.5: el endpoint `POST /registrar-pago` YA NO
+   * valida los datos bancarios del tercero. Este código se mantiene por
+   * compatibilidad con backends antiguos pero no debería activarse.
+   */
   TERCERO_SIN_DATOS_BANCARIOS: 'TERCERO_SIN_DATOS_BANCARIOS',
+  /**
+   * `concepto_id` al agregar un descuento no existe, no es
+   * `tipo=DEDUCCION_VOLUNTARIA` o está inactivo (doc §7.5).
+   */
+  DESCUENTO_CONCEPTO_INVALIDO: 'DESCUENTO_CONCEPTO_INVALIDO',
+  /**
+   * El `id` de descuento no existe o no pertenece al operario solicitado
+   * (doc §7.6). Aplica a DELETE `.../descuentos/{descuento}`.
+   */
+  DESCUENTO_NO_ENCONTRADO: 'DESCUENTO_NO_ENCONTRADO',
   /**
    * Intento de eliminar/liquidar un tercero que no tiene operarios en esa
    * nómina. Aplica a DELETE /nominas/{id}/terceros/{tercero} y POST /liquidar

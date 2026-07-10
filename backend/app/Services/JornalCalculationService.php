@@ -88,16 +88,14 @@ class JornalCalculationService
 
     /**
      * JORNAL_FIJO — valor plano, con fallback a precio del tercero si aplica.
+     * precio_palma=NULL se trata como 0.00: las labores JORNAL_FIJO pueden ser
+     * no remuneradas (ej. labores custom de palma / OTROS sin precio configurado).
      */
     private function calcularJornalFijo(Labor $labor, ?int $terceroId = null): array
     {
-        $precio = $this->resolverPrecioLabor($labor, $terceroId);
+        $precio = $this->resolverPrecioLabor($labor, $terceroId) ?? 0.0;
 
-        if ($precio === null) {
-            return ['valor_unitario' => null, 'precio_insumo_snapshot' => null, 'valor_total' => null];
-        }
-
-        $precioStr = (string) $precio;
+        $precioStr = number_format($precio, 2, '.', '');
 
         return [
             'valor_unitario'         => $precioStr,
@@ -168,6 +166,7 @@ class JornalCalculationService
     /**
      * Resuelve el precio de una labor con fallback:
      *   1. Override específico del tercero (tercero_labor_precios)
+     *      — POR_PALMA usa precio_palma; JORNAL_FIJO usa tarifa_jornal
      *   2. Precio tenant (labor.precio_palma)
      *   3. NULL — no configurado
      */
@@ -177,10 +176,10 @@ class JornalCalculationService
             $override = TerceroLaborPrecio::where('tercero_id', $terceroId)
                 ->where('labor_id', $labor->id)
                 ->where('estado', true)
-                ->value('precio_palma');
+                ->first(['tipo_pago', 'precio_palma', 'tarifa_jornal']);
 
             if ($override !== null) {
-                return (float) $override;
+                return $override->precio_resuelto;
             }
         }
 

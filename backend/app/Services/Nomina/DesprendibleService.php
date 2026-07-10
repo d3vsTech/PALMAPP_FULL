@@ -2,6 +2,8 @@
 
 namespace App\Services\Nomina;
 
+use App\Models\Ausencia;
+use App\Models\HoraExtra;
 use App\Models\NominaEmpleado;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Storage;
@@ -66,6 +68,55 @@ class DesprendibleService
             }
         }
 
+        // Detalle de horas extras y ausencias liquidadas en esta nómina
+        $detalleHorasExtra = [];
+        $detalleAusencias  = [];
+
+        if ($ne->empleado_id) {
+            $horasExtra = HoraExtra::where('empleado_id', $ne->empleado_id)
+                ->where('nomina_id', $ne->nomina_id)
+                ->with(['tipoHoraExtra', 'operacion:id,fecha'])
+                ->orderBy('id')
+                ->get();
+
+            foreach ($horasExtra as $h) {
+                $esExtra = (bool) ($h->tipoHoraExtra?->es_extra ?? true);
+                $detalleHorasExtra[] = [
+                    'id'                 => $h->id,
+                    'fecha'              => $h->operacion?->fecha?->format('Y-m-d'),
+                    'codigo'             => $h->codigo,
+                    'tipo_nombre'        => $h->tipoHoraExtra?->nombre,
+                    'es_extra'           => $esExtra,
+                    'cantidad_horas'     => (float) $h->cantidad_horas,
+                    'valor_hora_base'    => (float) $h->valor_hora_base,
+                    'porcentaje_recargo' => (float) $h->porcentaje_recargo,
+                    'paga_hora_completa' => (bool) $h->paga_hora_completa,
+                    'valor_calculado'    => (float) $h->valor_calculado,
+                    'observacion'        => $h->observacion,
+                ];
+            }
+
+            $ausencias = Ausencia::where('empleado_id', $ne->empleado_id)
+                ->where('nomina_id', $ne->nomina_id)
+                ->with('motivoAusencia:id,nombre')
+                ->orderBy('fecha_inicio')
+                ->get();
+
+            foreach ($ausencias as $a) {
+                $detalleAusencias[] = [
+                    'id'             => $a->id,
+                    'tipo'           => $a->tipo,
+                    'motivo_nombre'  => $a->motivoAusencia?->nombre,
+                    'fecha_inicio'   => $a->fecha_inicio?->format('Y-m-d'),
+                    'fecha_fin'      => $a->fecha_fin?->format('Y-m-d'),
+                    'dias_calendario'=> (int) $a->dias_calendario,
+                    'es_remunerada'  => (bool) $a->es_remunerada,
+                    'porcentaje_pago'=> (float) $a->porcentaje_pago,
+                    'afecta'         => $a->es_remunerada ? 'INCAPACIDAD' : 'DESCUENTO',
+                ];
+            }
+        }
+
         return [
             'finca'   => $ne->predio_snapshot ?? $empleado?->predio?->nombre,
             'empleado' => [
@@ -104,6 +155,8 @@ class DesprendibleService
                 'total_neto'             => (float) $ne->total_neto,
                 'bonificaciones'         => $bonificaciones,
                 'deducciones'            => $deducciones,
+                'detalle_horas_extra'    => $detalleHorasExtra,
+                'detalle_ausencias'      => $detalleAusencias,
             ],
             'resumen_trabajo' => $resumenTrabajo,
         ];

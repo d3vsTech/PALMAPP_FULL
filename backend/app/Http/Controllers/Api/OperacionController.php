@@ -218,6 +218,9 @@ class OperacionController extends Controller
         'jornales.sublote:id,nombre',
         'jornales.insumo:id,nombre',
         'ausencias.empleado:id,primer_nombre,primer_apellido',
+        'ausencias.motivoAusencia:id,nombre,tipo_base',
+        'horasExtra.empleado:id,primer_nombre,primer_apellido',
+        'horasExtra.tipoHoraExtra:id,codigo,nombre,porcentaje_recargo',
     ];
 
     public function show(Operacion $operacion): JsonResponse
@@ -294,19 +297,32 @@ class OperacionController extends Controller
                 ], 409);
             }
 
-            if ($operacion->jornales()->exists() || $operacion->cosechas()->exists() || $operacion->ausencias()->exists()) {
+            if ($operacion->cosechas()->whereHas('viajeDetalles', fn($q) => $q->where('estado', true))->exists()) {
                 return response()->json([
-                    'message' => 'No se puede eliminar: la planilla tiene jornales, cosechas o ausencias asociadas',
-                    'code'    => 'OPERACION_CON_HIJOS',
+                    'message' => 'No se puede eliminar: una o más cosechas de la planilla están asignadas a un viaje',
+                    'code'    => 'COSECHA_EN_VIAJE',
                 ], 409);
             }
 
             $this->auditoria->registrarEliminacion(
                 $request, 'OPERACIONES', $operacion,
-                "Se eliminó la planilla del día {$operacion->fecha->format('Y-m-d')}",
+                "Se eliminó la planilla del día {$operacion->fecha->format('Y-m-d')} con todos sus registros",
             );
 
-            $operacion->delete();
+            DB::transaction(function () use ($operacion) {
+                $cosechaIds = $operacion->cosechas()->pluck('id');
+
+                // FK: viaje_detalle → registro_cosecha (registros inactivos que pasaron el check)
+                DB::table('viaje_detalle')->whereIn('cosecha_id', $cosechaIds)->delete();
+                // FK: cosecha_cuadrilla → registro_cosecha
+                DB::table('cosecha_cuadrilla')->whereIn('cosecha_id', $cosechaIds)->delete();
+
+                $operacion->cosechas()->delete();
+                $operacion->jornales()->delete();
+                $operacion->ausencias()->delete();
+                $operacion->horasExtra()->delete();
+                $operacion->delete();
+            });
 
             return response()->json(['message' => 'Planilla eliminada correctamente']);
         } catch (\Throwable $e) {

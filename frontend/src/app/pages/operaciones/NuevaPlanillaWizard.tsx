@@ -4141,6 +4141,13 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         {trabajosCosecha.map((trabajo) => {
                           const lote = lotesData.find(l => l.id === trabajo.lote);
                           const sublote = sublotes.find(s => s.id === trabajo.sublote);
+                          const nombresColabs = (trabajo.colaboradores ?? [])
+                            .map((colId) => {
+                              const col = colaboradores.find((c) => c.id === colId);
+                              return col?.nombre_completo
+                                ?? `${col?.nombres ?? ''} ${col?.apellidos ?? ''}`.trim();
+                            })
+                            .filter(Boolean);
                           return (
                             <div key={trabajo.id} className="text-xs space-y-0.5">
                               <div className="flex items-center justify-between">
@@ -4150,8 +4157,13 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                 <span className="font-medium">{trabajo.kilos} kg</span>
                               </div>
                               <div className="text-muted-foreground">
-                                {trabajo.gajosRecogidos} gajos · {trabajo.colaboradores?.length || 0} colaboradores
+                                {trabajo.gajosRecogidos} gajos
                               </div>
+                              {nombresColabs.length > 0 && (
+                                <div className="text-muted-foreground">
+                                  {nombresColabs.join(', ')}
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -4180,6 +4192,13 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         {trabajosPlateo.map((trabajo) => {
                           const lote = lotesData.find(l => l.id === trabajo.lote);
                           const sublote = sublotes.find(s => s.id === trabajo.sublote);
+                          const nombresColabs = (trabajo.colaboradores ?? [])
+                            .map((colId) => {
+                              const col = colaboradores.find((c) => c.id === colId);
+                              return col?.nombre_completo
+                                ?? `${col?.nombres ?? ''} ${col?.apellidos ?? ''}`.trim();
+                            })
+                            .filter(Boolean);
                           return (
                             <div key={trabajo.id} className="text-xs space-y-0.5">
                               <div className="flex items-center justify-between">
@@ -4188,9 +4207,11 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                 </span>
                                 <span className="font-medium">{trabajo.numeroPalmas} palmas</span>
                               </div>
-                              <div className="text-muted-foreground">
-                                {trabajo.colaboradores?.length || 0} colaboradores
-                              </div>
+                              {nombresColabs.length > 0 && (
+                                <div className="text-muted-foreground">
+                                  {nombresColabs.join(', ')}
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -4219,6 +4240,13 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         {trabajosPoda.map((trabajo) => {
                           const lote = lotesData.find(l => l.id === trabajo.lote);
                           const sublote = sublotes.find(s => s.id === trabajo.sublote);
+                          const nombresColabs = (trabajo.colaboradores ?? [])
+                            .map((colId) => {
+                              const col = colaboradores.find((c) => c.id === colId);
+                              return col?.nombre_completo
+                                ?? `${col?.nombres ?? ''} ${col?.apellidos ?? ''}`.trim();
+                            })
+                            .filter(Boolean);
                           return (
                             <div key={trabajo.id} className="text-xs space-y-0.5">
                               <div className="flex items-center justify-between">
@@ -4227,9 +4255,11 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                 </span>
                                 <span className="font-medium">{trabajo.numeroPalmas} palmas</span>
                               </div>
-                              <div className="text-muted-foreground">
-                                {trabajo.colaboradores?.length || 0} colaboradores
-                              </div>
+                              {nombresColabs.length > 0 && (
+                                <div className="text-muted-foreground">
+                                  {nombresColabs.join(', ')}
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -4258,17 +4288,32 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         {trabajosFertilizacion.map((trabajo) => {
                           const lote = lotesData.find(l => l.id === trabajo.lote);
                           const sublote = sublotes.find(s => s.id === trabajo.sublote);
+                          const nombresColabs = (trabajo.colaboradores ?? [])
+                            .map((colId) => {
+                              const col = colaboradores.find((c) => c.id === colId);
+                              return col?.nombre_completo
+                                ?? `${col?.nombres ?? ''} ${col?.apellidos ?? ''}`.trim();
+                            })
+                            .filter(Boolean);
                           return (
                             <div key={trabajo.id} className="text-xs space-y-0.5">
                               <div className="flex items-center justify-between">
                                 <span className="text-muted-foreground">
                                   {lote?.nombre} - {sublote?.nombre}
                                 </span>
-                                <span className="font-medium">{trabajo.numeroPalmas} palmas</span>
+                                <span className="font-medium">{trabajo.palmas} palmas</span>
                               </div>
                               <div className="text-muted-foreground">
-                                {trabajo.tipoFertilizante} · {trabajo.colaboradores?.length || 0} colaboradores
+                                {trabajo.tipoFertilizante}
+                                {trabajo.cantidadGramos > 0 && (
+                                  <> · <span className="font-medium">{trabajo.cantidadGramos} g/palma</span></>
+                                )}
                               </div>
+                              {nombresColabs.length > 0 && (
+                                <div className="text-muted-foreground">
+                                  {nombresColabs.join(', ')}
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -4288,15 +4333,30 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                       <div className="space-y-1 pl-3 border-l-2 border-destructive/20">
                         {trabajosSanidad.map((trabajo) => {
                           const lote = lotesData.find(l => l.id === trabajo.lote);
+                          const sublote = sublotes.find(s => s.id === trabajo.sublote);
+                          const nombresColabs = (trabajo.colaboradores ?? [])
+                            .map((colId) => {
+                              const col = colaboradores.find((c) => c.id === colId);
+                              return col?.nombre_completo
+                                ?? `${col?.nombres ?? ''} ${col?.apellidos ?? ''}`.trim();
+                            })
+                            .filter(Boolean);
                           return (
                             <div key={trabajo.id} className="text-xs space-y-0.5">
-                              <div className="flex items-center justify-between">
-                                <span className="text-muted-foreground">{lote?.nombre}</span>
-                                <span className="font-medium">{trabajo.numeroPalmas} palmas</span>
-                              </div>
                               <div className="text-muted-foreground">
-                                {trabajo.tipoActividad} · {trabajo.colaboradores?.length || 0} colaboradores
+                                {lote?.nombre}
+                                {sublote?.nombre ? ` - ${sublote.nombre}` : ''}
                               </div>
+                              {trabajo.trabajoRealizado && (
+                                <div className="text-muted-foreground">
+                                  {trabajo.trabajoRealizado}
+                                </div>
+                              )}
+                              {nombresColabs.length > 0 && (
+                                <div className="text-muted-foreground">
+                                  {nombresColabs.join(', ')}
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -4315,14 +4375,26 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         </Badge>
                       </div>
                       <div className="space-y-1 pl-3 border-l-2 border-border">
-                        {trabajosAuxiliares.map((trabajo) => (
-                          <div key={trabajo.id} className="text-xs space-y-0.5">
-                            <div className="text-muted-foreground">{trabajo.tipoLabor}</div>
-                            <div className="text-muted-foreground">
-                              {trabajo.colaboradores?.length || 0} colaboradores
+                        {trabajosAuxiliares.map((trabajo) => {
+                          const labelLabor =
+                            trabajo.labor === 'Otro' && trabajo.otraLabor
+                              ? trabajo.otraLabor
+                              : trabajo.labor;
+                          const col = colaboradores.find((c) => c.id === trabajo.nombre);
+                          const nombreCol = col?.nombre_completo
+                            ?? `${col?.nombres ?? ''} ${col?.apellidos ?? ''}`.trim();
+                          return (
+                            <div key={trabajo.id} className="text-xs space-y-0.5">
+                              <div className="text-muted-foreground">
+                                {labelLabor || 'Sin labor'}
+                                {trabajo.lugar ? ` · ${trabajo.lugar}` : ''}
+                              </div>
+                              {nombreCol && (
+                                <div className="text-muted-foreground">{nombreCol}</div>
+                              )}
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -4333,6 +4405,41 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium">Otros</span>
                         <Badge variant="outline">{trabajosOtros.length}</Badge>
+                      </div>
+                      <div className="space-y-1 pl-3 border-l-2 border-border">
+                        {trabajosOtros.map((trabajo) => {
+                          const lote = lotesData.find(l => l.id === trabajo.lote);
+                          const sublote = sublotes.find(s => s.id === trabajo.sublote);
+                          const nombresColabs = (trabajo.colaboradores ?? [])
+                            .map((colId) => {
+                              const col = colaboradores.find((c) => c.id === colId);
+                              return col?.nombre_completo
+                                ?? `${col?.nombres ?? ''} ${col?.apellidos ?? ''}`.trim();
+                            })
+                            .filter(Boolean);
+                          const labelLabor =
+                            trabajo.laborRealizada || trabajo.nombreTrabajo || trabajo.nombre;
+                          return (
+                            <div key={trabajo.id} className="text-xs space-y-0.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-muted-foreground">
+                                  {lote?.nombre}{sublote?.nombre ? ` - ${sublote.nombre}` : ''}
+                                </span>
+                                {trabajo.laborOtrosTipoPago === 'POR_PALMA' && trabajo.numeroPalmas != null && (
+                                  <span className="font-medium">{trabajo.numeroPalmas} palmas</span>
+                                )}
+                              </div>
+                              {labelLabor && (
+                                <div className="text-muted-foreground">{labelLabor}</div>
+                              )}
+                              {nombresColabs.length > 0 && (
+                                <div className="text-muted-foreground">
+                                  {nombresColabs.join(', ')}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
