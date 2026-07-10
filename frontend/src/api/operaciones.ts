@@ -669,6 +669,18 @@ export const cosechasApi = {
       },
     ),
 
+  bulkCrear: (operacionId: number, items: Array<{
+    lote_id: number;
+    sublote_id?: number | null;
+    gajos_reportados: number;
+    peso_confirmado?: number | null;
+    cuadrilla: CuadrillaPayloadItem[];
+  }>) =>
+    smartRequest<{ data: Array<{ id: number }> }>(
+      `${BASE}/operaciones/${operacionId}/cosechas/bulk`,
+      { method: 'POST', body: JSON.stringify({ items }) },
+    ),
+
   editar: (id: number, payload: Partial<{
     gajos_reportados: number;
     gajos_reconteo: number;
@@ -741,6 +753,12 @@ export const jornalesApi = {
       },
     ),
 
+  bulkCrear: (operacionId: number, items: JornalPayload[]) =>
+    smartRequest<{ data: Array<{ id: number; sync_uuid: string | null }> }>(
+      `${BASE}/operaciones/${operacionId}/jornales/bulk`,
+      { method: 'POST', body: JSON.stringify({ items }) },
+    ),
+
   editar: (id: number, payload: Partial<JornalPayload>) =>
     smartRequest<{ data: Jornal; message?: string }>(`${BASE}/jornales/${id}`, {
       method: 'PUT',
@@ -795,6 +813,12 @@ export const horasExtraApi = {
         method: 'POST',
         body: JSON.stringify(payload),
       }),
+
+  bulkCrear: (operacionId: number, items: HoraExtraPayload[]) =>
+    smartRequest<{ data: Array<{ id: number }> }>(
+      `${BASE}/operaciones/${operacionId}/horas-extra/bulk`,
+      { method: 'POST', body: JSON.stringify({ items }) },
+    ),
 
   editar: (id: number, payload: Partial<HoraExtraPayload>) =>
     smartRequest<{ data: HoraExtra; message?: string }>(`${BASE}/horas-extra/${id}`, {
@@ -892,6 +916,16 @@ export const ausenciasApi = {
         method: 'POST',
         body: JSON.stringify(payload),
       },
+    ),
+
+  bulkCrear: (operacionId: number, items: Array<{
+    empleado_id: number;
+    motivo_ausencia_id: number;
+    motivo?: string;
+  }>) =>
+    smartRequest<{ data: Array<{ id: number }> }>(
+      `${BASE}/operaciones/${operacionId}/ausencias/bulk`,
+      { method: 'POST', body: JSON.stringify({ items }) },
     ),
 
   editar: (id: number, payload: Partial<{

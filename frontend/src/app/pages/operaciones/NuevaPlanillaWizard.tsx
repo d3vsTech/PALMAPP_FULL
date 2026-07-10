@@ -806,119 +806,14 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         await operacionesApi.editar(pid, headerBody);
       }
 
-      // Mapeo localId → backendId acumulado durante el guardado. Al final
-      // del flujo, hacemos UN solo setState por tipo para evitar race
-      // conditions de N setState dentro de un loop async. Sin esto, al volver
-      // a pulsar "Guardar Planilla" sin recargar, los items locales conservan
-      // su id `plateo-XYZ` y se duplican en el backend.
-      const mapeoIdsPlateo: Record<string, string> = {};
-      const mapeoIdsPoda: Record<string, string> = {};
-      const mapeoIdsFert: Record<string, string> = {};
-      const mapeoIdsSanidad: Record<string, string> = {};
-      const mapeoIdsOtros: Record<string, string> = {};
-      const mapeoIdsFinca: Record<string, string> = {};
-      const mapeoIdsCosecha: Record<string, string> = {};
-      const mapeoIdsHE: Record<string, string> = {};
-      const mapeoIdsAusencia: Record<string, string> = {};
-
-      // Cosechas — diff por id: PUT si la cosecha ya existe en backend,
-      // POST si es nueva del wizard. Sin este check, editar duplicaba.
-      for (const t of trabajosCosecha) {
-        if (!t.lote || t.colaboradores.length === 0) continue;
-        try {
-          if (isBackendId(t.id)) {
-            await cosechasApi.editar(parseInt(t.id), {
-              gajos_reportados: t.gajosRecogidos || 0,
-              peso_confirmado: t.kilos || null,
-              cuadrilla: t.colaboradores.map(c => decodeIdPersona(c)),
-            });
-          } else {
-            const res = await cosechasApi.crear(pid, {
-              lote_id: parseInt(t.lote),
-              sublote_id: t.sublote ? parseInt(t.sublote) : undefined,
-              gajos_reportados: t.gajosRecogidos || 0,
-              peso_confirmado: t.kilos || null,
-              cuadrilla: t.colaboradores.map(c => decodeIdPersona(c)),
-            });
-            if (res?.data?.id != null) {
-              mapeoIdsCosecha[t.id] = String(res.data.id);
-            }
-          }
-        } catch {}
-      }
-
-      // Plateo (labor fija de PALMA con tipo='PLATEO')
-      // Diff por id: PUT si el jornal existe en backend, POST si es nuevo.
-      // Si el ítem trae varios colaboradores: el primero se mapea al jornal
-      // existente (PUT), los demás se crean como jornales nuevos (POST).
-      //
-      // `cantidad_palmas` se envía siempre que el usuario haya ingresado un
-      // valor (> 0). Si la labor está en JORNAL_FIJO, el backend lo descarta
-      // sin error; si está en POR_PALMA, es requerido. Antes este campo se
-      // perdía cuando `palmaFijasInfo` no traía la entrada por algún motivo
-      // del bundle.
-      const plateoLaborId = palmaTipoToId.get('PLATEO');
-      if (plateoLaborId) {
-        for (const t of trabajosPlateo) {
-          for (let i = 0; i < t.colaboradores.length; i++) {
-            const cid = t.colaboradores[i];
-            const payload: any = {
-              labor_id: plateoLaborId,
-              ...decodeIdPersona(cid),
-              lote_id: t.lote ? parseInt(t.lote) : null,
-              sublote_id: t.sublote ? parseInt(t.sublote) : null,
-            };
-            if (t.numeroPalmas && t.numeroPalmas > 0) {
-              payload.cantidad_palmas = t.numeroPalmas;
-            }
-            try {
-              if (i === 0 && isBackendId(t.id)) {
-                await jornalesApi.editar(parseInt(t.id), payload);
-              } else {
-                const res = await jornalesApi.crear(pid, payload);
-                if (i === 0 && !isBackendId(t.id) && res?.data?.id != null) {
-                  mapeoIdsPlateo[t.id] = String(res.data.id);
-                }
-              }
-            } catch {}
-          }
-        }
-      }
-      // Poda (labor fija de PALMA con tipo='PODA')
-      const podaLaborId = palmaTipoToId.get('PODA');
-      if (podaLaborId) {
-        for (const t of trabajosPoda) {
-          for (let i = 0; i < t.colaboradores.length; i++) {
-            const cid = t.colaboradores[i];
-            const payload: any = {
-              labor_id: podaLaborId,
-              ...decodeIdPersona(cid),
-              lote_id: t.lote ? parseInt(t.lote) : null,
-              sublote_id: t.sublote ? parseInt(t.sublote) : null,
-            };
-            if (t.numeroPalmas && t.numeroPalmas > 0) {
-              payload.cantidad_palmas = t.numeroPalmas;
-            }
-            try {
-              if (i === 0 && isBackendId(t.id)) {
-                await jornalesApi.editar(parseInt(t.id), payload);
-              } else {
-                const res = await jornalesApi.crear(pid, payload);
-                if (i === 0 && !isBackendId(t.id) && res?.data?.id != null) {
-                  mapeoIdsPoda[t.id] = String(res.data.id);
-                }
-              }
-            } catch {}
-          }
-        }
-      }
-      // Fertilización (labor fija de PALMA con tipo='FERTILIZACION')
-      const fertLaborId = palmaTipoToId.get('FERTILIZACION');
-      const fertInfo = palmaFijasInfo.get('FERTILIZACION');
-      // Conteo de fertilizaciones que NO se persistieron por no poder
-      // resolver `insumo_id`. Lo reportamos al final como warning, en vez
-      // de hacer `continue` silencioso que deja al usuario sin saber qué pasó.
+      // ── Pre-paso: resolver insumos de fertilización ──────────────────────────
+      // Los insumos "Otro" requieren un POST secuencial (UNIQUE por tenant+nombre).
+      // Una vez resueltos los IDs, los jornales de fertilización se suman al batch
+      // paralelo junto con todos los demás tipos.
+      type FertResuelta = { t: TrabajoFertilizacion; insumoId: number };
+      const fertResueltas: FertResuelta[] = [];
       const fertSaltadas: string[] = [];
+      const fertLaborId = palmaTipoToId.get('FERTILIZACION');
       if (fertLaborId) {
         for (const t of trabajosFertilizacion) {
           let insumoId: number | undefined;
@@ -956,82 +851,148 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
             fertSaltadas.push(t.tipoFertilizante || '(sin nombre)');
             continue;
           }
+          fertResueltas.push({ t, insumoId });
+        }
+      }
+
+      // ── Construir batch de operaciones bulk ───────────────────────────────────
+      // Ítems NUEVOS se acumulan en arrays tipados y se envían en una sola
+      // petición bulk por tipo (4 peticiones HTTP total en vez de N).
+      // Ítems EXISTENTES (PUT) se disparan en paralelo con Promise.allSettled.
+      // Posición en el array → localId, para mapear backendId al resolver.
+      type BulkJornalItem = { localId: string; tipo: string; payload: any };
+      const newJornales:  BulkJornalItem[] = [];
+      const newCosechas:  Array<{ localId: string; payload: any }> = [];
+      const newHE:        Array<{ localId: string; payload: any }> = [];
+      const newAusencias: Array<{ localId: string; payload: any }> = [];
+      const updates: Promise<any>[] = [];
+      const erroresGuardado: string[] = [];
+      let heOperarios = 0, heSinTipo = 0, heSinColab = 0, heHorasInvalidas = 0;
+      let otrosSinLabor = 0;
+      let fincaSinLabor = 0;
+
+      // === COSECHAS ===
+      for (const t of trabajosCosecha) {
+        if (!t.lote || t.colaboradores.length === 0) continue;
+        if (isBackendId(t.id)) {
+          updates.push(
+            cosechasApi.editar(parseInt(t.id), {
+              gajos_reportados: t.gajosRecogidos || 0,
+              peso_confirmado: t.kilos || null,
+              cuadrilla: t.colaboradores.map(c => decodeIdPersona(c)),
+            }).catch(() => {}),
+          );
+        } else {
+          newCosechas.push({
+            localId: t.id,
+            payload: {
+              lote_id: parseInt(t.lote),
+              sublote_id: t.sublote ? parseInt(t.sublote) : undefined,
+              gajos_reportados: t.gajosRecogidos || 0,
+              peso_confirmado: t.kilos || null,
+              cuadrilla: t.colaboradores.map(c => decodeIdPersona(c)),
+            },
+          });
+        }
+      }
+
+      // === PLATEO ===
+      // Múltiples colaboradores por fila: el primero se mapea al jornal de la
+      // fila (PUT si existe, POST si nuevo), los adicionales siempre se crean.
+      const plateoLaborId = palmaTipoToId.get('PLATEO');
+      if (plateoLaborId) {
+        for (const t of trabajosPlateo) {
           for (let i = 0; i < t.colaboradores.length; i++) {
-            const cid = t.colaboradores[i];
             const payload: any = {
-              labor_id: fertLaborId,
-              ...decodeIdPersona(cid),
+              labor_id: plateoLaborId,
+              ...decodeIdPersona(t.colaboradores[i]),
               lote_id: t.lote ? parseInt(t.lote) : null,
               sublote_id: t.sublote ? parseInt(t.sublote) : null,
-              insumo_id: insumoId,
-              gramos_por_palma: t.cantidadGramos || 0,
             };
-            if (t.palmas && t.palmas > 0) {
-              payload.cantidad_palmas = t.palmas;
+            if (t.numeroPalmas && t.numeroPalmas > 0) payload.cantidad_palmas = t.numeroPalmas;
+            if (i === 0 && isBackendId(t.id)) {
+              updates.push(jornalesApi.editar(parseInt(t.id), payload).catch(() => {}));
+            } else {
+              newJornales.push({ localId: i === 0 ? t.id : '', tipo: 'plateo', payload });
             }
-            try {
-              if (i === 0 && isBackendId(t.id)) {
-                await jornalesApi.editar(parseInt(t.id), payload);
-              } else {
-                const res = await jornalesApi.crear(pid, payload);
-                if (i === 0 && !isBackendId(t.id) && res?.data?.id != null) {
-                  mapeoIdsFert[t.id] = String(res.data.id);
-                }
-              }
-            } catch {}
           }
         }
       }
-      // Sanidad (labor fija de PALMA con tipo='SANIDAD')
+
+      // === PODA ===
+      const podaLaborId = palmaTipoToId.get('PODA');
+      if (podaLaborId) {
+        for (const t of trabajosPoda) {
+          for (let i = 0; i < t.colaboradores.length; i++) {
+            const payload: any = {
+              labor_id: podaLaborId,
+              ...decodeIdPersona(t.colaboradores[i]),
+              lote_id: t.lote ? parseInt(t.lote) : null,
+              sublote_id: t.sublote ? parseInt(t.sublote) : null,
+            };
+            if (t.numeroPalmas && t.numeroPalmas > 0) payload.cantidad_palmas = t.numeroPalmas;
+            if (i === 0 && isBackendId(t.id)) {
+              updates.push(jornalesApi.editar(parseInt(t.id), payload).catch(() => {}));
+            } else {
+              newJornales.push({ localId: i === 0 ? t.id : '', tipo: 'poda', payload });
+            }
+          }
+        }
+      }
+
+      // === FERTILIZACION (insumos ya resueltos en el pre-paso) ===
+      for (const { t, insumoId } of fertResueltas) {
+        for (let i = 0; i < t.colaboradores.length; i++) {
+          const payload: any = {
+            labor_id: fertLaborId!,
+            ...decodeIdPersona(t.colaboradores[i]),
+            lote_id: t.lote ? parseInt(t.lote) : null,
+            sublote_id: t.sublote ? parseInt(t.sublote) : null,
+            insumo_id: insumoId,
+            gramos_por_palma: t.cantidadGramos || 0,
+          };
+          if (t.palmas && t.palmas > 0) payload.cantidad_palmas = t.palmas;
+          if (i === 0 && isBackendId(t.id)) {
+            updates.push(jornalesApi.editar(parseInt(t.id), payload).catch(() => {}));
+          } else {
+            newJornales.push({ localId: i === 0 ? t.id : '', tipo: 'fert', payload });
+          }
+        }
+      }
+
+      // === SANIDAD ===
       const sanidadLaborId = palmaTipoToId.get('SANIDAD');
       const sanidadInfo = palmaFijasInfo.get('SANIDAD');
       if (sanidadLaborId) {
         for (const t of trabajosSanidad) {
           for (let i = 0; i < t.colaboradores.length; i++) {
-            const cid = t.colaboradores[i];
             const payload: any = {
               labor_id: sanidadLaborId,
-              ...decodeIdPersona(cid),
+              ...decodeIdPersona(t.colaboradores[i]),
               lote_id: t.lote ? parseInt(t.lote) : null,
               sublote_id: t.sublote ? parseInt(t.sublote) : null,
               descripcion: t.trabajoRealizado || 'Sanidad',
             };
-            // Sanidad no tiene input propio de palmas en el wizard — si está
-            // configurada como POR_PALMA, reusamos las del sublote.
+            // Sanidad no tiene input propio de palmas — si está en POR_PALMA reusamos las del sublote.
             if (sanidadInfo?.tipo_pago === 'POR_PALMA') {
               payload.cantidad_palmas = Number(sublotes.find(s => s.id === t.sublote)?.cantidadPalmas ?? 0);
             }
-            try {
-              if (i === 0 && isBackendId(t.id)) {
-                await jornalesApi.editar(parseInt(t.id), payload);
-              } else {
-                const res = await jornalesApi.crear(pid, payload);
-                if (i === 0 && !isBackendId(t.id) && res?.data?.id != null) {
-                  mapeoIdsSanidad[t.id] = String(res.data.id);
-                }
-              }
-            } catch {}
+            if (i === 0 && isBackendId(t.id)) {
+              updates.push(jornalesApi.editar(parseInt(t.id), payload).catch(() => {}));
+            } else {
+              newJornales.push({ localId: i === 0 ? t.id : '', tipo: 'sanidad', payload });
+            }
           }
         }
       }
-      // Otros (labores custom de PALMA, tipo=null en el catálogo unificado).
-      // §3.2 del doc: el payload depende del tipo_pago de la labor:
-      //  - POR_PALMA   → `cantidad_palmas` requerido.
-      //  - JORNAL_FIJO → `nombre_trabajo` y `descripcion` opcionales; sin cantidad_palmas.
-      const erroresGuardado: string[] = [];
-      let otrosSinLabor = 0;
+
+      // === OTROS (labores custom de PALMA, tipo=null) ===
       for (const t of trabajosOtros) {
-        if (!t.laborOtrosRawId) {
-          // El usuario no eligió labor (o el catálogo del tenant está vacío).
-          // Antes se saltaba en silencio — ahora acumulamos para avisar al final.
-          otrosSinLabor++;
-          continue;
-        }
+        if (!t.laborOtrosRawId) { otrosSinLabor++; continue; }
         for (let i = 0; i < t.colaboradores.length; i++) {
-          const cid = t.colaboradores[i];
           const base: any = {
             labor_id: t.laborOtrosRawId,
-            ...decodeIdPersona(cid),
+            ...decodeIdPersona(t.colaboradores[i]),
             lote_id: t.lote ? parseInt(t.lote) : null,
             sublote_id: t.sublote ? parseInt(t.sublote) : null,
           };
@@ -1041,80 +1002,44 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
             if (t.nombreTrabajo?.trim()) base.nombre_trabajo = t.nombreTrabajo.trim();
           }
           if (t.laborRealizada?.trim()) base.descripcion = t.laborRealizada.trim();
-          try {
-            if (i === 0 && isBackendId(t.id)) {
-              await jornalesApi.editar(parseInt(t.id), base);
-            } else {
-              const res = await jornalesApi.crear(pid, base);
-              if (i === 0 && !isBackendId(t.id) && res?.data?.id != null) {
-                mapeoIdsOtros[t.id] = String(res.data.id);
-              }
-            }
-          } catch (err: any) {
-            erroresGuardado.push(`Otros: ${err?.message ?? 'error desconocido'}`);
+          if (i === 0 && isBackendId(t.id)) {
+            updates.push(
+              jornalesApi.editar(parseInt(t.id), base).catch((err: any) => {
+                erroresGuardado.push(`Otros: ${err?.message ?? 'error desconocido'}`);
+              }),
+            );
+          } else {
+            newJornales.push({ localId: i === 0 ? t.id : '', tipo: 'otros', payload: base });
           }
         }
       }
-      if (otrosSinLabor > 0 && !silent) {
-        toast.error(
-          `${otrosSinLabor} registro(s) de "Otros" no se guardaron: falta configurar labores custom en Configuración → Labores de Palma.`,
-          { duration: 6000 },
-        );
-      }
-      // Auxiliares (FINCA — labores del catálogo unificado con categoria='FINCA')
-      // `t.nombre` ahora trae el id local de la persona (`'10'` empleado o
-      // `'O_5'` operario). `decodeIdPersona` lo expande al XOR del payload.
-      let fincaSinLabor = 0;
+
+      // === AUXILIARES (FINCA) ===
       for (const t of trabajosAuxiliares) {
         if (!t.labor || !t.nombre) continue;
         const laborKey = t.labor === 'Otro' ? (t.otraLabor || '') : t.labor;
         const laborId = laboresMap.get(laborKey) ?? laboresMap.get(t.labor);
-        if (!laborId) {
-          fincaSinLabor++;
-          continue;
-        }
+        if (!laborId) { fincaSinLabor++; continue; }
         const personaIds = decodeIdPersona(t.nombre);
         if (!personaIds.empleado_id && !personaIds.operario_id) continue;
-        const payload = {
-          labor_id: laborId,
-          ...personaIds,
-          ubicacion: t.lugar || undefined,
-        };
-        try {
-          if (isBackendId(t.id)) {
-            await jornalesApi.editar(parseInt(t.id), payload);
-          } else {
-            const res = await jornalesApi.crear(pid, payload);
-            if (res?.data?.id != null) {
-              mapeoIdsFinca[t.id] = String(res.data.id);
-            }
-          }
-        } catch (err: any) {
-          erroresGuardado.push(`Finca: ${err?.message ?? 'error desconocido'}`);
+        const payload = { labor_id: laborId, ...personaIds, ubicacion: t.lugar || undefined };
+        if (isBackendId(t.id)) {
+          updates.push(
+            jornalesApi.editar(parseInt(t.id), payload).catch((err: any) => {
+              erroresGuardado.push(`Finca: ${err?.message ?? 'error desconocido'}`);
+            }),
+          );
+        } else {
+          newJornales.push({ localId: t.id, tipo: 'finca', payload });
         }
       }
-      if (fincaSinLabor > 0 && !silent) {
-        toast.error(
-          `${fincaSinLabor} registro(s) de "Finca" no se guardaron: la labor seleccionada no existe en el catálogo. Configúrala en Configuración → Labores de Finca.`,
-          { duration: 6000 },
-        );
-      }
-      // Horas extras — endpoint `POST /operaciones/{id}/horas-extra` (§4.1).
-      // Payload: { empleado_id, tipo_hora_extra_id, cantidad_horas (0.25–12), observacion? }.
-      // Los operarios de tercero no aplican (§4 solo empleado_id).
-      let heOperarios = 0;
-      let heSinTipo = 0;
-      let heSinColab = 0;
-      let heHorasInvalidas = 0;
+
+      // === HORAS EXTRAS ===
       for (const h of horasExtras) {
-        // Validaciones específicas para que el usuario sepa qué falta.
         if (!h.colaboradorId) { heSinColab++; continue; }
         if (!h.tipoHora) { heSinTipo++; continue; }
-        // El backend exige rango 0.25–12 (§4.1). Antes se aceptaba 0 y
-        // el bucle lo saltaba silenciosamente.
         const horas = Number(h.numeroHoras);
         if (!horas || horas < 0.25 || horas > 12) { heHorasInvalidas++; continue; }
-        // Detectar operario por prefijo 'O_' — no tienen id numérico directo.
         if (h.colaboradorId.startsWith('O_')) { heOperarios++; continue; }
         const empleadoId = parseInt(h.colaboradorId);
         if (Number.isNaN(empleadoId)) { heSinColab++; continue; }
@@ -1131,43 +1056,18 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           cantidad_horas: horas,
           observacion: h.observacion || undefined,
         };
-        try {
-          if (isBackendId(h.id)) {
-            await horasExtraApi.editar(parseInt(h.id), payload);
-          } else {
-            const res = await horasExtraApi.crear(pid, payload);
-            if (res?.data?.id != null) {
-              mapeoIdsHE[h.id] = String(res.data.id);
-            }
-          }
-        } catch (err: any) {
-          erroresGuardado.push(`Horas extra: ${err?.message ?? 'error desconocido'}`);
-        }
-      }
-      if (!silent) {
-        const heMsgs: string[] = [];
-        if (heSinColab > 0)       heMsgs.push(`${heSinColab} sin colaborador`);
-        if (heSinTipo > 0)        heMsgs.push(`${heSinTipo} sin tipo de hora`);
-        if (heHorasInvalidas > 0) heMsgs.push(`${heHorasInvalidas} con cantidad fuera de rango (0.25–12)`);
-        if (heOperarios > 0)      heMsgs.push(`${heOperarios} de operarios de tercero (no permitido)`);
-        if (heMsgs.length > 0) {
-          toast.error(
-            `Horas extras no guardadas: ${heMsgs.join(', ')}.`,
-            { duration: 6000 },
+        if (isBackendId(h.id)) {
+          updates.push(
+            horasExtraApi.editar(parseInt(h.id), payload).catch((err: any) => {
+              erroresGuardado.push(`Horas extra: ${err?.message ?? 'error desconocido'}`);
+            }),
           );
+        } else {
+          newHE.push({ localId: h.id, payload });
         }
       }
-      // Resumen final de errores de guardado — antes se tragaban silenciosos.
-      if (erroresGuardado.length > 0 && !silent) {
-        const primeros = erroresGuardado.slice(0, 3).join(' · ');
-        toast.error(
-          `${erroresGuardado.length} error(es) al guardar: ${primeros}${
-            erroresGuardado.length > 3 ? ` (+${erroresGuardado.length - 3} más)` : ''
-          }`,
-          { duration: 7000 },
-        );
-      }
-      // Ausencias
+
+      // === AUSENCIAS ===
       for (const a of ausentes) {
         if (!a.colaboradorId) continue;
         let motivoId = motivosMap.get(a.motivo);
@@ -1177,33 +1077,90 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           }
         }
         if (!motivoId) continue;
-        // `motivo` en el backend es texto LIBRE (observación) según §5.1
-        // del doc, NO el nombre del motivo del catálogo. Solo se envía
-        // cuando el usuario eligió "Otro" y escribió texto propio; para
-        // motivos del catálogo mandamos '' (evita que al recargar el
-        // fallback lo muestre pisando al nombre real).
+        // `motivo` en el backend es texto LIBRE (observación) según §5.1 del doc.
+        // Solo se envía cuando el usuario eligió "Otro" y escribió texto propio.
         const esMotivoOtro = a.motivo === 'Otro';
         const payload = {
           empleado_id: parseInt(a.colaboradorId),
           motivo_ausencia_id: motivoId,
           motivo: esMotivoOtro ? (a.otroMotivo ?? '') : '',
         };
-        try {
-          if (isBackendId(a.id)) {
-            await ausenciasApi.editar(parseInt(a.id), payload);
-          } else {
-            const res = await ausenciasApi.crear(pid, payload);
-            if (res?.data?.id != null) {
-              mapeoIdsAusencia[a.id] = String(res.data.id);
-            }
-          }
-        } catch {}
+        if (isBackendId(a.id)) {
+          updates.push(ausenciasApi.editar(parseInt(a.id), payload).catch(() => {}));
+        } else {
+          newAusencias.push({ localId: a.id, payload });
+        }
       }
 
-      // ── Aplicar los mapeos localId → backendId al estado local ──
-      // Sin esto, si el usuario pulsa "Guardar Planilla" varias veces seguidas
-      // (sin recargar la pantalla), los items que tenían id local seguirían
-      // teniéndolo y se crearían duplicados en el backend.
+      // ── Disparar bulk creates y updates en paralelo ───────────────────────────
+      // 4 peticiones HTTP (una por tipo) + PUTs individuales, todo en paralelo.
+      // Cada bulk es una transacción en el backend → consistencia atómica por tipo.
+      const [jornalBulkRes, cosechaBulkRes, heBulkRes, ausenciaBulkRes] = (await Promise.all([
+        newJornales.length > 0
+          ? jornalesApi.bulkCrear(pid!, newJornales.map(i => i.payload))
+              .catch((e: any) => { erroresGuardado.push(`Jornales: ${e?.message ?? 'error en bulk'}`); return null; })
+          : Promise.resolve(null),
+        newCosechas.length > 0
+          ? cosechasApi.bulkCrear(pid!, newCosechas.map(i => i.payload))
+              .catch((e: any) => { erroresGuardado.push(`Cosechas: ${e?.message ?? 'error en bulk'}`); return null; })
+          : Promise.resolve(null),
+        newHE.length > 0
+          ? horasExtraApi.bulkCrear(pid!, newHE.map(i => i.payload))
+              .catch((e: any) => { erroresGuardado.push(`Horas extra: ${e?.message ?? 'error en bulk'}`); return null; })
+          : Promise.resolve(null),
+        newAusencias.length > 0
+          ? ausenciasApi.bulkCrear(pid!, newAusencias.map(i => i.payload))
+              .catch((e: any) => { erroresGuardado.push(`Ausencias: ${e?.message ?? 'error en bulk'}`); return null; })
+          : Promise.resolve(null),
+        Promise.allSettled(updates),
+      ])) as [any, any, any, any, any];
+
+      // ── Construir mapeos localId → backendId desde las respuestas bulk ────────
+      // Posición idx en la respuesta corresponde a posición idx en el array enviado.
+      const mapeoIdsCosecha:  Record<string, string> = {};
+      const mapeoIdsPlateo:   Record<string, string> = {};
+      const mapeoIdsPoda:     Record<string, string> = {};
+      const mapeoIdsFert:     Record<string, string> = {};
+      const mapeoIdsSanidad:  Record<string, string> = {};
+      const mapeoIdsOtros:    Record<string, string> = {};
+      const mapeoIdsFinca:    Record<string, string> = {};
+      const mapeoIdsHE:       Record<string, string> = {};
+      const mapeoIdsAusencia: Record<string, string> = {};
+
+      if (jornalBulkRes) {
+        (jornalBulkRes.data as Array<{ id: number }>).forEach((item, idx) => {
+          const { localId, tipo } = newJornales[idx];
+          if (!localId) return; // colaborador adicional, no necesita mapeo
+          const bid = String(item.id);
+          switch (tipo) {
+            case 'plateo':  mapeoIdsPlateo[localId]  = bid; break;
+            case 'poda':    mapeoIdsPoda[localId]     = bid; break;
+            case 'fert':    mapeoIdsFert[localId]     = bid; break;
+            case 'sanidad': mapeoIdsSanidad[localId]  = bid; break;
+            case 'otros':   mapeoIdsOtros[localId]    = bid; break;
+            case 'finca':   mapeoIdsFinca[localId]    = bid; break;
+          }
+        });
+      }
+      if (cosechaBulkRes) {
+        (cosechaBulkRes.data as Array<{ id: number }>).forEach((item, idx) => {
+          mapeoIdsCosecha[newCosechas[idx].localId] = String(item.id);
+        });
+      }
+      if (heBulkRes) {
+        (heBulkRes.data as Array<{ id: number }>).forEach((item, idx) => {
+          mapeoIdsHE[newHE[idx].localId] = String(item.id);
+        });
+      }
+      if (ausenciaBulkRes) {
+        (ausenciaBulkRes.data as Array<{ id: number }>).forEach((item, idx) => {
+          mapeoIdsAusencia[newAusencias[idx].localId] = String(item.id);
+        });
+      }
+
+      // ── Aplicar mapeos al estado local ───────────────────────────────────────
+      // Sin esto, al volver a pulsar "Guardar Planilla" sin recargar, los items
+      // locales conservan su id temporal y se duplican en el backend.
       const aplicarMapeo = <T extends { id: string }>(
         items: T[], mapeo: Record<string, string>,
       ): T[] => items.map(x => mapeo[x.id] ? { ...x, id: mapeo[x.id] } : x);
@@ -1228,10 +1185,39 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         setAusentes(prev => aplicarMapeo(prev, mapeoIdsAusencia));
 
       setPlanillaPersistida(true);
+
+      // ── Reportes de advertencias y errores ───────────────────────────────────
       if (!silent) {
+        if (otrosSinLabor > 0) {
+          toast.error(
+            `${otrosSinLabor} registro(s) de "Otros" no se guardaron: falta configurar labores custom en Configuración → Labores de Palma.`,
+            { duration: 6000 },
+          );
+        }
+        if (fincaSinLabor > 0) {
+          toast.error(
+            `${fincaSinLabor} registro(s) de "Finca" no se guardaron: la labor seleccionada no existe en el catálogo. Configúrala en Configuración → Labores de Finca.`,
+            { duration: 6000 },
+          );
+        }
+        const heMsgs: string[] = [];
+        if (heSinColab > 0)       heMsgs.push(`${heSinColab} sin colaborador`);
+        if (heSinTipo > 0)        heMsgs.push(`${heSinTipo} sin tipo de hora`);
+        if (heHorasInvalidas > 0) heMsgs.push(`${heHorasInvalidas} con cantidad fuera de rango (0.25–12)`);
+        if (heOperarios > 0)      heMsgs.push(`${heOperarios} de operarios de tercero (no permitido)`);
+        if (heMsgs.length > 0) {
+          toast.error(`Horas extras no guardadas: ${heMsgs.join(', ')}.`, { duration: 6000 });
+        }
+        if (erroresGuardado.length > 0) {
+          const primeros = erroresGuardado.slice(0, 3).join(' · ');
+          toast.error(
+            `${erroresGuardado.length} error(es) al guardar: ${primeros}${
+              erroresGuardado.length > 3 ? ` (+${erroresGuardado.length - 3} más)` : ''
+            }`,
+            { duration: 7000 },
+          );
+        }
         if (fertSaltadas.length > 0) {
-          // Antes esto fallaba en silencio. Ahora avisamos qué fertilizaciones
-          // no se persistieron y por qué (insumo no resuelto).
           toast.warning(
             `Planilla guardada, pero ${fertSaltadas.length} fertilización(es) no se guardaron porque no se pudo resolver el insumo: ${fertSaltadas.join(', ')}. Verifica el tipo de fertilizante seleccionado.`,
             { duration: 8000 },
