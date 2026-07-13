@@ -281,7 +281,6 @@ export default function Operaciones() {
                       <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Fecha</th>
                       <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Estado</th>
                       <th className="text-center p-4 font-semibold text-sm text-muted-foreground">Colaboradores</th>
-                      <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Total Jornales</th>
                       <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Acciones</th>
                     </tr>
                   </thead>
@@ -304,11 +303,6 @@ export default function Operaciones() {
                         <td className="p-4 text-center">
                           <span className="inline-flex items-center justify-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
                             {planilla.colaboradores_count ?? 0}
-                          </span>
-                        </td>
-                        <td className="p-4 text-right">
-                          <span className="font-semibold text-success">
-                            {formatearMoneda(planilla.total_general)}
                           </span>
                         </td>
                         <td className="p-4">

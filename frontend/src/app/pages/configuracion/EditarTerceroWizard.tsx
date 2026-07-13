@@ -219,8 +219,12 @@ export default function EditarTerceroWizard() {
    */
   const [operariosOriginalesSnapshot, setOperariosOriginalesSnapshot] = useState<Operario[]>([]);
 
-  const epsOptions = bundle?.eps.map((e) => e.nombre) ?? null;
-  const arlOptions = bundle?.arl.map((a) => a.nombre) ?? null;
+  const epsOptions = bundle?.eps
+    .map((e) => e.nombre)
+    .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' })) ?? null;
+  const arlOptions = bundle?.arl
+    .map((a) => a.nombre)
+    .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' })) ?? null;
 
   // ── Carga inicial ──────────────────────────────────────────────────────────
   useEffect(() => {

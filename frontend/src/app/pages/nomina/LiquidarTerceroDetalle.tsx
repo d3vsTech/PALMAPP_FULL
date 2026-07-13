@@ -18,7 +18,7 @@
  *   6. Registrar pago: POST /registrar-pago (§7.7).
  *   7. Descargar/imprimir PDF del acta (§7.8).
  */
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -56,15 +56,57 @@ function toNumber(v: string | number | null | undefined): number {
   return parseFloat(v) || 0;
 }
 
-// ── Colores por labor (mismo esquema visual de V.18) ─────────────────────────
-const LABOR_META_PALMA = {
+// ── Colores por labor (esquema V.19) ─────────────────────────────────────────
+// Cada labor tiene su color: cosecha (ámbar), poda (verde oscuro finca),
+// fertilización (azul), sanidad (rosa), abonada (púrpura), trabajos de finca (zinc).
+type LaborMeta = { header: string; bg: string; chip: string };
+
+const LABOR_META_COSECHA: LaborMeta = {
   header: 'text-amber-600',
   bg: 'bg-amber-50/60 dark:bg-amber-950/20',
+  chip: 'bg-amber-500/10 text-amber-700 border-amber-500/30',
 };
-const LABOR_META_FINCA = {
+const LABOR_META_PODA: LaborMeta = {
+  header: 'text-[#1E5631]',
+  bg: 'bg-[#1E5631]/5',
+  chip: 'bg-[#1E5631]/10 text-[#1E5631] border-[#1E5631]/30',
+};
+const LABOR_META_PLATEO: LaborMeta = LABOR_META_PODA;
+const LABOR_META_FERTILIZACION: LaborMeta = {
+  header: 'text-blue-600',
+  bg: 'bg-blue-50/60 dark:bg-blue-950/20',
+  chip: 'bg-blue-500/10 text-blue-700 border-blue-500/30',
+};
+const LABOR_META_ABONADA: LaborMeta = {
+  header: 'text-purple-600',
+  bg: 'bg-purple-50/60 dark:bg-purple-950/20',
+  chip: 'bg-purple-500/10 text-purple-700 border-purple-500/30',
+};
+const LABOR_META_SANIDAD: LaborMeta = {
+  header: 'text-rose-600',
+  bg: 'bg-rose-50/60 dark:bg-rose-950/20',
+  chip: 'bg-rose-500/10 text-rose-700 border-rose-500/30',
+};
+const LABOR_META_FINCA: LaborMeta = {
   header: 'text-zinc-700 dark:text-zinc-300',
   bg: 'bg-zinc-100/80 dark:bg-zinc-800/40',
+  chip: 'bg-zinc-500/10 text-zinc-700 border-zinc-500/30 dark:text-zinc-300',
 };
+
+/** Resuelve el color según el nombre de la labor (case-insensitive). */
+function metaDeLabor(nombreLabor: string): LaborMeta {
+  const n = (nombreLabor || '').toLowerCase();
+  if (n.includes('cosecha')) return LABOR_META_COSECHA;
+  if (n.includes('plateo')) return LABOR_META_PLATEO;
+  if (n.includes('poda')) return LABOR_META_PODA;
+  if (n.includes('fertiliz')) return LABOR_META_FERTILIZACION;
+  if (n.includes('abonad')) return LABOR_META_ABONADA;
+  if (n.includes('sanidad')) return LABOR_META_SANIDAD;
+  return LABOR_META_FINCA;
+}
+
+// Aliases legacy usados en el JSX del desglose.
+const LABOR_META_PALMA = LABOR_META_COSECHA;
 
 export default function LiquidarTerceroDetalle() {
   const { nominaId: nominaIdParam, terceroId: terceroIdParam } = useParams();
@@ -168,10 +210,13 @@ export default function LiquidarTerceroDetalle() {
     }
   };
 
-  const abrirModalDescuento = (operarioId: number | null, operarioNombre: string) => {
-    setModalDescuento({ operarioId, operarioNombre });
+  const abrirModalDescuento = (_operarioId: number | null, terceroNombre: string) => {
+    // API v2: los descuentos van a nivel del acta del tercero, no del operario.
+    // Se conserva la firma con `operarioId` para no romper llamadas existentes,
+    // pero se ignora — el modal ya no pide operario.
+    setModalDescuento({ operarioId: null, operarioNombre: terceroNombre });
     setNuevoDescuento({
-      operario_id: operarioId != null ? String(operarioId) : '',
+      operario_id: '',
       concepto_id: '',
       valor: '',
       observacion: '',
@@ -180,14 +225,6 @@ export default function LiquidarTerceroDetalle() {
 
   const guardarDescuento = async () => {
     if (!nominaId || !terceroId || !modalDescuento) return;
-    // Cuando el modal se abre desde el bloque general del acta, el operario
-    // se elige en el select. Cuando se abre desde un operario específico
-    // (flujo legacy), el operario viene fijo en `modalDescuento.operarioId`.
-    const operarioId = modalDescuento.operarioId ?? parseInt(nuevoDescuento.operario_id);
-    if (!operarioId || Number.isNaN(operarioId)) {
-      toast.error('Selecciona a qué operario aplicar el descuento');
-      return;
-    }
     if (!nuevoDescuento.concepto_id) {
       toast.error('Selecciona un concepto');
       return;
@@ -202,7 +239,6 @@ export default function LiquidarTerceroDetalle() {
       const res = await nominaApi.terceros.agregarDescuento(
         nominaId,
         terceroId,
-        operarioId,
         {
           concepto_id: parseInt(nuevoDescuento.concepto_id),
           valor,
@@ -226,14 +262,13 @@ export default function LiquidarTerceroDetalle() {
     }
   };
 
-  const eliminarDescuento = async (operarioId: number, descuentoId: number) => {
+  const eliminarDescuento = async (descuentoId: number) => {
     if (!nominaId || !terceroId) return;
     setEliminandoDescuentoId(descuentoId);
     try {
       const res = await nominaApi.terceros.eliminarDescuento(
         nominaId,
         terceroId,
-        operarioId,
         descuentoId,
       );
       setDetalle(res.data);
@@ -506,16 +541,19 @@ export default function LiquidarTerceroDetalle() {
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
-                    {/* Chips de labores realizadas */}
+                    {/* Chips de labores realizadas — color por labor (V.19) */}
                     <div className="flex gap-2 flex-wrap justify-end max-w-md">
-                      {(o.labores_realizadas ?? []).map((labor, idx) => (
-                        <span
-                          key={`${labor}-${idx}`}
-                          className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground"
-                        >
-                          {labor.toUpperCase()}
-                        </span>
-                      ))}
+                      {(o.labores_realizadas ?? []).map((labor, idx) => {
+                        const meta = metaDeLabor(labor);
+                        return (
+                          <span
+                            key={`${labor}-${idx}`}
+                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${meta.chip}`}
+                          >
+                            {labor.toUpperCase()}
+                          </span>
+                        );
+                      })}
                     </div>
                     <p className="font-bold text-sm text-primary w-28 text-right">
                       ${subtotal.toLocaleString('es-CO')}
@@ -563,115 +601,178 @@ export default function LiquidarTerceroDetalle() {
                         No se pudo cargar el desglose.
                       </div>
                     )}
-                    {desglose && desglose !== 'cargando' && desglose !== 'error' && (
-                      <>
-                        {/* Cosecha */}
-                        {desglose.cosecha.length > 0 && (
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                              <thead>
-                                <tr className="border-b border-border text-xs text-muted-foreground bg-muted/20">
-                                  <th className="text-left p-3 pl-5 font-semibold">Lote</th>
-                                  <th className="text-left p-3 font-semibold">Sublote</th>
-                                  <th className="text-right p-3 font-semibold">Gajos</th>
-                                  <th className="text-right p-3 font-semibold">Prom.</th>
-                                  <th className="text-right p-3 font-semibold">Peso (kg)</th>
-                                  <th className="text-right p-3 font-semibold">Precio Unit.</th>
-                                  <th className="text-right p-3 pr-5 font-semibold">Total</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                <tr className={LABOR_META_PALMA.bg}>
-                                  <td colSpan={7} className={`px-5 py-2 text-xs font-bold tracking-wider ${LABOR_META_PALMA.header}`}>
-                                    COSECHA
-                                  </td>
-                                </tr>
-                                {desglose.cosecha.map((c, idx) => (
-                                  <tr
-                                    key={`cosecha-${idx}`}
-                                    className="border-b border-border/50 last:border-0 hover:bg-muted/10"
-                                  >
-                                    <td className="p-3 pl-5 font-semibold">{c.lote}</td>
-                                    <td className="p-3 text-muted-foreground">{c.sublote ?? '—'}</td>
-                                    <td className="p-3 text-right">
-                                      <span className="font-semibold">{c.gajos.toLocaleString('es-CO')}</span>{' '}
-                                      <span className="text-xs text-muted-foreground">gajos</span>
-                                    </td>
-                                    <td className="p-3 text-right text-muted-foreground">
-                                      {c.promedio_kg_gajo > 0 ? c.promedio_kg_gajo.toFixed(1) : '—'}
-                                    </td>
-                                    <td className="p-3 text-right font-semibold">
-                                      {c.peso_kg > 0 ? c.peso_kg.toLocaleString('es-CO') : '—'}
-                                    </td>
-                                    <td className="p-3 text-right text-muted-foreground">
-                                      ${c.precio_unit_kg.toLocaleString('es-CO')}
-                                      <span className="text-xs ml-0.5">/kg</span>
-                                    </td>
-                                    <td className={`p-3 pr-5 text-right font-semibold ${LABOR_META_PALMA.header}`}>
-                                      ${c.total.toLocaleString('es-CO')}
+                    {desglose && desglose !== 'cargando' && desglose !== 'error' && (() => {
+                      // Layout unificado V.19: una sola tabla con 7 columnas y
+                      // grupos por labor con header tintado + subtotal por grupo.
+                      // Los jornales de PALMA se agrupan por labor_nombre; los
+                      // de FINCA quedan agrupados como "TRABAJOS DE FINCA".
+                      const jornalesPalma = desglose.jornales.filter((j) => j.categoria !== 'FINCA');
+                      const jornalesFinca = desglose.jornales.filter((j) => j.categoria === 'FINCA');
+
+                      const gruposPalma: Record<string, typeof jornalesPalma> = {};
+                      for (const j of jornalesPalma) {
+                        (gruposPalma[j.labor_nombre] ??= []).push(j);
+                      }
+
+                      const totalCosecha = desglose.cosecha.reduce((s, c) => s + c.total, 0);
+                      const totalFinca = jornalesFinca.reduce((s, j) => s + j.total, 0);
+
+                      const hayContenido =
+                        desglose.cosecha.length > 0 ||
+                        desglose.jornales.length > 0;
+
+                      if (!hayContenido) {
+                        return (
+                          <div className="py-6 text-center text-sm text-muted-foreground">
+                            Sin registros de labores en el período.
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b border-border text-xs text-muted-foreground bg-muted/20">
+                                <th className="text-left p-3 pl-5 font-semibold">Lote</th>
+                                <th className="text-left p-3 font-semibold">Sublote</th>
+                                <th className="text-right p-3 font-semibold">Cantidad</th>
+                                <th className="text-right p-3 font-semibold">Prom.</th>
+                                <th className="text-right p-3 font-semibold">Peso (kg)</th>
+                                <th className="text-right p-3 font-semibold">Precio Unit.</th>
+                                <th className="text-right p-3 pr-5 font-semibold">Total</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {/* ─── COSECHA ─── */}
+                              {desglose.cosecha.length > 0 && (
+                                <>
+                                  <tr className={LABOR_META_COSECHA.bg}>
+                                    <td colSpan={7} className={`px-5 py-2 text-xs font-bold tracking-wider ${LABOR_META_COSECHA.header}`}>
+                                      COSECHA
                                     </td>
                                   </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
-
-                        {/* Jornales */}
-                        {desglose.jornales.length > 0 && (
-                          <div className="overflow-x-auto border-t border-border/40">
-                            <table className="w-full text-sm">
-                              <thead>
-                                <tr className="border-b border-border text-xs text-muted-foreground bg-muted/20">
-                                  <th className="text-left p-3 pl-5 font-semibold">Labor</th>
-                                  <th className="text-left p-3 font-semibold">Lote / Sublote</th>
-                                  <th className="text-right p-3 font-semibold">Unidades</th>
-                                  <th className="text-right p-3 font-semibold">Precio Unit.</th>
-                                  <th className="text-right p-3 pr-5 font-semibold">Total</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {desglose.jornales.map((j, idx) => {
-                                  const meta = j.categoria === 'FINCA' ? LABOR_META_FINCA : LABOR_META_PALMA;
-                                  return (
+                                  {desglose.cosecha.map((c, idx) => (
                                     <tr
-                                      key={`jornal-${idx}`}
-                                      className="border-b border-border/50 last:border-0 hover:bg-muted/10"
+                                      key={`cosecha-${idx}`}
+                                      className="border-b border-border/50 hover:bg-muted/10"
                                     >
-                                      <td className="p-3 pl-5">
-                                        <span className="font-semibold">{j.labor_nombre}</span>
-                                        <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded ${meta.bg} ${meta.header}`}>
-                                          {j.categoria}
-                                        </span>
-                                      </td>
-                                      <td className="p-3 text-muted-foreground">
-                                        {j.lote ? `${j.lote}${j.sublote ? ` · ${j.sublote}` : ''}` : '—'}
-                                      </td>
+                                      <td className="p-3 pl-5 font-semibold">{c.lote}</td>
+                                      <td className="p-3 text-muted-foreground">{c.sublote ?? '—'}</td>
                                       <td className="p-3 text-right">
-                                        <span className="font-semibold">{j.unidades.toLocaleString('es-CO')}</span>{' '}
-                                        <span className="text-xs text-muted-foreground">{j.unidad}</span>
+                                        <span className="font-semibold">{c.gajos.toLocaleString('es-CO')}</span>{' '}
+                                        <span className="text-xs text-muted-foreground">gajos</span>
+                                      </td>
+                                      <td className="p-3 text-right text-muted-foreground">
+                                        {c.promedio_kg_gajo > 0 ? c.promedio_kg_gajo.toFixed(1) : '—'}
+                                      </td>
+                                      <td className="p-3 text-right font-semibold">
+                                        {c.peso_kg > 0 ? c.peso_kg.toLocaleString('es-CO') : '—'}
+                                      </td>
+                                      <td className="p-3 text-right text-muted-foreground">
+                                        ${c.precio_unit_kg.toLocaleString('es-CO')}
+                                        <span className="text-xs ml-0.5">/kg</span>
+                                      </td>
+                                      <td className={`p-3 pr-5 text-right font-semibold ${LABOR_META_COSECHA.header}`}>
+                                        ${c.total.toLocaleString('es-CO')}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                  <tr className="border-b border-border">
+                                    <td colSpan={6} className="p-2 pr-5 text-right text-xs text-muted-foreground">
+                                      Subtotal Cosecha
+                                    </td>
+                                    <td className={`p-2 pr-5 text-right text-sm font-bold ${LABOR_META_COSECHA.header}`}>
+                                      ${totalCosecha.toLocaleString('es-CO')}
+                                    </td>
+                                  </tr>
+                                </>
+                              )}
+
+                              {/* ─── PALMA (poda / fertilización / sanidad / abonada / plateo) ─── */}
+                              {Object.entries(gruposPalma).map(([nombreLabor, filas]) => {
+                                const meta = metaDeLabor(nombreLabor);
+                                const subtotalGrupo = filas.reduce((s, j) => s + j.total, 0);
+                                return (
+                                  <React.Fragment key={`grupo-${nombreLabor}`}>
+                                    <tr className={meta.bg}>
+                                      <td colSpan={7} className={`px-5 py-2 text-xs font-bold tracking-wider ${meta.header}`}>
+                                        {nombreLabor.toUpperCase()}
+                                      </td>
+                                    </tr>
+                                    {filas.map((j, idx) => (
+                                      <tr
+                                        key={`palma-${nombreLabor}-${idx}`}
+                                        className="border-b border-border/50 hover:bg-muted/10"
+                                      >
+                                        <td className="p-3 pl-5 font-semibold">{j.lote ?? '—'}</td>
+                                        <td className="p-3 text-muted-foreground">{j.sublote ?? '—'}</td>
+                                        <td className="p-3 text-right">
+                                          <span className="font-semibold">{j.unidades.toLocaleString('es-CO')}</span>{' '}
+                                          <span className="text-xs text-muted-foreground">{j.unidad}</span>
+                                        </td>
+                                        <td className="p-3 text-right text-muted-foreground">—</td>
+                                        <td className="p-3 text-right text-muted-foreground">—</td>
+                                        <td className="p-3 text-right text-muted-foreground">
+                                          ${j.precio_unit.toLocaleString('es-CO')}
+                                          <span className="text-xs ml-0.5">/{j.unidad}</span>
+                                        </td>
+                                        <td className={`p-3 pr-5 text-right font-semibold ${meta.header}`}>
+                                          ${j.total.toLocaleString('es-CO')}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                    <tr className="border-b border-border">
+                                      <td colSpan={6} className="p-2 pr-5 text-right text-xs text-muted-foreground">
+                                        Subtotal {nombreLabor}
+                                      </td>
+                                      <td className={`p-2 pr-5 text-right text-sm font-bold ${meta.header}`}>
+                                        ${subtotalGrupo.toLocaleString('es-CO')}
+                                      </td>
+                                    </tr>
+                                  </React.Fragment>
+                                );
+                              })}
+
+                              {/* ─── TRABAJOS DE FINCA ─── */}
+                              {jornalesFinca.length > 0 && (
+                                <>
+                                  <tr className={LABOR_META_FINCA.bg}>
+                                    <td colSpan={7} className={`px-5 py-2 text-xs font-bold tracking-wider ${LABOR_META_FINCA.header}`}>
+                                      TRABAJOS DE FINCA
+                                    </td>
+                                  </tr>
+                                  {jornalesFinca.map((j, idx) => (
+                                    <tr
+                                      key={`finca-${idx}`}
+                                      className="border-b border-border/50 hover:bg-muted/10"
+                                    >
+                                      <td className="p-3 pl-5 font-semibold" colSpan={5}>
+                                        {j.labor_nombre}
                                       </td>
                                       <td className="p-3 text-right text-muted-foreground">
                                         ${j.precio_unit.toLocaleString('es-CO')}
                                       </td>
-                                      <td className={`p-3 pr-5 text-right font-semibold ${meta.header}`}>
+                                      <td className={`p-3 pr-5 text-right font-semibold ${LABOR_META_FINCA.header}`}>
                                         ${j.total.toLocaleString('es-CO')}
                                       </td>
                                     </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
-
-                        {desglose.cosecha.length === 0 && desglose.jornales.length === 0 && (
-                          <div className="py-6 text-center text-sm text-muted-foreground">
-                            Sin registros de labores en el período.
-                          </div>
-                        )}
-                      </>
-                    )}
+                                  ))}
+                                  <tr className="border-b border-border">
+                                    <td colSpan={6} className="p-2 pr-5 text-right text-xs text-muted-foreground">
+                                      Subtotal Finca
+                                    </td>
+                                    <td className={`p-2 pr-5 text-right text-sm font-bold ${LABOR_META_FINCA.header}`}>
+                                      ${totalFinca.toLocaleString('es-CO')}
+                                    </td>
+                                  </tr>
+                                </>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      );
+                    })()}
 
                     {/* Los descuentos se gestionan a nivel del acta,
                         no del operario — ver bloque general debajo. */}
@@ -682,18 +783,11 @@ export default function LiquidarTerceroDetalle() {
           })
         )}
 
-        {/* Descuentos a nivel del acta (consolidado de todos los operarios). */}
+        {/* Descuentos a nivel del acta del contratista (API v2 §7.5/§7.6). */}
         {(() => {
-          const todosLosDescuentos = (detalle?.operarios ?? []).flatMap((op) =>
-            (op.descuentos ?? []).map((d) => ({
-              ...d,
-              operarioId: op.operario_id,
-              operarioNombre: op.nombre_completo,
-            })),
-          );
-          const totalDescuentosActa = todosLosDescuentos.reduce(
-            (s, d) => s + toNumber(d.valor), 0,
-          );
+          const descuentosActa = detalle?.acta?.descuentos ?? [];
+          const totalDescuentosActa = toNumber(detalle?.acta?.total_descuentos ?? 0)
+            || descuentosActa.reduce((s, d) => s + toNumber(d.valor), 0);
           return (
             <div className="border-t border-destructive/20">
               <div className="flex items-center justify-between px-5 py-3 bg-destructive/5">
@@ -712,13 +806,13 @@ export default function LiquidarTerceroDetalle() {
                   </Button>
                 )}
               </div>
-              {todosLosDescuentos.length === 0 ? (
+              {descuentosActa.length === 0 ? (
                 <div className="py-4 text-center text-sm font-semibold text-destructive/70 bg-destructive/[0.03]">
                   $0
                 </div>
               ) : (
                 <div className="divide-y divide-destructive/10 bg-destructive/[0.03]">
-                  {todosLosDescuentos.map((d) => (
+                  {descuentosActa.map((d) => (
                     <div
                       key={d.id}
                       className="flex items-center justify-between gap-3 px-5 py-2.5"
@@ -727,10 +821,11 @@ export default function LiquidarTerceroDetalle() {
                         <Minus className="h-3.5 w-3.5 text-destructive flex-shrink-0" />
                         <div className="min-w-0">
                           <p className="text-sm font-medium truncate">{d.concepto_nombre}</p>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {d.operarioNombre}
-                            {d.observacion ? ` · ${d.observacion}` : ''}
-                          </p>
+                          {d.observacion && (
+                            <p className="text-xs text-muted-foreground truncate">
+                              {d.observacion}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <p className="text-sm font-bold text-destructive whitespace-nowrap">
@@ -740,7 +835,7 @@ export default function LiquidarTerceroDetalle() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => eliminarDescuento(d.operarioId, d.id)}
+                          onClick={() => eliminarDescuento(d.id)}
                           disabled={eliminandoDescuentoId === d.id}
                           className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10 flex-shrink-0"
                           title="Eliminar descuento"
@@ -864,34 +959,10 @@ export default function LiquidarTerceroDetalle() {
               Agregar descuento
             </DialogTitle>
             <DialogDescription>
-              {modalDescuento?.operarioId != null
-                ? modalDescuento.operarioNombre
-                : `Elige el operario del acta al que se aplicará`}
+              Se aplicará al acta de {modalDescuento?.operarioNombre ?? 'la empresa'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            {modalDescuento?.operarioId == null && (
-              <div className="space-y-1.5">
-                <Label className="text-xs">Operario *</Label>
-                <Select
-                  value={nuevoDescuento.operario_id}
-                  onValueChange={(v) =>
-                    setNuevoDescuento((prev) => ({ ...prev, operario_id: v }))
-                  }
-                >
-                  <SelectTrigger className="h-9">
-                    <SelectValue placeholder="Selecciona un operario..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(detalle?.operarios ?? []).map((op) => (
-                      <SelectItem key={op.operario_id} value={String(op.operario_id)}>
-                        {op.nombre_completo}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
             <div className="space-y-1.5">
               <Label className="text-xs">Concepto *</Label>
               <Select

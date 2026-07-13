@@ -326,7 +326,7 @@ export function PromediosTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {lotes.map((lote) => {
+              {[...lotes].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((lote) => {
                 // Promedio más reciente del año seleccionado para este lote.
                 // Si hay varios baselines por (lote, año), se elige por
                 // `updated_at` desc (mismo criterio que `valorActual`).

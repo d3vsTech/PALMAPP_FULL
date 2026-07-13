@@ -647,9 +647,19 @@ export const viajesApi = {
   eliminarDetalle: (viajeId: number, detalleId: number) =>
     del<{ message: string }>(`/viajes/${viajeId}/detalles/${detalleId}`),
 
-  /** PUT /viajes/{id}/detalles/{detalleId}/reconteo — hidratar gajos_reconteo + peso (solo CREADO, no aprobado) */
+  /**
+   * PUT /viajes/{id}/detalles/{detalleId}/reconteo — hidratar `gajos_en_viaje`
+   * + peso (solo CREADO, no aprobado).
+   *
+   * §5.5 v2: el reconteo puede superar `gajos_reportados`. El endpoint acepta
+   * cualquier valor ≥ 0. Cuando el total excede lo reportado, la respuesta
+   * incluye `advertencia` (string informativo, NO bloquea la operación).
+   */
   hidratarReconteo: (viajeId: number, detalleId: number, payload: HidratarReconteoPayload) =>
-    put<{ data: ViajeDetalle }>(`/viajes/${viajeId}/detalles/${detalleId}/reconteo`, payload),
+    put<{ data: ViajeDetalle; advertencia?: string }>(
+      `/viajes/${viajeId}/detalles/${detalleId}/reconteo`,
+      payload,
+    ),
 
   /**
    * POST /viajes/{id}/detalles/{detalleId}/aprobar-reconteo

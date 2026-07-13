@@ -321,7 +321,7 @@ export function InsumosTab() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {insumos.map((insumo) => (
+                  {[...insumos].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((insumo) => (
                     <TableRow key={insumo.id} className="hover:bg-muted/50 transition-colors">
                       <TableCell className="font-medium">{insumo.nombre}</TableCell>
                       <TableCell>

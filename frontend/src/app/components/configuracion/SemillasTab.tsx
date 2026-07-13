@@ -316,7 +316,7 @@ export function SemillasTab() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {semillas.map((semilla) => (
+                  {[...semillas].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((semilla) => (
                     <TableRow key={semilla.id} className="hover:bg-muted/50 transition-colors">
                       <TableCell>
                         <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">

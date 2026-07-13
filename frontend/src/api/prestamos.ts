@@ -161,6 +161,75 @@ export interface EditarPrestamoPayload {
   inicio_quincena?: number | null;
 }
 
+// ─── Abonos (doc §8) ──────────────────────────────────────────────────────────
+
+/**
+ * Medios de pago aceptados por el endpoint de abonos directos (doc §8.2).
+ * El backend responde también con `medio_pago_label` con la etiqueta legible.
+ */
+export type MedioPagoAbono =
+  | 'DESCUENTO_NOMINA'
+  | 'TRANSFERENCIA'
+  | 'EFECTIVO'
+  | 'CHEQUE'
+  | 'OTRO';
+
+/**
+ * Tipo del abono: NOMINA si fue aplicado vía liquidación de nómina,
+ * DIRECTO si fue registrado con `POST /prestamos/{id}/abonos`.
+ */
+export type TipoAbono = 'NOMINA' | 'DIRECTO';
+
+/** Fila del historial unificado de abonos (doc §8.1). */
+export interface AbonoPrestamo {
+  id: number;
+  numero_cuota: number;
+  /** YYYY-MM-DD. */
+  fecha: string;
+  valor: number | string;
+  medio_pago: MedioPagoAbono;
+  /** Etiqueta legible provista por el backend, ej. "Descuento nómina". */
+  medio_pago_label: string;
+  referencia: string | null;
+  nota: string | null;
+  saldo_tras_abono: number | string;
+  tipo: TipoAbono;
+  /** Nombre del usuario que registró el abono. */
+  registrado_por: string;
+}
+
+/** Resumen financiero del préstamo devuelto por `GET /prestamos/{id}/abonos`. */
+export interface PrestamoResumenAbonos {
+  id: number;
+  concepto: string;
+  estado: EstadoPrestamo;
+  valor_total: number | string;
+  total_abonado: number | string;
+  saldo_pendiente: number | string;
+  cuota_valor: number | string;
+  cuotas_pagadas: number;
+  num_cuotas: number;
+  /** Porcentaje 0–100 calculado por el backend. */
+  avance_pct: number;
+}
+
+/** Respuesta de `GET` y `POST /prestamos/{id}/abonos`. */
+export interface HistorialAbonos {
+  prestamo: PrestamoResumenAbonos;
+  abonos: AbonoPrestamo[];
+}
+
+/** Payload de `POST /prestamos/{id}/abonos` (doc §8.2). */
+export interface RegistrarAbonoPayload {
+  /** YYYY-MM-DD. No puede ser fecha futura. */
+  fecha: string;
+  medio_pago: MedioPagoAbono;
+  /** Nº transferencia, comprobante, etc. Max 100. */
+  referencia?: string | null;
+  /** Observación interna. Max 500. */
+  nota?: string | null;
+}
+
 // ─── Endpoints ────────────────────────────────────────────────────────────────
 
 export const prestamosApi = {
@@ -218,6 +287,31 @@ export const prestamosApi = {
    */
   eliminar: (id: number) =>
     apiClient.delete<{ message: string }>(`/v1/tenant/prestamos/${id}`, T),
+
+  /**
+   * GET /prestamos/{id}/abonos — historial unificado (nómina + directos)
+   * ordenado por `numero_cuota` ASC + resumen financiero del préstamo
+   * (doc §8.1).
+   */
+  historialAbonos: (id: number) =>
+    apiClient.get<{ data: HistorialAbonos }>(
+      `/v1/tenant/prestamos/${id}/abonos`,
+      T,
+    ),
+
+  /**
+   * POST /prestamos/{id}/abonos — registra un abono DIRECTO (no proveniente
+   * de nómina). El backend auto-aplica la próxima cuota PENDIENTE del
+   * calendario y devuelve resumen + historial actualizado (doc §8.2).
+   *
+   * Errores: 422 `PRESTAMO_NO_VIGENTE`, 422 `PRESTAMO_SIN_CUOTAS_PENDIENTES`.
+   */
+  registrarAbono: (id: number, payload: RegistrarAbonoPayload) =>
+    apiClient.post<{ data: HistorialAbonos; message: string }>(
+      `/v1/tenant/prestamos/${id}/abonos`,
+      payload,
+      T,
+    ),
 };
 
 // ─── Códigos de error específicos (doc §15) ───────────────────────────────────
@@ -231,6 +325,10 @@ export const PrestamoErrorCodes = {
   PRESTAMO_CUOTA_EMPLEADO_MISMATCH: 'PRESTAMO_CUOTA_EMPLEADO_MISMATCH',
   /** Intento de crear un préstamo para un operario de tercero (doc §0). */
   PRESTAMO_SOLO_COLABORADORES: 'PRESTAMO_SOLO_COLABORADORES',
+  /** Intento de registrar abono en préstamo CANCELADO o PAGADO (doc §8.2). */
+  PRESTAMO_NO_VIGENTE: 'PRESTAMO_NO_VIGENTE',
+  /** Todas las cuotas del préstamo ya fueron aplicadas (doc §8.2). */
+  PRESTAMO_SIN_CUOTAS_PENDIENTES: 'PRESTAMO_SIN_CUOTAS_PENDIENTES',
 } as const;
 
 export type PrestamoErrorCode =

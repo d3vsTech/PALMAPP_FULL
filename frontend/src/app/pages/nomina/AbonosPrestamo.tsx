@@ -1,17 +1,19 @@
 /**
- * Abonos del Préstamo — pantalla que lista los abonos aplicados a un préstamo
- * puntual y permite registrar nuevos abonos manuales.
+ * Abonos del Préstamo — pantalla que muestra el historial de abonos aplicados
+ * a un préstamo y permite registrar abonos directos (transferencia, efectivo,
+ * cheque, etc.) que aplican la próxima cuota PENDIENTE.
  *
- * Estado actual del backend:
- *  - El API de préstamos SOLO expone `prestamosApi.ver(id)` (cabecera + cuotas
- *    aplicadas automáticamente por descuento de nómina).
- *  - No existe endpoint `POST /prestamos/{id}/abonos` para abonos manuales
- *    (transferencia / efectivo / cheque). La UI queda montada esperando ese
- *    endpoint — por ahora los abonos manuales se guardan solo en memoria y
- *    se muestra un aviso al usuario.
+ * Conectada a:
+ *  - GET  /prestamos/{id}/abonos   → resumen financiero + historial unificado
+ *                                    (nómina + directos), ordenado por
+ *                                    numero_cuota ASC (doc §8.1).
+ *  - POST /prestamos/{id}/abonos   → registra abono DIRECTO; backend
+ *                                    auto-aplica la siguiente cuota
+ *                                    pendiente (doc §8.2).
  *
- * Los abonos automáticos (cuotas descontadas por nómina) SÍ vienen del backend
- * en el detalle del préstamo. Se muestran en la tabla junto con los manuales.
+ * Los abonos vía nómina (tipo=NOMINA) aparecen automáticamente en el
+ * historial cuando el liquidador aplica una cuota en la liquidación
+ * (§7.2 de API_PRESTAMOS).
  */
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router';
@@ -29,24 +31,24 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
 import {
-  ArrowLeft, Plus, DollarSign, Calendar, CheckCircle2, Clock, Loader2, Info,
+  ArrowLeft, Plus, DollarSign, Calendar, CheckCircle2, Clock, Loader2,
 } from 'lucide-react';
-import { prestamosApi, type Prestamo } from '../../../api/prestamos';
+import {
+  prestamosApi,
+  PrestamoErrorCodes,
+  type MedioPagoAbono,
+  type HistorialAbonos,
+  type AbonoPrestamo,
+} from '../../../api/prestamos';
 import type { ApiError } from '../../../api/client';
 import { formatThousands, parseCOP } from '../../components/lib/format';
 
-const MEDIOS_PAGO = ['Descuento nómina', 'Transferencia', 'Efectivo', 'Cheque', 'Otro'];
-
-interface AbonoLocal {
-  id: string;
-  fecha: string;
-  valor: number;
-  medioPago: string;
-  referencia: string;
-  nota: string;
-  /** true si es un abono manual creado en esta sesión (mock local). */
-  esManualLocal?: boolean;
-}
+const MEDIOS_PAGO: Array<{ value: MedioPagoAbono; label: string }> = [
+  { value: 'TRANSFERENCIA',    label: 'Transferencia' },
+  { value: 'EFECTIVO',         label: 'Efectivo' },
+  { value: 'CHEQUE',           label: 'Cheque' },
+  { value: 'OTRO',             label: 'Otro' },
+];
 
 function toNumber(v: string | number | null | undefined): number {
   if (v == null) return 0;
@@ -66,118 +68,110 @@ export default function AbonosPrestamo() {
   const { prestamoId } = useParams();
   const navigate = useNavigate();
 
-  const [prestamo, setPrestamo] = useState<Prestamo | null>(null);
+  const [historial, setHistorial] = useState<HistorialAbonos | null>(null);
   const [cargando, setCargando] = useState(true);
-  const [abonos, setAbonos] = useState<AbonoLocal[]>([]);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    fecha: string;
+    valor: string;
+    medioPago: MedioPagoAbono;
+    referencia: string;
+    nota: string;
+  }>({
     fecha: new Date().toISOString().split('T')[0],
     valor: '',
-    medioPago: 'Transferencia',
+    medioPago: 'TRANSFERENCIA',
     referencia: '',
     nota: '',
   });
 
-  // ── Carga del préstamo + hidratación de abonos automáticos ─────────────────
-  useEffect(() => {
+  // Cargar historial + resumen desde el backend.
+  const cargar = () => {
     if (!prestamoId) return;
     setCargando(true);
     prestamosApi
-      .ver(parseInt(prestamoId))
-      .then((res) => {
-        setPrestamo(res.data);
-        // Hidratamos con las cuotas ya aplicadas por el backend (si vienen).
-        // Cada cuota aplicada equivale a un abono automático por "Descuento
-        // nómina". Como el endpoint aún no expone la lista de aplicaciones,
-        // se muestra vacío por ahora — el backend lo enviará después.
-        setAbonos([]);
-      })
+      .historialAbonos(parseInt(prestamoId))
+      .then((res) => setHistorial(res.data))
       .catch((err: ApiError) => {
-        toast.error(err.message ?? 'No se pudo cargar el préstamo');
+        toast.error(err.message ?? 'No se pudo cargar el historial de abonos');
       })
       .finally(() => setCargando(false));
+  };
+
+  useEffect(() => {
+    cargar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prestamoId]);
 
   if (cargando) {
     return (
       <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground">
         <Loader2 className="h-5 w-5 animate-spin" />
-        Cargando préstamo...
+        Cargando abonos del préstamo...
       </div>
     );
   }
-  if (!prestamo) {
+  if (!historial) {
     return (
       <div className="p-8 text-muted-foreground">Préstamo no encontrado.</div>
     );
   }
 
-  const montoTotal = toNumber(prestamo.valor_total);
-  const cuota = toNumber(prestamo.cuota_valor);
-  const totalAbonadoLocal = abonos.reduce((s, a) => s + a.valor, 0);
-  // Saldo pendiente = el del backend menos los abonos manuales locales.
-  const saldoBackend = toNumber(prestamo.saldo_pendiente);
-  const saldoActual = Math.max(0, saldoBackend - totalAbonadoLocal);
-  const nombreColab = prestamo.empleado?.nombre_completo ?? '—';
-  const cedulaColab = prestamo.empleado?.documento ?? '—';
-  const pct = montoTotal > 0
-    ? Math.round(((montoTotal - saldoActual) / montoTotal) * 100)
-    : 0;
-  const estaVigente = prestamo.estado === 'VIGENTE';
-  const estadoBadgeClass = estaVigente
-    ? 'bg-primary/10 text-primary border-primary/20'
-    : 'bg-success/10 text-success border-success/20';
+  const p = historial.prestamo;
+  const abonos = historial.abonos;
+  const montoTotal = toNumber(p.valor_total);
+  const totalAbonado = toNumber(p.total_abonado);
+  const saldoPendiente = toNumber(p.saldo_pendiente);
+  const cuota = toNumber(p.cuota_valor);
+  const pct = Math.round(p.avance_pct);
+  const estaVigente = p.estado === 'VIGENTE';
+  const cuotasPendientes = p.num_cuotas - p.cuotas_pagadas;
+  const puedeRegistrarAbono = estaVigente && cuotasPendientes > 0;
+
+  const estadoBadgeClass =
+    p.estado === 'VIGENTE'
+      ? 'bg-primary/10 text-primary border-primary/20'
+      : p.estado === 'PAGADO'
+        ? 'bg-success/10 text-success border-success/20'
+        : 'bg-success/10 text-success border-success/20';
 
   const guardarAbono = async () => {
-    const valor = parseFloat(form.valor);
-    if (Number.isNaN(valor) || valor <= 0) {
-      toast.error('El valor debe ser mayor a 0');
-      return;
-    }
+    if (!prestamoId) return;
+    // El backend auto-aplica la próxima cuota; el valor viene de la cuota,
+    // no del input del usuario. Se muestra en la UI para dar contexto.
     setGuardando(true);
     try {
-      // TODO: cuando el backend implemente `POST /prestamos/{id}/abonos`,
-      // reemplazar este bloque por la llamada real.
-      // await prestamosApi.registrarAbono(prestamo.id, { ... });
-      const nuevo: AbonoLocal = {
-        id: `local-${Date.now()}`,
+      const res = await prestamosApi.registrarAbono(parseInt(prestamoId), {
         fecha: form.fecha,
-        valor,
-        medioPago: form.medioPago,
-        referencia: form.referencia.trim(),
-        nota: form.nota.trim(),
-        esManualLocal: true,
-      };
-      setAbonos((prev) => [nuevo, ...prev]);
+        medio_pago: form.medioPago,
+        referencia: form.referencia.trim() || null,
+        nota: form.nota.trim() || null,
+      });
+      setHistorial(res.data);
       setForm({
         fecha: new Date().toISOString().split('T')[0],
         valor: '',
-        medioPago: 'Transferencia',
+        medioPago: 'TRANSFERENCIA',
         referencia: '',
         nota: '',
       });
       setModalAbierto(false);
-      toast.info(
-        'Abono registrado localmente. El backend aún no expone el endpoint para persistirlo.',
-        { duration: 6000 },
-      );
+      toast.success(res.message ?? 'Abono registrado');
+    } catch (err) {
+      const e = err as ApiError;
+      if (e.code === PrestamoErrorCodes.PRESTAMO_NO_VIGENTE) {
+        toast.error('El préstamo no está vigente. No se pueden registrar más abonos.');
+      } else if (e.code === PrestamoErrorCodes.PRESTAMO_SIN_CUOTAS_PENDIENTES) {
+        toast.error('Todas las cuotas del préstamo ya fueron aplicadas.');
+      } else {
+        toast.error(e.message ?? 'No se pudo registrar el abono');
+      }
     } finally {
       setGuardando(false);
     }
   };
-
-  // Cálculo de saldo tras cada abono (orden cronológico).
-  const abonosConSaldo = (() => {
-    let saldoAcumulado = montoTotal;
-    const ordenados = [...abonos].sort((a, b) => a.fecha.localeCompare(b.fecha));
-    const conSaldo = ordenados.map((a) => {
-      saldoAcumulado = Math.max(0, saldoAcumulado - a.valor);
-      return { ...a, saldoTras: saldoAcumulado };
-    });
-    return conSaldo.reverse();
-  })();
 
   return (
     <div className="space-y-6">
@@ -193,10 +187,10 @@ export default function AbonosPrestamo() {
           <div>
             <h1 className="text-3xl font-bold text-primary">Abonos del Préstamo</h1>
             <p className="text-muted-foreground mt-1">
-              {nombreColab} · CC {cedulaColab}
+              {p.concepto}
             </p>
           </div>
-          {estaVigente && (
+          {puedeRegistrarAbono && (
             <Button
               onClick={() => setModalAbierto(true)}
               className="bg-primary hover:bg-primary/90 gap-2"
@@ -208,30 +202,17 @@ export default function AbonosPrestamo() {
         </div>
       </div>
 
-      {/* Aviso — endpoint pendiente */}
-      <div className="rounded-lg border border-amber-400/40 bg-amber-50/60 dark:bg-amber-950/20 px-4 py-3 flex gap-3">
-        <Info className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
-        <div className="text-xs text-amber-700">
-          <p className="font-semibold">Los abonos manuales aún no persisten en el backend.</p>
-          <p className="mt-0.5">
-            El endpoint <code className="bg-amber-100 px-1 rounded">POST /prestamos/{'{'}id{'}'}/abonos</code>{' '}
-            está pendiente. Por ahora los abonos que registres desde esta pantalla se muestran
-            en memoria; al recargar se perderán. La API se conectará cuando el backend la exponga.
-          </p>
-        </div>
-      </div>
-
       {/* Resumen del préstamo */}
       <Card className="border-border">
         <CardContent className="p-5">
           <div className="flex flex-wrap gap-6 items-start justify-between">
             <div className="space-y-1">
               <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
-                {prestamo.concepto}
+                {p.concepto}
               </p>
               <div className="flex items-center gap-3 mt-2">
                 <Badge variant="outline" className={estadoBadgeClass}>
-                  {estaVigente ? 'Vigente' : (prestamo.estado === 'PAGADO' ? 'Pagado' : 'Cancelado')}
+                  {p.estado === 'VIGENTE' ? 'Vigente' : p.estado === 'PAGADO' ? 'Pagado' : 'Cancelado'}
                 </Badge>
               </div>
             </div>
@@ -243,13 +224,13 @@ export default function AbonosPrestamo() {
               <div>
                 <p className="text-xs text-muted-foreground mb-0.5">Total Abonado</p>
                 <p className="font-bold text-lg text-primary">
-                  ${(montoTotal - saldoActual).toLocaleString('es-CO')}
+                  ${totalAbonado.toLocaleString('es-CO')}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground mb-0.5">Saldo Pendiente</p>
-                <p className={`font-bold text-lg ${saldoActual === 0 ? 'text-success' : 'text-foreground'}`}>
-                  ${saldoActual.toLocaleString('es-CO')}
+                <p className={`font-bold text-lg ${saldoPendiente === 0 ? 'text-success' : 'text-foreground'}`}>
+                  ${saldoPendiente.toLocaleString('es-CO')}
                 </p>
               </div>
               <div>
@@ -262,7 +243,7 @@ export default function AbonosPrestamo() {
           {/* Barra de progreso */}
           <div className="mt-4">
             <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
-              <span>Avance del préstamo</span>
+              <span>Avance del préstamo ({p.cuotas_pagadas}/{p.num_cuotas} cuotas)</span>
               <span>{pct}% abonado</span>
             </div>
             <div className="h-2 rounded-full bg-muted overflow-hidden">
@@ -296,7 +277,7 @@ export default function AbonosPrestamo() {
             <div>
               <p className="text-xs text-muted-foreground">Total abonado</p>
               <p className="text-xl font-bold text-primary">
-                ${(montoTotal - saldoActual).toLocaleString('es-CO')}
+                ${totalAbonado.toLocaleString('es-CO')}
               </p>
             </div>
           </CardContent>
@@ -308,8 +289,8 @@ export default function AbonosPrestamo() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Saldo pendiente</p>
-              <p className={`text-xl font-bold ${saldoActual === 0 ? 'text-success' : 'text-amber-600'}`}>
-                ${saldoActual.toLocaleString('es-CO')}
+              <p className={`text-xl font-bold ${saldoPendiente === 0 ? 'text-success' : 'text-amber-600'}`}>
+                ${saldoPendiente.toLocaleString('es-CO')}
               </p>
             </div>
           </CardContent>
@@ -335,14 +316,15 @@ export default function AbonosPrestamo() {
                 </tr>
               </thead>
               <tbody>
-                {abonosConSaldo.length === 0 ? (
+                {abonos.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="p-8 text-center text-muted-foreground">
                       Sin abonos registrados aún.
                     </td>
                   </tr>
                 ) : (
-                  abonosConSaldo.map((a, idx) => (
+                  // Mostrar de más reciente a más antiguo (backend devuelve ASC).
+                  [...abonos].reverse().map((a: AbonoPrestamo, idx) => (
                     <tr
                       key={a.id}
                       className={`border-b border-border last:border-0 ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}
@@ -354,21 +336,24 @@ export default function AbonosPrestamo() {
                         </div>
                       </td>
                       <td className="p-4 text-right font-bold text-primary">
-                        ${a.valor.toLocaleString('es-CO')}
+                        ${toNumber(a.valor).toLocaleString('es-CO')}
                       </td>
                       <td className="p-4 text-muted-foreground">
-                        {a.medioPago}
-                        {a.esManualLocal && (
-                          <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200 font-medium align-middle">
-                            local
+                        {a.medio_pago_label}
+                        {a.tipo === 'NOMINA' && (
+                          <span
+                            className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 font-medium align-middle"
+                            title={`Registrado por ${a.registrado_por}`}
+                          >
+                            Nómina
                           </span>
                         )}
                       </td>
                       <td className="p-4 text-muted-foreground font-mono text-xs">{a.referencia || '—'}</td>
                       <td className="p-4 text-muted-foreground">{a.nota || '—'}</td>
                       <td className="p-4 text-right">
-                        <span className={`font-semibold ${a.saldoTras === 0 ? 'text-success' : 'text-foreground'}`}>
-                          ${a.saldoTras.toLocaleString('es-CO')}
+                        <span className={`font-semibold ${toNumber(a.saldo_tras_abono) === 0 ? 'text-success' : 'text-foreground'}`}>
+                          ${toNumber(a.saldo_tras_abono).toLocaleString('es-CO')}
                         </span>
                       </td>
                     </tr>
@@ -389,15 +374,17 @@ export default function AbonosPrestamo() {
               Registrar Nuevo Abono
             </DialogTitle>
             <DialogDescription>
-              {nombreColab} · {prestamo.concepto}
+              {p.concepto} · Se aplicará la próxima cuota pendiente (${cuota.toLocaleString('es-CO')})
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
-            {/* Info saldo */}
+            {/* Info saldo actual */}
             <div className="rounded-lg border border-border bg-muted/20 px-4 py-3 flex justify-between text-sm">
               <span className="text-muted-foreground">Saldo pendiente actual</span>
-              <span className="font-bold text-foreground">${saldoActual.toLocaleString('es-CO')}</span>
+              <span className="font-bold text-foreground">
+                ${saldoPendiente.toLocaleString('es-CO')}
+              </span>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -406,6 +393,7 @@ export default function AbonosPrestamo() {
                 <Input
                   type="date"
                   value={form.fecha}
+                  max={new Date().toISOString().split('T')[0]}
                   onChange={(e) => setForm((f) => ({ ...f, fecha: e.target.value }))}
                 />
               </div>
@@ -416,14 +404,19 @@ export default function AbonosPrestamo() {
                   <Input
                     type="text"
                     inputMode="numeric"
-                    placeholder={`Cuota: ${cuota.toLocaleString('es-CO')}`}
+                    placeholder={cuota.toLocaleString('es-CO')}
                     value={formatThousands(form.valor)}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, valor: parseCOP(e.target.value) }))
                     }
                     className="pl-7"
+                    disabled
+                    title="El valor lo determina automáticamente el backend según la cuota"
                   />
                 </div>
+                <p className="text-[10px] text-muted-foreground">
+                  El backend aplica el monto de la cuota pendiente.
+                </p>
               </div>
             </div>
 
@@ -431,14 +424,14 @@ export default function AbonosPrestamo() {
               <Label>Medio de pago</Label>
               <Select
                 value={form.medioPago}
-                onValueChange={(v) => setForm((f) => ({ ...f, medioPago: v }))}
+                onValueChange={(v) => setForm((f) => ({ ...f, medioPago: v as MedioPagoAbono }))}
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {MEDIOS_PAGO.map((m) => (
-                    <SelectItem key={m} value={m}>{m}</SelectItem>
+                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -449,9 +442,10 @@ export default function AbonosPrestamo() {
                 Referencia / Comprobante <span className="text-muted-foreground font-normal">(opcional)</span>
               </Label>
               <Input
-                placeholder="Ej: NOM-MAY-2026, TRF-123..."
+                placeholder="Ej: TRF-20260713, Cheque 001234..."
                 value={form.referencia}
                 onChange={(e) => setForm((f) => ({ ...f, referencia: e.target.value }))}
+                maxLength={100}
               />
             </div>
 
@@ -463,37 +457,40 @@ export default function AbonosPrestamo() {
                 placeholder="Observación sobre este abono..."
                 value={form.nota}
                 onChange={(e) => setForm((f) => ({ ...f, nota: e.target.value }))}
+                maxLength={500}
               />
             </div>
 
             {/* Vista previa */}
-            {form.valor && parseFloat(form.valor) > 0 && (
-              <div className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm space-y-1">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Saldo antes</span>
-                  <span>${saldoActual.toLocaleString('es-CO')}</span>
-                </div>
-                <div className="flex justify-between text-destructive">
-                  <span>— Abono</span>
-                  <span>-${parseFloat(form.valor).toLocaleString('es-CO')}</span>
-                </div>
-                <div className="flex justify-between font-bold border-t border-border pt-1 mt-1">
-                  <span>Saldo después</span>
-                  <span className={saldoActual - parseFloat(form.valor) <= 0 ? 'text-success' : 'text-foreground'}>
-                    ${Math.max(0, saldoActual - parseFloat(form.valor)).toLocaleString('es-CO')}
-                  </span>
-                </div>
+            <div className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm space-y-1">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Saldo antes</span>
+                <span>${saldoPendiente.toLocaleString('es-CO')}</span>
               </div>
-            )}
+              <div className="flex justify-between text-destructive">
+                <span>— Abono</span>
+                <span>-${cuota.toLocaleString('es-CO')}</span>
+              </div>
+              <div className="flex justify-between font-bold border-t border-border pt-1 mt-1">
+                <span>Saldo después</span>
+                <span className={saldoPendiente - cuota <= 0 ? 'text-success' : 'text-foreground'}>
+                  ${Math.max(0, saldoPendiente - cuota).toLocaleString('es-CO')}
+                </span>
+              </div>
+            </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setModalAbierto(false)} disabled={guardando}>
+            <Button
+              variant="outline"
+              onClick={() => setModalAbierto(false)}
+              disabled={guardando}
+            >
               Cancelar
             </Button>
             <Button
               onClick={guardarAbono}
-              disabled={!form.valor || parseFloat(form.valor) <= 0 || guardando}
+              disabled={guardando}
               className="bg-primary hover:bg-primary/90 gap-2"
             >
               {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}

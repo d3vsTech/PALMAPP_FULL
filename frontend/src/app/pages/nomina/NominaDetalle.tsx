@@ -884,9 +884,9 @@ export default function NominaDetalle() {
     { key: 'cosecha', titulo: 'COSECHA', color: 'amber' },
     { key: 'poda', titulo: 'PODA', color: 'green' },
     { key: 'fertilizacion', titulo: 'FERTILIZACIÓN', color: 'blue' },
-    { key: 'plateo', titulo: 'PLATEO', color: 'purple' },
+    { key: 'plateo', titulo: 'PLATEO', color: 'green' },
     { key: 'sanidad', titulo: 'SANIDAD', color: 'red' },
-    { key: 'otros', titulo: 'OTROS', color: 'gray' },
+    { key: 'otros', titulo: 'OTROS', color: 'purple' },
     { key: 'finca', titulo: 'FINCA', color: 'gray' },
   ];
 
@@ -1052,14 +1052,21 @@ export default function NominaDetalle() {
   //  - plateo   → purple
   //  - sanidad  → success (verde éxito)
   //  - otros/finca → gris
+  // Paleta V.19 por labor:
+  //  Cosecha       → amber-600
+  //  Poda / Plateo → #1E5631 (verde oscuro finca)
+  //  Fertilización → blue-600
+  //  Abonada       → purple-600
+  //  Sanidad       → rose-600
+  //  Finca / Otros → zinc-700
   const acumCategoria = (color: CategoriaLabor['color']) => {
     switch (color) {
-      case 'amber': return { header: 'text-amber-600', total: 'text-amber-600' };
-      case 'green': return { header: 'text-primary', total: 'text-primary' };
-      case 'blue': return { header: 'text-info', total: 'text-info' };
-      case 'purple': return { header: 'text-purple-700', total: 'text-purple-700' };
-      case 'red': return { header: 'text-success', total: 'text-success' };
-      default: return { header: 'text-muted-foreground', total: 'text-foreground' };
+      case 'amber':  return { header: 'text-amber-600',   total: 'text-amber-600' };
+      case 'green':  return { header: 'text-[#1E5631]',   total: 'text-[#1E5631]' };
+      case 'blue':   return { header: 'text-blue-600',    total: 'text-blue-600' };
+      case 'purple': return { header: 'text-purple-600',  total: 'text-purple-600' };
+      case 'red':    return { header: 'text-rose-600',    total: 'text-rose-600' };
+      default:       return { header: 'text-zinc-700 dark:text-zinc-300', total: 'text-foreground' };
     }
   };
 

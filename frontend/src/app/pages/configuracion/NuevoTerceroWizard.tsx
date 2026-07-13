@@ -487,7 +487,7 @@ export function Paso3({
                   <SelectTrigger>
                     <SelectValue placeholder={epsCargando ? 'Cargando…' : (epsLista.length ? 'Seleccionar EPS' : 'Sin catálogo')} />
                   </SelectTrigger>
-                  <SelectContent>{epsLista.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
+                  <SelectContent>{[...epsLista].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' })).map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
@@ -500,7 +500,7 @@ export function Paso3({
                   <SelectTrigger>
                     <SelectValue placeholder={arlCargando ? 'Cargando…' : (arlLista.length ? 'Seleccionar ARL' : 'Sin catálogo')} />
                   </SelectTrigger>
-                  <SelectContent>{arlLista.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
+                  <SelectContent>{[...arlLista].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' })).map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             </div>

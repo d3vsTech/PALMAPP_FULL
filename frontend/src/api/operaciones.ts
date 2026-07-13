@@ -1105,6 +1105,51 @@ export const selectsApi = {
         body: JSON.stringify({ nombre: nombre.trim() }),
       }
     ),
+
+  /**
+   * Crear labor de finca "on-the-fly" desde el wizard cuando el operador
+   * elige "Otro" en el dropdown de Labor (Paso 3, Labores de Finca).
+   *
+   * Endpoint: POST /operaciones/labores-finca
+   * Permisos: operaciones.crear u operaciones.editar
+   *
+   * El backend fuerza `categoria=FINCA`, `tipo_pago=JORNAL_FIJO`, `tipo=null`,
+   * `es_sistema=false`. `precio_palma` queda null; el admin lo ajusta luego
+   * desde Configuración → Labores.
+   *
+   * Respuesta 201: `{ data: { id, nombre, categoria, tipo, tipo_pago, precio_palma, es_sistema } }`.
+   * Respuesta 409 `LABOR_FINCA_DUPLICADA`: ya existe una labor con ese nombre.
+   *   El backend igual devuelve `data.id` en el error → el frontend usa ese
+   *   id directamente en el bulk (no hay que crear duplicado).
+   *
+   * @example
+   *   try {
+   *     const r = await selectsApi.crearLaborFinca('Pintura de galpón');
+   *     laboresMap.set(r.data.nombre, r.data.id);
+   *   } catch (err: any) {
+   *     if (err.code === 'LABOR_FINCA_DUPLICADA' && err.data?.id) {
+   *       laboresMap.set(err.data.nombre, err.data.id);
+   *     }
+   *   }
+   */
+  crearLaborFinca: (nombre: string) =>
+    smartRequest<{
+      data: {
+        id: number;
+        nombre: string;
+        categoria: 'FINCA';
+        tipo: null;
+        tipo_pago: 'JORNAL_FIJO';
+        precio_palma: string | null;
+        es_sistema: boolean;
+      };
+    }>(
+      `${BASE}/operaciones/labores-finca`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ nombre: nombre.trim() }),
+      }
+    ),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1134,6 +1179,12 @@ export const OperacionesErrorCodes = {
   TIPO_HORA_EXTRA_CON_REGISTROS: 'TIPO_HORA_EXTRA_CON_REGISTROS',
   /** Insumo creado desde el wizard ya existe. Pedir al usuario seleccionarlo del dropdown. */
   INSUMO_DUPLICADO: 'INSUMO_DUPLICADO',
+  /**
+   * Labor de finca creada desde el wizard ("Otro") ya existe.
+   * El backend devuelve `data.id` en el error → el frontend lo usa igual
+   * y no crea duplicado.
+   */
+  LABOR_FINCA_DUPLICADA: 'LABOR_FINCA_DUPLICADA',
   /** Usuario sin permiso para la acción. */
   PERMISSION_DENIED: 'PERMISSION_DENIED',
 } as const;

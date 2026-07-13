@@ -322,7 +322,19 @@ export default function NuevoPrestamo() {
                   inputMode="numeric"
                   placeholder="1.500.000"
                   value={formatThousands(valorTotal)}
-                  onChange={(e) => { setValorTotal(parseCOP(e.target.value)); setCuotaManual(''); }}
+                  onChange={(e) => {
+                    const nuevoTotal = parseCOP(e.target.value);
+                    setValorTotal(nuevoTotal);
+                    // Si ya hay número de cuotas, recalcular la cuota
+                    // directamente en el input.
+                    const totalN = parseFloat(nuevoTotal) || 0;
+                    const cuotas = parseInt(numCuotas) || 0;
+                    if (totalN > 0 && cuotas > 0) {
+                      setCuotaManual(String(Math.floor(totalN / cuotas)));
+                    } else {
+                      setCuotaManual('');
+                    }
+                  }}
                   className="pl-7"
                 />
               </div>
@@ -418,7 +430,20 @@ export default function NuevoPrestamo() {
                 min="1"
                 max="48"
                 value={numCuotas}
-                onChange={(e) => { setNumCuotas(e.target.value); setCuotaManual(''); }}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  setNumCuotas(raw);
+                  // Auto-rellenar la cuota con el valor calculado. Antes se
+                  // dejaba vacío y solo se mostraba en texto — ahora el
+                  // input muestra el número directamente.
+                  const cuotas = parseInt(raw) || 0;
+                  const totalN = parseFloat(valorTotal) || 0;
+                  if (cuotas > 0 && totalN > 0) {
+                    setCuotaManual(String(Math.floor(totalN / cuotas)));
+                  } else {
+                    setCuotaManual('');
+                  }
+                }}
               />
             </div>
             <div className="space-y-2">
@@ -430,7 +455,7 @@ export default function NuevoPrestamo() {
                 <Input
                   type="text"
                   inputMode="numeric"
-                  placeholder={cuotaCalculada > 0 ? cuotaCalculada.toLocaleString('es-CO') : '0'}
+                  placeholder="0"
                   value={formatThousands(cuotaManual)}
                   onChange={(e) => {
                     const nuevoValor = parseCOP(e.target.value);
@@ -446,11 +471,6 @@ export default function NuevoPrestamo() {
                   className="pl-7"
                 />
               </div>
-              {cuotaCalculada > 0 && !cuotaManual && (
-                <p className="text-xs text-muted-foreground">
-                  Calculado: <span className="font-semibold text-primary">${cuotaCalculada.toLocaleString('es-CO')}</span>
-                </p>
-              )}
             </div>
           </div>
 

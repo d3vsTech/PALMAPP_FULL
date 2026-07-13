@@ -62,6 +62,19 @@ interface DeduccionLocal {
   prestamo_cuota_id?: number;
 }
 
+/** Colores V.19 por labor — se usan en el header de cada categoría del
+ *  resumen de trabajo. Cada tupla es [bg del header, text del título]. */
+type ColorCategoria = { bg: string; text: string };
+const COLOR_POR_LABOR: Record<string, ColorCategoria> = {
+  cosecha:       { bg: 'bg-amber-500/10',   text: 'text-amber-700' },
+  plateo:        { bg: 'bg-[#1E5631]/10',   text: 'text-[#1E5631]' },
+  poda:          { bg: 'bg-[#1E5631]/10',   text: 'text-[#1E5631]' },
+  fertilizacion: { bg: 'bg-blue-500/10',    text: 'text-blue-700' },
+  sanidad:       { bg: 'bg-rose-500/10',    text: 'text-rose-700' },
+  otros:         { bg: 'bg-purple-500/10',  text: 'text-purple-700' },
+  finca:         { bg: 'bg-zinc-500/10',    text: 'text-zinc-700 dark:text-zinc-300' },
+};
+
 const CATEGORIAS: { key: keyof Omit<ResumenTrabajo, 'total_general'>; titulo: string }[] = [
   { key: 'cosecha', titulo: 'Cosecha' },
   { key: 'plateo', titulo: 'Plateo' },
@@ -453,10 +466,11 @@ export default function LiquidarColaborador() {
             {CATEGORIAS.map(({ key, titulo }) => {
               const cat = resumen[key] as CategoriaResumenTrabajo;
               if (!cat || cat.filas.length === 0) return null;
+              const cc = COLOR_POR_LABOR[key as string] ?? COLOR_POR_LABOR.finca;
               return (
                 <div key={key} className="border border-border rounded-lg overflow-hidden">
-                  <div className="bg-primary/10 px-3 py-2 border-b border-border flex justify-between items-center">
-                    <h4 className="font-semibold text-sm text-primary">{titulo}</h4>
+                  <div className={`${cc.bg} px-3 py-2 border-b border-border flex justify-between items-center`}>
+                    <h4 className={`font-semibold text-sm ${cc.text}`}>{titulo}</h4>
                     <div className="flex gap-3 text-xs">
                       {cat.subtotal_racimos !== undefined && (
                         <span>{cat.subtotal_racimos} racimos</span>

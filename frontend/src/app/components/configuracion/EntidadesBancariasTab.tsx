@@ -241,7 +241,7 @@ export function EntidadesBancariasTab() {
         </CardHeader>
         <CardContent className="p-6">
           <div className="space-y-3">
-            {entidades.map((entidad) => (
+            {[...entidades].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((entidad) => (
               <div
                 key={entidad.id}
                 className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border"

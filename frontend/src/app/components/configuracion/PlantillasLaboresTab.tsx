@@ -533,7 +533,7 @@ export function PlantillasLaboresTab() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {plantillas.map((plantilla) => (
+                  {[...plantillas].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((plantilla) => (
                     <TableRow key={plantilla.id} className="hover:bg-muted/50 transition-colors">
                       <TableCell className="font-medium">{plantilla.nombre}</TableCell>
                       <TableCell>

@@ -146,7 +146,7 @@ function FormOperario({
               <SelectValue placeholder={epsCargando ? 'Cargando…' : (epsOptions?.length ? 'Seleccionar EPS' : 'Sin catálogo')} />
             </SelectTrigger>
             <SelectContent>
-              {(epsOptions ?? []).map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+              {[...(epsOptions ?? [])].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' })).map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -157,7 +157,7 @@ function FormOperario({
               <SelectValue placeholder={arlCargando ? 'Cargando…' : (arlOptions?.length ? 'Seleccionar ARL' : 'Sin catálogo')} />
             </SelectTrigger>
             <SelectContent>
-              {(arlOptions ?? []).map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+              {[...(arlOptions ?? [])].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' })).map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -367,7 +367,7 @@ export function TercerosTab() {
             </div>
           ) : (
             <div className="divide-y divide-border">
-              {terceros.map(t => {
+              {[...terceros].sort((a, b) => displayNombre(a).localeCompare(displayNombre(b), 'es', { sensitivity: 'base' })).map(t => {
                 const ops = operariosPorTercero[t.id] ?? [];
                 const cargando = cargandoOperarios[t.id];
                 const esNatural = t.tipo_persona === 'NATURAL';
@@ -474,7 +474,11 @@ export function TercerosTab() {
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {ops.map((op, i) => (
+                                  {[...ops].sort((a, b) => {
+                                    const na = `${a.apellidos ?? ''} ${a.nombres ?? ''}`.trim();
+                                    const nb = `${b.apellidos ?? ''} ${b.nombres ?? ''}`.trim();
+                                    return na.localeCompare(nb, 'es', { sensitivity: 'base' });
+                                  }).map((op, i) => (
                                     <tr key={op.id} className={`border-t border-border/50 ${i % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}>
                                       <td className="p-3">
                                         <div className="flex items-center gap-2">

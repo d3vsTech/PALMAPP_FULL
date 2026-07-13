@@ -45,24 +45,31 @@ const laboresOrden: TipoLabor[] = [
   'Cosecha', 'Plateo', 'Poda', 'Fertilización', 'Sanidad', 'Otros', 'Auxiliares',
 ];
 
+// Paleta V.19 por labor (usada también en LiquidarTerceros / NominaDetalle):
+//   Cosecha       → amber
+//   Poda / Plateo → verde oscuro (#1E5631)
+//   Fertilización → blue
+//   Sanidad       → rose
+//   Otros         → purple
+//   Auxiliares    → zinc
 const colorPorLabor: Record<TipoLabor, string> = {
-  Cosecha:       'bg-primary/10 text-primary border-primary/20',
-  Plateo:        'bg-primary/10 text-primary border-primary/20',
-  Poda:          'bg-amber-500/10 text-amber-700 border-amber-200',
-  Fertilización: 'bg-primary/10 text-primary border-primary/20',
-  Sanidad:       'bg-destructive/10 text-destructive border-destructive/20',
-  Otros:         'bg-purple-500/10 text-purple-700 border-purple-200',
-  Auxiliares:    'bg-muted text-muted-foreground border-border',
+  Cosecha:       'bg-amber-500/10 text-amber-700 border-amber-300',
+  Plateo:        'bg-[#1E5631]/10 text-[#1E5631] border-[#1E5631]/30',
+  Poda:          'bg-[#1E5631]/10 text-[#1E5631] border-[#1E5631]/30',
+  Fertilización: 'bg-blue-500/10 text-blue-700 border-blue-300',
+  Sanidad:       'bg-rose-500/10 text-rose-700 border-rose-300',
+  Otros:         'bg-purple-500/10 text-purple-700 border-purple-300',
+  Auxiliares:    'bg-zinc-500/10 text-zinc-700 dark:text-zinc-300 border-zinc-400',
 };
 
 const bordesPorLabor: Record<TipoLabor, string> = {
-  Cosecha:       'border-l-4 border-l-primary',
-  Plateo:        'border-l-4 border-l-primary/60',
-  Poda:          'border-l-4 border-l-amber-500',
-  Fertilización: 'border-l-4 border-l-success',
-  Sanidad:       'border-l-4 border-l-destructive',
+  Cosecha:       'border-l-4 border-l-amber-500',
+  Plateo:        'border-l-4 border-l-[#1E5631]',
+  Poda:          'border-l-4 border-l-[#1E5631]',
+  Fertilización: 'border-l-4 border-l-blue-500',
+  Sanidad:       'border-l-4 border-l-rose-500',
   Otros:         'border-l-4 border-l-purple-500',
-  Auxiliares:    'border-l-4 border-l-muted-foreground',
+  Auxiliares:    'border-l-4 border-l-zinc-400',
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

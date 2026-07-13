@@ -532,7 +532,7 @@ export function AusenciasTab() {
                     </td>
                   </tr>
                 ) : (
-                  motivos.map((motivo) => {
+                  [...motivos].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((motivo) => {
                     const { ss, prest } = flagsDeMotivo(motivo);
                     return (
                       <tr key={motivo.id} className="border-t border-border hover:bg-muted/30 transition-colors">

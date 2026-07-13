@@ -459,7 +459,7 @@ export function TransporteTab() {
                   <SelectValue placeholder="Selecciona una empresa" />
                 </SelectTrigger>
                 <SelectContent>
-                  {empresas.map((empresa) => (
+                  {[...empresas].sort((a, b) => (a.razon_social ?? '').localeCompare(b.razon_social ?? '', 'es', { sensitivity: 'base' })).map((empresa) => (
                     <SelectItem key={empresa.id} value={String(empresa.id)}>
                       {empresa.razon_social}
                     </SelectItem>
@@ -567,7 +567,7 @@ export function TransporteTab() {
             </div>
           ) : (
             <div className="space-y-3">
-              {empresas.map((empresa) => {
+              {[...empresas].sort((a, b) => (a.razon_social ?? '').localeCompare(b.razon_social ?? '', 'es', { sensitivity: 'base' })).map((empresa) => {
                 const conductoresEmpresa = getConductoresPorEmpresa(empresa.id);
                 const estaExpandida = empresasExpandidas.includes(empresa.id);
                 const tipo = empresa.tipo_persona ?? 'JURIDICA';
@@ -659,7 +659,11 @@ export function TransporteTab() {
                           </div>
                         ) : (
                           <div className="space-y-2">
-                            {conductoresEmpresa.map((conductor) => (
+                            {[...conductoresEmpresa].sort((a, b) => {
+                              const na = `${a.apellidos ?? ''} ${a.nombres ?? ''}`.trim();
+                              const nb = `${b.apellidos ?? ''} ${b.nombres ?? ''}`.trim();
+                              return na.localeCompare(nb, 'es', { sensitivity: 'base' });
+                            }).map((conductor) => (
                               <div
                                 key={conductor.id}
                                 className="flex items-center justify-between p-3 rounded-lg bg-background border border-border"

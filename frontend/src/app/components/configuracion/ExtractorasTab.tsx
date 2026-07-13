@@ -90,7 +90,7 @@ export function ExtractorasTab() {
             </div>
           ) : (
             <div className="space-y-3">
-              {extractoras.map((extractora) => (
+              {[...extractoras].sort((a, b) => (a.razon_social ?? '').localeCompare(b.razon_social ?? '', 'es', { sensitivity: 'base' })).map((extractora) => (
                 <div
                   key={extractora.id}
                   className="p-4 rounded-lg bg-muted/30 border border-border hover:bg-muted/50 transition-colors"

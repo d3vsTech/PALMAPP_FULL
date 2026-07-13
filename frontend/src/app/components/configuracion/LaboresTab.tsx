@@ -301,7 +301,7 @@ export function LaboresTab() {
               </p>
             ) : (
               <div className="space-y-2">
-                {laboresPalma.map((labor) => {
+                {[...laboresPalma].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((labor) => {
                   // "Otros" es labor especial: el wizard la crea automáticamente
                   // y sirve como contenedor genérico. La tratamos como fija
                   // (no eliminable, badge "Predefinida") aunque el backend la
@@ -378,7 +378,7 @@ export function LaboresTab() {
               </div>
             ) : (
               <div className="space-y-2">
-                {laboresFinca.map((labor) => (
+                {[...laboresFinca].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((labor) => (
                   <div
                     key={labor.id}
                     className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border hover:bg-muted/50 transition-colors"

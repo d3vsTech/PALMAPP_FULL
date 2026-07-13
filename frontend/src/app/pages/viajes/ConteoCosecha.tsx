@@ -302,6 +302,10 @@ export default function ConteoCosecha() {
       pesoKg: 0,
       cuadrillaCount: 0,
     });
+    // Reset de la cuadrilla previa: si el usuario acababa de cancelar una
+    // cosecha con cuadrilla, los IDs quedaban en el estado y aparecían como
+    // "colaboradores predeterminados" al abrir la nueva.
+    setCuadrillaSeleccionada([]);
     cargarOperaciones();
   };
 
@@ -390,16 +394,25 @@ export default function ConteoCosecha() {
         cosechaEnEdicion.gajosEnViaje > 0
         && cosechaEnEdicion.gajosEnViaje >= disponiblesReales;
       if (!esNuevo || hayPeso || cierraCosecha) {
-        await viajesApi.hidratarReconteo(viaje.id, detalleId, {
+        const res: any = await viajesApi.hidratarReconteo(viaje.id, detalleId, {
           gajos_en_viaje: cosechaEnEdicion.gajosEnViaje,
           peso_confirmado: hayPeso ? cosechaEnEdicion.pesoKg : undefined,
         });
+        // El backend v2 (§5.5): puede devolver `advertencia` cuando el
+        // reconteo supera `gajos_reportados`. No bloquea, solo informa.
+        const adv = res?.data?.advertencia ?? res?.advertencia;
+        if (adv) {
+          toast.warning(typeof adv === 'string' ? adv : 'El reconteo excede lo reportado', { duration: 6000 });
+        }
       }
       toast.success('Cosecha guardada');
       setCosechaEnEdicion(null);
       await cargar();
     } catch (e: any) {
       // Errores específicos del split parcial (§9 doc API_VIAJES).
+      // Nota: `GAJOS_INSUFICIENTES` prácticamente ya no ocurre — el backend
+      // v2 (§5.5) acepta valores > gajos_reportados y devuelve advertencia.
+      // Solo saltaría si backend no está actualizado.
       if (e?.code === ErrorCodes.GAJOS_INSUFICIENTES) {
         toast.error('Los gajos en viaje superan los disponibles de esta cosecha');
       } else if (e?.code === ErrorCodes.COSECHA_YA_ASIGNADA) {
@@ -668,11 +681,53 @@ export default function ConteoCosecha() {
                               } />
                             </SelectTrigger>
                             <SelectContent>
-                              {cosechasLibres.map((c) => (
-                                <SelectItem key={c.id} value={String(c.id)}>
-                                  Cuadrilla — {c.lote?.nombre ?? '—'}{c.sublote ? ` · ${c.sublote.nombre}` : ''} ({c.gajos_reportados ?? 0} gajos)
-                                </SelectItem>
-                              ))}
+                              {cosechasLibres.map((c) => {
+                                // Resolver nombre de cada miembro:
+                                //   1) `m.nombre` que ya venga del backend.
+                                //   2) fallback a `colaboradoresMap` (empleados internos).
+                                //   3) fallback al empleado_id de `cuadrillaPorCosecha`.
+                                const miembros = miembrosPorCosecha.get(c.id) ?? [];
+                                const nombresBackend = miembros.map((m) => {
+                                  if (m.nombre) return m.nombre;
+                                  if (m.tipo === 'EMP') {
+                                    const col = colaboradoresMap.get(String(m.id));
+                                    return col
+                                      ? (col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim())
+                                      : '';
+                                  }
+                                  return '';
+                                }).filter(Boolean);
+                                // Fallback adicional: si `miembrosPorCosecha`
+                                // llegó vacío, usar los ids de `cuadrillaPorCosecha`
+                                // y resolver los nombres desde `colaboradoresMap`.
+                                const nombres = nombresBackend.length > 0
+                                  ? nombresBackend
+                                  : (cuadrillaPorCosecha.get(c.id) ?? []).map((empId) => {
+                                      const col = colaboradoresMap.get(String(empId));
+                                      return col
+                                        ? (col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim())
+                                        : `Colaborador ${empId}`;
+                                    }).filter(Boolean);
+                                const etiquetaColabs = nombres.length > 0
+                                  ? nombres.join(', ')
+                                  : 'Sin colaboradores';
+                                // Mostrar gajos PENDIENTES (los que quedan
+                                // disponibles) en lugar del total reportado.
+                                // Si la cosecha ya se usó parcialmente en otro
+                                // viaje, `gajos_pendientes_enviar` refleja lo
+                                // que aún se puede asignar.
+                                const gajosDisponibles = c.gajos_pendientes_enviar
+                                  ?? c.gajos_reconteo
+                                  ?? c.gajos_reportados
+                                  ?? 0;
+                                return (
+                                  <SelectItem key={c.id} value={String(c.id)}>
+                                    {etiquetaColabs} — {c.lote?.nombre ?? '—'}
+                                    {c.sublote ? ` · ${c.sublote.nombre}` : ''}
+                                    {' '}({gajosDisponibles} gajos disponibles)
+                                  </SelectItem>
+                                );
+                              })}
                             </SelectContent>
                           </Select>
                         </div>
@@ -734,7 +789,15 @@ export default function ConteoCosecha() {
                                   </Badge>
                                 );
                               }
-                              return <p className="text-sm text-muted-foreground">No hay colaboradores</p>;
+                              return (
+                                <p className="text-sm text-muted-foreground">
+                                  {!cosechaEnEdicion.planillaId
+                                    ? 'Selecciona una planilla primero'
+                                    : !cosechaEnEdicion.cuadrillaReconteo
+                                      ? 'Selecciona una cuadrilla para ver los colaboradores'
+                                      : 'No hay colaboradores'}
+                                </p>
+                              );
                             })()}
                           </div>
                         </div>
@@ -759,32 +822,30 @@ export default function ConteoCosecha() {
 
                         {/* Gajos en Viaje — se persiste como
                             `viaje_detalle.gajos_en_viaje` (§5.5).
-                            El máximo es los gajos DISPONIBLES REALES de la
-                            cosecha (los que quedan tras splits en otros
-                            viajes), no los reportados originales. Este valor
-                            = gajosPendientesPorEnviar + gajosEnViaje (los que
-                            se pueden mover entre "en viaje" y "pendientes"). */}
+                            El backend acepta cualquier valor >= 0 (§5.5 v2:
+                            el reconteo puede superar `gajos_reportados`; si
+                            eso pasa el response incluye una `advertencia` pero
+                            no bloquea la operación). */}
                         <div className="space-y-2">
                           <Label>Gajos en Viaje</Label>
                           <Input
                             type="number"
                             placeholder="0"
                             min={0}
-                            max={cosechaEnEdicion.gajosPendientesPorEnviar + cosechaEnEdicion.gajosEnViaje}
                             onFocus={(e) => e.currentTarget.select()}
                             value={cosechaEnEdicion.gajosEnViaje || ''}
                             onChange={(e) => {
                               const maxDisponibles =
                                 cosechaEnEdicion.gajosPendientesPorEnviar
                                 + cosechaEnEdicion.gajosEnViaje;
-                              const enViaje = Math.min(
-                                parseInt(e.target.value) || 0,
-                                maxDisponibles,
-                              );
+                              const enViaje = Math.max(parseInt(e.target.value) || 0, 0);
+                              // Si supera lo disponible → pendientes = 0 (el
+                              // reconteo excedió lo reportado). Si no → resta normal.
+                              const pendientes = Math.max(maxDisponibles - enViaje, 0);
                               setCosechaEnEdicion({
                                 ...cosechaEnEdicion,
                                 gajosEnViaje: enViaje,
-                                gajosPendientesPorEnviar: maxDisponibles - enViaje,
+                                gajosPendientesPorEnviar: pendientes,
                               });
                             }}
                           />

@@ -178,7 +178,7 @@ export function SeguridadSocialTab() {
         <CardContent className="p-6">
           {/* Lista de entidades */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-            {lista.map((entidad) => (
+            {[...lista].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((entidad) => (
               <div
                 key={entidad.id}
                 className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border"

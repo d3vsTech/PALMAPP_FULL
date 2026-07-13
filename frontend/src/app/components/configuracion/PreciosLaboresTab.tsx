@@ -22,7 +22,7 @@ import {
   type Labor,
 } from '../../../api/configuracion';
 import { lotesApi, sublotesApi } from '../../../api/plantacion';
-import { formatCOP, formatThousands, parseCOP } from '../lib/format';
+import { formatCOP, formatThousands, parseCOP, formatDecimal, parseDecimal } from '../lib/format';
 
 type LoteOption = { id: number; nombre: string };
 type SubloteOption = { id: number; nombre: string; lote_id: number };
@@ -137,9 +137,9 @@ export function PreciosLaboresTab() {
         {
           // Gramos viene del backend como decimal (ej. "200.00"); lo normalizamos
           // a entero con separador de miles para mantener formato consistente.
-          gramos_min: formatThousands(r.gramos_min),
-          gramos_max: formatThousands(r.gramos_max),
-          precio_palma: formatThousands(r.precio_palma),
+          gramos_min: formatDecimal(r.gramos_min),
+          gramos_max: formatDecimal(r.gramos_max),
+          precio_palma: formatDecimal(r.precio_palma),
         },
       ]),
     ),
@@ -154,7 +154,7 @@ export function PreciosLaboresTab() {
   const [preciosPalma, setPreciosPalma] = useState<PrecioPalma[]>(cached?.palma ?? []);
   const [palmaInputs, setPalmaInputs] = useState<Record<number, string>>(
     Object.fromEntries(
-      (cached?.palma ?? []).map((p) => [p.id, p.precio_palma != null ? formatThousands(p.precio_palma) : '']),
+      (cached?.palma ?? []).map((p) => [p.id, p.precio_palma != null ? formatDecimal(p.precio_palma) : '']),
     ),
   );
 
@@ -163,7 +163,7 @@ export function PreciosLaboresTab() {
   const [laboresPalmaCustom, setLaboresPalmaCustom] = useState<Labor[]>(cached?.palmaCustom ?? []);
   const [palmaCustomInputs, setPalmaCustomInputs] = useState<Record<number, string>>(
     Object.fromEntries(
-      (cached?.palmaCustom ?? []).map((l) => [l.id, l.precio_palma != null ? formatThousands(l.precio_palma) : '']),
+      (cached?.palmaCustom ?? []).map((l) => [l.id, l.precio_palma != null ? formatDecimal(l.precio_palma) : '']),
     ),
   );
 
@@ -171,7 +171,7 @@ export function PreciosLaboresTab() {
   const [laboresFinca, setLaboresFinca] = useState<Labor[]>(cached?.finca ?? []);
   const [laborInputs, setLaborInputs] = useState<Record<number, string>>(
     Object.fromEntries(
-      (cached?.finca ?? []).map((l) => [l.id, l.precio_palma != null ? formatThousands(l.precio_palma) : '']),
+      (cached?.finca ?? []).map((l) => [l.id, l.precio_palma != null ? formatDecimal(l.precio_palma) : '']),
     ),
   );
 
@@ -202,35 +202,35 @@ export function PreciosLaboresTab() {
         Object.fromEntries(
           datos.cosecha
             .filter((p) => p.anio === anioActual)
-            .map((p) => [String(p.lote_id), formatThousands(p.precio)]),
+            .map((p) => [String(p.lote_id), formatDecimal(p.precio)]),
         ),
       );
       setRangosAbono(datos.rangos);
       setAbonoInputs(
         Object.fromEntries(
           datos.rangos.map((rr) => [rr.id, {
-            gramos_min: formatThousands(rr.gramos_min),
-            gramos_max: formatThousands(rr.gramos_max),
-            precio_palma: formatThousands(rr.precio_palma),
+            gramos_min: formatDecimal(rr.gramos_min),
+            gramos_max: formatDecimal(rr.gramos_max),
+            precio_palma: formatDecimal(rr.precio_palma),
           }]),
         ),
       );
       setPreciosPalma(datos.palma);
       setPalmaInputs(
         Object.fromEntries(
-          datos.palma.map((p) => [p.id, p.precio_palma != null ? formatThousands(p.precio_palma) : '']),
+          datos.palma.map((p) => [p.id, p.precio_palma != null ? formatDecimal(p.precio_palma) : '']),
         ),
       );
       setLaboresPalmaCustom(datos.palmaCustom);
       setPalmaCustomInputs(
         Object.fromEntries(
-          datos.palmaCustom.map((l) => [l.id, l.precio_palma != null ? formatThousands(l.precio_palma) : '']),
+          datos.palmaCustom.map((l) => [l.id, l.precio_palma != null ? formatDecimal(l.precio_palma) : '']),
         ),
       );
       setLaboresFinca(datos.finca);
       setLaborInputs(
         Object.fromEntries(
-          datos.finca.map((l) => [l.id, l.precio_palma != null ? formatThousands(l.precio_palma) : '']),
+          datos.finca.map((l) => [l.id, l.precio_palma != null ? formatDecimal(l.precio_palma) : '']),
         ),
       );
       setLotes(datos.ls);
@@ -327,7 +327,7 @@ export function PreciosLaboresTab() {
    */
   const handleSaveCosechaInline = async (lote: LoteOption) => {
     const raw = cosechaInputs[String(lote.id)] ?? '';
-    const limpio = parseCOP(raw);
+    const limpio = parseDecimal(raw);
     const valor = limpio ? Number(limpio) : 0;
     const existente = preciosCosecha.find(
       (p) => Number(p.lote_id) === lote.id && p.anio === anioActual,
@@ -405,9 +405,9 @@ export function PreciosLaboresTab() {
     if (!edit) return;
     // Quitamos puntos de miles antes de mandar el número al backend.
     const payload = {
-      gramos_min: Number(parseCOP(edit.gramos_min)),
-      gramos_max: Number(parseCOP(edit.gramos_max)),
-      precio_palma: Number(parseCOP(edit.precio_palma)),
+      gramos_min: Number(parseDecimal(edit.gramos_min)),
+      gramos_max: Number(parseDecimal(edit.gramos_max)),
+      precio_palma: Number(parseDecimal(edit.precio_palma)),
     };
     if (!Number.isFinite(payload.gramos_min) || !Number.isFinite(payload.gramos_max) || !Number.isFinite(payload.precio_palma)) {
       return;
@@ -425,9 +425,9 @@ export function PreciosLaboresTab() {
       setAbonoInputs((prev) => ({
         ...prev,
         [rango.id]: {
-          gramos_min: formatThousands(res.data.gramos_min),
-          gramos_max: formatThousands(res.data.gramos_max),
-          precio_palma: formatThousands(res.data.precio_palma),
+          gramos_min: formatDecimal(res.data.gramos_min),
+          gramos_max: formatDecimal(res.data.gramos_max),
+          precio_palma: formatDecimal(res.data.precio_palma),
         },
       }));
       toast.success('Guardado');
@@ -456,7 +456,9 @@ export function PreciosLaboresTab() {
   const agregarNuevoRango = () => {
     const ultimo = rangosAbono[rangosAbono.length - 1];
     // Mostrar el sugerido con separador de miles si aplica (ej. "1.001").
-    const minSugerido = ultimo ? formatThousands(Number(ultimo.gramos_max) + 1) : '0';
+    // Se acepta como decimal desde el input (formatDecimal), aunque el
+    // sugerido inicial sigue siendo entero (max previo + 1).
+    const minSugerido = ultimo ? formatDecimal(Number(ultimo.gramos_max) + 1) : '0';
     setNuevosRangos((prev) => [
       ...prev,
       {
@@ -474,9 +476,9 @@ export function PreciosLaboresTab() {
     const nr = nuevosRangos.find((x) => x.tempId === tempId);
     if (!nr) return;
     // Parseamos los 3 campos quitando los puntos de miles del display.
-    const min = Number(parseCOP(nr.gramos_min));
-    const max = Number(parseCOP(nr.gramos_max));
-    const precio = Number(parseCOP(nr.precio_palma));
+    const min = Number(parseDecimal(nr.gramos_min));
+    const max = Number(parseDecimal(nr.gramos_max));
+    const precio = Number(parseDecimal(nr.precio_palma));
     // Esperamos a que los 3 campos sean válidos antes de disparar el POST.
     if (!nr.gramos_min || !nr.gramos_max || !nr.precio_palma) return;
     if (!Number.isFinite(min) || !Number.isFinite(max) || !Number.isFinite(precio)) return;
@@ -507,9 +509,9 @@ export function PreciosLaboresTab() {
   // ── Labor Palma custom (precio_palma según tipo_pago) ────────────────────
   const handleSaveLaborPalmaCustom = async (labor: Labor) => {
     const raw = palmaCustomInputs[labor.id] ?? '';
-    const limpio = parseCOP(raw);
+    const limpio = parseDecimal(raw);
     const valor = limpio ? Number(limpio) : 0;
-    const actual = labor.precio_palma != null ? Number(parseCOP(formatThousands(labor.precio_palma))) : 0;
+    const actual = labor.precio_palma != null ? Number(labor.precio_palma) : 0;
     if (actual === valor) return;
     try {
       const res = await configuracionApi.labores.editar(labor.id, { precio_palma: valor });
@@ -530,9 +532,9 @@ export function PreciosLaboresTab() {
   // `precio_palma` es el valor por jornal. Inline edit con onBlur.
   const handleSaveLaborFinca = async (labor: Labor) => {
     const raw = laborInputs[labor.id] ?? '';
-    const limpio = parseCOP(raw);
+    const limpio = parseDecimal(raw);
     const valor = limpio ? Number(limpio) : 0;
-    const actual = labor.precio_palma != null ? Number(parseCOP(formatThousands(labor.precio_palma))) : 0;
+    const actual = labor.precio_palma != null ? Number(labor.precio_palma) : 0;
     if (actual === valor) return;
     try {
       const res = await configuracionApi.labores.editar(labor.id, { precio_palma: valor });
@@ -553,7 +555,7 @@ export function PreciosLaboresTab() {
   // redirige al endpoint unificado §4.
   const handleSavePalma = async (palma: PrecioPalma) => {
     const raw = palmaInputs[palma.id];
-    const limpio = parseCOP(raw);
+    const limpio = parseDecimal(raw);
     const precio = !limpio ? null : Number(limpio);
     try {
       const res = await configuracionApi.labores.editar(palma.id, { precio_palma: precio });
@@ -640,7 +642,13 @@ export function PreciosLaboresTab() {
                             </td>
                           </tr>
                         ) : (
-                          sublotes.map((sub) => {
+                          [...sublotes].sort((a, b) => {
+                            // Ordenar por nombre de lote y luego por sublote.
+                            const loteA = lotes.find((l) => l.id === a.lote_id)?.nombre ?? '';
+                            const loteB = lotes.find((l) => l.id === b.lote_id)?.nombre ?? '';
+                            const cmp = loteA.localeCompare(loteB, 'es', { sensitivity: 'base' });
+                            return cmp !== 0 ? cmp : (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' });
+                          }).map((sub) => {
                             const lote = lotes.find((l) => l.id === sub.lote_id);
                             return (
                               <tr key={sub.id} className="border-t border-border">
@@ -650,12 +658,12 @@ export function PreciosLaboresTab() {
                                   <div className="flex items-center justify-end gap-2">
                                     <span className="text-muted-foreground text-sm">$</span>
                                     <Input
-                                      inputMode="numeric"
+                                      inputMode="decimal"
                                       value={cosechaInputs[String(sub.lote_id)] ?? ''}
                                       onChange={(e) =>
                                         setCosechaInputs((prev) => ({
                                           ...prev,
-                                          [String(sub.lote_id)]: formatThousands(parseCOP(e.target.value)),
+                                          [String(sub.lote_id)]: formatDecimal(parseDecimal(e.target.value)),
                                         }))
                                       }
                                       onBlur={() => {
@@ -735,12 +743,12 @@ export function PreciosLaboresTab() {
                                     <td className="p-4">
                                       <div className="relative group">
                                         <Input
-                                          inputMode="numeric"
+                                          inputMode="decimal"
                                           value={edit.gramos_min}
                                           onChange={(e) =>
                                             setAbonoInputs((prev) => ({
                                               ...prev,
-                                              [rango.id]: { ...edit, gramos_min: formatThousands(parseCOP(e.target.value)) },
+                                              [rango.id]: { ...edit, gramos_min: formatDecimal(parseDecimal(e.target.value)) },
                                             }))
                                           }
                                           onBlur={() => handleSaveAbonoInline(rango)}
@@ -774,12 +782,12 @@ export function PreciosLaboresTab() {
                                     <td className="p-4">
                                       <div className="relative group">
                                         <Input
-                                          inputMode="numeric"
+                                          inputMode="decimal"
                                           value={edit.gramos_max}
                                           onChange={(e) =>
                                             setAbonoInputs((prev) => ({
                                               ...prev,
-                                              [rango.id]: { ...edit, gramos_max: formatThousands(parseCOP(e.target.value)) },
+                                              [rango.id]: { ...edit, gramos_max: formatDecimal(parseDecimal(e.target.value)) },
                                             }))
                                           }
                                           onBlur={() => handleSaveAbonoInline(rango)}
@@ -813,14 +821,14 @@ export function PreciosLaboresTab() {
                                       <div className="flex items-center gap-2">
                                         <span className="text-muted-foreground text-sm">$</span>
                                         <Input
-                                          inputMode="numeric"
+                                          inputMode="decimal"
                                           value={edit.precio_palma}
                                           onChange={(e) =>
                                             setAbonoInputs((prev) => ({
                                               ...prev,
                                               [rango.id]: {
                                                 ...edit,
-                                                precio_palma: formatThousands(parseCOP(e.target.value)),
+                                                precio_palma: formatDecimal(parseDecimal(e.target.value)),
                                               },
                                             }))
                                           }
@@ -849,14 +857,14 @@ export function PreciosLaboresTab() {
                                   <td className="p-4">
                                     <div className="relative group">
                                       <Input
-                                        inputMode="numeric"
+                                        inputMode="decimal"
                                         placeholder="0"
                                         value={nr.gramos_min}
                                         onChange={(e) =>
                                           setNuevosRangos((prev) =>
                                             prev.map((x) =>
                                               x.tempId === nr.tempId
-                                                ? { ...x, gramos_min: formatThousands(parseCOP(e.target.value)) }
+                                                ? { ...x, gramos_min: formatDecimal(parseDecimal(e.target.value)) }
                                                 : x,
                                             ),
                                           )
@@ -897,14 +905,14 @@ export function PreciosLaboresTab() {
                                   <td className="p-4">
                                     <div className="relative group">
                                       <Input
-                                        inputMode="numeric"
+                                        inputMode="decimal"
                                         placeholder="0"
                                         value={nr.gramos_max}
                                         onChange={(e) =>
                                           setNuevosRangos((prev) =>
                                             prev.map((x) =>
                                               x.tempId === nr.tempId
-                                                ? { ...x, gramos_max: formatThousands(parseCOP(e.target.value)) }
+                                                ? { ...x, gramos_max: formatDecimal(parseDecimal(e.target.value)) }
                                                 : x,
                                             ),
                                           )
@@ -946,14 +954,14 @@ export function PreciosLaboresTab() {
                                     <div className="flex items-center gap-2">
                                       <span className="text-muted-foreground text-sm">$</span>
                                       <Input
-                                        inputMode="numeric"
+                                        inputMode="decimal"
                                         placeholder="0"
                                         value={nr.precio_palma}
                                         onChange={(e) =>
                                           setNuevosRangos((prev) =>
                                             prev.map((x) =>
                                               x.tempId === nr.tempId
-                                                ? { ...x, precio_palma: formatThousands(parseCOP(e.target.value)) }
+                                                ? { ...x, precio_palma: formatDecimal(parseDecimal(e.target.value)) }
                                                 : x,
                                             ),
                                           )
@@ -1014,10 +1022,10 @@ export function PreciosLaboresTab() {
                         <span className="text-muted-foreground">$</span>
                         <Input
                           id={`precio-jornal-${labor.id}`}
-                          inputMode="numeric"
+                          inputMode="decimal"
                           value={palmaInputs[labor.id] ?? ''}
                           onChange={(e) =>
-                            setPalmaInputs((prev) => ({ ...prev, [labor.id]: formatThousands(parseCOP(e.target.value)) }))
+                            setPalmaInputs((prev) => ({ ...prev, [labor.id]: formatDecimal(parseDecimal(e.target.value)) }))
                           }
                           onBlur={() => handleSavePalma(labor)}
                           className="text-lg font-semibold"
@@ -1025,11 +1033,6 @@ export function PreciosLaboresTab() {
                         />
                         <span className="text-muted-foreground">/jornal</span>
                       </div>
-                      {palmaInputs[labor.id] && Number(parseCOP(palmaInputs[labor.id])) > 0 && (
-                        <p className="text-sm text-success font-medium">
-                          {formatCOP(parseCOP(palmaInputs[labor.id]))} /jornal
-                        </p>
-                      )}
                     </div>
                   </CardContent>
                 </AccordionContent>
@@ -1065,10 +1068,10 @@ export function PreciosLaboresTab() {
                         <span className="text-muted-foreground">$</span>
                         <Input
                           id={`precio-${palma.id}`}
-                          inputMode="numeric"
+                          inputMode="decimal"
                           value={palmaInputs[palma.id] ?? ''}
                           onChange={(e) =>
-                            setPalmaInputs((prev) => ({ ...prev, [palma.id]: formatThousands(parseCOP(e.target.value)) }))
+                            setPalmaInputs((prev) => ({ ...prev, [palma.id]: formatDecimal(parseDecimal(e.target.value)) }))
                           }
                           onBlur={() => handleSavePalma(palma)}
                           className="text-lg font-semibold"
@@ -1076,11 +1079,6 @@ export function PreciosLaboresTab() {
                         />
                         <span className="text-muted-foreground">{palmaUnidad(palma)}</span>
                       </div>
-                      {palmaInputs[palma.id] && Number(parseCOP(palmaInputs[palma.id])) > 0 && (
-                        <p className="text-sm text-success font-medium">
-                          {formatCOP(parseCOP(palmaInputs[palma.id]))} {palmaUnidad(palma)}
-                        </p>
-                      )}
                     </div>
                   </CardContent>
                 </AccordionContent>
@@ -1091,7 +1089,7 @@ export function PreciosLaboresTab() {
           {/* Custom Palma — mismo formato visual que las fijas. Las trae el fetch
               `categoria=PALMA, es_sistema=false`. Título = nombre que el admin
               escribió en "Operaciones → Trabajos / Labores". */}
-          {laboresPalmaCustom.map((labor) => (
+          {[...laboresPalmaCustom].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((labor) => (
             <AccordionItem key={`custom-${labor.id}`} value={`palma-custom-${labor.id}`} className="border-0">
               <Card className="border-border">
                 <CardHeader className="border-b bg-gradient-to-r from-amber-50/50 to-amber-50/10 dark:from-amber-950/20 dark:to-amber-950/5">
@@ -1110,12 +1108,12 @@ export function PreciosLaboresTab() {
                         <span className="text-muted-foreground">$</span>
                         <Input
                           id={`precio-custom-${labor.id}`}
-                          inputMode="numeric"
+                          inputMode="decimal"
                           value={palmaCustomInputs[labor.id] ?? ''}
                           onChange={(e) =>
                             setPalmaCustomInputs((prev) => ({
                               ...prev,
-                              [labor.id]: formatThousands(parseCOP(e.target.value)),
+                              [labor.id]: formatDecimal(parseDecimal(e.target.value)),
                             }))
                           }
                           onBlur={() => handleSaveLaborPalmaCustom(labor)}
@@ -1124,11 +1122,6 @@ export function PreciosLaboresTab() {
                         />
                         <span className="text-muted-foreground">{palmaUnidad(labor)}</span>
                       </div>
-                      {palmaCustomInputs[labor.id] && Number(parseCOP(palmaCustomInputs[labor.id])) > 0 && (
-                        <p className="text-sm text-success font-medium">
-                          {formatCOP(parseCOP(palmaCustomInputs[labor.id]))} {palmaUnidad(labor)}
-                        </p>
-                      )}
                     </div>
                   </CardContent>
                 </AccordionContent>
@@ -1163,19 +1156,19 @@ export function PreciosLaboresTab() {
                     </tr>
                   </thead>
                   <tbody>
-                    {laboresFinca.map((labor) => (
+                    {[...laboresFinca].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((labor) => (
                       <tr key={labor.id} className="border-t border-border">
                         <td className="p-4 font-medium">{labor.nombre}</td>
                         <td className="p-4">
                           <div className="flex items-center justify-end gap-2">
                             <span className="text-muted-foreground text-sm">$</span>
                             <Input
-                              inputMode="numeric"
+                              inputMode="decimal"
                               value={laborInputs[labor.id] ?? ''}
                               onChange={(e) =>
                                 setLaborInputs((prev) => ({
                                   ...prev,
-                                  [labor.id]: formatThousands(parseCOP(e.target.value)),
+                                  [labor.id]: formatDecimal(parseDecimal(e.target.value)),
                                 }))
                               }
                               onBlur={() => handleSaveLaborFinca(labor)}

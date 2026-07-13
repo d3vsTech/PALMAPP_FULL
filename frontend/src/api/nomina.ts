@@ -600,11 +600,15 @@ export interface NominaTerceroOperario {
   total_jornales: number;
   /** Total de cosecha del operario en el período. */
   total_cosecha: number;
-  /** SUM(descuentos.valor). Calculado por el backend. */
-  total_descuentos: number;
-  /** Lista de descuentos del operario. Puede llegar vacía `[]`. */
-  descuentos: DescuentoOperarioActa[];
-  /** total_jornales + total_cosecha − total_descuentos. Puede ser negativo. */
+  /**
+   * @deprecated API v2 (doc §7.2): los descuentos migraron al ACTA del tercero.
+   * El backend nuevo ya no envía este campo para operarios. Se conserva opcional
+   * por compatibilidad con respuestas legacy.
+   */
+  total_descuentos?: number;
+  /** @deprecated Igual que `total_descuentos` — ver `acta.descuentos` en su lugar. */
+  descuentos?: DescuentoOperarioActa[];
+  /** total_jornales + total_cosecha. Ya no incluye descuentos (van al acta). */
   subtotal: number;
   observacion: string | null;
 }
@@ -703,7 +707,12 @@ export interface NominaTerceroActaDetalle {
     total_jornales: number;
     total_cosecha: number;
     total_bruto: number;
+    /** SUM(descuentos.valor) del acta. Calculado por el backend. */
+    total_descuentos: number;
+    /** total_bruto − total_descuentos. Puede ser negativo si los descuentos exceden. */
     total_a_transferir: number;
+    /** Descuentos aplicados AL ACTA del contratista (API v2, doc §7.5). */
+    descuentos: DescuentoOperarioActa[];
     estado_pago: EstadoPagoTercero;
     orden_pago_numero: string | null;
     metodo_pago: MetodoPagoTercero | null;
@@ -1112,41 +1121,43 @@ export const nominaApi = {
       ),
 
     /**
-     * POST .../operarios/{op}/descuentos (doc §7.5) — agrega un descuento
-     * con concepto identificado a la línea del operario. El backend recalcula
-     * subtotal y total_a_transferir. Devuelve el acta completa actualizada.
+     * POST .../terceros/{tercero}/descuentos (doc §7.5) — agrega un descuento
+     * con concepto identificado AL ACTA del contratista. Recalcula
+     * `total_a_transferir = total_bruto − SUM(descuentos.valor)`. Devuelve
+     * el acta completa actualizada.
      *
-     * Errores: 422 `DESCUENTO_CONCEPTO_INVALIDO`, 422 `OPERARIO_NO_PERTENECE_A_TERCERO`,
-     * 404 `ACTA_NO_CALCULADA`, 409 `NOMINA_CERRADA`.
+     * IMPORTANTE (API v2): los descuentos ya NO van por operario. Se aplican
+     * a la empresa tercero como un todo. Un acta puede tener N descuentos.
+     *
+     * Errores: 422 `DESCUENTO_CONCEPTO_INVALIDO`, 404 `ACTA_NO_CALCULADA`,
+     * 409 `NOMINA_CERRADA`.
      */
     agregarDescuento: (
       nominaId: number,
       terceroId: number,
-      operarioId: number,
       payload: AgregarDescuentoOperarioPayload,
     ) =>
       apiClient.post<{ data: NominaTerceroActaDetalle; message?: string }>(
-        `/v1/tenant/nominas/${nominaId}/terceros/${terceroId}/operarios/${operarioId}/descuentos`,
+        `/v1/tenant/nominas/${nominaId}/terceros/${terceroId}/descuentos`,
         payload,
         T,
       ),
 
     /**
-     * DELETE .../operarios/{op}/descuentos/{descuento} (doc §7.6) — elimina
-     * un descuento de la línea del operario. Recalcula subtotal y
-     * total_a_transferir. Devuelve el acta completa actualizada.
+     * DELETE .../terceros/{tercero}/descuentos/{descuento} (doc §7.6) —
+     * elimina un descuento del acta del contratista. Recalcula
+     * `total_a_transferir`. Devuelve el acta completa actualizada.
      *
-     * Errores: 404 `DESCUENTO_NO_ENCONTRADO`, 422 `OPERARIO_NO_PERTENECE_A_TERCERO`,
-     * 404 `ACTA_NO_CALCULADA`, 409 `NOMINA_CERRADA`.
+     * Errores: 404 `DESCUENTO_NO_ENCONTRADO`, 404 `ACTA_NO_CALCULADA`,
+     * 409 `NOMINA_CERRADA`.
      */
     eliminarDescuento: (
       nominaId: number,
       terceroId: number,
-      operarioId: number,
       descuentoId: number,
     ) =>
       apiClient.delete<{ data: NominaTerceroActaDetalle; message?: string }>(
-        `/v1/tenant/nominas/${nominaId}/terceros/${terceroId}/operarios/${operarioId}/descuentos/${descuentoId}`,
+        `/v1/tenant/nominas/${nominaId}/terceros/${terceroId}/descuentos/${descuentoId}`,
         T,
       ),
 

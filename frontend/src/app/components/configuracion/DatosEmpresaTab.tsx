@@ -394,7 +394,7 @@ export function DatosEmpresaTab() {
                     className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                   >
                     <option value="">Seleccionar departamento...</option>
-                    {departamentos.map((d) => (
+                    {[...departamentos].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((d) => (
                       <option key={d.codigo} value={d.codigo}>{d.nombre}</option>
                     ))}
                   </select>
@@ -410,7 +410,7 @@ export function DatosEmpresaTab() {
                     className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <option value="">Seleccionar municipio...</option>
-                    {municipios.map((m) => (
+                    {[...municipios].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((m) => (
                       <option key={m.codigo} value={m.nombre}>{m.nombre}</option>
                     ))}
                   </select>

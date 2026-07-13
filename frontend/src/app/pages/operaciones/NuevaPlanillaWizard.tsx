@@ -57,15 +57,9 @@ import { toast } from 'sonner';
 // Las labores de Finca se cargan desde el API (`/v1/tenant/labores/select`,
 // §4 del doc paramétricas) — se guardan en `laboresLista` al montar el wizard.
 
-// Tipos de ausentismo
-const motivosAusentismo = [
-  'Enfermedad',
-  'Calamidad Doméstica',
-  'Permiso Personal',
-  'Licencia',
-  'Incapacidad',
-  'Otro'
-];
+// Los motivos de ausentismo vienen del catálogo del tenant vía
+// `parametricas.motivos_ausencia` (se cargan en `motivosLista` al montar).
+// La opción "Otro" se añade en el Select para permitir texto libre.
 
 // Tipos de horas extras
 const tiposHoraExtra = [
@@ -1014,11 +1008,52 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         }
       }
 
+      // === PRE-PASO FINCA: resolver labores "Otro" on-the-fly ===
+      // Para cada trabajo de FINCA con `labor === 'Otro'` y un nombre nuevo
+      // (`otraLabor`), llamamos POST /operaciones/labores-finca ANTES del
+      // bulk. Igual patrón que insumos de fertilización.
+      //   - 201 → usar data.id.
+      //   - 409 LABOR_FINCA_DUPLICADA → el backend devuelve data.id igual.
+      // El id resuelto se cachea en `laboresMap` para que el loop siguiente
+      // lo use sin re-crear.
+      const laboresFincaSaltadas: string[] = [];
+      const laboresMapLocal = new Map(laboresMap);
+      for (const t of trabajosAuxiliares) {
+        if (t.labor !== 'Otro') continue;
+        const nombreNuevo = (t.otraLabor || '').trim();
+        if (!nombreNuevo) continue;
+        // Ya cacheado (por otro trabajo del mismo lote o por prefill).
+        const existente = Array.from(laboresMapLocal.entries())
+          .find(([n]) => n.toLowerCase().trim() === nombreNuevo.toLowerCase());
+        if (existente) continue;
+        try {
+          const res = await selectsApi.crearLaborFinca(nombreNuevo);
+          laboresMapLocal.set(res.data.nombre, res.data.id);
+        } catch (err: any) {
+          if (err?.code === 'LABOR_FINCA_DUPLICADA' && err?.data?.id) {
+            const nombreBackend = err.data.nombre ?? nombreNuevo;
+            laboresMapLocal.set(nombreBackend, err.data.id as number);
+          } else {
+            console.error('[NuevaPlanillaWizard] No se pudo crear labor de finca "' + nombreNuevo + '":', err);
+            laboresFincaSaltadas.push(nombreNuevo);
+          }
+        }
+      }
+      // Propagar el mapa nuevo al estado por si el usuario re-guarda sin
+      // recargar (evita re-crear las mismas labores otra vez).
+      if (laboresMapLocal.size !== laboresMap.size) {
+        setLaboresMap(new Map(laboresMapLocal));
+        setLaboresLista(Array.from(laboresMapLocal.keys()));
+      }
+
       // === AUXILIARES (FINCA) ===
       for (const t of trabajosAuxiliares) {
         if (!t.labor || !t.nombre) continue;
-        const laborKey = t.labor === 'Otro' ? (t.otraLabor || '') : t.labor;
-        const laborId = laboresMap.get(laborKey) ?? laboresMap.get(t.labor);
+        const laborKey = t.labor === 'Otro' ? (t.otraLabor || '').trim() : t.labor;
+        // Lookup case-insensitive contra el mapa recién actualizado.
+        const matchInsensitive = Array.from(laboresMapLocal.entries())
+          .find(([n]) => n.toLowerCase().trim() === laborKey.toLowerCase());
+        const laborId = matchInsensitive?.[1] ?? laboresMapLocal.get(t.labor);
         if (!laborId) { fincaSinLabor++; continue; }
         const personaIds = decodeIdPersona(t.nombre);
         if (!personaIds.empleado_id && !personaIds.operario_id) continue;
@@ -1234,7 +1269,14 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
             `Planilla guardada, pero ${fertSaltadas.length} fertilización(es) no se guardaron porque no se pudo resolver el insumo: ${fertSaltadas.join(', ')}. Verifica el tipo de fertilizante seleccionado.`,
             { duration: 8000 },
           );
-        } else {
+        }
+        if (laboresFincaSaltadas.length > 0) {
+          toast.warning(
+            `Planilla guardada, pero ${laboresFincaSaltadas.length} labor(es) de finca no se crearon: ${laboresFincaSaltadas.join(', ')}. Puedes crearlas manualmente en Configuración → Labores de Finca.`,
+            { duration: 8000 },
+          );
+        }
+        if (fertSaltadas.length === 0 && laboresFincaSaltadas.length === 0) {
           toast.success(planillaId ? 'Planilla actualizada' : 'Planilla guardada');
         }
         navigate('/operaciones');
@@ -3901,7 +3943,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                 <SelectValue placeholder="Seleccionar motivo" />
                               </SelectTrigger>
                               <SelectContent>
-                                {motivosAusentismo.map((motivo) => (
+                                {motivosLista.map((motivo) => (
                                   <SelectItem key={motivo} value={motivo}>
                                     {motivo}
                                   </SelectItem>
@@ -3914,7 +3956,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                             <Button
                               type="button"
                               onClick={agregarAusente}
-                              disabled={!colaboradorAusenteSeleccionado || !motivoAusenteSeleccionado || (motivoAusenteSeleccionado === 'Otro' && !otroMotivoAusente)}
+                              disabled={!colaboradorAusenteSeleccionado || !motivoAusenteSeleccionado}
                               className="w-full gap-2"
                             >
                               <Plus className="h-4 w-4" />
@@ -3922,18 +3964,6 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                             </Button>
                           </div>
                         </div>
-
-                        {motivoAusenteSeleccionado === 'Otro' && (
-                          <div className="space-y-2">
-                            <Label htmlFor="otroMotivoAusente">Especificar otro motivo</Label>
-                            <Input
-                              id="otroMotivoAusente"
-                              placeholder="Ingrese el motivo"
-                              value={otroMotivoAusente}
-                              onChange={(e) => setOtroMotivoAusente(e.target.value)}
-                            />
-                          </div>
-                        )}
                       </>
                     )}
 
@@ -4152,10 +4182,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                 <span className="text-muted-foreground">
                                   {lote?.nombre} - {sublote?.nombre}
                                 </span>
-                                <span className="font-medium">{trabajo.kilos} kg</span>
-                              </div>
-                              <div className="text-muted-foreground">
-                                {trabajo.gajosRecogidos} gajos
+                                <span className="font-medium">{trabajo.gajosRecogidos} gajos</span>
                               </div>
                               {nombresColabs.length > 0 && (
                                 <div className="text-muted-foreground">
@@ -4169,7 +4196,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                           <div className="flex items-center justify-between font-medium">
                             <span className="text-xs">Total Cosecha</span>
                             <span className="text-xs text-success">
-                              {trabajosCosecha.reduce((sum, t) => sum + t.kilos, 0).toLocaleString('es-CO')} kg
+                              {trabajosCosecha.reduce((sum, t) => sum + (t.gajosRecogidos ?? 0), 0).toLocaleString('es-CO')} gajos
                             </span>
                           </div>
                         </div>
@@ -4499,14 +4526,14 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                   </>
                 )}
 
-                {/* Ausentes */}
+                {/* Novedades (ausencias) */}
                 {ausentes.length > 0 && (
                   <>
                     <div className="h-px bg-border" />
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
-                          Ausentes
+                          Novedades
                         </h4>
                         <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20">
                           {ausentes.length}

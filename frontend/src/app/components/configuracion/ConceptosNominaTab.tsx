@@ -221,7 +221,7 @@ export function ConceptosNominaTab() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {conceptos.map((concepto) => (
+                  {[...conceptos].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((concepto) => (
                     <TableRow key={concepto.id} className="hover:bg-muted/50 transition-colors">
                       <TableCell className="font-mono text-xs font-semibold uppercase">
                         {concepto.codigo}
