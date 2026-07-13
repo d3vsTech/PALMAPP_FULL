@@ -1008,6 +1008,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         }
       }
 
+<<<<<<< HEAD
       // === PRE-PASO FINCA: resolver labores "Otro" on-the-fly ===
       // Para cada trabajo de FINCA con `labor === 'Otro'` y un nombre nuevo
       // (`otraLabor`), llamamos POST /operaciones/labores-finca ANTES del
@@ -1045,15 +1046,48 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         setLaboresMap(new Map(laboresMapLocal));
         setLaboresLista(Array.from(laboresMapLocal.keys()));
       }
+=======
+      // ── Pre-paso: resolver labores de finca "Otro" ────────────────────────────
+      // Las labores nuevas digitadas en el campo "Otro" se crean secuencialmente
+      // antes del bulk. Igual al patrón de insumos de fertilización.
+      const localLaboresMap = new Map(laboresMap);
+      {
+        const nombresNuevos = [...new Set(
+          trabajosAuxiliares
+            .filter(t => t.labor === 'Otro' && t.otraLabor?.trim() && !localLaboresMap.has(t.otraLabor.trim()))
+            .map(t => t.otraLabor!.trim()),
+        )];
+        for (const nombre of nombresNuevos) {
+          try {
+            const res = await selectsApi.crearLaborFinca(nombre);
+            localLaboresMap.set(res.data.nombre, res.data.id);
+            setLaboresMap(prev => new Map(prev).set(res.data.nombre, res.data.id));
+          } catch (e: any) {
+            if (e?.code === 'LABOR_FINCA_DUPLICADA' && e?.data && typeof (e.data as any).id === 'number') {
+              const existing = e.data as { id: number; nombre: string };
+              localLaboresMap.set(nombre, existing.id);
+              setLaboresMap(prev => new Map(prev).set(nombre, existing.id));
+            } else {
+              console.error('[NuevaPlanillaWizard] No se pudo crear labor de finca "' + nombre + '":', e);
+            }
+          }
+        }
+      }
+>>>>>>> 2bdfcef9a3d54de60327fa101033e961222fe88e
 
       // === AUXILIARES (FINCA) ===
       for (const t of trabajosAuxiliares) {
         if (!t.labor || !t.nombre) continue;
+<<<<<<< HEAD
         const laborKey = t.labor === 'Otro' ? (t.otraLabor || '').trim() : t.labor;
         // Lookup case-insensitive contra el mapa recién actualizado.
         const matchInsensitive = Array.from(laboresMapLocal.entries())
           .find(([n]) => n.toLowerCase().trim() === laborKey.toLowerCase());
         const laborId = matchInsensitive?.[1] ?? laboresMapLocal.get(t.labor);
+=======
+        const laborKey = t.labor === 'Otro' ? (t.otraLabor || '') : t.labor;
+        const laborId = localLaboresMap.get(laborKey) ?? localLaboresMap.get(t.labor);
+>>>>>>> 2bdfcef9a3d54de60327fa101033e961222fe88e
         if (!laborId) { fincaSinLabor++; continue; }
         const personaIds = decodeIdPersona(t.nombre);
         if (!personaIds.empleado_id && !personaIds.operario_id) continue;

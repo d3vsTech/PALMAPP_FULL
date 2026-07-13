@@ -490,6 +490,7 @@ export interface PaginatedMeta {
 export interface OperacionesApiError extends Error {
   code?: string;
   status?: number;
+  data?: unknown;
 }
 
 function qs(params: Record<string, unknown> = {}): string {
@@ -509,8 +510,8 @@ interface RawErrorBody {
   errors?: Record<string, string[] | string>;
 }
 
-/** Parsea respuestas no-OK e incluye el `code` del backend cuando aplica. */
-async function parseError(res: Response): Promise<{ message: string; code?: string }> {
+/** Parsea respuestas no-OK e incluye el `code` y `data` del backend cuando aplica. */
+async function parseError(res: Response): Promise<{ message: string; code?: string; data?: unknown }> {
   let raw: unknown = null;
   try {
     const ct = res.headers.get('content-type') ?? '';
@@ -519,18 +520,18 @@ async function parseError(res: Response): Promise<{ message: string; code?: stri
     // Si el body no es parseable, `raw` queda `null` y caemos al fallback.
   }
   if (raw && typeof raw === 'object') {
-    const data = raw as RawErrorBody;
+    const body = raw as RawErrorBody & { data?: unknown };
     const firstFieldError = (() => {
-      if (!data.errors || typeof data.errors !== 'object') return null;
-      for (const k of Object.keys(data.errors)) {
-        const arr = data.errors[k];
+      if (!body.errors || typeof body.errors !== 'object') return null;
+      for (const k of Object.keys(body.errors)) {
+        const arr = body.errors[k];
         if (Array.isArray(arr) && arr.length && typeof arr[0] === 'string') return arr[0];
         if (typeof arr === 'string' && arr.trim()) return arr;
       }
       return null;
     })();
-    const msg = firstFieldError ?? data.message ?? data.error ?? 'Error al comunicarse con el servidor';
-    return { message: typeof msg === 'string' ? msg : 'Error', code: data.code };
+    const msg = firstFieldError ?? body.message ?? body.error ?? 'Error al comunicarse con el servidor';
+    return { message: typeof msg === 'string' ? msg : 'Error', code: body.code, data: body.data };
   }
   return { message: typeof raw === 'string' && raw.trim() ? raw : 'Error al comunicarse con el servidor' };
 }
@@ -539,10 +540,11 @@ async function parseError(res: Response): Promise<{ message: string; code?: stri
 async function smartRequest<T = unknown>(endpoint: string, opciones: RequestInit = {}): Promise<T> {
   const res = await fetchConToken(endpoint, undefined, opciones);
   if (!res.ok) {
-    const { message, code } = await parseError(res);
+    const { message, code, data } = await parseError(res);
     const err: OperacionesApiError = new Error(message);
     if (code) err.code = code;
     err.status = res.status;
+    if (data !== undefined) err.data = data;
     throw err;
   }
   if (res.status === 204) return null as unknown as T;
@@ -1108,11 +1110,16 @@ export const selectsApi = {
 
   /**
    * Crear labor de finca "on-the-fly" desde el wizard cuando el operador
+<<<<<<< HEAD
    * elige "Otro" en el dropdown de Labor (Paso 3, Labores de Finca).
+=======
+   * selecciona "Otro" en el dropdown de Labor de Finca (Paso 3).
+>>>>>>> 2bdfcef9a3d54de60327fa101033e961222fe88e
    *
    * Endpoint: POST /operaciones/labores-finca
    * Permisos: operaciones.crear u operaciones.editar
    *
+<<<<<<< HEAD
    * El backend fuerza `categoria=FINCA`, `tipo_pago=JORNAL_FIJO`, `tipo=null`,
    * `es_sistema=false`. `precio_palma` queda null; el admin lo ajusta luego
    * desde Configuración → Labores.
@@ -1144,6 +1151,13 @@ export const selectsApi = {
         es_sistema: boolean;
       };
     }>(
+=======
+   * Respuesta 201: { data: { id, nombre, categoria, tipo, tipo_pago, precio_palma, es_sistema } }
+   * Respuesta 409 LABOR_FINCA_DUPLICADA: error.data trae la labor existente con su id.
+   */
+  crearLaborFinca: (nombre: string) =>
+    smartRequest<{ data: { id: number; nombre: string; categoria: string; tipo: null; tipo_pago: string; precio_palma: string | null; es_sistema: boolean } }>(
+>>>>>>> 2bdfcef9a3d54de60327fa101033e961222fe88e
       `${BASE}/operaciones/labores-finca`,
       {
         method: 'POST',
@@ -1179,11 +1193,15 @@ export const OperacionesErrorCodes = {
   TIPO_HORA_EXTRA_CON_REGISTROS: 'TIPO_HORA_EXTRA_CON_REGISTROS',
   /** Insumo creado desde el wizard ya existe. Pedir al usuario seleccionarlo del dropdown. */
   INSUMO_DUPLICADO: 'INSUMO_DUPLICADO',
+<<<<<<< HEAD
   /**
    * Labor de finca creada desde el wizard ("Otro") ya existe.
    * El backend devuelve `data.id` en el error → el frontend lo usa igual
    * y no crea duplicado.
    */
+=======
+  /** Labor de finca creada desde el wizard ya existe; error.data trae la labor existente. */
+>>>>>>> 2bdfcef9a3d54de60327fa101033e961222fe88e
   LABOR_FINCA_DUPLICADA: 'LABOR_FINCA_DUPLICADA',
   /** Usuario sin permiso para la acción. */
   PERMISSION_DENIED: 'PERMISSION_DENIED',
