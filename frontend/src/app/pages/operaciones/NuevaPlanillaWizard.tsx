@@ -1014,11 +1014,38 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         }
       }
 
+      // ── Pre-paso: resolver labores de finca "Otro" ────────────────────────────
+      // Las labores nuevas digitadas en el campo "Otro" se crean secuencialmente
+      // antes del bulk. Igual al patrón de insumos de fertilización.
+      const localLaboresMap = new Map(laboresMap);
+      {
+        const nombresNuevos = [...new Set(
+          trabajosAuxiliares
+            .filter(t => t.labor === 'Otro' && t.otraLabor?.trim() && !localLaboresMap.has(t.otraLabor.trim()))
+            .map(t => t.otraLabor!.trim()),
+        )];
+        for (const nombre of nombresNuevos) {
+          try {
+            const res = await selectsApi.crearLaborFinca(nombre);
+            localLaboresMap.set(res.data.nombre, res.data.id);
+            setLaboresMap(prev => new Map(prev).set(res.data.nombre, res.data.id));
+          } catch (e: any) {
+            if (e?.code === 'LABOR_FINCA_DUPLICADA' && e?.data && typeof (e.data as any).id === 'number') {
+              const existing = e.data as { id: number; nombre: string };
+              localLaboresMap.set(nombre, existing.id);
+              setLaboresMap(prev => new Map(prev).set(nombre, existing.id));
+            } else {
+              console.error('[NuevaPlanillaWizard] No se pudo crear labor de finca "' + nombre + '":', e);
+            }
+          }
+        }
+      }
+
       // === AUXILIARES (FINCA) ===
       for (const t of trabajosAuxiliares) {
         if (!t.labor || !t.nombre) continue;
         const laborKey = t.labor === 'Otro' ? (t.otraLabor || '') : t.labor;
-        const laborId = laboresMap.get(laborKey) ?? laboresMap.get(t.labor);
+        const laborId = localLaboresMap.get(laborKey) ?? localLaboresMap.get(t.labor);
         if (!laborId) { fincaSinLabor++; continue; }
         const personaIds = decodeIdPersona(t.nombre);
         if (!personaIds.empleado_id && !personaIds.operario_id) continue;
