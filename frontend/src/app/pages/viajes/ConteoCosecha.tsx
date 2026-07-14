@@ -329,11 +329,11 @@ export default function ConteoCosecha() {
       loteName: c.lote?.nombre ?? '—',
       subloteName: c.sublote?.nombre ?? '',
       gajos: c.gajos_reportados ?? 0,
-      // Al elegir la cosecha, todos los gajos quedan pendientes por enviar
-      // hasta que el usuario indique cuántos entran en este viaje. Si el
-      // backend informó `gajos_pendientes_enviar` (por splits parciales),
-      // usar ese valor; si no, caer al reportado.
-      gajosPendientesPorEnviar: c.gajos_pendientes_enviar ?? c.gajos_reportados ?? 0,
+      // Al elegir la cosecha, TODOS los gajos reportados quedan como
+      // pendientes por enviar. El input "Gajos en Viaje" arranca en 0 y el
+      // user decide cuántos entran en este viaje. Pendientes se deriva luego
+      // como `gajos_reportados − gajos_en_viaje`.
+      gajosPendientesPorEnviar: c.gajos_reportados ?? 0,
       gajosEnViaje: 0,
       cuadrillaCount: empIds.length || (c.cuadrilla_count ?? 0),
     });
@@ -835,13 +835,12 @@ export default function ConteoCosecha() {
                             onFocus={(e) => e.currentTarget.select()}
                             value={cosechaEnEdicion.gajosEnViaje || ''}
                             onChange={(e) => {
-                              const maxDisponibles =
-                                cosechaEnEdicion.gajosPendientesPorEnviar
-                                + cosechaEnEdicion.gajosEnViaje;
                               const enViaje = Math.max(parseInt(e.target.value) || 0, 0);
-                              // Si supera lo disponible → pendientes = 0 (el
-                              // reconteo excedió lo reportado). Si no → resta normal.
-                              const pendientes = Math.max(maxDisponibles - enViaje, 0);
+                              // Pendientes = max(gajos reportados − en viaje, 0).
+                              // Cálculo directo sobre lo que el user está
+                              // viendo, sin arrastrar splits previos del backend
+                              // que confunden la UI.
+                              const pendientes = Math.max(cosechaEnEdicion.gajos - enViaje, 0);
                               setCosechaEnEdicion({
                                 ...cosechaEnEdicion,
                                 gajosEnViaje: enViaje,
@@ -851,12 +850,14 @@ export default function ConteoCosecha() {
                           />
                         </div>
 
-                        {/* Gajos Pendientes por Enviar — calculado readonly. */}
+                        {/* Gajos Pendientes por Enviar — derivado siempre de
+                            `gajos reportados − gajos en viaje` para evitar
+                            inconsistencias con el estado inicial del backend. */}
                         <div className="space-y-2">
                           <Label>Gajos Pendientes por Enviar</Label>
                           <Input
                             type="number"
-                            value={cosechaEnEdicion.gajosPendientesPorEnviar}
+                            value={Math.max(cosechaEnEdicion.gajos - cosechaEnEdicion.gajosEnViaje, 0)}
                             disabled
                             className="bg-muted font-semibold"
                           />

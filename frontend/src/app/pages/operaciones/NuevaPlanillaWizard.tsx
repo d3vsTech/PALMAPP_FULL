@@ -761,10 +761,18 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
    * sin pulsar "Guardar Planilla". Skipea el chequeo de duplicados, no muestra
    * toasts ni navega. Cualquier error se traga (no hay UI activa para mostrarlo).
    */
-  const guardarTodo = async (opts: { silent?: boolean } = {}) => {
+  const guardarTodo = async (opts: { silent?: boolean; stayHere?: boolean } = {}) => {
     const silent = opts.silent === true;
     if (!silent) setGuardando(true);
     try {
+      // La fecha SIEMPRE viaja en el PUT (aunque no haya cambiado). Antes se
+      // omitía como `undefined` cuando estaba vacía, lo que impedía que el
+      // backend detectara el cambio al editar el input `type="date"`.
+      if (!fecha) {
+        if (!silent) toast.error('La fecha es obligatoria');
+        setGuardando(false);
+        return;
+      }
       const headerBody = {
         fecha,
         elaborado_por: elaboradoPor || undefined,
@@ -797,7 +805,20 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         pid = res.data.id;
         setPlanillaId(pid);
       } else {
-        await operacionesApi.editar(pid, headerBody);
+        // Captura el response para actualizar el estado local sin borrar la
+        // fecha que el usuario acaba de escribir. Se conserva `fechaEnviada`
+        // en `planillaBundle` para que el useEffect de hidratación no la
+        // sobrescriba con un valor viejo del backend.
+        const fechaEnviada = fecha;
+        // DEBUG: logs de diagnóstico para el bug de "la fecha no se guarda".
+        // Abre la consola (F12) para ver qué se envía y qué responde el backend.
+        console.log('[PUT /operaciones/' + pid + '] body enviado:', headerBody);
+        const resEditar = await operacionesApi.editar(pid, headerBody);
+        const p: any = (resEditar as any)?.data ?? null;
+        console.log('[PUT /operaciones/' + pid + '] response.data.fecha:', p?.fecha, '(esperada:', fechaEnviada + ')');
+        if (p) {
+          setPlanillaBundle((prev) => ({ ...(prev ?? {}), ...p, fecha: fechaEnviada }));
+        }
       }
 
       // ── Pre-paso: resolver insumos de fertilización ──────────────────────────
@@ -1279,7 +1300,10 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         if (fertSaltadas.length === 0 && laboresFincaSaltadas.length === 0) {
           toast.success(planillaId ? 'Planilla actualizada' : 'Planilla guardada');
         }
-        navigate('/operaciones');
+        // Solo navegar cuando el guardado viene de la etapa final (o de
+        // creación nueva). Al guardar desde etapas intermedias (`stayHere`),
+        // el usuario se queda en el wizard editando.
+        if (!opts.stayHere) navigate('/operaciones');
       }
     } catch (err: any) {
       if (!silent) toast.error(err?.message ?? 'Error al guardar la planilla');
@@ -4044,6 +4068,29 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
             </Button>
 
             <div className="flex gap-2">
+              {/* En modo edición sobre planilla BORRADOR, permitir guardar
+                  desde cualquier etapa (no solo la última). */}
+              {!modoLectura && isEditMode && estadoPlanilla === 'BORRADOR' && etapaActual < ETAPAS.length && (
+                <Button
+                  variant="outline"
+                  onClick={() => guardarTodo({ stayHere: true })}
+                  disabled={guardando}
+                  className="gap-2 border-success text-success hover:bg-success/10"
+                  title="Guardar cambios sin cerrar la planilla"
+                >
+                  {guardando ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Guardando...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4" />
+                      Guardar cambios
+                    </>
+                  )}
+                </Button>
+              )}
               {etapaActual < ETAPAS.length ? (
                 <Button
                   onClick={siguienteEtapa}
@@ -4118,7 +4165,13 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         <div className="flex items-center justify-between">
                           <span className="text-sm">Fecha</span>
                           <span className="font-semibold text-sm">
-                            {new Date(fecha).toLocaleDateString('es-CO')}
+                            {(() => {
+                              // Parseo manual para EVITAR el desfase por zona
+                              // horaria de `new Date("YYYY-MM-DD")` (que
+                              // interpreta como UTC y en GMT-5 resta un día).
+                              const m = fecha.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                              return m ? `${m[3]}/${m[2]}/${m[1]}` : fecha;
+                            })()}
                           </span>
                         </div>
                       )}
