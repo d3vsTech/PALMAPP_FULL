@@ -121,6 +121,33 @@ export interface Indicadores {
 
 export type Periodo = 'semanal' | 'quincenal' | 'mensual' | 'personalizado';
 
+/**
+ * Response de `GET /operaciones/{id}/cobertura` (§7.1).
+ *
+ * Lista colaboradores y operarios que deberían aparecer en la planilla
+ * (activos y con contrato vigente para colaboradores) pero no tienen
+ * jornal, cosecha ni ausencia registrada en ella.
+ */
+export interface CoberturaColaboradorFaltante {
+  id: number;
+  nombre_completo: string;
+  documento: string;
+  modalidad_pago: 'FIJO' | 'PRODUCCION' | string;
+}
+
+export interface CoberturaOperarioFaltante {
+  id: number;
+  nombre_completo: string;
+  cedula: string;
+  tercero_nombre: string | null;
+}
+
+export interface CoberturaPlanilla {
+  tiene_faltantes: boolean;
+  colaboradores_faltantes: CoberturaColaboradorFaltante[];
+  operarios_faltantes: CoberturaOperarioFaltante[];
+}
+
 // ─── Entidades del módulo (cuerpo de respuestas) ──────────────────────────────
 
 export type EstadoNovedad = 'PENDIENTE' | 'APROBADA' | 'RECHAZADA' | 'LIQUIDADA';
@@ -613,11 +640,37 @@ export const operacionesApi = {
   eliminar: (id: number) =>
     smartRequest<{ message: string }>(`${BASE}/operaciones/${id}`, { method: 'DELETE' }),
 
+  /**
+   * POST /operaciones/{id}/aprobar (§7)
+   * Aprueba la planilla + en cascada todas las HorasExtra y Ausencias
+   * PENDIENTE de esa planilla. El response incluye `aprobaciones_cascada`
+   * con los conteos aprobados automáticamente.
+   */
   aprobar: (id: number) =>
-    smartRequest<{ data: Planilla }>(`${BASE}/operaciones/${id}/aprobar`, { method: 'POST' }),
+    smartRequest<{
+      message: string;
+      data: Planilla;
+      aprobaciones_cascada?: { horas_extra: number; ausencias: number };
+    }>(`${BASE}/operaciones/${id}/aprobar`, { method: 'POST' }),
 
   resumen: (id: number) =>
     requestConToken<{ data: Resumen }>(`${BASE}/operaciones/${id}/resumen`),
+
+  /**
+   * GET /operaciones/{id}/cobertura (§7.1)
+   *
+   * Devuelve qué colaboradores activos con contrato vigente y qué operarios
+   * activos NO aparecen en la planilla (sin labor de palma, sin labor de
+   * finca ni ausencia registrada). Se llama en el Paso 5 antes de aprobar
+   * para mostrar un banner informativo.
+   *
+   * Es INFORMATIVO, no bloqueante — el endpoint /aprobar no verifica
+   * cobertura, el usuario decide si aprueba con faltantes.
+   */
+  cobertura: (id: number) =>
+    requestConToken<{ data: CoberturaPlanilla }>(
+      `${BASE}/operaciones/${id}/cobertura`,
+    ),
 
   /**
    * Bundle único para abrir el wizard. Reemplaza las ~10 peticiones que el

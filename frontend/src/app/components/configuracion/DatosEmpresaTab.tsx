@@ -53,12 +53,12 @@ function apiToForm(data: InfoEmpresa): { tipoPersona: 'natural' | 'juridica'; fo
   const nombres = partes.slice(0, Math.ceil(partes.length / 2)).join(' ');
   const apellidos = partes.slice(Math.ceil(partes.length / 2)).join(' ');
 
-  // Detección heurística: si el tenant tiene NIT o nombre de empresa, asumimos
-  // Persona Jurídica aunque el backend marque NATURAL (caso común: el default
-  // del backend o un guardado intermedio dejó tipo_persona en estado inconsistente).
-  const hayDatosEmpresa = !!(data.nit || data.nombre || data.razon_social);
+  // Respetar el `tipo_persona` que devuelve el backend como fuente de verdad.
+  // Antes había una heurística que forzaba JURIDICA si venían NIT/nombre/razón
+  // social, pero eso ignoraba el valor real cuando el backend guardaba NATURAL
+  // pero conservaba datos legacy en esos campos.
   const tipoPersona: 'natural' | 'juridica' =
-    hayDatosEmpresa ? 'juridica' : (data.tipo_persona === 'NATURAL' ? 'natural' : 'juridica');
+    data.tipo_persona === 'NATURAL' ? 'natural' : 'juridica';
 
   return {
     tipoPersona,

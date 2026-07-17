@@ -17,12 +17,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
-import { Plus, Eye, FileText, Loader2, Trash2 } from 'lucide-react';
+import { Plus, Eye, FileText, Loader2, Trash2, Pencil, Check, AlertCircle } from 'lucide-react';
 import StatusBadge from '../../components/common/StatusBadge';
 import { toast } from 'sonner';
 import {
   operacionesApi,
   type Planilla, type Indicadores, type Periodo as PeriodoIndicadores, type EstadoPlanilla,
+  type CoberturaPlanilla,
 } from '../../../api/operaciones';
 
 const PER_PAGE = 50;
@@ -63,6 +64,68 @@ export default function Operaciones() {
   // ── Eliminación de planilla ────────────────────────────────────────────────
   const [planillaAEliminar, setPlanillaAEliminar] = useState<Planilla | null>(null);
   const [eliminando, setEliminando] = useState(false);
+
+  // ── Aprobación desde el listado ────────────────────────────────────────────
+  // Reproducimos el flujo del wizard: cobertura estricta (§7.1) + modal con
+  // faltantes bloqueante + modal de planilla vacía. `aprobandoId` marca la
+  // fila en curso para desactivar sus botones mientras se procesa.
+  const [aprobandoId, setAprobandoId] = useState<number | null>(null);
+  const [coberturaFaltantes, setCoberturaFaltantes] = useState<CoberturaPlanilla | null>(null);
+  const [alertaPlanillaVacia, setAlertaPlanillaVacia] = useState(false);
+
+  const aprobarPlanilla = async (p: Planilla) => {
+    setAprobandoId(p.id);
+
+    // Bloqueo previo: planilla completamente vacía. Suma jornales +
+    // cosechas + ausencias del listado (el backend ya trae los conteos
+    // agregados; horas extra no viene, pero si hay alguna, jornales_count
+    // o ausencias_count también será > 0 por construcción del wizard).
+    const totalHijos =
+      (p.jornales_count ?? 0) + (p.cosechas_count ?? 0) + (p.ausencias_count ?? 0);
+    if (totalHijos === 0) {
+      setAlertaPlanillaVacia(true);
+      setAprobandoId(null);
+      return;
+    }
+
+    // Verificar cobertura antes de aprobar. Si el endpoint falla,
+    // NO aprobamos automáticamente — avisamos al usuario.
+    try {
+      const cov = await operacionesApi.cobertura(p.id);
+      if (cov.data?.tiene_faltantes) {
+        setCoberturaFaltantes(cov.data);
+        setAprobandoId(null);
+        return;
+      }
+    } catch (err: any) {
+      toast.error(
+        err?.message
+          ?? 'No se pudo verificar la cobertura de personal. Intenta de nuevo.',
+      );
+      setAprobandoId(null);
+      return;
+    }
+
+    // Cobertura OK → aprobar.
+    try {
+      const res = await operacionesApi.aprobar(p.id);
+      const casc = res.aprobaciones_cascada;
+      if (casc && (casc.horas_extra > 0 || casc.ausencias > 0)) {
+        toast.success(
+          `Planilla aprobada. Aprobadas en cascada: ${casc.horas_extra} horas extra, ${casc.ausencias} ausencias.`,
+          { duration: 6000 },
+        );
+      } else {
+        toast.success('Planilla aprobada');
+      }
+      cargarLista();
+      cargarIndicadores();
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Error al aprobar la planilla');
+    } finally {
+      setAprobandoId(null);
+    }
+  };
 
   const cargarLista = useCallback(async () => {
     setCargandoLista(true);
@@ -315,12 +378,40 @@ export default function Operaciones() {
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
+                            {planilla.estado === 'BORRADOR' && (
+                              <Button
+                                size="sm" variant="outline"
+                                className="hover:bg-primary/10 hover:text-primary hover:border-primary"
+                                title="Editar planilla"
+                                onClick={() =>
+                                  navigate(`/operaciones/planilla/editar/${planilla.id}`)
+                                }
+                                disabled={aprobandoId === planilla.id}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {planilla.estado === 'BORRADOR' && (
+                              <Button
+                                size="sm" variant="outline"
+                                className="hover:bg-success/10 hover:text-success hover:border-success/30"
+                                title="Aprobar planilla"
+                                onClick={() => aprobarPlanilla(planilla)}
+                                disabled={aprobandoId === planilla.id}
+                              >
+                                {aprobandoId === planilla.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Check className="h-4 w-4" />
+                                )}
+                              </Button>
+                            )}
                             <Button
                               size="sm" variant="outline"
                               className="hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
                               title="Eliminar"
                               onClick={() => setPlanillaAEliminar(planilla)}
-                              disabled={planilla.estado === 'APROBADA'}
+                              disabled={planilla.estado === 'APROBADA' || aprobandoId === planilla.id}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -355,6 +446,99 @@ export default function Operaciones() {
               className="bg-destructive text-white hover:bg-destructive/90"
             >
               {eliminando ? 'Eliminando...' : 'Eliminar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bloqueo: planilla vacía. No permite aprobar hasta agregar al menos
+          un jornal, cosecha, ausencia u hora extra. */}
+      <AlertDialog open={alertaPlanillaVacia} onOpenChange={setAlertaPlanillaVacia}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-amber-700">
+              <AlertCircle className="h-5 w-5" />
+              La planilla está vacía
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              No has registrado ninguna labor de palma, labor de finca,
+              ausencia ni hora extra en esta planilla. Debes agregar al
+              menos un registro antes de aprobarla.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setAlertaPlanillaVacia(false)}>
+              Volver a editar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bloqueo estricto: cobertura de personal (§7.1). No deja aprobar
+          hasta que todos los colaboradores activos con contrato vigente y
+          los operarios activos tengan actividad o novedad registrada. */}
+      <AlertDialog
+        open={!!coberturaFaltantes}
+        onOpenChange={(o) => !o && setCoberturaFaltantes(null)}
+      >
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-amber-700">
+              <AlertCircle className="h-5 w-5" />
+              Faltan colaboradores por registrar
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>
+                  {(coberturaFaltantes?.colaboradores_faltantes.length ?? 0)}
+                  {' '}colaborador(es) y{' '}
+                  {(coberturaFaltantes?.operarios_faltantes.length ?? 0)}
+                  {' '}operario(s) no registraron labor de palma, labor de
+                  finca ni novedad para este día. No puedes aprobar la
+                  planilla hasta registrar la actividad o novedad de todos
+                  los colaboradores activos.
+                </p>
+                {(coberturaFaltantes?.colaboradores_faltantes.length ?? 0) > 0 && (
+                  <div className="rounded-lg border border-border bg-muted/30 p-3">
+                    <p className="text-xs font-semibold uppercase text-muted-foreground mb-1.5">
+                      Colaboradores ({coberturaFaltantes!.colaboradores_faltantes.length})
+                    </p>
+                    <ul className="text-sm space-y-0.5 max-h-40 overflow-y-auto">
+                      {coberturaFaltantes!.colaboradores_faltantes.map((c) => (
+                        <li key={`col-${c.id}`}>
+                          {c.nombre_completo}
+                          <span className="text-xs text-muted-foreground ml-1">
+                            · CC {c.documento}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {(coberturaFaltantes?.operarios_faltantes.length ?? 0) > 0 && (
+                  <div className="rounded-lg border border-border bg-muted/30 p-3">
+                    <p className="text-xs font-semibold uppercase text-muted-foreground mb-1.5">
+                      Operarios ({coberturaFaltantes!.operarios_faltantes.length})
+                    </p>
+                    <ul className="text-sm space-y-0.5 max-h-40 overflow-y-auto">
+                      {coberturaFaltantes!.operarios_faltantes.map((o) => (
+                        <li key={`op-${o.id}`}>
+                          {o.nombre_completo}
+                          <span className="text-xs text-muted-foreground ml-1">
+                            · CC {o.cedula}
+                            {o.tercero_nombre ? ` · ${o.tercero_nombre}` : ''}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setCoberturaFaltantes(null)}>
+              Volver a editar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

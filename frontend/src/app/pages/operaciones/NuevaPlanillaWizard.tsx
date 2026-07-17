@@ -42,6 +42,7 @@ import {
   Pencil,
   X,
   Loader2,
+  AlertCircle,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { operacionesApi, cosechasApi, jornalesApi, horasExtraApi, ausenciasApi, selectsApi } from '../../../api/operaciones';
@@ -187,6 +188,21 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   const [etapaActual, setEtapaActual] = useState(1);
   const [estadoPlanilla, setEstadoPlanilla] = useState<string>('');
   const [aprobando, setAprobando] = useState(false);
+  // Modal de confirmación con la lista de personas faltantes (cobertura).
+  // Se abre solo si el backend reporta `tiene_faltantes = true` antes de
+  // aprobar la planilla. El usuario decide si aprueba con faltantes o
+  // vuelve a editar.
+  const [coberturaFaltantes, setCoberturaFaltantes] = useState<
+    import('../../../api/operaciones').CoberturaPlanilla | null
+  >(null);
+  // Diferencia el contexto del modal de cobertura:
+  //   - 'aprobar' → botones "Volver a editar" + "Aprobar de todas formas".
+  //   - 'guardar' → botones "Volver a editar" + "Ir al listado".
+  const [coberturaModo, setCoberturaModo] = useState<'aprobar' | 'guardar'>('aprobar');
+  // Bloqueo estricto: cuando la planilla está completamente vacía
+  // (sin jornales, sin cosechas, sin ausencias ni horas extra), no se
+  // puede aprobar. Se muestra un modal que solo permite volver a editar.
+  const [alertaPlanillaVacia, setAlertaPlanillaVacia] = useState(false);
 
   // ── Estado planilla ID + loading ─────────────────────────────────────────
   const [planillaId, setPlanillaId] = useState<number | null>(idParam ? Number(idParam) : null);
@@ -561,11 +577,25 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           : '';
         if (fechaNorm) setFecha(fechaNorm);
         if (p.hora_inicio) setInicioLabores(String(p.hora_inicio).slice(0, 5));
+        // DEBUG: qué llega del backend para la lluvia. Si el usuario
+        // reporta "aparece No aunque puse Sí", este log revela si el
+        // problema es de hidratación o de persistencia (backend).
+        console.log(
+          '[wizard-init][lluvia] hubo_lluvia:', p.hubo_lluvia,
+          '(typeof:', typeof p.hubo_lluvia + ')',
+          '· cantidad_lluvia:', p.cantidad_lluvia,
+        );
+        // Hidratación defensiva: solo actualizamos el estado si el backend
+        // envía un valor reconocible. Si `hubo_lluvia` viene undefined/null,
+        // preservamos el estado local (evita falsos "No" cuando el bundle
+        // no traiga el campo por algún motivo).
         const lluviaRaw = p.hubo_lluvia;
-        const lluviaBool =
-          lluviaRaw === true || lluviaRaw === 1 || lluviaRaw === '1' ||
-          (typeof lluviaRaw === 'string' && lluviaRaw.toLowerCase() === 'true');
-        setHuboLluvia(lluviaBool ? 'si' : 'no');
+        if (lluviaRaw !== undefined && lluviaRaw !== null) {
+          const lluviaBool =
+            lluviaRaw === true || lluviaRaw === 1 || lluviaRaw === '1' ||
+            (typeof lluviaRaw === 'string' && lluviaRaw.toLowerCase() === 'true');
+          setHuboLluvia(lluviaBool ? 'si' : 'no');
+        }
         if (p.cantidad_lluvia != null) {
           const n = parseFloat(String(p.cantidad_lluvia));
           setLluvia(Number.isFinite(n) && n > 0 ? String(n) : '');
@@ -723,6 +753,36 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   const siguienteEtapa = async () => {
     if (etapaActual >= ETAPAS.length) return;
 
+    // Validar campos obligatorios del Paso 1 antes de avanzar.
+    // La API exige fecha (§2.1), hora_inicio y la consistencia
+    // hubo_lluvia ↔ cantidad_lluvia. Bloqueamos aquí antes de que el
+    // usuario avance sin llenar el dropdown "¿Hubo lluvia?".
+    if (etapaActual === 1) {
+      if (!fecha) {
+        toast.error('Selecciona una fecha para la planilla.');
+        return;
+      }
+      if (!elaboradoPor.trim()) {
+        toast.error('Indica quién elabora la planilla.');
+        return;
+      }
+      if (!inicioLabores) {
+        toast.error('Indica la hora de inicio de labores.');
+        return;
+      }
+      if (huboLluvia === '') {
+        toast.error('Selecciona si hubo lluvia o no.');
+        return;
+      }
+      if (huboLluvia === 'si') {
+        const mm = parseFloat(lluvia);
+        if (!lluvia || isNaN(mm) || mm <= 0) {
+          toast.error('Ingresa la cantidad de lluvia en milímetros.');
+          return;
+        }
+      }
+    }
+
     // Validar al avanzar desde la etapa 1: que no exista ya planilla para esa fecha (solo en creación nueva).
     if (etapaActual === 1 && !isEditMode && !planillaId && fecha) {
       try {
@@ -772,6 +832,27 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         if (!silent) toast.error('La fecha es obligatoria');
         setGuardando(false);
         return;
+      }
+      // Bloqueo de planilla vacía en modo interactivo: si el usuario pulsó
+      // "Guardar Planilla" (o "Guardar cambios") sin registrar nada,
+      // mostramos el mismo modal que en el flujo de aprobar. Sólo aplica
+      // cuando NO existe planilla todavía y no es autosave.
+      if (!silent && !planillaId) {
+        const hayContenido =
+          trabajosCosecha.length > 0
+          || trabajosPlateo.length > 0
+          || trabajosPoda.length > 0
+          || trabajosFertilizacion.length > 0
+          || trabajosSanidad.length > 0
+          || trabajosOtros.length > 0
+          || trabajosAuxiliares.length > 0
+          || horasExtras.length > 0
+          || ausentes.length > 0;
+        if (!hayContenido) {
+          setAlertaPlanillaVacia(true);
+          setGuardando(false);
+          return;
+        }
       }
       const headerBody = {
         fecha,
@@ -1300,10 +1381,27 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         if (fertSaltadas.length === 0 && laboresFincaSaltadas.length === 0) {
           toast.success(planillaId ? 'Planilla actualizada' : 'Planilla guardada');
         }
+        // Aviso de cobertura tras un guardado exitoso. Si hay faltantes,
+        // mostramos el mismo modal que en el flujo de aprobar (§7.1). El
+        // usuario decide si vuelve a editar o va al listado. NO bloquea el
+        // guardado — la planilla ya está persistida como BORRADOR.
+        let mostrandoCobertura = false;
+        if (pid) {
+          try {
+            const cov = await operacionesApi.cobertura(pid);
+            if (cov.data?.tiene_faltantes) {
+              setCoberturaModo('guardar');
+              setCoberturaFaltantes(cov.data);
+              mostrandoCobertura = true;
+            }
+          } catch { /* no bloqueamos el flujo si el aviso falla */ }
+        }
         // Solo navegar cuando el guardado viene de la etapa final (o de
         // creación nueva). Al guardar desde etapas intermedias (`stayHere`),
         // el usuario se queda en el wizard editando.
-        if (!opts.stayHere) navigate('/operaciones');
+        // Si estamos mostrando el modal de cobertura, el propio modal
+        // maneja la navegación en su botón "Ir al listado".
+        if (!opts.stayHere && !mostrandoCobertura) navigate('/operaciones');
       }
     } catch (err: any) {
       if (!silent) toast.error(err?.message ?? 'Error al guardar la planilla');
@@ -1316,16 +1414,39 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   //
   // Se mantiene un ref con la closure fresca para que el cleanup del useEffect
   // (que solo corre con array vacío en el primer mount) tenga acceso al estado
-  // más reciente. Guarda como BORRADOR si:
+  // más reciente. `guardarTodo()` ya distingue ítems nuevos (POST bulk) de
+  // existentes (PUT paralelo con `isBackendId`) y hace PUT del header cuando
+  // hay planillaId — así que llamarlo siempre es seguro, no duplica hijos.
+  //
+  // Guarda como BORRADOR si:
   //   - No estamos en modo lectura.
-  //   - No se ha persistido todavía (evita duplicar hijos del flujo legacy).
   //   - Hay datos mínimos para que el backend acepte el POST (fecha + elaborado_por).
+  //   - El usuario ya agregó AL MENOS un trabajo/novedad. Sin esto, salir de la
+  //     pantalla apenas se abrió (con `fecha` y `elaboradoPor` autofill)
+  //     crearía una planilla en BORRADOR completamente vacía en el listado.
+  //
+  // NO se filtra por `planillaPersistida`: aunque el usuario haya pulsado
+  // "Guardar" antes, si sigue agregando ítems y luego sale, queremos que el
+  // autosave los persista. Como `guardarTodo()` distingue ítems con backendId
+  // (PUT) de ítems locales (POST bulk), re-ejecutarlo es idempotente.
   const guardarBorradorRef = useRef<() => void>(() => {});
   guardarBorradorRef.current = () => {
     if (modoLectura) return;
-    if (planillaPersistida) return;
-    if (planillaId) return; // ya existe → re-disparar duplicaría hijos
     if (!fecha || !elaboradoPor) return;
+    const hayContenido =
+      trabajosCosecha.length > 0
+      || trabajosPlateo.length > 0
+      || trabajosPoda.length > 0
+      || trabajosFertilizacion.length > 0
+      || trabajosSanidad.length > 0
+      || trabajosOtros.length > 0
+      || trabajosAuxiliares.length > 0
+      || horasExtras.length > 0
+      || ausentes.length > 0;
+    // Si nunca se persistió y no hay ningún trabajo/novedad, no creamos
+    // planilla vacía. Si ya se persistió (planillaId), sí guardamos las
+    // ediciones del header (fecha/lluvia/hora) aunque no haya hijos nuevos.
+    if (!planillaId && !hayContenido) return;
     // Disparado en background. No espera la promesa: el componente ya se está
     // desmontando o la página se está cerrando. La petición termina sola.
     void guardarTodo({ silent: true });
@@ -1337,19 +1458,20 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
   // Aviso del navegador antes de refresh / cerrar pestaña cuando hay datos
   // sin persistir. No podemos disparar una petición fiable aquí (el navegador
-  // suele matar el fetch), así que solo pedimos confirmación al usuario.
+  // suele matar el fetch), así que solo pedimos confirmación al usuario para
+  // que use "Guardar" primero. El autosave del useEffect cleanup cubre las
+  // navegaciones internas (react-router), donde sí hay tiempo para el fetch.
   useEffect(() => {
     if (modoLectura) return;
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       if (planillaPersistida) return;
-      if (planillaId) return;
       if (!fecha) return;
       e.preventDefault();
       e.returnValue = '';
     };
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
-  }, [modoLectura, planillaPersistida, planillaId, fecha]);
+  }, [modoLectura, planillaPersistida, fecha]);
 
   // Funciones para agregar trabajos
   const agregarCosecha = () => {
@@ -1874,10 +1996,65 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
               </Button>
               <Button
                 onClick={async () => {
+                  // Bloqueo previo: planilla completamente vacía.
+                  // Suma jornales (labores palma + finca), cosechas,
+                  // ausencias y horas extra desde el resumen del backend.
+                  const totalLabores = resumen
+                    ? (resumen.labores.cosecha
+                        + resumen.labores.plateo
+                        + resumen.labores.poda
+                        + resumen.labores.fertilizacion
+                        + resumen.labores.sanidad
+                        + resumen.labores.otros
+                        + resumen.labores.labores_finca)
+                    : 0;
+                  const totalAusencias = resumen?.ausencias.total ?? 0;
+                  const totalHorasExtra = resumen?.horas_extra?.total ?? 0;
+                  if (totalLabores + totalAusencias + totalHorasExtra === 0) {
+                    setAlertaPlanillaVacia(true);
+                    return;
+                  }
+
+                  // Antes de aprobar: consultar cobertura de personal.
+                  // Si el backend reporta faltantes, mostrar modal con la
+                  // lista para que el usuario decida si aprueba o corrige.
                   setAprobando(true);
+                  let coberturaOk = false;
                   try {
-                    await operacionesApi.aprobar(Number(idParam));
-                    toast.success('Planilla aprobada');
+                    const cov = await operacionesApi.cobertura(Number(idParam));
+                    if (cov.data?.tiene_faltantes) {
+                      setCoberturaModo('aprobar');
+                      setCoberturaFaltantes(cov.data);
+                      setAprobando(false);
+                      return; // el modal maneja el "aprobar de todas formas"
+                    }
+                    coberturaOk = true;
+                  } catch (err: any) {
+                    // Si el endpoint falla no aprobamos automáticamente —
+                    // avisamos al usuario para que reintente.
+                    console.warn('[cobertura] fallo consultar faltantes:', err);
+                    toast.error(
+                      err?.message
+                        ?? 'No se pudo verificar la cobertura de personal. Intenta de nuevo.',
+                    );
+                    setAprobando(false);
+                    return;
+                  }
+                  if (!coberturaOk) {
+                    setAprobando(false);
+                    return;
+                  }
+                  try {
+                    const res = await operacionesApi.aprobar(Number(idParam));
+                    const casc = res.aprobaciones_cascada;
+                    if (casc && (casc.horas_extra > 0 || casc.ausencias > 0)) {
+                      toast.success(
+                        `Planilla aprobada. Aprobadas en cascada: ${casc.horas_extra} horas extra, ${casc.ausencias} ausencias.`,
+                        { duration: 6000 },
+                      );
+                    } else {
+                      toast.success('Planilla aprobada');
+                    }
                     setEstadoPlanilla('APROBADA');
                   } catch (err: any) {
                     toast.error(err?.message ?? 'Error al aprobar');
@@ -4100,7 +4277,18 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                   Siguiente
                   <ArrowRight className="h-4 w-4" />
                 </Button>
-              ) : modoLectura ? null : (
+              ) : modoLectura ? (
+                // Modo lectura, última etapa: botón de cierre para volver
+                // al listado. Sin él, el usuario solo puede usar la flecha
+                // superior o "Anterior", lo cual no es evidente.
+                <Button
+                  onClick={() => navigate('/operaciones')}
+                  className="gap-2 bg-success hover:bg-success/90"
+                >
+                  <Check className="h-4 w-4" />
+                  Finalizar
+                </Button>
+              ) : (
                 <Button
                   onClick={() => guardarTodo()} disabled={guardando} className="gap-2 bg-success hover:bg-success/90"
                 >
@@ -4638,6 +4826,125 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
             <AlertDialogAction onClick={() => setAlertaDuplicada(false)}>
               Entendido
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Alerta: planilla vacía — bloquea la aprobación cuando no se ha
+          registrado ninguna labor de palma, labor de finca, ausencia ni
+          hora extra. Aprobar una planilla vacía no tiene sentido operativo
+          ni de nómina. */}
+      <AlertDialog open={alertaPlanillaVacia} onOpenChange={setAlertaPlanillaVacia}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-amber-700">
+              <AlertCircle className="h-5 w-5" />
+              La planilla está vacía
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              No has registrado ninguna labor de palma, labor de finca,
+              ausencia ni hora extra en esta planilla. Debes agregar al
+              menos un registro antes de aprobarla.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setAlertaPlanillaVacia(false)}>
+              Volver a editar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Alerta: cobertura de personal — colaboradores/operarios sin registrar
+          actividad hoy. Se muestra antes de aprobar (§7.1) y también al
+          guardar borrador. En modo 'aprobar' bloquea (no deja aprobar hasta
+          cubrir a todos); en modo 'guardar' permite continuar. */}
+      <AlertDialog
+        open={!!coberturaFaltantes}
+        onOpenChange={(o) => !o && setCoberturaFaltantes(null)}
+      >
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-amber-700">
+              <AlertCircle className="h-5 w-5" />
+              {coberturaModo === 'aprobar'
+                ? 'Faltan colaboradores por registrar'
+                : 'Personal sin actividad registrada'}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>
+                  {(coberturaFaltantes?.colaboradores_faltantes.length ?? 0)}
+                  {' '}colaborador(es) y{' '}
+                  {(coberturaFaltantes?.operarios_faltantes.length ?? 0)}
+                  {' '}operario(s) no registraron labor de palma, labor de
+                  finca ni novedad para este día.
+                  {coberturaModo === 'aprobar'
+                    ? ' No puedes aprobar la planilla hasta registrar la actividad o novedad de todos los colaboradores activos.'
+                    : ' Puedes guardar el borrador igual o volver a editar para agregarlos.'}
+                </p>
+                {(coberturaFaltantes?.colaboradores_faltantes.length ?? 0) > 0 && (
+                  <div className="rounded-lg border border-border bg-muted/30 p-3">
+                    <p className="text-xs font-semibold uppercase text-muted-foreground mb-1.5">
+                      Colaboradores ({coberturaFaltantes!.colaboradores_faltantes.length})
+                    </p>
+                    <ul className="text-sm space-y-0.5 max-h-40 overflow-y-auto">
+                      {coberturaFaltantes!.colaboradores_faltantes.map((c) => (
+                        <li key={`col-${c.id}`}>
+                          {c.nombre_completo}
+                          <span className="text-xs text-muted-foreground ml-1">
+                            · CC {c.documento}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {(coberturaFaltantes?.operarios_faltantes.length ?? 0) > 0 && (
+                  <div className="rounded-lg border border-border bg-muted/30 p-3">
+                    <p className="text-xs font-semibold uppercase text-muted-foreground mb-1.5">
+                      Operarios ({coberturaFaltantes!.operarios_faltantes.length})
+                    </p>
+                    <ul className="text-sm space-y-0.5 max-h-40 overflow-y-auto">
+                      {coberturaFaltantes!.operarios_faltantes.map((o) => (
+                        <li key={`op-${o.id}`}>
+                          {o.nombre_completo}
+                          <span className="text-xs text-muted-foreground ml-1">
+                            · CC {o.cedula}
+                            {o.tercero_nombre ? ` · ${o.tercero_nombre}` : ''}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            {coberturaModo === 'aprobar' ? (
+              // Aprobación estricta: no dejamos aprobar con faltantes.
+              // El usuario debe registrar labor/ausencia para todos.
+              // Un único botón cierra el modal y regresa al wizard.
+              <AlertDialogAction onClick={() => setCoberturaFaltantes(null)}>
+                Volver a editar
+              </AlertDialogAction>
+            ) : (
+              // Guardado de borrador: puede seguir avanzando aunque
+              // falten personas, es un WIP. Le damos las dos opciones.
+              <>
+                <AlertDialogCancel>Volver a editar</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => {
+                    setCoberturaFaltantes(null);
+                    navigate('/operaciones');
+                  }}
+                  className="bg-success hover:bg-success/90"
+                >
+                  Ir al listado
+                </AlertDialogAction>
+              </>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
