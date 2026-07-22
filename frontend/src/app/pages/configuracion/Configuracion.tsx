@@ -23,6 +23,7 @@ import { InsumosTab } from '../../components/configuracion/InsumosTab';
 import { SeguridadSocialTab } from '../../components/configuracion/SeguridadSocialTab';
 import { ExtractorasTab } from '../../components/configuracion/ExtractorasTab';
 import { TransporteTab } from '../../components/configuracion/TransporteTab';
+import { RangosNumeracionTab } from '../../components/configuracion/RangosNumeracionTab';
 import { ConceptosNominaTab } from '../../components/configuracion/ConceptosNominaTab';
 import { HorasExtrasTab } from '../../components/configuracion/HorasExtrasTab';
 import { AusenciasTab } from '../../components/configuracion/AusenciasTab';
@@ -100,8 +101,9 @@ const CATEGORIAS: Categoria[] = [
     nombre: 'Viajes',
     icono: Truck,
     items: [
-      { id: 'extractoras', nombre: 'Extractoras',     component: ExtractorasTab },
-      { id: 'transporte',  nombre: 'Transportadores', component: TransporteTab },
+      { id: 'extractoras',        nombre: 'Extractoras',            component: ExtractorasTab },
+      { id: 'transporte',         nombre: 'Transportadores',        component: TransporteTab },
+      { id: 'rangos-numeracion',  nombre: 'Rangos de Numeración',   component: RangosNumeracionTab },
     ],
   },
   {

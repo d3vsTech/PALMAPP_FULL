@@ -14,16 +14,23 @@ import {
   BreadcrumbPage, BreadcrumbSeparator,
 } from '../../components/ui/breadcrumb';
 import {
-  ArrowLeft, Truck, User, MapPin, Calendar, Save, X,
+  ArrowLeft, Truck, User, MapPin, Calendar, Save, X, Hash, FileText,
 } from 'lucide-react';
 import {
   viajesApi,
   empresasTransportadorasApi,
   extractorasApi,
+  ViajesErrorCodes,
   type TransportadorSelect,
   type ExtractoraSelect,
   type EmpresaTransportadoraSelect,
+  type CrearViajePayload,
+  type EditarViajePayload,
 } from '../../../api/viajes';
+import {
+  rangosNumeracionApi,
+  type RangoNumeracionSelectItem,
+} from '../../../api/rangosNumeracion';
 import { toast } from 'sonner';
 
 /**
@@ -44,6 +51,15 @@ export default function NuevoEditarViaje() {
 
   const [formData, setFormData] = useState({
     fecha: new Date().toISOString().split('T')[0],
+    prefijo: '',
+    numeroRemision: '',
+    /**
+     * Id del `rango_numeracion` elegido (§18). Se envía en el payload del
+     * `POST /viajes` para que el backend genere la remisión como
+     * `{prefijo}-{numero_zeropaded}`. Opcional: si queda vacío, el backend
+     * usa el formato automático `REM-{YYYY}-{NNN}`.
+     */
+    rangoNumeracionId: '',
     placaVehiculo: '',
     conductor: '',
     transportadorId: '',
@@ -58,6 +74,23 @@ export default function NuevoEditarViaje() {
     Array<TransportadorSelect & { empresaRazonSocial: string }>
   >([]);
   const [extractoras, setExtractoras] = useState<ExtractoraSelect[]>([]);
+  // Rangos de numeración activos (§18 Configuración → Viajes → Rangos).
+  // Poblan el dropdown "Prefijo"; al elegir uno se autocompleta el
+  // "Número de Remisión" con `numero_actual`. El backend ya filtra por
+  // `estado=true` en `/rangos-numeracion/select`.
+  const [rangosRemision, setRangosRemision] = useState<RangoNumeracionSelectItem[]>([]);
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await rangosNumeracionApi.select({ tipo_documento: 'REMISION' });
+        setRangosRemision(res.data ?? []);
+      } catch (err) {
+        // No bloquea el form — sin rangos, el usuario puede seguir sin
+        // asignar prefijo manual (el backend usa el formato automático).
+        console.warn('[rangos-numeracion/select] error:', err);
+      }
+    })();
+  }, []);
 
   // Carga inicial: empresas + extractoras + transportadores por empresa.
   useEffect(() => {
@@ -96,6 +129,12 @@ export default function NuevoEditarViaje() {
         const v = res.data as any;
         setFormData({
           fecha: String(v.fecha_viaje ?? ''),
+          // Rehidratamos el rango si el viaje ya fue creado con uno.
+          // El backend expone `rango_numeracion` (con id/prefijo) o el
+          // simple `rango_numeracion_id`.
+          prefijo: String(v.rango_numeracion?.prefijo ?? ''),
+          numeroRemision: String(v.remision ?? ''),
+          rangoNumeracionId: String(v.rango_numeracion?.id ?? v.rango_numeracion_id ?? ''),
           placaVehiculo: String(v.placa_vehiculo ?? ''),
           conductor: String(v.nombre_conductor ?? ''),
           transportadorId: String(v.transportador?.id ?? v.transportador_id ?? ''),
@@ -159,23 +198,60 @@ export default function NuevoEditarViaje() {
     try {
       // `es_homogeneo` no va en el payload: lo calcula el backend al agregar /
       // quitar detalles de cosecha (§5.1 + §6.1 del doc API_VIAJES.md).
-      const payload = {
-        fecha_viaje: formData.fecha,
-        hora_salida: formData.horaSalida,
-        transportador_id: Number(formData.transportadorId),
-        extractora_id: Number(formData.extractoraId),
-        observaciones: null,
-      };
+      //
+      // `rango_numeracion_id` (§18): opcional. Si el usuario eligió un
+      // prefijo del dropdown, incluimos el id para que el backend genere
+      // la remisión como `{prefijo}-{numero_zeropaded}`. Si lo omite, el
+      // backend usa el formato automático `REM-{YYYY}-{NNN}`.
+      const rangoId = formData.rangoNumeracionId
+        ? Number(formData.rangoNumeracionId)
+        : null;
+
       if (esEdicion && id) {
+        const payload: EditarViajePayload = {
+          fecha_viaje: formData.fecha,
+          hora_salida: formData.horaSalida,
+          transportador_id: Number(formData.transportadorId),
+          extractora_id: Number(formData.extractoraId),
+          observaciones: null,
+          rango_numeracion_id: rangoId,
+        };
         await viajesApi.editar(Number(id), payload);
         toast.success('Viaje actualizado');
       } else {
+        const payload: CrearViajePayload = {
+          fecha_viaje: formData.fecha,
+          hora_salida: formData.horaSalida,
+          transportador_id: Number(formData.transportadorId),
+          extractora_id: Number(formData.extractoraId),
+          observaciones: null,
+          rango_numeracion_id: rangoId,
+        };
         await viajesApi.crear(payload);
         toast.success('Viaje creado');
       }
       navigate('/viajes');
     } catch (err: any) {
-      toast.error(err?.message ?? 'Error al guardar viaje');
+      const code = err?.code ?? '';
+      // §9 códigos del módulo Viajes que pueden aparecer al crear/editar:
+      if (code === ViajesErrorCodes.TRANSPORTADOR_INACTIVO) {
+        toast.error('El conductor seleccionado está inactivo. Actívalo en Configuración → Viajes → Transportadores.');
+      } else if (code === ViajesErrorCodes.EXTRACTORA_INACTIVA) {
+        toast.error('La extractora seleccionada está inactiva. Actívala en Configuración → Viajes → Extractoras.');
+      } else if (code === ViajesErrorCodes.VIAJE_NO_EDITABLE) {
+        toast.error('El viaje ya no está en estado CREADO — no se puede editar.');
+      } else if (code === ViajesErrorCodes.REMISION_DUPLICADA) {
+        toast.error('Colisión de número de remisión. Intenta de nuevo.');
+      } else if (code === 'RANGO_INACTIVO') {
+        // §18 rangos de numeración
+        toast.error('El rango de numeración seleccionado está inactivo. Elige otro o actívalo en Configuración → Viajes → Rangos de Numeración.');
+      } else if (code === 'RANGO_AGOTADO') {
+        toast.error('El rango de numeración se agotó (numero_actual > numero_hasta). Amplía "Número Hasta" o crea un nuevo rango.');
+      } else if (code === ViajesErrorCodes.MODULO_DESHABILITADO) {
+        toast.error('El módulo de Viajes está deshabilitado para esta finca.');
+      } else {
+        toast.error(err?.message ?? 'Error al guardar viaje');
+      }
     } finally {
       setGuardando(false);
     }
@@ -234,6 +310,9 @@ export default function NuevoEditarViaje() {
               </div>
             </CardHeader>
             <CardContent className="space-y-6">
+              {/* Primera fila: Fecha · Prefijo · Número de Remisión.
+                  Va separada del resto para destacar los datos de la
+                  remisión física de despacho. */}
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {/* Fecha */}
                 <div className="space-y-1.5">
@@ -251,6 +330,94 @@ export default function NuevoEditarViaje() {
                   {errors.fecha && <p className="text-xs text-destructive">{errors.fecha}</p>}
                 </div>
 
+                {/* Prefijo (dropdown alimentado por los rangos activos
+                    de "Rangos de Numeración" → tipo Remisión).
+                    Al elegir uno, "Número de Remisión" se auto-rellena
+                    con el `numero_actual` del rango. */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="prefijo" className="flex items-center gap-2 text-sm">
+                    <Hash className="h-3.5 w-3.5" />
+                    Prefijo
+                  </Label>
+                  <Select
+                    value={formData.prefijo}
+                    onValueChange={(v) => {
+                      const r = rangosRemision.find((x) => x.prefijo === v);
+                      setFormData((prev) => ({
+                        ...prev,
+                        prefijo: v,
+                        // Guardamos el id del rango para enviarlo en el
+                        // payload como `rango_numeracion_id` (§18).
+                        rangoNumeracionId: r ? String(r.id) : '',
+                        // Solo prellenamos el número de remisión si no lo
+                        // ha editado manualmente todavía (o si estaba con
+                        // el consecutivo de otro prefijo).
+                        numeroRemision: r ? String(r.numero_actual) : prev.numeroRemision,
+                      }));
+                      if (errors.prefijo) {
+                        setErrors((prev) => {
+                          const n = { ...prev };
+                          delete n.prefijo;
+                          return n;
+                        });
+                      }
+                    }}
+                  >
+                    <SelectTrigger
+                      id="prefijo"
+                      className={errors.prefijo ? 'border-destructive' : ''}
+                    >
+                      <SelectValue
+                        placeholder={
+                          rangosRemision.length === 0
+                            ? 'Configura un rango primero'
+                            : 'Seleccionar prefijo...'
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {rangosRemision.length === 0 ? (
+                        <div className="px-3 py-2 text-xs text-muted-foreground">
+                          No hay rangos activos. Créalos en Configuración → Viajes → Rangos de Numeración.
+                        </div>
+                      ) : (
+                        rangosRemision.map((r) => (
+                          <SelectItem key={r.id} value={r.prefijo}>
+                            {r.prefijo}{' '}
+                            <span className="text-xs text-muted-foreground">
+                              (próximo: {r.numero_actual})
+                            </span>
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  {errors.prefijo && <p className="text-xs text-destructive">{errors.prefijo}</p>}
+                </div>
+
+                {/* Número de Remisión — se auto-rellena con el consecutivo
+                    del rango seleccionado, pero el usuario puede editarlo
+                    manualmente si necesita saltar/repetir un número. */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="numeroRemision" className="flex items-center gap-2 text-sm">
+                    <FileText className="h-3.5 w-3.5" />
+                    Número de Remisión
+                  </Label>
+                  <Input
+                    id="numeroRemision"
+                    placeholder={formData.prefijo ? 'Consecutivo del rango' : 'Selecciona un prefijo primero'}
+                    value={formData.numeroRemision}
+                    onChange={(e) => handleInputChange('numeroRemision', e.target.value)}
+                    className={errors.numeroRemision ? 'border-destructive' : ''}
+                  />
+                  {errors.numeroRemision && (
+                    <p className="text-xs text-destructive">{errors.numeroRemision}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Segunda sección: datos del despacho (transportador, vehículo, destino, hora). */}
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {/* Transportador (empresa) */}
                 <div className="space-y-1.5">
                   <Label htmlFor="transportador" className="flex items-center gap-2 text-sm">

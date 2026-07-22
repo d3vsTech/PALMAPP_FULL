@@ -185,14 +185,43 @@ export interface ViajeDetalle {
     cuadrilla_count?: number;
     lote?: { id: number; nombre: string };
     sublote?: { id: number; nombre: string };
-    cuadrilla?: Array<{ empleado_id: number }>;
+    /**
+     * Cuadrilla de la cosecha. XOR por miembro: `empleado_id` (colaborador
+     * propio) u `operario_id` (operario de tercero). El backend inyecta
+     * `tercero_id` cuando aplica; el frontend nunca lo envía.
+     */
+    cuadrilla?: Array<{
+      empleado_id?: number | null;
+      operario_id?: number | null;
+      tercero_id?: number | null;
+    }>;
   };
 }
 
 /** Viaje completo (con todos los campos del nuevo contrato) */
 export interface Viaje {
   id: number;
-  remision: string;                                  // REM-{YYYY}-{NNN}
+  remision: string;                                  // REM-{YYYY}-{NNN} o {prefijo}-{NNN}
+  /**
+   * FK al rango de numeración usado al crear el viaje (§18 API_PARAMETRICAS).
+   * `null` = consecutivo automático `REM-{YYYY}-{NNN}`.
+   * Cuando está poblado, el backend generó la remisión como
+   * `{rango.prefijo}-{numero_zeropaded}`.
+   */
+  rango_numeracion_id?: number | null;
+  /**
+   * Objeto expandido del rango cuando el backend lo eager-loadea (para que
+   * el form de edición muestre el prefijo elegido en el dropdown sin llamada
+   * extra). Es opcional — el backend puede devolver solo `rango_numeracion_id`.
+   */
+  rango_numeracion?: {
+    id: number;
+    tipo_documento: string;
+    prefijo: string;
+    numero_desde: number;
+    numero_hasta: number;
+    numero_actual: number;
+  } | null;
   fecha_viaje: string;                               // YYYY-MM-DD
   hora_salida: string;                               // HH:MM:SS
   estado: EstadoViajeApi;
@@ -254,12 +283,18 @@ export interface Viaje {
  * NO incluye `es_homogeneo`: el backend lo calcula automáticamente según los
  * lotes de las cosechas asignadas al viaje (se recalcula en `addDetalle` /
  * `removeDetalle`). El frontend recibe el valor en la respuesta `Viaje`.
+ *
+ * `rango_numeracion_id` (§18 API_PARAMETRICAS + §5.1 nota):
+ *  - Presente → el backend genera la remisión como `{prefijo}-{numero}` y
+ *    aumenta `rango.numero_actual` en 1.
+ *  - Omitido/null → consecutivo automático `REM-{YYYY}-{NNN}`.
  */
 export interface CrearViajePayload {
   fecha_viaje: string;
   hora_salida: string;
   transportador_id: number;
   extractora_id: number;
+  rango_numeracion_id?: number | null;
   observaciones?: string | null;
   sync_uuid?: string | null;
 }
@@ -268,13 +303,16 @@ export interface CrearViajePayload {
  * Payload para editar viaje (§12.3 — `UpdateViajeRequest`).
  *
  * Solo permitido cuando `viaje.estado = CREADO`. Tampoco acepta `es_homogeneo`
- * (mismo motivo que el POST: lo calcula el backend).
+ * (mismo motivo que el POST: lo calcula el backend). Se permite cambiar
+ * `rango_numeracion_id` en modo edición (backend recalcula la remisión si el
+ * campo llega distinto al actual).
  */
 export interface EditarViajePayload {
   fecha_viaje?: string;
   hora_salida?: string;
   transportador_id?: number;
   extractora_id?: number;
+  rango_numeracion_id?: number | null;
   observaciones?: string | null;
 }
 
@@ -746,33 +784,6 @@ export const viajesApi = {
     get<{ data: DocumentoBascula; viaje?: Viaje }>(`/viajes/${viajeId}/documento-bascula/${docId}`),
 };
 
-// ─── códigos de error del API ────────────────────────────────────────────────
-
-export const ErrorCodes = {
-  VIAJE_NOT_FOUND:        'VIAJE_NOT_FOUND',
-  DETALLE_NOT_FOUND:      'DETALLE_NOT_FOUND',
-  VIAJE_ESTADO_INVALIDO:  'VIAJE_ESTADO_INVALIDO',
-  VIAJE_NO_EDITABLE:      'VIAJE_NO_EDITABLE',
-  DETALLE_APROBADO:       'DETALLE_APROBADO',
-  VIAJE_INCOMPLETO:       'VIAJE_INCOMPLETO',
-  RECONTEO_PENDIENTE:     'RECONTEO_PENDIENTE',
-  REMISION_DUPLICADA:     'REMISION_DUPLICADA',
-  COSECHA_FUERA_DE_VIAJE: 'COSECHA_FUERA_DE_VIAJE',
-  COSECHA_YA_ASIGNADA:    'COSECHA_YA_ASIGNADA',
-  /**
-   * `gajos_en_viaje` supera los gajos disponibles restantes de la cosecha
-   * (§9). Ocurre cuando el operador intenta asignar más gajos de los que
-   * quedan en `gajos_pendientes_enviar`.
-   */
-  GAJOS_INSUFICIENTES:    'GAJOS_INSUFICIENTES',
-  OPERACION_NO_APROBADA:  'OPERACION_NO_APROBADA',
-  TRANSPORTADOR_INACTIVO: 'TRANSPORTADOR_INACTIVO',
-  EXTRACTORA_INACTIVA:    'EXTRACTORA_INACTIVA',
-  MODULO_DESHABILITADO:   'MODULO_DESHABILITADO',
-  DOCUMENTO_VIAJE_MISMATCH: 'DOCUMENTO_VIAJE_MISMATCH',
-  ANTHROPIC_SIN_CONFIGURAR: 'ANTHROPIC_SIN_CONFIGURAR',
-} as const;
-
 // ─── utilidades ──────────────────────────────────────────────────────────────
 
 /** Convierte fecha del API (YYYY-MM-DD o ISO) en Date. Retorna null si es inválida. */
@@ -824,3 +835,60 @@ export function normalizarEstado(raw: string | null | undefined): EstadoViajeApi
   if (!raw) return 'CREADO';
   return ESTADO_LEGACY_TO_NUEVO[raw] ?? 'CREADO';
 }
+
+// ─── códigos de error (§9 API_VIAJES.md) ──────────────────────────────────
+
+/**
+ * Códigos de error específicos del módulo Viajes (§9 API_VIAJES.md).
+ *
+ * Todos se leen del campo `code` (o `error_code`) del response de error.
+ * `smartRequest` los expone en `err.code`.
+ *
+ * Uso típico en un `catch`:
+ * ```
+ * } catch (err) {
+ *   if (err.code === ViajesErrorCodes.VIAJE_NO_EDITABLE) { ... }
+ * }
+ * ```
+ */
+export const ViajesErrorCodes = {
+  /** 404 — viaje no existe o no pertenece al tenant. */
+  VIAJE_NOT_FOUND: 'VIAJE_NOT_FOUND',
+  /** 404 — `detalleId` no pertenece al viaje. */
+  DETALLE_NOT_FOUND: 'DETALLE_NOT_FOUND',
+  /** 409 — transición desde estado incorrecto (ej. `finalizar` en CREADO). */
+  VIAJE_ESTADO_INVALIDO: 'VIAJE_ESTADO_INVALIDO',
+  /** 409 — PUT/DELETE/reconteo con `estado !== CREADO`. */
+  VIAJE_NO_EDITABLE: 'VIAJE_NO_EDITABLE',
+  /** 409 — intento de editar/eliminar un detalle con `reconteo_aprobado = true`. */
+  DETALLE_APROBADO: 'DETALLE_APROBADO',
+  /** 422 — finalizar viaje con detalles pero sin `peso_viaje` o `cantidad_gajos_total`. */
+  VIAJE_INCOMPLETO: 'VIAJE_INCOMPLETO',
+  /** 422 — aprobar reconteo sin haber hidratado `gajos_en_viaje` del detalle. */
+  RECONTEO_PENDIENTE: 'RECONTEO_PENDIENTE',
+  /** 422 — colisión de remisión al generar (fallback por concurrencia, muy raro). */
+  REMISION_DUPLICADA: 'REMISION_DUPLICADA',
+  /** 422 — `reconteo` con una `cosecha_id` que no está en el `viaje_detalle`. */
+  COSECHA_FUERA_DE_VIAJE: 'COSECHA_FUERA_DE_VIAJE',
+  /**
+   * 422 — la cosecha ya está asignada completa (modo legacy) o dos veces en
+   * el mismo viaje (índice único `(cosecha_id, viaje_id) WHERE estado = true`).
+   */
+  COSECHA_YA_ASIGNADA: 'COSECHA_YA_ASIGNADA',
+  /** 422 — `gajos_en_viaje` supera los gajos disponibles restantes de la cosecha. */
+  GAJOS_INSUFICIENTES: 'GAJOS_INSUFICIENTES',
+  /** 422 — la operación padre de la cosecha no está APROBADA. */
+  OPERACION_NO_APROBADA: 'OPERACION_NO_APROBADA',
+  /** 422 — `transportador.estado = false` al crear viaje. */
+  TRANSPORTADOR_INACTIVO: 'TRANSPORTADOR_INACTIVO',
+  /** 422 — `extractora.estado = false` al crear viaje. */
+  EXTRACTORA_INACTIVA: 'EXTRACTORA_INACTIVA',
+  /** 404 — polling con `documento_id` que no pertenece al `viaje_id` de la URL. */
+  DOCUMENTO_VIAJE_MISMATCH: 'DOCUMENTO_VIAJE_MISMATCH',
+  /** 503 — falta `ANTHROPIC_API_KEY` en el env del backend (defensa temprana del POST). */
+  ANTHROPIC_SIN_CONFIGURAR: 'ANTHROPIC_SIN_CONFIGURAR',
+  /** 403 — `tenant_config.modulo_viajes = false`. */
+  MODULO_DESHABILITADO: 'MODULO_DESHABILITADO',
+} as const;
+
+export type ViajeErrorCode = typeof ViajesErrorCodes[keyof typeof ViajesErrorCodes];

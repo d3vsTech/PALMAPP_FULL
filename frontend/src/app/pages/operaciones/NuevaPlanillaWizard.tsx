@@ -45,7 +45,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { operacionesApi, cosechasApi, jornalesApi, horasExtraApi, ausenciasApi, selectsApi } from '../../../api/operaciones';
+import { operacionesApi, cosechasApi, jornalesApi, jornalGruposApi, horasExtraApi, ausenciasApi, selectsApi } from '../../../api/operaciones';
 import { configuracionApi } from '../../../api/configuracion';
 import { toast } from 'sonner';
 
@@ -81,8 +81,22 @@ interface TrabajoCosecha {
   kilos: number;
 }
 
+/**
+ * Campo común opcional para los 5 tipos de labores de palma con N miembros.
+ *
+ * Cuando la tarjeta representa un GRUPO persistido en el backend (`jornal_grupos`),
+ * este campo lleva el id numérico del grupo (como string). Cuando la tarjeta
+ * es un jornal INDIVIDUAL (1 colaborador), este campo es `undefined` y el `id`
+ * apunta al `jornales.id` clásico.
+ *
+ * El wizard usa esta bandera para decidir qué endpoint llamar al persistir:
+ *   - N === 1 sin grupoId  → jornalesApi (bulk POST / PUT individual)
+ *   - N >= 2 sin grupoId   → jornalGruposApi.crear (nuevo grupo)
+ *   - grupoId presente     → jornalGruposApi.editar (grupo existente)
+ */
 interface TrabajoPlateo {
   id: string;
+  grupoId?: string;
   colaboradores: string[];
   lote: string;
   sublote: string;
@@ -91,6 +105,7 @@ interface TrabajoPlateo {
 
 interface TrabajoPoda {
   id: string;
+  grupoId?: string;
   colaboradores: string[];
   lote: string;
   sublote: string;
@@ -99,6 +114,7 @@ interface TrabajoPoda {
 
 interface TrabajoFertilizacion {
   id: string;
+  grupoId?: string;
   colaboradores: string[];
   lote: string;
   sublote: string;
@@ -110,6 +126,7 @@ interface TrabajoFertilizacion {
 
 interface TrabajoSanidad {
   id: string;
+  grupoId?: string;
   colaboradores: string[];
   lote: string;
   sublote: string;
@@ -118,6 +135,7 @@ interface TrabajoSanidad {
 
 interface TrabajoOtros {
   id: string;
+  grupoId?: string;
   colaboradores: string[];
   /**
    * Referencia al catálogo unificado de Labores (categoria=PALMA, custom, tipo=null).
@@ -178,6 +196,63 @@ const ETAPAS = [
 
 interface NuevaPlanillaWizardProps {
   modoLectura?: boolean;
+}
+
+/**
+ * Chip con el nombre de un colaborador/operario para las tarjetas de palma.
+ *
+ * Estados visuales (§3.2 y §3.2.1):
+ *  - Operario de tercero → fondo naranja, badge del nombre del tercero.
+ *  - Empleado propio con `modalidad_pago = 'FIJO'` → badge extra gris
+ *    "FIJO · $0" para dejar claro que su jornal cierra en cero (la nómina
+ *    lo paga por salario_base).
+ *  - Empleado propio con `modalidad_pago = 'PRODUCCION'` → chip neutro.
+ */
+function ColaboradorChip({
+  col,
+}: {
+  col: {
+    id: string;
+    nombres: string;
+    apellidos: string;
+    terceroNombre?: string;
+    modalidad_pago?: 'FIJO' | 'PRODUCCION' | string;
+  };
+}) {
+  const esFijo = !col.terceroNombre && col.modalidad_pago === 'FIJO';
+  const primerApellido = (col.apellidos || '').split(' ')[0] ?? '';
+  const nombreCorto = `${col.nombres} ${primerApellido}`.trim();
+  return (
+    <Badge
+      variant="outline"
+      className={`text-xs ${
+        col.terceroNombre
+          ? 'bg-orange-50 text-orange-800 border-orange-300'
+          : esFijo
+            ? 'bg-muted/60 text-muted-foreground border-border'
+            : ''
+      }`}
+      title={
+        col.terceroNombre
+          ? `Tercero · ${col.terceroNombre}`
+          : esFijo
+            ? 'Empleado con salario fijo — su jornal diario queda en $0. La nómina lo paga por salario_base.'
+            : 'Colaborador interno · pago por producción'
+      }
+    >
+      {nombreCorto}
+      {col.terceroNombre && (
+        <span className="ml-1.5 text-[9px] font-semibold uppercase tracking-wide bg-orange-200/70 text-orange-900 rounded px-1 py-[1px]">
+          {col.terceroNombre}
+        </span>
+      )}
+      {esFijo && (
+        <span className="ml-1.5 text-[9px] font-semibold uppercase tracking-wide bg-slate-200 text-slate-700 rounded px-1 py-[1px]">
+          FIJO · $0
+        </span>
+      )}
+    </Badge>
+  );
 }
 
 export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanillaWizardProps = {}) {
@@ -273,6 +348,16 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
     nombres: string;
     apellidos: string;
     nombre_completo: string;
+    /**
+     * Solo presente en empleados propios. Los operarios de tercero no
+     * usan este campo (siempre cobran por producción vía tercero).
+     *
+     * `FIJO`: la nómina paga por `salario_base`; los jornales quedan en
+     * `valor_total = 0.00`. Se pinta un badge en la UI para que el
+     * operador entienda por qué el pago diario es 0.
+     * `PRODUCCION`: cobra por lo trabajado.
+     */
+    modalidad_pago?: 'FIJO' | 'PRODUCCION' | string;
     /** Solo presente en operarios. */
     terceroNombre?: string;
     _raw?: any;
@@ -422,7 +507,16 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
             apellidos = String(c.id);
           }
           const nombreCompleto = nombreCompletoApi || `${nombres} ${apellidos}`.trim();
-          return { id: String(c.id), nombres, apellidos, nombre_completo: nombreCompleto, _raw: c };
+          return {
+            id: String(c.id),
+            nombres,
+            apellidos,
+            nombre_completo: nombreCompleto,
+            // La UI pinta un badge cuando `modalidad_pago === 'FIJO'`
+            // para explicar por qué el jornal cerrará en $0 (§3.2).
+            modalidad_pago: c.modalidad_pago as ('FIJO' | 'PRODUCCION' | string | undefined),
+            _raw: c,
+          };
         });
 
         // 2. Operarios de terceros (operario_id en payloads). Vienen del bundle
@@ -614,68 +708,197 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           gajosRecogidos: Number(c.gajos_reportados ?? 0),
           kilos: c.peso_confirmado != null ? Number(c.peso_confirmado) : 0,
         })));
-        const jornales = (p.jornales ?? []) as any[];
-        const porTipo = (tipo: string) => jornales.filter(j => j.categoria === 'PALMA' && j.tipo === tipo);
-        setTrabajosPlateo(porTipo('PLATEO').map(j => ({
-          id: String(j.id),
-          colaboradores: [encodeIdFromBackend(j)],
-          lote: j.lote_id != null ? String(j.lote_id) : '',
-          sublote: j.sublote_id != null ? String(j.sublote_id) : '',
-          numeroPalmas: Number(j.cantidad_palmas ?? 0),
-        })));
-        setTrabajosPoda(porTipo('PODA').map(j => ({
-          id: String(j.id),
-          colaboradores: [encodeIdFromBackend(j)],
-          lote: j.lote_id != null ? String(j.lote_id) : '',
-          sublote: j.sublote_id != null ? String(j.sublote_id) : '',
-          numeroPalmas: Number(j.cantidad_palmas ?? 0),
-        })));
-        setTrabajosFertilizacion(porTipo('FERTILIZACION').map(j => ({
-          id: String(j.id),
-          colaboradores: [encodeIdFromBackend(j)],
-          lote: j.lote_id != null ? String(j.lote_id) : '',
-          sublote: j.sublote_id != null ? String(j.sublote_id) : '',
-          palmas: Number(j.cantidad_palmas ?? 0),
-          tipoFertilizante: j.insumo?.nombre ?? '',
-          otroFertilizante: '',
-          cantidadGramos: Number(j.gramos_por_palma ?? 0),
-        })));
-        setTrabajosSanidad(porTipo('SANIDAD').map(j => ({
-          id: String(j.id),
-          colaboradores: [encodeIdFromBackend(j)],
-          lote: j.lote_id != null ? String(j.lote_id) : '',
-          sublote: j.sublote_id != null ? String(j.sublote_id) : '',
-          trabajoRealizado: j.descripcion ?? '',
-        })));
+        // ── Hidratación de labores de palma (§3.2.1) ─────────────────────
+        // El bundle expone los jornales por dos vías posibles:
+        //   (a) `p.jornales` con `jornal_grupo_id` → jornal miembro de un
+        //       grupo. Reagrupamos en cliente si el backend NO envía el
+        //       array oficial `p.jornal_grupos`.
+        //   (b) `p.jornal_grupos` (oficial) → cada grupo trae `jornales[]`
+        //       expandidos. Es la fuente preferida cuando llega.
+        // La lógica cubre 3 fases de la migración del backend:
+        //   1. Ni `jornal_grupo_id` ni `jornal_grupos` → todo suelto.
+        //   2. `jornal_grupo_id` sí, `jornal_grupos` no → reagrupamos aquí.
+        //   3. `jornal_grupos` sí → filtramos jornales miembros del listado.
+        // Todos los caminos terminan con `jornalesSueltos` (tarjetas
+        // individuales) + `grupos` (tarjetas con N colaboradores).
+        const jornalesTodos = (p.jornales ?? []) as any[];
+        const gruposDelBackend = ((p as any).jornal_grupos ?? []) as any[];
+        const backendEnviaGrupos = Array.isArray((p as any).jornal_grupos);
+
+        let jornalesSueltos: any[] = [];
+        let grupos: any[] = [...gruposDelBackend];
+
+        if (backendEnviaGrupos) {
+          // Fase 3: usar el array oficial y filtrar miembros del listado.
+          jornalesSueltos = jornalesTodos.filter(j => j.jornal_grupo_id == null);
+        } else {
+          // Fases 1-2: reagrupar por `jornal_grupo_id` si viene, tratando
+          // los jornales sin él como sueltos. Al sumar `cantidad_palmas` de
+          // los miembros recuperamos el valor original del grupo (el backend
+          // divide `cantidad_palmas / N` al guardar cada miembro).
+          const porGrupoId = new Map<number, any[]>();
+          for (const j of jornalesTodos) {
+            const gid = j.jornal_grupo_id;
+            if (gid != null) {
+              const arr = porGrupoId.get(gid) ?? [];
+              arr.push(j);
+              porGrupoId.set(gid, arr);
+            } else {
+              jornalesSueltos.push(j);
+            }
+          }
+          for (const [gid, miembros] of porGrupoId.entries()) {
+            const primero = miembros[0];
+            grupos.push({
+              id: gid,
+              labor_id: primero.labor_id,
+              labor: primero.labor,
+              lote_id: primero.lote_id,
+              lote: primero.lote,
+              sublote_id: primero.sublote_id,
+              sublote: primero.sublote,
+              insumo_id: primero.insumo_id,
+              insumo: primero.insumo,
+              gramos_por_palma: primero.gramos_por_palma,
+              descripcion: primero.descripcion,
+              nombre_trabajo: primero.nombre_trabajo,
+              // §3.2.1: `cantidad_palmas` es del GRUPO — el backend la
+              // replica igual en cada jornal miembro, no la divide (lo
+              // que sí se divide es `valor_total`). Por eso tomamos el
+              // valor del primero, no la suma.
+              cantidad_palmas: primero.cantidad_palmas,
+              jornales: miembros,
+            });
+          }
+        }
+
+        const porTipoJornal = (tipo: string) =>
+          jornalesSueltos.filter(j => j.categoria === 'PALMA' && j.tipo === tipo);
+        const porTipoGrupo = (tipo: string) =>
+          grupos.filter(g => g.labor?.tipo === tipo);
+        const miembrosDeGrupo = (g: any): string[] =>
+          ((g.jornales ?? []) as any[])
+            .map((m) => encodeIdFromBackend(m))
+            .filter(Boolean);
+
+        setTrabajosPlateo([
+          ...porTipoGrupo('PLATEO').map((g: any) => ({
+            id: String(g.id),
+            grupoId: String(g.id),
+            colaboradores: miembrosDeGrupo(g),
+            lote: g.lote_id != null ? String(g.lote_id) : '',
+            sublote: g.sublote_id != null ? String(g.sublote_id) : '',
+            numeroPalmas: Number(g.cantidad_palmas ?? 0),
+          })),
+          ...porTipoJornal('PLATEO').map(j => ({
+            id: String(j.id),
+            colaboradores: [encodeIdFromBackend(j)],
+            lote: j.lote_id != null ? String(j.lote_id) : '',
+            sublote: j.sublote_id != null ? String(j.sublote_id) : '',
+            numeroPalmas: Number(j.cantidad_palmas ?? 0),
+          })),
+        ]);
+        setTrabajosPoda([
+          ...porTipoGrupo('PODA').map((g: any) => ({
+            id: String(g.id),
+            grupoId: String(g.id),
+            colaboradores: miembrosDeGrupo(g),
+            lote: g.lote_id != null ? String(g.lote_id) : '',
+            sublote: g.sublote_id != null ? String(g.sublote_id) : '',
+            numeroPalmas: Number(g.cantidad_palmas ?? 0),
+          })),
+          ...porTipoJornal('PODA').map(j => ({
+            id: String(j.id),
+            colaboradores: [encodeIdFromBackend(j)],
+            lote: j.lote_id != null ? String(j.lote_id) : '',
+            sublote: j.sublote_id != null ? String(j.sublote_id) : '',
+            numeroPalmas: Number(j.cantidad_palmas ?? 0),
+          })),
+        ]);
+        setTrabajosFertilizacion([
+          ...porTipoGrupo('FERTILIZACION').map((g: any) => ({
+            id: String(g.id),
+            grupoId: String(g.id),
+            colaboradores: miembrosDeGrupo(g),
+            lote: g.lote_id != null ? String(g.lote_id) : '',
+            sublote: g.sublote_id != null ? String(g.sublote_id) : '',
+            palmas: Number(g.cantidad_palmas ?? 0),
+            tipoFertilizante: (g.insumo?.nombre ?? '') as string,
+            otroFertilizante: '',
+            cantidadGramos: Number(g.gramos_por_palma ?? 0),
+          })),
+          ...porTipoJornal('FERTILIZACION').map(j => ({
+            id: String(j.id),
+            colaboradores: [encodeIdFromBackend(j)],
+            lote: j.lote_id != null ? String(j.lote_id) : '',
+            sublote: j.sublote_id != null ? String(j.sublote_id) : '',
+            palmas: Number(j.cantidad_palmas ?? 0),
+            tipoFertilizante: (j.insumo?.nombre ?? '') as string,
+            otroFertilizante: '',
+            cantidadGramos: Number(j.gramos_por_palma ?? 0),
+          })),
+        ]);
+        setTrabajosSanidad([
+          ...porTipoGrupo('SANIDAD').map((g: any) => ({
+            id: String(g.id),
+            grupoId: String(g.id),
+            colaboradores: miembrosDeGrupo(g),
+            lote: g.lote_id != null ? String(g.lote_id) : '',
+            sublote: g.sublote_id != null ? String(g.sublote_id) : '',
+            trabajoRealizado: (g.descripcion ?? '') as string,
+          })),
+          ...porTipoJornal('SANIDAD').map(j => ({
+            id: String(j.id),
+            colaboradores: [encodeIdFromBackend(j)],
+            lote: j.lote_id != null ? String(j.lote_id) : '',
+            sublote: j.sublote_id != null ? String(j.sublote_id) : '',
+            trabajoRealizado: (j.descripcion ?? '') as string,
+          })),
+        ]);
         // Otros: labores custom de PALMA (tipo=null en el catálogo unificado).
         // Quedan fuera de los 4 tipos fijos (PLATEO/PODA/FERTILIZACION/SANIDAD).
-        const jornalesOtros = jornales.filter(j => j.categoria === 'PALMA' && j.tipo == null);
-        setTrabajosOtros(jornalesOtros.map(j => {
-          const laborId = j.labor_id != null ? Number(j.labor_id) : undefined;
-          // Snapshot del tipo_pago: viene en j.labor.tipo_pago dentro del detalle.
-          const tipoPagoRaw = j.labor?.tipo_pago;
+        const jornalesOtros = jornalesSueltos.filter(
+          j => j.categoria === 'PALMA' && j.tipo == null,
+        );
+        const gruposOtros = grupos.filter(
+          (g: any) => g.labor?.categoria === 'PALMA' && g.labor?.tipo == null,
+        );
+        const mapOtroBase = (obj: any, colaboradores: string[]) => {
+          const laborId = obj.labor_id != null ? Number(obj.labor_id) : undefined;
+          const tipoPagoRaw = obj.labor?.tipo_pago;
           const tipoPago: 'POR_PALMA' | 'JORNAL_FIJO' =
             tipoPagoRaw === 'POR_PALMA' ? 'POR_PALMA' : 'JORNAL_FIJO';
           return {
-            id: String(j.id),
-            colaboradores: [encodeIdFromBackend(j)],
+            colaboradores,
             laborOtrosKey: laborId ? `palma-${laborId}` : undefined,
             laborOtrosRawId: laborId,
             laborOtrosTipoPago: tipoPago,
-            nombre: j.labor?.nombre ?? j.nombre_trabajo ?? '',
-            laborRealizada: j.descripcion ?? '',
-            numeroPalmas: tipoPago === 'POR_PALMA' && j.cantidad_palmas != null
-              ? Number(j.cantidad_palmas)
+            nombre: obj.labor?.nombre ?? obj.nombre_trabajo ?? '',
+            laborRealizada: obj.descripcion ?? '',
+            numeroPalmas: tipoPago === 'POR_PALMA' && obj.cantidad_palmas != null
+              ? Number(obj.cantidad_palmas)
               : undefined,
-            nombreTrabajo: tipoPago === 'JORNAL_FIJO' ? (j.nombre_trabajo ?? '') : undefined,
-            lote: j.lote_id != null ? String(j.lote_id) : '',
-            sublote: j.sublote_id != null ? String(j.sublote_id) : '',
+            nombreTrabajo: tipoPago === 'JORNAL_FIJO' ? (obj.nombre_trabajo ?? '') : undefined,
+            lote: obj.lote_id != null ? String(obj.lote_id) : '',
+            sublote: obj.sublote_id != null ? String(obj.sublote_id) : '',
           };
-        }));
+        };
+        setTrabajosOtros([
+          ...gruposOtros.map((g: any) => ({
+            id: String(g.id),
+            grupoId: String(g.id),
+            ...mapOtroBase(g, miembrosDeGrupo(g)),
+          })),
+          ...jornalesOtros.map((j: any) => ({
+            id: String(j.id),
+            ...mapOtroBase(j, [encodeIdFromBackend(j)]),
+          })),
+        ]);
         // Labores de Finca — `nombre` ahora guarda el id local de la persona
         // (`'10'` empleado, `'O_5'` operario) para soportar XOR al guardar.
         // La visualización del nombre se hace via lookup en `colaboradores`.
-        setTrabajosAuxiliares(jornales.filter(j => j.categoria === 'FINCA').map(j => ({
+        // No usan grupo: cada labor de finca es 1 colaborador × 1 lugar.
+        setTrabajosAuxiliares(jornalesSueltos.filter(j => j.categoria === 'FINCA').map(j => ({
           id: String(j.id),
           nombre: encodeIdFromBackend(j),
           labor: j.labor?.nombre ?? '',
@@ -957,6 +1180,13 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
       // Ítems EXISTENTES (PUT) se disparan en paralelo con Promise.allSettled.
       // Posición en el array → localId, para mapear backendId al resolver.
       type BulkJornalItem = { localId: string; tipo: string; payload: any };
+      /**
+       * Grupos nuevos (§3.2.1): tarjetas de palma con N >= 2 colaboradores.
+       * Van por `POST /operaciones/{id}/jornal-grupos` — el backend calcula
+       * `valor_grupo = cantidad_palmas * precio` y lo divide entre miembros.
+       * NO se puede combinar con el bulk de jornales (endpoints distintos).
+       */
+      const newGrupos: Array<{ localId: string; tipo: string; payload: any }> = [];
       const newJornales:  BulkJornalItem[] = [];
       const newCosechas:  Array<{ localId: string; payload: any }> = [];
       const newHE:        Array<{ localId: string; payload: any }> = [];
@@ -992,26 +1222,71 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         }
       }
 
+      // === Helper: persistir una tarjeta de labor de palma con N colaboradores.
+      //
+      // Regla §3.2.1:
+      //   N === 1 → un `jornal` individual (endpoint bulk /jornales/bulk).
+      //   N >= 2 → un `jornal-grupo` (endpoint /jornal-grupos). El backend
+      //            distribuye `valor_grupo` entre los miembros según su
+      //            modalidad_pago (FIJO recibe 0.00, el resto se divide por N).
+      //
+      // Detección de edición:
+      //   - `t.grupoId` presente → tarjeta es un grupo persistido → PUT al grupo.
+      //   - `t.id` es backend id (jornal individual) → PUT al jornal.
+      //   - En otro caso → creación nueva (bulk o grupo).
+      const persistirLaborPalma = (
+        t: { id: string; grupoId?: string; colaboradores: string[] },
+        tipoLocal: string,
+        payloadBase: Record<string, any>,
+      ) => {
+        const miembros = t.colaboradores
+          .map((c) => decodeIdPersona(c))
+          .filter((m) => m.empleado_id || m.operario_id);
+        if (miembros.length === 0) return;
+
+        // Grupo persistido → PUT al grupo (con o sin cambio de N).
+        if (t.grupoId && /^\d+$/.test(t.grupoId)) {
+          const payloadGrupo = { ...payloadBase, miembros };
+          updates.push(
+            jornalGruposApi
+              .editar(parseInt(t.grupoId), payloadGrupo as any)
+              .catch((err: any) => {
+                erroresGuardado.push(`${tipoLocal}: ${err?.message ?? 'error grupo'}`);
+              }),
+          );
+          return;
+        }
+
+        if (miembros.length === 1) {
+          // Individual: jornal directo (nuevo o edición).
+          const payload = { ...payloadBase, ...miembros[0] };
+          if (isBackendId(t.id)) {
+            updates.push(
+              jornalesApi.editar(parseInt(t.id), payload).catch((err: any) => {
+                erroresGuardado.push(`${tipoLocal}: ${err?.message ?? 'error jornal'}`);
+              }),
+            );
+          } else {
+            newJornales.push({ localId: t.id, tipo: tipoLocal, payload });
+          }
+        } else {
+          // Grupo nuevo: 1 sola llamada a POST /jornal-grupos (N miembros).
+          const payloadGrupo = { ...payloadBase, miembros };
+          newGrupos.push({ localId: t.id, tipo: tipoLocal, payload: payloadGrupo });
+        }
+      };
+
       // === PLATEO ===
-      // Múltiples colaboradores por fila: el primero se mapea al jornal de la
-      // fila (PUT si existe, POST si nuevo), los adicionales siempre se crean.
       const plateoLaborId = palmaTipoToId.get('PLATEO');
       if (plateoLaborId) {
         for (const t of trabajosPlateo) {
-          for (let i = 0; i < t.colaboradores.length; i++) {
-            const payload: any = {
-              labor_id: plateoLaborId,
-              ...decodeIdPersona(t.colaboradores[i]),
-              lote_id: t.lote ? parseInt(t.lote) : null,
-              sublote_id: t.sublote ? parseInt(t.sublote) : null,
-            };
-            if (t.numeroPalmas && t.numeroPalmas > 0) payload.cantidad_palmas = t.numeroPalmas;
-            if (i === 0 && isBackendId(t.id)) {
-              updates.push(jornalesApi.editar(parseInt(t.id), payload).catch(() => {}));
-            } else {
-              newJornales.push({ localId: i === 0 ? t.id : '', tipo: 'plateo', payload });
-            }
-          }
+          const base: Record<string, any> = {
+            labor_id: plateoLaborId,
+            lote_id: t.lote ? parseInt(t.lote) : null,
+            sublote_id: t.sublote ? parseInt(t.sublote) : null,
+          };
+          if (t.numeroPalmas && t.numeroPalmas > 0) base.cantidad_palmas = t.numeroPalmas;
+          persistirLaborPalma(t, 'plateo', base);
         }
       }
 
@@ -1019,41 +1294,27 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
       const podaLaborId = palmaTipoToId.get('PODA');
       if (podaLaborId) {
         for (const t of trabajosPoda) {
-          for (let i = 0; i < t.colaboradores.length; i++) {
-            const payload: any = {
-              labor_id: podaLaborId,
-              ...decodeIdPersona(t.colaboradores[i]),
-              lote_id: t.lote ? parseInt(t.lote) : null,
-              sublote_id: t.sublote ? parseInt(t.sublote) : null,
-            };
-            if (t.numeroPalmas && t.numeroPalmas > 0) payload.cantidad_palmas = t.numeroPalmas;
-            if (i === 0 && isBackendId(t.id)) {
-              updates.push(jornalesApi.editar(parseInt(t.id), payload).catch(() => {}));
-            } else {
-              newJornales.push({ localId: i === 0 ? t.id : '', tipo: 'poda', payload });
-            }
-          }
+          const base: Record<string, any> = {
+            labor_id: podaLaborId,
+            lote_id: t.lote ? parseInt(t.lote) : null,
+            sublote_id: t.sublote ? parseInt(t.sublote) : null,
+          };
+          if (t.numeroPalmas && t.numeroPalmas > 0) base.cantidad_palmas = t.numeroPalmas;
+          persistirLaborPalma(t, 'poda', base);
         }
       }
 
       // === FERTILIZACION (insumos ya resueltos en el pre-paso) ===
       for (const { t, insumoId } of fertResueltas) {
-        for (let i = 0; i < t.colaboradores.length; i++) {
-          const payload: any = {
-            labor_id: fertLaborId!,
-            ...decodeIdPersona(t.colaboradores[i]),
-            lote_id: t.lote ? parseInt(t.lote) : null,
-            sublote_id: t.sublote ? parseInt(t.sublote) : null,
-            insumo_id: insumoId,
-            gramos_por_palma: t.cantidadGramos || 0,
-          };
-          if (t.palmas && t.palmas > 0) payload.cantidad_palmas = t.palmas;
-          if (i === 0 && isBackendId(t.id)) {
-            updates.push(jornalesApi.editar(parseInt(t.id), payload).catch(() => {}));
-          } else {
-            newJornales.push({ localId: i === 0 ? t.id : '', tipo: 'fert', payload });
-          }
-        }
+        const base: Record<string, any> = {
+          labor_id: fertLaborId!,
+          lote_id: t.lote ? parseInt(t.lote) : null,
+          sublote_id: t.sublote ? parseInt(t.sublote) : null,
+          insumo_id: insumoId,
+          gramos_por_palma: t.cantidadGramos || 0,
+        };
+        if (t.palmas && t.palmas > 0) base.cantidad_palmas = t.palmas;
+        persistirLaborPalma(t, 'fert', base);
       }
 
       // === SANIDAD ===
@@ -1061,53 +1322,38 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
       const sanidadInfo = palmaFijasInfo.get('SANIDAD');
       if (sanidadLaborId) {
         for (const t of trabajosSanidad) {
-          for (let i = 0; i < t.colaboradores.length; i++) {
-            const payload: any = {
-              labor_id: sanidadLaborId,
-              ...decodeIdPersona(t.colaboradores[i]),
-              lote_id: t.lote ? parseInt(t.lote) : null,
-              sublote_id: t.sublote ? parseInt(t.sublote) : null,
-              descripcion: t.trabajoRealizado || 'Sanidad',
-            };
-            // Sanidad no tiene input propio de palmas — si está en POR_PALMA reusamos las del sublote.
-            if (sanidadInfo?.tipo_pago === 'POR_PALMA') {
-              payload.cantidad_palmas = Number(sublotes.find(s => s.id === t.sublote)?.cantidadPalmas ?? 0);
-            }
-            if (i === 0 && isBackendId(t.id)) {
-              updates.push(jornalesApi.editar(parseInt(t.id), payload).catch(() => {}));
-            } else {
-              newJornales.push({ localId: i === 0 ? t.id : '', tipo: 'sanidad', payload });
-            }
+          const base: Record<string, any> = {
+            labor_id: sanidadLaborId,
+            lote_id: t.lote ? parseInt(t.lote) : null,
+            sublote_id: t.sublote ? parseInt(t.sublote) : null,
+            descripcion: t.trabajoRealizado || 'Sanidad',
+          };
+          // Sanidad no tiene input propio de palmas — si está en POR_PALMA
+          // reusamos las del sublote.
+          if (sanidadInfo?.tipo_pago === 'POR_PALMA') {
+            base.cantidad_palmas = Number(sublotes.find(s => s.id === t.sublote)?.cantidadPalmas ?? 0);
           }
+          persistirLaborPalma(t, 'sanidad', base);
         }
       }
 
       // === OTROS (labores custom de PALMA, tipo=null) ===
       for (const t of trabajosOtros) {
         if (!t.laborOtrosRawId) { otrosSinLabor++; continue; }
-        for (let i = 0; i < t.colaboradores.length; i++) {
-          const base: any = {
-            labor_id: t.laborOtrosRawId,
-            ...decodeIdPersona(t.colaboradores[i]),
-            lote_id: t.lote ? parseInt(t.lote) : null,
-            sublote_id: t.sublote ? parseInt(t.sublote) : null,
-          };
-          if (t.laborOtrosTipoPago === 'POR_PALMA') {
-            base.cantidad_palmas = Number(t.numeroPalmas ?? 0);
-          } else if (t.laborOtrosTipoPago === 'JORNAL_FIJO') {
-            if (t.nombreTrabajo?.trim()) base.nombre_trabajo = t.nombreTrabajo.trim();
-          }
-          if (t.laborRealizada?.trim()) base.descripcion = t.laborRealizada.trim();
-          if (i === 0 && isBackendId(t.id)) {
-            updates.push(
-              jornalesApi.editar(parseInt(t.id), base).catch((err: any) => {
-                erroresGuardado.push(`Otros: ${err?.message ?? 'error desconocido'}`);
-              }),
-            );
-          } else {
-            newJornales.push({ localId: i === 0 ? t.id : '', tipo: 'otros', payload: base });
-          }
+        const base: Record<string, any> = {
+          labor_id: t.laborOtrosRawId,
+          lote_id: t.lote ? parseInt(t.lote) : null,
+          sublote_id: t.sublote ? parseInt(t.sublote) : null,
+        };
+        if (t.laborOtrosTipoPago === 'POR_PALMA') {
+          base.cantidad_palmas = Number(t.numeroPalmas ?? 0);
+        } else if (t.laborOtrosTipoPago === 'JORNAL_FIJO') {
+          if (t.nombreTrabajo?.trim()) base.nombre_trabajo = t.nombreTrabajo.trim();
         }
+        if (t.laborRealizada?.trim()) base.descripcion = t.laborRealizada.trim();
+        // El campo `nombre` de TrabajoOtros es texto libre, no un colaborador
+        // individual: aquí usamos el array `colaboradores[]` estándar.
+        persistirLaborPalma(t, 'otros', base);
       }
 
       // === PRE-PASO FINCA: resolver labores "Otro" on-the-fly ===
@@ -1244,7 +1490,17 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         }
         return msg || 'error en bulk';
       };
-      const [jornalBulkRes, cosechaBulkRes, heBulkRes, ausenciaBulkRes] = (await Promise.all([
+      // Grupos: no hay bulk (§3.2.1 solo expone POST unitario), pero los
+      // disparamos en paralelo. Cada respuesta trae `data.id` = jornal_grupos.id.
+      const gruposReqs = newGrupos.map((g) =>
+        jornalGruposApi
+          .crear(pid!, g.payload)
+          .catch((e: any) => {
+            erroresGuardado.push(`Grupo ${g.tipo}: ${parseErrorJornal(e)}`);
+            return null;
+          }),
+      );
+      const [jornalBulkRes, cosechaBulkRes, heBulkRes, ausenciaBulkRes, , gruposRes] = (await Promise.all([
         newJornales.length > 0
           ? jornalesApi.bulkCrear(pid!, newJornales.map(i => i.payload))
               .catch((e: any) => { erroresGuardado.push(`Jornales: ${parseErrorJornal(e)}`); return null; })
@@ -1262,7 +1518,8 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
               .catch((e: any) => { erroresGuardado.push(`Ausencias: ${e?.message ?? 'error en bulk'}`); return null; })
           : Promise.resolve(null),
         Promise.allSettled(updates),
-      ])) as [any, any, any, any, any];
+        Promise.all(gruposReqs),
+      ])) as [any, any, any, any, any, Array<{ data: { id: number } } | null>];
 
       // ── Construir mapeos localId → backendId desde las respuestas bulk ────────
       // Posición idx en la respuesta corresponde a posición idx en el array enviado.
@@ -1306,6 +1563,23 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           mapeoIdsAusencia[newAusencias[idx].localId] = String(item.id);
         });
       }
+      // Grupos: cada respuesta corresponde a `newGrupos[idx]`. Aparte del
+      // `data.id` (jornal_grupos.id) que guardamos en `grupoId`, refrescamos
+      // también el `id` del wizard para que apunte al mismo grupo — así al
+      // re-guardar cae en la rama de PUT al grupo.
+      const mapeoGruposPorTipo: Record<string, Record<string, string>> = {
+        plateo: {}, poda: {}, fert: {}, sanidad: {}, otros: {},
+      };
+      if (gruposRes) {
+        gruposRes.forEach((res, idx) => {
+          const { localId, tipo } = newGrupos[idx];
+          if (!res || !localId) return;
+          const grupoId = String(res.data.id);
+          if (mapeoGruposPorTipo[tipo]) {
+            mapeoGruposPorTipo[tipo][localId] = grupoId;
+          }
+        });
+      }
 
       // ── Aplicar mapeos al estado local ───────────────────────────────────────
       // Sin esto, al volver a pulsar "Guardar Planilla" sin recargar, los items
@@ -1314,18 +1588,36 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         items: T[], mapeo: Record<string, string>,
       ): T[] => items.map(x => mapeo[x.id] ? { ...x, id: mapeo[x.id] } : x);
 
+      /**
+       * Igual que `aplicarMapeo`, pero setea `grupoId` en lugar de `id`.
+       * Se usa para tarjetas persistidas como jornal-grupo (N>=2).
+       */
+      const aplicarMapeoGrupo = <T extends { id: string; grupoId?: string }>(
+        items: T[], mapeo: Record<string, string>,
+      ): T[] => items.map(x => mapeo[x.id] ? { ...x, grupoId: mapeo[x.id] } : x);
+
       if (Object.keys(mapeoIdsCosecha).length > 0)
         setTrabajosCosecha(prev => aplicarMapeo(prev, mapeoIdsCosecha));
       if (Object.keys(mapeoIdsPlateo).length > 0)
         setTrabajosPlateo(prev => aplicarMapeo(prev, mapeoIdsPlateo));
+      if (Object.keys(mapeoGruposPorTipo.plateo).length > 0)
+        setTrabajosPlateo(prev => aplicarMapeoGrupo(prev, mapeoGruposPorTipo.plateo));
       if (Object.keys(mapeoIdsPoda).length > 0)
         setTrabajosPoda(prev => aplicarMapeo(prev, mapeoIdsPoda));
+      if (Object.keys(mapeoGruposPorTipo.poda).length > 0)
+        setTrabajosPoda(prev => aplicarMapeoGrupo(prev, mapeoGruposPorTipo.poda));
       if (Object.keys(mapeoIdsFert).length > 0)
         setTrabajosFertilizacion(prev => aplicarMapeo(prev, mapeoIdsFert));
+      if (Object.keys(mapeoGruposPorTipo.fert).length > 0)
+        setTrabajosFertilizacion(prev => aplicarMapeoGrupo(prev, mapeoGruposPorTipo.fert));
       if (Object.keys(mapeoIdsSanidad).length > 0)
         setTrabajosSanidad(prev => aplicarMapeo(prev, mapeoIdsSanidad));
+      if (Object.keys(mapeoGruposPorTipo.sanidad).length > 0)
+        setTrabajosSanidad(prev => aplicarMapeoGrupo(prev, mapeoGruposPorTipo.sanidad));
       if (Object.keys(mapeoIdsOtros).length > 0)
         setTrabajosOtros(prev => aplicarMapeo(prev, mapeoIdsOtros));
+      if (Object.keys(mapeoGruposPorTipo.otros).length > 0)
+        setTrabajosOtros(prev => aplicarMapeoGrupo(prev, mapeoGruposPorTipo.otros));
       if (Object.keys(mapeoIdsFinca).length > 0)
         setTrabajosAuxiliares(prev => aplicarMapeo(prev, mapeoIdsFinca));
       if (Object.keys(mapeoIdsHE).length > 0)
@@ -1710,8 +2002,16 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
     setHoraExtraEnEdicion(null);
   };
 
-  const eliminarHoraExtra = (id: string) => {
-    setHorasExtras(horasExtras.filter(h => h.id !== id));
+  const eliminarHoraExtra = async (id: string) => {
+    if (isBackendId(id)) {
+      try {
+        await horasExtraApi.eliminar(parseInt(id));
+      } catch (err: any) {
+        toast.error(err?.message ?? 'No se pudo eliminar la hora extra');
+        return;
+      }
+    }
+    setHorasExtras(prev => prev.filter(h => h.id !== id));
   };
 
   const agregarAuxiliar = () => {
@@ -1754,32 +2054,108 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   };
 
   // Funciones para eliminar trabajos
-  const eliminarCosecha = (id: string) => {
-    setTrabajosCosecha(trabajosCosecha.filter(t => t.id !== id));
+  /**
+   * Borra una tarjeta de labor de palma (§3.2.1) del backend según su tipo:
+   *   - `grupoId` presente     → DELETE /jornal-grupos/{grupoId} (cascada
+   *     elimina el maestro y todos sus jornales miembro en una transacción).
+   *   - `isBackendId(id)`      → DELETE /jornales/{id} (jornal individual).
+   *   - Ninguno de los dos     → tarjeta local sin persistir, solo se saca
+   *     del estado.
+   * Si el backend responde error (típicamente 409 `OPERACION_APROBADA`)
+   * no se toca el estado local — el usuario ve el toast y decide.
+   */
+  const eliminarTarjetaLaborPalma = async (
+    tarjeta: { id: string; grupoId?: string },
+  ): Promise<boolean> => {
+    try {
+      if (tarjeta.grupoId && /^\d+$/.test(tarjeta.grupoId)) {
+        await jornalGruposApi.eliminar(parseInt(tarjeta.grupoId));
+      } else if (isBackendId(tarjeta.id)) {
+        await jornalesApi.eliminar(parseInt(tarjeta.id));
+      }
+      return true;
+    } catch (err: any) {
+      const code = err?.code ?? '';
+      if (code === 'OPERACION_APROBADA') {
+        toast.error('No se puede eliminar: la planilla ya fue aprobada');
+      } else {
+        toast.error(err?.message ?? 'No se pudo eliminar el registro');
+      }
+      return false;
+    }
   };
 
-  const eliminarPlateo = (id: string) => {
-    setTrabajosPlateo(trabajosPlateo.filter(t => t.id !== id));
+  const eliminarCosecha = async (id: string) => {
+    if (isBackendId(id)) {
+      try {
+        await cosechasApi.eliminar(parseInt(id));
+      } catch (err: any) {
+        const code = err?.code ?? '';
+        if (code === 'COSECHA_EN_VIAJE') {
+          toast.error('No se puede eliminar: la cosecha ya fue asignada a un viaje. Desasóciala del viaje primero.');
+        } else if (code === 'OPERACION_APROBADA') {
+          toast.error('No se puede eliminar: la planilla ya fue aprobada');
+        } else {
+          toast.error(err?.message ?? 'No se pudo eliminar la cosecha');
+        }
+        return;
+      }
+    }
+    setTrabajosCosecha(prev => prev.filter(t => t.id !== id));
   };
 
-  const eliminarPoda = (id: string) => {
-    setTrabajosPoda(trabajosPoda.filter(t => t.id !== id));
+  const eliminarPlateo = async (id: string) => {
+    const t = trabajosPlateo.find(x => x.id === id);
+    if (!t) return;
+    if (!(await eliminarTarjetaLaborPalma(t))) return;
+    setTrabajosPlateo(prev => prev.filter(x => x.id !== id));
   };
 
-  const eliminarFertilizacion = (id: string) => {
-    setTrabajosFertilizacion(trabajosFertilizacion.filter(t => t.id !== id));
+  const eliminarPoda = async (id: string) => {
+    const t = trabajosPoda.find(x => x.id === id);
+    if (!t) return;
+    if (!(await eliminarTarjetaLaborPalma(t))) return;
+    setTrabajosPoda(prev => prev.filter(x => x.id !== id));
   };
 
-  const eliminarSanidad = (id: string) => {
-    setTrabajosSanidad(trabajosSanidad.filter(t => t.id !== id));
+  const eliminarFertilizacion = async (id: string) => {
+    const t = trabajosFertilizacion.find(x => x.id === id);
+    if (!t) return;
+    if (!(await eliminarTarjetaLaborPalma(t))) return;
+    setTrabajosFertilizacion(prev => prev.filter(x => x.id !== id));
   };
 
-  const eliminarOtros = (id: string) => {
-    setTrabajosOtros(trabajosOtros.filter(t => t.id !== id));
+  const eliminarSanidad = async (id: string) => {
+    const t = trabajosSanidad.find(x => x.id === id);
+    if (!t) return;
+    if (!(await eliminarTarjetaLaborPalma(t))) return;
+    setTrabajosSanidad(prev => prev.filter(x => x.id !== id));
   };
 
-  const eliminarAuxiliar = (id: string) => {
-    setTrabajosAuxiliares(trabajosAuxiliares.filter(t => t.id !== id));
+  const eliminarOtros = async (id: string) => {
+    const t = trabajosOtros.find(x => x.id === id);
+    if (!t) return;
+    if (!(await eliminarTarjetaLaborPalma(t))) return;
+    setTrabajosOtros(prev => prev.filter(x => x.id !== id));
+  };
+
+  const eliminarAuxiliar = async (id: string) => {
+    // Labores de finca no usan grupo — cada tarjeta es 1 colaborador × 1 lugar,
+    // así que basta con el DELETE al jornal individual.
+    if (isBackendId(id)) {
+      try {
+        await jornalesApi.eliminar(parseInt(id));
+      } catch (err: any) {
+        const code = err?.code ?? '';
+        if (code === 'OPERACION_APROBADA') {
+          toast.error('No se puede eliminar: la planilla ya fue aprobada');
+        } else {
+          toast.error(err?.message ?? 'No se pudo eliminar la labor de finca');
+        }
+        return;
+      }
+    }
+    setTrabajosAuxiliares(prev => prev.filter(t => t.id !== id));
   };
 
   // Funciones para editar trabajos guardados (cargan el item al formulario sin removerlo de la lista)
@@ -1942,8 +2318,23 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
     }
   };
 
-  const eliminarAusente = (id: string) => {
-    setAusentes(ausentes.filter(a => a.id !== id));
+  const eliminarAusente = async (id: string) => {
+    if (isBackendId(id)) {
+      try {
+        await ausenciasApi.eliminar(parseInt(id));
+      } catch (err: any) {
+        const code = err?.code ?? '';
+        if (code === 'OPERACION_APROBADA') {
+          toast.error('No se puede eliminar: la planilla ya fue aprobada');
+        } else if (code === 'AUSENCIA_LIQUIDADA') {
+          toast.error('No se puede eliminar: la ausencia ya fue liquidada en nómina');
+        } else {
+          toast.error(err?.message ?? 'No se pudo eliminar la ausencia');
+        }
+        return;
+      }
+    }
+    setAusentes(prev => prev.filter(a => a.id !== id));
   };
 
   const puedeAvanzarEtapa1 = fecha && elaboradoPor;
@@ -2332,7 +2723,25 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                           variant="secondary"
                                           className="pl-2.5 pr-1 py-1 gap-1"
                                         >
-                                          <span>{col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}</span>
+                                          <span>
+                                            {col.nombres} {col.apellidos}
+                                            {col.terceroNombre && (
+                                              <span
+                                                className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle"
+                                                title={`Operario del tercero ${col.terceroNombre}`}
+                                              >
+                                                Tercero · {col.terceroNombre}
+                                              </span>
+                                            )}
+                                            {!col.terceroNombre && col.modalidad_pago === 'FIJO' && (
+                                              <span
+                                                className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-slate-200 text-slate-700 border border-slate-300 font-medium align-middle"
+                                                title="Empleado con salario fijo — su jornal diario queda en $0. La nómina lo paga por salario_base."
+                                              >
+                                                FIJO · $0
+                                              </span>
+                                            )}
+                                          </span>
                                           <button
                                             type="button"
                                             onClick={() => eliminarColaboradorEnEdicion(colId)}
@@ -2442,19 +2851,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                       {trabajo.colaboradores?.map((colId) => {
                                         const col = colaboradores.find(c => c.id === colId);
                                         return col ? (
-                                          <Badge
-                                            key={colId}
-                                            variant="outline"
-                                            className={`text-xs ${col.terceroNombre ? 'bg-orange-50 text-orange-800 border-orange-300' : ''}`}
-                                            title={col.terceroNombre ? `Tercero · ${col.terceroNombre}` : 'Colaborador interno'}
-                                          >
-                                            {col.nombres} {col.apellidos.split(' ')[0]}
-                                            {col.terceroNombre && (
-                                              <span className="ml-1.5 text-[9px] font-semibold uppercase tracking-wide bg-orange-200/70 text-orange-900 rounded px-1 py-[1px]">
-                                                {col.terceroNombre}
-                                              </span>
-                                            )}
-                                          </Badge>
+                                          <ColaboradorChip key={colId} col={col} />
                                         ) : null;
                                       })}
                                     </div>
@@ -2665,19 +3062,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                       {trabajo.colaboradores?.map((colId) => {
                                         const col = colaboradores.find(c => c.id === colId);
                                         return col ? (
-                                          <Badge
-                                            key={colId}
-                                            variant="outline"
-                                            className={`text-xs ${col.terceroNombre ? 'bg-orange-50 text-orange-800 border-orange-300' : ''}`}
-                                            title={col.terceroNombre ? `Tercero · ${col.terceroNombre}` : 'Colaborador interno'}
-                                          >
-                                            {col.nombres} {col.apellidos.split(' ')[0]}
-                                            {col.terceroNombre && (
-                                              <span className="ml-1.5 text-[9px] font-semibold uppercase tracking-wide bg-orange-200/70 text-orange-900 rounded px-1 py-[1px]">
-                                                {col.terceroNombre}
-                                              </span>
-                                            )}
-                                          </Badge>
+                                          <ColaboradorChip key={colId} col={col} />
                                         ) : null;
                                       })}
                                     </div>
@@ -2773,7 +3158,25 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                       const col = colaboradores.find(c => c.id === colId);
                                       return col ? (
                                         <Badge key={colId} variant="secondary" className="pl-2.5 pr-1 py-1 gap-1">
-                                          <span>{col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}</span>
+                                          <span>
+                                            {col.nombres} {col.apellidos}
+                                            {col.terceroNombre && (
+                                              <span
+                                                className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle"
+                                                title={`Operario del tercero ${col.terceroNombre}`}
+                                              >
+                                                Tercero · {col.terceroNombre}
+                                              </span>
+                                            )}
+                                            {!col.terceroNombre && col.modalidad_pago === 'FIJO' && (
+                                              <span
+                                                className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-slate-200 text-slate-700 border border-slate-300 font-medium align-middle"
+                                                title="Empleado con salario fijo — su jornal diario queda en $0. La nómina lo paga por salario_base."
+                                              >
+                                                FIJO · $0
+                                              </span>
+                                            )}
+                                          </span>
                                           <button
                                             type="button"
                                             onClick={() => setPodaEnEdicion({ ...podaEnEdicion, colaboradores: podaEnEdicion.colaboradores.filter(id => id !== colId) })}
@@ -2872,19 +3275,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                       {trabajo.colaboradores?.map((colId) => {
                                         const col = colaboradores.find(c => c.id === colId);
                                         return col ? (
-                                          <Badge
-                                            key={colId}
-                                            variant="outline"
-                                            className={`text-xs ${col.terceroNombre ? 'bg-orange-50 text-orange-800 border-orange-300' : ''}`}
-                                            title={col.terceroNombre ? `Tercero · ${col.terceroNombre}` : 'Colaborador interno'}
-                                          >
-                                            {col.nombres} {col.apellidos.split(' ')[0]}
-                                            {col.terceroNombre && (
-                                              <span className="ml-1.5 text-[9px] font-semibold uppercase tracking-wide bg-orange-200/70 text-orange-900 rounded px-1 py-[1px]">
-                                                {col.terceroNombre}
-                                              </span>
-                                            )}
-                                          </Badge>
+                                          <ColaboradorChip key={colId} col={col} />
                                         ) : null;
                                       })}
                                     </div>
@@ -2980,7 +3371,25 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                       const col = colaboradores.find(c => c.id === colId);
                                       return col ? (
                                         <Badge key={colId} variant="secondary" className="pl-2.5 pr-1 py-1 gap-1">
-                                          <span>{col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}</span>
+                                          <span>
+                                            {col.nombres} {col.apellidos}
+                                            {col.terceroNombre && (
+                                              <span
+                                                className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle"
+                                                title={`Operario del tercero ${col.terceroNombre}`}
+                                              >
+                                                Tercero · {col.terceroNombre}
+                                              </span>
+                                            )}
+                                            {!col.terceroNombre && col.modalidad_pago === 'FIJO' && (
+                                              <span
+                                                className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-slate-200 text-slate-700 border border-slate-300 font-medium align-middle"
+                                                title="Empleado con salario fijo — su jornal diario queda en $0. La nómina lo paga por salario_base."
+                                              >
+                                                FIJO · $0
+                                              </span>
+                                            )}
+                                          </span>
                                           <button
                                             type="button"
                                             onClick={() => setFertilizacionEnEdicion({ ...fertilizacionEnEdicion, colaboradores: fertilizacionEnEdicion.colaboradores.filter(id => id !== colId) })}
@@ -3126,19 +3535,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                       {trabajo.colaboradores?.map((colId) => {
                                         const col = colaboradores.find(c => c.id === colId);
                                         return col ? (
-                                          <Badge
-                                            key={colId}
-                                            variant="outline"
-                                            className={`text-xs ${col.terceroNombre ? 'bg-orange-50 text-orange-800 border-orange-300' : ''}`}
-                                            title={col.terceroNombre ? `Tercero · ${col.terceroNombre}` : 'Colaborador interno'}
-                                          >
-                                            {col.nombres} {col.apellidos.split(' ')[0]}
-                                            {col.terceroNombre && (
-                                              <span className="ml-1.5 text-[9px] font-semibold uppercase tracking-wide bg-orange-200/70 text-orange-900 rounded px-1 py-[1px]">
-                                                {col.terceroNombre}
-                                              </span>
-                                            )}
-                                          </Badge>
+                                          <ColaboradorChip key={colId} col={col} />
                                         ) : null;
                                       })}
                                     </div>
@@ -3246,7 +3643,25 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                           variant="secondary"
                                           className="pl-2.5 pr-1 py-1 gap-1"
                                         >
-                                          <span>{col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}</span>
+                                          <span>
+                                            {col.nombres} {col.apellidos}
+                                            {col.terceroNombre && (
+                                              <span
+                                                className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle"
+                                                title={`Operario del tercero ${col.terceroNombre}`}
+                                              >
+                                                Tercero · {col.terceroNombre}
+                                              </span>
+                                            )}
+                                            {!col.terceroNombre && col.modalidad_pago === 'FIJO' && (
+                                              <span
+                                                className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-slate-200 text-slate-700 border border-slate-300 font-medium align-middle"
+                                                title="Empleado con salario fijo — su jornal diario queda en $0. La nómina lo paga por salario_base."
+                                              >
+                                                FIJO · $0
+                                              </span>
+                                            )}
+                                          </span>
                                           <button
                                             type="button"
                                             onClick={() => {
@@ -3349,19 +3764,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                       {trabajo.colaboradores?.map((colId) => {
                                         const col = colaboradores.find(c => c.id === colId);
                                         return col ? (
-                                          <Badge
-                                            key={colId}
-                                            variant="outline"
-                                            className={`text-xs ${col.terceroNombre ? 'bg-orange-50 text-orange-800 border-orange-300' : ''}`}
-                                            title={col.terceroNombre ? `Tercero · ${col.terceroNombre}` : 'Colaborador interno'}
-                                          >
-                                            {col.nombres} {col.apellidos}
-                                            {col.terceroNombre && (
-                                              <span className="ml-1.5 text-[9px] font-semibold uppercase tracking-wide bg-orange-200/70 text-orange-900 rounded px-1 py-[1px]">
-                                                {col.terceroNombre}
-                                              </span>
-                                            )}
-                                          </Badge>
+                                          <ColaboradorChip key={colId} col={col} />
                                         ) : null;
                                       })}
                                     </div>
@@ -3469,7 +3872,25 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                           variant="secondary"
                                           className="pl-2.5 pr-1 py-1 gap-1"
                                         >
-                                          <span>{col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}</span>
+                                          <span>
+                                            {col.nombres} {col.apellidos}
+                                            {col.terceroNombre && (
+                                              <span
+                                                className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle"
+                                                title={`Operario del tercero ${col.terceroNombre}`}
+                                              >
+                                                Tercero · {col.terceroNombre}
+                                              </span>
+                                            )}
+                                            {!col.terceroNombre && col.modalidad_pago === 'FIJO' && (
+                                              <span
+                                                className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-slate-200 text-slate-700 border border-slate-300 font-medium align-middle"
+                                                title="Empleado con salario fijo — su jornal diario queda en $0. La nómina lo paga por salario_base."
+                                              >
+                                                FIJO · $0
+                                              </span>
+                                            )}
+                                          </span>
                                           <button
                                             type="button"
                                             onClick={() => {
@@ -3610,19 +4031,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                       {trabajo.colaboradores?.map((colId) => {
                                         const col = colaboradores.find(c => c.id === colId);
                                         return col ? (
-                                          <Badge
-                                            key={colId}
-                                            variant="outline"
-                                            className={`text-xs ${col.terceroNombre ? 'bg-orange-50 text-orange-800 border-orange-300' : ''}`}
-                                            title={col.terceroNombre ? `Tercero · ${col.terceroNombre}` : 'Colaborador interno'}
-                                          >
-                                            {col.nombres} {col.apellidos}
-                                            {col.terceroNombre && (
-                                              <span className="ml-1.5 text-[9px] font-semibold uppercase tracking-wide bg-orange-200/70 text-orange-900 rounded px-1 py-[1px]">
-                                                {col.terceroNombre}
-                                              </span>
-                                            )}
-                                          </Badge>
+                                          <ColaboradorChip key={colId} col={col} />
                                         ) : null;
                                       })}
                                     </div>

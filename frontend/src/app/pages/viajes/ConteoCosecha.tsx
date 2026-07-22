@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  viajesApi, strField, ErrorCodes,
+  viajesApi, strField, ViajesErrorCodes as ErrorCodes,
   type Viaje, type ViajeDetalle, type OperacionDisponible, type CosechaLibre,
 } from '../../../api/viajes';
 import { selectsApi, operacionesApi } from '../../../api/operaciones';

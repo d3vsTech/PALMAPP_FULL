@@ -112,8 +112,14 @@ export interface OperarioDisponible {
   id: number;
   nombre_completo: string;
   cedula: string;
-  cargo: string;
+  cargo: string | null;
   tercero: { id: number; razon_social: string };
+  /**
+   * Salario base declarado del operario. Fuente principal para "Tarifa/Día"
+   * en la pantalla de selección de personal en Nómina. Si viene `null`, se
+   * cae a `tarifa_dia_estimada`.
+   */
+  salario_base?: number | null;
   /** Tarifa diaria estimada (tomada de la labor JORNAL_FIJO más frecuente del tercero). */
   tarifa_dia_estimada?: number;
 }

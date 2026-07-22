@@ -1418,9 +1418,21 @@ export default function NuevaNominaWizard() {
                                   </td>
                                   <td className="p-4 text-right">
                                     <span className="text-sm font-medium">
-                                      {op.tarifa_dia_estimada && op.tarifa_dia_estimada > 0
-                                        ? `$${op.tarifa_dia_estimada.toLocaleString('es-CO')}`
-                                        : '—'}
+                                      {(() => {
+                                        // Prioridad: `salario_base` declarado
+                                        // en el operario → `tarifa_dia_estimada`
+                                        // (derivada de la labor JORNAL_FIJO más
+                                        // frecuente del tercero) → guión.
+                                        const tarifa =
+                                          op.salario_base && op.salario_base > 0
+                                            ? op.salario_base
+                                            : op.tarifa_dia_estimada && op.tarifa_dia_estimada > 0
+                                              ? op.tarifa_dia_estimada
+                                              : 0;
+                                        return tarifa > 0
+                                          ? `$${tarifa.toLocaleString('es-CO')}`
+                                          : '—';
+                                      })()}
                                     </span>
                                   </td>
                                 </tr>

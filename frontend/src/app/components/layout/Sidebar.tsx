@@ -124,7 +124,7 @@ export default function Sidebar() {
   });
 
   const NavContent = () => (
-    <div className="flex h-full flex-col bg-card glass-subtle border-r border-border">
+    <div className="flex h-full min-h-0 min-w-0 flex-col bg-card glass-subtle border-r border-border">
       {/* Logo y título */}
       <div className="flex h-20 items-center justify-center border-b border-border px-6">
         <PalmappLogo 
@@ -165,13 +165,19 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Footer info — usa la finca activa del usuario logueado */}
-      <div className="border-t border-border p-4">
-        <div className="rounded-xl bg-muted/50 p-4">
-          <p className="font-bold text-foreground truncate" title={user?.fincaActual?.nombre}>
+      {/* Footer info — usa la finca activa del usuario logueado.
+          `min-w-0` + `overflow-hidden` en el wrapper permiten que el `truncate`
+          del `<p>` funcione dentro del flex parent (sin esto, nombres largos
+          se desbordan al hacer zoom del navegador o en anchos apretados). */}
+      <div className="border-t border-border p-4 shrink-0 min-w-0">
+        <div className="rounded-xl bg-muted/50 p-4 min-w-0 overflow-hidden">
+          <p
+            className="font-bold text-foreground truncate"
+            title={user?.fincaActual?.nombre}
+          >
             {user?.fincaActual?.nombre ?? 'Sin finca seleccionada'}
           </p>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="text-sm text-muted-foreground mt-1 truncate">
             Sistema de gestión integral
           </p>
         </div>
@@ -181,8 +187,10 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Desktop Sidebar — solo visible en pantallas grandes (lg ≥ 1024px) */}
-      <aside className="hidden w-72 flex-col bg-card lg:flex">
+      {/* Desktop Sidebar — solo visible en pantallas grandes (lg ≥ 1024px).
+          `shrink-0` evita que el sidebar se comprima cuando el `main` se
+          apreta (zoom del navegador o contenido con ancho intrínseco alto). */}
+      <aside className="hidden w-72 shrink-0 flex-col bg-card lg:flex">
         <NavContent />
       </aside>
 

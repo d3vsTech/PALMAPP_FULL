@@ -54,6 +54,7 @@ export {
   operacionesApi,
   cosechasApi,
   jornalesApi,
+  jornalGruposApi,
   horasExtraApi,
   ausenciasApi,
   selectsApi as operacionesSelectsApi,
@@ -65,6 +66,7 @@ export type {
   Resumen, Indicadores,
   Cosecha, CosechaCuadrillaItem,
   Jornal, JornalPayload, JornalPalma, JornalFinca, CategoriaJornal, TipoJornalPalma,
+  JornalGrupo, JornalGrupoMiembroPayload, CrearJornalGrupoPayload,
   HoraExtra, HoraExtraPayload, HoraExtraTipoRef, EstadoHoraExtra,
   Ausencia, EstadoNovedad,
   OperacionesErrorCode,
@@ -77,14 +79,32 @@ export {
   extractorasApi,
   empresasTransportadorasApi,
   transportadoresApi,
+  // §9 códigos de error del módulo Viajes.
+  ViajesErrorCodes,
 } from './viajes';
 export type {
-  Viaje, ViajePayload,
+  Viaje,
   // Tipos de las paramétricas de viajes
   Extractora, ExtractoraSelect,
   EmpresaTransportadora, EmpresaTransportadoraSelect,
   Transportador, TransportadorSelect,
+  ViajeErrorCode,
+  // Payloads de creación/edición (§5.1 y §5.5-5.7)
+  CrearViajePayload, EditarViajePayload,
+  HidratarReconteoPayload, ValidarViajePayload,
 } from './viajes';
+
+// Paramétricas §18 — Rangos de Numeración Manual (prefijos + consecutivos
+// para remisiones y otros documentos de viajes).
+export { rangosNumeracionApi, RangosNumeracionErrorCodes } from './rangosNumeracion';
+export type {
+  RangoNumeracion,
+  RangoNumeracionSelectItem,
+  CrearRangoNumeracionPayload,
+  EditarRangoNumeracionPayload,
+  TipoDocumentoRango,
+  RangoNumeracionErrorCode,
+} from './rangosNumeracion';
 
 export { configuracionApi, ConfiguracionErrorCodes } from './configuracion';
 export type {

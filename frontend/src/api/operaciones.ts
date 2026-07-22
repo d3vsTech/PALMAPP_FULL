@@ -63,6 +63,13 @@ export interface Planilla {
 export interface PlanillaDetalle extends Planilla {
   cosechas?: Cosecha[];
   jornales?: Jornal[];
+  /**
+   * Grupos de jornales (§3.2.1): un grupo agrupa N jornales miembros que
+   * comparten labor + lote + cantidad_palmas. Cuando el bundle los expone,
+   * los `jornales[]` individuales referenciados por cada grupo también
+   * pueden venir en `jornales` con `jornal_grupo_id` apuntando al maestro.
+   */
+  jornal_grupos?: JornalGrupo[];
   ausencias?: Ausencia[];
   horas_extra?: HoraExtra[];
   [k: string]: unknown;
@@ -214,6 +221,13 @@ export interface Jornal {
   operario_id?: number | null;
   /** Inyectado por backend cuando hay `operario_id`. */
   tercero_id?: number | null;
+  /**
+   * Nuevo (§3.2.1): cuando el jornal pertenece a un grupo, apunta al
+   * `jornal_grupos.id` maestro. Los jornales individuales tienen `null`.
+   * El frontend usa este campo para NO renderizar dos veces (una desde
+   * `planilla.jornales` y otra desde `planilla.jornal_grupos[].jornales`).
+   */
+  jornal_grupo_id?: number | null;
   categoria: CategoriaJornal;
   tipo?: TipoJornalPalma | null;
   lote_id?: number | null;
@@ -330,6 +344,13 @@ export interface EmpleadoRef {
   primer_apellido?: string | null;
   segundo_nombre?: string | null;
   segundo_apellido?: string | null;
+  /**
+   * `FIJO` | `PRODUCCION`. Presente en los subobjetos que la API §3.2.1
+   * devuelve dentro de `jornales[].empleado` — sirve para que la UI
+   * marque visualmente por qué un jornal FIJO tiene `valor_total = 0.00`
+   * ("la nómina lo paga por salario_base").
+   */
+  modalidad_pago?: 'FIJO' | 'PRODUCCION' | string | null;
   [k: string]: unknown;
 }
 
@@ -797,6 +818,123 @@ export interface JornalPayload {
 export type JornalPalma = JornalPayload;
 /** @deprecated Usar `JornalPayload`. La API ya no requiere `categoria`. */
 export type JornalFinca = JornalPayload;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GRUPOS DE JORNALES  (§3.2.1)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Un miembro del grupo. XOR estricto: exactamente uno de `empleado_id`
+ * u `operario_id` — enviar ambos o ninguno responde 422.
+ * `tercero_id` NO se envía: el backend lo inyecta desde `operario_id`.
+ */
+export interface JornalGrupoMiembroPayload {
+  empleado_id?: number;
+  operario_id?: number;
+}
+
+/**
+ * Payload de `POST /operaciones/{id}/jornal-grupos` (§3.2.1).
+ *
+ * Se usa cuando varios colaboradores realizan la MISMA labor juntos (mismo
+ * lote, mismo `cantidad_palmas` compartida). El backend crea el registro
+ * maestro y un `jornal` por cada miembro, distribuyendo el valor según:
+ *
+ *   POR_PALMA   → `valor_grupo / N` a cada miembro PRODUCCION/operario.
+ *                 Los miembros FIJO reciben `0.00` (la nómina los paga por
+ *                 salario_base). N = total de miembros incluyendo FIJOs.
+ *   JORNAL_FIJO → `labor.precio_palma` completo a cada miembro
+ *                 PRODUCCION/operario (NO se divide). FIJOs reciben `0.00`.
+ *
+ * `miembros` debe traer entre 1 y 50 filas.
+ */
+export interface CrearJornalGrupoPayload {
+  labor_id: number;
+  lote_id?: number | null;
+  sublote_id?: number | null;
+  cantidad_palmas?: number;
+  insumo_id?: number;
+  gramos_por_palma?: number;
+  descripcion?: string;
+  nombre_trabajo?: string;
+  ubicacion?: string;
+  observacion?: string | null;
+  miembros: JornalGrupoMiembroPayload[];
+}
+
+/**
+ * Respuesta de `POST /operaciones/{id}/jornal-grupos` y `GET /jornal-grupos/{id}`.
+ *
+ * `valor_grupo` = valor total antes de dividir (para POR_PALMA es
+ * `cantidad_palmas × precio`; para JORNAL_FIJO es `labor.precio_palma`).
+ * `valor_unitario` = precio por unidad usado en el cálculo (por palma o
+ * por jornal según el modo).
+ *
+ * Los `jornales[]` traen el `valor_total` ya calculado y dividido por
+ * miembro, junto con su empleado/operario expandido (con `modalidad_pago`
+ * para que la UI pueda distinguir por qué un FIJO trae `0.00`).
+ */
+export interface JornalGrupo {
+  id: number;
+  operacion_id: number;
+  labor_id: number;
+  lote_id?: number | null;
+  sublote_id?: number | null;
+  cantidad_palmas?: number | null;
+  insumo_id?: number | null;
+  gramos_por_palma?: number | null;
+  descripcion?: string | null;
+  nombre_trabajo?: string | null;
+  ubicacion?: string | null;
+  observacion?: string | null;
+  valor_grupo: string | number | null;
+  valor_unitario: string | number | null;
+  labor?: LaborWizardItem | Record<string, unknown> | null;
+  lote?: { id: number; nombre: string } | Record<string, unknown> | null;
+  sublote?: { id: number; nombre: string } | Record<string, unknown> | null;
+  jornales: Jornal[];
+}
+
+/**
+ * Cliente del sub-recurso "grupos de jornales" (§3.2.1).
+ *
+ * Permisos (Spatie):
+ *  - crear   → `operaciones.crear`
+ *  - ver     → `operaciones.ver`
+ *  - editar  → `operaciones.editar`
+ *  - eliminar→ `operaciones.eliminar`
+ *
+ * Bloqueos:
+ *  - Toda mutación (`crear`/`editar`/`eliminar`) falla con 409
+ *    `OPERACION_APROBADA` si la planilla padre está APROBADA.
+ *  - `eliminar` es en cascada: borra el grupo maestro Y todos sus
+ *    jornales miembro en una transacción atómica.
+ *
+ * Edición: el `PUT` recibe el mismo payload que el `POST` y el backend
+ * sincroniza `miembros` (agrega nuevos, elimina los que no vinieron,
+ * recalcula `valor_total` de todos con el nuevo N).
+ */
+export const jornalGruposApi = {
+  crear: (operacionId: number, payload: CrearJornalGrupoPayload) =>
+    smartRequest<{ data: JornalGrupo; message?: string }>(
+      `${BASE}/operaciones/${operacionId}/jornal-grupos`,
+      { method: 'POST', body: JSON.stringify(payload) },
+    ),
+
+  ver: (id: number) =>
+    requestConToken<{ data: JornalGrupo }>(`${BASE}/jornal-grupos/${id}`),
+
+  editar: (id: number, payload: CrearJornalGrupoPayload) =>
+    smartRequest<{ data: JornalGrupo; message?: string }>(
+      `${BASE}/jornal-grupos/${id}`,
+      { method: 'PUT', body: JSON.stringify(payload) },
+    ),
+
+  eliminar: (id: number) =>
+    smartRequest<{ message: string }>(`${BASE}/jornal-grupos/${id}`, {
+      method: 'DELETE',
+    }),
+};
 
 export const jornalesApi = {
   crear: (operacionId: number, payload: JornalPayload) =>
