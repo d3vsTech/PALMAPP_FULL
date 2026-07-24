@@ -19,7 +19,7 @@ import {
   type TipoPersona,
 } from '../../../api/configuracion';
 import { getDepartamentos, getMunicipios } from '../../../api/plantacion';
-import { cached, FOREVER } from '../../../api/cache';
+import { cached, invalidate, FOREVER } from '../../../api/cache';
 import { useAuth } from '../../contexts/AuthContext';
 import { TabLoadingGate } from './TabLoadingGate';
 
@@ -197,6 +197,10 @@ export function DatosEmpresaTab() {
       const res = await configuracionApi.infoEmpresa.actualizar(
         formToPayload(tipoPersona, datosEmpresa)
       );
+      // Invalidamos el caché antes de rehidratar. Sin esto, cuando el
+      // usuario vuelve a abrir la pantalla el `cached('config:info-empresa')`
+      // devuelve el valor viejo y no se ve el cambio de tipo_persona.
+      invalidate('config:info-empresa');
       const { tipoPersona: tp, form } = apiToForm(res.data);
       setTipoPersona(tp);
       setDatosEmpresa(form);

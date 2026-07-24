@@ -6,6 +6,7 @@ import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Textarea } from '../../components/ui/textarea';
 import { Badge } from '../../components/ui/badge';
+import { MultiSelectColaboradores } from '../../components/operaciones/MultiSelectColaboradores';
 import {
   Select,
   SelectContent,
@@ -274,10 +275,16 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   //   - 'aprobar' → botones "Volver a editar" + "Aprobar de todas formas".
   //   - 'guardar' → botones "Volver a editar" + "Ir al listado".
   const [coberturaModo, setCoberturaModo] = useState<'aprobar' | 'guardar'>('aprobar');
-  // Bloqueo estricto: cuando la planilla está completamente vacía
-  // (sin jornales, sin cosechas, sin ausencias ni horas extra), no se
-  // puede aprobar. Se muestra un modal que solo permite volver a editar.
+  // Alerta informativa: la planilla está completamente vacía o hay
+  // colaboradores sin actividad. NO bloquea — muestra el modal con la
+  // opción de "Continuar de todas formas" según `accionPendiente`.
   const [alertaPlanillaVacia, setAlertaPlanillaVacia] = useState(false);
+  /**
+   * Acción que el usuario intentó cuando se disparó una alerta informativa
+   * (planilla vacía / cobertura incompleta). Al confirmar "Continuar de
+   * todas formas" desde el modal, ejecutamos la acción original.
+   */
+  const [accionPendiente, setAccionPendiente] = useState<'aprobar' | 'guardar' | null>(null);
 
   // ── Estado planilla ID + loading ─────────────────────────────────────────
   const [planillaId, setPlanillaId] = useState<number | null>(idParam ? Number(idParam) : null);
@@ -1044,8 +1051,9 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
    * sin pulsar "Guardar Planilla". Skipea el chequeo de duplicados, no muestra
    * toasts ni navega. Cualquier error se traga (no hay UI activa para mostrarlo).
    */
-  const guardarTodo = async (opts: { silent?: boolean; stayHere?: boolean } = {}) => {
+  const guardarTodo = async (opts: { silent?: boolean; stayHere?: boolean; bypassAlertas?: boolean } = {}) => {
     const silent = opts.silent === true;
+    const bypassAlertas = opts.bypassAlertas === true;
     if (!silent) setGuardando(true);
     try {
       // La fecha SIEMPRE viaja en el PUT (aunque no haya cambiado). Antes se
@@ -1056,11 +1064,11 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         setGuardando(false);
         return;
       }
-      // Bloqueo de planilla vacía en modo interactivo: si el usuario pulsó
-      // "Guardar Planilla" (o "Guardar cambios") sin registrar nada,
-      // mostramos el mismo modal que en el flujo de aprobar. Sólo aplica
-      // cuando NO existe planilla todavía y no es autosave.
-      if (!silent && !planillaId) {
+      // Aviso informativo de planilla vacía. YA NO bloquea el guardado —
+      // solo abre el modal para que el usuario decida. Al confirmar
+      // "Continuar de todas formas", el modal re-invoca esta función con
+      // `bypassAlertas: true` y salta este chequeo.
+      if (!silent && !planillaId && !bypassAlertas) {
         const hayContenido =
           trabajosCosecha.length > 0
           || trabajosPlateo.length > 0
@@ -1072,6 +1080,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           || horasExtras.length > 0
           || ausentes.length > 0;
         if (!hayContenido) {
+          setAccionPendiente('guardar');
           setAlertaPlanillaVacia(true);
           setGuardando(false);
           return;
@@ -1748,6 +1757,35 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
     return () => { guardarBorradorRef.current(); };
   }, []);
 
+  /**
+   * Aprueba la planilla llamando a `POST /operaciones/{id}/aprobar` sin
+   * verificar alertas previas — se usa como "Continuar de todas formas"
+   * desde los modales informativos (planilla vacía / cobertura incompleta)
+   * y también como camino directo cuando no hay alertas que mostrar.
+   */
+  const ejecutarAprobar = async () => {
+    if (!idParam) return;
+    setAprobando(true);
+    try {
+      const res = await operacionesApi.aprobar(Number(idParam));
+      const casc = res.aprobaciones_cascada;
+      if (casc && (casc.horas_extra > 0 || casc.ausencias > 0)) {
+        toast.success(
+          `Planilla aprobada. Aprobadas en cascada: ${casc.horas_extra} horas extra, ${casc.ausencias} ausencias.`,
+          { duration: 6000 },
+        );
+      } else {
+        toast.success('Planilla aprobada');
+      }
+      setEstadoPlanilla('APROBADA');
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Error al aprobar');
+    } finally {
+      setAprobando(false);
+      setAccionPendiente(null);
+    }
+  };
+
   // Aviso del navegador antes de refresh / cerrar pestaña cuando hay datos
   // sin persistir. No podemos disparar una petición fiable aquí (el navegador
   // suele matar el fetch), así que solo pedimos confirmación al usuario para
@@ -2007,8 +2045,11 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
       try {
         await horasExtraApi.eliminar(parseInt(id));
       } catch (err: any) {
-        toast.error(err?.message ?? 'No se pudo eliminar la hora extra');
-        return;
+        // 404 → ya no existe, idempotente.
+        if (err?.status !== 404) {
+          toast.error(err?.message ?? 'No se pudo eliminar la hora extra');
+          return;
+        }
       }
     }
     setHorasExtras(prev => prev.filter(h => h.id !== id));
@@ -2076,6 +2117,10 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
       return true;
     } catch (err: any) {
       const code = err?.code ?? '';
+      const status = err?.status;
+      // 404: el registro ya no existe en el backend (doble-click / retry).
+      // Idempotente: sacamos la tarjeta del UI igual.
+      if (status === 404) return true;
       if (code === 'OPERACION_APROBADA') {
         toast.error('No se puede eliminar: la planilla ya fue aprobada');
       } else {
@@ -2091,14 +2136,19 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         await cosechasApi.eliminar(parseInt(id));
       } catch (err: any) {
         const code = err?.code ?? '';
-        if (code === 'COSECHA_EN_VIAJE') {
-          toast.error('No se puede eliminar: la cosecha ya fue asignada a un viaje. Desasóciala del viaje primero.');
-        } else if (code === 'OPERACION_APROBADA') {
-          toast.error('No se puede eliminar: la planilla ya fue aprobada');
-        } else {
-          toast.error(err?.message ?? 'No se pudo eliminar la cosecha');
+        const status = err?.status;
+        // 404: la cosecha ya no existe en el backend (doble-click / retry).
+        // Tratamos como éxito idempotente y sacamos la fila del UI.
+        if (status !== 404) {
+          if (code === 'COSECHA_EN_VIAJE') {
+            toast.error('No se puede eliminar: la cosecha ya fue asignada a un viaje. Desasóciala del viaje primero.');
+          } else if (code === 'OPERACION_APROBADA') {
+            toast.error('No se puede eliminar: la planilla ya fue aprobada');
+          } else {
+            toast.error(err?.message ?? 'No se pudo eliminar la cosecha');
+          }
+          return;
         }
-        return;
       }
     }
     setTrabajosCosecha(prev => prev.filter(t => t.id !== id));
@@ -2147,12 +2197,16 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         await jornalesApi.eliminar(parseInt(id));
       } catch (err: any) {
         const code = err?.code ?? '';
-        if (code === 'OPERACION_APROBADA') {
-          toast.error('No se puede eliminar: la planilla ya fue aprobada');
-        } else {
-          toast.error(err?.message ?? 'No se pudo eliminar la labor de finca');
+        const status = err?.status;
+        // 404 → ya no existe, idempotente.
+        if (status !== 404) {
+          if (code === 'OPERACION_APROBADA') {
+            toast.error('No se puede eliminar: la planilla ya fue aprobada');
+          } else {
+            toast.error(err?.message ?? 'No se pudo eliminar la labor de finca');
+          }
+          return;
         }
-        return;
       }
     }
     setTrabajosAuxiliares(prev => prev.filter(t => t.id !== id));
@@ -2324,14 +2378,18 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         await ausenciasApi.eliminar(parseInt(id));
       } catch (err: any) {
         const code = err?.code ?? '';
-        if (code === 'OPERACION_APROBADA') {
-          toast.error('No se puede eliminar: la planilla ya fue aprobada');
-        } else if (code === 'AUSENCIA_LIQUIDADA') {
-          toast.error('No se puede eliminar: la ausencia ya fue liquidada en nómina');
-        } else {
-          toast.error(err?.message ?? 'No se pudo eliminar la ausencia');
+        const status = err?.status;
+        // 404 → ya no existe, idempotente.
+        if (status !== 404) {
+          if (code === 'OPERACION_APROBADA') {
+            toast.error('No se puede eliminar: la planilla ya fue aprobada');
+          } else if (code === 'AUSENCIA_LIQUIDADA') {
+            toast.error('No se puede eliminar: la ausencia ya fue liquidada en nómina');
+          } else {
+            toast.error(err?.message ?? 'No se pudo eliminar la ausencia');
+          }
+          return;
         }
-        return;
       }
     }
     setAusentes(prev => prev.filter(a => a.id !== id));
@@ -2375,92 +2433,10 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                 : 'Configura tu planilla paso a paso'}
             </p>
           </div>
-          {modoLectura && estadoPlanilla === 'BORRADOR' && idParam && (
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={() => navigate(`/operaciones/planilla/editar/${idParam}`)}
-                className="gap-2"
-              >
-                <Pencil className="h-4 w-4" />
-                Editar
-              </Button>
-              <Button
-                onClick={async () => {
-                  // Bloqueo previo: planilla completamente vacía.
-                  // Suma jornales (labores palma + finca), cosechas,
-                  // ausencias y horas extra desde el resumen del backend.
-                  const totalLabores = resumen
-                    ? (resumen.labores.cosecha
-                        + resumen.labores.plateo
-                        + resumen.labores.poda
-                        + resumen.labores.fertilizacion
-                        + resumen.labores.sanidad
-                        + resumen.labores.otros
-                        + resumen.labores.labores_finca)
-                    : 0;
-                  const totalAusencias = resumen?.ausencias.total ?? 0;
-                  const totalHorasExtra = resumen?.horas_extra?.total ?? 0;
-                  if (totalLabores + totalAusencias + totalHorasExtra === 0) {
-                    setAlertaPlanillaVacia(true);
-                    return;
-                  }
-
-                  // Antes de aprobar: consultar cobertura de personal.
-                  // Si el backend reporta faltantes, mostrar modal con la
-                  // lista para que el usuario decida si aprueba o corrige.
-                  setAprobando(true);
-                  let coberturaOk = false;
-                  try {
-                    const cov = await operacionesApi.cobertura(Number(idParam));
-                    if (cov.data?.tiene_faltantes) {
-                      setCoberturaModo('aprobar');
-                      setCoberturaFaltantes(cov.data);
-                      setAprobando(false);
-                      return; // el modal maneja el "aprobar de todas formas"
-                    }
-                    coberturaOk = true;
-                  } catch (err: any) {
-                    // Si el endpoint falla no aprobamos automáticamente —
-                    // avisamos al usuario para que reintente.
-                    console.warn('[cobertura] fallo consultar faltantes:', err);
-                    toast.error(
-                      err?.message
-                        ?? 'No se pudo verificar la cobertura de personal. Intenta de nuevo.',
-                    );
-                    setAprobando(false);
-                    return;
-                  }
-                  if (!coberturaOk) {
-                    setAprobando(false);
-                    return;
-                  }
-                  try {
-                    const res = await operacionesApi.aprobar(Number(idParam));
-                    const casc = res.aprobaciones_cascada;
-                    if (casc && (casc.horas_extra > 0 || casc.ausencias > 0)) {
-                      toast.success(
-                        `Planilla aprobada. Aprobadas en cascada: ${casc.horas_extra} horas extra, ${casc.ausencias} ausencias.`,
-                        { duration: 6000 },
-                      );
-                    } else {
-                      toast.success('Planilla aprobada');
-                    }
-                    setEstadoPlanilla('APROBADA');
-                  } catch (err: any) {
-                    toast.error(err?.message ?? 'Error al aprobar');
-                  } finally {
-                    setAprobando(false);
-                  }
-                }}
-                disabled={aprobando}
-                className="gap-2 bg-success hover:bg-success/90"
-              >
-                <Check className="h-4 w-4" />
-                Aprobar Planilla
-              </Button>
-            </div>
-          )}
+          {/* Los botones "Editar" y "Aprobar Planilla" del header se eliminaron
+              a pedido del usuario. Ambas acciones ya están disponibles desde el
+              listado /operaciones (columna Acciones por fila) y desde el paso 5
+              del wizard en modo lectura ("Finalizar"). */}
         </div>
       </div>
 
@@ -2692,27 +2668,13 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                             <div className="grid gap-4 md:grid-cols-2">
                               <div className="space-y-2 md:col-span-2">
                                 <Label>Colaboradores</Label>
-                                <Select
-                                  value=""
-                                  onValueChange={(value) => {
-                                    if (value) {
-                                      agregarColaboradorEnEdicion(value);
-                                    }
-                                  }}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Agregar colaborador" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {colaboradores
-                                      .filter(col => !cosechaEnEdicion.colaboradores.includes(col.id))
-                                      .map((col) => (
-                                        <SelectItem key={col.id} value={col.id}>
-                                          {col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}
-                                        </SelectItem>
-                                      ))}
-                                  </SelectContent>
-                                </Select>
+                                <MultiSelectColaboradores
+                                  colaboradores={colaboradores}
+                                  seleccionados={cosechaEnEdicion.colaboradores}
+                                  onChange={(nuevos) =>
+                                    setCosechaEnEdicion({ ...cosechaEnEdicion, colaboradores: nuevos })
+                                  }
+                                />
                                 {cosechaEnEdicion.colaboradores.length > 0 && (
                                   <div className="flex flex-wrap gap-2 mt-2">
                                     {cosechaEnEdicion.colaboradores.map((colId) => {
@@ -2935,27 +2897,13 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                             <div className="grid gap-4 md:grid-cols-2">
                               <div className="space-y-2 md:col-span-2">
                                 <Label>Colaboradores</Label>
-                                <Select
-                                  value=""
-                                  onValueChange={(value) => {
-                                    if (value && !plateoEnEdicion.colaboradores.includes(value)) {
-                                      setPlateoEnEdicion({ ...plateoEnEdicion, colaboradores: [...plateoEnEdicion.colaboradores, value] });
-                                    }
-                                  }}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Agregar colaborador" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {colaboradores
-                                      .filter(col => !plateoEnEdicion.colaboradores.includes(col.id))
-                                      .map((col) => (
-                                        <SelectItem key={col.id} value={col.id}>
-                                          {col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}
-                                        </SelectItem>
-                                      ))}
-                                  </SelectContent>
-                                </Select>
+                                <MultiSelectColaboradores
+                                  colaboradores={colaboradores}
+                                  seleccionados={plateoEnEdicion.colaboradores}
+                                  onChange={(nuevos) =>
+                                    setPlateoEnEdicion({ ...plateoEnEdicion, colaboradores: nuevos })
+                                  }
+                                />
                                 {plateoEnEdicion.colaboradores.length > 0 && (
                                   <div className="flex flex-wrap gap-2 mt-2">
                                     {plateoEnEdicion.colaboradores.map((colId) => {
@@ -3131,27 +3079,13 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                             <div className="grid gap-4 md:grid-cols-2">
                               <div className="space-y-2 md:col-span-2">
                                 <Label>Colaboradores</Label>
-                                <Select
-                                  value=""
-                                  onValueChange={(value) => {
-                                    if (value && !podaEnEdicion.colaboradores.includes(value)) {
-                                      setPodaEnEdicion({ ...podaEnEdicion, colaboradores: [...podaEnEdicion.colaboradores, value] });
-                                    }
-                                  }}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Agregar colaborador" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {colaboradores
-                                      .filter(col => !podaEnEdicion.colaboradores.includes(col.id))
-                                      .map((col) => (
-                                        <SelectItem key={col.id} value={col.id}>
-                                          {col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}
-                                        </SelectItem>
-                                      ))}
-                                  </SelectContent>
-                                </Select>
+                                <MultiSelectColaboradores
+                                  colaboradores={colaboradores}
+                                  seleccionados={podaEnEdicion.colaboradores}
+                                  onChange={(nuevos) =>
+                                    setPodaEnEdicion({ ...podaEnEdicion, colaboradores: nuevos })
+                                  }
+                                />
                                 {podaEnEdicion.colaboradores.length > 0 && (
                                   <div className="flex flex-wrap gap-2 mt-2">
                                     {podaEnEdicion.colaboradores.map((colId) => {
@@ -3344,27 +3278,13 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                             <div className="grid gap-4 md:grid-cols-2">
                               <div className="space-y-2 md:col-span-2">
                                 <Label>Colaboradores</Label>
-                                <Select
-                                  value=""
-                                  onValueChange={(value) => {
-                                    if (value && !fertilizacionEnEdicion.colaboradores.includes(value)) {
-                                      setFertilizacionEnEdicion({ ...fertilizacionEnEdicion, colaboradores: [...fertilizacionEnEdicion.colaboradores, value] });
-                                    }
-                                  }}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Agregar colaborador" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {colaboradores
-                                      .filter(col => !fertilizacionEnEdicion.colaboradores.includes(col.id))
-                                      .map((col) => (
-                                        <SelectItem key={col.id} value={col.id}>
-                                          {col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}
-                                        </SelectItem>
-                                      ))}
-                                  </SelectContent>
-                                </Select>
+                                <MultiSelectColaboradores
+                                  colaboradores={colaboradores}
+                                  seleccionados={fertilizacionEnEdicion.colaboradores}
+                                  onChange={(nuevos) =>
+                                    setFertilizacionEnEdicion({ ...fertilizacionEnEdicion, colaboradores: nuevos })
+                                  }
+                                />
                                 {fertilizacionEnEdicion.colaboradores.length > 0 && (
                                   <div className="flex flex-wrap gap-2 mt-2">
                                     {fertilizacionEnEdicion.colaboradores.map((colId) => {
@@ -3609,30 +3529,13 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                             <div className="grid gap-4 md:grid-cols-2">
                               <div className="space-y-2 md:col-span-2">
                                 <Label>Colaboradores</Label>
-                                <Select
-                                  value=""
-                                  onValueChange={(value) => {
-                                    if (value && !sanidadEnEdicion.colaboradores.includes(value)) {
-                                      setSanidadEnEdicion({
-                                        ...sanidadEnEdicion,
-                                        colaboradores: [...sanidadEnEdicion.colaboradores, value]
-                                      });
-                                    }
-                                  }}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Agregar colaborador" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {colaboradores
-                                      .filter(col => !sanidadEnEdicion.colaboradores.includes(col.id))
-                                      .map((col) => (
-                                        <SelectItem key={col.id} value={col.id}>
-                                          {col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}
-                                        </SelectItem>
-                                      ))}
-                                  </SelectContent>
-                                </Select>
+                                <MultiSelectColaboradores
+                                  colaboradores={colaboradores}
+                                  seleccionados={sanidadEnEdicion.colaboradores}
+                                  onChange={(nuevos) =>
+                                    setSanidadEnEdicion({ ...sanidadEnEdicion, colaboradores: nuevos })
+                                  }
+                                />
                                 {sanidadEnEdicion.colaboradores.length > 0 && (
                                   <div className="flex flex-wrap gap-2 mt-2">
                                     {sanidadEnEdicion.colaboradores.map((colId) => {
@@ -3838,30 +3741,13 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                             <div className="grid gap-4 md:grid-cols-2">
                               <div className="space-y-2 md:col-span-2">
                                 <Label>Colaboradores</Label>
-                                <Select
-                                  value=""
-                                  onValueChange={(value) => {
-                                    if (value && !otrosEnEdicion.colaboradores.includes(value)) {
-                                      setOtrosEnEdicion({
-                                        ...otrosEnEdicion,
-                                        colaboradores: [...otrosEnEdicion.colaboradores, value]
-                                      });
-                                    }
-                                  }}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Agregar colaborador" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {colaboradores
-                                      .filter(col => !otrosEnEdicion.colaboradores.includes(col.id))
-                                      .map((col) => (
-                                        <SelectItem key={col.id} value={col.id}>
-                                          {col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}
-                                        </SelectItem>
-                                      ))}
-                                  </SelectContent>
-                                </Select>
+                                <MultiSelectColaboradores
+                                  colaboradores={colaboradores}
+                                  seleccionados={otrosEnEdicion.colaboradores}
+                                  onChange={(nuevos) =>
+                                    setOtrosEnEdicion({ ...otrosEnEdicion, colaboradores: nuevos })
+                                  }
+                                />
                                 {otrosEnEdicion.colaboradores.length > 0 && (
                                   <div className="flex flex-wrap gap-2 mt-2">
                                     {otrosEnEdicion.colaboradores.map((colId) => {
@@ -5252,13 +5138,34 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
             </AlertDialogTitle>
             <AlertDialogDescription>
               No has registrado ninguna labor de palma, labor de finca,
-              ausencia ni hora extra en esta planilla. Debes agregar al
-              menos un registro antes de aprobarla.
+              ausencia ni hora extra en esta planilla. Puedes agregar
+              registros antes o continuar de todas formas.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction onClick={() => setAlertaPlanillaVacia(false)}>
+            <AlertDialogCancel
+              onClick={() => {
+                setAlertaPlanillaVacia(false);
+                setAccionPendiente(null);
+              }}
+            >
               Volver a editar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                setAlertaPlanillaVacia(false);
+                if (accionPendiente === 'aprobar') {
+                  await ejecutarAprobar();
+                } else if (accionPendiente === 'guardar') {
+                  setAccionPendiente(null);
+                  await guardarTodo({ bypassAlertas: true });
+                } else {
+                  setAccionPendiente(null);
+                }
+              }}
+              className="bg-amber-600 hover:bg-amber-700"
+            >
+              Continuar de todas formas
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -5289,7 +5196,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                   {' '}operario(s) no registraron labor de palma, labor de
                   finca ni novedad para este día.
                   {coberturaModo === 'aprobar'
-                    ? ' No puedes aprobar la planilla hasta registrar la actividad o novedad de todos los colaboradores activos.'
+                    ? ' Puedes registrar su actividad antes o aprobar de todas formas.'
                     : ' Puedes guardar el borrador igual o volver a editar para agregarlos.'}
                 </p>
                 {(coberturaFaltantes?.colaboradores_faltantes.length ?? 0) > 0 && (
@@ -5332,15 +5239,32 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           </AlertDialogHeader>
           <AlertDialogFooter>
             {coberturaModo === 'aprobar' ? (
-              // Aprobación estricta: no dejamos aprobar con faltantes.
-              // El usuario debe registrar labor/ausencia para todos.
-              // Un único botón cierra el modal y regresa al wizard.
-              <AlertDialogAction onClick={() => setCoberturaFaltantes(null)}>
-                Volver a editar
-              </AlertDialogAction>
+              // Aviso informativo: puede aprobar de todas formas o volver
+              // a editar para agregar los colaboradores faltantes.
+              <>
+                <AlertDialogCancel
+                  onClick={() => {
+                    setCoberturaFaltantes(null);
+                    setAccionPendiente(null);
+                  }}
+                >
+                  Volver a editar
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={async () => {
+                    setCoberturaFaltantes(null);
+                    await ejecutarAprobar();
+                  }}
+                  className="bg-amber-600 hover:bg-amber-700"
+                >
+                  Aprobar de todas formas
+                </AlertDialogAction>
+              </>
             ) : (
-              // Guardado de borrador: puede seguir avanzando aunque
-              // falten personas, es un WIP. Le damos las dos opciones.
+              // Guardado de borrador: la planilla YA está persistida cuando
+              // llega este modal (el aviso es post-guardado). El botón cierra
+              // el modal y navega al listado; el copy usa "Guardar" porque
+              // es la acción que el usuario originalmente pidió.
               <>
                 <AlertDialogCancel>Volver a editar</AlertDialogCancel>
                 <AlertDialogAction
@@ -5350,7 +5274,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                   }}
                   className="bg-success hover:bg-success/90"
                 >
-                  Ir al listado
+                  Guardar
                 </AlertDialogAction>
               </>
             )}

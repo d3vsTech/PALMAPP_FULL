@@ -383,10 +383,7 @@ export default function NuevoEditarViaje() {
                       ) : (
                         rangosRemision.map((r) => (
                           <SelectItem key={r.id} value={r.prefijo}>
-                            {r.prefijo}{' '}
-                            <span className="text-xs text-muted-foreground">
-                              (próximo: {r.numero_actual})
-                            </span>
+                            {r.prefijo}
                           </SelectItem>
                         ))
                       )}

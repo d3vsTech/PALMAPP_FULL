@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useLocation } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -30,6 +30,7 @@ const PER_PAGE = 50;
 
 export default function Operaciones() {
   const navigate = useNavigate();
+  const location = useLocation();
 
   // ── KPIs con filtro de período ─────────────────────────────────────────────
   const [periodoKPI, setPeriodoKPI] = useState<PeriodoIndicadores>('mensual');
@@ -72,41 +73,18 @@ export default function Operaciones() {
   const [aprobandoId, setAprobandoId] = useState<number | null>(null);
   const [coberturaFaltantes, setCoberturaFaltantes] = useState<CoberturaPlanilla | null>(null);
   const [alertaPlanillaVacia, setAlertaPlanillaVacia] = useState(false);
+  // Planilla objetivo cuando una alerta bloquea temporalmente el flujo.
+  // Al confirmar "Aprobar de todas formas" desde el modal, se retoma la
+  // aprobación de esta planilla saltándose las validaciones.
+  const [planillaPendiente, setPlanillaPendiente] = useState<Planilla | null>(null);
 
-  const aprobarPlanilla = async (p: Planilla) => {
+  /**
+   * Llamada real al backend para aprobar. Sin validaciones previas —
+   * se usa tanto en el camino directo (sin alertas) como al confirmar
+   * "Aprobar de todas formas" en cualquiera de los dos modales.
+   */
+  const ejecutarAprobar = async (p: Planilla) => {
     setAprobandoId(p.id);
-
-    // Bloqueo previo: planilla completamente vacía. Suma jornales +
-    // cosechas + ausencias del listado (el backend ya trae los conteos
-    // agregados; horas extra no viene, pero si hay alguna, jornales_count
-    // o ausencias_count también será > 0 por construcción del wizard).
-    const totalHijos =
-      (p.jornales_count ?? 0) + (p.cosechas_count ?? 0) + (p.ausencias_count ?? 0);
-    if (totalHijos === 0) {
-      setAlertaPlanillaVacia(true);
-      setAprobandoId(null);
-      return;
-    }
-
-    // Verificar cobertura antes de aprobar. Si el endpoint falla,
-    // NO aprobamos automáticamente — avisamos al usuario.
-    try {
-      const cov = await operacionesApi.cobertura(p.id);
-      if (cov.data?.tiene_faltantes) {
-        setCoberturaFaltantes(cov.data);
-        setAprobandoId(null);
-        return;
-      }
-    } catch (err: any) {
-      toast.error(
-        err?.message
-          ?? 'No se pudo verificar la cobertura de personal. Intenta de nuevo.',
-      );
-      setAprobandoId(null);
-      return;
-    }
-
-    // Cobertura OK → aprobar.
     try {
       const res = await operacionesApi.aprobar(p.id);
       const casc = res.aprobaciones_cascada;
@@ -124,7 +102,42 @@ export default function Operaciones() {
       toast.error(err?.message ?? 'Error al aprobar la planilla');
     } finally {
       setAprobandoId(null);
+      setPlanillaPendiente(null);
     }
+  };
+
+  const aprobarPlanilla = async (p: Planilla) => {
+    setAprobandoId(p.id);
+
+    // Aviso informativo (NO bloqueante): planilla vacía. Suma jornales +
+    // cosechas + ausencias del listado — si es 0, mostramos el modal con
+    // opción de aprobar de todas formas.
+    const totalHijos =
+      (p.jornales_count ?? 0) + (p.cosechas_count ?? 0) + (p.ausencias_count ?? 0);
+    if (totalHijos === 0) {
+      setPlanillaPendiente(p);
+      setAlertaPlanillaVacia(true);
+      setAprobandoId(null);
+      return;
+    }
+
+    // Aviso informativo: cobertura de personal (§7.1). Si hay faltantes,
+    // el modal permite decidir. Si el endpoint falla, seguimos adelante
+    // sin bloquear (es solo informativo).
+    try {
+      const cov = await operacionesApi.cobertura(p.id);
+      if (cov.data?.tiene_faltantes) {
+        setPlanillaPendiente(p);
+        setCoberturaFaltantes(cov.data);
+        setAprobandoId(null);
+        return;
+      }
+    } catch (err) {
+      console.warn('[cobertura] fallo consultar faltantes:', err);
+    }
+
+    // Cobertura OK → aprobar directo.
+    await ejecutarAprobar(p);
   };
 
   const cargarLista = useCallback(async () => {
@@ -154,7 +167,12 @@ export default function Operaciones() {
     }
   }, []);
 
-  useEffect(() => { cargarLista(); }, [cargarLista]);
+  // Refresca cuando el usuario navega a `/operaciones`. `location.key`
+  // cambia en cada navegación (aunque sea al mismo path), así que al volver
+  // de editar/aprobar/liquidar una planilla, el listado siempre trae la
+  // data fresca — evita ver "0 colaboradores" cuando el backend ya persistió
+  // los cambios.
+  useEffect(() => { cargarLista(); }, [cargarLista, location.key]);
 
   const eliminarPlanilla = async () => {
     if (!planillaAEliminar) return;
@@ -462,13 +480,29 @@ export default function Operaciones() {
             </AlertDialogTitle>
             <AlertDialogDescription>
               No has registrado ninguna labor de palma, labor de finca,
-              ausencia ni hora extra en esta planilla. Debes agregar al
-              menos un registro antes de aprobarla.
+              ausencia ni hora extra en esta planilla. Puedes editarla
+              antes o aprobarla de todas formas.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction onClick={() => setAlertaPlanillaVacia(false)}>
+            <AlertDialogCancel
+              onClick={() => {
+                setAlertaPlanillaVacia(false);
+                setPlanillaPendiente(null);
+              }}
+            >
               Volver a editar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                setAlertaPlanillaVacia(false);
+                if (planillaPendiente) {
+                  await ejecutarAprobar(planillaPendiente);
+                }
+              }}
+              className="bg-amber-600 hover:bg-amber-700"
+            >
+              Aprobar de todas formas
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -494,9 +528,8 @@ export default function Operaciones() {
                   {' '}colaborador(es) y{' '}
                   {(coberturaFaltantes?.operarios_faltantes.length ?? 0)}
                   {' '}operario(s) no registraron labor de palma, labor de
-                  finca ni novedad para este día. No puedes aprobar la
-                  planilla hasta registrar la actividad o novedad de todos
-                  los colaboradores activos.
+                  finca ni novedad para este día. Puedes registrar su
+                  actividad antes o aprobar de todas formas.
                 </p>
                 {(coberturaFaltantes?.colaboradores_faltantes.length ?? 0) > 0 && (
                   <div className="rounded-lg border border-border bg-muted/30 p-3">
@@ -537,8 +570,24 @@ export default function Operaciones() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction onClick={() => setCoberturaFaltantes(null)}>
+            <AlertDialogCancel
+              onClick={() => {
+                setCoberturaFaltantes(null);
+                setPlanillaPendiente(null);
+              }}
+            >
               Volver a editar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                setCoberturaFaltantes(null);
+                if (planillaPendiente) {
+                  await ejecutarAprobar(planillaPendiente);
+                }
+              }}
+              className="bg-amber-600 hover:bg-amber-700"
+            >
+              Aprobar de todas formas
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

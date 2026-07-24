@@ -70,7 +70,10 @@ const FORM_VACIO: FormState = {
   descripcion: '',
 };
 
-const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+// Tamaño de página fijo: la tabla siempre pagina de a 10 filas. Antes había
+// un dropdown "Mostrar N registros" pero el volumen típico por finca es tan
+// bajo (< 20 rangos) que ese selector no aportaba nada.
+const PAGE_SIZE = 10;
 
 // Único tipo de documento manejado por este módulo. La UI ya no muestra
 // selector: se persiste `tipo_documento: 'REMISION'` fijo por default.
@@ -111,8 +114,8 @@ export function RangosNumeracionTab() {
   const [filtroPrefijo, setFiltroPrefijo] = useState('');
 
   // Paginación
-  const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
+  const pageSize = PAGE_SIZE;
 
   // Modal crear / editar
   const [modalAbierto, setModalAbierto] = useState(false);
@@ -339,13 +342,14 @@ export function RangosNumeracionTab() {
         </CardHeader>
 
         <CardContent className="p-6 space-y-6">
-          {/* Filtros — solo por prefijo (único tipo = Remisión). */}
-          <div className="space-y-3">
+          {/* Filtros — solo por prefijo (único tipo = Remisión).
+              Input + botón "Buscar" en la misma fila para un layout compacto. */}
+          <div className="space-y-2">
             <h3 className="text-sm font-semibold text-foreground">
               Filtro de búsqueda
             </h3>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-1.5">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              <div className="flex-1 space-y-1.5">
                 <Label htmlFor="filtro-prefijo" className="text-sm">
                   Prefijo
                 </Label>
@@ -359,43 +363,19 @@ export function RangosNumeracionTab() {
                   }}
                 />
               </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <Button onClick={buscar} variant="outline" className="gap-2">
-                <Search className="h-4 w-4" />
-                Buscar
-              </Button>
-              {filtroPrefijo && (
-                <Button variant="ghost" onClick={limpiarFiltros} className="gap-2">
-                  <X className="h-4 w-4" />
-                  Limpiar
+              <div className="flex items-center gap-2">
+                <Button onClick={buscar} variant="outline" className="gap-2">
+                  <Search className="h-4 w-4" />
+                  Buscar
                 </Button>
-              )}
+                {filtroPrefijo && (
+                  <Button variant="ghost" onClick={limpiarFiltros} className="gap-2">
+                    <X className="h-4 w-4" />
+                    Limpiar
+                  </Button>
+                )}
+              </div>
             </div>
-          </div>
-
-          {/* Selector de tamaño de página */}
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span>Mostrar</span>
-            <Select
-              value={String(pageSize)}
-              onValueChange={(v) => {
-                setPageSize(parseInt(v));
-                setPage(1);
-              }}
-            >
-              <SelectTrigger className="w-[150px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PAGE_SIZE_OPTIONS.map((n) => (
-                  <SelectItem key={n} value={String(n)}>
-                    {n} registros
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
 
           {/* Tabla */}

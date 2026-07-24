@@ -122,6 +122,7 @@ function mapearAgregados(
       salarioBase: Number(e.salario_base ?? 0) || undefined,
       salarioTipo: null,
       estado: e.estado as 'PENDIENTE' | 'LIQUIDADO',
+      operarioId: Number(e.operario_id) || undefined,
     };
   });
 }
@@ -243,6 +244,10 @@ export default function NuevaNominaWizard() {
     salarioBase?: number;
     salarioTipo?: string | null;
     estado: 'PENDIENTE' | 'LIQUIDADO';
+    /** Solo para tipo='OP'. Permite hacer lookup en `operarios[]` para
+     *  recuperar `salario_base` / `tarifa_dia_estimada` cuando el backend
+     *  no los persiste en el registro `nomina_empleado`. */
+    operarioId?: number;
   }>>([]);
   const colaboradoresYaAgregados = colaboradoresAgregados.length;
   /** Filtro de la tabla de operarios por empresa (?tercero_id=N). */
@@ -1859,72 +1864,147 @@ export default function NuevaNominaWizard() {
                   </CardContent>
                 </Card>
 
-                {/* Colaboradores Incluidos — lista los ya persistidos en la
-                    nómina con badge Colaborador (verde) o Tercero (ámbar) y
-                    salario base / tarifa mensual estimada a la derecha. */}
-                <Card className="border-border">
-                  <CardContent className="p-6">
-                    <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-                      <Users className="h-5 w-5 text-primary" />
-                      Colaboradores Incluidos ({colaboradoresAgregados.length})
-                    </h3>
-                    {colaboradoresAgregados.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-4">
-                        No hay colaboradores en esta nómina.
-                      </p>
-                    ) : (
-                      <div className="space-y-2">
-                        {colaboradoresAgregados.map((c) => {
-                          const partes = c.nombre.split(' ');
-                          const iniciales = ((partes[0]?.[0] ?? '') + (partes[1]?.[0] ?? '')).toUpperCase() || '?';
-                          const esOp = c.tipo === 'OP';
-                          return (
-                            <div
-                              key={`col-${c.nominaEmpleadoId}`}
-                              className={`flex items-center gap-3 p-3 rounded-lg ${
-                                esOp ? 'bg-amber-500/5' : 'bg-muted/30'
-                              }`}
-                            >
-                              <div className={`h-10 w-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                                esOp ? 'bg-amber-500/10 text-amber-700' : 'bg-primary/10 text-primary'
-                              }`}>
-                                <span className="text-sm font-medium">{iniciales}</span>
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <p className="text-sm font-medium">{c.nombre}</p>
-                                  {esOp ? (
-                                    <Badge className="bg-amber-500/10 text-amber-700 border-amber-300 text-[10px]">
-                                      Tercero
-                                    </Badge>
-                                  ) : (
-                                    <Badge className="bg-success/10 text-success border-success/20 text-[10px]">
-                                      Colaborador
-                                    </Badge>
-                                  )}
-                                </div>
-                                <p className="text-xs text-muted-foreground">
-                                  {c.cargo ?? 'Sin cargo'}
-                                  {esOp && c.tercero ? ` · ${c.tercero}` : ''}
-                                </p>
-                              </div>
-                              {/* Salario base solo aplica a empleados internos.
-                                  Los operarios cobran por labor (no tienen salario/tarifa fija). */}
-                              {!esOp && c.salarioBase && c.salarioBase > 0 && (
-                                <div className="text-right">
-                                  <p className="text-sm font-semibold text-foreground">
-                                    ${c.salarioBase.toLocaleString('es-CO')}
-                                  </p>
-                                  <p className="text-[10px] text-muted-foreground">Salario base</p>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
+                {/* Personal incluido — se separa en dos tarjetas para no mezclar
+                    colaboradores internos con operarios de terceros. Para los
+                    terceros hacemos lookup en `operarios[]` (cargado en el
+                    paso 2) buscando `salario_base` o `tarifa_dia_estimada`
+                    como fallback si el backend no persistió `salario_base` en
+                    el registro `nomina_empleado`. */}
+                {(() => {
+                  const soloEmpleados = colaboradoresAgregados.filter((c) => c.tipo === 'EMP');
+                  const soloTerceros = colaboradoresAgregados.filter((c) => c.tipo === 'OP');
+
+                  const renderFilaEmp = (c: typeof colaboradoresAgregados[number]) => {
+                    const partes = c.nombre.split(' ');
+                    const iniciales = ((partes[0]?.[0] ?? '') + (partes[1]?.[0] ?? '')).toUpperCase() || '?';
+                    return (
+                      <div
+                        key={`emp-${c.nominaEmpleadoId}`}
+                        className="flex items-center gap-3 p-3 rounded-lg bg-muted/30"
+                      >
+                        <div className="h-10 w-10 rounded-full flex items-center justify-center flex-shrink-0 bg-primary/10 text-primary">
+                          <span className="text-sm font-medium">{iniciales}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium">{c.nombre}</p>
+                            <Badge className="bg-success/10 text-success border-success/20 text-[10px]">
+                              Colaborador
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {c.cargo ?? 'Sin cargo'}
+                          </p>
+                        </div>
+                        {c.salarioBase && c.salarioBase > 0 && (
+                          <div className="text-right">
+                            <p className="text-sm font-semibold text-foreground">
+                              ${c.salarioBase.toLocaleString('es-CO')}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">Salario base</p>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </CardContent>
-                </Card>
+                    );
+                  };
+
+                  const renderFilaOp = (c: typeof colaboradoresAgregados[number]) => {
+                    const partes = c.nombre.split(' ');
+                    const iniciales = ((partes[0]?.[0] ?? '') + (partes[1]?.[0] ?? '')).toUpperCase() || '?';
+                    // Fallback: si `salario_base` no viene del backend en el
+                    // registro `nomina_empleado`, resolvemos contra la lista
+                    // de operarios disponibles (paso 2). `tarifa_dia_estimada`
+                    // se muestra como valor de referencia por día.
+                    const opInfo = c.operarioId
+                      ? operarios.find((o) => o.id === c.operarioId)
+                      : undefined;
+                    const salarioResuelto =
+                      (c.salarioBase && c.salarioBase > 0 ? c.salarioBase : 0)
+                      || (opInfo?.salario_base && opInfo.salario_base > 0 ? opInfo.salario_base : 0);
+                    const tarifaDia = opInfo?.tarifa_dia_estimada;
+                    return (
+                      <div
+                        key={`op-${c.nominaEmpleadoId}`}
+                        className="flex items-center gap-3 p-3 rounded-lg bg-amber-500/5"
+                      >
+                        <div className="h-10 w-10 rounded-full flex items-center justify-center flex-shrink-0 bg-amber-500/10 text-amber-700">
+                          <span className="text-sm font-medium">{iniciales}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium">{c.nombre}</p>
+                            <Badge className="bg-amber-500/10 text-amber-700 border-amber-300 text-[10px]">
+                              Tercero
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {c.cargo ?? 'Sin cargo'}
+                            {c.tercero ? ` · ${c.tercero}` : ''}
+                          </p>
+                        </div>
+                        {salarioResuelto > 0 ? (
+                          <div className="text-right">
+                            <p className="text-sm font-semibold text-foreground">
+                              ${salarioResuelto.toLocaleString('es-CO')}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">Salario base</p>
+                          </div>
+                        ) : tarifaDia && tarifaDia > 0 ? (
+                          <div className="text-right">
+                            <p className="text-sm font-semibold text-foreground">
+                              ${tarifaDia.toLocaleString('es-CO')}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">Tarifa/día</p>
+                          </div>
+                        ) : (
+                          <div className="text-right">
+                            <p className="text-[10px] text-muted-foreground">Pago por labor</p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  };
+
+                  return (
+                    <>
+                      <Card className="border-border">
+                        <CardContent className="p-6">
+                          <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                            <Users className="h-5 w-5 text-primary" />
+                            Colaboradores Incluidos ({soloEmpleados.length})
+                          </h3>
+                          {soloEmpleados.length === 0 ? (
+                            <p className="text-sm text-muted-foreground text-center py-4">
+                              No hay colaboradores internos en esta nómina.
+                            </p>
+                          ) : (
+                            <div className="space-y-2">
+                              {soloEmpleados.map(renderFilaEmp)}
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+
+                      <Card className="border-border">
+                        <CardContent className="p-6">
+                          <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                            <Users className="h-5 w-5 text-amber-700" />
+                            Terceros Incluidos ({soloTerceros.length})
+                          </h3>
+                          {soloTerceros.length === 0 ? (
+                            <p className="text-sm text-muted-foreground text-center py-4">
+                              No hay operarios de terceros en esta nómina.
+                            </p>
+                          ) : (
+                            <div className="space-y-2">
+                              {soloTerceros.map(renderFilaOp)}
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </>
+                  );
+                })()}
 
                 <Card className="border-primary bg-primary/5">
                   <CardContent className="p-6">
