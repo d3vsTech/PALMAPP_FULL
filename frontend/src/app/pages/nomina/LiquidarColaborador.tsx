@@ -92,6 +92,35 @@ function getIniciales(nombre: string): string {
   return `${partes[0][0]}${partes[1][0]}`.toUpperCase();
 }
 
+/**
+ * Filtro de conceptos habilitados para el bloque "Descuentos Voluntarios"
+ * en la pantalla de liquidación. Excluye:
+ *   - AHORRO (por decisión de negocio, no se gestiona desde nómina).
+ * El resto del catálogo (adelantos, otros descuentos custom del tenant) sí
+ * se muestra. Los préstamos activos NO llegan por esta vía — se pre-cargan
+ * como cuotas automáticas con `prestamo_cuota_id`.
+ */
+function esConceptoParaAdelantos(
+  c: { nombre?: string | null; codigo?: string | null },
+): boolean {
+  const esAhorro = /ahorro/i.test(c.nombre ?? '') || /AHORRO/.test(c.codigo ?? '');
+  return !esAhorro;
+}
+
+/**
+ * Etiqueta que se muestra en la UI para un concepto de deducción voluntaria.
+ * El concepto seedeado por default `DCTO_ADELANTO` viene del backend como
+ * "Descuento Adelantos / Préstamo", pero en esta pantalla solo se registran
+ * ADELANTOS (los préstamos entran como cuota automática pre-aplicada).
+ * Renombramos para no confundir al usuario.
+ */
+function nombreConceptoUI(
+  c: { nombre?: string | null; codigo?: string | null },
+): string {
+  if (c.codigo === 'DCTO_ADELANTO') return 'Descuento Adelantos';
+  return c.nombre ?? '';
+}
+
 export default function LiquidarColaborador() {
   const { nominaId, colaboradorId } = useParams();
   const navigate = useNavigate();
@@ -768,13 +797,17 @@ export default function LiquidarColaborador() {
                 })}
                 {/* Deducciones voluntarias por concepto del catálogo. Cada
                     fila muestra un "+ Agregar" que crea una sub-fila con
-                    valor + observación. Se excluye "Ahorro Voluntario" por
-                    decisión de negocio — no se gestiona desde nómina. */}
+                    valor + observación.
+                    Reglas de negocio:
+                    - "Ahorro Voluntario" no se gestiona desde nómina.
+                    - "Descuento Adelantos / Préstamo" del catálogo cubre AMBAS
+                      cosas, pero aquí en la UI el usuario solo debería
+                      registrar ADELANTOS (los préstamos vienen ya como cuota
+                      automática pre-seleccionada arriba con badge "Aplicada").
+                      Por eso lo etiquetamos como "Descuento Adelantos" en el UI.
+                */}
                 {conceptos
-                  .filter((c) =>
-                    !/ahorro/i.test(c.nombre ?? '') &&
-                    !/AHORRO/.test(c.codigo ?? ''),
-                  )
+                  .filter(esConceptoParaAdelantos)
                   .map((concepto) => {
                   const filas = deducciones
                     .map((d, idx) => ({ d, idx }))
@@ -784,7 +817,7 @@ export default function LiquidarColaborador() {
                     <div key={concepto.id} className="border-b border-destructive/10 last:border-0">
                       <div className="flex justify-between items-center px-4 py-3">
                         <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                          {concepto.nombre}
+                          {nombreConceptoUI(concepto)}
                         </span>
                         <div className="flex items-center gap-3">
                           <span className={`text-sm font-semibold ${totalConcepto > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
@@ -888,20 +921,28 @@ export default function LiquidarColaborador() {
                               <SelectValue placeholder="Selecciona" />
                             </SelectTrigger>
                             <SelectContent>
-                              {conceptos.length === 0 ? (
-                                <div className="px-3 py-2 text-xs text-muted-foreground">
-                                  No hay conceptos activos. Actívalos en Configuración → Conceptos de nómina.
-                                </div>
-                              ) : (
-                                conceptos.map((c) => (
+                              {(() => {
+                                // Mismo filtro que la sección de arriba:
+                                // excluimos AHORRO (no aplica) para que el
+                                // dropdown solo ofrezca conceptos que el
+                                // usuario realmente puede registrar aquí.
+                                const opciones = conceptos.filter(esConceptoParaAdelantos);
+                                if (opciones.length === 0) {
+                                  return (
+                                    <div className="px-3 py-2 text-xs text-muted-foreground">
+                                      No hay conceptos activos. Actívalos en Configuración → Conceptos de nómina.
+                                    </div>
+                                  );
+                                }
+                                return opciones.map((c) => (
                                   <SelectItem key={c.id} value={String(c.id)}>
-                                    {c.nombre}
+                                    {nombreConceptoUI(c)}
                                     {c.codigo && (
                                       <span className="text-[10px] text-muted-foreground ml-1">({c.codigo})</span>
                                     )}
                                   </SelectItem>
-                                ))
-                              )}
+                                ));
+                              })()}
                             </SelectContent>
                           </Select>
                         </div>

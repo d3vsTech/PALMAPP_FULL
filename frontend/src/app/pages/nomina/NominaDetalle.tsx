@@ -20,7 +20,7 @@
  *    (empresas, operarios, labores, kg, total a transferir, estado).
  *  - Endpoint para exportar la nómina a Excel/PDF.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useParams, Link, useNavigate } from 'react-router';
@@ -52,14 +52,13 @@ import StatusBadge from '../../components/common/StatusBadge';
 import { toast } from 'sonner';
 import {
   nominaApi, Nomina, NominaEmpleado, NominaTercero, Periodicidad,
-  NominaErrorCodes, NominaTerceroActaDetalle, ResumenTrabajo, MetodoPagoTercero,
+  NominaErrorCodes, NominaTerceroActaDetalle, MetodoPagoTercero,
 } from '../../../api/nomina';
-import { operariosApi, tercerosApi } from '../../../api/terceros';
-import type { OperarioSelectItem, TerceroSelectItem } from '../../../api/terceros';
 import { operacionesApi } from '../../../api/operaciones';
 import type { PlanillaDetalle } from '../../../api/operaciones';
 import { lotesApi, sublotesApi } from '../../../api/plantacion';
 import type { ApiError } from '../../../api/client';
+import { cached } from '../../../api/cache';
 
 const MESES_NOMBRE: Record<number, string> = {
   1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril', 5: 'Mayo', 6: 'Junio',
@@ -130,7 +129,10 @@ export default function NominaDetalle() {
   /** Detalle acta indexado por tercero_id (nit, representante, operarios). */
   const [detallesTerceros, setDetallesTerceros] = useState<Map<number, NominaTerceroActaDetalle>>(new Map());
   /** Resumen-trabajo por nomina_empleado.id de cada operario. */
-  const [resumenesOperarios, setResumenesOperarios] = useState<Map<number, ResumenTrabajo>>(new Map());
+  // Nota: `resumenesOperarios` se removió — el endpoint `/nomina-empleados/{id}/resumen-trabajo`
+  // solo funciona con empleados internos (backend requiere `empleado_id` int,
+  // no null). Para operarios el consolidado se arma desde `planillasPeriodo`
+  // que ya trae cosechas[].cuadrilla y jornales[] eager-loaded.
   /**
    * Registros de campo del período (planillas APROBADAS). Fuente real del
    * desglose por lote/labor para operarios de terceros — el endpoint
@@ -140,9 +142,10 @@ export default function NominaDetalle() {
   const [lotesNombre, setLotesNombre] = useState<Map<number, string>>(new Map());
   const [sublotesNombre, setSublotesNombre] = useState<Map<number, string>>(new Map());
 
-  // ── Lookups para resolver nombres cuando `ver()` no eager-loadea ─────────
-  const [operariosLookup, setOperariosLookup] = useState<Map<number, OperarioSelectItem>>(new Map());
-  const [tercerosLookup, setTercerosLookup] = useState<Map<number, TerceroSelectItem>>(new Map());
+  // Nota: `tercerosLookup` se eliminó — solo era un fallback defensivo
+  // para `nombre_display`, pero el backend siempre eager-loadea el tercero
+  // en `operario.tercero.razon_social` y en `acta.tercero_nombre`, así que
+  // el lookup nunca se usaba en la práctica.
 
   // ── Modal Registrar Pago ────────────────────────────────────────────────
   const [modalPagoTerceroId, setModalPagoTerceroId] = useState<number | null>(null);
@@ -211,55 +214,24 @@ export default function NominaDetalle() {
     }
   };
 
-  /**
-   * Carga el resumen-trabajo de cada operario de la nómina — sirve para el
-   * desglose por lote/labor en el tab Terceros. No bloquea la UI: llena el
-   * mapa en background.
-   */
-  const cargarResumenesOperarios = (empleadosOps: NominaEmpleado[]) => {
-    empleadosOps.forEach((emp) => {
-      nominaApi
-        .resumenTrabajo(emp.id)
-        .then((r) => {
-          setResumenesOperarios((prev) => {
-            const next = new Map(prev);
-            next.set(emp.id, r.data);
-            return next;
-          });
-        })
-        .catch(() => void 0);
-    });
-  };
-
   useEffect(() => {
     cargar();
     cargarTerceros();
-    operariosApi
-      .selectGlobal()
-      .then((res) => {
-        const m = new Map<number, OperarioSelectItem>();
-        (res.data ?? []).forEach((o) => m.set(o.id, o));
-        setOperariosLookup(m);
-      })
-      .catch(() => void 0);
-    tercerosApi
-      .select()
-      .then((res) => {
-        const m = new Map<number, TerceroSelectItem>();
-        (res.data ?? []).forEach((t) => m.set(t.id, t));
-        setTercerosLookup(m);
-      })
-      .catch(() => void 0);
-    lotesApi
-      .select()
+    // Los 4 catálogos (operarios/terceros/lotes/sublotes) casi nunca
+    // cambian dentro de una liquidación: los cacheamos 5 min en memoria
+    // con dedup de in-flight. Sin esto, entrar y salir de la pantalla
+    // multiplicaba las 4 peticiones.
+    // (se eliminaron `operariosApi.selectGlobal()` y `tercerosApi.select()`
+    //  — los dos lookups nunca se leían: el backend ya eager-loadea el
+    //  tercero en `operario.tercero.razon_social` y en `acta.tercero_nombre`.)
+    cached('nomina:lotes-select', () => lotesApi.select(), 5 * 60_000)
       .then((res) => {
         const m = new Map<number, string>();
         (res.data ?? []).forEach((l: any) => m.set(l.id, l.nombre));
         setLotesNombre(m);
       })
       .catch(() => void 0);
-    sublotesApi
-      .select()
+    cached('nomina:sublotes-select', () => sublotesApi.select(), 5 * 60_000)
       .then((res) => {
         const m = new Map<number, string>();
         (res.data ?? []).forEach((s: any) => m.set(s.id, s.nombre));
@@ -269,23 +241,36 @@ export default function NominaDetalle() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nominaId]);
 
-  // Cuando ya cargó `empleados`, disparar resumen-trabajo de operarios
-  useEffect(() => {
-    const ops = empleados.filter((e) => e.operario_id != null);
-    if (ops.length === 0) return;
-    cargarResumenesOperarios(ops);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [empleados]);
+  // Nota: se eliminó el useEffect que disparaba `resumen-trabajo` por cada
+  // operario — el endpoint solo acepta empleados internos y el resultado
+  // no se consumía (state huérfano). El consolidado por operario se arma
+  // desde `planillasPeriodo` que ya trae los eager-loads necesarios.
 
   /**
-   * Carga las planillas APROBADAS entre fecha_inicio y fecha_fin de la nómina,
-   * y pide el detalle de cada una — necesitamos cosechas[].cuadrilla y jornales[]
-   * para consolidar por operario/lote/labor.
+   * Carga LAZY de las planillas APROBADAS entre fecha_inicio y fecha_fin de
+   * la nómina. Solo se dispara cuando el usuario abre el tab "Terceros" y
+   * hay operarios en la nómina — antes se cargaba upfront aunque el usuario
+   * nunca abriera ese tab (era 1 `listar` + N `ver` que a veces sumaban
+   * ~50 kB por nómina y no se usaban para colaboradores internos).
+   *
+   * `planillasPeriodoCargadasRef` evita re-cargar si el usuario abre y
+   * cierra el tab Terceros varias veces sin que cambien las fechas.
    */
+  const hayOperariosRef = useRef(false);
   useEffect(() => {
+    hayOperariosRef.current = empleados.some((e) => e.operario_id != null);
+  }, [empleados]);
+
+  const planillasPeriodoCargadasRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (tabActivo !== 'terceros') return;
     if (!nomina) return;
-    const hayOperarios = empleados.some((e) => e.operario_id != null);
-    if (!hayOperarios) return;
+    if (!hayOperariosRef.current) return;
+    // Key de caché in-memory por rango de fechas — si el rango no cambió,
+    // no volvemos a cargar aunque el usuario re-abra el tab Terceros.
+    const key = `${nomina.fecha_inicio}::${nomina.fecha_fin}`;
+    if (planillasPeriodoCargadasRef.current === key) return;
+    planillasPeriodoCargadasRef.current = key;
     operacionesApi
       .listar({
         fecha_desde: nomina.fecha_inicio,
@@ -302,9 +287,12 @@ export default function NominaDetalle() {
         );
         setPlanillasPeriodo(detalles.filter(Boolean) as PlanillaDetalle[]);
       })
-      .catch(() => void 0);
+      .catch(() => {
+        // Al fallar, reseteamos la key para que el próximo intento pueda funcionar.
+        planillasPeriodoCargadasRef.current = null;
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nomina?.fecha_inicio, nomina?.fecha_fin, empleados]);
+  }, [tabActivo, nomina?.fecha_inicio, nomina?.fecha_fin]);
 
   const esBorrador = nomina?.estado === 'BORRADOR';
   // Los operarios NO van en la tabla de "Liquidación de Colaboradores" — se
@@ -827,11 +815,9 @@ export default function NominaDetalle() {
       const tid = emp.tercero_id ?? emp.operario?.tercero?.id ?? 0;
       if (!tid) return;
       if (!map.has(tid)) {
-        const nombreLookup = tercerosLookup.get(tid)?.nombre_display;
-        const nombreEmb = emp.operario?.tercero?.razon_social;
         map.set(tid, {
           tercero_id: tid,
-          tercero_nombre: nombreEmb ?? nombreLookup ?? `Tercero #${tid}`,
+          tercero_nombre: emp.operario?.tercero?.razon_social ?? `Tercero #${tid}`,
           operarios: [],
           acta: terceros.find((t) => t.tercero_id === tid),
         });
@@ -843,7 +829,7 @@ export default function NominaDetalle() {
       if (!map.has(t.tercero_id)) {
         map.set(t.tercero_id, {
           tercero_id: t.tercero_id,
-          tercero_nombre: t.tercero_nombre ?? tercerosLookup.get(t.tercero_id)?.nombre_display ?? `Tercero #${t.tercero_id}`,
+          tercero_nombre: t.tercero_nombre ?? `Tercero #${t.tercero_id}`,
           operarios: [],
           acta: t,
         });
