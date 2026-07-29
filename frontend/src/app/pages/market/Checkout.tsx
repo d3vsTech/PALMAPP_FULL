@@ -17,9 +17,9 @@ import { getDepartamentos, getMunicipios } from '../../../api/plantacion';
 import { pagosApi } from '../../../api/pagos';
 
 const METODOS_PAGO = [
-  { id: 'PSE', nombre: 'Pago con PSE', descripcion: 'Pago seguro desde tu cuenta bancaria' },
-  { id: 'Nequi', nombre: 'Nequi', descripcion: 'Confirma el pago desde la app Nequi de tu celular' },
-  { id: 'Tarjeta de Crédito', nombre: 'Tarjeta de Crédito', descripcion: 'Visa, Mastercard, American Express' },
+  { id: 'PSE', nombre: 'Pago con PSE', descripcion: 'Pago seguro desde tu cuenta bancaria · procesa Wompi' },
+  { id: 'Nequi', nombre: 'Nequi', descripcion: 'Confirma el pago desde tu app Nequi · procesa Wompi' },
+  { id: 'Tarjeta de Crédito', nombre: 'Tarjeta de Crédito', descripcion: 'Visa, Mastercard, American Express · procesa Wompi' },
   { id: 'Pago Contra Entrega', nombre: 'Pago Contra Entrega', descripcion: 'Paga al recibir tu pedido' },
   { id: 'Transferencia Bancaria', nombre: 'Transferencia Bancaria', descripcion: 'Transferencia directa a cuenta del proveedor' },
 ];

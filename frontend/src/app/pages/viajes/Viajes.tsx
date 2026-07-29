@@ -313,7 +313,7 @@ export default function Viajes() {
       </AlertDialog>
 
       {/* Header */}
-      <div className="flex items-start justify-between mb-8">
+      <div className="flex items-start justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold text-primary">Viajes</h1>
           <p className="text-muted-foreground mt-1">
@@ -328,6 +328,7 @@ export default function Viajes() {
           Nuevo Viaje
         </Button>
       </div>
+
 
       {/* Indicadores Principales */}
       <div>

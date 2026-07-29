@@ -121,6 +121,7 @@ const Viajes = lazyWithRetry(() => import('./pages/viajes/Viajes'));
 const DetalleViaje = lazyWithRetry(() => import('./pages/viajes/DetalleViaje'));
 const ConteoCosecha = lazyWithRetry(() => import('./pages/viajes/ConteoCosecha'));
 const NuevoEditarViaje = lazyWithRetry(() => import('./pages/viajes/Nuevoeditarviaje'));
+const AjustesCosecha = lazyWithRetry(() => import('./pages/viajes/AjustesCosecha'));
 
 // Market
 const Market = lazyWithRetry(() => import('./pages/market/Market'));
@@ -317,6 +318,7 @@ export const router = createBrowserRouter([
       { path: 'operaciones/planilla/:id',        element: L(<VerPlanilla />) },
 
       { path: 'viajes',                    element: <ProtectedRoute permiso="remisiones.ver">{L(<Viajes />)}</ProtectedRoute> },
+      { path: 'viajes/ajustes-cosecha',    element: L(<AjustesCosecha />) },
       { path: 'viajes/nuevo',              element: L(<NuevoEditarViaje />) },
       { path: 'viajes/editar/:id',         element: L(<NuevoEditarViaje />) },
       { path: 'viajes/:id/conteo',         element: L(<ConteoCosecha />) },

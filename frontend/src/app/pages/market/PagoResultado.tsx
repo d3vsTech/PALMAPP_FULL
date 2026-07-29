@@ -84,11 +84,11 @@ export default function PagoResultado() {
 
   const descripcion =
     estadoFinal === 'aprobado'
-      ? 'Tu pedido está confirmado. El proveedor recibirá una notificación en breve.'
+      ? 'Wompi confirmó el cobro. Tu pedido está confirmado y el proveedor recibirá una notificación en breve.'
       : estadoFinal === 'rechazado'
         ? 'El banco rechazó la transacción. Verifica tu tarjeta o intenta con otro método.'
         : estadoFinal === 'fallido'
-          ? 'La pasarela tuvo un problema al procesar el cobro. Puedes reintentar sin cargo.'
+          ? 'Wompi tuvo un problema al procesar el cobro. Puedes reintentar sin cargo.'
           : 'Aún no se ha registrado un intento de pago para este pedido.';
 
   return (

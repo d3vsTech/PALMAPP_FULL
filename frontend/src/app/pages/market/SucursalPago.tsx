@@ -1,18 +1,17 @@
 /**
  * SucursalPago
  *
- * Pantalla "sucursal" que simula el portal del proveedor de pagos (PSE,
- * Nequi, tarjeta). Cada método tiene su propia UI para replicar lo que
- * el usuario vería en producción cuando el checkout lo redirige al
- * gateway.
+ * Pantalla que simula el **Web Checkout de Wompi** (la pasarela de
+ * Bancolombia que usa PalmApp). En producción el usuario sale del dominio
+ * PalmApp y aterriza en `checkout.wompi.co/...`, elige/completa el método
+ * seleccionado, y Wompi lo devuelve a `PagoResultado.tsx` por redirección
+ * y confirma la transacción al backend vía webhook.
+ *
+ * Aquí replicamos ese portal con branding Wompi + una variante por método
+ * (PSE con selector de banco, Nequi con push/QR, Tarjeta con formulario)
+ * para poder probar el flujo end-to-end sin credenciales reales.
  *
  * URL: /market/pagos/sucursal/:codigo?metodo=pse|nequi|tarjeta
- *
- * En la integración real esta pantalla desaparece: el usuario sale del
- * dominio de PalmApp hacia `pagos.pse.com.co`, `nequi.com.co`, etc., y
- * regresa al `PagoResultado.tsx` vía callback. Aquí solo la mantenemos
- * para que el flujo se pueda probar y demostrar de punta a punta sin
- * cuentas reales de proveedor.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
@@ -95,51 +94,96 @@ export default function SucursalPago() {
   const total = toNumber(pedido.total);
 
   return (
-    <div className="max-w-3xl mx-auto py-6">
-      {/* Header con branding y aviso de simulador. */}
-      <div className="mb-4 flex items-center justify-between">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate(`/market/pedidos/${codigo}`)}
-          className="gap-2"
-          disabled={procesando}
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Cancelar y volver
-        </Button>
-        <Badge className="bg-amber-500/20 text-amber-700 border-amber-500/30">
-          SIMULADOR
-        </Badge>
-      </div>
+    <div className="min-h-screen bg-gradient-to-b from-[#F5F9F8] to-white -mx-6 -my-8 sm:-mx-8 dark:from-slate-900 dark:to-slate-950">
+      <div className="max-w-3xl mx-auto px-6 py-6">
+        {/* Barra superior tipo Wompi. */}
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate(`/market/pedidos/${codigo}`)}
+            className="gap-2"
+            disabled={procesando}
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Cancelar y volver a PalmApp
+          </Button>
+          <Badge className="bg-amber-500/20 text-amber-700 border-amber-500/30">
+            SIMULADOR
+          </Badge>
+        </div>
 
-      {metodo === 'pse' && (
-        <SucursalPSE
-          pedido={pedido}
-          total={total}
-          referencia={referencia}
-          procesando={procesando}
-          onEjecutar={ejecutar}
-        />
-      )}
-      {metodo === 'nequi' && (
-        <SucursalNequi
-          pedido={pedido}
-          total={total}
-          referencia={referencia}
-          procesando={procesando}
-          onEjecutar={ejecutar}
-        />
-      )}
-      {metodo === 'tarjeta' && (
-        <SucursalTarjeta
-          pedido={pedido}
-          total={total}
-          referencia={referencia}
-          procesando={procesando}
-          onEjecutar={ejecutar}
-        />
-      )}
+        {/* Header Wompi. */}
+        <div className="mb-4 flex items-center justify-between rounded-t-xl bg-white dark:bg-slate-900 border border-b-0 border-border px-5 py-3">
+          <WompiLogo />
+          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <Lock className="h-3 w-3" />
+            Conexión segura
+          </div>
+        </div>
+
+        {metodo === 'pse' && (
+          <SucursalPSE
+            pedido={pedido}
+            total={total}
+            referencia={referencia}
+            procesando={procesando}
+            onEjecutar={ejecutar}
+          />
+        )}
+        {metodo === 'nequi' && (
+          <SucursalNequi
+            pedido={pedido}
+            total={total}
+            referencia={referencia}
+            procesando={procesando}
+            onEjecutar={ejecutar}
+          />
+        )}
+        {metodo === 'tarjeta' && (
+          <SucursalTarjeta
+            pedido={pedido}
+            total={total}
+            referencia={referencia}
+            procesando={procesando}
+            onEjecutar={ejecutar}
+          />
+        )}
+
+        {/* Footer Wompi con sellos de seguridad. */}
+        <div className="mt-4 rounded-b-xl bg-white dark:bg-slate-900 border border-t-0 border-border px-5 py-3 flex items-center justify-between flex-wrap gap-2 text-[10px] text-muted-foreground">
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1">
+              <Lock className="h-3 w-3" />
+              PCI DSS Nivel 1
+            </span>
+            <span>SSL 256-bit</span>
+            <span>3D Secure</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span>Procesa</span>
+            <WompiLogo compact />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Logo Wompi textual. Wompi usa un wordmark verde-turquesa. Aquí lo
+ * reproducimos con tipografía + acento de color; cuando llegue el widget
+ * real, este componente desaparece (el logo lo pinta Wompi.js).
+ */
+function WompiLogo({ compact = false }: { compact?: boolean }) {
+  return (
+    <div className="flex items-center gap-2">
+      <div className={`rounded-md bg-[#00D9AB] flex items-center justify-center ${compact ? 'h-5 w-5' : 'h-7 w-7'}`}>
+        <span className={`font-black text-white ${compact ? 'text-[10px]' : 'text-sm'}`}>w</span>
+      </div>
+      <span className={`font-bold tracking-tight text-foreground ${compact ? 'text-xs' : 'text-lg'}`}>
+        wompi
+      </span>
     </div>
   );
 }
@@ -161,15 +205,15 @@ function SucursalPSE({ total, referencia, procesando, onEjecutar }: VariantProps
   const [email, setEmail] = useState('');
 
   return (
-    <Card className="border-2 border-blue-500/30 bg-blue-500/5">
+    <Card className="rounded-none border-x border-y-0 border-border shadow-none bg-white dark:bg-slate-900">
       <CardContent className="p-6 space-y-5">
-        <div className="flex items-center gap-3 pb-3 border-b border-blue-500/20">
+        <div className="flex items-center gap-3 pb-4 border-b border-border">
           <div className="h-11 w-11 rounded-lg bg-blue-500/10 flex items-center justify-center">
             <Building2 className="h-6 w-6 text-blue-600" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-foreground">Pagos Seguros en Línea</h2>
-            <p className="text-xs text-muted-foreground">PSE · ACH Colombia</p>
+            <h2 className="text-lg font-bold text-foreground">Pagos Seguros en Línea</h2>
+            <p className="text-xs text-muted-foreground">PSE · vía Wompi</p>
           </div>
         </div>
 
@@ -260,15 +304,15 @@ function SucursalNequi({ total, referencia, procesando, onEjecutar }: VariantPro
   };
 
   return (
-    <Card className="border-2 border-pink-500/30 bg-pink-500/5">
+    <Card className="rounded-none border-x border-y-0 border-border shadow-none bg-white dark:bg-slate-900">
       <CardContent className="p-6 space-y-5">
-        <div className="flex items-center gap-3 pb-3 border-b border-pink-500/20">
+        <div className="flex items-center gap-3 pb-4 border-b border-border">
           <div className="h-11 w-11 rounded-lg bg-pink-500/10 flex items-center justify-center">
             <Smartphone className="h-6 w-6 text-pink-600" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-foreground">Nequi</h2>
-            <p className="text-xs text-muted-foreground">Paga con tu app en segundos</p>
+            <h2 className="text-lg font-bold text-foreground">Nequi</h2>
+            <p className="text-xs text-muted-foreground">Paga con tu app · vía Wompi</p>
           </div>
         </div>
 
@@ -353,15 +397,15 @@ function SucursalTarjeta({ total, referencia, procesando, onEjecutar }: VariantP
   const [cuotas, setCuotas] = useState('1');
 
   return (
-    <Card className="border-2 border-primary/30 bg-primary/5">
+    <Card className="rounded-none border-x border-y-0 border-border shadow-none bg-white dark:bg-slate-900">
       <CardContent className="p-6 space-y-5">
-        <div className="flex items-center gap-3 pb-3 border-b border-primary/20">
-          <div className="h-11 w-11 rounded-lg bg-primary/10 flex items-center justify-center">
-            <CreditCard className="h-6 w-6 text-primary" />
+        <div className="flex items-center gap-3 pb-4 border-b border-border">
+          <div className="h-11 w-11 rounded-lg bg-[#00D9AB]/10 flex items-center justify-center">
+            <CreditCard className="h-6 w-6 text-[#00A87F]" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-foreground">Pago con Tarjeta</h2>
-            <p className="text-xs text-muted-foreground">Visa · Mastercard · Amex · Diners</p>
+            <h2 className="text-lg font-bold text-foreground">Pago con Tarjeta</h2>
+            <p className="text-xs text-muted-foreground">Visa · Mastercard · Amex · vía Wompi</p>
           </div>
         </div>
 

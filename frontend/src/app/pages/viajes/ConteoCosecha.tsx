@@ -13,7 +13,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
 import {
-  ArrowLeft, ArrowRight, Check, Truck, Leaf, Plus, Trash2,
+  ArrowLeft, ArrowRight, Check, Truck, Leaf, Plus, Trash2, AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -22,6 +22,7 @@ import {
 } from '../../../api/viajes';
 import { selectsApi, operacionesApi } from '../../../api/operaciones';
 import { tercerosApi } from '../../../api/terceros';
+import { ajustesCosechaApi } from '../../../api/ajustesCosecha';
 
 const ETAPAS = [
   { numero: 1, nombre: 'Info. Viaje' },
@@ -76,6 +77,11 @@ export default function ConteoCosecha() {
   const [cosechaToDelete, setCosechaToDelete] = useState<CosechaConteo | null>(null);
   const [loading, setLoading] = useState(true);
   const [procesando, setProcesando] = useState(false);
+  /** Cosechas con gajos pendientes hace 3+ viajes. Alimenta el banner
+   *  de alerta arriba del wizard — misma info que ve el usuario en
+   *  `/viajes`, disponible también aquí porque durante el conteo es
+   *  donde se enfrenta a los pendientes que arrastran. */
+  const [ajustesPendientes, setAjustesPendientes] = useState<number>(0);
 
   // Wizard
   const [etapaActual, setEtapaActual] = useState(1);
@@ -95,6 +101,13 @@ export default function ConteoCosecha() {
       });
     }
   }, [cosechaEnEdicion]);
+
+  // Conteo de cosechas con pendientes de resolver (banner de alerta).
+  useEffect(() => {
+    ajustesCosechaApi.listar()
+      .then((r) => setAjustesPendientes(r.data.length))
+      .catch(() => setAjustesPendientes(0));
+  }, []);
 
   // Catálogos del API
   const [operaciones, setOperaciones] = useState<OperacionDisponible[]>([]);
@@ -506,7 +519,7 @@ export default function ConteoCosecha() {
   return (
     <div className="container mx-auto py-8 px-4 max-w-7xl">
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-6">
         <Button variant="ghost" size="sm" onClick={() => navigate('/viajes')} className="mb-4 gap-2">
           <ArrowLeft className="h-4 w-4" />
           Volver a Viajes
@@ -514,6 +527,7 @@ export default function ConteoCosecha() {
         <h1 className="text-3xl font-bold text-primary">Conteo de Cosecha</h1>
         <p className="text-muted-foreground mt-1">Registra las cosechas del viaje</p>
       </div>
+
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Columna izquierda: Wizard (2/3) */}
@@ -609,6 +623,29 @@ export default function ConteoCosecha() {
             {/* ETAPA 2: COSECHA */}
             {etapaActual === 2 && (
               <div className="space-y-4">
+                {/* Alerta compacta: solo aparece en el paso de cosecha, es
+                    donde el usuario decide si arrastra pendientes viejos o
+                    los resuelve como clavijo. */}
+                {ajustesPendientes > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/viajes/ajustes-cosecha')}
+                    className="w-full rounded-lg border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/15 transition-colors px-3 py-2 flex items-center gap-2.5 text-left"
+                  >
+                    <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                    <span className="flex-1 text-xs text-amber-800 dark:text-amber-200 min-w-0">
+                      <span className="font-semibold">{ajustesPendientes}</span>{' '}
+                      {ajustesPendientes === 1
+                        ? 'cosecha con gajos pendientes hace 3+ viajes.'
+                        : 'cosechas con gajos pendientes hace 3+ viajes.'}
+                      {' '}Podrían ser clavijos.
+                    </span>
+                    <span className="text-xs font-medium text-amber-700 dark:text-amber-300 whitespace-nowrap">
+                      Revisar →
+                    </span>
+                  </button>
+                )}
+
                 <div className="flex justify-end">
                   <Button onClick={agregarCosecha} className="gap-2" disabled={!!cosechaEnEdicion}>
                     <Plus className="h-4 w-4" />

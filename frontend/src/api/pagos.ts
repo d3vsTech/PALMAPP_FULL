@@ -2,16 +2,23 @@
  * api/pagos.ts
  *
  * Cliente de la pasarela de pagos del Market. **Todo el módulo está mockeado
- * mientras el backend construye los endpoints reales.** El objetivo es que
- * todo el flujo UI (Checkout, modal de pago, callback, badges de estado)
- * quede armado y navegable, y cuando el backend entregue las rutas solo se
- * reemplace el cuerpo de las funciones de `pagosApi` — la UI no se toca.
+ * mientras el backend construye los endpoints reales de la integración con
+ * Wompi.** El objetivo es que todo el flujo UI (Checkout, portal Wompi,
+ * callback, badges de estado) quede armado y navegable, y cuando el backend
+ * entregue las rutas solo se reemplace el cuerpo de las funciones de
+ * `pagosApi` — la UI no se toca.
+ *
+ * Sobre Wompi (Bancolombia):
+ *   - Docs: https://docs.wompi.co
+ *   - Modos de integración: Web Checkout (redirect), Widget JS, Botón, API.
+ *   - Métodos soportados: Tarjeta, PSE, Nequi, Bancolombia Transfer, Daviplata.
  *
  * Contrato eventual con backend (propuesta):
  *   POST /market/pedidos/{codigo}/iniciar-pago
- *     → { reference: string, public_key: string, amount_cents: number }
+ *     → { reference: string, public_key: string, amount_cents: number,
+ *         provider: 'WOMPI' }
  *   POST /market/pedidos/{codigo}/confirmar-pago
- *     body: { transaction_id: string, provider: 'WOMPI' | 'EPAYCO' | 'MOCK' }
+ *     body: { transaction_id: string, provider: 'WOMPI' }
  *     → { estado_pago: EstadoPago, provider_reference: string }
  *   GET  /market/pedidos/{codigo}/estado-pago
  *     → { estado_pago: EstadoPago, transaction_id?: string, fecha_pago?: string }
@@ -19,7 +26,7 @@
  * Mientras tanto, persistimos el estado del pago en `sessionStorage` bajo la
  * clave `palmapp:pagos:{codigo}`. Esto es solo para poder ver el estado
  * en `Pedidodetalle` y `Pedidos` durante la demo — se elimina al conectar
- * con el backend real.
+ * con el backend real (Wompi confirmará vía webhook al backend).
  */
 
 export type EstadoPago =
@@ -33,7 +40,8 @@ export interface IniciarPagoResponse {
   reference: string;
   public_key: string;
   amount_cents: number;
-  provider: 'WOMPI' | 'EPAYCO' | 'MOCK';
+  /** Pasarela seleccionada. La finca opera con Wompi (Bancolombia). */
+  provider: 'WOMPI';
 }
 
 export interface ConfirmarPagoResponse {
@@ -85,12 +93,14 @@ function delay(ms: number): Promise<void> {
 
 function generarReferencia(codigo: string): string {
   const rand = Math.random().toString(36).slice(2, 10).toUpperCase();
-  return `MOCK-${codigo}-${rand}`;
+  // Formato similar al de Wompi: prefijo dominio-orden + hash corto.
+  return `WOMPI-${codigo}-${rand}`;
 }
 
 function generarTransactionId(): string {
-  const rand = Math.random().toString(36).slice(2, 12).toUpperCase();
-  return `TXN-${rand}`;
+  const rand = Math.random().toString(36).slice(2, 14).toUpperCase();
+  // Wompi devuelve IDs tipo `01234-1234567890-12345`; simulamos algo parecido.
+  return `WMP-${rand}`;
 }
 
 export const pagosApi = {
@@ -106,13 +116,13 @@ export const pagosApi = {
       estado_pago: 'procesando',
       amount_cents: Math.round(totalPesos * 100),
       provider_reference: reference,
-      provider: 'MOCK',
+      provider: 'WOMPI',
     });
     return {
       reference,
-      public_key: 'pub_test_MOCK_PUBLIC_KEY',
+      public_key: 'pub_test_WOMPI_PUBLIC_KEY_STUB',
       amount_cents: Math.round(totalPesos * 100),
-      provider: 'MOCK',
+      provider: 'WOMPI',
     };
   },
 
@@ -136,7 +146,7 @@ export const pagosApi = {
       transaction_id: transactionId,
       provider_reference: providerRef,
       fecha_pago: fecha,
-      provider: 'MOCK',
+      provider: 'WOMPI',
       amount_cents: previo?.amount_cents ?? 0,
     });
     return {
