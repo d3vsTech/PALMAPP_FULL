@@ -56,9 +56,7 @@ import {
 } from '../../../api/nomina';
 import { operacionesApi } from '../../../api/operaciones';
 import type { PlanillaDetalle } from '../../../api/operaciones';
-import { lotesApi, sublotesApi } from '../../../api/plantacion';
 import type { ApiError } from '../../../api/client';
-import { cached } from '../../../api/cache';
 
 const MESES_NOMBRE: Record<number, string> = {
   1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril', 5: 'Mayo', 6: 'Junio',
@@ -139,8 +137,6 @@ export default function NominaDetalle() {
    * `resumen-trabajo` NO funciona con operarios (422 EMPLEADO_NO_VARIABLE).
    */
   const [planillasPeriodo, setPlanillasPeriodo] = useState<PlanillaDetalle[]>([]);
-  const [lotesNombre, setLotesNombre] = useState<Map<number, string>>(new Map());
-  const [sublotesNombre, setSublotesNombre] = useState<Map<number, string>>(new Map());
 
   // Nota: `tercerosLookup` se eliminó — solo era un fallback defensivo
   // para `nombre_display`, pero el backend siempre eager-loadea el tercero
@@ -217,27 +213,9 @@ export default function NominaDetalle() {
   useEffect(() => {
     cargar();
     cargarTerceros();
-    // Los 4 catálogos (operarios/terceros/lotes/sublotes) casi nunca
-    // cambian dentro de una liquidación: los cacheamos 5 min en memoria
-    // con dedup de in-flight. Sin esto, entrar y salir de la pantalla
-    // multiplicaba las 4 peticiones.
-    // (se eliminaron `operariosApi.selectGlobal()` y `tercerosApi.select()`
-    //  — los dos lookups nunca se leían: el backend ya eager-loadea el
-    //  tercero en `operario.tercero.razon_social` y en `acta.tercero_nombre`.)
-    cached('nomina:lotes-select', () => lotesApi.select(), 5 * 60_000)
-      .then((res) => {
-        const m = new Map<number, string>();
-        (res.data ?? []).forEach((l: any) => m.set(l.id, l.nombre));
-        setLotesNombre(m);
-      })
-      .catch(() => void 0);
-    cached('nomina:sublotes-select', () => sublotesApi.select(), 5 * 60_000)
-      .then((res) => {
-        const m = new Map<number, string>();
-        (res.data ?? []).forEach((s: any) => m.set(s.id, s.nombre));
-        setSublotesNombre(m);
-      })
-      .catch(() => void 0);
+    // Se eliminaron los pre-fetch de `/lotes/select` y `/sublotes/select`.
+    // Los nombres de lote/sublote ya vienen eager-loaded en cada cosecha
+    // y jornal de `GET /operaciones/{id}` (ver API_OPERACIONES.md §3.4).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nominaId]);
 
@@ -876,19 +854,24 @@ export default function NominaDetalle() {
     { key: 'finca', titulo: 'FINCA', color: 'gray' },
   ];
 
+  /**
+   * `GET /operaciones/{id}` siempre trae `lote` y `sublote` eager-loaded
+   * en cosechas y jornales (ver API_OPERACIONES.md §3.4). Confiamos en el
+   * embed; solo caemos a "Lote #N" si por algún motivo llegara nulo.
+   */
   const nombreLote = (id: number | null | undefined, embed?: any): string => {
     if (embed && typeof embed === 'object' && 'nombre' in embed && typeof (embed as any).nombre === 'string') {
       return (embed as any).nombre;
     }
     if (id == null) return '—';
-    return lotesNombre.get(id) ?? `Lote #${id}`;
+    return `Lote #${id}`;
   };
   const nombreSublote = (id: number | null | undefined, embed?: any): string => {
     if (embed && typeof embed === 'object' && 'nombre' in embed && typeof (embed as any).nombre === 'string') {
       return (embed as any).nombre;
     }
     if (id == null) return '—';
-    return sublotesNombre.get(id) ?? `#${id}`;
+    return `#${id}`;
   };
 
   const catDeJornal = (categoria: 'PALMA' | 'FINCA', tipo?: string | null): CategoriaLabor['key'] => {
@@ -950,8 +933,8 @@ export default function NominaDetalle() {
           (m) => m.operario_id != null && operariosSet.has(m.operario_id),
         );
         if (miembros.length === 0) return;
-        const loteName = nombreLote(c.lote_id);
-        const subloteName = nombreSublote(c.sublote_id);
+        const loteName = nombreLote(c.lote_id, c.lote);
+        const subloteName = nombreSublote(c.sublote_id, c.sublote);
         const row = getRow('cosecha', loteName, subloteName, true);
 
         const gajos = Number(c.gajos_reconteo ?? c.gajos_reportados ?? 0);

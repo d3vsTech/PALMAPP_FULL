@@ -131,6 +131,8 @@ const Carrito = lazyWithRetry(() => import('./pages/market/Carrito'));
 const Checkout = lazyWithRetry(() => import('./pages/market/Checkout'));
 const Pedidos = lazyWithRetry(() => import('./pages/market/Pedidos'));
 const PedidoDetalle = lazyWithRetry(() => import('./pages/market/Pedidodetalle'));
+const PagoResultado = lazyWithRetry(() => import('./pages/market/PagoResultado'));
+const SucursalPago = lazyWithRetry(() => import('./pages/market/SucursalPago'));
 
 // Usuarios
 const Usuarios = lazyWithRetry(() => import('./pages/usuarios/Usuarios'));
@@ -328,8 +330,10 @@ export const router = createBrowserRouter([
       { path: 'market/productos/:id',    element: L(<ProductoDetalle />) },
       { path: 'market/carrito',          element: L(<Carrito />) },
       { path: 'market/checkout',         element: L(<Checkout />) },
-      { path: 'market/pedidos',          element: L(<Pedidos />) },
-      { path: 'market/pedidos/:id',      element: L(<PedidoDetalle />) },
+      { path: 'market/pedidos',                element: L(<Pedidos />) },
+      { path: 'market/pedidos/:id',            element: L(<PedidoDetalle />) },
+      { path: 'market/pagos/sucursal/:codigo',  element: L(<SucursalPago />) },
+      { path: 'market/pagos/resultado/:codigo', element: L(<PagoResultado />) },
 
       { path: 'usuarios',              element: <ProtectedRoute permiso="usuarios.ver">{L(<Usuarios />)}</ProtectedRoute> },
       { path: 'usuarios/nuevo',        element: <ProtectedRoute permiso="usuarios.crear">{L(<UsuarioNuevoEditar />)}</ProtectedRoute> },

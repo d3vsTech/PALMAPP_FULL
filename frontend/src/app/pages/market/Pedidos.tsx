@@ -15,6 +15,7 @@ import {
   marketApi, toNumber,
   type Pedido, type EstadoPedido, type PedidoStats,
 } from '../../../api/market';
+import { pagosApi, ESTADO_PAGO_LABEL, type EstadoPago } from '../../../api/pagos';
 import { formatFecha } from '../../utils/fecha';
 import { useAutoRefresh } from '../../hooks/useAutoRefresh';
 
@@ -42,6 +43,11 @@ export default function Pedidos() {
   const [filtroEstado, setFiltroEstado] = useState<EstadoPedido | 'todos'>('todos');
   const [page, setPage] = useState(1);
   const [cargando, setCargando] = useState(true);
+  /** Estado de pago por código de pedido. Se llena tras cargar los pedidos
+   *  con una consulta paralela a `pagosApi.estadoPago()`. Cuando el backend
+   *  real entregue `estado_pago` como campo del pedido, este Map desaparece
+   *  y se lee directo de `pedido.estado_pago`. */
+  const [estadosPago, setEstadosPago] = useState<Map<string, EstadoPago>>(new Map());
 
   /**
    * Carga la página actual. Aceptamos `silent=true` para los refrescos en
@@ -54,10 +60,20 @@ export default function Pedidos() {
       estado: filtroEstado === 'todos' ? undefined : filtroEstado,
       page,
     })
-      .then((res) => {
+      .then(async (res) => {
         setPedidos(res.data);
         setStats(res.stats);
         setMeta(res.meta);
+        // Hidratar estado de pago de cada pedido en paralelo. Mock: lee de
+        // sessionStorage; backend real: 1 request por pedido (o mejor, un
+        // endpoint bulk `POST /market/pagos/estados` que ojalá agreguen).
+        const entries = await Promise.all(
+          res.data.map(async (p) => {
+            const r = await pagosApi.estadoPago(p.codigo);
+            return [p.codigo, r.estado_pago] as const;
+          }),
+        );
+        setEstadosPago(new Map(entries));
       })
       .catch((e: any) => {
         if (!silent) toast.error(e?.message ?? 'Error al cargar pedidos');
@@ -207,7 +223,7 @@ export default function Pedidos() {
                     <div className="flex-1 space-y-3">
                       <div className="flex items-start justify-between">
                         <div>
-                          <div className="flex items-center gap-3 mb-1">
+                          <div className="flex items-center gap-3 mb-1 flex-wrap">
                             <h3 className="text-lg font-bold text-foreground">{pedido.codigo}</h3>
                             <Badge
                               className={`${config.bgColor} ${config.color} ${config.borderColor} border`}
@@ -215,6 +231,19 @@ export default function Pedidos() {
                               <Icon className="h-3 w-3 mr-1" />
                               {config.label}
                             </Badge>
+                            {/* Badge de estado de pago — solo cuando ya se
+                                intentó cobrar (o sea, no aparece si el
+                                método fue contra-entrega/transferencia). */}
+                            {(() => {
+                              const ep = estadosPago.get(pedido.codigo);
+                              if (!ep || ep === 'no_iniciado') return null;
+                              const c = ESTADO_PAGO_LABEL[ep];
+                              return (
+                                <Badge variant="outline" className={c.color}>
+                                  {c.label}
+                                </Badge>
+                              );
+                            })()}
                           </div>
                           <p className="text-sm text-muted-foreground">
                             Fecha: {formatFecha(pedido.fecha_pedido)}

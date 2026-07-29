@@ -14,13 +14,26 @@ import {
 import { toast } from 'sonner';
 import { marketApi, toNumber, type Carrito as CarritoT } from '../../../api/market';
 import { getDepartamentos, getMunicipios } from '../../../api/plantacion';
+import { pagosApi } from '../../../api/pagos';
 
 const METODOS_PAGO = [
   { id: 'PSE', nombre: 'Pago con PSE', descripcion: 'Pago seguro desde tu cuenta bancaria' },
+  { id: 'Nequi', nombre: 'Nequi', descripcion: 'Confirma el pago desde la app Nequi de tu celular' },
   { id: 'Tarjeta de Crédito', nombre: 'Tarjeta de Crédito', descripcion: 'Visa, Mastercard, American Express' },
   { id: 'Pago Contra Entrega', nombre: 'Pago Contra Entrega', descripcion: 'Paga al recibir tu pedido' },
   { id: 'Transferencia Bancaria', nombre: 'Transferencia Bancaria', descripcion: 'Transferencia directa a cuenta del proveedor' },
 ];
+
+/**
+ * Mapeo de método a la "sucursal" (pantalla simulada del gateway) que
+ * corresponde. Los métodos que no requieren cobro en línea devuelven null.
+ */
+function slugSucursalPara(metodo: string): 'pse' | 'nequi' | 'tarjeta' | null {
+  if (metodo === 'PSE') return 'pse';
+  if (metodo === 'Nequi') return 'nequi';
+  if (metodo === 'Tarjeta de Crédito') return 'tarjeta';
+  return null;
+}
 
 export default function Checkout() {
   const navigate = useNavigate();
@@ -126,6 +139,22 @@ export default function Checkout() {
           ? `${total} pedidos creados (uno por proveedor)`
           : 'Pedido creado correctamente',
       );
+
+      // Si el método requiere pasarela y hay un pedido único, redirigimos
+      // a la "sucursal" del gateway (pantalla simulada por método: PSE con
+      // selector de banco, Nequi con QR, Tarjeta con formulario). Cada
+      // método tiene su propia UI, replicando el flujo real donde el
+      // usuario sale del checkout hacia el portal del proveedor de pago.
+      // Multi-pedido (varios proveedores) por ahora no dispara pago: cada
+      // pedido se paga por separado desde su detalle.
+      const primer = res.data?.[0];
+      const slug = slugSucursalPara(metodoPago);
+      if (primer && total === 1 && slug) {
+        await pagosApi.iniciarPago(primer.codigo, toNumber(primer.total));
+        navigate(`/market/pagos/sucursal/${primer.codigo}?metodo=${slug}`);
+        return;
+      }
+
       if (res.data && res.data.length === 1) {
         navigate(`/market/pedidos/${res.data[0].codigo}`);
       } else {
@@ -621,6 +650,7 @@ export default function Checkout() {
           </div>
         </div>
       </div>
+
     </div>
   );
 }

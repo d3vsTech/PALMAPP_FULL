@@ -201,6 +201,13 @@ export interface Cosecha {
   promedio_kg_gajo?: string | number | null;
   valor_total: string | number | null;
   cuadrilla: CosechaCuadrillaItem[];
+  /**
+   * Eager-load estándar de `GET /operaciones/{id}` (ver §3.4 doc). El
+   * backend siempre pobla `{id, nombre}`. Con esto el frontend no necesita
+   * pedir `/lotes/select` ni `/sublotes/select` para resolver nombres.
+   */
+  lote?: { id: number; nombre: string } | null;
+  sublote?: { id: number; nombre: string } | null;
 }
 
 export type CategoriaJornal = 'PALMA' | 'FINCA';
