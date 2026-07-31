@@ -103,9 +103,11 @@ export default function ConteoCosecha() {
   }, [cosechaEnEdicion]);
 
   // Conteo de cosechas con pendientes de resolver (banner de alerta).
+  // Endpoint específico y liviano — solo devuelve el número, no la lista
+  // completa (§13.6 de API_VIAJES).
   useEffect(() => {
-    ajustesCosechaApi.listar()
-      .then((r) => setAjustesPendientes(r.data.length))
+    ajustesCosechaApi.indicador()
+      .then((r) => setAjustesPendientes(r.data.count))
       .catch(() => setAjustesPendientes(0));
   }, []);
 

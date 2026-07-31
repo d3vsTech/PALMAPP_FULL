@@ -2,8 +2,7 @@
  * AjustesCosecha
  *
  * Pantalla dedicada a resolver cosechas con gajos pendientes tipo clavijo.
- * Se llega solo desde el banner de alerta en `/viajes` — sin item de
- * sidebar dedicado.
+ * Se llega solo desde el banner de alerta en el paso Cosecha del conteo.
  *
  * URL: /viajes/ajustes-cosecha
  */
@@ -17,13 +16,14 @@ import {
 } from 'lucide-react';
 import {
   ajustesCosechaApi,
-  type CosechaConAjustePendiente,
+  type CosechaConAjustePendiente, type IndicadorAgregado,
 } from '../../../api/ajustesCosecha';
 import { ModalAjustarCosecha } from '../../components/viajes/ModalAjustarCosecha';
 
 export default function AjustesCosecha() {
   const navigate = useNavigate();
   const [items, setItems] = useState<CosechaConAjustePendiente[]>([]);
+  const [indicador, setIndicador] = useState<IndicadorAgregado | null>(null);
   const [cargando, setCargando] = useState(true);
   const [seleccionada, setSeleccionada] = useState<CosechaConAjustePendiente | null>(null);
   const [modalAbierto, setModalAbierto] = useState(false);
@@ -32,7 +32,8 @@ export default function AjustesCosecha() {
     setCargando(true);
     try {
       const res = await ajustesCosechaApi.listar();
-      setItems(res.data);
+      setItems(res.data.cosechas);
+      setIndicador(res.data.indicador);
     } finally {
       setCargando(false);
     }
@@ -46,12 +47,6 @@ export default function AjustesCosecha() {
     setSeleccionada(c);
     setModalAbierto(true);
   };
-
-  const totalPendientes = items.reduce((s, c) => s + c.gajos_pendientes, 0);
-  const pesoEstimadoPerdido = items.reduce(
-    (s, c) => s + c.gajos_pendientes * (c.peso_promedio_gajo ?? 0),
-    0,
-  );
 
   return (
     <div className="space-y-6">
@@ -71,14 +66,16 @@ export default function AjustesCosecha() {
         </p>
       </div>
 
-      {/* Resumen. */}
+      {/* Resumen — viene consolidado del backend (§13.7). */}
       <div className="grid gap-4 sm:grid-cols-3">
         <Card className="border-border">
           <CardContent className="p-4">
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-xs text-muted-foreground">Cosechas afectadas</p>
-                <p className="text-2xl font-bold text-foreground mt-1">{items.length}</p>
+                <p className="text-2xl font-bold text-foreground mt-1">
+                  {indicador?.cosechas_afectadas ?? 0}
+                </p>
               </div>
               <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
                 <AlertTriangle className="h-5 w-5 text-amber-600" />
@@ -91,7 +88,9 @@ export default function AjustesCosecha() {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-xs text-muted-foreground">Gajos pendientes total</p>
-                <p className="text-2xl font-bold text-foreground mt-1">{totalPendientes}</p>
+                <p className="text-2xl font-bold text-foreground mt-1">
+                  {indicador?.gajos_pendientes_total ?? 0}
+                </p>
               </div>
               <div className="h-10 w-10 rounded-lg bg-orange-500/10 flex items-center justify-center">
                 <Sparkles className="h-5 w-5 text-orange-600" />
@@ -105,7 +104,9 @@ export default function AjustesCosecha() {
               <div>
                 <p className="text-xs text-muted-foreground">Peso estimado</p>
                 <p className="text-2xl font-bold text-foreground mt-1">
-                  {pesoEstimadoPerdido.toLocaleString('es-CO', { maximumFractionDigits: 0 })} kg
+                  {(indicador?.peso_estimado_total ?? 0).toLocaleString('es-CO', {
+                    maximumFractionDigits: 0,
+                  })} kg
                 </p>
               </div>
               <div className="h-10 w-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
@@ -142,7 +143,7 @@ export default function AjustesCosecha() {
       ) : (
         <div className="space-y-3">
           {items.map((c) => (
-            <Card key={c.cosecha_id} className="border-border">
+            <Card key={c.id} className="border-border">
               <CardContent className="p-4 sm:p-5">
                 <div className="flex flex-col lg:flex-row lg:items-center gap-4">
                   <div className="flex-1 space-y-2">
@@ -162,12 +163,12 @@ export default function AjustesCosecha() {
                     <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
                       <span className="flex items-center gap-1">
                         <Clock className="h-3 w-3" />
-                        Reportado el {new Date(c.planilla_fecha + 'T00:00:00').toLocaleDateString('es-CO')}
+                        Reportado el {new Date(c.operacion.fecha + 'T00:00:00').toLocaleDateString('es-CO')}
                       </span>
                       {c.reportado_por && (
                         <span className="flex items-center gap-1">
                           <User className="h-3 w-3" />
-                          {c.reportado_por}
+                          {c.reportado_por.name}
                         </span>
                       )}
                     </div>
@@ -175,7 +176,7 @@ export default function AjustesCosecha() {
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs bg-muted/30 rounded-lg p-2.5">
                       <Metric label="Reportados" valor={c.gajos_reportados} />
                       <Metric label="Reconteo" valor={c.gajos_reconteo ?? '—'} />
-                      <Metric label="En viajes" valor={c.gajos_asignados_total} />
+                      <Metric label="En viajes" valor={c.gajos_en_viajes} />
                       <Metric
                         label="Pendientes"
                         valor={c.gajos_pendientes}
@@ -190,9 +191,9 @@ export default function AjustesCosecha() {
                         Peso estimado perdido
                       </p>
                       <p className="text-lg font-bold text-orange-600">
-                        {(c.gajos_pendientes * (c.peso_promedio_gajo ?? 0)).toLocaleString('es-CO', {
-                          maximumFractionDigits: 0,
-                        })} kg
+                        {c.peso_estimado_perdido != null
+                          ? `${c.peso_estimado_perdido.toLocaleString('es-CO', { maximumFractionDigits: 0 })} kg`
+                          : '—'}
                       </p>
                     </div>
                     <Button onClick={() => abrirModal(c)} className="gap-2 whitespace-nowrap">

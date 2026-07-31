@@ -8,12 +8,11 @@
  *  - CLAVIJO:      nunca existieron. Baja `gajos_reconteo` al total real
  *                  asignado. La cosecha se cierra.
  *  - REASIGNADO:   los gajos sí existían; se trasladan a un viaje ya creado.
- *                  Muestra dropdown con los viajes en estado CREADO del tenant.
+ *                  Muestra dropdown alimentado por
+ *                  `GET /viajes/ajuste-gajos/{cosecha}/viajes-disponibles`.
  *  - MANTENIDO:    silencia la alerta N viajes más sin modificar cantidades.
  *
- * Todas las opciones piden motivo obligatorio (queda en `cosecha_ajuste.motivo`
- * para trazabilidad). La preservación histórica la garantiza el backend con
- * los snapshots que guarda en la tabla de ajustes.
+ * Todas las opciones piden motivo obligatorio (queda en el historial).
  */
 import { useEffect, useState } from 'react';
 import {
@@ -32,10 +31,9 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  ajustesCosechaApi, TIPO_AJUSTE_LABEL,
-  type CosechaConAjustePendiente, type TipoAjuste,
+  ajustesCosechaApi, ACCION_AJUSTE_LABEL, AjusteGajosErrorCodes,
+  type CosechaConAjustePendiente, type Accion, type ViajeDisponible,
 } from '../../../api/ajustesCosecha';
-import { viajesApi, type Viaje } from '../../../api/viajes';
 
 interface Props {
   open: boolean;
@@ -45,37 +43,34 @@ interface Props {
 }
 
 export function ModalAjustarCosecha({ open, cosecha, onClose, onAjustado }: Props) {
-  const [tipo, setTipo] = useState<TipoAjuste | null>(null);
+  const [accion, setAccion] = useState<Accion | null>(null);
   const [motivo, setMotivo] = useState('');
   const [viajeDestinoId, setViajeDestinoId] = useState('');
   const [silenciarPor, setSilenciarPor] = useState('2');
   const [enviando, setEnviando] = useState(false);
-  /** Viajes en estado CREADO donde se puede reasignar la cantidad.
-   *  Se carga en cuanto el usuario escoge "Reasignar a otro viaje". */
-  const [viajesDisponibles, setViajesDisponibles] = useState<Viaje[]>([]);
+  /** Viajes en estado CREADO donde se puede reasignar. Se carga solo
+   *  cuando el usuario escoge REASIGNADO — endpoint específico por cosecha
+   *  que ya excluye viajes donde la cosecha esté asignada. */
+  const [viajesDisponibles, setViajesDisponibles] = useState<ViajeDisponible[]>([]);
   const [cargandoViajes, setCargandoViajes] = useState(false);
 
   useEffect(() => {
-    if (tipo !== 'REASIGNADO' || viajesDisponibles.length > 0) return;
+    if (accion !== 'REASIGNADO' || !cosecha) return;
     setCargandoViajes(true);
-    viajesApi.listar({ per_page: 100 })
-      .then((res) => {
-        // Solo CREADO admite nuevos detalles. EN_VALIDACION y FINALIZADO
-        // rechazan `POST /viajes/{id}/detalles` con 409 VIAJE_NO_EDITABLE.
-        const editables = (res.data ?? []).filter((v: any) => v.estado === 'CREADO');
-        setViajesDisponibles(editables);
-      })
+    ajustesCosechaApi.viajesDisponibles(cosecha.id)
+      .then((res) => setViajesDisponibles(res.data ?? []))
       .catch(() => setViajesDisponibles([]))
       .finally(() => setCargandoViajes(false));
-  }, [tipo, viajesDisponibles.length]);
+  }, [accion, cosecha]);
 
   if (!cosecha) return null;
 
   const reset = () => {
-    setTipo(null);
+    setAccion(null);
     setMotivo('');
     setViajeDestinoId('');
     setSilenciarPor('2');
+    setViajesDisponibles([]);
   };
 
   const cerrar = () => {
@@ -85,34 +80,46 @@ export function ModalAjustarCosecha({ open, cosecha, onClose, onAjustado }: Prop
   };
 
   const confirmar = async () => {
-    if (!tipo) return;
+    if (!accion) return;
     if (motivo.trim().length < 5) {
       toast.error('Escribe un motivo mínimo de 5 caracteres');
       return;
     }
-    if (tipo === 'REASIGNADO' && !viajeDestinoId.trim()) {
+    if (accion === 'REASIGNADO' && !viajeDestinoId) {
       toast.error('Selecciona el viaje al que se reasignan los gajos');
       return;
     }
     setEnviando(true);
     try {
-      await ajustesCosechaApi.ajustar(cosecha.cosecha_id, {
-        tipo,
+      await ajustesCosechaApi.aplicar(cosecha.id, {
+        accion,
         motivo: motivo.trim(),
-        viaje_destino_id: tipo === 'REASIGNADO' ? Number(viajeDestinoId) : undefined,
-        silenciar_por_viajes: tipo === 'MANTENIDO' ? Number(silenciarPor) : undefined,
+        viaje_destino_id: accion === 'REASIGNADO' ? Number(viajeDestinoId) : undefined,
+        silenciar_viajes: accion === 'MANTENIDO' ? Number(silenciarPor) : undefined,
       });
       toast.success('Ajuste guardado correctamente');
       reset();
       onAjustado();
     } catch (err: any) {
-      toast.error(err?.message ?? 'No se pudo guardar el ajuste');
+      const code = err?.code ?? err?.error_code;
+      if (code === AjusteGajosErrorCodes.SIN_GAJOS_PENDIENTES) {
+        toast.error('La cosecha ya no tiene gajos pendientes.');
+        onAjustado();
+      } else if (code === AjusteGajosErrorCodes.VIAJE_NO_EDITABLE) {
+        toast.error('El viaje destino ya no está en estado CREADO.');
+      } else if (code === AjusteGajosErrorCodes.COSECHA_YA_ASIGNADA) {
+        toast.error('Esta cosecha ya está asignada al viaje destino.');
+      } else if (code === AjusteGajosErrorCodes.VIAJE_NOT_FOUND) {
+        toast.error('El viaje destino no existe.');
+      } else {
+        toast.error(err?.message ?? 'No se pudo guardar el ajuste');
+      }
     } finally {
       setEnviando(false);
     }
   };
 
-  const cfgSeleccionado = tipo ? TIPO_AJUSTE_LABEL[tipo] : null;
+  const cfgSeleccionado = accion ? ACCION_AJUSTE_LABEL[accion] : null;
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) cerrar(); }}>
@@ -126,7 +133,7 @@ export function ModalAjustarCosecha({ open, cosecha, onClose, onAjustado }: Prop
             {cosecha.lote?.nombre ?? 'Sin lote'}
             {cosecha.sublote?.nombre ? ` · ${cosecha.sublote.nombre}` : ''}
             {' · '}
-            Planilla {new Date(cosecha.planilla_fecha + 'T00:00:00').toLocaleDateString('es-CO')}
+            Operación {new Date(cosecha.operacion.fecha + 'T00:00:00').toLocaleDateString('es-CO')}
           </DialogDescription>
         </DialogHeader>
 
@@ -142,7 +149,7 @@ export function ModalAjustarCosecha({ open, cosecha, onClose, onAjustado }: Prop
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Asignados a viajes</span>
-            <span className="font-mono">{cosecha.gajos_asignados_total}</span>
+            <span className="font-mono">{cosecha.gajos_en_viajes}</span>
           </div>
           <div className="flex justify-between border-t border-border pt-1.5">
             <span className="font-medium text-amber-600">Pendientes sin resolver</span>
@@ -161,23 +168,23 @@ export function ModalAjustarCosecha({ open, cosecha, onClose, onAjustado }: Prop
           <Label className="text-xs">¿Qué hacer con los {cosecha.gajos_pendientes} gajos pendientes?</Label>
           <div className="grid gap-2">
             <OpcionAccion
-              activo={tipo === 'CLAVIJO'}
-              onClick={() => setTipo('CLAVIJO')}
+              activo={accion === 'CLAVIJO'}
+              onClick={() => setAccion('CLAVIJO')}
               icon={GhostIcon}
               titulo="Marcar como clavijo"
               descripcion="Nunca existieron. Diferencia de conteo del trabajador."
               destructivo
             />
             <OpcionAccion
-              activo={tipo === 'REASIGNADO'}
-              onClick={() => setTipo('REASIGNADO')}
+              activo={accion === 'REASIGNADO'}
+              onClick={() => setAccion('REASIGNADO')}
               icon={ArrowRightLeft}
               titulo="Reasignar a otro viaje"
               descripcion="Sí existían; olvidé asignarlos a un viaje anterior."
             />
             <OpcionAccion
-              activo={tipo === 'MANTENIDO'}
-              onClick={() => setTipo('MANTENIDO')}
+              activo={accion === 'MANTENIDO'}
+              onClick={() => setAccion('MANTENIDO')}
               icon={PauseCircle}
               titulo="Mantener pendientes"
               descripcion="Silenciar alerta unos viajes más sin cambiar nada."
@@ -185,8 +192,7 @@ export function ModalAjustarCosecha({ open, cosecha, onClose, onAjustado }: Prop
           </div>
         </div>
 
-        {/* Campos condicionales según la opción. */}
-        {tipo === 'REASIGNADO' && (
+        {accion === 'REASIGNADO' && (
           <div className="space-y-1.5">
             <Label className="text-xs">Viaje destino</Label>
             {cargandoViajes ? (
@@ -196,8 +202,7 @@ export function ModalAjustarCosecha({ open, cosecha, onClose, onAjustado }: Prop
               </div>
             ) : viajesDisponibles.length === 0 ? (
               <p className="text-xs text-muted-foreground py-2">
-                No hay viajes en estado CREADO donde reasignar. Solo los viajes
-                aún editables pueden recibir la reasignación.
+                No hay viajes en estado CREADO donde reasignar esta cosecha.
               </p>
             ) : (
               <Select
@@ -209,9 +214,7 @@ export function ModalAjustarCosecha({ open, cosecha, onClose, onAjustado }: Prop
                   <SelectValue placeholder="Selecciona el viaje" />
                 </SelectTrigger>
                 <SelectContent>
-                  {viajesDisponibles.map((v: any) => {
-                    const rem = v.remision ?? v.id;
-                    const placa = v.placa_vehiculo ?? '—';
+                  {viajesDisponibles.map((v) => {
                     const fecha = v.fecha_viaje
                       ? new Date(v.fecha_viaje + 'T00:00:00').toLocaleDateString('es-CO', {
                           day: '2-digit', month: 'short',
@@ -221,9 +224,9 @@ export function ModalAjustarCosecha({ open, cosecha, onClose, onAjustado }: Prop
                       <SelectItem key={v.id} value={String(v.id)}>
                         <span className="flex items-center gap-2">
                           <Truck className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span className="font-mono">{rem}</span>
+                          <span className="font-mono">{v.remision}</span>
                           <span className="text-muted-foreground">·</span>
-                          <span>{placa}</span>
+                          <span>{v.placa_vehiculo}</span>
                           {fecha && (
                             <>
                               <span className="text-muted-foreground">·</span>
@@ -243,7 +246,7 @@ export function ModalAjustarCosecha({ open, cosecha, onClose, onAjustado }: Prop
           </div>
         )}
 
-        {tipo === 'MANTENIDO' && (
+        {accion === 'MANTENIDO' && (
           <div className="space-y-1.5">
             <Label className="text-xs">Silenciar por N viajes</Label>
             <Input
@@ -251,7 +254,7 @@ export function ModalAjustarCosecha({ open, cosecha, onClose, onAjustado }: Prop
               value={silenciarPor}
               onChange={(e) => setSilenciarPor(e.target.value)}
               min={1}
-              max={10}
+              max={20}
               disabled={enviando}
               className="w-24 font-mono"
             />
@@ -266,6 +269,7 @@ export function ModalAjustarCosecha({ open, cosecha, onClose, onAjustado }: Prop
             placeholder="Explica por qué tomas esta decisión. Queda registrado en el historial."
             rows={3}
             disabled={enviando}
+            maxLength={500}
           />
         </div>
 
@@ -284,7 +288,7 @@ export function ModalAjustarCosecha({ open, cosecha, onClose, onAjustado }: Prop
           <Button variant="outline" onClick={cerrar} disabled={enviando}>
             Cancelar
           </Button>
-          <Button onClick={confirmar} disabled={!tipo || enviando} className="gap-2">
+          <Button onClick={confirmar} disabled={!accion || enviando} className="gap-2">
             {enviando && <Loader2 className="h-4 w-4 animate-spin" />}
             Guardar ajuste
           </Button>
