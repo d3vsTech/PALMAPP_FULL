@@ -356,10 +356,10 @@ export default function ConteoCosecha() {
 
   const guardarCosecha = async () => {
     if (!viaje || !cosechaEnEdicion) return;
-    // 0 es válido (la cuadrilla reportó gajos que no llegaron al viaje).
-    // Solo rechazamos negativos o null/undefined.
-    if (cosechaEnEdicion.gajosEnViaje == null || cosechaEnEdicion.gajosEnViaje < 0) {
-      toast.error('Ingresa los gajos en viaje');
+    // `gajos_en_viaje` obligatorio y > 0. Si la cosecha no lleva gajos
+    // en este camión, no se agrega al viaje (sale por el módulo de ajustes).
+    if (cosechaEnEdicion.gajosEnViaje == null || cosechaEnEdicion.gajosEnViaje <= 0) {
+      toast.error('Ingresa la cantidad de gajos en viaje (mayor a 0)');
       return;
     }
     setProcesando(true);
@@ -388,37 +388,23 @@ export default function ConteoCosecha() {
         setProcesando(false);
         return;
       }
-      // IMPORTANTE: manejo del PUT /reconteo (§5.5 doc API_VIAJES).
+      // Siempre llamamos PUT /reconteo tras POST /detalles porque §5.4 solo
+      // sincroniza `registro_cosecha.gajos_reconteo` — no refresca
+      // `viajes.cantidad_gajos_total`. Ese refresh vive únicamente en §5.5
+      // paso 6. Sin este PUT, el listado de viajes mostraba 0 gajos.
       //
-      // El PUT actualiza `registro_cosecha.gajos_reconteo = SUM(splits)`,
-      // lo que hace que `gajos_pendientes_enviar = COALESCE(reconteo, reportados)
-      // − SUM(gajos_en_viaje)` colapse a 0 (matemáticamente siempre).
-      //
-      // Por eso solo lo llamamos cuando corresponde consolidar el reconteo:
-      //  - Estamos EDITANDO un detalle existente (actualizar el valor).
-      //  - Hay peso a confirmar (solo persiste vía reconteo).
-      //  - Este split cierra la cosecha (gajos disponibles = gajos en viaje).
-      //    Este es el "último" viaje que envía gajos de esa cosecha, así que
-      //    el reconteo debe consolidarse para que la nómina lea el total
-      //    verificado real (no gajos_reportados).
+      // Los "gajos pendientes" (base del módulo §13 de clavijos) se calculan
+      // como `gajos_reportados − gajos_reconteo`, no dependen de omitir el PUT.
       const hayPeso = cosechaEnEdicion.pesoKg > 0;
-      const disponiblesReales =
-        cosechaEnEdicion.gajosPendientesPorEnviar
-        + cosechaEnEdicion.gajosEnViaje;
-      const cierraCosecha =
-        cosechaEnEdicion.gajosEnViaje > 0
-        && cosechaEnEdicion.gajosEnViaje >= disponiblesReales;
-      if (!esNuevo || hayPeso || cierraCosecha) {
-        const res: any = await viajesApi.hidratarReconteo(viaje.id, detalleId, {
-          gajos_en_viaje: cosechaEnEdicion.gajosEnViaje,
-          peso_confirmado: hayPeso ? cosechaEnEdicion.pesoKg : undefined,
-        });
-        // El backend v2 (§5.5): puede devolver `advertencia` cuando el
-        // reconteo supera `gajos_reportados`. No bloquea, solo informa.
-        const adv = res?.data?.advertencia ?? res?.advertencia;
-        if (adv) {
-          toast.warning(typeof adv === 'string' ? adv : 'El reconteo excede lo reportado', { duration: 6000 });
-        }
+      const res: any = await viajesApi.hidratarReconteo(viaje.id, detalleId, {
+        gajos_en_viaje: cosechaEnEdicion.gajosEnViaje,
+        peso_confirmado: hayPeso ? cosechaEnEdicion.pesoKg : undefined,
+      });
+      // §5.5: puede devolver `advertencia` cuando el reconteo supera
+      // `gajos_reportados`. No bloquea, solo informa.
+      const adv = res?.data?.advertencia ?? res?.advertencia;
+      if (adv) {
+        toast.warning(typeof adv === 'string' ? adv : 'El reconteo excede lo reportado', { duration: 6000 });
       }
       toast.success('Cosecha guardada');
       setCosechaEnEdicion(null);
@@ -463,9 +449,9 @@ export default function ConteoCosecha() {
     if (!viaje) { return; }
     if (cosechas.length === 0) { toast.error('Agrega al menos una cosecha'); return; }
     const pendientes = cosechas.filter(c => !c.aprobado);
-    // El 0 es válido — solo rechazamos negativos o sin registrar.
-    if (pendientes.some(c => c.gajosEnViaje == null || c.gajosEnViaje < 0)) {
-      toast.error('Todas las cosechas deben tener gajos en viaje antes de aprobar');
+    // `gajos_en_viaje` obligatorio y > 0 para todas las cosechas del viaje.
+    if (pendientes.some(c => c.gajosEnViaje == null || c.gajosEnViaje <= 0)) {
+      toast.error('Todas las cosechas deben tener gajos en viaje mayores a 0');
       return;
     }
     setProcesando(true);
@@ -922,7 +908,11 @@ export default function ConteoCosecha() {
                         <Button variant="outline" onClick={cancelarCosecha} disabled={procesando}>
                           Cancelar
                         </Button>
-                        <Button onClick={guardarCosecha} disabled={procesando} className="gap-2">
+                        <Button
+                          onClick={guardarCosecha}
+                          disabled={procesando || !cosechaEnEdicion.gajosEnViaje || cosechaEnEdicion.gajosEnViaje <= 0}
+                          className="gap-2"
+                        >
                           <Check className="h-4 w-4" />
                           {procesando ? 'Guardando...' : 'Guardar'}
                         </Button>
