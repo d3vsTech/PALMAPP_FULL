@@ -2,36 +2,25 @@
  * ModalAjustarCosecha
  *
  * Modal para resolver qué hacer con los gajos pendientes tipo "clavijo"
- * de una cosecha (gajos que se reportaron pero no existían físicamente).
- * Ofrece 3 acciones:
+ * de una cosecha. Diseño alineado con V.20/PalmApp; la conexión al backend
+ * (§13 API_VIAJES.md) se mantiene sin cambios.
  *
- *  - CLAVIJO:      nunca existieron. Baja `gajos_reconteo` al total real
- *                  asignado. La cosecha se cierra.
- *  - REASIGNADO:   los gajos sí existían; se trasladan a un viaje ya creado.
- *                  Muestra dropdown alimentado por
- *                  `GET /viajes/ajuste-gajos/{cosecha}/viajes-disponibles`.
- *  - MANTENIDO:    silencia la alerta N viajes más sin modificar cantidades.
- *
- * Todas las opciones piden motivo obligatorio (queda en el historial).
+ * 3 acciones:
+ *  - CLAVIJO      → nunca existieron. Baja `gajos_reconteo`.
+ *  - REASIGNADO   → sí existían; se agregan a un viaje en CREADO.
+ *  - MANTENIDO    → silencia la alerta N viajes más.
  */
 import { useEffect, useState } from 'react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '../ui/dialog';
 import { Button } from '../ui/button';
-import { Textarea } from '../ui/textarea';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
-import { Badge } from '../ui/badge';
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '../ui/select';
-import {
-  AlertTriangle, GhostIcon, ArrowRightLeft, PauseCircle, Loader2, Truck,
+  TriangleAlert, Ghost, ArrowLeftRight, PauseCircle, ChevronDown, Truck, Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  ajustesCosechaApi, ACCION_AJUSTE_LABEL, AjusteGajosErrorCodes,
+  ajustesCosechaApi, AjusteGajosErrorCodes,
   type CosechaConAjustePendiente, type Accion, type ViajeDisponible,
 } from '../../../api/ajustesCosecha';
 
@@ -42,34 +31,61 @@ interface Props {
   onAjustado: () => void;
 }
 
+const OPCIONES = [
+  {
+    id: 'CLAVIJO' as Accion,
+    icon: Ghost,
+    iconBg: 'bg-sky-100',
+    iconColor: 'text-sky-500',
+    titulo: 'Marcar como clavijo',
+    descripcion: 'Nunca existieron. Diferencia de conteo del trabajador.',
+    borderSeleccionado: 'border-sky-400 bg-sky-50',
+  },
+  {
+    id: 'REASIGNADO' as Accion,
+    icon: ArrowLeftRight,
+    iconBg: 'bg-primary/10',
+    iconColor: 'text-primary',
+    titulo: 'Reasignar a otro viaje',
+    descripcion: 'Sí existían; olvidé asignarlos a un viaje anterior.',
+    borderSeleccionado: 'border-primary bg-primary/5',
+  },
+  {
+    id: 'MANTENIDO' as Accion,
+    icon: PauseCircle,
+    iconBg: 'bg-orange-100',
+    iconColor: 'text-orange-500',
+    titulo: 'Mantener pendientes',
+    descripcion: 'Silenciar alerta unos viajes más sin cambiar nada.',
+    borderSeleccionado: 'border-orange-400 bg-orange-50',
+  },
+];
+
 export function ModalAjustarCosecha({ open, cosecha, onClose, onAjustado }: Props) {
-  const [accion, setAccion] = useState<Accion | null>(null);
+  const [opcion, setOpcion] = useState<Accion | null>(null);
   const [motivo, setMotivo] = useState('');
   const [viajeDestinoId, setViajeDestinoId] = useState('');
-  const [silenciarPor, setSilenciarPor] = useState('2');
+  const [silenciarViajes, setSilenciarViajes] = useState(2);
   const [enviando, setEnviando] = useState(false);
-  /** Viajes en estado CREADO donde se puede reasignar. Se carga solo
-   *  cuando el usuario escoge REASIGNADO — endpoint específico por cosecha
-   *  que ya excluye viajes donde la cosecha esté asignada. */
   const [viajesDisponibles, setViajesDisponibles] = useState<ViajeDisponible[]>([]);
   const [cargandoViajes, setCargandoViajes] = useState(false);
 
   useEffect(() => {
-    if (accion !== 'REASIGNADO' || !cosecha) return;
+    if (opcion !== 'REASIGNADO' || !cosecha) return;
     setCargandoViajes(true);
     ajustesCosechaApi.viajesDisponibles(cosecha.id)
       .then((res) => setViajesDisponibles(res.data ?? []))
       .catch(() => setViajesDisponibles([]))
       .finally(() => setCargandoViajes(false));
-  }, [accion, cosecha]);
+  }, [opcion, cosecha]);
 
   if (!cosecha) return null;
 
   const reset = () => {
-    setAccion(null);
+    setOpcion(null);
     setMotivo('');
     setViajeDestinoId('');
-    setSilenciarPor('2');
+    setSilenciarViajes(2);
     setViajesDisponibles([]);
   };
 
@@ -79,23 +95,23 @@ export function ModalAjustarCosecha({ open, cosecha, onClose, onAjustado }: Prop
     onClose();
   };
 
-  const confirmar = async () => {
-    if (!accion) return;
+  const guardarAjuste = async () => {
+    if (!opcion) return;
     if (motivo.trim().length < 5) {
       toast.error('Escribe un motivo mínimo de 5 caracteres');
       return;
     }
-    if (accion === 'REASIGNADO' && !viajeDestinoId) {
+    if (opcion === 'REASIGNADO' && !viajeDestinoId) {
       toast.error('Selecciona el viaje al que se reasignan los gajos');
       return;
     }
     setEnviando(true);
     try {
       await ajustesCosechaApi.aplicar(cosecha.id, {
-        accion,
+        accion: opcion,
         motivo: motivo.trim(),
-        viaje_destino_id: accion === 'REASIGNADO' ? Number(viajeDestinoId) : undefined,
-        silenciar_viajes: accion === 'MANTENIDO' ? Number(silenciarPor) : undefined,
+        viaje_destino_id: opcion === 'REASIGNADO' ? Number(viajeDestinoId) : undefined,
+        silenciar_viajes: opcion === 'MANTENIDO' ? silenciarViajes : undefined,
       });
       toast.success('Ajuste guardado correctamente');
       reset();
@@ -119,215 +135,202 @@ export function ModalAjustarCosecha({ open, cosecha, onClose, onAjustado }: Prop
     }
   };
 
-  const cfgSeleccionado = accion ? ACCION_AJUSTE_LABEL[accion] : null;
+  const fechaReporte = new Date(cosecha.operacion.fecha + 'T00:00:00').toLocaleDateString('es-CO');
+  const viajeSeleccionado = viajesDisponibles.find((v) => String(v.id) === viajeDestinoId);
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) cerrar(); }}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-none w-[680px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-amber-600" />
+          <DialogTitle className="flex items-center gap-2 text-primary text-xl">
+            <TriangleAlert className="h-5 w-5 text-orange-500 shrink-0" />
             Ajustar cosecha con gajos pendientes
           </DialogTitle>
-          <DialogDescription className="text-xs">
+          <DialogDescription>
             {cosecha.lote?.nombre ?? 'Sin lote'}
             {cosecha.sublote?.nombre ? ` · ${cosecha.sublote.nombre}` : ''}
-            {' · '}
-            Operación {new Date(cosecha.operacion.fecha + 'T00:00:00').toLocaleDateString('es-CO')}
+            {' · '}Operación {fechaReporte}
           </DialogDescription>
         </DialogHeader>
 
-        {/* Resumen de la cosecha. */}
-        <div className="rounded-lg bg-muted/40 border border-border p-3 space-y-1.5 text-xs">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Reportados</span>
-            <span className="font-mono">{cosecha.gajos_reportados}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Reconteo actual</span>
-            <span className="font-mono">{cosecha.gajos_reconteo ?? '—'}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Asignados a viajes</span>
-            <span className="font-mono">{cosecha.gajos_en_viajes}</span>
-          </div>
-          <div className="flex justify-between border-t border-border pt-1.5">
-            <span className="font-medium text-amber-600">Pendientes sin resolver</span>
-            <span className="font-mono font-bold text-amber-600">
-              {cosecha.gajos_pendientes}
-            </span>
-          </div>
-          <div className="flex justify-between text-muted-foreground">
-            <span>Viajes transcurridos</span>
-            <span>{cosecha.viajes_transcurridos}</span>
-          </div>
-        </div>
-
-        {/* Selector de acción. */}
-        <div className="space-y-2">
-          <Label className="text-xs">¿Qué hacer con los {cosecha.gajos_pendientes} gajos pendientes?</Label>
-          <div className="grid gap-2">
-            <OpcionAccion
-              activo={accion === 'CLAVIJO'}
-              onClick={() => setAccion('CLAVIJO')}
-              icon={GhostIcon}
-              titulo="Marcar como clavijo"
-              descripcion="Nunca existieron. Diferencia de conteo del trabajador."
-              destructivo
-            />
-            <OpcionAccion
-              activo={accion === 'REASIGNADO'}
-              onClick={() => setAccion('REASIGNADO')}
-              icon={ArrowRightLeft}
-              titulo="Reasignar a otro viaje"
-              descripcion="Sí existían; olvidé asignarlos a un viaje anterior."
-            />
-            <OpcionAccion
-              activo={accion === 'MANTENIDO'}
-              onClick={() => setAccion('MANTENIDO')}
-              icon={PauseCircle}
-              titulo="Mantener pendientes"
-              descripcion="Silenciar alerta unos viajes más sin cambiar nada."
-            />
-          </div>
-        </div>
-
-        {accion === 'REASIGNADO' && (
-          <div className="space-y-1.5">
-            <Label className="text-xs">Viaje destino</Label>
-            {cargandoViajes ? (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Cargando viajes disponibles...
-              </div>
-            ) : viajesDisponibles.length === 0 ? (
-              <p className="text-xs text-muted-foreground py-2">
-                No hay viajes en estado CREADO donde reasignar esta cosecha.
-              </p>
-            ) : (
-              <Select
-                value={viajeDestinoId}
-                onValueChange={setViajeDestinoId}
-                disabled={enviando}
+        <div className="space-y-5 mt-2">
+          {/* Tabla de info */}
+          <div className="rounded-xl border border-border overflow-hidden">
+            {[
+              { label: 'Reportados', valor: cosecha.gajos_reportados, naranja: false },
+              { label: 'Reconteo actual', valor: cosecha.gajos_reconteo ?? '–', naranja: false },
+              { label: 'Asignados a viajes', valor: cosecha.gajos_en_viajes, naranja: false },
+              { label: 'Pendientes sin resolver', valor: cosecha.gajos_pendientes, naranja: true },
+              { label: 'Viajes transcurridos', valor: cosecha.viajes_transcurridos, naranja: false },
+            ].map((fila, i) => (
+              <div
+                key={i}
+                className={`flex items-center justify-between px-4 py-2.5 ${i < 4 ? 'border-b border-border' : ''}`}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona el viaje" />
-                </SelectTrigger>
-                <SelectContent>
-                  {viajesDisponibles.map((v) => {
-                    const fecha = v.fecha_viaje
-                      ? new Date(v.fecha_viaje + 'T00:00:00').toLocaleDateString('es-CO', {
-                          day: '2-digit', month: 'short',
-                        })
-                      : '';
-                    return (
-                      <SelectItem key={v.id} value={String(v.id)}>
-                        <span className="flex items-center gap-2">
-                          <Truck className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span className="font-mono">{v.remision}</span>
-                          <span className="text-muted-foreground">·</span>
-                          <span>{v.placa_vehiculo}</span>
-                          {fecha && (
-                            <>
-                              <span className="text-muted-foreground">·</span>
-                              <span className="text-muted-foreground">{fecha}</span>
-                            </>
-                          )}
-                        </span>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            )}
-            <p className="text-[10px] text-muted-foreground">
-              Los {cosecha.gajos_pendientes} gajos se agregarán como split parcial al viaje seleccionado.
-            </p>
+                <span className={`text-sm ${fila.naranja ? 'font-semibold text-orange-500' : 'text-muted-foreground'}`}>
+                  {fila.label}
+                </span>
+                <span className={`text-sm font-bold ${fila.naranja ? 'text-orange-500' : 'text-foreground'}`}>
+                  {fila.valor}
+                </span>
+              </div>
+            ))}
           </div>
-        )}
 
-        {accion === 'MANTENIDO' && (
-          <div className="space-y-1.5">
-            <Label className="text-xs">Silenciar por N viajes</Label>
-            <Input
-              type="number"
-              value={silenciarPor}
-              onChange={(e) => setSilenciarPor(e.target.value)}
-              min={1}
-              max={20}
+          {/* Pregunta */}
+          <div>
+            <p className="font-semibold text-foreground mb-3">
+              ¿Qué hacer con los {cosecha.gajos_pendientes} gajos pendientes?
+            </p>
+            <div className="space-y-2">
+              {OPCIONES.map((op) => {
+                const Icon = op.icon;
+                const seleccionada = opcion === op.id;
+                return (
+                  <button
+                    key={op.id}
+                    onClick={() => setOpcion(op.id)}
+                    className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 text-left transition-all duration-150 ${
+                      seleccionada
+                        ? op.borderSeleccionado
+                        : 'border-border bg-card hover:border-primary/40 hover:bg-muted/50'
+                    }`}
+                  >
+                    <div className={`h-10 w-10 rounded-xl ${op.iconBg} flex items-center justify-center shrink-0`}>
+                      <Icon className={`h-5 w-5 ${op.iconColor}`} />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm text-foreground">{op.titulo}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{op.descripcion}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Campo extra para REASIGNADO */}
+          {opcion === 'REASIGNADO' && (
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-foreground">Viaje destino</label>
+              {cargandoViajes ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Cargando viajes disponibles...
+                </div>
+              ) : viajesDisponibles.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">
+                  No hay viajes en estado CREADO donde reasignar esta cosecha.
+                </p>
+              ) : (
+                <>
+                  <div className="relative">
+                    <select
+                      value={viajeDestinoId}
+                      onChange={(e) => setViajeDestinoId(e.target.value)}
+                      disabled={enviando}
+                      className="w-full appearance-none rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors pr-10"
+                    >
+                      <option value="">Selecciona el viaje</option>
+                      {viajesDisponibles.map((v) => (
+                        <option key={v.id} value={String(v.id)}>
+                          {v.remision} · {v.placa_vehiculo} · {new Date(v.fecha_viaje + 'T00:00:00').toLocaleDateString('es-CO')}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  </div>
+                  {viajeSeleccionado && (
+                    <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-accent text-white text-sm font-semibold w-full">
+                      <Truck className="h-4 w-4 shrink-0" />
+                      <span>{viajeSeleccionado.remision}</span>
+                      <span className="opacity-70">·</span>
+                      <span>{viajeSeleccionado.placa_vehiculo}</span>
+                      <span className="opacity-70">·</span>
+                      <span>
+                        {new Date(viajeSeleccionado.fecha_viaje + 'T00:00:00').toLocaleDateString('es-CO')}
+                      </span>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Campo extra para MANTENIDO */}
+          {opcion === 'MANTENIDO' && (
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-foreground">Silenciar por N viajes</label>
+              <input
+                type="number"
+                min={1}
+                max={20}
+                value={silenciarViajes}
+                onChange={(e) => setSilenciarViajes(Math.max(1, parseInt(e.target.value) || 1))}
+                disabled={enviando}
+                className="w-24 rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
+              />
+            </div>
+          )}
+
+          {/* Motivo */}
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-foreground">Motivo del ajuste</label>
+            <textarea
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              placeholder="Explica por qué tomas esta decisión. Queda registrado en el historial."
+              rows={3}
+              maxLength={500}
               disabled={enviando}
-              className="w-24 font-mono"
+              className="w-full rounded-xl border border-border bg-card px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
             />
           </div>
-        )}
 
-        <div className="space-y-1.5">
-          <Label className="text-xs">Motivo del ajuste</Label>
-          <Textarea
-            value={motivo}
-            onChange={(e) => setMotivo(e.target.value)}
-            placeholder="Explica por qué tomas esta decisión. Queda registrado en el historial."
-            rows={3}
-            disabled={enviando}
-            maxLength={500}
-          />
-        </div>
-
-        {cfgSeleccionado && (
-          <div className={`rounded-lg p-2.5 text-[11px] border ${cfgSeleccionado.color}`}>
-            <div className="flex items-center gap-1.5 mb-0.5">
-              <Badge variant="outline" className={cfgSeleccionado.color}>
-                {cfgSeleccionado.label}
-              </Badge>
+          {/* Caja informativa según opción */}
+          {opcion === 'CLAVIJO' && (
+            <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 space-y-1.5">
+              <span className="inline-block text-xs font-semibold px-2.5 py-0.5 rounded-full bg-sky-100 text-sky-600 border border-sky-300">
+                Clavijo
+              </span>
+              <p className="text-sm text-foreground font-medium">
+                Los gajos nunca existieron (clavijos). Se baja el reconteo al total real asignado.
+              </p>
             </div>
-            <p className="opacity-90">{cfgSeleccionado.descripcion}</p>
-          </div>
-        )}
+          )}
+          {opcion === 'REASIGNADO' && (
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-1.5">
+              <span className="inline-block text-xs font-semibold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                Reasignado a otro viaje
+              </span>
+              <p className="text-sm text-foreground font-medium">
+                Los gajos sí existían; se agregan como split parcial al viaje seleccionado.
+              </p>
+            </div>
+          )}
+          {opcion === 'MANTENIDO' && (
+            <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 space-y-1.5">
+              <span className="inline-block text-xs font-semibold px-2.5 py-0.5 rounded-full bg-orange-100 text-orange-600 border border-orange-300">
+                Mantenido pendiente
+              </span>
+              <p className="text-sm text-foreground font-medium">
+                Silencia la alerta {silenciarViajes} viajes más; no modifica cantidades.
+              </p>
+            </div>
+          )}
 
-        <div className="flex justify-end gap-2 pt-2">
-          <Button variant="outline" onClick={cerrar} disabled={enviando}>
-            Cancelar
-          </Button>
-          <Button onClick={confirmar} disabled={!accion || enviando} className="gap-2">
-            {enviando && <Loader2 className="h-4 w-4 animate-spin" />}
-            Guardar ajuste
-          </Button>
+          {/* Botones */}
+          <div className="flex justify-end gap-3 pt-1">
+            <Button variant="outline" onClick={cerrar} disabled={enviando}>
+              Cancelar
+            </Button>
+            <Button onClick={guardarAjuste} disabled={!opcion || enviando}>
+              {enviando && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Guardar ajuste
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
-  );
-}
-
-interface OpcionProps {
-  activo: boolean;
-  onClick: () => void;
-  icon: React.ComponentType<{ className?: string }>;
-  titulo: string;
-  descripcion: string;
-  destructivo?: boolean;
-}
-function OpcionAccion({ activo, onClick, icon: Icon, titulo, descripcion, destructivo }: OpcionProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`text-left rounded-lg border p-3 transition-all flex items-start gap-3 ${
-        activo
-          ? destructivo
-            ? 'border-destructive/50 bg-destructive/5'
-            : 'border-primary bg-primary/5'
-          : 'border-border hover:bg-muted/40'
-      }`}
-    >
-      <div className={`h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-        destructivo ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary'
-      }`}>
-        <Icon className="h-4 w-4" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-foreground">{titulo}</p>
-        <p className="text-[11px] text-muted-foreground mt-0.5">{descripcion}</p>
-      </div>
-    </button>
   );
 }

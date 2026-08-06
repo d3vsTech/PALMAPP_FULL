@@ -615,23 +615,45 @@ export default function ConteoCosecha() {
                     donde el usuario decide si arrastra pendientes viejos o
                     los resuelve como clavijo. */}
                 {ajustesPendientes > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => navigate('/viajes/ajustes-cosecha')}
-                    className="w-full rounded-lg border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/15 transition-colors px-3 py-2 flex items-center gap-2.5 text-left"
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '12px',
+                      borderRadius: '8px',
+                      border: '1px solid #fde68a',
+                      backgroundColor: '#fffbeb',
+                      padding: '10px 16px',
+                      fontSize: '14px',
+                      color: '#92400e',
+                    }}
                   >
-                    <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
-                    <span className="flex-1 text-xs text-amber-800 dark:text-amber-200 min-w-0">
-                      <span className="font-semibold">{ajustesPendientes}</span>{' '}
-                      {ajustesPendientes === 1
-                        ? 'cosecha con gajos pendientes hace 3+ viajes.'
-                        : 'cosechas con gajos pendientes hace 3+ viajes.'}
-                      {' '}Podrían ser clavijos.
-                    </span>
-                    <span className="text-xs font-medium text-amber-700 dark:text-amber-300 whitespace-nowrap">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <AlertTriangle style={{ width: '16px', height: '16px', flexShrink: 0, color: '#f59e0b' }} />
+                      <span>
+                        {ajustesPendientes}{' '}
+                        {ajustesPendientes === 1
+                          ? 'cosecha con gajos pendientes hace 3+ viajes.'
+                          : 'cosechas con gajos pendientes hace 3+ viajes.'}
+                        {' '}Podrían ser clavijos.
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => navigate('/viajes/ajustes-cosecha')}
+                      style={{
+                        flexShrink: 0,
+                        fontWeight: 500,
+                        color: '#b45309',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
                       Revisar →
-                    </span>
-                  </button>
+                    </button>
+                  </div>
                 )}
 
                 <div className="flex justify-end">
