@@ -82,7 +82,7 @@ export function ModalReintentoEpayco({ open, codigoPedido, onClose }: Props) {
       onClose();
       abrirCheckoutEpayco(session_id, test, {
         onResponse: () => {
-          navigate(`/market/pedidos?x_extra1=${encodeURIComponent(codigoPedido)}`);
+          navigate(`/market/pedidos/${codigoPedido}`);
         },
         onClosed: () => {
           // Se queda en el detalle del pedido, sin cambios.

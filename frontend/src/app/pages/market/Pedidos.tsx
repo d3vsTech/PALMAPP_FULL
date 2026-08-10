@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
@@ -41,7 +41,7 @@ const estadoConfig: Record<EstadoPedido, {
 
 export default function Pedidos() {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
 
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [stats, setStats] = useState<PedidoStats | null>(null);
@@ -107,59 +107,14 @@ export default function Pedidos() {
   useAutoRefresh(() => cargar(true), 20_000);
 
   /**
-   * Detecta si venimos del redirect de ePayco (§10.5 punto 5). ePayco
-   * añade `x_extra1` con el código del pedido. Hacemos polling al estado
-   * (fuente autoritativa), mostramos un toast con el resultado y limpiamos
-   * el query param para no repetir el toast al refrescar.
+   * Si ePayco cayó en el fallback (`response_url` del backend), aterrizamos
+   * aquí con `x_extra1` en la URL. Redirigimos al detalle del pedido —
+   * allí ya hay polling al backend y se muestra el estado real del pago.
    */
-  const pagoConsultadoRef = useRef<string | null>(null);
   useEffect(() => {
     const codigo = searchParams.get('x_extra1');
-    if (!codigo || pagoConsultadoRef.current === codigo) return;
-    pagoConsultadoRef.current = codigo;
-
-    // Polling: el webhook puede tardar unos segundos en actualizar el estado.
-    const POLL_INTERVAL = 2500;
-    const POLL_MAX = 20_000;
-    const inicio = Date.now();
-    let cancelado = false;
-
-    const loop = async () => {
-      try {
-        const r = await pagosApi.estado(codigo);
-        if (cancelado) return;
-        const estado = r.data.estado_pago;
-        if (estado === 'procesando' && Date.now() - inicio < POLL_MAX) {
-          setTimeout(loop, POLL_INTERVAL);
-          return;
-        }
-        if (estado === 'pagado') {
-          toast.success(`Pago aprobado — pedido ${codigo}`, { duration: 6000 });
-        } else if (estado === 'rechazado') {
-          toast.error(`Pago rechazado — pedido ${codigo}`, {
-            duration: 8000,
-            description: r.data.ultimo_pago?.response_reason ?? undefined,
-          });
-        } else if (estado === 'fallido') {
-          toast.error(`Error al procesar el pago — pedido ${codigo}`, { duration: 8000 });
-        } else if (estado === 'procesando') {
-          toast.info(`Pago en proceso — pedido ${codigo}. Actualizaremos el estado en unos momentos.`, { duration: 6000 });
-        }
-      } catch {
-        // Silencioso — el usuario puede entrar al detalle para ver más.
-      }
-      // Limpiar el query param y refrescar el listado.
-      searchParams.delete('x_extra1');
-      searchParams.delete('ref_payco');
-      searchParams.delete('x_transaction_id');
-      searchParams.delete('x_response');
-      searchParams.delete('x_amount');
-      setSearchParams(searchParams, { replace: true });
-      cargar(true);
-    };
-
-    loop();
-    return () => { cancelado = true; };
+    if (!codigo) return;
+    navigate(`/market/pedidos/${codigo}`, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
