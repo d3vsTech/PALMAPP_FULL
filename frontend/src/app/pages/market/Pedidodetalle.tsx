@@ -13,9 +13,10 @@ import {
   type Pedido, type EstadoPedido,
 } from '../../../api/market';
 import {
-  pagosApi, ESTADO_PAGO_LABEL,
-  type EstadoPagoResponse,
+  pagosApi, ESTADO_PAGO_LABEL, METODO_PAGO_LABEL,
+  type EstadoPagoResponse, type MetodoPago,
 } from '../../../api/pagos';
+import { ModalReintentoEpayco } from '../../components/market/ModalReintentoEpayco';
 import { formatFecha, formatFechaHora } from '../../utils/fecha';
 import { useAutoRefresh } from '../../hooks/useAutoRefresh';
 
@@ -40,10 +41,9 @@ export default function PedidoDetalle() {
 
   const [pedido, setPedido] = useState<Pedido | null>(null);
   const [cargando, setCargando] = useState(true);
-  /** Estado del pago del pedido (mockeado en pagosApi). Cuando el backend
-   *  incluya `estado_pago` en el response del pedido, se elimina este state
-   *  y se lee directo de `pedido.estado_pago`. */
-  const [estadoPago, setEstadoPago] = useState<EstadoPagoResponse | null>(null);
+  /** Respuesta del endpoint GET /pago/estado del pedido (§10.4). */
+  const [estadoPago, setEstadoPago] = useState<EstadoPagoResponse['data'] | null>(null);
+  const [modalReintentoAbierto, setModalReintentoAbierto] = useState(false);
 
   /**
    * `silent=true` cuando viene de polling/focus: no muestra spinner ni
@@ -62,23 +62,9 @@ export default function PedidoDetalle() {
         }
       })
       .finally(() => { if (!silent) setCargando(false); });
-    // Hidratar estado de pago en paralelo. Es un mock, no falla nunca; con
-    // backend real conviene degradar suave si el endpoint no responde.
-    pagosApi.estadoPago(codigo).then(setEstadoPago).catch(() => setEstadoPago(null));
-  };
-
-  /** Redirige al usuario a la "sucursal" (portal del gateway) del método
-   *  que quedó registrado en el pedido. Reutiliza la misma pantalla que
-   *  usa el checkout inicial. */
-  const iniciarReintento = async () => {
-    if (!pedido) return;
-    const slug =
-      pedido.metodo_pago === 'PSE' ? 'pse' :
-      pedido.metodo_pago === 'Nequi' ? 'nequi' :
-      pedido.metodo_pago === 'Tarjeta de Crédito' ? 'tarjeta' : null;
-    if (!slug) return;
-    await pagosApi.iniciarPago(pedido.codigo, toNumber(pedido.total));
-    navigate(`/market/pagos/sucursal/${pedido.codigo}?metodo=${slug}`);
+    // Hidratar estado de pago en paralelo. Degrada suave si el backend
+    // no responde (ej. pedidos viejos sin registro de pago).
+    pagosApi.estado(codigo).then((r) => setEstadoPago(r.data)).catch(() => setEstadoPago(null));
   };
 
   useEffect(() => {
@@ -269,8 +255,10 @@ export default function PedidoDetalle() {
                       </div>
                       <div className="flex-1">
                         <p className="font-medium text-foreground mb-1">Método de pago</p>
-                        <p className="text-sm text-muted-foreground">{pedido.metodo_pago}</p>
-                        {estadoPago && estadoPago.estado_pago !== 'no_iniciado' && (
+                        <p className="text-sm text-muted-foreground">
+                          {METODO_PAGO_LABEL[pedido.metodo_pago as MetodoPago] ?? pedido.metodo_pago}
+                        </p>
+                        {estadoPago && (
                           <div className="mt-2 flex items-center gap-2 flex-wrap">
                             <Badge
                               variant="outline"
@@ -278,31 +266,33 @@ export default function PedidoDetalle() {
                             >
                               {ESTADO_PAGO_LABEL[estadoPago.estado_pago].label}
                             </Badge>
-                            {estadoPago.transaction_id && (
+                            {estadoPago.ultimo_pago?.franchise && (
+                              <span className="text-[10px] text-muted-foreground">
+                                {estadoPago.ultimo_pago.franchise}
+                              </span>
+                            )}
+                            {estadoPago.ultimo_pago?.approval_code && (
                               <span className="text-[10px] font-mono text-muted-foreground">
-                                {estadoPago.transaction_id}
+                                Aprob: {estadoPago.ultimo_pago.approval_code}
                               </span>
                             )}
                           </div>
                         )}
-                        {/* Botón para reintentar pago cuando quedó pendiente
-                            o falló. Solo mostramos si el método requería
-                            pasarela (no aparece para contra entrega). */}
-                        {estadoPago
-                          && (estadoPago.estado_pago === 'no_iniciado'
+                        {/* Botón de "Pagar ahora / Reintentar" solo aparece cuando
+                            el pedido es ePayco y aún no está pagado (§10.3). */}
+                        {pedido.metodo_pago === 'epayco'
+                          && estadoPago
+                          && (estadoPago.estado_pago === 'pendiente'
                             || estadoPago.estado_pago === 'rechazado'
                             || estadoPago.estado_pago === 'fallido')
-                          && (pedido.metodo_pago === 'PSE'
-                            || pedido.metodo_pago === 'Nequi'
-                            || pedido.metodo_pago === 'Tarjeta de Crédito')
                           && (
                             <Button
                               size="sm"
                               className="mt-3 gap-2"
-                              onClick={iniciarReintento}
+                              onClick={() => setModalReintentoAbierto(true)}
                             >
                               <CreditCard className="h-4 w-4" />
-                              {estadoPago.estado_pago === 'no_iniciado'
+                              {estadoPago.estado_pago === 'pendiente'
                                 ? 'Pagar ahora'
                                 : 'Reintentar pago'}
                             </Button>
@@ -378,6 +368,12 @@ export default function PedidoDetalle() {
         </div>
       </div>
 
+      {/* Modal de reintento de pago con ePayco (§10.5). */}
+      <ModalReintentoEpayco
+        open={modalReintentoAbierto}
+        codigoPedido={pedido.codigo}
+        onClose={() => setModalReintentoAbierto(false)}
+      />
     </div>
   );
 }

@@ -43,10 +43,9 @@ export default function Pedidos() {
   const [filtroEstado, setFiltroEstado] = useState<EstadoPedido | 'todos'>('todos');
   const [page, setPage] = useState(1);
   const [cargando, setCargando] = useState(true);
-  /** Estado de pago por código de pedido. Se llena tras cargar los pedidos
-   *  con una consulta paralela a `pagosApi.estadoPago()`. Cuando el backend
-   *  real entregue `estado_pago` como campo del pedido, este Map desaparece
-   *  y se lee directo de `pedido.estado_pago`. */
+  /** Estado de pago por código de pedido. Alimenta el badge que aparece
+   *  al lado del estado logístico. Se hidrata solo para los pedidos que
+   *  usan `epayco` (los otros métodos no tienen pasarela). */
   const [estadosPago, setEstadosPago] = useState<Map<string, EstadoPago>>(new Map());
 
   /**
@@ -64,16 +63,20 @@ export default function Pedidos() {
         setPedidos(res.data);
         setStats(res.stats);
         setMeta(res.meta);
-        // Hidratar estado de pago de cada pedido en paralelo. Mock: lee de
-        // sessionStorage; backend real: 1 request por pedido (o mejor, un
-        // endpoint bulk `POST /market/pagos/estados` que ojalá agreguen).
+        // Hidratar estado de pago solo para pedidos `epayco` — los otros
+        // no tienen registro en /pago/estado y el backend responde 422.
+        const objetivos = (res.data ?? []).filter((p: any) => p.metodo_pago === 'epayco');
         const entries = await Promise.all(
-          res.data.map(async (p) => {
-            const r = await pagosApi.estadoPago(p.codigo);
-            return [p.codigo, r.estado_pago] as const;
+          objetivos.map(async (p) => {
+            try {
+              const r = await pagosApi.estado(p.codigo);
+              return [p.codigo, r.data.estado_pago] as const;
+            } catch {
+              return null;
+            }
           }),
         );
-        setEstadosPago(new Map(entries));
+        setEstadosPago(new Map(entries.filter(Boolean) as Array<readonly [string, EstadoPago]>));
       })
       .catch((e: any) => {
         if (!silent) toast.error(e?.message ?? 'Error al cargar pedidos');
@@ -236,7 +239,7 @@ export default function Pedidos() {
                                 método fue contra-entrega/transferencia). */}
                             {(() => {
                               const ep = estadosPago.get(pedido.codigo);
-                              if (!ep || ep === 'no_iniciado') return null;
+                              if (!ep || ep === 'pendiente') return null;
                               const c = ESTADO_PAGO_LABEL[ep];
                               return (
                                 <Badge variant="outline" className={c.color}>

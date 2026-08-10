@@ -14,29 +14,44 @@ import {
 import { toast } from 'sonner';
 import { marketApi, toNumber, type Carrito as CarritoT } from '../../../api/market';
 import { getDepartamentos, getMunicipios } from '../../../api/plantacion';
-import { pagosApi } from '../../../api/pagos';
+import { pagosApi, abrirCheckoutEpayco, type MetodoPago, type BillingInfo } from '../../../api/pagos';
+import { useAuth } from '../../contexts/AuthContext';
 
-const METODOS_PAGO = [
-  { id: 'PSE', nombre: 'Pago con PSE', descripcion: 'Pago seguro desde tu cuenta bancaria · procesa Wompi' },
-  { id: 'Nequi', nombre: 'Nequi', descripcion: 'Confirma el pago desde tu app Nequi · procesa Wompi' },
-  { id: 'Tarjeta de Crédito', nombre: 'Tarjeta de Crédito', descripcion: 'Visa, Mastercard, American Express · procesa Wompi' },
-  { id: 'Pago Contra Entrega', nombre: 'Pago Contra Entrega', descripcion: 'Paga al recibir tu pedido' },
-  { id: 'Transferencia Bancaria', nombre: 'Transferencia Bancaria', descripcion: 'Transferencia directa a cuenta del proveedor' },
+/** Persistimos el billing en localStorage para que el usuario no tenga que
+ *  reescribir sus datos en cada compra. `name`/`email` vienen del perfil,
+ *  pero `doc_type`, `doc_number` y `phone` los guarda el usuario al pagar. */
+const BILLING_STORAGE_KEY = 'palmapp:market:billing';
+
+/** §10.2 API_MARKET — métodos permitidos por el backend. */
+const METODOS_PAGO: Array<{ id: MetodoPago; nombre: string; descripcion: string }> = [
+  {
+    id: 'epayco',
+    nombre: 'Pago en línea',
+    descripcion: 'Tarjeta, PSE, Nequi, Daviplata · procesa ePayco',
+  },
+  {
+    id: 'transferencia',
+    nombre: 'Transferencia bancaria',
+    descripcion: 'Transferencia directa a la cuenta del proveedor',
+  },
+  {
+    id: 'contra_entrega',
+    nombre: 'Pago contra entrega',
+    descripcion: 'Paga al recibir tu pedido',
+  },
 ];
 
-/**
- * Mapeo de método a la "sucursal" (pantalla simulada del gateway) que
- * corresponde. Los métodos que no requieren cobro en línea devuelven null.
- */
-function slugSucursalPara(metodo: string): 'pse' | 'nequi' | 'tarjeta' | null {
-  if (metodo === 'PSE') return 'pse';
-  if (metodo === 'Nequi') return 'nequi';
-  if (metodo === 'Tarjeta de Crédito') return 'tarjeta';
-  return null;
-}
+const DOC_TYPES: Array<{ id: BillingInfo['doc_type']; label: string }> = [
+  { id: 'CC', label: 'Cédula de ciudadanía' },
+  { id: 'CE', label: 'Cédula de extranjería' },
+  { id: 'NIT', label: 'NIT' },
+  { id: 'TI', label: 'Tarjeta de identidad' },
+  { id: 'PPN', label: 'Pasaporte' },
+];
 
 export default function Checkout() {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const [paso, setPaso] = useState(1);
   const [carrito, setCarrito] = useState<CarritoT | null>(null);
@@ -52,7 +67,27 @@ export default function Checkout() {
     codigoPostal: '',
     indicaciones: '',
   });
-  const [metodoPago, setMetodoPago] = useState('');
+  const [metodoPago, setMetodoPago] = useState<MetodoPago | ''>('');
+
+  /** Datos de facturación exigidos por ePayco (§10.4). Solo aplican cuando
+   *  el método seleccionado es `epayco`. Pre-poblamos con:
+   *    - name/email → del perfil del usuario (AuthContext).
+   *    - doc_type/doc_number/phone → del último pago guardado en localStorage.
+   *  Todo es editable — el widget de ePayco los usa como valores por defecto. */
+  const [billing, setBilling] = useState<BillingInfo>(() => {
+    let previo: Partial<BillingInfo> = {};
+    try {
+      const raw = localStorage.getItem(BILLING_STORAGE_KEY);
+      if (raw) previo = JSON.parse(raw);
+    } catch { /* ignore */ }
+    return {
+      email: previo.email ?? user?.email ?? '',
+      name: previo.name ?? user?.nombre ?? '',
+      doc_type: previo.doc_type ?? 'CC',
+      doc_number: previo.doc_number ?? '',
+      phone: previo.phone ?? '',
+    };
+  });
 
   // Departamentos / municipios desde el backend (mismo patrón que el wizard
   // de predios y colaboradores). Departamento guarda el código; el nombre se
@@ -125,7 +160,22 @@ export default function Checkout() {
     return partes.join(' · ');
   };
 
+  /** Valida los campos mínimos de facturación exigidos por ePayco. */
+  const validarBilling = (): boolean => {
+    if (metodoPago !== 'epayco') return true;
+    if (!billing.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(billing.email)) {
+      toast.error('Ingresa un correo electrónico válido para el pago');
+      return false;
+    }
+    if (!billing.name.trim()) { toast.error('Ingresa el nombre para la facturación'); return false; }
+    if (!billing.doc_number.trim()) { toast.error('Ingresa el número de documento'); return false; }
+    if (!billing.phone.trim()) { toast.error('Ingresa el teléfono de contacto'); return false; }
+    return true;
+  };
+
   const confirmarPedido = async () => {
+    if (!metodoPago) return;
+    if (!validarBilling()) return;
     setEnviando(true);
     try {
       const res = await marketApi.checkout({
@@ -140,19 +190,47 @@ export default function Checkout() {
           : 'Pedido creado correctamente',
       );
 
-      // Si el método requiere pasarela y hay un pedido único, redirigimos
-      // a la "sucursal" del gateway (pantalla simulada por método: PSE con
-      // selector de banco, Nequi con QR, Tarjeta con formulario). Cada
-      // método tiene su propia UI, replicando el flujo real donde el
-      // usuario sale del checkout hacia el portal del proveedor de pago.
-      // Multi-pedido (varios proveedores) por ahora no dispara pago: cada
-      // pedido se paga por separado desde su detalle.
+      // Solo `epayco` dispara la pasarela. `transferencia` y `contra_entrega`
+      // cierran el flujo aquí y llevan al detalle/listado.
       const primer = res.data?.[0];
-      const slug = slugSucursalPara(metodoPago);
-      if (primer && total === 1 && slug) {
-        await pagosApi.iniciarPago(primer.codigo, toNumber(primer.total));
-        navigate(`/market/pagos/sucursal/${primer.codigo}?metodo=${slug}`);
-        return;
+      if (primer && total === 1 && metodoPago === 'epayco') {
+        try {
+          const ini = await pagosApi.iniciar(primer.codigo, billing);
+          // Persistir el billing para la próxima compra (no requerir re-tipear).
+          try { localStorage.setItem(BILLING_STORAGE_KEY, JSON.stringify(billing)); } catch { /* cuota */ }
+          const { session_id, test } = ini.data;
+          abrirCheckoutEpayco(session_id, test, {
+            onResponse: () => {
+              // No confiar en el response — solo redirigir a la página de
+              // resultado que hará polling al backend (fuente autoritativa).
+              navigate(`/market/pago/resultado?x_extra1=${encodeURIComponent(primer.codigo)}`);
+            },
+            onClosed: () => {
+              // Usuario cerró el modal sin completar — pedido queda pendiente.
+              // Puede reintentar desde el detalle del pedido.
+              navigate(`/market/pedidos/${primer.codigo}`);
+            },
+            onErrors: (err) => {
+              console.error('[ePayco] onErrors:', err);
+              toast.error('No se pudo abrir la pasarela de pago. Intenta de nuevo desde el detalle del pedido.');
+              navigate(`/market/pedidos/${primer.codigo}`);
+            },
+          });
+          return;
+        } catch (payErr: any) {
+          const code = payErr?.code ?? payErr?.error_code;
+          if (code === 'EPAYCO_UNAVAILABLE') {
+            toast.error('La pasarela de pago no está disponible. Intenta más tarde desde el detalle del pedido.');
+          } else if (code === 'PAGO_METODO_INVALIDO') {
+            toast.error('Este pedido no admite pago en línea.');
+          } else if (code === 'PEDIDO_CANCELADO') {
+            toast.error('El pedido está cancelado.');
+          } else {
+            toast.error(payErr?.message ?? 'No se pudo iniciar el pago');
+          }
+          navigate(`/market/pedidos/${primer.codigo}`);
+          return;
+        }
       }
 
       if (res.data && res.data.length === 1) {
@@ -495,6 +573,85 @@ export default function Checkout() {
                   ))}
                 </div>
 
+                {/* Formulario de facturación — solo para ePayco (§10.4). */}
+                {metodoPago === 'epayco' && (
+                  <div className="space-y-3 border-t border-border pt-4">
+                    <div>
+                      <h3 className="font-semibold text-foreground">Datos de facturación</h3>
+                      <p className="text-xs text-muted-foreground">
+                        Requeridos por ePayco para procesar el pago.
+                      </p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="billing-name">
+                          Nombre completo <span className="text-destructive">*</span>
+                        </Label>
+                        <Input
+                          id="billing-name"
+                          value={billing.name}
+                          onChange={(e) => setBilling({ ...billing, name: e.target.value })}
+                          placeholder="Juan Pérez"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="billing-email">
+                          Correo electrónico <span className="text-destructive">*</span>
+                        </Label>
+                        <Input
+                          id="billing-email"
+                          type="email"
+                          value={billing.email}
+                          onChange={(e) => setBilling({ ...billing, email: e.target.value })}
+                          placeholder="tucorreo@ejemplo.com"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="billing-doc-type">
+                          Tipo de documento <span className="text-destructive">*</span>
+                        </Label>
+                        <Select
+                          value={billing.doc_type}
+                          onValueChange={(v) => setBilling({ ...billing, doc_type: v as BillingInfo['doc_type'] })}
+                        >
+                          <SelectTrigger id="billing-doc-type">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {DOC_TYPES.map((d) => (
+                              <SelectItem key={d.id} value={d.id}>{d.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="billing-doc-number">
+                          Número documento <span className="text-destructive">*</span>
+                        </Label>
+                        <Input
+                          id="billing-doc-number"
+                          value={billing.doc_number}
+                          onChange={(e) => setBilling({ ...billing, doc_number: e.target.value.replace(/\D/g, '') })}
+                          placeholder="1234567890"
+                          className="font-mono"
+                        />
+                      </div>
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <Label htmlFor="billing-phone">
+                          Teléfono <span className="text-destructive">*</span>
+                        </Label>
+                        <Input
+                          id="billing-phone"
+                          value={billing.phone}
+                          onChange={(e) => setBilling({ ...billing, phone: e.target.value.replace(/\D/g, '') })}
+                          placeholder="3001234567"
+                          className="font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex gap-3">
                   <Button variant="outline" onClick={() => setPaso(1)} className="flex-1">
                     Anterior
@@ -565,7 +722,14 @@ export default function Checkout() {
                       <CreditCard className="h-4 w-4" />
                       Método de pago
                     </h3>
-                    <p className="text-sm">{metodoPago}</p>
+                    <p className="text-sm">
+                      {METODOS_PAGO.find((m) => m.id === metodoPago)?.nombre ?? metodoPago}
+                    </p>
+                    {metodoPago === 'epayco' && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Se abrirá la pasarela de ePayco al confirmar.
+                      </p>
+                    )}
                   </div>
                 </div>
 

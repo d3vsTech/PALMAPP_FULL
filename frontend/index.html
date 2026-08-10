@@ -10,6 +10,10 @@
 
     <body>
       <div id="root"></div>
+      <!-- SDK Checkout v2 de ePayco (Market §10 API_MARKET.md). Se carga una
+           sola vez y `window.ePayco.checkout` queda disponible globalmente
+           para el flujo de pago iniciado desde Checkout.tsx. -->
+      <script src="https://checkout.epayco.co/checkout-v2.js"></script>
       <script type="module" src="/src/main.tsx"></script>
     </body>
   </html>

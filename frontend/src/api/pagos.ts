@@ -1,196 +1,196 @@
 /**
  * api/pagos.ts
  *
- * Cliente de la pasarela de pagos del Market. **Todo el módulo está mockeado
- * mientras el backend construye los endpoints reales de la integración con
- * Wompi.** El objetivo es que todo el flujo UI (Checkout, portal Wompi,
- * callback, badges de estado) quede armado y navegable, y cuando el backend
- * entregue las rutas solo se reemplace el cuerpo de las funciones de
- * `pagosApi` — la UI no se toca.
+ * Cliente de la pasarela de pagos del Market — integración real con ePayco
+ * Checkout v2 (ver API_MARKET.md §10 y PLAN_INTEGRACION_EPAYCO.md).
  *
- * Sobre Wompi (Bancolombia):
- *   - Docs: https://docs.wompi.co
- *   - Modos de integración: Web Checkout (redirect), Widget JS, Botón, API.
- *   - Métodos soportados: Tarjeta, PSE, Nequi, Bancolombia Transfer, Daviplata.
+ * Endpoints backend:
+ *   POST /api/v1/tenant/market/pedidos/{codigo}/pago/iniciar
+ *   GET  /api/v1/tenant/market/pedidos/{codigo}/pago/estado
  *
- * Contrato eventual con backend (propuesta):
- *   POST /market/pedidos/{codigo}/iniciar-pago
- *     → { reference: string, public_key: string, amount_cents: number,
- *         provider: 'WOMPI' }
- *   POST /market/pedidos/{codigo}/confirmar-pago
- *     body: { transaction_id: string, provider: 'WOMPI' }
- *     → { estado_pago: EstadoPago, provider_reference: string }
- *   GET  /market/pedidos/{codigo}/estado-pago
- *     → { estado_pago: EstadoPago, transaction_id?: string, fecha_pago?: string }
+ * Flujo:
+ *   1. Frontend crea pedido con `metodo_pago = 'epayco'` (ya existe en marketApi).
+ *   2. Llama `pagosApi.iniciar(codigo, billing)` → recibe { session_id, test }.
+ *   3. Abre el widget ePayco: `ePayco.checkout.configure({sessionId, type:'onpage', test}).open()`.
+ *   4. Al terminar el usuario (`onResponse` del SDK) se hace polling a
+ *      `pagosApi.estado(codigo)` hasta que el estado deje de ser 'procesando'.
+ *   5. Redirige a `/market/pago/resultado?x_extra1=<codigo>` mostrando el estado real.
  *
- * Mientras tanto, persistimos el estado del pago en `sessionStorage` bajo la
- * clave `palmapp:pagos:{codigo}`. Esto es solo para poder ver el estado
- * en `Pedidodetalle` y `Pedidos` durante la demo — se elimina al conectar
- * con el backend real (Wompi confirmará vía webhook al backend).
+ * NOTA: `estado_pago` del pedido no es el mismo que `estado` de un intento
+ * individual (`MarketPedidoPago`). El primero refleja el resumen; el segundo
+ * viene en `ultimo_pago`.
  */
 
-export type EstadoPago =
-  | 'no_iniciado'   // El pedido se creó pero aún no se ha intentado pagar.
-  | 'procesando'   // El widget está abierto o el gateway está confirmando.
-  | 'aprobado'    // Cobro exitoso.
-  | 'rechazado'   // Tarjeta rechazada / fondos insuficientes.
-  | 'fallido';    // Error del gateway / timeout.
+import { requestConToken } from './request';
 
-export interface IniciarPagoResponse {
-  reference: string;
-  public_key: string;
-  amount_cents: number;
-  /** Pasarela seleccionada. La finca opera con Wompi (Bancolombia). */
-  provider: 'WOMPI';
+const BASE = '/api/v1/tenant/market';
+
+function tkn() { return localStorage.getItem('palmapp_token'); }
+
+function post<T>(path: string, body: unknown): Promise<T> {
+  return requestConToken<T>(`${BASE}${path}`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  }, tkn());
+}
+function get<T>(path: string): Promise<T> {
+  return requestConToken<T>(`${BASE}${path}`, { method: 'GET' }, tkn());
 }
 
-export interface ConfirmarPagoResponse {
-  estado_pago: EstadoPago;
-  provider_reference: string;
-  fecha_pago: string;
+// ─── Tipos ───────────────────────────────────────────────────────────────────
+
+/** §10.3 — valores de `estado_pago` en el pedido. */
+export type EstadoPago =
+  | 'pendiente'    // Estado inicial; sin pago procesado
+  | 'procesando'   // Sesión ePayco iniciada o webhook pendiente
+  | 'pagado'       // Pago aprobado (Aceptada)
+  | 'rechazado'    // Pago rechazado
+  | 'fallido';     // Pago fallido
+
+/** §10.2 — métodos de pago permitidos por el backend. */
+export type MetodoPago = 'epayco' | 'transferencia' | 'contra_entrega';
+
+/** Datos de facturación requeridos por ePayco (§10.4). */
+export interface BillingInfo {
+  email: string;
+  name: string;
+  doc_type: 'CC' | 'CE' | 'NIT' | 'TI' | 'PPN';
+  doc_number: string;
+  phone: string;
+  address?: string;
+  city?: string;
+  /** ISO alpha-2. */
+  country?: string;
+}
+
+export interface IniciarPagoResponse {
+  data: {
+    session_id: string;
+    test: boolean;
+  };
+}
+
+export interface UltimoPago {
+  estado: 'iniciado' | 'pendiente' | 'aprobado' | 'rechazado' | 'fallido';
+  franchise?: string | null;
+  approval_code?: string | null;
+  response_reason?: string | null;
+  fecha_procesado?: string | null;
 }
 
 export interface EstadoPagoResponse {
-  estado_pago: EstadoPago;
-  transaction_id?: string;
-  provider_reference?: string;
-  fecha_pago?: string;
-  provider?: string;
+  data: {
+    estado_pago: EstadoPago;
+    estado_pedido: string;
+    ultimo_pago: UltimoPago | null;
+  };
 }
 
-const STORAGE_PREFIX = 'palmapp:pagos:';
+/** Códigos de error específicos de la pasarela (§10.6). */
+export const PagoErrorCodes = {
+  PAGO_METODO_INVALIDO: 'PAGO_METODO_INVALIDO',
+  PAGO_YA_APROBADO: 'PAGO_YA_APROBADO',
+  PEDIDO_CANCELADO: 'PEDIDO_CANCELADO',
+  EPAYCO_UNAVAILABLE: 'EPAYCO_UNAVAILABLE',
+  PEDIDO_NOT_FOUND: 'PEDIDO_NOT_FOUND',
+} as const;
 
-interface PagoLocal {
-  estado_pago: EstadoPago;
-  transaction_id?: string;
-  provider_reference?: string;
-  fecha_pago?: string;
-  provider?: string;
-  amount_cents: number;
-}
-
-function leerPago(codigo: string): PagoLocal | null {
-  try {
-    const raw = sessionStorage.getItem(`${STORAGE_PREFIX}${codigo}`);
-    if (!raw) return null;
-    return JSON.parse(raw) as PagoLocal;
-  } catch {
-    return null;
-  }
-}
-
-function guardarPago(codigo: string, pago: PagoLocal): void {
-  try {
-    sessionStorage.setItem(`${STORAGE_PREFIX}${codigo}`, JSON.stringify(pago));
-  } catch {
-    // sessionStorage lleno — ignorar (el pago sigue funcionando en memoria).
-  }
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function generarReferencia(codigo: string): string {
-  const rand = Math.random().toString(36).slice(2, 10).toUpperCase();
-  // Formato similar al de Wompi: prefijo dominio-orden + hash corto.
-  return `WOMPI-${codigo}-${rand}`;
-}
-
-function generarTransactionId(): string {
-  const rand = Math.random().toString(36).slice(2, 14).toUpperCase();
-  // Wompi devuelve IDs tipo `01234-1234567890-12345`; simulamos algo parecido.
-  return `WMP-${rand}`;
-}
+// ─── API ─────────────────────────────────────────────────────────────────────
 
 export const pagosApi = {
   /**
-   * Registra la intención de pago en el backend (o mock). Devuelve la
-   * referencia y la public_key necesarias para abrir el widget.
-   * REAL: POST /market/pedidos/{codigo}/iniciar-pago
+   * Crea la sesión ePayco para un pedido con `metodo_pago='epayco'`.
+   * POST /market/pedidos/{codigo}/pago/iniciar
    */
-  async iniciarPago(codigo: string, totalPesos: number): Promise<IniciarPagoResponse> {
-    await delay(600);
-    const reference = generarReferencia(codigo);
-    guardarPago(codigo, {
-      estado_pago: 'procesando',
-      amount_cents: Math.round(totalPesos * 100),
-      provider_reference: reference,
-      provider: 'WOMPI',
-    });
-    return {
-      reference,
-      public_key: 'pub_test_WOMPI_PUBLIC_KEY_STUB',
-      amount_cents: Math.round(totalPesos * 100),
-      provider: 'WOMPI',
-    };
-  },
+  iniciar: (codigo: string, billing: BillingInfo) =>
+    post<IniciarPagoResponse>(`/pedidos/${codigo}/pago/iniciar`, { billing }),
 
   /**
-   * Confirma en backend el resultado que devolvió el widget. Backend real
-   * consulta la API del gateway con su private_key para verificar que la
-   * transacción existe y el monto coincide antes de marcar aprobado.
-   * REAL: POST /market/pedidos/{codigo}/confirmar-pago
+   * Consulta el estado actual del pago del pedido. Se usa para polling tras
+   * el `onResponse` del widget y en la pantalla de resultado.
+   * GET /market/pedidos/{codigo}/pago/estado
    */
-  async confirmarPago(
-    codigo: string,
-    transactionId: string,
-    resultado: 'aprobado' | 'rechazado' | 'fallido',
-  ): Promise<ConfirmarPagoResponse> {
-    await delay(900);
-    const previo = leerPago(codigo);
-    const providerRef = previo?.provider_reference ?? generarReferencia(codigo);
-    const fecha = new Date().toISOString();
-    guardarPago(codigo, {
-      estado_pago: resultado,
-      transaction_id: transactionId,
-      provider_reference: providerRef,
-      fecha_pago: fecha,
-      provider: 'WOMPI',
-      amount_cents: previo?.amount_cents ?? 0,
-    });
-    return {
-      estado_pago: resultado,
-      provider_reference: providerRef,
-      fecha_pago: fecha,
-    };
-  },
-
-  /**
-   * Consulta el estado actual del pago de un pedido. Se usa en la pantalla
-   * de callback y en el detalle del pedido para mostrar el badge.
-   * REAL: GET /market/pedidos/{codigo}/estado-pago
-   */
-  async estadoPago(codigo: string): Promise<EstadoPagoResponse> {
-    await delay(200);
-    const pago = leerPago(codigo);
-    if (!pago) return { estado_pago: 'no_iniciado' };
-    return {
-      estado_pago: pago.estado_pago,
-      transaction_id: pago.transaction_id,
-      provider_reference: pago.provider_reference,
-      fecha_pago: pago.fecha_pago,
-      provider: pago.provider,
-    };
-  },
-
-  /**
-   * Solo mock — permite forzar un resultado desde el modal simulado.
-   * En producción esta función no existe: el gateway devuelve el resultado
-   * al widget o al webhook.
-   */
-  simularResultadoWidget(resultado: 'aprobado' | 'rechazado' | 'fallido'): {
-    transaction_id: string;
-    resultado: 'aprobado' | 'rechazado' | 'fallido';
-  } {
-    return { transaction_id: generarTransactionId(), resultado };
-  },
+  estado: (codigo: string) =>
+    get<EstadoPagoResponse>(`/pedidos/${codigo}/pago/estado`),
 };
 
+// ─── Widget ePayco (client-side) ─────────────────────────────────────────────
+
+/**
+ * Handler global del SDK checkout-v2.js. Se carga desde index.html:
+ *   <script src="https://checkout.epayco.co/checkout-v2.js"></script>
+ */
+declare global {
+  interface Window {
+    ePayco?: {
+      checkout: {
+        configure: (opts: { sessionId: string; type: 'onpage' | 'standard'; test: boolean }) => {
+          setHooks: (hooks: {
+            onCreated?: (data?: any) => void;
+            onResponse?: (response?: any) => void;
+            onErrors?: (error?: any) => void;
+            onClosed?: (errors?: any) => void;
+          }) => void;
+          open: () => void;
+        };
+      };
+    };
+  }
+}
+
+export interface AbrirCheckoutHooks {
+  /** Se dispara cuando el usuario termina/intenta pagar. Aquí se hace polling
+   *  al backend porque `response` no es autoritativo. */
+  onResponse?: (response?: any) => void;
+  /** Error abriendo el widget (SDK no disponible, session_id inválida, etc). */
+  onErrors?: (error?: any) => void;
+  /** Usuario cerró el modal sin completar. */
+  onClosed?: (errors?: any) => void;
+  /** Modal abierto — útil para ocultar spinner. */
+  onCreated?: (data?: any) => void;
+}
+
+/**
+ * Abre el widget de checkout de ePayco. Requiere que `checkout-v2.js` esté
+ * cargado (lo agregamos en `index.html`).
+ */
+export function abrirCheckoutEpayco(
+  sessionId: string,
+  test: boolean,
+  hooks: AbrirCheckoutHooks = {},
+): void {
+  if (!window.ePayco?.checkout) {
+    throw new Error(
+      'El SDK de ePayco no está cargado. Verifica que index.html incluya checkout-v2.js.',
+    );
+  }
+  const checkout = window.ePayco.checkout.configure({
+    sessionId,
+    type: 'onpage',
+    test,
+  });
+  // setHooks() debe ir ANTES de open() (§10.5 del doc).
+  checkout.setHooks({
+    onCreated: hooks.onCreated,
+    onResponse: hooks.onResponse,
+    onErrors: hooks.onErrors,
+    onClosed: hooks.onClosed,
+  });
+  checkout.open();
+}
+
+// ─── Etiquetas UI ────────────────────────────────────────────────────────────
+
 export const ESTADO_PAGO_LABEL: Record<EstadoPago, { label: string; color: string }> = {
-  no_iniciado: { label: 'Sin pagar',    color: 'bg-muted text-muted-foreground border-border' },
-  procesando:  { label: 'Procesando',  color: 'bg-blue-500/10 text-blue-600 border-blue-500/30' },
-  aprobado:    { label: 'Pagado',      color: 'bg-success/10 text-success border-success/30' },
-  rechazado:   { label: 'Rechazado',   color: 'bg-destructive/10 text-destructive border-destructive/30' },
-  fallido:     { label: 'Fallido',     color: 'bg-orange-500/10 text-orange-600 border-orange-500/30' },
+  pendiente:  { label: 'Sin pagar',    color: 'bg-muted text-muted-foreground border-border' },
+  procesando: { label: 'Procesando',   color: 'bg-blue-500/10 text-blue-600 border-blue-500/30' },
+  pagado:     { label: 'Pagado',       color: 'bg-success/10 text-success border-success/30' },
+  rechazado:  { label: 'Rechazado',    color: 'bg-destructive/10 text-destructive border-destructive/30' },
+  fallido:    { label: 'Fallido',      color: 'bg-orange-500/10 text-orange-600 border-orange-500/30' },
+};
+
+export const METODO_PAGO_LABEL: Record<MetodoPago, string> = {
+  epayco:        'Pago en línea (ePayco)',
+  transferencia: 'Transferencia bancaria',
+  contra_entrega: 'Pago contra entrega',
 };
