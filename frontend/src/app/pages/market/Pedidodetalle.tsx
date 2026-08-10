@@ -3,13 +3,18 @@ import { useNavigate, useParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
+import { Textarea } from '../../components/ui/textarea';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '../../components/ui/alert-dialog';
 import {
   ArrowLeft, Package, Clock, CheckCircle, XCircle, Truck, PackageCheck,
-  MapPin, CreditCard, Store, Calendar, ChefHat, Loader2,
+  MapPin, CreditCard, Store, Calendar, ChefHat, Loader2, Ban,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  marketApi, toNumber, buildImagenUrl,
+  marketApi, toNumber, buildImagenUrl, MarketErrorCodes,
   type Pedido, type EstadoPedido,
 } from '../../../api/market';
 import {
@@ -44,6 +49,10 @@ export default function PedidoDetalle() {
   /** Respuesta del endpoint GET /pago/estado del pedido (§10.4). */
   const [estadoPago, setEstadoPago] = useState<EstadoPagoResponse['data'] | null>(null);
   const [modalReintentoAbierto, setModalReintentoAbierto] = useState(false);
+  /** Diálogo de confirmación para cancelar el pedido (§5.3). */
+  const [dialogoCancelarAbierto, setDialogoCancelarAbierto] = useState(false);
+  const [motivoCancelacion, setMotivoCancelacion] = useState('');
+  const [cancelando, setCancelando] = useState(false);
 
   /**
    * `silent=true` cuando viene de polling/focus: no muestra spinner ni
@@ -75,6 +84,36 @@ export default function PedidoDetalle() {
   // Auto-sincronización: el proveedor puede cambiar el estado mientras la
   // finca tiene esta pantalla abierta. Polling 20s + al volver a la pestaña.
   useAutoRefresh(() => cargar(true), 20_000);
+
+  /** Ejecuta la cancelación con el motivo opcional (§5.3). */
+  const cancelarPedido = async () => {
+    if (!pedido) return;
+    setCancelando(true);
+    try {
+      await marketApi.cancelarPedido(pedido.codigo, motivoCancelacion.trim() || undefined);
+      toast.success('Pedido cancelado correctamente');
+      setDialogoCancelarAbierto(false);
+      setMotivoCancelacion('');
+      cargar();
+    } catch (err: any) {
+      const code = err?.code ?? err?.error_code;
+      if (code === MarketErrorCodes.PEDIDO_YA_CANCELADO) {
+        toast.info('El pedido ya está cancelado');
+        setDialogoCancelarAbierto(false);
+        cargar();
+      } else if (code === MarketErrorCodes.PAGO_YA_APROBADO) {
+        toast.error('No se puede cancelar: el pago ya fue aprobado');
+      } else if (code === MarketErrorCodes.PAGO_EN_PROCESO) {
+        toast.error('Hay un pago en curso. Espera a que se resuelva antes de cancelar.');
+      } else if (code === MarketErrorCodes.PEDIDO_NO_CANCELABLE) {
+        toast.error('Este pedido ya no se puede cancelar');
+      } else {
+        toast.error(err?.message ?? 'No se pudo cancelar el pedido');
+      }
+    } finally {
+      setCancelando(false);
+    }
+  };
 
   if (cargando) {
     return (
@@ -116,10 +155,29 @@ export default function PedidoDetalle() {
               Realizado el {formatFecha(pedido.fecha_pedido)}
             </p>
           </div>
-          <Badge className={`${config.bgColor} ${config.color} ${config.borderColor} border h-fit`}>
-            <Icon className="h-4 w-4 mr-1" />
-            {config.label}
-          </Badge>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge className={`${config.bgColor} ${config.color} ${config.borderColor} border h-fit`}>
+              <Icon className="h-4 w-4 mr-1" />
+              {config.label}
+            </Badge>
+            {/* Botón cancelar — §5.3. Estados cancelables:
+                pendiente/confirmado/preparando/en_transito y estado_pago
+                distinto de pagado/procesando. */}
+            {pedido.estado !== 'entregado' && pedido.estado !== 'cancelado'
+              && estadoPago?.estado_pago !== 'pagado'
+              && estadoPago?.estado_pago !== 'procesando'
+              && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDialogoCancelarAbierto(true)}
+                  className="gap-2 border-destructive/40 text-destructive hover:bg-destructive/5 hover:text-destructive"
+                >
+                  <Ban className="h-4 w-4" />
+                  Cancelar pedido
+                </Button>
+              )}
+          </div>
         </div>
       </div>
 
@@ -374,6 +432,47 @@ export default function PedidoDetalle() {
         codigoPedido={pedido.codigo}
         onClose={() => setModalReintentoAbierto(false)}
       />
+
+      {/* Diálogo de confirmación para cancelar pedido (§5.3). */}
+      <AlertDialog
+        open={dialogoCancelarAbierto}
+        onOpenChange={(o) => { if (!cancelando) setDialogoCancelarAbierto(o); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Ban className="h-5 w-5 text-destructive" />
+              Cancelar pedido {pedido.codigo}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción cancelará el pedido y repondrá el stock automáticamente.
+              No se puede deshacer. Puedes agregar un motivo opcional para tu registro.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-foreground">Motivo (opcional)</label>
+            <Textarea
+              value={motivoCancelacion}
+              onChange={(e) => setMotivoCancelacion(e.target.value)}
+              placeholder="Ej: Ya no necesito el pedido"
+              rows={3}
+              disabled={cancelando}
+              maxLength={500}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelando}>Volver</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); cancelarPedido(); }}
+              disabled={cancelando}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {cancelando && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Sí, cancelar pedido
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

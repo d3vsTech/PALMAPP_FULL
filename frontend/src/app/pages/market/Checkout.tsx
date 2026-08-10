@@ -201,9 +201,9 @@ export default function Checkout() {
           const { session_id, test } = ini.data;
           abrirCheckoutEpayco(session_id, test, {
             onResponse: () => {
-              // No confiar en el response — solo redirigir a la página de
-              // resultado que hará polling al backend (fuente autoritativa).
-              navigate(`/market/pago/resultado?x_extra1=${encodeURIComponent(primer.codigo)}`);
+              // No confiar en el response — el listado detectará x_extra1
+              // en la URL y hará polling al backend (fuente autoritativa).
+              navigate(`/market/pedidos?x_extra1=${encodeURIComponent(primer.codigo)}`);
             },
             onClosed: () => {
               // Usuario cerró el modal sin completar — pedido queda pendiente.

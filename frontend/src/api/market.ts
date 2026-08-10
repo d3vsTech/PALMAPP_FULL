@@ -259,6 +259,15 @@ export const marketApi = {
 
   pedido: (codigo: string) =>
     get<{ data: Pedido }>(`/pedidos/${codigo}`),
+
+  /**
+   * Cancela un pedido activo antes de que el pago sea aprobado (§5.3).
+   * Repone stock automáticamente. Estados cancelables:
+   *   pendiente | confirmado | preparando | en_transito
+   * Siempre que `estado_pago` no sea `pagado` ni `procesando`.
+   */
+  cancelarPedido: (codigo: string, motivo?: string) =>
+    post<{ message: string }>(`/pedidos/${codigo}/cancelar`, motivo ? { motivo } : {}),
 };
 
 // ─── Códigos de error ────────────────────────────────────────────────────────
@@ -277,6 +286,10 @@ export const MarketErrorCodes = {
   STOCK_INSUFICIENTE: 'STOCK_INSUFICIENTE',
   STOCK_INSUFICIENTE_CONCURRENTE: 'STOCK_INSUFICIENTE_CONCURRENTE',
   PEDIDO_NOT_FOUND: 'PEDIDO_NOT_FOUND',
+  PEDIDO_YA_CANCELADO: 'PEDIDO_YA_CANCELADO',
+  PAGO_YA_APROBADO: 'PAGO_YA_APROBADO',
+  PAGO_EN_PROCESO: 'PAGO_EN_PROCESO',
+  PEDIDO_NO_CANCELABLE: 'PEDIDO_NO_CANCELABLE',
 } as const;
 
 // ─── Utilidades ──────────────────────────────────────────────────────────────

@@ -1,18 +1,23 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
+import { Textarea } from '../../components/ui/textarea';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '../../components/ui/alert-dialog';
 import {
   ArrowLeft, Package, Clock, CheckCircle, XCircle, Truck, PackageCheck,
-  Filter, Eye, Loader2, ChefHat,
+  Filter, Eye, Loader2, ChefHat, Ban,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  marketApi, toNumber,
+  marketApi, toNumber, MarketErrorCodes,
   type Pedido, type EstadoPedido, type PedidoStats,
 } from '../../../api/market';
 import { pagosApi, ESTADO_PAGO_LABEL, type EstadoPago } from '../../../api/pagos';
@@ -36,6 +41,7 @@ const estadoConfig: Record<EstadoPedido, {
 
 export default function Pedidos() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [stats, setStats] = useState<PedidoStats | null>(null);
@@ -47,6 +53,13 @@ export default function Pedidos() {
    *  al lado del estado logístico. Se hidrata solo para los pedidos que
    *  usan `epayco` (los otros métodos no tienen pasarela). */
   const [estadosPago, setEstadosPago] = useState<Map<string, EstadoPago>>(new Map());
+
+  /** Diálogo de cancelación (§5.3). Se abre al hacer click en el botón
+   *  "Cancelar" de la fila. `pedidoACancelar` guarda el código; motivo
+   *  opcional; `cancelando` bloquea el diálogo mientras se ejecuta. */
+  const [pedidoACancelar, setPedidoACancelar] = useState<string | null>(null);
+  const [motivoCancelacion, setMotivoCancelacion] = useState('');
+  const [cancelando, setCancelando] = useState(false);
 
   /**
    * Carga la página actual. Aceptamos `silent=true` para los refrescos en
@@ -92,6 +105,101 @@ export default function Pedidos() {
   // Auto-sincronización: refresca cada 20s y al volver a la pestaña,
   // así los cambios de estado hechos por el proveedor aparecen solos.
   useAutoRefresh(() => cargar(true), 20_000);
+
+  /**
+   * Detecta si venimos del redirect de ePayco (§10.5 punto 5). ePayco
+   * añade `x_extra1` con el código del pedido. Hacemos polling al estado
+   * (fuente autoritativa), mostramos un toast con el resultado y limpiamos
+   * el query param para no repetir el toast al refrescar.
+   */
+  const pagoConsultadoRef = useRef<string | null>(null);
+  useEffect(() => {
+    const codigo = searchParams.get('x_extra1');
+    if (!codigo || pagoConsultadoRef.current === codigo) return;
+    pagoConsultadoRef.current = codigo;
+
+    // Polling: el webhook puede tardar unos segundos en actualizar el estado.
+    const POLL_INTERVAL = 2500;
+    const POLL_MAX = 20_000;
+    const inicio = Date.now();
+    let cancelado = false;
+
+    const loop = async () => {
+      try {
+        const r = await pagosApi.estado(codigo);
+        if (cancelado) return;
+        const estado = r.data.estado_pago;
+        if (estado === 'procesando' && Date.now() - inicio < POLL_MAX) {
+          setTimeout(loop, POLL_INTERVAL);
+          return;
+        }
+        if (estado === 'pagado') {
+          toast.success(`Pago aprobado — pedido ${codigo}`, { duration: 6000 });
+        } else if (estado === 'rechazado') {
+          toast.error(`Pago rechazado — pedido ${codigo}`, {
+            duration: 8000,
+            description: r.data.ultimo_pago?.response_reason ?? undefined,
+          });
+        } else if (estado === 'fallido') {
+          toast.error(`Error al procesar el pago — pedido ${codigo}`, { duration: 8000 });
+        } else if (estado === 'procesando') {
+          toast.info(`Pago en proceso — pedido ${codigo}. Actualizaremos el estado en unos momentos.`, { duration: 6000 });
+        }
+      } catch {
+        // Silencioso — el usuario puede entrar al detalle para ver más.
+      }
+      // Limpiar el query param y refrescar el listado.
+      searchParams.delete('x_extra1');
+      searchParams.delete('ref_payco');
+      searchParams.delete('x_transaction_id');
+      searchParams.delete('x_response');
+      searchParams.delete('x_amount');
+      setSearchParams(searchParams, { replace: true });
+      cargar(true);
+    };
+
+    loop();
+    return () => { cancelado = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  /** Cancelable según §5.3: estado ∈ {pendiente,confirmado,preparando,en_transito}
+   *  y estado_pago ∉ {pagado, procesando}. */
+  const esCancelable = (p: Pedido): boolean => {
+    if (p.estado === 'entregado' || p.estado === 'cancelado') return false;
+    const ep = estadosPago.get(p.codigo);
+    if (ep === 'pagado' || ep === 'procesando') return false;
+    return true;
+  };
+
+  const ejecutarCancelacion = async () => {
+    if (!pedidoACancelar) return;
+    setCancelando(true);
+    try {
+      await marketApi.cancelarPedido(pedidoACancelar, motivoCancelacion.trim() || undefined);
+      toast.success('Pedido cancelado correctamente');
+      setPedidoACancelar(null);
+      setMotivoCancelacion('');
+      cargar();
+    } catch (err: any) {
+      const code = err?.code ?? err?.error_code;
+      if (code === MarketErrorCodes.PEDIDO_YA_CANCELADO) {
+        toast.info('El pedido ya está cancelado');
+        setPedidoACancelar(null);
+        cargar();
+      } else if (code === MarketErrorCodes.PAGO_YA_APROBADO) {
+        toast.error('No se puede cancelar: el pago ya fue aprobado');
+      } else if (code === MarketErrorCodes.PAGO_EN_PROCESO) {
+        toast.error('Hay un pago en curso. Espera a que se resuelva.');
+      } else if (code === MarketErrorCodes.PEDIDO_NO_CANCELABLE) {
+        toast.error('Este pedido ya no se puede cancelar');
+      } else {
+        toast.error(err?.message ?? 'No se pudo cancelar el pedido');
+      }
+    } finally {
+      setCancelando(false);
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -284,15 +392,28 @@ export default function Pedidos() {
                           ${toNumber(pedido.total).toLocaleString('es-CO')}
                         </p>
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => navigate(`/market/pedidos/${pedido.codigo}`)}
-                        className="gap-2 whitespace-nowrap"
-                      >
-                        <Eye className="h-4 w-4" />
-                        Ver detalles
-                      </Button>
+                      <div className="flex flex-col gap-2 w-full lg:w-auto">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => navigate(`/market/pedidos/${pedido.codigo}`)}
+                          className="gap-2 whitespace-nowrap"
+                        >
+                          <Eye className="h-4 w-4" />
+                          Ver detalles
+                        </Button>
+                        {esCancelable(pedido) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setPedidoACancelar(pedido.codigo)}
+                            className="gap-2 whitespace-nowrap border-destructive/40 text-destructive hover:bg-destructive/5 hover:text-destructive"
+                          >
+                            <Ban className="h-4 w-4" />
+                            Cancelar
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -327,6 +448,48 @@ export default function Pedidos() {
           </div>
         )}
       </div>
+
+      {/* Diálogo de cancelación (§5.3). Reusa el mismo patrón que la
+          pantalla de detalle para consistencia. */}
+      <AlertDialog
+        open={!!pedidoACancelar}
+        onOpenChange={(o) => { if (!cancelando && !o) setPedidoACancelar(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Ban className="h-5 w-5 text-destructive" />
+              Cancelar pedido {pedidoACancelar}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción cancelará el pedido y repondrá el stock automáticamente.
+              No se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-foreground">Motivo (opcional)</label>
+            <Textarea
+              value={motivoCancelacion}
+              onChange={(e) => setMotivoCancelacion(e.target.value)}
+              placeholder="Ej: Ya no necesito el pedido"
+              rows={3}
+              disabled={cancelando}
+              maxLength={500}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelando}>Volver</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); ejecutarCancelacion(); }}
+              disabled={cancelando}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {cancelando && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Sí, cancelar pedido
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
