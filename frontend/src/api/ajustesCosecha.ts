@@ -4,7 +4,7 @@
  * Cliente del módulo "Ajuste de Gajos Pendientes" de Viajes.
  * Ver API_VIAJES.md §13.
  *
- * Concepto de "clavijo": gajos reportados en la planilla que nunca aparecen
+ * Concepto de "clavija": gajos reportados en la planilla que nunca aparecen
  * físicamente en un camión. Cuando quedan pendientes durante 3+ viajes
  * FINALIZADOS, el sistema alerta al operador para decidir qué hacer:
  *
@@ -152,9 +152,9 @@ export const ajustesCosechaApi = {
 
 export const ACCION_AJUSTE_LABEL: Record<Accion, { label: string; color: string; descripcion: string }> = {
   CLAVIJO: {
-    label: 'Clavijo',
+    label: 'Clavija',
     color: 'bg-destructive/10 text-destructive border-destructive/30',
-    descripcion: 'Los gajos nunca existieron (clavijos). Se baja el reconteo al total real asignado.',
+    descripcion: 'Los gajos nunca existieron (clavijas). Se baja el reconteo al total real asignado.',
   },
   REASIGNADO: {
     label: 'Reasignado a otro viaje',

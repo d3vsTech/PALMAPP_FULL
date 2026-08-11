@@ -393,7 +393,7 @@ export default function ConteoCosecha() {
       // `viajes.cantidad_gajos_total`. Ese refresh vive únicamente en §5.5
       // paso 6. Sin este PUT, el listado de viajes mostraba 0 gajos.
       //
-      // Los "gajos pendientes" (base del módulo §13 de clavijos) se calculan
+      // Los "gajos pendientes" (base del módulo §13 de clavijas) se calculan
       // como `gajos_reportados − gajos_reconteo`, no dependen de omitir el PUT.
       const hayPeso = cosechaEnEdicion.pesoKg > 0;
       const res: any = await viajesApi.hidratarReconteo(viaje.id, detalleId, {
@@ -613,7 +613,7 @@ export default function ConteoCosecha() {
               <div className="space-y-4">
                 {/* Alerta compacta: solo aparece en el paso de cosecha, es
                     donde el usuario decide si arrastra pendientes viejos o
-                    los resuelve como clavijo. */}
+                    los resuelve como clavija. */}
                 {ajustesPendientes > 0 && (
                   <div
                     style={{
@@ -636,7 +636,7 @@ export default function ConteoCosecha() {
                         {ajustesPendientes === 1
                           ? 'cosecha con gajos pendientes hace 3+ viajes.'
                           : 'cosechas con gajos pendientes hace 3+ viajes.'}
-                        {' '}Podrían ser clavijos.
+                        {' '}Podrían ser clavijas.
                       </span>
                     </div>
                     <button

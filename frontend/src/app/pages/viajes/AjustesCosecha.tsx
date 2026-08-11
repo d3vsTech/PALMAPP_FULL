@@ -1,7 +1,7 @@
 /**
  * AjustesCosecha
  *
- * Pantalla dedicada a resolver cosechas con gajos pendientes tipo clavijo.
+ * Pantalla dedicada a resolver cosechas con gajos pendientes tipo clavija.
  * Se llega solo desde el banner de alerta en el paso Cosecha del conteo.
  *
  * URL: /viajes/ajustes-cosecha
@@ -221,7 +221,7 @@ export default function AjustesCosecha() {
                         <div className="flex items-center justify-center gap-1">
                           <button
                             onClick={() => abrirModal(cosecha, 'CLAVIJO')}
-                            title="Marcar como clavijo"
+                            title="Marcar como clavija"
                             className="h-8 w-8 rounded-lg bg-sky-100 hover:bg-sky-200 flex items-center justify-center transition-colors"
                           >
                             <Ghost className="h-4 w-4 text-sky-500" />
@@ -257,7 +257,7 @@ export default function AjustesCosecha() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-primary text-xl">
               <TriangleAlert className="h-5 w-5 text-orange-500 shrink-0" />
-              {opcion === 'CLAVIJO' && 'Marcar como clavijo'}
+              {opcion === 'CLAVIJO' && 'Marcar como clavija'}
               {opcion === 'REASIGNADO' && 'Reasignar a otro viaje'}
               {opcion === 'MANTENIDO' && 'Mantener pendientes'}
             </DialogTitle>
@@ -348,8 +348,8 @@ export default function AjustesCosecha() {
             {/* Caja informativa */}
             {opcion === 'CLAVIJO' && (
               <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 space-y-1.5">
-                <span className="inline-block text-xs font-semibold px-2.5 py-0.5 rounded-full bg-sky-100 text-sky-600 border border-sky-300">Clavijo</span>
-                <p className="text-sm text-foreground font-medium">Los gajos nunca existieron (clavijos). Se baja el reconteo al total real asignado.</p>
+                <span className="inline-block text-xs font-semibold px-2.5 py-0.5 rounded-full bg-sky-100 text-sky-600 border border-sky-300">Clavija</span>
+                <p className="text-sm text-foreground font-medium">Los gajos nunca existieron (clavijas). Se baja el reconteo al total real asignado.</p>
               </div>
             )}
             {opcion === 'REASIGNADO' && (
