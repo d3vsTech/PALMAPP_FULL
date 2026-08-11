@@ -112,7 +112,7 @@ export function ModalReintentoEpayco({ open, codigoPedido, onClose }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o && !enviando) onClose(); }}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CreditCard className="h-5 w-5 text-primary" />
