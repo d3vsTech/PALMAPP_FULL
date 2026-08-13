@@ -23,7 +23,6 @@ import {
 } from '../../../api/pagos';
 import { ModalReintentoEpayco } from '../../components/market/ModalReintentoEpayco';
 import { formatFecha, formatFechaHora } from '../../utils/fecha';
-import { useAutoRefresh } from '../../hooks/useAutoRefresh';
 
 const estadoConfig: Record<EstadoPedido, {
   label: string;
@@ -81,9 +80,8 @@ export default function PedidoDetalle() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [codigo, navigate]);
 
-  // Auto-sincronización: el proveedor puede cambiar el estado mientras la
-  // finca tiene esta pantalla abierta. Polling 20s + al volver a la pestaña.
-  useAutoRefresh(() => cargar(true), 20_000);
+  // Se eliminó el auto-refresh periódico — para ver cambios el usuario
+  // recarga con F5 o navega de nuevo a la pantalla.
 
   /** Ejecuta la cancelación con el motivo opcional (§5.3). */
   const cancelarPedido = async () => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
@@ -22,7 +22,6 @@ import {
 } from '../../../api/market';
 import { pagosApi, ESTADO_PAGO_LABEL, type EstadoPago } from '../../../api/pagos';
 import { formatFecha } from '../../utils/fecha';
-import { useAutoRefresh } from '../../hooks/useAutoRefresh';
 
 const estadoConfig: Record<EstadoPedido, {
   label: string;
@@ -51,8 +50,16 @@ export default function Pedidos() {
   const [cargando, setCargando] = useState(true);
   /** Estado de pago por código de pedido. Alimenta el badge que aparece
    *  al lado del estado logístico. Se hidrata solo para los pedidos que
-   *  usan `epayco` (los otros métodos no tienen pasarela). */
+   *  usan `epayco` (los otros métodos no tienen pasarela).
+   *
+   *  Optimización: los estados terminales (`pagado`, `rechazado`, `fallido`)
+   *  no vuelven a consultarse — solo re-consultamos los que están en
+   *  `pendiente` o `procesando` (que sí pueden cambiar por el webhook). */
   const [estadosPago, setEstadosPago] = useState<Map<string, EstadoPago>>(new Map());
+  /** Ref con el snapshot más reciente del mapa — para leer dentro de
+   *  `cargar` sin meter estadosPago en las dependencias del useCallback. */
+  const estadosPagoRef = useRef<Map<string, EstadoPago>>(new Map());
+  useEffect(() => { estadosPagoRef.current = estadosPago; }, [estadosPago]);
 
   /** Diálogo de cancelación (§5.3). Se abre al hacer click en el botón
    *  "Cancelar" de la fila. `pedidoACancelar` guarda el código; motivo
@@ -76,9 +83,17 @@ export default function Pedidos() {
         setPedidos(res.data);
         setStats(res.stats);
         setMeta(res.meta);
-        // Hidratar estado de pago solo para pedidos `epayco` — los otros
-        // no tienen registro en /pago/estado y el backend responde 422.
-        const objetivos = (res.data ?? []).filter((p: any) => p.metodo_pago === 'epayco');
+
+        // Hidratar estado de pago solo la primera vez que vemos el pedido.
+        // Los auto-refresh silenciosos no vuelven a consultar — para ver el
+        // estado actualizado, el usuario refresca (F5) o entra al detalle
+        // del pedido (esa pantalla tiene su propio polling).
+        const cache = estadosPagoRef.current;
+        const objetivos = (res.data ?? []).filter((p: any) => {
+          if (p.metodo_pago !== 'epayco') return false;
+          return !cache.has(p.codigo);
+        });
+        if (objetivos.length === 0) return;
         const entries = await Promise.all(
           objetivos.map(async (p) => {
             try {
@@ -89,7 +104,11 @@ export default function Pedidos() {
             }
           }),
         );
-        setEstadosPago(new Map(entries.filter(Boolean) as Array<readonly [string, EstadoPago]>));
+        const nuevos = new Map(cache);
+        (entries.filter(Boolean) as Array<readonly [string, EstadoPago]>).forEach(([codigo, estado]) => {
+          nuevos.set(codigo, estado);
+        });
+        setEstadosPago(nuevos);
       })
       .catch((e: any) => {
         if (!silent) toast.error(e?.message ?? 'Error al cargar pedidos');
@@ -102,9 +121,9 @@ export default function Pedidos() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtroEstado, page]);
 
-  // Auto-sincronización: refresca cada 20s y al volver a la pestaña,
-  // así los cambios de estado hechos por el proveedor aparecen solos.
-  useAutoRefresh(() => cargar(true), 20_000);
+  // Se eliminó el auto-refresh periódico — los pedidos no cambian tanto
+  // como para justificar un polling constante. El usuario puede recargar
+  // con F5 o navegar de nuevo a la pantalla si quiere ver actualizaciones.
 
   /**
    * Si ePayco cayó en el fallback (`response_url` del backend), aterrizamos
