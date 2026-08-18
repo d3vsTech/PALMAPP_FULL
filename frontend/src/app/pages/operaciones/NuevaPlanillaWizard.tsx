@@ -4545,10 +4545,10 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
               {!modoLectura && isEditMode && estadoPlanilla === 'BORRADOR' && etapaActual < ETAPAS.length && (
                 <Button
                   variant="outline"
-                  onClick={() => guardarTodo({ stayHere: true })}
+                  onClick={() => guardarTodo()}
                   disabled={guardando}
                   className="gap-2 border-success text-success hover:bg-success/10"
-                  title="Guardar cambios sin cerrar la planilla"
+                  title="Guardar cambios y volver al listado"
                 >
                   {guardando ? (
                     <>

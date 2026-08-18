@@ -18,7 +18,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Button } from '../ui/button';
 import { Checkbox } from '../ui/checkbox';
 import { Input } from '../ui/input';
-import { Badge } from '../ui/badge';
 import { Users, Search, ChevronDown, X } from 'lucide-react';
 
 export interface ColaboradorOption {
@@ -99,10 +98,8 @@ export function MultiSelectColaboradores({
       <PopoverContent
         className="p-0"
         align="start"
-        sideOffset={4}
-        // Ancho exacto del trigger — la variable CSS la expone Radix Popover
-        // en tiempo de render. Usamos inline style porque Tailwind arbitrary
-        // values a veces no interpola bien las vars de Radix.
+        // side="bottom" y avoidCollisions=false ya son defaults globales en
+        // src/app/components/ui/popover.tsx — todo popover abre hacia abajo.
         style={{
           width: 'var(--radix-popover-trigger-width)',
           minWidth: '320px',
@@ -130,7 +127,6 @@ export function MultiSelectColaboradores({
           <div className="max-h-72 overflow-y-auto py-1">
             {opciones.map((col) => {
               const checked = seleccionadosSet.has(col.id);
-              const esFijo = !col.terceroNombre && col.modalidad_pago === 'FIJO';
               return (
                 <button
                   key={col.id}
@@ -141,26 +137,10 @@ export function MultiSelectColaboradores({
                   }`}
                 >
                   <Checkbox checked={checked} className="shrink-0" />
-                  <span className="flex-1 text-left flex items-center gap-2 min-w-0">
+                  <span className="flex-1 text-left min-w-0">
                     <span className="truncate">
                       {col.nombres} {col.apellidos}
                     </span>
-                    {col.terceroNombre && (
-                      <Badge
-                        variant="outline"
-                        className="text-[9px] font-semibold uppercase tracking-wide bg-orange-100 text-orange-700 border-orange-200 shrink-0"
-                      >
-                        {col.terceroNombre}
-                      </Badge>
-                    )}
-                    {esFijo && (
-                      <Badge
-                        variant="outline"
-                        className="text-[9px] font-semibold uppercase tracking-wide bg-slate-200 text-slate-700 border-slate-300 shrink-0"
-                      >
-                        FIJO · $0
-                      </Badge>
-                    )}
                   </span>
                   {renderExtra && <span className="shrink-0">{renderExtra(col)}</span>}
                 </button>
