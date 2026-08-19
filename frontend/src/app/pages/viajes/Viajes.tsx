@@ -452,13 +452,20 @@ export default function Viajes() {
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-muted-foreground">Estado</label>
-                      <select value={filtros.estado} onChange={e => handleFiltroChange('estado', e.target.value)}
-                        className="flex h-9 w-full rounded-md border border-input bg-background pl-3 pr-9 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                        <option value="">Todos</option>
-                        <option value="Creado">Creado</option>
-                        <option value="En Validación">En Validación</option>
-                        <option value="Finalizado">Finalizado</option>
-                      </select>
+                      <Select
+                        value={filtros.estado || '__todos__'}
+                        onValueChange={(v) => handleFiltroChange('estado', v === '__todos__' ? '' : v)}
+                      >
+                        <SelectTrigger className="h-9 w-full">
+                          <SelectValue placeholder="Todos" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__todos__">Todos</SelectItem>
+                          <SelectItem value="Creado">Creado</SelectItem>
+                          <SelectItem value="En Validación">En Validación</SelectItem>
+                          <SelectItem value="Finalizado">Finalizado</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-muted-foreground">Vehículo</label>

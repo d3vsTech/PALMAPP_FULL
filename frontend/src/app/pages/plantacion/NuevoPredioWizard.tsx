@@ -1707,19 +1707,36 @@ export default function NuevoPredioWizard() {
                   </div>
                   <div className="space-y-2">
                     <Label>Departamento</Label>
-                    <select value={deptoSel} onChange={e => { setDeptoSel(e.target.value); setMunSel(''); }}
-                      className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
-                      <option value="">Seleccionar...</option>
-                      {departamentos.map(d => <option key={d.codigo} value={d.codigo}>{d.nombre}</option>)}
-                    </select>
+                    <Select
+                      value={deptoSel || undefined}
+                      onValueChange={(v) => { setDeptoSel(v); setMunSel(''); }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Seleccionar..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {departamentos.map(d => (
+                          <SelectItem key={d.codigo} value={d.codigo}>{d.nombre}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
                     <Label>Municipio</Label>
-                    <select value={munSel} onChange={e => setMunSel(e.target.value)} disabled={!deptoSel}
-                      className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50">
-                      <option value="">Seleccionar...</option>
-                      {municipios.map(m => <option key={m.codigo} value={m.codigo}>{m.nombre}</option>)}
-                    </select>
+                    <Select
+                      value={munSel || undefined}
+                      onValueChange={setMunSel}
+                      disabled={!deptoSel}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Seleccionar..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {municipios.map(m => (
+                          <SelectItem key={m.codigo} value={m.codigo}>{m.nombre}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="hectareas">Hectáreas Totales *</Label>
