@@ -244,6 +244,14 @@ export interface Jornal {
   cantidad_palmas?: number | null;
   insumo_id?: number | null;
   gramos_por_palma?: number | null;
+  /**
+   * §4.7 LABORES_JORNALES — FK a `labor_actividades`. Solo aplica a jornales
+   * de SANIDAD o de labor custom PALMA con `tipo=null`. NULL en jornales
+   * históricos (o cuando el usuario escribió `descripcion` a mano).
+   * Backend snapshotea `descripcion = actividad.nombre` cuando se envía este id
+   * sin `descripcion`.
+   */
+  labor_actividad_id?: number | null;
   descripcion?: string | null;
   nombre_trabajo?: string | null;
   ubicacion?: string | null;
@@ -489,6 +497,17 @@ export interface WizardInitBundle {
      * operario de un tercero específico.
      */
     tercero_labor_overrides: TerceroLaborOverride[];
+    /**
+     * §19 API_PARAMETRICAS — actividades predefinidas (sublabores) indexadas
+     * por `labor_id`. Solo aplica a la labor fija SANIDAD y a labores custom
+     * de PALMA (`es_sistema=false`, `tipo=null`). Alimenta el select
+     * "Trabajo realizado" en las tabs SANIDAD y OTROS del wizard.
+     */
+    actividades_por_labor?: Record<string, Array<{
+      id: number;
+      labor_id: number;
+      nombre: string;
+    }>>;
   };
 }
 
@@ -815,6 +834,13 @@ export interface JornalPayload {
   cantidad_palmas?: number;
   insumo_id?: number;
   gramos_por_palma?: number;
+  /**
+   * §4.7 LABORES_JORNALES — id de una actividad del catálogo (SANIDAD y
+   * custom PALMA). Si se envía sin `descripcion`, el backend snapshotea
+   * `descripcion = actividad.nombre`. Para SANIDAD basta con enviar
+   * `labor_actividad_id` O `descripcion` (al menos uno).
+   */
+  labor_actividad_id?: number | null;
   descripcion?: string;
   nombre_trabajo?: string;
   ubicacion?: string;
@@ -862,6 +888,11 @@ export interface CrearJornalGrupoPayload {
   cantidad_palmas?: number;
   insumo_id?: number;
   gramos_por_palma?: number;
+  /**
+   * §4.7 LABORES_JORNALES — id de una actividad del catálogo. Se propaga
+   * a cada jornal hijo del grupo. Ver notas en `JornalPayload`.
+   */
+  labor_actividad_id?: number | null;
   descripcion?: string;
   nombre_trabajo?: string;
   ubicacion?: string;
@@ -957,6 +988,29 @@ export const jornalesApi = {
     smartRequest<{ data: Array<{ id: number; sync_uuid: string | null }> }>(
       `${BASE}/operaciones/${operacionId}/jornales/bulk`,
       { method: 'POST', body: JSON.stringify({ items }) },
+    ),
+
+  /**
+   * Actualiza N jornales existentes de una misma operación en una sola
+   * petición. Reemplaza el patrón anterior de N `PUT /jornales/{id}` en
+   * paralelo por 1 sola llamada.
+   *
+   * Cada item debe traer `id` del jornal + los campos a modificar (mismo
+   * schema que `JornalPayload`, con XOR `empleado_id`/`operario_id` y las
+   * reglas de labor). El backend valida por item y responde 200 con los
+   * jornales completos ya recalculados.
+   *
+   * Errores del bloque:
+   *  - 409 `OPERACION_APROBADA`: la planilla está aprobada.
+   *  - 422 `CALC_ERROR`: validación o cálculo (campo faltante).
+   */
+  bulkUpdate: (
+    operacionId: number,
+    items: Array<Partial<JornalPayload> & { id: number }>,
+  ) =>
+    smartRequest<{ data: Jornal[] }>(
+      `${BASE}/operaciones/${operacionId}/jornales/bulk-update`,
+      { method: 'PUT', body: JSON.stringify({ items }) },
     ),
 
   editar: (id: number, payload: Partial<JornalPayload>) =>
@@ -1211,46 +1265,6 @@ export const selectsApi = {
       es_sistema: boolean;
       requiere_cosecha_workflow: boolean;
     }> }>(`${BASE}/labores/select${qs(params)}`),
-
-  /**
-   * @deprecated `/labores-palma/select` ya no existe. Usa `labores({categoria:'PALMA'})`.
-   * Wrapper retrocompat: filtra del endpoint unificado las labores PALMA
-   * custom (es_sistema=false) más las fijas, para mantener compat con el wizard
-   * tab OTROS que muestra todas las opciones de palma.
-   */
-  laboresPalma: async (_params: { estado?: boolean } = {}) => {
-    const res = await requestConToken<{ data: Array<any> }>(
-      `${BASE}/labores/select${qs({ categoria: 'PALMA' })}`,
-    );
-    return { data: (res.data ?? []) as Array<{
-      id: number;
-      nombre: string;
-      tipo_pago: 'POR_PALMA' | 'JORNAL_FIJO';
-      precio_palma: string | number | null;
-      es_sistema?: boolean;
-      tipo?: string | null;
-      requiere_cosecha_workflow?: boolean;
-    }> };
-  },
-
-  /**
-   * @deprecated `/precios-palma` ya no existe. Usa `labores({categoria:'PALMA'})`
-   * y filtra `es_sistema=true` para tener solo las 5 fijas.
-   */
-  preciosPalma: async () => {
-    const res = await requestConToken<{ data: Array<any> }>(
-      `${BASE}/labores/select${qs({ categoria: 'PALMA' })}`,
-    );
-    const fijas = (res.data ?? []).filter((l: any) => l.es_sistema === true);
-    return { data: fijas as Array<{
-      id: number;
-      tipo: 'COSECHA' | 'PLATEO' | 'PODA' | 'FERTILIZACION' | 'SANIDAD';
-      tipo_pago: 'POR_PALMA' | 'JORNAL_FIJO';
-      precio_palma: string | number | null;
-      estado: boolean;
-      es_sistema: boolean;
-    }> };
-  },
 
   motivosAusencia: (params: { estado?: boolean } = {}) =>
     requestConToken<{ data: Array<{

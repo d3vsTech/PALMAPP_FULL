@@ -115,9 +115,8 @@ export type {
   // §4 Labores (unificado: palma fijas + custom palma + custom finca)
   Labor, LaborPayload, LaborSelectItem, LaborParams,
   CategoriaLabor, TipoLaborPalma, TipoPagoLabor,
-  // Aliases deprecated mantenidos por retrocompatibilidad
-  PrecioPalma, PrecioPalmaPayload, TipoPalmaPrecio, TipoPagoPalma,
-  LaborPalma, LaborPalmaPayload, LaborPalmaSelectItem, LaborPalmaParams,
+  // §19 Actividades de labor (sublabores para SANIDAD y custom PALMA)
+  LaborActividad, LaborActividadPayload,
   PromedioLote, PromedioLotePayload,
   Cargo, CargoPayload, SalarioTipoCargo,
   ModalidadContrato, ModalidadContratoPayload,

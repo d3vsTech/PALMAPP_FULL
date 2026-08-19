@@ -148,10 +148,6 @@ export type CategoriaLabor = 'PALMA' | 'FINCA';
 export type TipoLaborPalma = 'COSECHA' | 'PLATEO' | 'PODA' | 'FERTILIZACION' | 'SANIDAD';
 export type TipoPagoLabor = 'POR_PALMA' | 'JORNAL_FIJO';
 
-/** Alias retrocompatibles con código existente. */
-export type TipoPagoPalma = TipoPagoLabor;
-export type TipoPalmaPrecio = TipoLaborPalma;
-
 export interface Labor {
   id: number;
   tenant_id?: number;
@@ -200,19 +196,24 @@ export interface LaborParams extends ParametricaParams {
   es_sistema?: boolean;
 }
 
-/** ─── Alias deprecated para no romper imports existentes ──────────────────── */
-/** @deprecated Usar `Labor` con `es_sistema=true` (§4 unificado). */
-export type PrecioPalma = Labor;
-/** @deprecated Usar `LaborPayload`. */
-export type PrecioPalmaPayload = Partial<LaborPayload>;
-/** @deprecated Usar `Labor` con `es_sistema=false`. */
-export type LaborPalma = Labor;
-/** @deprecated Usar `LaborSelectItem`. */
-export type LaborPalmaSelectItem = LaborSelectItem;
-/** @deprecated Usar `LaborPayload`. */
-export type LaborPalmaPayload = LaborPayload & { precio?: number };
-/** @deprecated Usar `LaborParams`. */
-export type LaborPalmaParams = LaborParams;
+/**
+ * §19 Actividad de Labor (sublabor). Registro del catálogo predefinido de
+ * "trabajos realizados" que aparece en las tabs SANIDAD y OTROS del wizard.
+ */
+export interface LaborActividad {
+  id: number;
+  tenant_id: number;
+  labor_id: number;
+  nombre: string;
+  estado: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface LaborActividadPayload {
+  nombre: string;
+  estado?: boolean;
+}
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 5. PROMEDIOS POR LOTE
@@ -765,68 +766,49 @@ export const configuracionApi = {
   },
 
   /**
-   * @deprecated `/precios-palma` ya no existe en el backend. Usa
-   * `configuracionApi.labores.listar({categoria: 'PALMA', es_sistema: true})`
-   * y `editar(id, { tipo_pago, precio_palma, estado })`.
-   * Wrappers de retrocompatibilidad para pantallas que aún no migraron.
+   * §19 Actividades de Labor (Sublabores).
+   *
+   * Catálogo de actividades predefinidas para las tabs SANIDAD y OTROS
+   * (labores custom de PALMA) del wizard de Operaciones. Reemplaza el campo
+   * de texto libre "Trabajo Realizado" por un select del catálogo.
+   *
+   * Alcance: solo aplica a labores donde:
+   *  - `tipo = 'SANIDAD'` (fija del sistema), O
+   *  - `es_sistema = false` AND `categoria = 'PALMA'` AND `tipo IS NULL`.
+   *
+   * Endpoints:
+   *  GET    /labores/{labor}/actividades              — lista por labor
+   *  POST   /labores/{labor}/actividades              — crea desde configuración
+   *  POST   /labores/{labor}/actividades/wizard       — quick-create desde wizard
+   *  GET    /labor-actividades/{id}                   — detalle
+   *  PUT    /labor-actividades/{id}                   — editar
+   *  DELETE /labor-actividades/{id}                   — eliminar
    */
-  preciosPalma: {
-    listar: async () => {
-      const res = await apiClient.get<PaginatedResponse<Labor>>(
-        `/v1/tenant/labores${toQuery({ categoria: 'PALMA', es_sistema: true, per_page: 100 })}`,
-        T,
-      );
-      return { data: res.data };
-    },
+  laborActividades: {
+    /** Lista actividades de una labor. `estado`: 'all' → todas, false → inactivas,
+     *  sin param → solo activas (default backend). */
+    listarPorLabor: (laborId: number, params?: { estado?: boolean | 'all' }) =>
+      apiClient.get<{ data: LaborActividad[] }>(
+        `/v1/tenant/labores/${laborId}/actividades${toQuery(params)}`, T),
+    /** Crear desde pantalla de configuración (requiere `configuracion.editar`). */
+    crear: (laborId: number, payload: LaborActividadPayload) =>
+      apiClient.post<{ message: string; data: LaborActividad }>(
+        `/v1/tenant/labores/${laborId}/actividades`, payload, T),
+    /**
+     * Quick-create desde el wizard (permite `operaciones.crear` u `.editar`,
+     * NO requiere `configuracion.editar`). Si el nombre ya existe devuelve
+     * 409 `ACTIVIDAD_DUPLICADA` con el registro existente en `data`.
+     */
+    crearDesdeWizard: (laborId: number, nombre: string) =>
+      apiClient.post<{ message: string; data: LaborActividad }>(
+        `/v1/tenant/labores/${laborId}/actividades/wizard`, { nombre }, T),
     ver: (id: number) =>
-      apiClient.get<{ data: Labor }>(`/v1/tenant/labores/${id}`, T),
-    editar: (id: number, payload: PrecioPalmaPayload) =>
-      apiClient.put<{ message: string; data: Labor }>(
-        `/v1/tenant/labores/${id}`, payload, T),
-  },
-
-  /**
-   * @deprecated `/labores-palma` ya no existe. Usa `configuracionApi.labores`
-   * con `categoria=PALMA` y `es_sistema=false`. Wrappers retrocompatibles abajo.
-   */
-  laboresPalma: {
-    select: async () => {
-      const res = await apiClient.get<{ data: LaborSelectItem[] }>(
-        `/v1/tenant/labores/select${toQuery({ categoria: 'PALMA' })}`, T,
-      );
-      // El wizard antes esperaba solo custom; ahora le entregamos custom + fijas
-      // porque el catálogo está unificado. Si la pantalla necesita filtrar las
-      // fijas, debe revisar `es_sistema`.
-      return { data: res.data };
-    },
-    listar: async (params?: LaborParams) => {
-      const res = await apiClient.get<PaginatedResponse<Labor>>(
-        `/v1/tenant/labores${toQuery({ ...params, categoria: 'PALMA', es_sistema: false })}`,
-        T,
-      );
-      return res;
-    },
-    ver: (id: number) =>
-      apiClient.get<{ data: Labor }>(`/v1/tenant/labores/${id}`, T),
-    crear: (payload: LaborPalmaPayload) => {
-      // `precio` (legacy) se mapea a `precio_palma`.
-      const { precio, ...resto } = payload;
-      return apiClient.post<{ message: string; data: Labor }>(
-        '/v1/tenant/labores',
-        { ...resto, categoria: 'PALMA', precio_palma: precio ?? resto.precio_palma },
-        T,
-      );
-    },
-    editar: (id: number, payload: Partial<LaborPalmaPayload>) => {
-      const { precio, ...resto } = payload;
-      return apiClient.put<{ message: string; data: Labor }>(
-        `/v1/tenant/labores/${id}`,
-        { ...resto, ...(precio != null ? { precio_palma: precio } : {}) },
-        T,
-      );
-    },
+      apiClient.get<{ data: LaborActividad }>(`/v1/tenant/labor-actividades/${id}`, T),
+    editar: (id: number, payload: Partial<LaborActividadPayload>) =>
+      apiClient.put<{ message: string; data: LaborActividad }>(
+        `/v1/tenant/labor-actividades/${id}`, payload, T),
     eliminar: (id: number) =>
-      apiClient.delete<{ message: string }>(`/v1/tenant/labores/${id}`, T),
+      apiClient.delete<{ message: string }>(`/v1/tenant/labor-actividades/${id}`, T),
   },
 
   // ── 5. Promedios por Lote ──────────────────────────────────────────────────
@@ -1030,4 +1012,10 @@ export const ConfiguracionErrorCodes = {
   CORTE_QUINCENA_INVALIDO: 'CORTE_QUINCENA_INVALIDO',
   /** Motivo de ausencia con ausencias asociadas — no se puede eliminar. */
   MOTIVO_CON_AUSENCIAS: 'MOTIVO_CON_AUSENCIAS',
+  /** §19 — La labor no admite actividades (no es SANIDAD ni custom PALMA). */
+  LABOR_NO_ADMITE_ACTIVIDADES: 'LABOR_NO_ADMITE_ACTIVIDADES',
+  /** §19 — Nombre de actividad ya existe para esa labor en el tenant. */
+  ACTIVIDAD_DUPLICADA: 'ACTIVIDAD_DUPLICADA',
+  /** §19 — Actividad con jornales asociados — no se puede eliminar. */
+  ACTIVIDAD_CON_JORNALES: 'ACTIVIDAD_CON_JORNALES',
 } as const;

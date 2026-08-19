@@ -17,17 +17,22 @@ import {
   ConfiguracionErrorCodes,
   type PrecioCosecha,
   type PrecioAbono,
-  type PrecioPalma,
-  type TipoPalmaPrecio,
   type Labor,
 } from '../../../api/configuracion';
+
+/**
+ * Claves que esta pantalla usa para agrupar precios en el tab "Palma".
+ * `OTROS` no existe en el enum del backend (las labores custom tienen
+ * `tipo=null`); es solo un ID local para renderizar la card de custom.
+ */
+type PalmaKey = 'PLATEO' | 'PODA' | 'SANIDAD' | 'OTROS';
 import { lotesApi, sublotesApi } from '../../../api/plantacion';
 import { formatCOP, formatThousands, parseCOP, formatDecimal, parseDecimal } from '../lib/format';
 
 type LoteOption = { id: number; nombre: string };
 type SubloteOption = { id: number; nombre: string; lote_id: number };
 
-const PALMA_LABEL: Record<TipoPalmaPrecio, string> = {
+const PALMA_LABEL: Record<PalmaKey, string> = {
   PLATEO: 'Precio Plateo',
   PODA: 'Precio Poda',
   SANIDAD: 'Precio Control de Plagas',
@@ -37,26 +42,26 @@ const PALMA_LABEL: Record<TipoPalmaPrecio, string> = {
 /** Subtítulo y unidad se derivan del `tipo_pago` real del backend §4b
  *  (POR_PALMA o JORNAL_FIJO), no del `tipo` hardcodeado, para que cuando
  *  el admin cambia el tipo_pago desde "Labores", se refleje aquí también. */
-function palmaSubLabel(p: PrecioPalma): string {
+function palmaSubLabel(p: Labor): string {
   return p.tipo_pago === 'JORNAL_FIJO' ? 'Precio por jornal fijo' : 'Precio por palma';
 }
 
-function palmaUnidad(p: PrecioPalma): string {
+function palmaUnidad(p: Labor): string {
   return p.tipo_pago === 'JORNAL_FIJO' ? '/jornal' : '/palma';
 }
 
-function palmaLabelInput(p: PrecioPalma): string {
+function palmaLabelInput(p: Labor): string {
   return p.tipo_pago === 'JORNAL_FIJO' ? 'Valor por Jornal' : 'Valor por Palma';
 }
 
-const PALMA_GRADIENT: Record<TipoPalmaPrecio, string> = {
+const PALMA_GRADIENT: Record<PalmaKey, string> = {
   PLATEO: 'from-amber-50/50 to-amber-50/10 dark:from-amber-950/20 dark:to-amber-950/5',
   PODA: 'from-purple-50/50 to-purple-50/10 dark:from-purple-950/20 dark:to-purple-950/5',
   SANIDAD: 'from-red-50/50 to-red-50/10 dark:from-red-950/20 dark:to-red-950/5',
   OTROS: 'from-slate-50/50 to-slate-50/10 dark:from-slate-950/20 dark:to-slate-950/5',
 };
 
-const PALMA_VALUE: Record<TipoPalmaPrecio, string> = {
+const PALMA_VALUE: Record<PalmaKey, string> = {
   PLATEO: 'plateo',
   PODA: 'poda',
   SANIDAD: 'sanidad',
@@ -75,7 +80,7 @@ type CacheShape = {
   tenant: string | null;
   cosecha: PrecioCosecha[];
   abono: PrecioAbono[];
-  palma: PrecioPalma[];
+  palma: Labor[];
   palmaCustom: Labor[];
   finca: Labor[];
   lotes: LoteOption[];
@@ -151,7 +156,7 @@ export function PreciosLaboresTab() {
   const [nuevosRangos, setNuevosRangos] = useState<RangoNuevo[]>([]);
 
   // Precios de Palma — labores fijas (es_sistema=true)
-  const [preciosPalma, setPreciosPalma] = useState<PrecioPalma[]>(cached?.palma ?? []);
+  const [preciosPalma, setPreciosPalma] = useState<Labor[]>(cached?.palma ?? []);
   const [palmaInputs, setPalmaInputs] = useState<Record<number, string>>(
     Object.fromEntries(
       (cached?.palma ?? []).map((p) => [p.id, p.precio_palma != null ? formatDecimal(p.precio_palma) : '']),
@@ -191,7 +196,7 @@ export function PreciosLaboresTab() {
     const aplicar = (datos: {
       cosecha: PrecioCosecha[];
       rangos: PrecioAbono[];
-      palma: PrecioPalma[];
+      palma: Labor[];
       palmaCustom: Labor[];
       finca: Labor[];
       ls: LoteOption[];
@@ -553,7 +558,7 @@ export function PreciosLaboresTab() {
   // ── Palma (PLATEO/PODA/SANIDAD/COSECHA/FERTILIZACION fijas) ───────────────
   // PUT /labores/{id} con precio_palma. El wrapper preciosPalma.editar lo
   // redirige al endpoint unificado §4.
-  const handleSavePalma = async (palma: PrecioPalma) => {
+  const handleSavePalma = async (palma: Labor) => {
     const raw = palmaInputs[palma.id];
     const limpio = parseDecimal(raw);
     const precio = !limpio ? null : Number(limpio);
@@ -1048,7 +1053,7 @@ export function PreciosLaboresTab() {
                 · SANIDAD       → no se gestiona en esta finca como labor estándar.
                 · OTROS         → el §4 unificado ya no usa este tipo. */}
           {preciosPalma
-            .filter((p) => p.tipo === 'PLATEO' || p.tipo === 'PODA')
+            .filter((p): p is Labor & { tipo: 'PLATEO' | 'PODA' } => p.tipo === 'PLATEO' || p.tipo === 'PODA')
             .map((palma) => (
             <AccordionItem key={`fija-${palma.id}`} value={PALMA_VALUE[palma.tipo]} className="border-0">
               <Card className="border-border">

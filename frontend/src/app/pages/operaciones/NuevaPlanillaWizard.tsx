@@ -7,6 +7,7 @@ import { Label } from '../../components/ui/label';
 import { Textarea } from '../../components/ui/textarea';
 import { Badge } from '../../components/ui/badge';
 import { MultiSelectColaboradores } from '../../components/operaciones/MultiSelectColaboradores';
+import { SelectActividadLabor } from '../../components/operaciones/SelectActividadLabor';
 import {
   Select,
   SelectContent,
@@ -131,7 +132,14 @@ interface TrabajoSanidad {
   colaboradores: string[];
   lote: string;
   sublote: string;
+  /** Nombre visible del trabajo. Snapshot para render. */
   trabajoRealizado: string;
+  /**
+   * §4.7 LABORES_JORNALES — FK a `labor_actividades`. Se envía al backend
+   * cuando existe. `null` significa "texto libre" (histórico o el usuario
+   * escribió a mano) — el backend acepta ambos casos en SANIDAD.
+   */
+  laborActividadId?: number | null;
 }
 
 interface TrabajoOtros {
@@ -149,6 +157,11 @@ interface TrabajoOtros {
   laborOtrosTipoPago?: 'POR_PALMA' | 'JORNAL_FIJO';
   nombre: string;
   laborRealizada: string;
+  /**
+   * §4.7 LABORES_JORNALES — FK a `labor_actividades`. Ver nota en
+   * `TrabajoSanidad.laborActividadId`.
+   */
+  laborActividadId?: number | null;
   /** Solo POR_PALMA — autofill desde sublote.cantidad_palmas, editable. */
   numeroPalmas?: number;
   /** Solo JORNAL_FIJO — opcional, texto libre para detallar el trabajo. */
@@ -338,6 +351,37 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
    */
   const isBackendId = (id: string): boolean => /^\d+$/.test(id);
 
+  /**
+   * Dirty tracking: snapshot serializado de cada item hidratado del backend
+   * al abrir la planilla en modo edición. Al guardar, comparamos el estado
+   * actual contra el snapshot y solo enviamos PUT para los items que cambiaron.
+   * Evita gatillar N PUTs cuando el usuario solo tocó la fecha del paso 1.
+   *
+   * Clave: `${bucket}:${backendId}` (ej. "plateo:346", "cosecha:12").
+   * Valor: `JSON.stringify(item)` al momento de la hidratación.
+   */
+  const snapshotItemsRef = useRef<Map<string, string>>(new Map());
+  const snapshotKey = (bucket: string, id: string) => `${bucket}:${id}`;
+  /** Serializa un item de forma determinista para comparar. */
+  const serializarItem = (item: unknown): string => {
+    try { return JSON.stringify(item); } catch { return ''; }
+  };
+  /** true si el item viene del backend y no coincide con su snapshot. */
+  const itemCambio = (bucket: string, item: { id: string }): boolean => {
+    if (!isBackendId(item.id)) return false; // item nuevo, aplica POST
+    const original = snapshotItemsRef.current.get(snapshotKey(bucket, item.id));
+    if (!original) return true; // sin snapshot = asumir cambio (defensivo)
+    return original !== serializarItem(item);
+  };
+  /** Registra el snapshot inicial de todos los items de un bucket. */
+  const guardarSnapshot = (bucket: string, items: Array<{ id: string }>) => {
+    items.forEach((it) => {
+      if (isBackendId(it.id)) {
+        snapshotItemsRef.current.set(snapshotKey(bucket, it.id), serializarItem(it));
+      }
+    });
+  };
+
   // ── Datos de catálogos cargados desde API (reemplazan al mockData del diseño) ──
   /**
    * Lista combinada de colaboradores + operarios para el selector de "Persona"
@@ -441,6 +485,14 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
     tipo_pago: 'POR_PALMA' | 'JORNAL_FIJO';
   };
   const [laboresOtrosOpciones, setLaboresOtrosOpciones] = useState<LaborOtrosOpcion[]>([]);
+  /**
+   * §19 API_PARAMETRICAS — actividades predefinidas indexadas por `labor_id`.
+   * Alimenta el select "Trabajo realizado" en las tabs SANIDAD y OTROS.
+   * Puede quedar vacío si el tenant aún no ha creado actividades.
+   */
+  const [actividadesPorLabor, setActividadesPorLabor] = useState<
+    Record<string, Array<{ id: number; labor_id: number; nombre: string }>>
+  >({});
 
   /** Planilla cruda traída por `wizard-init`. La consume el useEffect de
    *  prefill más abajo para hidratar los estados del wizard sin disparar una
@@ -483,6 +535,9 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           });
         setPalmaTipoToId(tipoMap);
         setPalmaFijasInfo(infoMap);
+        // §19: actividades predefinidas para el select "Trabajo realizado"
+        // en las tabs SANIDAD y OTROS. Ya viene indexado por labor_id.
+        setActividadesPorLabor((parametricas as any).actividades_por_labor ?? {});
 
         const opcionesPalma: LaborOtrosOpcion[] = palmaItems
           .filter((x: any) => x.es_sistema !== true && x.tipo == null)
@@ -707,14 +762,16 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           p.creadoPor?.name ?? p.creado_por?.name ?? '';
         if (elaboradoApi) setElaboradoPor(elaboradoApi);
 
-        setTrabajosCosecha((p.cosechas ?? []).map((c: any) => ({
+        const cosechasHidratadas = (p.cosechas ?? []).map((c: any) => ({
           id: String(c.id),
           colaboradores: (c.cuadrilla ?? []).map((q: any) => encodeIdFromBackend(q)),
           lote: c.lote_id != null ? String(c.lote_id) : '',
           sublote: c.sublote_id != null ? String(c.sublote_id) : '',
           gajosRecogidos: Number(c.gajos_reportados ?? 0),
           kilos: c.peso_confirmado != null ? Number(c.peso_confirmado) : 0,
-        })));
+        }));
+        setTrabajosCosecha(cosechasHidratadas);
+        guardarSnapshot('cosecha', cosechasHidratadas);
         // ── Hidratación de labores de palma (§3.2.1) ─────────────────────
         // El bundle expone los jornales por dos vías posibles:
         //   (a) `p.jornales` con `jornal_grupo_id` → jornal miembro de un
@@ -788,7 +845,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
             .map((m) => encodeIdFromBackend(m))
             .filter(Boolean);
 
-        setTrabajosPlateo([
+        const plateoHidratado = [
           ...porTipoGrupo('PLATEO').map((g: any) => ({
             id: String(g.id),
             grupoId: String(g.id),
@@ -804,8 +861,11 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
             sublote: j.sublote_id != null ? String(j.sublote_id) : '',
             numeroPalmas: Number(j.cantidad_palmas ?? 0),
           })),
-        ]);
-        setTrabajosPoda([
+        ];
+        setTrabajosPlateo(plateoHidratado);
+        guardarSnapshot('plateo', plateoHidratado);
+
+        const podaHidratado = [
           ...porTipoGrupo('PODA').map((g: any) => ({
             id: String(g.id),
             grupoId: String(g.id),
@@ -821,8 +881,11 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
             sublote: j.sublote_id != null ? String(j.sublote_id) : '',
             numeroPalmas: Number(j.cantidad_palmas ?? 0),
           })),
-        ]);
-        setTrabajosFertilizacion([
+        ];
+        setTrabajosPoda(podaHidratado);
+        guardarSnapshot('poda', podaHidratado);
+
+        const fertHidratado = [
           ...porTipoGrupo('FERTILIZACION').map((g: any) => ({
             id: String(g.id),
             grupoId: String(g.id),
@@ -844,8 +907,11 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
             otroFertilizante: '',
             cantidadGramos: Number(j.gramos_por_palma ?? 0),
           })),
-        ]);
-        setTrabajosSanidad([
+        ];
+        setTrabajosFertilizacion(fertHidratado);
+        guardarSnapshot('fert', fertHidratado);
+
+        const sanidadHidratado = [
           ...porTipoGrupo('SANIDAD').map((g: any) => ({
             id: String(g.id),
             grupoId: String(g.id),
@@ -853,6 +919,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
             lote: g.lote_id != null ? String(g.lote_id) : '',
             sublote: g.sublote_id != null ? String(g.sublote_id) : '',
             trabajoRealizado: (g.descripcion ?? '') as string,
+            laborActividadId: g.labor_actividad_id != null ? Number(g.labor_actividad_id) : null,
           })),
           ...porTipoJornal('SANIDAD').map(j => ({
             id: String(j.id),
@@ -860,8 +927,11 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
             lote: j.lote_id != null ? String(j.lote_id) : '',
             sublote: j.sublote_id != null ? String(j.sublote_id) : '',
             trabajoRealizado: (j.descripcion ?? '') as string,
+            laborActividadId: (j as any).labor_actividad_id != null ? Number((j as any).labor_actividad_id) : null,
           })),
-        ]);
+        ];
+        setTrabajosSanidad(sanidadHidratado);
+        guardarSnapshot('sanidad', sanidadHidratado);
         // Otros: labores custom de PALMA (tipo=null en el catálogo unificado).
         // Quedan fuera de los 4 tipos fijos (PLATEO/PODA/FERTILIZACION/SANIDAD).
         const jornalesOtros = jornalesSueltos.filter(
@@ -888,9 +958,10 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
             nombreTrabajo: tipoPago === 'JORNAL_FIJO' ? (obj.nombre_trabajo ?? '') : undefined,
             lote: obj.lote_id != null ? String(obj.lote_id) : '',
             sublote: obj.sublote_id != null ? String(obj.sublote_id) : '',
+            laborActividadId: obj.labor_actividad_id != null ? Number(obj.labor_actividad_id) : null,
           };
         };
-        setTrabajosOtros([
+        const otrosHidratado = [
           ...gruposOtros.map((g: any) => ({
             id: String(g.id),
             grupoId: String(g.id),
@@ -900,18 +971,23 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
             id: String(j.id),
             ...mapOtroBase(j, [encodeIdFromBackend(j)]),
           })),
-        ]);
+        ];
+        setTrabajosOtros(otrosHidratado);
+        guardarSnapshot('otros', otrosHidratado);
+
         // Labores de Finca — `nombre` ahora guarda el id local de la persona
         // (`'10'` empleado, `'O_5'` operario) para soportar XOR al guardar.
         // La visualización del nombre se hace via lookup en `colaboradores`.
         // No usan grupo: cada labor de finca es 1 colaborador × 1 lugar.
-        setTrabajosAuxiliares(jornalesSueltos.filter(j => j.categoria === 'FINCA').map(j => ({
+        const fincaHidratado = jornalesSueltos.filter(j => j.categoria === 'FINCA').map(j => ({
           id: String(j.id),
           nombre: encodeIdFromBackend(j),
           labor: j.labor?.nombre ?? '',
           otraLabor: '',
           lugar: j.ubicacion ?? '',
-        })));
+        }));
+        setTrabajosAuxiliares(fincaHidratado);
+        guardarSnapshot('finca', fincaHidratado);
         // Horas extras — según §1.1 del doc, el bundle wizard-init trae las
         // tarjetas en `planilla.horas_extra` (snake_case) con eager-load de
         // `horasExtra.tipoHoraExtra` (camelCase). Probamos varios nombres por
@@ -922,7 +998,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           ?? p.horas_extras
           ?? p.horasExtras
           ?? [];
-        setHorasExtras(horasExtraRaw.map((h: any) => {
+        const heHidratadas = horasExtraRaw.map((h: any) => {
           let nombreTipo = h.tipoHoraExtra?.nombre
             ?? h.tipo_hora_extra?.nombre
             ?? h.tipo_hora?.nombre
@@ -939,7 +1015,9 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
             numeroHoras: Number(h.cantidad_horas ?? 0),
             observacion: h.observacion ?? '',
           };
-        }));
+        });
+        setHorasExtras(heHidratadas);
+        guardarSnapshot('he', heHidratadas);
 
         // Horas extras — según §4 del doc, `NO existe GET /operaciones/{id}/horas-extra`
         // (responde 405). Las tarjetas vienen dentro de `planilla.horas_extra`
@@ -951,7 +1029,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         // pueden desincronizarse si el admin renombra o reasigna motivos.
         // Guardamos `motivo` (texto libre) en `otroMotivo` y el nombre del
         // catálogo en `motivo` para tener ambos disponibles.
-        setAusentes((p.ausencias ?? []).map((a: any) => {
+        const ausenciasHidratadas = (p.ausencias ?? []).map((a: any) => {
           const nombreCatalogo = a.motivoAusencia?.nombre
             ?? a.motivo_ausencia?.nombre
             ?? a.motivo_ausencia_nombre
@@ -966,7 +1044,9 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
               ? Number(a.motivo_ausencia_id)
               : undefined,
           };
-        }));
+        });
+        setAusentes(ausenciasHidratadas);
+        guardarSnapshot('ausencia', ausenciasHidratadas);
         // El resumen ya se hidrató en el effect de `wizard-init` arriba.
       } catch (err: any) {
         if (!cancelled) toast.error(err?.message ?? 'Error al cargar la planilla');
@@ -1183,6 +1263,66 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         }
       }
 
+      // ── Pre-paso §19: resolver actividades nuevas ("Otra") ──────────────────
+      // Cuando el usuario elige "Otra" y escribe un nombre en SANIDAD u OTROS,
+      // el estado guarda `laborActividadId=null`. Aquí llamamos al endpoint
+      // quick-create para obtener el id antes de crear el jornal. Si el nombre
+      // ya existe en el catálogo local (case-insensitive) reusamos ese id sin
+      // llamar al backend.
+      const resolverActividad = async (
+        laborId: number | undefined,
+        nombre: string,
+      ): Promise<number | null> => {
+        const nombreLimpio = nombre.trim();
+        if (!laborId || !nombreLimpio) return null;
+        const key = String(laborId);
+        const catalogo = actividadesPorLabor[key] ?? [];
+        const matchLocal = catalogo.find(
+          (a) => a.nombre.toLowerCase() === nombreLimpio.toLowerCase(),
+        );
+        if (matchLocal) return matchLocal.id;
+        try {
+          const res = await configuracionApi.laborActividades.crearDesdeWizard(
+            laborId, nombreLimpio,
+          );
+          setActividadesPorLabor((prev) => {
+            const actuales = prev[key] ?? [];
+            if (actuales.some((a) => a.id === res.data.id)) return prev;
+            return { ...prev, [key]: [...actuales, res.data] };
+          });
+          return res.data.id;
+        } catch (err: any) {
+          // Si el backend responde 409 con la existente, la usamos.
+          if (err?.body?.data?.id) return err.body.data.id as number;
+          console.error('[NuevaPlanillaWizard] No se pudo crear actividad:', err);
+          return null;
+        }
+      };
+
+      // Resolver actividades de SANIDAD (una labor fija).
+      const sanidadLaborIdPrev = palmaTipoToId.get('SANIDAD');
+      const sanidadActividadIds = new Map<string, number | null>();
+      if (sanidadLaborIdPrev) {
+        for (const t of trabajosSanidad) {
+          if (t.laborActividadId) {
+            sanidadActividadIds.set(t.id, t.laborActividadId);
+          } else if (t.trabajoRealizado?.trim()) {
+            const id = await resolverActividad(sanidadLaborIdPrev, t.trabajoRealizado);
+            sanidadActividadIds.set(t.id, id);
+          }
+        }
+      }
+      // Resolver actividades de OTROS (una por labor custom seleccionada).
+      const otrosActividadIds = new Map<string, number | null>();
+      for (const t of trabajosOtros) {
+        if (t.laborActividadId) {
+          otrosActividadIds.set(t.id, t.laborActividadId);
+        } else if (t.laborRealizada?.trim() && t.laborOtrosRawId) {
+          const id = await resolverActividad(t.laborOtrosRawId, t.laborRealizada);
+          otrosActividadIds.set(t.id, id);
+        }
+      }
+
       // ── Construir batch de operaciones bulk ───────────────────────────────────
       // Ítems NUEVOS se acumulan en arrays tipados y se envían en una sola
       // petición bulk por tipo (4 peticiones HTTP total en vez de N).
@@ -1200,6 +1340,13 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
       const newCosechas:  Array<{ localId: string; payload: any }> = [];
       const newHE:        Array<{ localId: string; payload: any }> = [];
       const newAusencias: Array<{ localId: string; payload: any }> = [];
+      /**
+       * §Fix jornales — jornales individuales existentes que cambiaron
+       * respecto al snapshot inicial. Al terminar el batch, se envían en
+       * UNA sola llamada `PUT /operaciones/{id}/jornales/bulk-update`,
+       * reemplazando N PUTs individuales.
+       */
+      const jornalesParaBulkUpdate: Array<{ id: number; payload: any; tipoLocal: string }> = [];
       const updates: Promise<any>[] = [];
       const erroresGuardado: string[] = [];
       let heOperarios = 0, heSinTipo = 0, heSinColab = 0, heHorasInvalidas = 0;
@@ -1210,6 +1357,8 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
       for (const t of trabajosCosecha) {
         if (!t.lote || t.colaboradores.length === 0) continue;
         if (isBackendId(t.id)) {
+          // Dirty tracking: no reenviar cosecha si el snapshot no cambió.
+          if (!itemCambio('cosecha', t)) continue;
           updates.push(
             cosechasApi.editar(parseInt(t.id), {
               gajos_reportados: t.gajosRecogidos || 0,
@@ -1253,8 +1402,10 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           .filter((m) => m.empleado_id || m.operario_id);
         if (miembros.length === 0) return;
 
-        // Grupo persistido → PUT al grupo (con o sin cambio de N).
+        // Grupo persistido → PUT al grupo. Solo si el snapshot detecta cambios,
+        // para no enviar el PUT cuando el usuario no tocó la tarjeta.
         if (t.grupoId && /^\d+$/.test(t.grupoId)) {
+          if (!itemCambio(tipoLocal, t)) return;
           const payloadGrupo = { ...payloadBase, miembros };
           updates.push(
             jornalGruposApi
@@ -1270,11 +1421,15 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           // Individual: jornal directo (nuevo o edición).
           const payload = { ...payloadBase, ...miembros[0] };
           if (isBackendId(t.id)) {
-            updates.push(
-              jornalesApi.editar(parseInt(t.id), payload).catch((err: any) => {
-                erroresGuardado.push(`${tipoLocal}: ${err?.message ?? 'error jornal'}`);
-              }),
-            );
+            // Dirty tracking: si el jornal no cambió respecto al snapshot
+            // inicial, no lo mandamos. Ahorra N-M PUTs cuando el usuario
+            // solo editó M jornales de N.
+            if (!itemCambio(tipoLocal, t)) return;
+            jornalesParaBulkUpdate.push({
+              id: parseInt(t.id),
+              payload,
+              tipoLocal,
+            });
           } else {
             newJornales.push({ localId: t.id, tipo: tipoLocal, payload });
           }
@@ -1335,8 +1490,16 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
             labor_id: sanidadLaborId,
             lote_id: t.lote ? parseInt(t.lote) : null,
             sublote_id: t.sublote ? parseInt(t.sublote) : null,
-            descripcion: t.trabajoRealizado || 'Sanidad',
           };
+          // §4.7: preferimos mandar el FK. Si el pre-paso resolvió la actividad
+          // (existente o quick-created), usamos su id. Si no hay id ni texto,
+          // caemos a un placeholder para no romper la validación del backend.
+          const actividadIdSan = sanidadActividadIds.get(t.id) ?? null;
+          if (actividadIdSan) {
+            base.labor_actividad_id = actividadIdSan;
+          } else {
+            base.descripcion = t.trabajoRealizado || 'Sanidad';
+          }
           // Sanidad no tiene input propio de palmas — si está en POR_PALMA
           // reusamos las del sublote.
           if (sanidadInfo?.tipo_pago === 'POR_PALMA') {
@@ -1359,7 +1522,14 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         } else if (t.laborOtrosTipoPago === 'JORNAL_FIJO') {
           if (t.nombreTrabajo?.trim()) base.nombre_trabajo = t.nombreTrabajo.trim();
         }
-        if (t.laborRealizada?.trim()) base.descripcion = t.laborRealizada.trim();
+        // §4.7: FK a `labor_actividades`. El pre-paso ya resolvió los "Otra"
+        // en un id — solo si fallara (falta labor o red) caemos a descripción.
+        const actividadIdOtros = otrosActividadIds.get(t.id) ?? null;
+        if (actividadIdOtros) {
+          base.labor_actividad_id = actividadIdOtros;
+        } else if (t.laborRealizada?.trim()) {
+          base.descripcion = t.laborRealizada.trim();
+        }
         // El campo `nombre` de TrabajoOtros es texto libre, no un colaborador
         // individual: aquí usamos el array `colaboradores[]` estándar.
         persistirLaborPalma(t, 'otros', base);
@@ -1416,11 +1586,13 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         if (!personaIds.empleado_id && !personaIds.operario_id) continue;
         const payload = { labor_id: laborId, ...personaIds, ubicacion: t.lugar || undefined };
         if (isBackendId(t.id)) {
-          updates.push(
-            jornalesApi.editar(parseInt(t.id), payload).catch((err: any) => {
-              erroresGuardado.push(`Finca: ${err?.message ?? 'error desconocido'}`);
-            }),
-          );
+          // Dirty tracking: skip si no cambió respecto al snapshot inicial.
+          if (!itemCambio('finca', t)) continue;
+          jornalesParaBulkUpdate.push({
+            id: parseInt(t.id),
+            payload,
+            tipoLocal: 'finca',
+          });
         } else {
           newJornales.push({ localId: t.id, tipo: 'finca', payload });
         }
@@ -1449,6 +1621,8 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           observacion: h.observacion || undefined,
         };
         if (isBackendId(h.id)) {
+          // Dirty tracking: skip PUT si el snapshot inicial coincide.
+          if (!itemCambio('he', h)) continue;
           updates.push(
             horasExtraApi.editar(parseInt(h.id), payload).catch((err: any) => {
               erroresGuardado.push(`Horas extra: ${err?.message ?? 'error desconocido'}`);
@@ -1478,6 +1652,8 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           motivo: esMotivoOtro ? (a.otroMotivo ?? '') : '',
         };
         if (isBackendId(a.id)) {
+          // Dirty tracking: skip PUT si el snapshot inicial coincide.
+          if (!itemCambio('ausencia', a)) continue;
           updates.push(ausenciasApi.editar(parseInt(a.id), payload).catch(() => {}));
         } else {
           newAusencias.push({ localId: a.id, payload });
@@ -1509,7 +1685,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
             return null;
           }),
       );
-      const [jornalBulkRes, cosechaBulkRes, heBulkRes, ausenciaBulkRes, , gruposRes] = (await Promise.all([
+      const [jornalBulkRes, cosechaBulkRes, heBulkRes, ausenciaBulkRes, , , gruposRes] = (await Promise.all([
         newJornales.length > 0
           ? jornalesApi.bulkCrear(pid!, newJornales.map(i => i.payload))
               .catch((e: any) => { erroresGuardado.push(`Jornales: ${parseErrorJornal(e)}`); return null; })
@@ -1526,9 +1702,14 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           ? ausenciasApi.bulkCrear(pid!, newAusencias.map(i => i.payload))
               .catch((e: any) => { erroresGuardado.push(`Ausencias: ${e?.message ?? 'error en bulk'}`); return null; })
           : Promise.resolve(null),
+        // Bulk update de jornales individuales modificados — 1 sola petición.
+        jornalesParaBulkUpdate.length > 0
+          ? jornalesApi.bulkUpdate(pid!, jornalesParaBulkUpdate.map(i => ({ id: i.id, ...i.payload })))
+              .catch((e: any) => { erroresGuardado.push(`Jornales edit: ${parseErrorJornal(e)}`); return null; })
+          : Promise.resolve(null),
         Promise.allSettled(updates),
         Promise.all(gruposReqs),
-      ])) as [any, any, any, any, any, Array<{ data: { id: number } } | null>];
+      ])) as [any, any, any, any, any, any, Array<{ data: { id: number } } | null>];
 
       // ── Construir mapeos localId → backendId desde las respuestas bulk ────────
       // Posición idx en la respuesta corresponde a posición idx en el array enviado.
@@ -1682,6 +1863,24 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         if (fertSaltadas.length === 0 && laboresFincaSaltadas.length === 0) {
           toast.success(planillaId ? 'Planilla actualizada' : 'Planilla guardada');
         }
+
+        // ── Rehidratar snapshot de dirty tracking ────────────────────────────
+        // Después del guardado, todas las tarjetas con backend id están
+        // persistidas con su estado actual. Rehidratar el snapshot para que el
+        // próximo "Guardar" NO reenvíe items que no se hayan tocado.
+        // Usamos setState callbacks solo para leer el estado ya actualizado
+        // por los aplicarMapeo de arriba (no muta, solo lee).
+        snapshotItemsRef.current.clear();
+        setTrabajosCosecha(prev => { guardarSnapshot('cosecha', prev); return prev; });
+        setTrabajosPlateo(prev => { guardarSnapshot('plateo', prev); return prev; });
+        setTrabajosPoda(prev => { guardarSnapshot('poda', prev); return prev; });
+        setTrabajosFertilizacion(prev => { guardarSnapshot('fert', prev); return prev; });
+        setTrabajosSanidad(prev => { guardarSnapshot('sanidad', prev); return prev; });
+        setTrabajosOtros(prev => { guardarSnapshot('otros', prev); return prev; });
+        setTrabajosAuxiliares(prev => { guardarSnapshot('finca', prev); return prev; });
+        setHorasExtras(prev => { guardarSnapshot('he', prev); return prev; });
+        setAusentes(prev => { guardarSnapshot('ausencia', prev); return prev; });
+
         // Aviso de cobertura tras un guardado exitoso. Si hay faltantes,
         // mostramos el mismo modal que en el flujo de aprobar (§7.1). El
         // usuario decide si vuelve a editar o va al listado. NO bloquea el
@@ -1918,7 +2117,8 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
       colaboradores: [],
       lote: '',
       sublote: '',
-      trabajoRealizado: ''
+      trabajoRealizado: '',
+      laborActividadId: null,
     });
   };
 
@@ -1984,6 +2184,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
       laborOtrosRawId: primera.rawId,
       laborOtrosTipoPago: primera.tipo_pago,
       laborRealizada: '',
+      laborActividadId: null,
       lote: '',
       sublote: ''
     });
@@ -3628,12 +3829,16 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                               </div>
                               <div className="space-y-2 md:col-span-2">
                                 <Label>Trabajo Realizado</Label>
-                                <Input
-                                  placeholder="Descripción del trabajo"
+                                <SelectActividadLabor
+                                  laborId={palmaTipoToId.get('SANIDAD')}
+                                  actividades={actividadesPorLabor[String(palmaTipoToId.get('SANIDAD') ?? '')] ?? []}
                                   value={sanidadEnEdicion.trabajoRealizado}
-                                  onChange={(e) => {
-                                    setSanidadEnEdicion({ ...sanidadEnEdicion, trabajoRealizado: e.target.value });
-                                  }}
+                                  actividadId={sanidadEnEdicion.laborActividadId ?? null}
+                                  onChange={(nombre, id) => setSanidadEnEdicion({
+                                    ...sanidadEnEdicion,
+                                    trabajoRealizado: nombre,
+                                    laborActividadId: id,
+                                  })}
                                 />
                               </div>
                             </div>
@@ -3797,12 +4002,16 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                               </div>
                               <div className="space-y-2 md:col-span-2">
                                 <Label>Labor Realizada</Label>
-                                <Input
-                                  placeholder="Descripción de la labor"
+                                <SelectActividadLabor
+                                  laborId={otrosEnEdicion.laborOtrosRawId}
+                                  actividades={actividadesPorLabor[String(otrosEnEdicion.laborOtrosRawId ?? '')] ?? []}
                                   value={otrosEnEdicion.laborRealizada}
-                                  onChange={(e) => {
-                                    setOtrosEnEdicion({ ...otrosEnEdicion, laborRealizada: e.target.value });
-                                  }}
+                                  actividadId={otrosEnEdicion.laborActividadId ?? null}
+                                  onChange={(nombre, id) => setOtrosEnEdicion({
+                                    ...otrosEnEdicion,
+                                    laborRealizada: nombre,
+                                    laborActividadId: id,
+                                  })}
                                 />
                               </div>
                               <div className="space-y-2">

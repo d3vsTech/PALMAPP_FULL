@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
-import { Plus, Edit, Trash2 } from 'lucide-react';
+import { Plus, Edit, Trash2, ChevronDown } from 'lucide-react';
+import { LaborActividadesPanel } from './LaborActividadesPanel';
 import {
   Dialog,
   DialogContent,
@@ -59,6 +60,19 @@ export function LaboresTab() {
   const [loading, setLoading] = useState(true);
   const [modo, setModo] = useState<ModoEdicion | null>(null);
   const [formData, setFormData] = useState<FormState>(FORM_VACIO);
+  /**
+   * §19 — Set con los ids de labores cuyo panel de actividades está expandido.
+   * Solo aplica a SANIDAD (fija) y a labores custom PALMA (es_sistema=false,
+   * tipo=null). Las demás no admiten actividades — no muestran chevron.
+   */
+  const [expandidas, setExpandidas] = useState<Set<number>>(new Set());
+  const toggleExpandida = (id: number) =>
+    setExpandidas((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const { confirmDelete, ConfirmDeleteDialog } = useConfirmDelete();
 
@@ -308,38 +322,63 @@ export function LaboresTab() {
                   // guarde con es_sistema=false.
                   const esOtros = (labor.nombre ?? '').trim().toLowerCase() === 'otros';
                   const esFija = labor.es_sistema || esOtros;
+                  // §19: solo SANIDAD (fija) y las labores custom PALMA
+                  // (es_sistema=false, tipo=null) admiten actividades.
+                  const admiteActividades =
+                    labor.tipo === 'SANIDAD' ||
+                    (!labor.es_sistema && labor.categoria === 'PALMA' && labor.tipo == null);
+                  const expandida = expandidas.has(labor.id);
                   return (
                     <div
                       key={labor.id}
-                      className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border hover:bg-muted/50 transition-colors"
+                      className="rounded-lg bg-muted/30 border border-border overflow-hidden"
                     >
-                      <div className="flex-1">
-                        <p className="font-semibold">{labor.nombre}</p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {labelTipoPago(labor.tipo_pago, labor.tipo)}
-                          {esFija && ' · Predefinida'}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => abrirEditar(labor)}
-                          className="h-8 w-8 p-0"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        {!esFija && (
+                      <div
+                        className={`flex items-center justify-between p-4 hover:bg-muted/50 transition-colors ${
+                          admiteActividades ? 'cursor-pointer' : ''
+                        }`}
+                        onClick={() => admiteActividades && toggleExpandida(labor.id)}
+                      >
+                        <div className="flex items-center gap-2 flex-1">
+                          {admiteActividades && (
+                            <ChevronDown
+                              className={`h-4 w-4 text-muted-foreground transition-transform ${
+                                expandida ? 'rotate-180' : ''
+                              }`}
+                            />
+                          )}
+                          <div className="flex-1">
+                            <p className="font-semibold">{labor.nombre}</p>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {labelTipoPago(labor.tipo_pago, labor.tipo)}
+                              {esFija && ' · Predefinida'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleDelete(labor)}
+                            onClick={() => abrirEditar(labor)}
                             className="h-8 w-8 p-0"
                           >
-                            <Trash2 className="h-4 w-4 text-destructive" />
+                            <Edit className="h-4 w-4" />
                           </Button>
-                        )}
+                          {!esFija && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDelete(labor)}
+                              className="h-8 w-8 p-0"
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          )}
+                        </div>
                       </div>
+                      {admiteActividades && expandida && (
+                        <LaborActividadesPanel laborId={labor.id} open={expandida} />
+                      )}
                     </div>
                   );
                 })}
