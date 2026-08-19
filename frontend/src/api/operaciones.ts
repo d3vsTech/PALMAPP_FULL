@@ -212,7 +212,12 @@ export interface Cosecha {
 
 export type CategoriaJornal = 'PALMA' | 'FINCA';
 /** Tipos snapshoteados en el jornal. Las labores custom de palma tienen tipo=null. */
-export type TipoJornalPalma = 'PLATEO' | 'PODA' | 'FERTILIZACION' | 'SANIDAD';
+/**
+ * Snapshots del jornal. Desde agosto 2026 OTROS también es una labor fija,
+ * así que puede aparecer como `tipo='OTROS'` cuando el jornal usa la fija.
+ * Las labores custom de palma siguen con `tipo=null`.
+ */
+export type TipoJornalPalma = 'PLATEO' | 'PODA' | 'FERTILIZACION' | 'SANIDAD' | 'OTROS';
 
 /**
  * Jornal — registro de trabajo de un colaborador (o un operario de tercero)

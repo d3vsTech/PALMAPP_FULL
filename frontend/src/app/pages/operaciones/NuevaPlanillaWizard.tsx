@@ -48,7 +48,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { operacionesApi, cosechasApi, jornalesApi, jornalGruposApi, horasExtraApi, ausenciasApi, selectsApi } from '../../../api/operaciones';
-import { configuracionApi } from '../../../api/configuracion';
+import { configuracionApi, ConfiguracionErrorCodes } from '../../../api/configuracion';
 import { toast } from 'sonner';
 
 // Los fertilizantes se cargan desde Configuración → Insumos vía el bundle
@@ -527,8 +527,12 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         const palmaItems = parametricas.labores_palma ?? [];
         const tipoMap = new Map<string, number>();
         const infoMap = new Map<string, { id: number; tipo_pago: 'POR_PALMA' | 'JORNAL_FIJO' }>();
+        // Las 5 tabs específicas (Cosecha/Plateo/Poda/Fertilización/Sanidad)
+        // se alimentan de las labores fijas de esos 5 tipos. Excluimos la
+        // fija OTROS a propósito — va al catálogo del tab OTROS junto con
+        // las labores custom.
         palmaItems
-          .filter((x: any) => x.es_sistema === true && x.tipo)
+          .filter((x: any) => x.es_sistema === true && x.tipo && x.tipo !== 'OTROS')
           .forEach((x: any) => {
             tipoMap.set(x.tipo, x.id);
             infoMap.set(x.tipo, { id: x.id, tipo_pago: x.tipo_pago });
@@ -539,8 +543,16 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         // en las tabs SANIDAD y OTROS. Ya viene indexado por labor_id.
         setActividadesPorLabor((parametricas as any).actividades_por_labor ?? {});
 
+        // Tab OTROS (§3 API_OPERACIONES agosto 2026): la fija OTROS del sistema
+        // (`es_sistema=true`, `tipo='OTROS'`) + labores custom PALMA
+        // (`es_sistema=false`, `tipo=null`). Excluimos labores custom heredadas
+        // del código legacy que se llamaban "Otros" (evita duplicar la fija).
         const opcionesPalma: LaborOtrosOpcion[] = palmaItems
-          .filter((x: any) => x.es_sistema !== true && x.tipo == null)
+          .filter((x: any) =>
+            (x.es_sistema === true && x.tipo === 'OTROS') ||
+            (x.es_sistema !== true && x.tipo == null &&
+             (x.nombre ?? '').trim().toLowerCase() !== 'otros'),
+          )
           .map((x: any) => ({
             key: `palma-${x.id}`,
             nombre: x.nombre,
@@ -679,6 +691,12 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   const [sanidadEnEdicion, setSanidadEnEdicion] = useState<TrabajoSanidad | null>(null);
   const [trabajosOtros, setTrabajosOtros] = useState<TrabajoOtros[]>([]);
   const [otrosEnEdicion, setOtrosEnEdicion] = useState<TrabajoOtros | null>(null);
+  /**
+   * Flag local del select "Trabajo Realizado" del tab OTROS: `true` cuando el
+   * usuario eligió "Otra" para escribir una labor nueva. Se resetea al cerrar
+   * el form (cancelar/guardar) o al elegir una labor del catálogo.
+   */
+  const [otrosModoOtra, setOtrosModoOtra] = useState(false);
   const [trabajosAuxiliares, setTrabajosAuxiliares] = useState<TrabajoAuxiliar[]>([]);
   const [auxiliarEnEdicion, setAuxiliarEnEdicion] = useState<TrabajoAuxiliar | null>(null);
   const [horasExtras, setHorasExtras] = useState<HoraExtra[]>([]);
@@ -932,13 +950,14 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         ];
         setTrabajosSanidad(sanidadHidratado);
         guardarSnapshot('sanidad', sanidadHidratado);
-        // Otros: labores custom de PALMA (tipo=null en el catálogo unificado).
-        // Quedan fuera de los 4 tipos fijos (PLATEO/PODA/FERTILIZACION/SANIDAD).
+        // Otros: fija OTROS (tipo='OTROS') + labores custom de PALMA (tipo=null).
+        // Quedan fuera de los 4 tipos fijos específicos (PLATEO/PODA/FERT/SANIDAD).
+        // Cambio agosto 2026: OTROS ahora es fija con `tipo='OTROS'`.
         const jornalesOtros = jornalesSueltos.filter(
-          j => j.categoria === 'PALMA' && j.tipo == null,
+          j => j.categoria === 'PALMA' && (j.tipo == null || j.tipo === 'OTROS'),
         );
         const gruposOtros = grupos.filter(
-          (g: any) => g.labor?.categoria === 'PALMA' && g.labor?.tipo == null,
+          (g: any) => g.labor?.categoria === 'PALMA' && (g.labor?.tipo == null || g.labor?.tipo === 'OTROS'),
         );
         const mapOtroBase = (obj: any, colaboradores: string[]) => {
           const laborId = obj.labor_id != null ? Number(obj.labor_id) : undefined;
@@ -1312,12 +1331,19 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           }
         }
       }
-      // Resolver actividades de OTROS (una por labor custom seleccionada).
+      // Resolver actividades de OTROS (§19 agosto 2026). Aplica a la fija
+      // OTROS + labores custom PALMA — ambas admiten `labor_actividades`.
+      // Si el usuario ya seleccionó una actividad del catálogo, se manda su id.
+      // Si escribió una nueva ("Otra"), se hace quick-create y se toma el id.
+      // Las labores recién creadas por "Otra Labor" NO llevan actividad — el
+      // nombre de la labor ya describe el trabajo.
       const otrosActividadIds = new Map<string, number | null>();
       for (const t of trabajosOtros) {
+        if (!t.laborOtrosRawId) continue; // labor nueva → sin actividad separada
         if (t.laborActividadId) {
           otrosActividadIds.set(t.id, t.laborActividadId);
-        } else if (t.laborRealizada?.trim() && t.laborOtrosRawId) {
+        } else if (t.laborRealizada?.trim()) {
+          // Usuario escribió una actividad nueva → quick-create.
           const id = await resolverActividad(t.laborOtrosRawId, t.laborRealizada);
           otrosActividadIds.set(t.id, id);
         }
@@ -1509,7 +1535,10 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         }
       }
 
-      // === OTROS (labores custom de PALMA, tipo=null) ===
+      // === OTROS (fija OTROS + labores custom de PALMA con tipo=null) ===
+      // El flujo es idéntico a SANIDAD: labor ya resuelta desde el bundle,
+      // y la actividad (obligatoria u opcional) se envía como `labor_actividad_id`
+      // o `descripcion` texto libre.
       for (const t of trabajosOtros) {
         if (!t.laborOtrosRawId) { otrosSinLabor++; continue; }
         const base: Record<string, any> = {
@@ -1522,16 +1551,14 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         } else if (t.laborOtrosTipoPago === 'JORNAL_FIJO') {
           if (t.nombreTrabajo?.trim()) base.nombre_trabajo = t.nombreTrabajo.trim();
         }
-        // §4.7: FK a `labor_actividades`. El pre-paso ya resolvió los "Otra"
-        // en un id — solo si fallara (falta labor o red) caemos a descripción.
+        // §4.7: FK a `labor_actividades`. Si el pre-paso resolvió una nueva
+        // ("Otra" + texto), usamos su id. Si no, mandamos descripción libre.
         const actividadIdOtros = otrosActividadIds.get(t.id) ?? null;
         if (actividadIdOtros) {
           base.labor_actividad_id = actividadIdOtros;
         } else if (t.laborRealizada?.trim()) {
           base.descripcion = t.laborRealizada.trim();
         }
-        // El campo `nombre` de TrabajoOtros es texto libre, no un colaborador
-        // individual: aquí usamos el array `colaboradores[]` estándar.
         persistirLaborPalma(t, 'otros', base);
       }
 
@@ -2138,51 +2165,21 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
     setSanidadEnEdicion(null);
   };
 
-  const agregarOtros = async () => {
-    // Buscamos SIEMPRE la labor cuyo nombre es "Otros" (case-insensitive).
-    // Es la labor genérica del tenant: el precio configurado en
-    // "Configuración → Precios de labores → Otros" es el que aplicará a
-    // todos los registros que se creen desde este tab.
-    let primera = laboresOtrosOpciones.find(
+  const agregarOtros = () => {
+    // Preseleccionar la fija "Otros" del sistema (tipo='OTROS') — el usuario
+    // puede cambiar a otra custom PALMA desde el dropdown "Labor" o escribir
+    // "Otra" para crear una custom nueva al vuelo.
+    const fijaOtros = laboresOtrosOpciones.find(
       (l) => l.nombre.trim().toLowerCase() === 'otros',
-    ) ?? laboresOtrosOpciones[0];
-    if (!primera) {
-      // Fallback: creamos automáticamente una labor custom "Otros"
-      // (categoria=PALMA, es_sistema=false, tipo_pago=JORNAL_FIJO) para que
-      // el operador pueda registrar sin salir del wizard. Si el backend
-      // rechaza por permisos (`configuracion.editar`), avisamos.
-      try {
-        const res = await configuracionApi.labores.crear({
-          categoria: 'PALMA',
-          nombre: 'Otros',
-          tipo_pago: 'JORNAL_FIJO',
-          precio_palma: 0,
-        });
-        const nueva = res.data;
-        primera = {
-          key: `palma-${nueva.id}`,
-          nombre: nueva.nombre,
-          rawId: nueva.id,
-          tipo_pago: 'JORNAL_FIJO',
-        };
-        setLaboresOtrosOpciones((prev) => [...prev, primera!]);
-        toast.success('Labor "Otros" creada automáticamente');
-      } catch (err: any) {
-        toast.error(
-          err?.message
-            ?? 'No se pudo crear una labor "Otros". Ve a Configuración → Labores de Palma y créala manualmente.',
-          { duration: 6000 },
-        );
-        return;
-      }
-    }
+    );
+    setOtrosModoOtra(false);
     setOtrosEnEdicion({
       id: `otros-${Date.now()}`,
       colaboradores: [],
-      nombre: primera.nombre,
-      laborOtrosKey: primera.key,
-      laborOtrosRawId: primera.rawId,
-      laborOtrosTipoPago: primera.tipo_pago,
+      nombre: fijaOtros?.nombre ?? '',
+      laborOtrosKey: fijaOtros?.key,
+      laborOtrosRawId: fijaOtros?.rawId,
+      laborOtrosTipoPago: fijaOtros?.tipo_pago ?? 'JORNAL_FIJO',
       laborRealizada: '',
       laborActividadId: null,
       lote: '',
@@ -2208,10 +2205,12 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
       setTrabajosOtros([otrosEnEdicion, ...trabajosOtros]);
     }
     setOtrosEnEdicion(null);
+    setOtrosModoOtra(false);
   };
 
   const cancelarOtros = () => {
     setOtrosEnEdicion(null);
+    setOtrosModoOtra(false);
   };
 
   // Funciones para horas extras
@@ -2448,6 +2447,10 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   const editarOtros = (id: string) => {
     const t = trabajosOtros.find(x => x.id === id);
     if (!t) return;
+    // Al editar un trabajo ya existente la labor viene del catálogo → NO
+    // estamos en modo "Otra". El input "Especificar otro trabajo" solo se
+    // muestra si el usuario elige "Otra" explícitamente después.
+    setOtrosModoOtra(false);
     setOtrosEnEdicion({ ...t });
   };
 
@@ -4000,20 +4003,6 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                   </div>
                                 )}
                               </div>
-                              <div className="space-y-2 md:col-span-2">
-                                <Label>Labor Realizada</Label>
-                                <SelectActividadLabor
-                                  laborId={otrosEnEdicion.laborOtrosRawId}
-                                  actividades={actividadesPorLabor[String(otrosEnEdicion.laborOtrosRawId ?? '')] ?? []}
-                                  value={otrosEnEdicion.laborRealizada}
-                                  actividadId={otrosEnEdicion.laborActividadId ?? null}
-                                  onChange={(nombre, id) => setOtrosEnEdicion({
-                                    ...otrosEnEdicion,
-                                    laborRealizada: nombre,
-                                    laborActividadId: id,
-                                  })}
-                                />
-                              </div>
                               <div className="space-y-2">
                                 <Label>Lote</Label>
                                 <Select
@@ -4071,6 +4060,25 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                       ))}
                                   </SelectContent>
                                 </Select>
+                              </div>
+                              {/* Trabajo Realizado — mismo componente que Sanidad,
+                                  apuntando a la fija OTROS (§19 API_PARAMETRICAS).
+                                  Al elegir "Otra" y escribir un trabajo nuevo, al
+                                  guardar la tarjeta se crea la actividad en el catálogo
+                                  y aparece en Configuración → Labores → Otros. */}
+                              <div className="space-y-2 md:col-span-2">
+                                <Label>Trabajo Realizado</Label>
+                                <SelectActividadLabor
+                                  laborId={otrosEnEdicion.laborOtrosRawId}
+                                  actividades={actividadesPorLabor[String(otrosEnEdicion.laborOtrosRawId ?? '')] ?? []}
+                                  value={otrosEnEdicion.laborRealizada}
+                                  actividadId={otrosEnEdicion.laborActividadId ?? null}
+                                  onChange={(nombre, id) => setOtrosEnEdicion({
+                                    ...otrosEnEdicion,
+                                    laborRealizada: nombre,
+                                    laborActividadId: id,
+                                  })}
+                                />
                               </div>
 
                               {/* Campos dependientes del tipo_pago de la labor seleccionada

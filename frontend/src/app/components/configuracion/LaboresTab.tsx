@@ -315,18 +315,30 @@ export function LaboresTab() {
               </p>
             ) : (
               <div className="space-y-2">
-                {[...laboresPalma].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((labor) => {
-                  // "Otros" es labor especial: el wizard la crea automáticamente
-                  // y sirve como contenedor genérico. La tratamos como fija
-                  // (no eliminable, badge "Predefinida") aunque el backend la
-                  // guarde con es_sistema=false.
-                  const esOtros = (labor.nombre ?? '').trim().toLowerCase() === 'otros';
-                  const esFija = labor.es_sistema || esOtros;
-                  // §19: solo SANIDAD (fija) y las labores custom PALMA
-                  // (es_sistema=false, tipo=null) admiten actividades.
+                {[...laboresPalma].sort((a, b) => {
+                  // Mismo orden que las tabs del wizard de Operaciones §3:
+                  // Cosecha → Plateo → Poda → Fertilización → Sanidad → Otros
+                  // → custom (alfabético). Las fijas usan `tipo`; las custom
+                  // van al final ordenadas por nombre.
+                  const ORDEN: Record<string, number> = {
+                    COSECHA: 1, PLATEO: 2, PODA: 3, FERTILIZACION: 4, SANIDAD: 5, OTROS: 6,
+                  };
+                  const oa = a.tipo ? ORDEN[a.tipo] ?? 99 : 99;
+                  const ob = b.tipo ? ORDEN[b.tipo] ?? 99 : 99;
+                  if (oa !== ob) return oa - ob;
+                  return (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' });
+                }).map((labor) => {
+                  // Desde agosto 2026, OTROS es una labor fija (`es_sistema=true`,
+                  // `tipo='OTROS'`) sembrada en todo tenant. `esFija` cubre las 6
+                  // fijas del sistema (COSECHA, PLATEO, PODA, FERT, SANIDAD, OTROS).
+                  const esFija = labor.es_sistema === true;
+                  // Solo las 2 fijas del sistema con desplegable de trabajos:
+                  // SANIDAD y OTROS. Las labores custom que el admin cree NO
+                  // muestran el panel — su propósito es ser labores planas con
+                  // su propio precio y tipo_pago.
                   const admiteActividades =
-                    labor.tipo === 'SANIDAD' ||
-                    (!labor.es_sistema && labor.categoria === 'PALMA' && labor.tipo == null);
+                    labor.es_sistema === true &&
+                    (labor.tipo === 'SANIDAD' || labor.tipo === 'OTROS');
                   const expandida = expandidas.has(labor.id);
                   return (
                     <div

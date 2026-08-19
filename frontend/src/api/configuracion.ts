@@ -145,7 +145,13 @@ export interface PrecioAbonoPayload {
  */
 
 export type CategoriaLabor = 'PALMA' | 'FINCA';
-export type TipoLaborPalma = 'COSECHA' | 'PLATEO' | 'PODA' | 'FERTILIZACION' | 'SANIDAD';
+/**
+ * Enum de labores fijas del sistema (`es_sistema=true`). Desde agosto 2026
+ * OTROS pasó a ser una labor fija sembrada en todo tenant (default JORNAL_FIJO)
+ * — antes era solo `tipo=null` en labores custom. La fija OTROS NO admite
+ * sub-actividades: el trabajo se describe con `descripcion`/`nombre_trabajo`.
+ */
+export type TipoLaborPalma = 'COSECHA' | 'PLATEO' | 'PODA' | 'FERTILIZACION' | 'SANIDAD' | 'OTROS';
 export type TipoPagoLabor = 'POR_PALMA' | 'JORNAL_FIJO';
 
 export interface Labor {
