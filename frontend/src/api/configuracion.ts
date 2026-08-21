@@ -211,6 +211,14 @@ export interface LaborActividad {
   tenant_id: number;
   labor_id: number;
   nombre: string;
+  /**
+   * §4.7 LABORES_JORNALES — precio propio de la sublabor. Cuando está
+   * configurado, reemplaza a `labor.precio_palma` en el cálculo del jornal
+   * para colaboradores propios (los operarios de tercero lo ignoran, usan
+   * `tercero_labor_precios`). Nunca cambia el `tipo_pago`. `null` = hereda
+   * el precio de la labor padre.
+   */
+  precio?: string | number | null;
   estado: boolean;
   created_at?: string;
   updated_at?: string;
@@ -218,6 +226,17 @@ export interface LaborActividad {
 
 export interface LaborActividadPayload {
   nombre: string;
+  /**
+   * Solo editable desde Configuración (`configuracion.editar`). El
+   * quick-create del wizard lo ignora — nace siempre con `precio=null`.
+   *
+   * En PUT:
+   *  - Omitir → precio queda intacto.
+   *  - `null` explícito → **borra** el precio, restaurando el fallback a
+   *    `labor.precio_palma`.
+   *  - Número (≥ 0, máx 2 decimales, tope 99999999.99) → asigna el precio.
+   */
+  precio?: number | null;
   estado?: boolean;
 }
 
@@ -858,8 +877,8 @@ export const configuracionApi = {
    * §17 del doc API_PARAMETRICAS.md — reemplaza las 6 llamadas paralelas que
    * la pantalla de Precios de Labores disparaba al cargar. Devuelve los 6
    * datasets en una sola respuesta (cacheada server-side, TTL 60s, invalidada
-   * automáticamente por POST/PUT/DELETE en labores, precios-cosecha,
-   * precios-abono o lotes).
+   * automáticamente por POST/PUT/DELETE en labores, actividades de labor
+   * (sublabores), precios-cosecha, precios-abono o lotes).
    *
    * Permiso: `configuracion.editar`.
    *
@@ -874,6 +893,20 @@ export const configuracionApi = {
         labores_palma_fijas: Labor[];
         labores_palma_custom: Labor[];
         labores_finca: Labor[];
+        /**
+         * §19 — sublabores indexadas por `labor_id`. Solo trae labores que
+         * admiten sublabores (SANIDAD, OTROS y custom PALMA). A diferencia del
+         * wizard, **incluye sublabores inactivas** (`estado: false`) porque
+         * esta pantalla las administra. Único lugar donde `precio` es editable
+         * (vía `PUT /labor-actividades/{id}`).
+         */
+        actividades_por_labor: Record<string, Array<{
+          id: number;
+          labor_id: number;
+          nombre: string;
+          precio: string | number | null;
+          estado: boolean;
+        }>>;
         lotes: Array<{ id: number; nombre: string; predio_id: number; predio?: { id: number; nombre: string } }>;
       } }>(`/v1/tenant/configuracion/precios-labores/init${toQuery(params)}`, T),
   },

@@ -229,7 +229,14 @@ export function RangosNumeracionTab() {
     // en edición solo enviamos los campos que la API acepta.
     try {
       if (editando) {
+        const nuevoPrefijo = form.prefijo.trim().toUpperCase();
+        const nuevoDesde = parseInt(form.numero_desde);
         const res = await rangosNumeracionApi.editar(editando.id, {
+          // Solo enviamos prefijo/numero_desde si el usuario los cambió,
+          // así evitamos pisar el registro con campos que el backend §18
+          // podría rechazar cuando no hay diferencia real.
+          ...(nuevoPrefijo !== editando.prefijo ? { prefijo: nuevoPrefijo } : {}),
+          ...(nuevoDesde !== editando.numero_desde ? { numero_desde: nuevoDesde } : {}),
           numero_hasta: parseInt(form.numero_hasta),
           numero_actual: parseInt(form.numero_actual),
           descripcion: form.descripcion.trim() || null,
@@ -294,23 +301,37 @@ export function RangosNumeracionTab() {
   };
 
   const eliminarRango = (r: RangoNumeracion) => {
+    // §18: DELETE es soft (marca `estado = false`). Si el rango ya está
+    // inactivo, refleja mejor la acción decir "Eliminar del listado".
+    // La UI local lo saca del listado; el backend sigue conservando el
+    // registro (mismo comportamiento que soft-delete idempotente).
+    const yaInactivo = !r.estado;
     confirmDelete({
-      title: '¿Eliminar rango de numeración?',
-      description: `Se inactivará el rango "${r.prefijo}". Los viajes ya emitidos con este rango conservan su remisión.`,
+      title: yaInactivo ? '¿Eliminar rango del listado?' : '¿Eliminar rango de numeración?',
+      description: yaInactivo
+        ? `El rango "${r.prefijo}" está inactivo. Se removerá del listado.`
+        : `Se inactivará el rango "${r.prefijo}". Los viajes ya emitidos con este rango conservan su remisión.`,
       confirmText: 'Eliminar',
       onConfirm: async () => {
         try {
           await rangosNumeracionApi.eliminar(r.id);
-          // §18: DELETE es soft — marca `estado = false`. Refrescamos con
-          // el listado para reflejar el cambio en el switch de la fila.
           await recargar();
-          toast.success('Rango inactivado');
+          toast.success(yaInactivo ? 'Rango eliminado' : 'Rango inactivado');
         } catch (err: any) {
           const code = err?.code ?? '';
           if (code === RangosNumeracionErrorCodes.RANGO_CON_VIAJES) {
             toast.error(
-              'No se puede eliminar: el rango tiene viajes activos asociados. Puedes desactivarlo con el switch en su lugar.',
+              'No se puede eliminar: el rango tiene viajes asociados. Puedes desactivarlo con el switch en su lugar.',
             );
+          } else if (yaInactivo) {
+            // Fallback pragmático: si el backend rechaza el DELETE de un
+            // rango ya inactivo, lo sacamos del listado local igual — para
+            // el usuario "eliminar un inactivo" ya no debería tener efectos
+            // colaterales sobre viajes existentes (los viajes conservan la
+            // remisión emitida). No perdemos consistencia porque en el
+            // próximo recargar() el backend sigue mandando lo que tenga.
+            setRangos((prev) => prev.filter((x) => x.id !== r.id));
+            toast.success('Rango removido del listado');
           } else {
             toast.error(err?.message ?? 'No se pudo eliminar el rango');
           }
@@ -531,14 +552,8 @@ export function RangosNumeracionTab() {
                 onChange={(e) => setCampo('prefijo', e.target.value.toUpperCase())}
                 placeholder="Ej: R-A"
                 maxLength={20}
-                disabled={!!editando}
-                className={`${erroresForm.prefijo ? 'border-destructive' : ''} ${editando ? 'bg-muted/40' : ''}`}
+                className={erroresForm.prefijo ? 'border-destructive' : ''}
               />
-              {editando ? (
-                <p className="text-xs text-muted-foreground">
-                  El prefijo no se puede modificar después de crear el rango.
-                </p>
-              ) : null}
               {erroresForm.prefijo && (
                 <p className="text-xs text-destructive">{erroresForm.prefijo}</p>
               )}
@@ -554,7 +569,6 @@ export function RangosNumeracionTab() {
                   type="number"
                   min={1}
                   value={form.numero_desde}
-                  disabled={!!editando}
                   onChange={(e) => {
                     const v = e.target.value;
                     setCampo('numero_desde', v);
@@ -564,7 +578,7 @@ export function RangosNumeracionTab() {
                       setCampo('numero_actual', v);
                     }
                   }}
-                  className={`${erroresForm.numero_desde ? 'border-destructive' : ''} ${editando ? 'bg-muted/40' : ''}`}
+                  className={erroresForm.numero_desde ? 'border-destructive' : ''}
                 />
                 {erroresForm.numero_desde && (
                   <p className="text-xs text-destructive">{erroresForm.numero_desde}</p>

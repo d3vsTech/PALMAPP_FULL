@@ -849,19 +849,41 @@ export interface PlanillaDiariaFilaCosecha {
 /**
  * Fila de las secciones basadas en jornales (`plateo`, `poda`,
  * `fertilizacion`, `sanidad`, `otros`, `auxiliares`). Agrupadas por
- * `(operacion_id, labor_id, lote_id)`.
+ * `(operacion_id, labor_id, labor_actividad_id, lote_id)`. El
+ * `labor_actividad_id` entra en la clave desde que las sublabores pueden
+ * tener precio propio — sin él, dos sublabores caerían en la misma fila.
  */
 export interface PlanillaDiariaFilaJornal {
   id: number;
   fecha: string;
   lote: string | null;
   labor: string;
+  /**
+   * Nombre de la sublabor (`labor_actividades.nombre`), o `null` si el
+   * jornal no tiene `labor_actividad_id` asignado.
+   */
+  sublabor: string | null;
   colaboradores: PlanillaDiariaColaborador[];
-  precio: string;
+  /**
+   * `valor_unitario` cuando TODOS los miembros del grupo comparten el mismo
+   * precio. `null` cuando el grupo mezcla precios (ver `precio_mixto`) —
+   * caso típico: colaboradores propios + operarios de tercero con precios
+   * pactados distintos. En ese caso la fuente de verdad es `total`.
+   */
+  precio: string | null;
+  /**
+   * `true` cuando el grupo tiene más de un `valor_unitario` distinto. Cuando
+   * es `true`, `precio` y `pago_por_colaborador` vienen en `null` y la UI
+   * debe pintar "Mixto" o "—" en esas columnas.
+   */
+  precio_mixto?: boolean;
   total: string;
   num_colaboradores: number;
-  /** = `valor_unitario` (ya es individual — cada jornal es por persona). */
-  pago_por_colaborador: string;
+  /**
+   * = `valor_unitario` (ya es individual — cada jornal es por persona).
+   * `null` cuando `precio_mixto` es `true`.
+   */
+  pago_por_colaborador: string | null;
   col_neto: string;
 }
 

@@ -35,7 +35,7 @@ type SubloteOption = { id: number; nombre: string; lote_id: number };
 const PALMA_LABEL: Record<PalmaKey, string> = {
   PLATEO: 'Precio Plateo',
   PODA: 'Precio Poda',
-  SANIDAD: 'Precio Control de Plagas',
+  SANIDAD: 'Precio Sanidad',
   OTROS: 'Precio Otros',
 };
 
@@ -71,9 +71,21 @@ const PALMA_VALUE: Record<PalmaKey, string> = {
 
 // Cache simple en sessionStorage por tenant (TTL 60s). Hace que volver a esta
 // pantalla en la misma sesión sea instantáneo.
-// `v3` invalida cachés previas que no traían `sublotes`.
-const CACHE_KEY = 'palmapp.preciosLabores.cache.v3';
+// `v4` invalida cachés previas que no traían `actividades` (§19).
+const CACHE_KEY = 'palmapp.preciosLabores.cache.v4';
 const CACHE_TTL_MS = 60_000;
+
+/**
+ * §19 — Sublabor tal como llega en el bundle §17 de esta pantalla.
+ * Trae `precio` (editable aquí) y `estado` (incluye inactivas para admin).
+ */
+type SublaborBundle = {
+  id: number;
+  labor_id: number;
+  nombre: string;
+  precio: string | number | null;
+  estado: boolean;
+};
 
 type CacheShape = {
   ts: number;
@@ -83,6 +95,7 @@ type CacheShape = {
   palma: Labor[];
   palmaCustom: Labor[];
   finca: Labor[];
+  actividades: Record<string, SublaborBundle[]>;
   lotes: LoteOption[];
   sublotes: SubloteOption[];
 };
@@ -180,6 +193,23 @@ export function PreciosLaboresTab() {
     ),
   );
 
+  // §19 Actividades de labor (sublabores). Indexado por labor_id.
+  // Solo trae SANIDAD, OTROS y custom PALMA. Incluye inactivas — esta pantalla
+  // las administra. El precio de cada sublabor es editable inline via
+  // `PUT /labor-actividades/{id}` (única fuente de escritura permitida).
+  const [actividadesPorLabor, setActividadesPorLabor] = useState<Record<string, SublaborBundle[]>>(
+    cached?.actividades ?? {},
+  );
+  // Inputs inline de precio por actividad, keyed por actividad.id.
+  const [actividadInputs, setActividadInputs] = useState<Record<number, string>>(
+    Object.fromEntries(
+      Object.values(cached?.actividades ?? {}).flat().map((a) => [
+        a.id,
+        a.precio != null ? formatDecimal(a.precio) : '',
+      ]),
+    ),
+  );
+
   // Loading sólo cuando NO hay caché — primer arranque del día / nuevo tenant.
   const [loading, setLoading] = useState(!cached);
 
@@ -199,6 +229,7 @@ export function PreciosLaboresTab() {
       palma: Labor[];
       palmaCustom: Labor[];
       finca: Labor[];
+      actividades: Record<string, SublaborBundle[]>;
       ls: LoteOption[];
       subs: SubloteOption[];
     }) => {
@@ -238,6 +269,15 @@ export function PreciosLaboresTab() {
           datos.finca.map((l) => [l.id, l.precio_palma != null ? formatDecimal(l.precio_palma) : '']),
         ),
       );
+      setActividadesPorLabor(datos.actividades);
+      setActividadInputs(
+        Object.fromEntries(
+          Object.values(datos.actividades).flat().map((a) => [
+            a.id,
+            a.precio != null ? formatDecimal(a.precio) : '',
+          ]),
+        ),
+      );
       setLotes(datos.ls);
       setSublotes(datos.subs);
       writeCache({
@@ -246,6 +286,7 @@ export function PreciosLaboresTab() {
         palma: datos.palma,
         palmaCustom: datos.palmaCustom,
         finca: datos.finca,
+        actividades: datos.actividades,
         lotes: datos.ls,
         sublotes: datos.subs,
       });
@@ -269,6 +310,7 @@ export function PreciosLaboresTab() {
           palma: b.labores_palma_fijas ?? [],
           palmaCustom: b.labores_palma_custom ?? [],
           finca: b.labores_finca ?? [],
+          actividades: (b.actividades_por_labor ?? {}) as Record<string, SublaborBundle[]>,
           ls: (b.lotes ?? []).map((l) => ({ id: l.id, nombre: l.nombre })),
           subs: (sublotesRes.data ?? []).map((s) => ({ id: s.id, nombre: s.nombre, lote_id: s.lote_id })),
         });
@@ -305,6 +347,10 @@ export function PreciosLaboresTab() {
         palma: palmaR.data ?? [],
         palmaCustom: palmaCustomR.data ?? [],
         finca: fincaR.data ?? [],
+        // Fallback sin §17: las sublabores solo vienen en el bundle, así que
+        // el mapa queda vacío. El panel expandible de LaboresTab sigue viendo
+        // las sublabores por su endpoint individual.
+        actividades: {},
         ls: (lotesR.data ?? []).map((l) => ({ id: l.id, nombre: l.nombre })),
         subs: (sublotesR.data ?? []).map((s) => ({ id: s.id, nombre: s.nombre, lote_id: s.lote_id })),
       });
@@ -574,6 +620,102 @@ export function PreciosLaboresTab() {
         toast.error(e?.message ?? 'No se pudo guardar el precio');
       }
     }
+  };
+
+  // ── Sublabores (labor_actividades) — precio inline por sublabor ────────────
+  // §19: única pantalla donde `labor_actividades.precio` es editable. Se guarda
+  // con `PUT /labor-actividades/{id}` (helper `.editar`). Valor vacío = null =
+  // hereda el precio de la labor padre. La nomenclatura visible es "trabajo".
+  const handleSaveActividadInline = async (act: SublaborBundle) => {
+    const raw = actividadInputs[act.id] ?? '';
+    const limpio = parseDecimal(raw);
+    const nuevoPrecio: number | null = !limpio ? null : Number(limpio);
+    const actual = act.precio == null || act.precio === '' ? null : Number(act.precio);
+    if (nuevoPrecio === actual) return;
+    try {
+      const res = await configuracionApi.laborActividades.editar(act.id, { precio: nuevoPrecio });
+      setActividadesPorLabor((prev) => {
+        const key = String(act.labor_id);
+        const arr = (prev[key] ?? []).map((a) =>
+          a.id === act.id ? { ...a, precio: res.data.precio ?? null } : a,
+        );
+        return { ...prev, [key]: arr };
+      });
+      setActividadInputs((prev) => ({
+        ...prev,
+        [act.id]: res.data.precio != null ? formatDecimal(res.data.precio) : '',
+      }));
+      toast.success('Guardado');
+    } catch (e: any) {
+      if (e?.errors) {
+        const primero = Object.values(e.errors).flat()[0];
+        toast.error(typeof primero === 'string' ? primero : 'Error de validación');
+      } else {
+        toast.error(e?.message ?? 'No se pudo guardar el precio');
+      }
+    }
+  };
+
+  /**
+   * Render de la tabla de sublabores (trabajos) dentro de la card de una labor.
+   * Se muestra cuando la labor admite trabajos (SANIDAD, OTROS o custom PALMA).
+   * Sólo permite EDITAR precios inline — crear/eliminar se hace desde el tab
+   * "Labores" (LaborActividadesPanel).
+   */
+  const renderSublaboresPanel = (laborId: number, unidad: string) => {
+    const acts = actividadesPorLabor[String(laborId)] ?? [];
+    if (acts.length === 0) {
+      return (
+        <p className="text-xs text-muted-foreground italic">
+          Sin trabajos configurados. Créalos en "Labores".
+        </p>
+      );
+    }
+    return (
+      <div className="rounded-lg border border-border overflow-hidden">
+        <table className="w-full table-fixed">
+          <thead className="bg-muted/50">
+            <tr>
+              <th className="text-left p-3 font-semibold text-sm w-2/3">Trabajo</th>
+              <th className="text-right p-3 font-semibold text-sm">Precio</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...acts]
+              .sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' }))
+              .map((act) => (
+                <tr key={act.id} className="border-t border-border">
+                  <td className="p-3 text-sm font-medium">
+                    {act.nombre}
+                    {!act.estado && (
+                      <span className="ml-2 text-xs text-muted-foreground italic">(inactivo)</span>
+                    )}
+                  </td>
+                  <td className="p-3">
+                    <div className="flex items-center justify-end gap-2">
+                      <span className="text-muted-foreground text-sm">$</span>
+                      <Input
+                        inputMode="decimal"
+                        value={actividadInputs[act.id] ?? ''}
+                        onChange={(e) =>
+                          setActividadInputs((prev) => ({
+                            ...prev,
+                            [act.id]: formatDecimal(parseDecimal(e.target.value)),
+                          }))
+                        }
+                        onBlur={() => handleSaveActividadInline(act)}
+                        placeholder="Hereda de la labor"
+                        className="w-44 text-right"
+                      />
+                      <span className="text-muted-foreground text-sm">{unidad}</span>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      </div>
+    );
   };
 
   return (
@@ -1045,15 +1187,15 @@ export function PreciosLaboresTab() {
             </AccordionItem>
           ))}
 
-          {/* Secciones: solo Plateo y Poda — las únicas labores fijas de palma
-              que tienen "Precio por palma / jornal" en la UI.
+          {/* Secciones: Plateo, Poda, Sanidad y Otros — labores fijas de palma
+              con "Precio por palma / jornal" configurable en la UI.
               Excluimos:
                 · COSECHA       → "Precios de Cosecha" (siempre) + acordeón extra si JORNAL_FIJO.
-                · FERTILIZACION → "Escala de Abonada" (siempre) + acordeón extra si JORNAL_FIJO.
-                · SANIDAD       → no se gestiona en esta finca como labor estándar.
-                · OTROS         → el §4 unificado ya no usa este tipo. */}
+                · FERTILIZACION → "Escala de Abonada" (siempre) + acordeón extra si JORNAL_FIJO. */}
           {preciosPalma
-            .filter((p): p is Labor & { tipo: 'PLATEO' | 'PODA' } => p.tipo === 'PLATEO' || p.tipo === 'PODA')
+            .filter((p): p is Labor & { tipo: 'PLATEO' | 'PODA' | 'SANIDAD' | 'OTROS' } =>
+              p.tipo === 'PLATEO' || p.tipo === 'PODA' || p.tipo === 'SANIDAD' || p.tipo === 'OTROS'
+            )
             .map((palma) => (
             <AccordionItem key={`fija-${palma.id}`} value={PALMA_VALUE[palma.tipo]} className="border-0">
               <Card className="border-border">
@@ -1066,7 +1208,11 @@ export function PreciosLaboresTab() {
                   </AccordionTrigger>
                 </CardHeader>
                 <AccordionContent>
-                  <CardContent className="p-6">
+                  <CardContent className="p-6 space-y-6">
+                    {/* Precio de la labor padre — aplica siempre. En Sanidad
+                        y Otros funciona como valor por defecto que los
+                        trabajos (sublabores) heredan si no tienen precio
+                        propio. */}
                     <div className="max-w-md space-y-3">
                       <Label htmlFor={`precio-${palma.id}`}>{palmaLabelInput(palma)}</Label>
                       <div className="flex items-center gap-2">
@@ -1085,6 +1231,19 @@ export function PreciosLaboresTab() {
                         <span className="text-muted-foreground">{palmaUnidad(palma)}</span>
                       </div>
                     </div>
+
+                    {/* Trabajos (sublabores) — solo Sanidad y Otros los admiten. */}
+                    {(palma.tipo === 'SANIDAD' || palma.tipo === 'OTROS') && (
+                      <div className="space-y-3">
+                        <div>
+                          <h4 className="font-semibold text-sm">Precios por trabajo</h4>
+                          <p className="text-xs text-muted-foreground">
+                            Cada trabajo puede tener un precio propio. Si lo dejas vacío, hereda el precio de la labor.
+                          </p>
+                        </div>
+                        {renderSublaboresPanel(palma.id, palmaUnidad(palma))}
+                      </div>
+                    )}
                   </CardContent>
                 </AccordionContent>
               </Card>
@@ -1106,7 +1265,9 @@ export function PreciosLaboresTab() {
                   </AccordionTrigger>
                 </CardHeader>
                 <AccordionContent>
-                  <CardContent className="p-6">
+                  <CardContent className="p-6 space-y-6">
+                    {/* Precio de la labor padre — valor por defecto que
+                        heredan los trabajos sin precio propio. */}
                     <div className="max-w-md space-y-3">
                       <Label htmlFor={`precio-custom-${labor.id}`}>{palmaLabelInput(labor)}</Label>
                       <div className="flex items-center gap-2">
@@ -1127,6 +1288,16 @@ export function PreciosLaboresTab() {
                         />
                         <span className="text-muted-foreground">{palmaUnidad(labor)}</span>
                       </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <h4 className="font-semibold text-sm">Precios por trabajo</h4>
+                        <p className="text-xs text-muted-foreground">
+                          Cada trabajo puede tener un precio propio. Si lo dejas vacío, hereda el precio de la labor.
+                        </p>
+                      </div>
+                      {renderSublaboresPanel(labor.id, palmaUnidad(labor))}
                     </div>
                   </CardContent>
                 </AccordionContent>

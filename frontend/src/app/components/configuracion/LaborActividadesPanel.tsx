@@ -4,7 +4,13 @@
  * Panel expandible con el CRUD de "Actividades" (sublabores) de una labor.
  * Se usa dentro de las tarjetas de:
  *  - Sanidad (labor fija).
+ *  - Otros (labor fija, desde agosto 2026).
  *  - Labores custom de PALMA (es_sistema=false, tipo=null).
+ *
+ * Este panel solo administra NOMBRE y ESTADO de las sublabores. El precio
+ * (§4.7 LABORES_JORNALES) se edita únicamente en "Precios de Labores"
+ * (PreciosLaboresTab), para tener una sola pantalla como fuente de verdad
+ * de valores monetarios.
  *
  * Endpoints: §19 API_PARAMETRICAS — `configuracionApi.laborActividades.*`.
  * El listado se pide en la primera expansión y se cachea en state local.
@@ -55,22 +61,31 @@ export function LaborActividadesPanel({ laborId, open }: Props) {
     }
     setGuardando(true);
     try {
-      const res = await configuracionApi.laborActividades.crear(laborId, { nombre });
+      // No mandamos `precio` — se administra en Precios de Labores. El
+      // backend crea el trabajo con `precio=null` (hereda de la labor).
+      const res = await configuracionApi.laborActividades.crear(laborId, {
+        nombre,
+      });
       setActividades((prev) => [...(prev ?? []), res.data]);
       setNombreNuevo('');
       setCreando(false);
-      toast.success('Actividad creada');
+      toast.success('Trabajo creado');
     } catch (e: any) {
       if (e?.code === ConfiguracionErrorCodes.ACTIVIDAD_DUPLICADA) {
-        toast.error('Ya existe una actividad con ese nombre');
+        toast.error('Ya existe un trabajo con ese nombre');
       } else if (e?.code === ConfiguracionErrorCodes.LABOR_NO_ADMITE_ACTIVIDADES) {
-        toast.error('Esta labor no admite actividades');
+        toast.error('Esta labor no admite trabajos');
       } else {
-        toast.error(e?.message ?? 'No se pudo crear la actividad');
+        toast.error(e?.message ?? 'No se pudo crear el trabajo');
       }
     } finally {
       setGuardando(false);
     }
+  };
+
+  const iniciarEdicion = (act: LaborActividad) => {
+    setEditandoId(act.id);
+    setNombreEditado(act.nombre);
   };
 
   const guardarEdicion = async (id: number) => {
@@ -81,16 +96,19 @@ export function LaborActividadesPanel({ laborId, open }: Props) {
     }
     setGuardando(true);
     try {
-      const res = await configuracionApi.laborActividades.editar(id, { nombre });
+      // No editamos precio aquí — es responsabilidad de "Precios de Labores".
+      const res = await configuracionApi.laborActividades.editar(id, {
+        nombre,
+      });
       setActividades((prev) => (prev ?? []).map((a) => (a.id === id ? res.data : a)));
       setEditandoId(null);
       setNombreEditado('');
-      toast.success('Actividad actualizada');
+      toast.success('Trabajo actualizado');
     } catch (e: any) {
       if (e?.code === ConfiguracionErrorCodes.ACTIVIDAD_DUPLICADA) {
-        toast.error('Ya existe una actividad con ese nombre');
+        toast.error('Ya existe un trabajo con ese nombre');
       } else {
-        toast.error(e?.message ?? 'No se pudo actualizar la actividad');
+        toast.error(e?.message ?? 'No se pudo actualizar el trabajo');
       }
     } finally {
       setGuardando(false);
@@ -99,19 +117,19 @@ export function LaborActividadesPanel({ laborId, open }: Props) {
 
   const eliminar = (act: LaborActividad) => {
     confirmDelete({
-      title: '¿Eliminar actividad?',
+      title: '¿Eliminar trabajo?',
       description: `¿Estás seguro de eliminar "${act.nombre}"? Esta acción no se puede deshacer.`,
       confirmText: 'Eliminar',
       onConfirm: async () => {
         try {
           await configuracionApi.laborActividades.eliminar(act.id);
           setActividades((prev) => (prev ?? []).filter((a) => a.id !== act.id));
-          toast.success('Actividad eliminada');
+          toast.success('Trabajo eliminado');
         } catch (e: any) {
           if (e?.code === ConfiguracionErrorCodes.ACTIVIDAD_CON_JORNALES) {
             toast.error('No se puede eliminar: tiene registros asociados');
           } else {
-            toast.error(e?.message ?? 'No se pudo eliminar la actividad');
+            toast.error(e?.message ?? 'No se pudo eliminar el trabajo');
           }
         }
       },
@@ -148,7 +166,7 @@ export function LaborActividadesPanel({ laborId, open }: Props) {
             onChange={(e) => setNombreNuevo(e.target.value)}
             disabled={guardando}
             maxLength={150}
-            className="h-8 text-sm"
+            className="h-8 text-sm flex-1"
             onKeyDown={(e) => {
               if (e.key === 'Enter') { e.preventDefault(); crear(); }
               if (e.key === 'Escape') { setCreando(false); setNombreNuevo(''); }
@@ -222,7 +240,7 @@ export function LaborActividadesPanel({ laborId, open }: Props) {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => { setEditandoId(act.id); setNombreEditado(act.nombre); }}
+                      onClick={() => iniciarEdicion(act)}
                       className="h-7 w-7 p-0"
                     >
                       <Edit className="h-3.5 w-3.5" />

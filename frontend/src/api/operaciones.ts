@@ -504,45 +504,61 @@ export interface WizardInitBundle {
     tercero_labor_overrides: TerceroLaborOverride[];
     /**
      * §19 API_PARAMETRICAS — actividades predefinidas (sublabores) indexadas
-     * por `labor_id`. Solo aplica a la labor fija SANIDAD y a labores custom
-     * de PALMA (`es_sistema=false`, `tipo=null`). Alimenta el select
+     * por `labor_id`. Solo aplica a las labores fijas SANIDAD y OTROS más las
+     * custom de PALMA (`es_sistema=false`, `tipo=null`). Alimenta el select
      * "Trabajo realizado" en las tabs SANIDAD y OTROS del wizard.
+     *
+     * `precio` es el precio propio de la sublabor (`null` = hereda
+     * `labor.precio_palma`). Solo aplica a colaboradores propios: los
+     * operarios de tercero usan siempre `tercero_labor_precios` — ver el
+     * algoritmo de resolución de §4.3 LABORES_JORNALES.
      */
     actividades_por_labor?: Record<string, Array<{
       id: number;
       labor_id: number;
       nombre: string;
+      precio?: string | number | null;
     }>>;
   };
 }
 
 /**
  * Resuelve el `tipo_pago` y `precio_palma` efectivos para una combinación
- * (labor, persona) considerando los overrides del tercero (§1.1 del doc).
+ * (labor, persona, actividad) — dos cascadas distintas según quién hace el
+ * jornal (§4.3 LABORES_JORNALES / §1.1 API_OPERACIONES):
  *
- *  - Si la persona es un colaborador propio → usa el catálogo del tenant.
- *  - Si es un operario de tercero → busca override por (tercero_id, labor_id).
- *    Si existe, los campos `null` del override caen al catálogo.
- *    Si no existe, usa el catálogo igual que para colaboradores.
+ *  - **Operario de tercero:** manda lo pactado con el contratista. La sublabor
+ *    NO participa. `tercero_labor_precios` ?? `labor.precio_palma`.
+ *  - **Colaborador propio:** la sublabor overridea el monto; el modo siempre
+ *    viene de la labor. `actividad.precio` ?? `labor.precio_palma`.
  *
- * El backend hace la misma resolución al calcular `valor_total`; este helper
- * solo sirve para el preview en la UI.
+ * El `tipo_pago` nunca cambia por la sublabor — solo puede cambiar por
+ * override explícito de tercero (POR_PALMA ↔ JORNAL_FIJO).
+ *
+ * El backend hace exactamente la misma resolución al calcular `valor_total`;
+ * este helper solo sirve para el preview en la UI.
  */
 export function resolverPrecioPersonaLabor(
   labor: Pick<LaborWizardItem, 'id' | 'tipo_pago' | 'precio_palma'>,
   persona: { tipo: 'colaborador'; id: number } | { tipo: 'operario'; id: number; tercero_id: number },
   overrides: TerceroLaborOverride[],
+  /** Actividad del select "Trabajo Realizado", si el usuario eligió una. */
+  actividad?: { precio?: string | number | null } | null,
 ): { tipo_pago: 'POR_PALMA' | 'JORNAL_FIJO'; precio_palma: string | number | null } {
-  if (persona.tipo === 'colaborador') {
-    return { tipo_pago: labor.tipo_pago, precio_palma: labor.precio_palma };
+  if (persona.tipo === 'operario') {
+    const ov = overrides.find(
+      (o) => o.tercero_id === persona.tercero_id && o.labor_id === labor.id,
+    );
+    if (!ov) return { tipo_pago: labor.tipo_pago, precio_palma: labor.precio_palma };
+    return {
+      tipo_pago: (ov.tipo_pago ?? labor.tipo_pago) as 'POR_PALMA' | 'JORNAL_FIJO',
+      precio_palma: ov.precio_palma ?? labor.precio_palma,
+    };
   }
-  const ov = overrides.find(
-    (o) => o.tercero_id === persona.tercero_id && o.labor_id === labor.id,
-  );
-  if (!ov) return { tipo_pago: labor.tipo_pago, precio_palma: labor.precio_palma };
+  // Colaborador propio — la sublabor solo overridea el monto.
   return {
-    tipo_pago: (ov.tipo_pago ?? labor.tipo_pago) as 'POR_PALMA' | 'JORNAL_FIJO',
-    precio_palma: ov.precio_palma ?? labor.precio_palma,
+    tipo_pago: labor.tipo_pago,
+    precio_palma: actividad?.precio ?? labor.precio_palma,
   };
 }
 

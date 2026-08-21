@@ -292,20 +292,18 @@ export function LaboresTab() {
 
       <TabLoadingGate loading={loading} message="Cargando labores…">
       <div className="space-y-6">
-        {/* LABORES PALMA — 5 fijas + custom */}
+        {/* LABORES PALMA — 6 fijas del sistema. Ya no se crean labores
+            custom desde aquí: los trabajos extra se registran como
+            sub-actividades dentro de Sanidad u Otros. */}
         <Card className="border-border">
           <CardHeader className="border-b bg-gradient-to-r from-primary/10 to-primary/5">
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle>Labores Palma</CardTitle>
                 <CardDescription>
-                  Labores de palma - Puedes crear nuevas y editar
+                  Labores predefinidas del sistema — edita precio y tipo de pago.
                 </CardDescription>
               </div>
-              <Button onClick={abrirNuevaPalma}>
-                <Plus className="mr-2 h-4 w-4" />
-                Nueva Labor
-              </Button>
             </div>
           </CardHeader>
           <CardContent className="p-6">

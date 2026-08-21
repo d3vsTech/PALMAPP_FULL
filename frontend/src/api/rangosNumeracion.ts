@@ -115,12 +115,17 @@ export interface CrearRangoNumeracionPayload {
 }
 
 /**
- * Payload de PUT /rangos-numeracion/{id} — solo campos editables.
- * `tipo_documento` y `prefijo` son inmutables (silenciosamente descartados
- * si llegan). `numero_actual` solo se puede editar si no hay viajes
- * activos asociados.
+ * Payload de PUT /rangos-numeracion/{id}.
+ *
+ * Mandamos también `prefijo` y `numero_desde`: el backend §18 los descarta
+ * silenciosamente si no los admite. Si el admin necesita cambiarlos y el
+ * backend los rechaza, el error 422 se propaga tal cual al toast.
+ *
+ * `numero_actual` sólo se puede editar si no hay viajes activos asociados.
  */
 export interface EditarRangoNumeracionPayload {
+  prefijo?: string;
+  numero_desde?: number;
   numero_hasta?: number;
   numero_actual?: number;
   descripcion?: string | null;

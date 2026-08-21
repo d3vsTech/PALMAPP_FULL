@@ -666,6 +666,10 @@ function FilaCosecha({ r, idx }: { r: PlanillaDiariaFilaCosecha; idx: number }) 
 
 function FilaJornal({ r, idx }: { r: PlanillaDiariaFilaJornal; idx: number }) {
   const cols = distribuirColaboradores(r.colaboradores);
+  // Cuando el grupo mezcla precios (colaborador propio + operario con precio
+  // pactado distinto), backend manda `precio` y `pago_por_colaborador` en null
+  // y marca `precio_mixto=true`. La fuente de verdad queda en `total`.
+  const esPrecioMixto = r.precio_mixto === true || r.precio == null;
   return (
     <tr className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}>
       <td className="p-3 whitespace-nowrap">{fmtFecha(r.fecha)}</td>
@@ -675,11 +679,20 @@ function FilaJornal({ r, idx }: { r: PlanillaDiariaFilaJornal; idx: number }) {
       <td className="p-3 text-muted-foreground whitespace-nowrap max-w-[220px] truncate" title={cols.cuadrilla}>
         {cols.cuadrilla || '-'}
       </td>
-      <td className="p-3 font-semibold whitespace-nowrap">{r.lote ?? '—'}</td>
-      <td className="p-3 text-right whitespace-nowrap">{fmtMoney(r.precio)}</td>
+      <td className="p-3 whitespace-nowrap">
+        <div className="font-semibold">{r.lote ?? '—'}</div>
+        {r.sublabor && (
+          <div className="text-xs text-muted-foreground mt-0.5">{r.sublabor}</div>
+        )}
+      </td>
+      <td className="p-3 text-right whitespace-nowrap">
+        {esPrecioMixto ? <span className="text-muted-foreground italic">Mixto</span> : fmtMoney(r.precio)}
+      </td>
       <td className="p-3 text-right font-semibold text-success whitespace-nowrap">{fmtMoney(r.total)}</td>
       <td className="p-3 text-center font-semibold whitespace-nowrap">{r.num_colaboradores}</td>
-      <td className="p-3 text-right font-medium whitespace-nowrap">{fmtMoney(r.pago_por_colaborador)}</td>
+      <td className="p-3 text-right font-medium whitespace-nowrap">
+        {esPrecioMixto ? <span className="text-muted-foreground italic">Mixto</span> : fmtMoney(r.pago_por_colaborador)}
+      </td>
       <td className="p-3 text-right font-bold text-primary bg-primary/5 whitespace-nowrap">
         {fmtMoney(r.col_neto)}
       </td>

@@ -2677,10 +2677,20 @@ function FormLote({
   const [nombre, setNombre]        = useState(loteInicial?.nombre ?? '');
   const [fecha, setFecha]          = useState(loteInicial?.fechaSiembra ?? '');
   const [ha, setHa]                = useState(loteInicial ? String(loteInicial.hectareasSembradas) : '');
+  // Precarga de variedad al editar:
+  //  1. Si el lote tiene semilla del catálogo → usarla directamente.
+  //  2. Si no tiene semilla pero sí `variedad` texto libre (creada como "Otros"
+  //     en el pasado) → preseleccionar "Otros" y precargar el input.
   const [semillaId, setSemillaId]  = useState(
-    loteInicial?.semillasIds?.[0] ? String(loteInicial.semillasIds[0]) : ''
+    loteInicial?.semillasIds?.[0]
+      ? String(loteInicial.semillasIds[0])
+      : (loteInicial?.variedad?.trim() ? '__otros__' : '')
   );
-  const [otraVariedad, setOtraVariedad] = useState('');
+  const [otraVariedad, setOtraVariedad] = useState(
+    (!loteInicial?.semillasIds?.[0] && loteInicial?.variedad?.trim())
+      ? loteInicial.variedad
+      : ''
+  );
 
   const esOtros = semillaId === '__otros__';
   const variedadFinal = esOtros ? otraVariedad : (semillasCatalogo.find(s => String(s.id) === semillaId)?.nombre ?? semillaId);
@@ -2728,15 +2738,26 @@ function FormLote({
           </p>
         </div>
         <div className="space-y-2">
-          <Label>Variedad / Semilla *</Label>
+          <Label>Variedad / Semilla</Label>
           <Select
-            value={semillaId}
-            onValueChange={(v) => { setSemillaId(v); setOtraVariedad(''); }}
+            value={semillaId || '__ninguna__'}
+            onValueChange={(v) => {
+              if (v === '__ninguna__') {
+                setSemillaId('');
+                setOtraVariedad('');
+              } else {
+                setSemillaId(v);
+                setOtraVariedad('');
+              }
+            }}
           >
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Seleccionar variedad" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="__ninguna__">
+                <span className="text-muted-foreground">Sin variedad</span>
+              </SelectItem>
               {semillasCatalogo.length > 0
                 ? semillasCatalogo.map(s => (
                     <SelectItem key={s.id} value={String(s.id)}>
@@ -2780,7 +2801,7 @@ function FormLote({
             const semillasIds = semillaId && !isNaN(Number(semillaId)) ? [Number(semillaId)] : [];
             onGuardar({ nombre, fechaSiembra: fecha, hectareasSembradas: haNum, semillasIds, variedad: variedadFinal });
           }}
-          disabled={!nombre || !ha || !semillaId || (esOtros && !otraVariedad.trim()) || haInvalid}
+          disabled={!nombre || !ha || (esOtros && !otraVariedad.trim()) || haInvalid}
         >
           {isEditing ? 'Actualizar Lote' : 'Guardar Lote'}
         </Button>

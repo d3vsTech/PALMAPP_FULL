@@ -2265,7 +2265,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
     });
   };
 
-  const guardarAuxiliar = () => {
+  const guardarAuxiliar = async () => {
     if (!auxiliarEnEdicion) return;
     if (!auxiliarEnEdicion.nombre || !auxiliarEnEdicion.labor) {
       toast.error('Selecciona colaborador y labor antes de guardar');
@@ -2275,11 +2275,44 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
       toast.error('Especifica el tipo de labor');
       return;
     }
-    const existe = trabajosAuxiliares.some(t => t.id === auxiliarEnEdicion.id);
+    // Si es "Otro" con nombre nuevo, crear la labor en el catálogo ahora mismo
+    // (§3.3.1 POST /operaciones/labores-finca). Así aparece inmediatamente en
+    // el dropdown de la próxima tarjeta y también en Configuración → Labores.
+    let auxFinal = auxiliarEnEdicion;
+    if (auxiliarEnEdicion.labor === 'Otro') {
+      const nombreNuevo = (auxiliarEnEdicion.otraLabor || '').trim();
+      const existente = Array.from(laboresMap.entries())
+        .find(([n]) => n.toLowerCase() === nombreNuevo.toLowerCase());
+      if (existente) {
+        // Ya existe en el catálogo local — reutilizamos y limpiamos "Otro".
+        auxFinal = { ...auxiliarEnEdicion, labor: existente[0], otraLabor: '' };
+      } else {
+        try {
+          const res = await selectsApi.crearLaborFinca(nombreNuevo);
+          const nombreCreado = res.data.nombre;
+          const idCreado = res.data.id;
+          setLaboresMap((prev) => new Map(prev).set(nombreCreado, idCreado));
+          setLaboresLista((prev) => prev.includes(nombreCreado) ? prev : [...prev, nombreCreado]);
+          auxFinal = { ...auxiliarEnEdicion, labor: nombreCreado, otraLabor: '' };
+          toast.success(`Labor "${nombreCreado}" creada`);
+        } catch (err: any) {
+          if (err?.code === 'LABOR_FINCA_DUPLICADA' && err?.data?.id) {
+            const nombreBackend = err.data.nombre ?? nombreNuevo;
+            setLaboresMap((prev) => new Map(prev).set(nombreBackend, err.data.id));
+            setLaboresLista((prev) => prev.includes(nombreBackend) ? prev : [...prev, nombreBackend]);
+            auxFinal = { ...auxiliarEnEdicion, labor: nombreBackend, otraLabor: '' };
+          } else {
+            toast.error(err?.message ?? 'No se pudo crear la labor');
+            return;
+          }
+        }
+      }
+    }
+    const existe = trabajosAuxiliares.some(t => t.id === auxFinal.id);
     if (existe) {
-      setTrabajosAuxiliares(trabajosAuxiliares.map(t => (t.id === auxiliarEnEdicion.id ? auxiliarEnEdicion : t)));
+      setTrabajosAuxiliares(trabajosAuxiliares.map(t => (t.id === auxFinal.id ? auxFinal : t)));
     } else {
-      setTrabajosAuxiliares([auxiliarEnEdicion, ...trabajosAuxiliares]);
+      setTrabajosAuxiliares([auxFinal, ...trabajosAuxiliares]);
     }
     setAuxiliarEnEdicion(null);
   };
@@ -3531,7 +3564,20 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                 <Label>Lote</Label>
                                 <Select
                                   value={fertilizacionEnEdicion.lote}
-                                  onValueChange={(value) => setFertilizacionEnEdicion({ ...fertilizacionEnEdicion, lote: value, sublote: '' })}
+                                  onValueChange={(value) => {
+                                    // Autofill: al elegir lote sin sublote,
+                                    // se asume que fertilizó el lote completo →
+                                    // suma las palmas de todos sus sublotes.
+                                    const totalLote = sublotes
+                                      .filter((s) => s.loteId === value)
+                                      .reduce((acc, s) => acc + Number(s.cantidadPalmas ?? 0), 0);
+                                    setFertilizacionEnEdicion({
+                                      ...fertilizacionEnEdicion,
+                                      lote: value,
+                                      sublote: '',
+                                      palmas: totalLote,
+                                    });
+                                  }}
                                 >
                                   <SelectTrigger>
                                     <SelectValue placeholder="Seleccionar lote" />
