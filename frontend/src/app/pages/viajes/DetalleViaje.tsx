@@ -593,8 +593,15 @@ export default function DetalleViaje() {
                               <Input value={d.cosecha?.gajos_reportados ?? 0} disabled />
                             </div>
                             <div className="space-y-2">
-                              <Label>Reconteo de Gajos</Label>
-                              <Input value={d.cosecha?.gajos_reconteo ?? '—'} disabled />
+                              <Label>Gajos en Viaje</Label>
+                              {/* §5.5: `gajos_en_viaje` es el split de esta
+                                  cosecha en este viaje. `cosecha.gajos_reconteo`
+                                  suma todos los splits — no sirve aca porque
+                                  mostraria el total de todos los viajes. */}
+                              <Input
+                                value={d.gajos_en_viaje ?? d.cosecha?.gajos_reconteo ?? d.cosecha?.gajos_reportados ?? '—'}
+                                disabled
+                              />
                             </div>
                             <div className="space-y-2 md:col-span-2">
                               <Label>Peso (kg)</Label>

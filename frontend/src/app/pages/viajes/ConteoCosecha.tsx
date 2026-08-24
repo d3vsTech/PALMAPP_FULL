@@ -55,12 +55,20 @@ interface CosechaEnEdicion {
   cuadrillaReconteo: string; // = cosechaId del select de "cuadrilla" (cosecha)
   loteName: string;
   subloteName: string;
+  /** `gajos_reportados` — total original de la cosecha (informativo). */
   gajos: number;
+  /**
+   * `gajos_pendientes_enviar` del backend al momento de elegir la cuadrilla:
+   * base INMUTABLE contra la que calculamos los pendientes en pantalla.
+   * Si la cosecha ya tenia splits en otros viajes, este numero refleja lo
+   * que realmente se puede asignar a ESTE viaje, no el total reportado.
+   */
+  gajosDisponibles: number;
   /** Gajos que efectivamente salen en este viaje — se persiste como
    *  `viaje_detalle.gajos_en_viaje`. */
   gajosEnViaje: number;
-  /** Calculado readonly: gajos_pendientes_enviar del backend menos
-   *  gajosEnViaje. Se muestra como "Gajos Pendientes por Enviar". */
+  /** Calculado readonly: gajosDisponibles - gajosEnViaje.
+   *  Se muestra como "Gajos Pendientes por Enviar". */
   gajosPendientesPorEnviar: number;
   pesoKg: number;
   cuadrillaCount: number;
@@ -482,6 +490,7 @@ export default function ConteoCosecha() {
       loteName: '',
       subloteName: '',
       gajos: 0,
+      gajosDisponibles: 0,
       gajosEnViaje: 0,
       gajosPendientesPorEnviar: 0,
       pesoKg: 0,
@@ -518,6 +527,14 @@ export default function ConteoCosecha() {
         return next;
       });
     }
+    // Base disponible = lo que el backend dice que aun puede asignarse a
+    // ESTE viaje. Si la cosecha ya tenia splits, `gajos_pendientes_enviar`
+    // ya descuenta lo enviado en otros viajes. Fallback al total reportado
+    // solo si el backend no lo trae (cosechas viejas sin splits).
+    const disponibles = c.gajos_pendientes_enviar
+      ?? c.gajos_reconteo
+      ?? c.gajos_reportados
+      ?? 0;
     setCosechaEnEdicion({
       ...cosechaEnEdicion,
       cosechaId: c.id,
@@ -525,11 +542,10 @@ export default function ConteoCosecha() {
       loteName: c.lote?.nombre ?? '—',
       subloteName: c.sublote?.nombre ?? '',
       gajos: c.gajos_reportados ?? 0,
-      // Al elegir la cosecha, TODOS los gajos reportados quedan como
-      // pendientes por enviar. El input "Gajos en Viaje" arranca en 0 y el
-      // user decide cuántos entran en este viaje. Pendientes se deriva luego
-      // como `gajos_reportados − gajos_en_viaje`.
-      gajosPendientesPorEnviar: c.gajos_reportados ?? 0,
+      gajosDisponibles: disponibles,
+      // El input "Gajos en Viaje" arranca en 0. Pendientes se deriva como
+      // `disponibles - gajos_en_viaje`.
+      gajosPendientesPorEnviar: disponibles,
       gajosEnViaje: 0,
       cuadrillaCount: finalCount,
     });
@@ -609,7 +625,9 @@ export default function ConteoCosecha() {
 
   const eliminarCosecha = (c: CosechaConteo) => {
     if (!viaje || !c.detalleId) return;
-    if (c.aprobado) { toast.error('No se puede eliminar una cosecha aprobada'); return; }
+    // No bloqueamos por `c.aprobado` aca: si el viaje se revirtio a CREADO
+    // en DB pero el flag `reconteo_aprobado` del detalle sigue en true, el
+    // backend arbitrara con DETALLE_APROBADO y el toast explicara.
     setCosechaToDelete(c);
   };
 
@@ -622,7 +640,16 @@ export default function ConteoCosecha() {
       toast.success('Cosecha eliminada');
       await cargar();
     } catch (e: any) {
-      toast.error(e?.message ?? 'Error al eliminar la cosecha');
+      // Errores 409 tipicos cuando el viaje o el detalle no admiten cambios.
+      if (e?.code === ErrorCodes.DETALLE_APROBADO) {
+        toast.error(
+          'No se puede eliminar: el reconteo del detalle está marcado como aprobado. Reabrelo en la base de datos (reconteo_aprobado=false) e intenta de nuevo.',
+        );
+      } else if (e?.code === ErrorCodes.VIAJE_NO_EDITABLE) {
+        toast.error('El viaje ya no está en estado CREADO. Solo se pueden eliminar cosechas cuando está en CREADO.');
+      } else {
+        toast.error(e?.message ?? 'Error al eliminar la cosecha');
+      }
     }
   };
 
@@ -870,7 +897,7 @@ export default function ConteoCosecha() {
                               setCosechaEnEdicion({
                                 ...cosechaEnEdicion, planillaId: value, cuadrillaReconteo: '',
                                 cosechaId: null, loteName: '', subloteName: '', gajos: 0,
-                                gajosEnViaje: 0, gajosPendientesPorEnviar: 0, cuadrillaCount: 0,
+                                gajosDisponibles: 0, gajosEnViaje: 0, gajosPendientesPorEnviar: 0, cuadrillaCount: 0,
                               });
                               setCuadrillaSeleccionada([]);
                             }}
@@ -1064,11 +1091,12 @@ export default function ConteoCosecha() {
                             value={cosechaEnEdicion.gajosEnViaje || ''}
                             onChange={(e) => {
                               const enViaje = Math.max(parseInt(e.target.value) || 0, 0);
-                              // Pendientes = max(gajos reportados − en viaje, 0).
-                              // Cálculo directo sobre lo que el user está
-                              // viendo, sin arrastrar splits previos del backend
-                              // que confunden la UI.
-                              const pendientes = Math.max(cosechaEnEdicion.gajos - enViaje, 0);
+                              // Pendientes = max(gajosDisponibles − en viaje, 0).
+                              // `gajosDisponibles` respeta lo que el backend
+                              // ya envio en otros viajes (via
+                              // `gajos_pendientes_enviar`), asi no ofrecemos
+                              // gajos que ya se despacharon.
+                              const pendientes = Math.max(cosechaEnEdicion.gajosDisponibles - enViaje, 0);
                               setCosechaEnEdicion({
                                 ...cosechaEnEdicion,
                                 gajosEnViaje: enViaje,
@@ -1078,14 +1106,15 @@ export default function ConteoCosecha() {
                           />
                         </div>
 
-                        {/* Gajos Pendientes por Enviar — derivado siempre de
-                            `gajos reportados − gajos en viaje` para evitar
-                            inconsistencias con el estado inicial del backend. */}
+                        {/* Gajos Pendientes por Enviar — se calcula sobre
+                            `gajosDisponibles` (backend `gajos_pendientes_enviar`),
+                            no sobre `gajos_reportados`, para reflejar los
+                            splits ya asignados a otros viajes. */}
                         <div className="space-y-2">
                           <Label>Gajos Pendientes por Enviar</Label>
                           <Input
                             type="number"
-                            value={Math.max(cosechaEnEdicion.gajos - cosechaEnEdicion.gajosEnViaje, 0)}
+                            value={Math.max(cosechaEnEdicion.gajosDisponibles - cosechaEnEdicion.gajosEnViaje, 0)}
                             disabled
                             className="bg-muted font-semibold"
                           />
@@ -1206,9 +1235,9 @@ export default function ConteoCosecha() {
                         <Button
                           variant="ghost" size="sm"
                           onClick={() => eliminarCosecha(cosecha)}
-                          disabled={cosecha.aprobado || procesando}
+                          disabled={procesando}
                           className="text-destructive hover:text-destructive shrink-0"
-                          title={cosecha.aprobado ? 'No se puede eliminar una cosecha aprobada' : 'Eliminar'}
+                          title="Eliminar"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
