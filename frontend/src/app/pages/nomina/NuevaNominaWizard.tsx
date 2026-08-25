@@ -211,6 +211,16 @@ export default function NuevaNominaWizard() {
    * En modo edición, se sobrescribe con el `tipo_pago_snapshot` de la nómina.
    */
   const [periodicidad, setPeriodicidad] = useState<Periodicidad>('QUINCENAL');
+  /**
+   * Fechas de corte configuradas por el tenant (§8 API_PARAMETRICAS).
+   * Reflejan lo que hay en Configuración → Nómina y se usan para calcular
+   * `fechaInicio`/`fechaFin` y para el label del select de quincena.
+   * Defaults 1/15/16/31 sirven de fallback mientras carga el fetch.
+   */
+  const [diasQuincena, setDiasQuincena] = useState<{
+    dia_inicio_q1: number; dia_fin_q1: number;
+    dia_inicio_q2: number; dia_fin_q2: number;
+  }>({ dia_inicio_q1: 1, dia_fin_q1: 15, dia_inicio_q2: 16, dia_fin_q2: 31 });
   const [quincena, setQuincena] = useState<'1' | '2' | ''>('');
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
@@ -368,13 +378,21 @@ export default function NuevaNominaWizard() {
         setPeriodicidad(res.data.tipo_pago_nomina);
         // Si es MENSUAL, no hay quincena — limpiar cualquier valor previo.
         if (res.data.tipo_pago_nomina === 'MENSUAL') setQuincena('');
+        setDiasQuincena({
+          dia_inicio_q1: res.data.dia_inicio_q1 ?? 1,
+          dia_fin_q1: res.data.dia_fin_q1 ?? 15,
+          dia_inicio_q2: res.data.dia_inicio_q2 ?? 16,
+          dia_fin_q2: res.data.dia_fin_q2 ?? 31,
+        });
       })
       .catch(() => {
         // silencioso — se queda con el default QUINCENAL del useState.
       });
   }, [esEdicion]);
 
-  // Calcular fechas automáticamente
+  // Calcular fechas automáticamente. Las quincenas respetan las fechas de
+  // corte del tenant (§8): `dia_inicio_q1..dia_fin_q2`. Si el día configurado
+  // excede el último día del mes (ej. 31 en febrero) se hace clamp.
   useEffect(() => {
     if (!mes) {
       setFechaInicio('');
@@ -384,20 +402,23 @@ export default function NuevaNominaWizard() {
     const a = parseInt(ano);
     const m = parseInt(mes);
     const fmt = (d: Date) => d.toISOString().split('T')[0];
+    // Último día real del mes seleccionado (mes+1, día 0).
+    const ultimoDiaMes = new Date(a, m, 0).getDate();
+    const clamp = (d: number) => Math.min(Math.max(d, 1), ultimoDiaMes);
     if (periodicidad === 'MENSUAL') {
       setFechaInicio(fmt(new Date(a, m - 1, 1)));
       setFechaFin(fmt(new Date(a, m, 0)));
     } else if (periodicidad === 'QUINCENAL' && quincena === '1') {
-      setFechaInicio(fmt(new Date(a, m - 1, 1)));
-      setFechaFin(fmt(new Date(a, m - 1, 15)));
+      setFechaInicio(fmt(new Date(a, m - 1, clamp(diasQuincena.dia_inicio_q1))));
+      setFechaFin(fmt(new Date(a, m - 1, clamp(diasQuincena.dia_fin_q1))));
     } else if (periodicidad === 'QUINCENAL' && quincena === '2') {
-      setFechaInicio(fmt(new Date(a, m - 1, 16)));
-      setFechaFin(fmt(new Date(a, m, 0)));
+      setFechaInicio(fmt(new Date(a, m - 1, clamp(diasQuincena.dia_inicio_q2))));
+      setFechaFin(fmt(new Date(a, m - 1, clamp(diasQuincena.dia_fin_q2))));
     } else {
       setFechaInicio('');
       setFechaFin('');
     }
-  }, [ano, mes, periodicidad, quincena]);
+  }, [ano, mes, periodicidad, quincena, diasQuincena]);
 
   // Cargar empleados+operarios disponibles al entrar al paso 2.
   // Requiere nominaId — si no existe, no carga.
@@ -924,8 +945,12 @@ export default function NuevaNominaWizard() {
                         <SelectValue placeholder="Selecciona quincena" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="1">Primera Quincena (1-15)</SelectItem>
-                        <SelectItem value="2">Segunda Quincena (16-fin de mes)</SelectItem>
+                        <SelectItem value="1">
+                          Primera Quincena ({diasQuincena.dia_inicio_q1}-{diasQuincena.dia_fin_q1})
+                        </SelectItem>
+                        <SelectItem value="2">
+                          Segunda Quincena ({diasQuincena.dia_inicio_q2}-{diasQuincena.dia_fin_q2 >= 31 ? 'fin de mes' : diasQuincena.dia_fin_q2})
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
