@@ -417,7 +417,7 @@ export default function NuevaLiquidacionWizard() {
                   </Label>
                   <Input
                     id="diasTrabajados"
-                    type="number"
+                    type="number" step="0.001"
                     placeholder="180"
                     value={diasTrabajados}
                     onChange={(e) => setDiasTrabajados(e.target.value)}

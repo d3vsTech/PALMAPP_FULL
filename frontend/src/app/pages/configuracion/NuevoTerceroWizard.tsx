@@ -246,7 +246,7 @@ export function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange
                           <td className="p-3">
                             <div className="flex items-center justify-end gap-1.5">
                               <span className="text-muted-foreground text-xs">$</span>
-                              <Input type="number" value={item.precioPorKg || ''} onChange={e => setCosecha(i, parseFloat(e.target.value) || 0)} className="w-24 text-right h-8" placeholder="0" />
+                              <Input type="number" step="0.001" value={item.precioPorKg || ''} onChange={e => setCosecha(i, parseFloat(e.target.value) || 0)} className="w-24 text-right h-8" placeholder="0" />
                               <span className="text-muted-foreground text-xs">/kg</span>
                             </div>
                           </td>
@@ -286,9 +286,9 @@ export function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange
                     <tbody>
                       {precios.abonada.map((r, i) => (
                         <tr key={i} className="border-t border-border">
-                          <td className="p-2"><Input type="number" value={r.gramosMinimo || ''} onChange={e => setAbonada(i, 'gramosMinimo', parseFloat(e.target.value) || 0)} className="h-8" /></td>
-                          <td className="p-2"><Input type="number" value={r.gramosMaximo || ''} onChange={e => setAbonada(i, 'gramosMaximo', parseFloat(e.target.value) || 0)} className="h-8" /></td>
-                          <td className="p-2"><div className="flex gap-1 items-center"><span className="text-muted-foreground text-xs">$</span><Input type="number" value={r.precioPorPalma || ''} onChange={e => setAbonada(i, 'precioPorPalma', parseFloat(e.target.value) || 0)} className="h-8 w-20" /></div></td>
+                          <td className="p-2"><Input type="number" step="0.001" value={r.gramosMinimo || ''} onChange={e => setAbonada(i, 'gramosMinimo', parseFloat(e.target.value) || 0)} className="h-8" /></td>
+                          <td className="p-2"><Input type="number" step="0.001" value={r.gramosMaximo || ''} onChange={e => setAbonada(i, 'gramosMaximo', parseFloat(e.target.value) || 0)} className="h-8" /></td>
+                          <td className="p-2"><div className="flex gap-1 items-center"><span className="text-muted-foreground text-xs">$</span><Input type="number" step="0.001" value={r.precioPorPalma || ''} onChange={e => setAbonada(i, 'precioPorPalma', parseFloat(e.target.value) || 0)} className="h-8 w-20" /></div></td>
                           <td className="p-2"><Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => onChange({ ...precios, abonada: precios.abonada.filter((_, j) => j !== i) })}><Trash2 className="h-3.5 w-3.5" /></Button></td>
                         </tr>
                       ))}
@@ -318,7 +318,7 @@ export function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange
                   <CardContent className="p-4">
                     <div className="flex items-center gap-2 max-w-xs">
                       <span className="text-muted-foreground">$</span>
-                      <Input type="number" value={precios[key] || ''} onChange={e => setPrecioSimple(key, parseFloat(e.target.value) || 0)} placeholder="0" />
+                      <Input type="number" step="0.001" value={precios[key] || ''} onChange={e => setPrecioSimple(key, parseFloat(e.target.value) || 0)} placeholder="0" />
                       <span className="text-muted-foreground text-sm">/{unidad}</span>
                     </div>
                     {(precios[key] as number) > 0 && (
@@ -356,7 +356,7 @@ export function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange
                         <div className="flex items-center gap-2 w-48">
                           <span className="text-muted-foreground">$</span>
                           <Input
-                            type="number"
+                            type="number" step="0.001"
                             value={f.precio || ''}
                             onChange={(e) => {
                               const next = [...precios.finca];

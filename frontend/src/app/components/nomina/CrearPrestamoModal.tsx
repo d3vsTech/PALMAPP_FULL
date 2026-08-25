@@ -152,7 +152,7 @@ export function CrearPrestamoModal({
               <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 id="valor"
-                type="number"
+                type="number" step="0.001"
                 placeholder="50000"
                 value={formData.valor || ''}
                 onChange={(e) => handleInputChange('valor', parseFloat(e.target.value) || 0)}

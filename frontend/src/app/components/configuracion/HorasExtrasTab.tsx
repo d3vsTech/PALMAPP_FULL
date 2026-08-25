@@ -238,7 +238,7 @@ export function HorasExtrasTab() {
             <div className="flex items-center gap-3 mt-2">
               <Input
                 id="horasSemanales"
-                type="number"
+                type="number" step="0.001"
                 min={1}
                 max={96}
                 value={horasSemanales}

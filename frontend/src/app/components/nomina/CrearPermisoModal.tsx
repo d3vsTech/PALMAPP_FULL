@@ -241,7 +241,7 @@ export function CrearPermisoModal({
                 <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   id="valorJornal"
-                  type="number"
+                  type="number" step="0.001"
                   placeholder="86666"
                   value={formData.valorJornal || ''}
                   onChange={(e) => handleInputChange('valorJornal', parseFloat(e.target.value) || 0)}

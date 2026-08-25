@@ -196,10 +196,10 @@ export default function Carrito() {
                             <Minus className="h-4 w-4" />
                           </Button>
                           <Input
-                            type="number"
+                            type="number" step="0.001"
                             value={item.cantidad}
                             onChange={(e) => {
-                              const v = parseInt(e.target.value) || 1;
+                              const v = parseFloat(e.target.value) || 1;
                               if (v !== item.cantidad) cambiarCantidad(item.id, v);
                             }}
                             className="w-16 text-center"

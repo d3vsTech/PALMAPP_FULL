@@ -2844,7 +2844,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         <Label htmlFor="lluvia">Lluvia (mm)</Label>
                         <Input
                           id="lluvia"
-                          type="number"
+                          type="number" step="0.001"
                           placeholder="Ej: 15"
                           value={lluvia}
                           onChange={(e) => setLluvia(e.target.value)}
@@ -3000,22 +3000,22 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                               <div className="space-y-2">
                                 <Label>Gajos Recogidos</Label>
                                 <Input
-                                  type="number"
+                                  type="number" step="0.001"
                                   placeholder="0"
                                   value={cosechaEnEdicion.gajosRecogidos || ''}
                                   onChange={(e) => {
-                                    setCosechaEnEdicion({ ...cosechaEnEdicion, gajosRecogidos: parseInt(e.target.value) || 0 });
+                                    setCosechaEnEdicion({ ...cosechaEnEdicion, gajosRecogidos: parseFloat(e.target.value) || 0 });
                                   }}
                                 />
                               </div>
                               <div className="space-y-2">
                                 <Label>Kilos (opcional)</Label>
                                 <Input
-                                  type="number"
+                                  type="number" step="0.001"
                                   placeholder="0"
                                   value={cosechaEnEdicion.kilos || ''}
                                   onChange={(e) => {
-                                    setCosechaEnEdicion({ ...cosechaEnEdicion, kilos: parseInt(e.target.value) || 0 });
+                                    setCosechaEnEdicion({ ...cosechaEnEdicion, kilos: parseFloat(e.target.value) || 0 });
                                   }}
                                 />
                               </div>
@@ -3211,10 +3211,10 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                               <div className="space-y-2">
                                 <Label>Número de Palmas</Label>
                                 <Input
-                                  type="number"
+                                  type="number" step="0.001"
                                   placeholder="0"
                                   value={plateoEnEdicion.numeroPalmas || ''}
-                                  onChange={(e) => setPlateoEnEdicion({ ...plateoEnEdicion, numeroPalmas: parseInt(e.target.value) || 0 })}
+                                  onChange={(e) => setPlateoEnEdicion({ ...plateoEnEdicion, numeroPalmas: parseFloat(e.target.value) || 0 })}
                                 />
                               </div>
                             </div>
@@ -3410,10 +3410,10 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                               <div className="space-y-2">
                                 <Label>Número de Palmas</Label>
                                 <Input
-                                  type="number"
+                                  type="number" step="0.001"
                                   placeholder="0"
                                   value={podaEnEdicion.numeroPalmas || ''}
-                                  onChange={(e) => setPodaEnEdicion({ ...podaEnEdicion, numeroPalmas: parseInt(e.target.value) || 0 })}
+                                  onChange={(e) => setPodaEnEdicion({ ...podaEnEdicion, numeroPalmas: parseFloat(e.target.value) || 0 })}
                                 />
                               </div>
                             </div>
@@ -3622,10 +3622,10 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                               <div className="space-y-2">
                                 <Label>Número de Palmas</Label>
                                 <Input
-                                  type="number"
+                                  type="number" step="0.001"
                                   placeholder="0"
                                   value={fertilizacionEnEdicion.palmas || ''}
-                                  onChange={(e) => setFertilizacionEnEdicion({ ...fertilizacionEnEdicion, palmas: parseInt(e.target.value) || 0 })}
+                                  onChange={(e) => setFertilizacionEnEdicion({ ...fertilizacionEnEdicion, palmas: parseFloat(e.target.value) || 0 })}
                                 />
                               </div>
                               <div className="space-y-2">
@@ -3668,10 +3668,10 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                               <div className="space-y-2">
                                 <Label>Cantidad (gramos)</Label>
                                 <Input
-                                  type="number"
+                                  type="number" step="0.001"
                                   placeholder="0"
                                   value={fertilizacionEnEdicion.cantidadGramos || ''}
-                                  onChange={(e) => setFertilizacionEnEdicion({ ...fertilizacionEnEdicion, cantidadGramos: parseInt(e.target.value) || 0 })}
+                                  onChange={(e) => setFertilizacionEnEdicion({ ...fertilizacionEnEdicion, cantidadGramos: parseFloat(e.target.value) || 0 })}
                                 />
                               </div>
                             </div>
@@ -4136,13 +4136,13 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                     Número de Palmas <span className="text-destructive">*</span>
                                   </Label>
                                   <Input
-                                    type="number"
+                                    type="number" step="0.001"
                                     placeholder="0"
                                     value={otrosEnEdicion.numeroPalmas ?? ''}
                                     onChange={(e) =>
                                       setOtrosEnEdicion({
                                         ...otrosEnEdicion,
-                                        numeroPalmas: parseInt(e.target.value) || 0,
+                                        numeroPalmas: parseFloat(e.target.value) || 0,
                                       })
                                     }
                                   />
@@ -4524,7 +4524,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         <div className="space-y-2">
                           <Label>Número de Horas</Label>
                           <Input
-                            type="number"
+                            type="number" step="0.001"
                             placeholder="0"
                             value={horaExtraEnEdicion.numeroHoras || ''}
                             onChange={(e) => {

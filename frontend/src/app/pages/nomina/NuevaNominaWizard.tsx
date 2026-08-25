@@ -2266,7 +2266,7 @@ export default function NuevaNominaWizard() {
                         <td className="p-3 pr-5 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <Input
-                              type="number"
+                              type="number" step="0.001"
                               step="0.1"
                               min="0"
                               className="w-24 h-8 text-right text-sm"

@@ -239,7 +239,7 @@ export function CrearEditarLoteModal({
               </Label>
               <Input
                 id="hectareas"
-                type="number"
+                type="number" step="0.001"
                 step="0.01"
                 placeholder="45.5"
                 min="0"

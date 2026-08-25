@@ -2095,7 +2095,7 @@ export default function NuevoPredioWizard() {
                           <div className="space-y-2">
                             <Label className="text-sm">Cantidad de palmas</Label>
                             <Input
-                              type="number"
+                              type="number" step="0.001"
                               placeholder="Ej: 50"
                               min="0"
                               max={disponiblesSinLinea > 0 ? disponiblesSinLinea : undefined}
@@ -2278,7 +2278,7 @@ export default function NuevoPredioWizard() {
                             <div className="space-y-2">
                               <Label className="text-sm font-medium">Número de palmas</Label>
                               <Input
-                                type="number"
+                                type="number" step="0.001"
                                 placeholder="Ej: 170"
                                 value={cantPalmasForm[sub.id] ?? String(sub.cantidadPalmas ?? '')}
                                 onChange={e => setCantPalmasForm(prev => ({ ...prev, [sub.id]: e.target.value }))}
@@ -2330,7 +2330,7 @@ export default function NuevoPredioWizard() {
                               <div className="space-y-2">
                                 <Label>Cantidad de palmas</Label>
                                 <Input
-                                  type="number"
+                                  type="number" step="0.001"
                                   placeholder="Ej: 50"
                                   min="0"
                                   value={cantPalmasForm[sub.id] ?? ''}
@@ -2620,7 +2620,7 @@ export default function NuevoPredioWizard() {
           <div className="space-y-2 py-2">
             <Label className="text-sm">Cantidad de palmas</Label>
             <Input
-              type="number"
+              type="number" step="0.001"
               min={0}
               max={nuevaLineaPrompt?.disponibles ?? 0}
               placeholder={`Máx ${nuevaLineaPrompt?.disponibles ?? 0}`}
@@ -2724,7 +2724,7 @@ function FormLote({
         <div className="space-y-2">
           <Label>Hectáreas Sembradas *</Label>
           <Input
-            type="number"
+            type="number" step="0.001"
             placeholder="0"
             min={0}
             max={haDisponibles}

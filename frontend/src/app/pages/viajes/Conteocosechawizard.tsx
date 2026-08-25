@@ -550,12 +550,12 @@ export default function ConteoCosechaWizard({ viaje, onClose }: ConteoCosechaWiz
                             <div className="space-y-2">
                               <Label>Número de Gajos</Label>
                               <Input
-                                type="number"
+                                type="number" step="0.001"
                                 placeholder="0"
                                 value={cosecha.gajos || ''}
                                 onChange={(e) => {
                                   const updated = cosechas.map(c =>
-                                    c.id === cosecha.id ? { ...c, gajos: parseInt(e.target.value) || 0 } : c
+                                    c.id === cosecha.id ? { ...c, gajos: parseFloat(e.target.value) || 0 } : c
                                   );
                                   setCosechas(updated);
                                 }}
@@ -565,12 +565,12 @@ export default function ConteoCosechaWizard({ viaje, onClose }: ConteoCosechaWiz
                             <div className="space-y-2">
                               <Label>Peso en kg (opcional)</Label>
                               <Input
-                                type="number"
+                                type="number" step="0.001"
                                 placeholder="0"
                                 value={cosecha.pesoKg || ''}
                                 onChange={(e) => {
                                   const updated = cosechas.map(c =>
-                                    c.id === cosecha.id ? { ...c, pesoKg: parseInt(e.target.value) || 0 } : c
+                                    c.id === cosecha.id ? { ...c, pesoKg: parseFloat(e.target.value) || 0 } : c
                                   );
                                   setCosechas(updated);
                                 }}

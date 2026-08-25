@@ -106,7 +106,7 @@ export default function CrearLinea() {
               <Label htmlFor="numeroLinea" className="text-base">
                 Número de Línea <span className="text-destructive">*</span>
               </Label>
-              <Input id="numeroLinea" type="number" min="1" placeholder="Ej: 1, 2, 3..."
+              <Input id="numeroLinea" type="number" step="0.001" min="1" placeholder="Ej: 1, 2, 3..."
                 value={numero} onChange={e => setNumero(e.target.value)}
                 className="h-12 text-base" autoFocus />
               <p className="text-sm text-muted-foreground">
@@ -124,7 +124,7 @@ export default function CrearLinea() {
               <Label htmlFor="cantidadPalmas" className="text-base">
                 Cantidad Teórica de Palmas <span className="text-muted-foreground text-sm font-normal">(opcional)</span>
               </Label>
-              <Input id="cantidadPalmas" type="number" min="0" max="9999" placeholder="Ej: 50"
+              <Input id="cantidadPalmas" type="number" step="0.001" min="0" max="9999" placeholder="Ej: 50"
                 value={cantTeorica} onChange={e => setCantTeorica(e.target.value)}
                 className="h-12 text-base" />
               <p className="text-sm text-muted-foreground">

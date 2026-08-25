@@ -157,7 +157,7 @@ export default function CrearPalmas() {
               <Label htmlFor="cantidadPalmas" className="text-base">
                 Cantidad de Palmas a Agregar <span className="text-destructive">*</span>
               </Label>
-              <Input id="cantidadPalmas" type="number" min="1" max="99999" placeholder="Ej: 100"
+              <Input id="cantidadPalmas" type="number" step="0.001" min="1" max="99999" placeholder="Ej: 100"
                 value={cantidad} onChange={e => setCantidad(e.target.value)}
                 className="h-12 text-base" autoFocus />
               <p className="text-sm text-muted-foreground">

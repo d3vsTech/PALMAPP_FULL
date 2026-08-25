@@ -866,7 +866,7 @@ export default function DetalleViaje() {
                         </div>
                         <div className="space-y-2">
                           <Label>Peso Recibido (kg)</Label>
-                          <Input type="number" value={datosExtractora.pesoRecibido}
+                          <Input type="number" step="0.001" value={datosExtractora.pesoRecibido}
                             onChange={(e) => setDatosExtractora({ ...datosExtractora, pesoRecibido: parseFloat(e.target.value) || 0 })}
                             disabled={procesandoIA || estadoActual === 'Finalizado'} />
                         </div>

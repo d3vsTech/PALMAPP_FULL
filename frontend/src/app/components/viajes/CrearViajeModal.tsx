@@ -289,11 +289,11 @@ export function CrearViajeModal({
                   <Package className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     id="gajos"
-                    type="number"
+                    type="number" step="0.001"
                     placeholder="850"
                     value={formData.gajosEstimados || ''}
                     onChange={(e) =>
-                      handleInputChange('gajosEstimados', parseInt(e.target.value) || 0)
+                      handleInputChange('gajosEstimados', parseFloat(e.target.value) || 0)
                     }
                     className="pl-9"
                   />
@@ -314,7 +314,7 @@ export function CrearViajeModal({
                   <Scale className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     id="peso"
-                    type="number"
+                    type="number" step="0.001"
                     placeholder="12500"
                     value={formData.peso || ''}
                     onChange={(e) => {

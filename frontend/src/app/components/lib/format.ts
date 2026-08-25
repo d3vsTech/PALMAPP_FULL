@@ -74,7 +74,7 @@ export function parseCOP(text: string | null | undefined): string {
  */
 export function formatDecimal(
   value: number | string | null | undefined,
-  maxDecimals = 4,
+  maxDecimals = 3,
 ): string {
   if (value === null || value === undefined || value === '') return '';
   const str = String(value).trim().replace(/\s/g, '');

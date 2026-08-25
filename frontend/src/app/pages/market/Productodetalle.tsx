@@ -474,9 +474,9 @@ export default function ProductoDetalle() {
                       <Minus className="h-4 w-4" />
                     </Button>
                     <Input
-                      type="number"
+                      type="number" step="0.001"
                       value={cantidad}
-                      onChange={(e) => setCantidad(Math.max(1, parseInt(e.target.value) || 1))}
+                      onChange={(e) => setCantidad(Math.max(1, parseFloat(e.target.value) || 1))}
                       className="w-20 text-center"
                       min="1"
                       max={producto.stock_disponible}

@@ -732,7 +732,7 @@ export default function ProveedorConfiguracion() {
                       <Label htmlFor="tiempo_prep">Tiempo de preparación (horas)</Label>
                       <Input
                         id="tiempo_prep"
-                        type="number"
+                        type="number" step="0.001"
                         min={1}
                         max={720}
                         value={form.envios.tiempo_preparacion_horas}
@@ -746,7 +746,7 @@ export default function ProveedorConfiguracion() {
                       <Label htmlFor="monto_envio_gratis">Monto para envío gratis (COP)</Label>
                       <Input
                         id="monto_envio_gratis"
-                        type="number"
+                        type="number" step="0.001"
                         min={0}
                         value={form.envios.monto_envio_gratis}
                         onChange={(e) => setEnvios('monto_envio_gratis', e.target.value)}

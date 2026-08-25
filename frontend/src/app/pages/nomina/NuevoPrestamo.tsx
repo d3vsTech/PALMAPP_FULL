@@ -425,7 +425,7 @@ export default function NuevoPrestamo() {
                 <span className="text-destructive"> *</span>
               </Label>
               <Input
-                type="number"
+                type="number" step="0.001"
                 placeholder="Ej: 4"
                 min="1"
                 max="48"

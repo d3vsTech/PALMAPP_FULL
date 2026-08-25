@@ -566,7 +566,7 @@ export function RangosNumeracionTab() {
                 </Label>
                 <Input
                   id="numero-desde"
-                  type="number"
+                  type="number" step="0.001"
                   min={1}
                   value={form.numero_desde}
                   onChange={(e) => {
@@ -591,7 +591,7 @@ export function RangosNumeracionTab() {
                 </Label>
                 <Input
                   id="numero-hasta"
-                  type="number"
+                  type="number" step="0.001"
                   min={1}
                   value={form.numero_hasta}
                   onChange={(e) => setCampo('numero_hasta', e.target.value)}
@@ -609,7 +609,7 @@ export function RangosNumeracionTab() {
               </Label>
               <Input
                 id="numero-actual"
-                type="number"
+                type="number" step="0.001"
                 min={1}
                 value={form.numero_actual}
                 onChange={(e) => {

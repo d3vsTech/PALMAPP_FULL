@@ -148,7 +148,7 @@ export default function CrearEditarPredio() {
                 </Label>
                 <Input
                   id="hectareas"
-                  type="number"
+                  type="number" step="0.001"
                   placeholder="Ej: 250"
                   value={hectareas}
                   onChange={(e) => setHectareas(e.target.value)}

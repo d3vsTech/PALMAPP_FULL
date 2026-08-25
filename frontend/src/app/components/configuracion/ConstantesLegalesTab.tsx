@@ -125,7 +125,7 @@ export function ConstantesLegalesTab() {
             <Label htmlFor="anoVigente">Año Vigente *</Label>
             <Input
               id="anoVigente"
-              type="number"
+              type="number" step="0.001"
               min={2020}
               max={2100}
               value={constantes.anoVigente}
@@ -191,7 +191,7 @@ export function ConstantesLegalesTab() {
               <div className="relative">
                 <Input
                   id="tasaInteresesCesantias"
-                  type="number"
+                  type="number" step="0.001"
                   value={constantes.tasaInteresesCesantias}
                   onChange={(e) => handleChange('tasaInteresesCesantias', e.target.value)}
                   placeholder="12"
@@ -266,7 +266,7 @@ export function ConstantesLegalesTab() {
             <Label htmlFor="diasVacacionesAnuales">Días de Vacaciones Anuales *</Label>
             <Input
               id="diasVacacionesAnuales"
-              type="number"
+              type="number" step="0.001"
               value={constantes.diasVacacionesAnuales}
               onChange={(e) => handleChange('diasVacacionesAnuales', e.target.value)}
               placeholder="15"
@@ -291,7 +291,7 @@ export function ConstantesLegalesTab() {
               <Label htmlFor="diasAnoComercial">Días del Año Comercial *</Label>
               <Input
                 id="diasAnoComercial"
-                type="number"
+                type="number" step="0.001"
                 value={constantes.diasAnoComercial}
                 onChange={(e) => handleChange('diasAnoComercial', e.target.value)}
                 placeholder="360"
@@ -303,7 +303,7 @@ export function ConstantesLegalesTab() {
               <Label htmlFor="diasMesComercial">Días del Mes Comercial *</Label>
               <Input
                 id="diasMesComercial"
-                type="number"
+                type="number" step="0.001"
                 value={constantes.diasMesComercial}
                 onChange={(e) => handleChange('diasMesComercial', e.target.value)}
                 placeholder="30"

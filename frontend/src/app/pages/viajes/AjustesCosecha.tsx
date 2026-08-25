@@ -320,11 +320,11 @@ export default function AjustesCosecha() {
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-foreground">Silenciar por N viajes</label>
                 <input
-                  type="number"
+                  type="number" step="0.001"
                   min={1}
                   max={20}
                   value={silenciarViajes}
-                  onChange={(e) => setSilenciarViajes(Math.max(1, parseInt(e.target.value) || 1))}
+                  onChange={(e) => setSilenciarViajes(Math.max(1, parseFloat(e.target.value) || 1))}
                   disabled={enviando}
                   className="w-24 rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
                 />

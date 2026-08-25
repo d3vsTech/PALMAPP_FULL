@@ -388,7 +388,7 @@ export function AusenciasTab() {
                 <Label htmlFor="porcentaje">% Aplicación</Label>
                 <Input
                   id="porcentaje"
-                  type="number"
+                  type="number" step="0.001"
                   min={0}
                   max={100}
                   placeholder="100"

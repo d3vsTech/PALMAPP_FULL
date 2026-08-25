@@ -986,7 +986,7 @@ export default function LiquidarTerceroDetalle() {
             <div className="space-y-1.5">
               <Label className="text-xs">Valor *</Label>
               <Input
-                type="number"
+                type="number" step="0.001"
                 min="0"
                 step="0.01"
                 placeholder="0"

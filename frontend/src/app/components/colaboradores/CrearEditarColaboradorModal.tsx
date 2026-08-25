@@ -337,7 +337,7 @@ export function CrearEditarColaboradorModal({
                   </Label>
                   <Input
                     id="salarioBase"
-                    type="number"
+                    type="number" step="0.001"
                     placeholder="1300000"
                     value={formData.salarioBase || ''}
                     onChange={(e) => handleInputChange('salarioBase', parseFloat(e.target.value) || 0)}

@@ -134,7 +134,7 @@ export default function CrearSublote() {
             {/* Cantidad de palmas */}
             <div className="space-y-2">
               <Label className="text-base">Cantidad de Palmas <span className="text-muted-foreground text-sm font-normal">(opcional)</span></Label>
-              <Input type="number" min="0" max="99999"
+              <Input type="number" step="0.001" min="0" max="99999"
                 placeholder="Dejar vacío si se agregarán después"
                 value={cantidad} onChange={e => setCantidad(e.target.value)}
                 className="h-12 text-base" />

@@ -231,7 +231,7 @@ export function PreciosCosechaModal({
                     {editando === precio.id ? (
                       <div className="flex items-center gap-2 justify-end">
                         <Input
-                          type="number"
+                          type="number" step="0.001"
                           value={nuevoPrecio}
                           onChange={(e) => setNuevoPrecio(e.target.value)}
                           className="w-24 text-right"

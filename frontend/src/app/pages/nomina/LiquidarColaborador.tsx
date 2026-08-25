@@ -612,7 +612,7 @@ export default function LiquidarColaborador() {
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Días Trabajados</p>
               <Input
-                type="number"
+                type="number" step="0.001"
                 value={diasTrabajados}
                 onChange={(e) =>
                   setDiasTrabajados(e.target.value === '' ? '' : Number(e.target.value))
@@ -845,7 +845,7 @@ export default function LiquidarColaborador() {
                             <div key={idx} className="grid grid-cols-12 gap-2 items-center px-4 py-2">
                               <div className="col-span-4">
                                 <Input
-                                  type="number"
+                                  type="number" step="0.001"
                                   value={d.valor || ''}
                                   onChange={(e) => actualizarDeduccion(idx, 'valor', Number(e.target.value))}
                                   placeholder="Valor"
@@ -949,7 +949,7 @@ export default function LiquidarColaborador() {
                         <div className="col-span-3">
                           <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Valor</Label>
                           <Input
-                            type="number"
+                            type="number" step="0.001"
                             value={d.valor || ''}
                             onChange={(e) => actualizarDeduccion(idx, 'valor', Number(e.target.value))}
                             className="h-8 text-sm"
@@ -1015,7 +1015,7 @@ export default function LiquidarColaborador() {
                         </div>
                         <div className="col-span-5">
                           <Input
-                            type="number"
+                            type="number" step="0.001"
                             placeholder="Valor"
                             value={b.valor || ''}
                             onChange={(e) => actualizarBonificacion(i, 'valor', Number(e.target.value))}

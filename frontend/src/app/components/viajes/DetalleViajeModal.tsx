@@ -423,10 +423,10 @@ export function DetalleViajeModal({
                 <Label className="text-sm">Gajos Estimados</Label>
                 {modoEdicion ? (
                   <Input
-                    type="number"
+                    type="number" step="0.001"
                     value={formData.gajosEstimados}
                     onChange={(e) =>
-                      handleInputChange('gajosEstimados', parseInt(e.target.value) || 0)
+                      handleInputChange('gajosEstimados', parseFloat(e.target.value) || 0)
                     }
                   />
                 ) : (
@@ -441,7 +441,7 @@ export function DetalleViajeModal({
                 <Label className="text-sm">Peso (kg)</Label>
                 {modoEdicion ? (
                   <Input
-                    type="number"
+                    type="number" step="0.001"
                     value={formData.peso || ''}
                     onChange={(e) => {
                       const value = e.target.value;

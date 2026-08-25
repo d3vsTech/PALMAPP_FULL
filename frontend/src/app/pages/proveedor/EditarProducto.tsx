@@ -301,7 +301,7 @@ export default function EditarProducto() {
                     </Label>
                     <Input
                       id="stock"
-                      type="number"
+                      type="number" step="0.001"
                       placeholder="0"
                       value={stock}
                       onChange={(e) => setStock(e.target.value)}
@@ -314,7 +314,7 @@ export default function EditarProducto() {
                     <Label htmlFor="stock-min">Stock mínimo</Label>
                     <Input
                       id="stock-min"
-                      type="number"
+                      type="number" step="0.001"
                       placeholder="0"
                       value={stockMin}
                       onChange={(e) => setStockMin(e.target.value)}
@@ -351,10 +351,10 @@ export default function EditarProducto() {
                         <div className="space-y-2">
                           <Label className="text-xs">Cantidad mínima</Label>
                           <Input
-                            type="number"
+                            type="number" step="0.001"
                             placeholder="0"
                             value={pv.cantidad_minima}
-                            onChange={(e) => actualizarPV(index, 'cantidad_minima', parseInt(e.target.value) || 0)}
+                            onChange={(e) => actualizarPV(index, 'cantidad_minima', parseFloat(e.target.value) || 0)}
                             min="0"
                           />
                         </div>

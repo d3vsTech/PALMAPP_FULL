@@ -334,15 +334,15 @@ export function CrearPlanillaModal({
 
                           <div className="space-y-2">
                             <Label className="text-xs">Gajos Reportados</Label>
-                            <Input type="number" placeholder="0" value={cosecha.gajosReportados || ''}
-                              onChange={e => actualizarCosecha(cosecha.id, 'gajosReportados', parseInt(e.target.value) || 0)}
+                            <Input type="number" step="0.001" placeholder="0" value={cosecha.gajosReportados || ''}
+                              onChange={e => actualizarCosecha(cosecha.id, 'gajosReportados', parseFloat(e.target.value) || 0)}
                             />
                           </div>
 
                           <div className="space-y-2">
                             <Label className="text-xs">Gajos Volqueta</Label>
-                            <Input type="number" placeholder="0" value={cosecha.gajosVolqueta || ''}
-                              onChange={e => actualizarCosecha(cosecha.id, 'gajosVolqueta', parseInt(e.target.value) || 0)}
+                            <Input type="number" step="0.001" placeholder="0" value={cosecha.gajosVolqueta || ''}
+                              onChange={e => actualizarCosecha(cosecha.id, 'gajosVolqueta', parseFloat(e.target.value) || 0)}
                             />
                           </div>
                         </div>
@@ -418,8 +418,8 @@ export function CrearPlanillaModal({
                             />
                           </TableCell>
                           <TableCell>
-                            <Input type="number" placeholder="0" value={plateo.numeroPalmas || ''}
-                              onChange={e => actualizarPlateo(plateo.id, 'numeroPalmas', parseInt(e.target.value) || 0)}
+                            <Input type="number" step="0.001" placeholder="0" value={plateo.numeroPalmas || ''}
+                              onChange={e => actualizarPlateo(plateo.id, 'numeroPalmas', parseFloat(e.target.value) || 0)}
                             />
                           </TableCell>
                           <TableCell>
@@ -499,8 +499,8 @@ export function CrearPlanillaModal({
                               onChange={e => actualizarPoda(poda.id, 'sublotes', e.target.value)} />
                           </TableCell>
                           <TableCell>
-                            <Input type="number" placeholder="0" value={poda.numeroPalmas || ''}
-                              onChange={e => actualizarPoda(poda.id, 'numeroPalmas', parseInt(e.target.value) || 0)} />
+                            <Input type="number" step="0.001" placeholder="0" value={poda.numeroPalmas || ''}
+                              onChange={e => actualizarPoda(poda.id, 'numeroPalmas', parseFloat(e.target.value) || 0)} />
                           </TableCell>
                           <TableCell>
                             <Button variant="ghost" size="sm" onClick={() => eliminarFilaPoda(poda.id)}>
@@ -599,14 +599,14 @@ export function CrearPlanillaModal({
 
                           <div className="space-y-2">
                             <Label className="text-xs">Nº Palmas</Label>
-                            <Input type="number" placeholder="0" value={fert.palmas || ''}
-                              onChange={e => actualizarFertilizacion(fert.id, 'palmas', parseInt(e.target.value) || 0)} />
+                            <Input type="number" step="0.001" placeholder="0" value={fert.palmas || ''}
+                              onChange={e => actualizarFertilizacion(fert.id, 'palmas', parseFloat(e.target.value) || 0)} />
                           </div>
 
                           <div className="space-y-2">
                             <Label className="text-xs">Cantidad por Palma (gr)</Label>
-                            <Input type="number" placeholder="0" value={fert.cantidadGramos || ''}
-                              onChange={e => actualizarFertilizacion(fert.id, 'cantidadGramos', parseInt(e.target.value) || 0)} />
+                            <Input type="number" step="0.001" placeholder="0" value={fert.cantidadGramos || ''}
+                              onChange={e => actualizarFertilizacion(fert.id, 'cantidadGramos', parseFloat(e.target.value) || 0)} />
                           </div>
 
                           {fert.palmas > 0 && fert.cantidadGramos > 0 && (
@@ -758,11 +758,11 @@ export function CrearPlanillaModal({
                                 onChange={e => actualizarAuxiliar(aux.id, 'lugar', e.target.value)} />
                             </TableCell>
                             <TableCell>
-                              <Input type="number" placeholder="8" value={aux.total || ''}
+                              <Input type="number" step="0.001" placeholder="8" value={aux.total || ''}
                                 onChange={e => actualizarAuxiliar(aux.id, 'total', parseFloat(e.target.value) || 0)} />
                             </TableCell>
                             <TableCell>
-                              <Input type="number" placeholder="0" value={aux.horasExtra || ''}
+                              <Input type="number" step="0.001" placeholder="0" value={aux.horasExtra || ''}
                                 onChange={e => actualizarAuxiliar(aux.id, 'horasExtra', parseFloat(e.target.value) || 0)} />
                             </TableCell>
                             <TableCell>
@@ -793,7 +793,7 @@ export function CrearPlanillaModal({
                 <h3 className="text-lg font-semibold">Valor Jornal del Día</h3>
                 <div className="space-y-2">
                   <Label>Valor Jornal (directamente palma)</Label>
-                  <Input type="number" placeholder="86666" value={formData.valorJornal || ''}
+                  <Input type="number" step="0.001" placeholder="86666" value={formData.valorJornal || ''}
                     onChange={e => setFormData(prev => ({ ...prev, valorJornal: parseFloat(e.target.value) || 0 }))} />
                   {formData.valorJornal > 0 && (
                     <p className="text-xs text-muted-foreground">${formData.valorJornal.toLocaleString('es-CO')}</p>
@@ -807,7 +807,7 @@ export function CrearPlanillaModal({
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label>Lluvia (mm)</Label>
-                    <Input type="number" placeholder="0" value={formData.lluvia || ''}
+                    <Input type="number" step="0.001" placeholder="0" value={formData.lluvia || ''}
                       onChange={e => setFormData(prev => ({ ...prev, lluvia: parseFloat(e.target.value) || 0 }))} />
                   </div>
                   <div className="space-y-2">

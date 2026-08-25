@@ -461,7 +461,7 @@ export default function ConfiguracionInicialWizard() {
                       <Label htmlFor="tiempoPreparacion">Tiempo de preparación (horas)</Label>
                       <Input
                         id="tiempoPreparacion"
-                        type="number"
+                        type="number" step="0.001"
                         value={configuracionEnvios.tiempoPreparacion}
                         onChange={(e) =>
                           setConfiguracionEnvios({
@@ -479,7 +479,7 @@ export default function ConfiguracionInicialWizard() {
                       <Label htmlFor="costoEnvioGratis">Monto para envío gratis (COP)</Label>
                       <Input
                         id="costoEnvioGratis"
-                        type="number"
+                        type="number" step="0.001"
                         value={configuracionEnvios.costoEnvioGratis}
                         onChange={(e) =>
                           setConfiguracionEnvios({

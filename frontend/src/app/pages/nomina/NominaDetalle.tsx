@@ -2035,7 +2035,7 @@ export default function NominaDetalle() {
                               Valor
                             </Label>
                             <Input
-                              type="number"
+                              type="number" step="0.001"
                               value={d.valor || ''}
                               onChange={(e) => actualizarDescuentoTercero(i, 'valor', Number(e.target.value))}
                               className="h-8 text-sm"

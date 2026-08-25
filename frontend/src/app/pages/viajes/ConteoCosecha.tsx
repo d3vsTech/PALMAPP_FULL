@@ -1072,7 +1072,7 @@ export default function ConteoCosecha() {
                         {/* Gajos Reportados */}
                         <div className="space-y-2">
                           <Label>Gajos Reportados</Label>
-                          <Input type="number" value={cosechaEnEdicion.gajos || ''} disabled />
+                          <Input type="number" step="0.001" value={cosechaEnEdicion.gajos || ''} disabled />
                         </div>
 
                         {/* Gajos en Viaje — se persiste como
@@ -1084,13 +1084,13 @@ export default function ConteoCosecha() {
                         <div className="space-y-2">
                           <Label>Gajos en Viaje</Label>
                           <Input
-                            type="number"
+                            type="number" step="0.001"
                             placeholder="0"
                             min={0}
                             onFocus={(e) => e.currentTarget.select()}
                             value={cosechaEnEdicion.gajosEnViaje || ''}
                             onChange={(e) => {
-                              const enViaje = Math.max(parseInt(e.target.value) || 0, 0);
+                              const enViaje = Math.max(parseFloat(e.target.value) || 0, 0);
                               // Pendientes = max(gajosDisponibles − en viaje, 0).
                               // `gajosDisponibles` respeta lo que el backend
                               // ya envio en otros viajes (via
@@ -1113,7 +1113,7 @@ export default function ConteoCosecha() {
                         <div className="space-y-2">
                           <Label>Gajos Pendientes por Enviar</Label>
                           <Input
-                            type="number"
+                            type="number" step="0.001"
                             value={Math.max(cosechaEnEdicion.gajosDisponibles - cosechaEnEdicion.gajosEnViaje, 0)}
                             disabled
                             className="bg-muted font-semibold"
@@ -1124,13 +1124,13 @@ export default function ConteoCosecha() {
                         <div className="space-y-2">
                           <Label>Peso en kg (opcional)</Label>
                           <Input
-                            type="number"
+                            type="number" step="0.001"
                             placeholder="0"
                             value={cosechaEnEdicion.pesoKg || ''}
                             onChange={(e) => {
                               setCosechaEnEdicion({
                                 ...cosechaEnEdicion,
-                                pesoKg: parseInt(e.target.value) || 0,
+                                pesoKg: parseFloat(e.target.value) || 0,
                               });
                             }}
                           />

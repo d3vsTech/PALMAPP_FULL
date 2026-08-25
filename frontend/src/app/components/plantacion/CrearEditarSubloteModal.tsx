@@ -111,7 +111,7 @@ export function CrearEditarSubloteModal({
             </Label>
             <Input
               id="palmas"
-              type="number"
+              type="number" step="0.001"
               placeholder="250"
               min="1"
               value={cantidadPalmas}

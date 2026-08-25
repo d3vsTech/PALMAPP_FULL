@@ -690,12 +690,12 @@ export default function Market() {
                         <Minus className="h-4 w-4" />
                       </Button>
                       <Input
-                        type="number"
+                        type="number" step="0.001"
                         min="1"
                         max={productoSel.stock_disponible}
                         value={cantidadModal}
                         onChange={(e) => {
-                          const val = parseInt(e.target.value) || 1;
+                          const val = parseFloat(e.target.value) || 1;
                           setCantidadModal(Math.min(productoSel.stock_disponible, Math.max(1, val)));
                         }}
                         className="w-24 text-center"
