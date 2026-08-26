@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { cached } from '../../../api/cache';
+import { sortByFirstName } from '../../utils/personas';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -659,11 +660,7 @@ export function TransporteTab() {
                           </div>
                         ) : (
                           <div className="space-y-2">
-                            {[...conductoresEmpresa].sort((a, b) => {
-                              const na = `${a.apellidos ?? ''} ${a.nombres ?? ''}`.trim();
-                              const nb = `${b.apellidos ?? ''} ${b.nombres ?? ''}`.trim();
-                              return na.localeCompare(nb, 'es', { sensitivity: 'base' });
-                            }).map((conductor) => (
+                            {sortByFirstName(conductoresEmpresa).map((conductor) => (
                               <div
                                 key={conductor.id}
                                 className="flex items-center justify-between p-3 rounded-lg bg-background border border-border"

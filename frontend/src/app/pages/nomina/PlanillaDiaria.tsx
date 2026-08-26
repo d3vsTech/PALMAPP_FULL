@@ -10,6 +10,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
+import { sortByFirstName } from '../../utils/personas';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -750,10 +751,8 @@ function extraerColaboradores(bundle: PlanillaDiariaBundle): PlanillaDiariaColab
       });
     });
   });
-  return Array.from(map.values()).sort((a, b) => {
-    const cmp = primerApellido(a.nombre).localeCompare(primerApellido(b.nombre), 'es');
-    return cmp !== 0 ? cmp : a.nombre.localeCompare(b.nombre, 'es');
-  });
+  // Orden alfabetico por primer nombre (convencion del sistema).
+  return sortByFirstName(Array.from(map.values()));
 }
 
 /**

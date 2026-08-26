@@ -13,6 +13,7 @@
  */
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
+import { comparePersonaByFirstName } from '../../utils/personas';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -256,7 +257,9 @@ export default function Prestamos() {
                     </td>
                   </tr>
                 ) : (
-                  prestamosFiltrados.map((p, idx) => {
+                  [...prestamosFiltrados].sort((a, b) =>
+                    comparePersonaByFirstName(a.empleado ?? {}, b.empleado ?? {})
+                  ).map((p, idx) => {
                     const cfg = estadoConfig[p.estado] ?? estadoConfig.CANCELADO;
                     const pct = p.num_cuotas > 0
                       ? Math.round((p.cuotas_pagadas / p.num_cuotas) * 100)

@@ -24,6 +24,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useParams, Link, useNavigate } from 'react-router';
+import { comparePersonaByFirstName } from '../../utils/personas';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import {
@@ -1639,7 +1640,13 @@ export default function NominaDetalle() {
                       </tr>
                     </thead>
                     <tbody>
-                      {empleadosMostrar.map((emp, index) => {
+                      {[...empleadosMostrar].sort((a, b) => {
+                        // Orden alfabetico por primer nombre. Cada fila puede
+                        // ser empleado interno u operario de tercero (XOR).
+                        const pA = a.operario ?? a.empleado ?? {};
+                        const pB = b.operario ?? b.empleado ?? {};
+                        return comparePersonaByFirstName(pA, pB);
+                      }).map((emp, index) => {
                         const liquidado = emp.estado === 'LIQUIDADO';
                         // XOR empleado_id vs operario_id: cada fila es uno u otro.
                         const esOperario = emp.operario_id != null;

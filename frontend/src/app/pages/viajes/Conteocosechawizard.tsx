@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
+import { sortByFirstName } from '../../utils/personas';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -462,9 +463,9 @@ export default function ConteoCosechaWizard({ viaje, onClose }: ConteoCosechaWiz
                                   <SelectValue placeholder="Agregar colaborador" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {colaboradores
-                                    .filter(col => !cosecha.colaboradores.includes(col.id))
-                                    .map((col) => (
+                                  {sortByFirstName(
+                                    colaboradores.filter(col => !cosecha.colaboradores.includes(col.id))
+                                  ).map((col) => (
                                       <SelectItem key={col.id} value={col.id}>
                                         {col.nombres} {col.apellidos}
                                       </SelectItem>

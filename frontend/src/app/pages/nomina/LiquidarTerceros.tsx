@@ -18,6 +18,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
+import { sortByFirstName } from '../../utils/personas';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
@@ -402,7 +403,7 @@ export default function LiquidarTerceros() {
                       </tr>
                     </thead>
                     <tbody>
-                      {operarios.map((op, idx) => {
+                      {sortByFirstName(operarios).map((op, idx) => {
                         const totalJornales = toNumber(op.total_jornales);
                         const totalCosecha = toNumber(op.total_cosecha);
                         const totalDescuentos = toNumber(op.total_descuentos);

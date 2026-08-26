@@ -104,6 +104,94 @@ export function formatDecimal(
 }
 
 /**
+ * Filtra caracteres para input decimal live: solo permite dígitos, coma,
+ * punto y guión al inicio. Convierte punto tipeado a coma (para navegadores
+ * que remapean automaticamente segun locale). NO agrega separadores de miles
+ * — así preserva EXACTAMENTE lo que el usuario está tipeando sin ambiguedad.
+ *
+ * Usar en onChange; el formateo bonito con separadores va en onBlur via
+ * `formatDecimal`.
+ */
+export function sanitizeDecimalInput(text: string): string {
+  if (!text) return '';
+  // Permitimos: dígitos, punto, coma y guión.
+  let s = String(text).replace(/[^\d.,-]/g, '');
+  // Guión solo al inicio.
+  const negativo = s.startsWith('-');
+  s = s.replace(/-/g, '');
+  // Convertimos puntos a comas para unificar (usuarios que tipean `.` como
+  // decimal separator). Después colapsamos comas múltiples a la primera.
+  s = s.replace(/\./g, ',');
+  const idxComa = s.indexOf(',');
+  if (idxComa >= 0) {
+    // Quitamos comas subsecuentes.
+    s = s.slice(0, idxComa + 1) + s.slice(idxComa + 1).replace(/,/g, '');
+  }
+  return (negativo ? '-' : '') + s;
+}
+
+/**
+ * Formatea el input en vivo (usar en onChange) preservando lo que el usuario
+ * tipea Y agregando separadores de miles. Heurística:
+ *  - Coma presente → coma es decimal, puntos son miles (formato es-CO).
+ *  - Múltiples puntos → todos son miles.
+ *  - Un solo punto:
+ *      • integer="0" o vacío → decimal (ej "0.125" o ".5")
+ *      • 0-2 dígitos después → decimal (ej "45.9", "45.99", "45.")
+ *      • 3+ dígitos después → miles (ej "1.750", "45.988" de auto-formateo)
+ *
+ * Preserva coma final ("45," → "45,") para permitir seguir tipeando decimales.
+ * Trunca decimales a `maxDecimals` (default 3).
+ */
+export function formatDecimalLive(text: string, maxDecimals = 3): string {
+  if (!text) return '';
+  const raw = String(text).replace(/[^\d.,\-]/g, '');
+  const negativo = raw.startsWith('-');
+  const sinSigno = negativo ? raw.slice(1) : raw;
+  if (!sinSigno) return negativo ? '-' : '';
+
+  let integer = '';
+  let decimal = '';
+  let hasDecimal = false;
+
+  const commaIdx = sinSigno.lastIndexOf(',');
+  if (commaIdx >= 0) {
+    integer = sinSigno.slice(0, commaIdx).replace(/[^\d]/g, '');
+    decimal = sinSigno.slice(commaIdx + 1).replace(/[^\d]/g, '').slice(0, maxDecimals);
+    hasDecimal = true;
+  } else {
+    const dotCount = (sinSigno.match(/\./g) || []).length;
+    if (dotCount >= 2) {
+      integer = sinSigno.replace(/[^\d]/g, '');
+    } else if (dotCount === 1) {
+      const dotIdx = sinSigno.indexOf('.');
+      const before = sinSigno.slice(0, dotIdx).replace(/[^\d]/g, '');
+      const after = sinSigno.slice(dotIdx + 1).replace(/[^\d]/g, '');
+      const asDecimal = before === '' || before === '0' || after.length <= 2;
+      if (asDecimal) {
+        integer = before;
+        decimal = after.slice(0, maxDecimals);
+        hasDecimal = true;
+      } else {
+        integer = before + after;
+      }
+    } else {
+      integer = sinSigno.replace(/[^\d]/g, '');
+    }
+  }
+
+  const intNum = integer ? Number(integer) : NaN;
+  const intFmt = Number.isFinite(intNum)
+    ? new Intl.NumberFormat('es-CO').format(intNum)
+    : '';
+  const prefix = negativo ? '-' : '';
+  if (hasDecimal) {
+    return `${prefix}${intFmt || (integer === '' ? '' : '0')},${decimal}`;
+  }
+  return `${prefix}${intFmt}`;
+}
+
+/**
  * Convierte el texto de un input decimal (formato es-CO: `1.750,5`) al string
  * numérico que espera el backend Laravel (`1750.5`). Preserva los decimales.
  *

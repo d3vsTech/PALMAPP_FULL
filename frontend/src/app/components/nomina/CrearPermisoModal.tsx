@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
+import { sortByFirstName } from '../../utils/personas';
 import {
   Dialog,
   DialogContent,
@@ -151,7 +152,7 @@ export function CrearPermisoModal({
                 <SelectValue placeholder="Selecciona un colaborador" />
               </SelectTrigger>
               <SelectContent>
-                {colaboradores.map((colaborador) => (
+                {sortByFirstName(colaboradores).map((colaborador) => (
                   <SelectItem key={colaborador.id} value={colaborador.id}>
                     {colaborador.nombres} {colaborador.apellidos}
                   </SelectItem>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
+import { sortByFirstName } from '../../utils/personas';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -336,9 +337,9 @@ export default function NuevaLiquidacionWizard() {
               )}
 
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {colaboradores
-                  .filter((c) => c.estado === 'Activo')
-                  .map((empleado) => {
+                {sortByFirstName(
+                  colaboradores.filter((c) => c.estado === 'Activo')
+                ).map((empleado) => {
                     const isSelected = empleadoSeleccionado === empleado.id;
 
                     return (

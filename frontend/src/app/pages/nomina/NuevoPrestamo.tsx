@@ -8,6 +8,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
+import { sortByFirstName } from '../../utils/personas';
 import { toast } from 'sonner';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
@@ -118,8 +119,8 @@ export default function NuevoPrestamo() {
     return () => document.removeEventListener('mousedown', fn);
   }, []);
 
-  const colaboradoresFiltrados = colaboradores
-    .filter((c) => {
+  const colaboradoresFiltrados = sortByFirstName(
+    colaboradores.filter((c) => {
       const q = busquedaColaborador.toLowerCase().trim();
       if (!q) return true;
       return (
@@ -127,7 +128,7 @@ export default function NuevoPrestamo() {
         (c.documento ?? '').toLowerCase().includes(q)
       );
     })
-    .slice(0, 8);
+  ).slice(0, 8);
 
   const seleccionar = (c: ColaboradorSelectItem) => {
     setEmpleadoId(c.id);

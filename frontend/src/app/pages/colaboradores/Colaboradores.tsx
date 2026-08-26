@@ -13,6 +13,7 @@ import {
   Loader2, UserCheck, UserX, FileSpreadsheet,
 } from 'lucide-react';
 import { colaboradoresApi, buildAvatarUrl } from '../../../api/colaboradores';
+import { sortByFirstName } from '../../utils/personas';
 import { toast } from 'sonner';
 import ImportarColaboradoresDialog from '../../components/colaboradores/ImportarColaboradoresDialog';
 
@@ -91,15 +92,9 @@ export default function Colaboradores() {
   const activos = colaboradores.filter(c => c.estado === true).length;
   const inactivos = colaboradores.filter(c => c.estado === false).length;
 
-  // Orden alfabético por primer apellido (desempate por primer nombre).
-  // Locale 'es' + sensitivity:'base' ignora tildes y mayúsculas.
-  const colaboradoresOrdenados = [...colaboradores].sort((a, b) => {
-    const apA = (a.primer_apellido ?? '').trim();
-    const apB = (b.primer_apellido ?? '').trim();
-    const cmp = apA.localeCompare(apB, 'es', { sensitivity: 'base' });
-    if (cmp !== 0) return cmp;
-    return (a.primer_nombre ?? '').localeCompare(b.primer_nombre ?? '', 'es', { sensitivity: 'base' });
-  });
+  // Orden alfabetico por PRIMER NOMBRE (convencion del sistema). Desempate
+  // por nombre completo. Ignora tildes y mayusculas.
+  const colaboradoresOrdenados = sortByFirstName(colaboradores);
 
   return (
     <div className="space-y-8">

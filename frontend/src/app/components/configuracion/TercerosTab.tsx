@@ -13,6 +13,7 @@
  */
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
+import { sortByFirstName } from '../../utils/personas';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Input } from '../ui/input';
@@ -367,7 +368,17 @@ export function TercerosTab() {
             </div>
           ) : (
             <div className="divide-y divide-border">
-              {[...terceros].sort((a, b) => displayNombre(a).localeCompare(displayNombre(b), 'es', { sensitivity: 'base' })).map(t => {
+              {[...terceros].sort((a, b) => {
+                // NATURAL: por primer nombre. JURIDICA: por razon social.
+                // Mixto: naturales primero, luego juridicas.
+                const aName = a.tipo_persona === 'NATURAL'
+                  ? (a.nombre_completo ?? '').trim().split(/\s+/)[0] ?? ''
+                  : displayNombre(a);
+                const bName = b.tipo_persona === 'NATURAL'
+                  ? (b.nombre_completo ?? '').trim().split(/\s+/)[0] ?? ''
+                  : displayNombre(b);
+                return aName.localeCompare(bName, 'es', { sensitivity: 'base' });
+              }).map(t => {
                 const ops = operariosPorTercero[t.id] ?? [];
                 const cargando = cargandoOperarios[t.id];
                 const esNatural = t.tipo_persona === 'NATURAL';
@@ -474,11 +485,7 @@ export function TercerosTab() {
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {[...ops].sort((a, b) => {
-                                    const na = `${a.apellidos ?? ''} ${a.nombres ?? ''}`.trim();
-                                    const nb = `${b.apellidos ?? ''} ${b.nombres ?? ''}`.trim();
-                                    return na.localeCompare(nb, 'es', { sensitivity: 'base' });
-                                  }).map((op, i) => (
+                                  {sortByFirstName(ops).map((op, i) => (
                                     <tr key={op.id} className={`border-t border-border/50 ${i % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}>
                                       <td className="p-3">
                                         <div className="flex items-center gap-2">

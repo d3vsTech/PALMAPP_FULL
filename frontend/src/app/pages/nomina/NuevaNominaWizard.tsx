@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
+import { sortByFirstName } from '../../utils/personas';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import { Checkbox } from '../../components/ui/checkbox';
@@ -1099,7 +1100,9 @@ export default function NuevaNominaWizard() {
                             </tr>
                           </thead>
                           <tbody>
-                            {colaboradoresAgregados.map((c, idx) => {
+                            {[...colaboradoresAgregados].sort((a, b) =>
+                              a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' })
+                            ).map((c, idx) => {
                               const iniciales = c.nombre.split(' ')
                                 .slice(0, 2)
                                 .map((n) => n[0] ?? '')
@@ -1225,7 +1228,7 @@ export default function NuevaNominaWizard() {
                             </tr>
                           </thead>
                           <tbody>
-                            {empleadosActivos.map((empleado, index) => {
+                            {sortByFirstName(empleadosActivos).map((empleado, index) => {
                               const isSelected = empleadosSeleccionados.includes(empleado.id);
                               return (
                                 <tr
@@ -1403,7 +1406,7 @@ export default function NuevaNominaWizard() {
                             </tr>
                           </thead>
                           <tbody>
-                            {operariosFiltrados.map((op, index) => {
+                            {sortByFirstName(operariosFiltrados).map((op, index) => {
                               const isSelected = operariosSeleccionados.includes(op.id);
                               const partes = op.nombre_completo.split(' ');
                               const iniciales = ((partes[0]?.[0] ?? '') + (partes[1]?.[0] ?? '')).toUpperCase() || '?';
@@ -1896,8 +1899,8 @@ export default function NuevaNominaWizard() {
                     como fallback si el backend no persistió `salario_base` en
                     el registro `nomina_empleado`. */}
                 {(() => {
-                  const soloEmpleados = colaboradoresAgregados.filter((c) => c.tipo === 'EMP');
-                  const soloTerceros = colaboradoresAgregados.filter((c) => c.tipo === 'OP');
+                  const soloEmpleados = sortByFirstName(colaboradoresAgregados.filter((c) => c.tipo === 'EMP'));
+                  const soloTerceros = sortByFirstName(colaboradoresAgregados.filter((c) => c.tipo === 'OP'));
 
                   const renderFilaEmp = (c: typeof colaboradoresAgregados[number]) => {
                     const partes = c.nombre.split(' ');

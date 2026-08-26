@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
+import { sortByFirstName } from '../../utils/personas';
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter,
 } from '../ui/dialog';
@@ -290,7 +291,7 @@ export function CrearPlanillaModal({
                                     <SelectValue placeholder={`Colaborador ${colIndex + 1}`} />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    {colaboradores.map(c => (
+                                    {sortByFirstName(colaboradores).map(c => (
                                       <SelectItem key={c.id} value={c.id}>
                                         {c.nombres} {c.apellidos}
                                       </SelectItem>
@@ -387,7 +388,7 @@ export function CrearPlanillaModal({
                               onValueChange={value => actualizarPlateo(plateo.id, 'colaboradorId', value)}>
                               <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                               <SelectContent>
-                                {colaboradores.map(c => (
+                                {sortByFirstName(colaboradores).map(c => (
                                   <SelectItem key={c.id} value={c.id}>{c.nombres} {c.apellidos}</SelectItem>
                                 ))}
                               </SelectContent>
@@ -469,7 +470,7 @@ export function CrearPlanillaModal({
                               onValueChange={value => actualizarPoda(poda.id, 'colaboradorId', value)}>
                               <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                               <SelectContent>
-                                {colaboradores.map(c => (
+                                {sortByFirstName(colaboradores).map(c => (
                                   <SelectItem key={c.id} value={c.id}>{c.nombres} {c.apellidos}</SelectItem>
                                 ))}
                               </SelectContent>
@@ -548,7 +549,7 @@ export function CrearPlanillaModal({
                               onValueChange={value => actualizarFertilizacion(fert.id, 'colaboradorId', value)}>
                               <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                               <SelectContent>
-                                {colaboradores.map(c => (
+                                {sortByFirstName(colaboradores).map(c => (
                                   <SelectItem key={c.id} value={c.id}>{c.nombres} {c.apellidos}</SelectItem>
                                 ))}
                               </SelectContent>
@@ -663,7 +664,7 @@ export function CrearPlanillaModal({
                               onValueChange={value => actualizarSanidad(san.id, 'colaboradorId', value)}>
                               <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                               <SelectContent>
-                                {colaboradores.map(c => (
+                                {sortByFirstName(colaboradores).map(c => (
                                   <SelectItem key={c.id} value={c.id}>{c.nombres} {c.apellidos}</SelectItem>
                                 ))}
                               </SelectContent>
@@ -819,7 +820,7 @@ export function CrearPlanillaModal({
                   <div className="space-y-2 md:col-span-2">
                     <Label>Colaboradores Ausentes</Label>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-40 overflow-y-auto p-2 border rounded-lg">
-                      {colaboradores.map(c => (
+                      {sortByFirstName(colaboradores).map(c => (
                         <div key={c.id} className="flex items-center space-x-2">
                           <Checkbox id={`ausente-${c.id}`}
                             checked={formData.ausentes.includes(c.id)}

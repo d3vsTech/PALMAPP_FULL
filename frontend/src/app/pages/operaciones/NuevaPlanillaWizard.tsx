@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router';
+import { sortByFirstName } from '../../utils/personas';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -612,7 +613,8 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           };
         });
 
-        setColaboradores([...empleadosLista, ...operariosLista]);
+        // Orden alfabetico por primer nombre para toda la lista mezclada.
+        setColaboradores(sortByFirstName([...empleadosLista, ...operariosLista]));
 
         // Overrides de precio/modo por tercero — los usaremos en
         // `resolverPrecioPersonaLabor(labor, persona, overrides)` para mostrar

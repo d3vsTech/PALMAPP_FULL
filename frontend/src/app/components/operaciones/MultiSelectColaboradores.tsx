@@ -15,6 +15,7 @@
  */
 import { useMemo, useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { sortByFirstName } from '../../utils/personas';
 import { Button } from '../ui/button';
 import { Checkbox } from '../ui/checkbox';
 import { Input } from '../ui/input';
@@ -125,7 +126,7 @@ export function MultiSelectColaboradores({
           </p>
         ) : (
           <div className="max-h-72 overflow-y-auto py-1">
-            {opciones.map((col) => {
+            {sortByFirstName(opciones).map((col) => {
               const checked = seleccionadosSet.has(col.id);
               return (
                 <button

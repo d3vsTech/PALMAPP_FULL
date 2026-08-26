@@ -27,7 +27,7 @@ import {
  */
 type PalmaKey = 'PLATEO' | 'PODA' | 'SANIDAD' | 'OTROS';
 import { lotesApi, sublotesApi } from '../../../api/plantacion';
-import { formatCOP, formatThousands, parseCOP, formatDecimal, parseDecimal } from '../lib/format';
+import { formatCOP, formatThousands, parseCOP, formatDecimal, parseDecimal, sanitizeDecimalInput, formatDecimalLive } from '../lib/format';
 
 type LoteOption = { id: number; nombre: string };
 type SubloteOption = { id: number; nombre: string; lote_id: number };
@@ -450,15 +450,18 @@ export function PreciosLaboresTab() {
   };
 
   /** PUT del rango ya guardado cuando alguno de los 3 inputs pierde foco y
-   *  detectamos cambio respecto al valor original. */
-  const handleSaveAbonoInline = async (rango: PrecioAbono) => {
+   *  detectamos cambio respecto al valor original. `overridePrecioPalma` se
+   *  pasa cuando el input es uncontrolled y necesitamos leer el valor tipeado
+   *  directo del DOM antes de que setState llegue. */
+  const handleSaveAbonoInline = async (rango: PrecioAbono, overridePrecioPalma?: string) => {
     const edit = abonoInputs[rango.id];
     if (!edit) return;
+    const precioPalmaRaw = overridePrecioPalma ?? edit.precio_palma;
     // Quitamos puntos de miles antes de mandar el número al backend.
     const payload = {
       gramos_min: Number(parseDecimal(edit.gramos_min)),
       gramos_max: Number(parseDecimal(edit.gramos_max)),
-      precio_palma: Number(parseDecimal(edit.precio_palma)),
+      precio_palma: Number(parseDecimal(precioPalmaRaw)),
     };
     if (!Number.isFinite(payload.gramos_min) || !Number.isFinite(payload.gramos_max) || !Number.isFinite(payload.precio_palma)) {
       return;
@@ -523,15 +526,16 @@ export function PreciosLaboresTab() {
 
   /** POST: al perder foco, si los 3 campos están llenos creamos. Si éxito,
    *  movemos el item de `nuevosRangos` a `rangosAbono`. */
-  const handleSaveNuevoRango = async (tempId: string) => {
+  const handleSaveNuevoRango = async (tempId: string, overridePrecioPalma?: string) => {
     const nr = nuevosRangos.find((x) => x.tempId === tempId);
     if (!nr) return;
     // Parseamos los 3 campos quitando los puntos de miles del display.
+    const precioPalmaRaw = overridePrecioPalma ?? nr.precio_palma;
     const min = Number(parseDecimal(nr.gramos_min));
     const max = Number(parseDecimal(nr.gramos_max));
-    const precio = Number(parseDecimal(nr.precio_palma));
+    const precio = Number(parseDecimal(precioPalmaRaw));
     // Esperamos a que los 3 campos sean válidos antes de disparar el POST.
-    if (!nr.gramos_min || !nr.gramos_max || !nr.precio_palma) return;
+    if (!nr.gramos_min || !nr.gramos_max || !precioPalmaRaw) return;
     if (!Number.isFinite(min) || !Number.isFinite(max) || !Number.isFinite(precio)) return;
     try {
       const res = await configuracionApi.preciosAbono.crear({
@@ -695,12 +699,12 @@ export function PreciosLaboresTab() {
                     <div className="flex items-center justify-end gap-2">
                       <span className="text-muted-foreground text-sm">$</span>
                       <Input
-                        inputMode="decimal"
+                        
                         value={actividadInputs[act.id] ?? ''}
                         onChange={(e) =>
                           setActividadInputs((prev) => ({
                             ...prev,
-                            [act.id]: formatDecimal(parseDecimal(e.target.value)),
+                            [act.id]: formatDecimalLive(e.target.value),
                           }))
                         }
                         onBlur={() => handleSaveActividadInline(act)}
@@ -805,12 +809,12 @@ export function PreciosLaboresTab() {
                                   <div className="flex items-center justify-end gap-2">
                                     <span className="text-muted-foreground text-sm">$</span>
                                     <Input
-                                      inputMode="decimal"
+                                      
                                       value={cosechaInputs[String(sub.lote_id)] ?? ''}
                                       onChange={(e) =>
                                         setCosechaInputs((prev) => ({
                                           ...prev,
-                                          [String(sub.lote_id)]: formatDecimal(parseDecimal(e.target.value)),
+                                          [String(sub.lote_id)]: formatDecimalLive(e.target.value),
                                         }))
                                       }
                                       onBlur={() => {
@@ -890,12 +894,12 @@ export function PreciosLaboresTab() {
                                     <td className="p-4">
                                       <div className="relative group">
                                         <Input
-                                          inputMode="decimal"
+                                          
                                           value={edit.gramos_min}
                                           onChange={(e) =>
                                             setAbonoInputs((prev) => ({
                                               ...prev,
-                                              [rango.id]: { ...edit, gramos_min: formatDecimal(parseDecimal(e.target.value)) },
+                                              [rango.id]: { ...edit, gramos_min: formatDecimalLive(e.target.value) },
                                             }))
                                           }
                                           onBlur={() => handleSaveAbonoInline(rango)}
@@ -929,12 +933,12 @@ export function PreciosLaboresTab() {
                                     <td className="p-4">
                                       <div className="relative group">
                                         <Input
-                                          inputMode="decimal"
+                                          
                                           value={edit.gramos_max}
                                           onChange={(e) =>
                                             setAbonoInputs((prev) => ({
                                               ...prev,
-                                              [rango.id]: { ...edit, gramos_max: formatDecimal(parseDecimal(e.target.value)) },
+                                              [rango.id]: { ...edit, gramos_max: formatDecimalLive(e.target.value) },
                                             }))
                                           }
                                           onBlur={() => handleSaveAbonoInline(rango)}
@@ -968,14 +972,15 @@ export function PreciosLaboresTab() {
                                       <div className="flex items-center gap-2">
                                         <span className="text-muted-foreground text-sm">$</span>
                                         <Input
-                                          inputMode="decimal"
+                                          type="text"
+                                          autoComplete="off"
                                           value={edit.precio_palma}
                                           onChange={(e) =>
                                             setAbonoInputs((prev) => ({
                                               ...prev,
                                               [rango.id]: {
                                                 ...edit,
-                                                precio_palma: formatDecimal(parseDecimal(e.target.value)),
+                                                precio_palma: formatDecimalLive(e.target.value),
                                               },
                                             }))
                                           }
@@ -1004,14 +1009,14 @@ export function PreciosLaboresTab() {
                                   <td className="p-4">
                                     <div className="relative group">
                                       <Input
-                                        inputMode="decimal"
+                                        
                                         placeholder="0"
                                         value={nr.gramos_min}
                                         onChange={(e) =>
                                           setNuevosRangos((prev) =>
                                             prev.map((x) =>
                                               x.tempId === nr.tempId
-                                                ? { ...x, gramos_min: formatDecimal(parseDecimal(e.target.value)) }
+                                                ? { ...x, gramos_min: formatDecimalLive(e.target.value) }
                                                 : x,
                                             ),
                                           )
@@ -1052,14 +1057,14 @@ export function PreciosLaboresTab() {
                                   <td className="p-4">
                                     <div className="relative group">
                                       <Input
-                                        inputMode="decimal"
+                                        
                                         placeholder="0"
                                         value={nr.gramos_max}
                                         onChange={(e) =>
                                           setNuevosRangos((prev) =>
                                             prev.map((x) =>
                                               x.tempId === nr.tempId
-                                                ? { ...x, gramos_max: formatDecimal(parseDecimal(e.target.value)) }
+                                                ? { ...x, gramos_max: formatDecimalLive(e.target.value) }
                                                 : x,
                                             ),
                                           )
@@ -1101,14 +1106,15 @@ export function PreciosLaboresTab() {
                                     <div className="flex items-center gap-2">
                                       <span className="text-muted-foreground text-sm">$</span>
                                       <Input
-                                        inputMode="decimal"
+                                        type="text"
+                                        autoComplete="off"
                                         placeholder="0"
                                         value={nr.precio_palma}
                                         onChange={(e) =>
                                           setNuevosRangos((prev) =>
                                             prev.map((x) =>
                                               x.tempId === nr.tempId
-                                                ? { ...x, precio_palma: formatDecimal(parseDecimal(e.target.value)) }
+                                                ? { ...x, precio_palma: formatDecimalLive(e.target.value) }
                                                 : x,
                                             ),
                                           )
@@ -1169,10 +1175,10 @@ export function PreciosLaboresTab() {
                         <span className="text-muted-foreground">$</span>
                         <Input
                           id={`precio-jornal-${labor.id}`}
-                          inputMode="decimal"
+                          
                           value={palmaInputs[labor.id] ?? ''}
                           onChange={(e) =>
-                            setPalmaInputs((prev) => ({ ...prev, [labor.id]: formatDecimal(parseDecimal(e.target.value)) }))
+                            setPalmaInputs((prev) => ({ ...prev, [labor.id]: formatDecimalLive(e.target.value) }))
                           }
                           onBlur={() => handleSavePalma(labor)}
                           className="text-lg font-semibold"
@@ -1219,10 +1225,10 @@ export function PreciosLaboresTab() {
                         <span className="text-muted-foreground">$</span>
                         <Input
                           id={`precio-${palma.id}`}
-                          inputMode="decimal"
+                          
                           value={palmaInputs[palma.id] ?? ''}
                           onChange={(e) =>
-                            setPalmaInputs((prev) => ({ ...prev, [palma.id]: formatDecimal(parseDecimal(e.target.value)) }))
+                            setPalmaInputs((prev) => ({ ...prev, [palma.id]: formatDecimalLive(e.target.value) }))
                           }
                           onBlur={() => handleSavePalma(palma)}
                           className="text-lg font-semibold"
@@ -1274,12 +1280,12 @@ export function PreciosLaboresTab() {
                         <span className="text-muted-foreground">$</span>
                         <Input
                           id={`precio-custom-${labor.id}`}
-                          inputMode="decimal"
+                          
                           value={palmaCustomInputs[labor.id] ?? ''}
                           onChange={(e) =>
                             setPalmaCustomInputs((prev) => ({
                               ...prev,
-                              [labor.id]: formatDecimal(parseDecimal(e.target.value)),
+                              [labor.id]: formatDecimalLive(e.target.value),
                             }))
                           }
                           onBlur={() => handleSaveLaborPalmaCustom(labor)}
@@ -1339,12 +1345,12 @@ export function PreciosLaboresTab() {
                           <div className="flex items-center justify-end gap-2">
                             <span className="text-muted-foreground text-sm">$</span>
                             <Input
-                              inputMode="decimal"
+                              
                               value={laborInputs[labor.id] ?? ''}
                               onChange={(e) =>
                                 setLaborInputs((prev) => ({
                                   ...prev,
-                                  [labor.id]: formatDecimal(parseDecimal(e.target.value)),
+                                  [labor.id]: formatDecimalLive(e.target.value),
                                 }))
                               }
                               onBlur={() => handleSaveLaborFinca(labor)}
