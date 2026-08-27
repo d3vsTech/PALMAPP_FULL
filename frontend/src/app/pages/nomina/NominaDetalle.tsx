@@ -106,6 +106,14 @@ export default function NominaDetalle() {
 
   const [empleadoAQuitar, setEmpleadoAQuitar] = useState<NominaEmpleado | null>(null);
   const [confirmarCerrar, setConfirmarCerrar] = useState(false);
+  // §4.4 — datos de gajos pendientes precargados al abrir el diálogo de
+  // cerrar, para que el usuario decida CON la info a la vista antes del POST
+  // /cerrar (que es irreversible).
+  const [alertaGajosPreCierre, setAlertaGajosPreCierre] = useState<{
+    cosechas_con_gajos_pendientes: number;
+    total_gajos_pendientes_enviar: number;
+  } | null>(null);
+  const [cargandoValidacionPreCierre, setCargandoValidacionPreCierre] = useState(false);
   const [confirmarEliminar, setConfirmarEliminar] = useState(false);
   const [accionando, setAccionando] = useState(false);
 
@@ -308,6 +316,11 @@ export default function NominaDetalle() {
     try {
       const res = await nominaApi.cerrar(nominaId);
       toast.success(res.message ?? 'Nómina cerrada');
+      // §4.4 — advertencia post-cierre si había cosechas con gajos sin
+      // despachar. Cierre irreversible: aviso importante.
+      if (res.advertencia?.code === 'COSECHA_GAJOS_SIN_DESPACHAR') {
+        toast.warning(res.advertencia.texto, { duration: 10000 });
+      }
       setConfirmarCerrar(false);
       cargar();
     } catch (err) {
@@ -1098,12 +1111,38 @@ export default function NominaDetalle() {
               return (
                 <Button
                   className="gap-2 bg-primary hover:bg-primary/90"
-                  onClick={() => setConfirmarCerrar(true)}
-                  disabled={accionando || !puedeCerrar}
+                  onClick={async () => {
+                    // §4.4 — Precargamos el bundle de validar-cosecha para
+                    // saber si hay gajos sin despachar ANTES de abrir el
+                    // diálogo. El cierre es irreversible: si continuamos con
+                    // gajos pendientes, esa fruta queda fuera de la
+                    // liquidación de forma permanente.
+                    if (!nominaId) return;
+                    setCargandoValidacionPreCierre(true);
+                    try {
+                      const res = await nominaApi.validarCosecha(nominaId);
+                      const pendientes = res.data.cosechas_con_gajos_pendientes ?? 0;
+                      const totalGajos = res.data.total_gajos_pendientes_enviar ?? 0;
+                      if (pendientes > 0) {
+                        setAlertaGajosPreCierre({
+                          cosechas_con_gajos_pendientes: pendientes,
+                          total_gajos_pendientes_enviar: totalGajos,
+                        });
+                      } else {
+                        setAlertaGajosPreCierre(null);
+                      }
+                    } catch {
+                      setAlertaGajosPreCierre(null);
+                    } finally {
+                      setCargandoValidacionPreCierre(false);
+                      setConfirmarCerrar(true);
+                    }
+                  }}
+                  disabled={accionando || !puedeCerrar || cargandoValidacionPreCierre}
                   title={!puedeCerrar ? 'Liquida todos los colaboradores antes de cerrar' : undefined}
                 >
                   <Check className="h-4 w-4" />
-                  Cerrar Nómina
+                  {cargandoValidacionPreCierre ? 'Verificando…' : 'Cerrar Nómina'}
                 </Button>
               );
             })()}
@@ -1832,16 +1871,41 @@ export default function NominaDetalle() {
       <AlertDialog open={confirmarCerrar} onOpenChange={setConfirmarCerrar}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Cerrar nómina</AlertDialogTitle>
+            <AlertDialogTitle>
+              {alertaGajosPreCierre
+                ? `Cerrar con ${alertaGajosPreCierre.total_gajos_pendientes_enviar} gajos sin despachar`
+                : 'Cerrar nómina'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
               Al cerrar la nómina los valores quedan inmutables. Las ausencias y horas extras del período
-              quedarán LIQUIDADAS y no podrán editarse. ¿Continuar?
+              quedarán LIQUIDADAS y no podrán editarse.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {/* §4.4 — Aviso de gajos sin despachar. Es la única forma en que
+              la nómina paga de menos. El backend NO bloquea el cierre, pero
+              debe requerir confirmación explícita. */}
+          {alertaGajosPreCierre && (
+            <div className="rounded-lg border-2 border-orange-500/40 bg-orange-50/60 dark:bg-orange-950/20 p-3 my-2">
+              <p className="text-sm font-semibold text-orange-900 dark:text-orange-200">
+                Vas a cerrar con {alertaGajosPreCierre.total_gajos_pendientes_enviar} gajos sin despachar en {alertaGajosPreCierre.cosechas_con_gajos_pendientes} cosecha{alertaGajosPreCierre.cosechas_con_gajos_pendientes !== 1 ? 's' : ''}.
+              </p>
+              <p className="text-xs text-orange-800/80 dark:text-orange-200/80 mt-1">
+                Esos gajos quedarán fuera de la liquidación de forma permanente: la cosecha pertenece a este período por fecha de operación, así que la nómina siguiente no los va a tomar.
+              </p>
+            </div>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={accionando}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={cerrarNomina} disabled={accionando}>
-              {accionando ? 'Cerrando...' : 'Cerrar nómina'}
+            <AlertDialogAction
+              onClick={cerrarNomina}
+              disabled={accionando}
+              className={alertaGajosPreCierre ? 'bg-orange-600 hover:bg-orange-700' : undefined}
+            >
+              {accionando
+                ? 'Cerrando...'
+                : alertaGajosPreCierre
+                  ? 'Cerrar de todas formas'
+                  : 'Cerrar nómina'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

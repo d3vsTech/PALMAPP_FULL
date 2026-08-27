@@ -1394,8 +1394,6 @@ export const selectsApi = {
 export const OperacionesErrorCodes = {
   /** Intento de mutar una planilla ya aprobada. */
   OPERACION_APROBADA: 'OPERACION_APROBADA',
-  /** Intento de eliminar planilla con jornales/cosechas/ausencias/horas extras. */
-  OPERACION_CON_HIJOS: 'OPERACION_CON_HIJOS',
   /** La cosecha ya está asignada a un viaje. */
   COSECHA_EN_VIAJE: 'COSECHA_EN_VIAJE',
   /** Falta precio configurado, insumo sin rango, precios_cosecha sin registro, etc. */
@@ -1426,3 +1424,43 @@ export const OperacionesErrorCodes = {
 
 export type OperacionesErrorCode =
   typeof OperacionesErrorCodes[keyof typeof OperacionesErrorCodes];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ADVERTENCIAS (§3.2 del doc): array `advertencias` que devuelven POST/PUT de
+// jornales, cosechas y bulk. Son AVISOS informativos, no errores. El registro
+// ya quedó guardado. En endpoints bulk vienen consolidadas por código.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const OperacionesAdvertenciaCodes = {
+  /** POR_PALMA sin precio configurado → `valor_total = null` (limbo). */
+  SIN_PRECIO_LABOR: 'SIN_PRECIO_LABOR',
+  /** FERTILIZACION POR_PALMA sin rango en `precio_abono` que cubra los gramos. */
+  SIN_RANGO_ABONO: 'SIN_RANGO_ABONO',
+  /** Labor de FINCA sin tarifa para colaborador propio → jornal mínimo aplicado. */
+  JORNAL_MINIMO_APLICADO: 'JORNAL_MINIMO_APLICADO',
+  /** Labor de FINCA sin tarifa para operario de tercero → `valor_total = 0`. */
+  SIN_TARIFA_TERCERO: 'SIN_TARIFA_TERCERO',
+  /** COSECHA con peso pero sin `precio_cosecha` para lote+año. */
+  SIN_PRECIO_COSECHA: 'SIN_PRECIO_COSECHA',
+  /** COSECHA JORNAL_FIJO sin tarifa → `valor_total = 0`. */
+  SIN_TARIFA_COSECHA: 'SIN_TARIFA_COSECHA',
+} as const;
+
+export type OperacionesAdvertenciaCode =
+  typeof OperacionesAdvertenciaCodes[keyof typeof OperacionesAdvertenciaCodes];
+
+export interface OperacionAdvertencia {
+  codigo: OperacionesAdvertenciaCode | string;
+  mensaje: string;
+}
+
+/**
+ * Wrapper genérico de respuestas de creación/edición del módulo Operaciones.
+ * Además de `data`, el backend puede devolver `advertencias` con avisos NO
+ * bloqueantes que el frontend debe mostrar como banners/toasts informativos.
+ */
+export interface OperacionResponseConAdvertencias<T> {
+  message?: string;
+  data: T;
+  advertencias?: OperacionAdvertencia[];
+}

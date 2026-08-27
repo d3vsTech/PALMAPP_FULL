@@ -31,6 +31,7 @@ import {
   Save,
   Loader2,
   Check,
+  AlertCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -385,6 +386,11 @@ export default function LiquidarColaborador() {
         ? await nominaApi.reLiquidar(nominaEmpleadoId, payload)
         : await nominaApi.liquidar(nominaEmpleadoId, payload);
       toast.success(res.message ?? (esReliquidacion ? 'Liquidación actualizada' : 'Empleado liquidado'));
+      // §4.4 — advertencia post-liquidación si había cosechas con
+      // `alerta_despacho = "ALTA"`. No bloquea (la liquidación ya se hizo).
+      if (res.advertencia?.code === 'COSECHA_GAJOS_SIN_DESPACHAR') {
+        toast.warning(res.advertencia.texto, { duration: 8000 });
+      }
       navigate(`/nomina/${nominaId}/desprendible/${nominaEmpleadoId}`);
     } catch (err) {
       const e = err as ApiError;
@@ -657,6 +663,35 @@ export default function LiquidarColaborador() {
                   {' '}en estado PENDIENTE — no se incluyen en el cálculo hasta que
                   se aprueben desde la planilla correspondiente.
                 </p>
+              </div>
+            </div>
+          )}
+
+          {/* §4.4 — Alerta de gajos sin despachar. Solo mostrar las cosechas
+              con `alerta_despacho = "ALTA"` (las BAJA son clavijos esperados
+              y convertirlas en incidentes hace que se pierda la señal). */}
+          {preview.alertas_cosecha
+            && (preview.alertas_cosecha.total_alta ?? 0) > 0 && (
+            <div className="rounded-lg border-2 border-orange-500/40 bg-orange-50/60 dark:bg-orange-950/20 p-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 mt-0.5 text-orange-700 shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <p className="text-sm font-semibold text-orange-900 dark:text-orange-200">
+                    {preview.alertas_cosecha.total_gajos_pendientes_enviar} gajos sin despachar en {preview.alertas_cosecha.total_alta} cosecha{preview.alertas_cosecha.total_alta !== 1 ? 's' : ''}
+                  </p>
+                  <p className="text-xs text-orange-800/80 dark:text-orange-200/80">
+                    Esos gajos están reportados en la planilla pero no cargados a ningún camión, así que <strong>no se van a pagar en esta liquidación</strong>. Carga la fruta al camión y vuelve a liquidar para incluirlos.
+                  </p>
+                  <div className="space-y-1 pt-1">
+                    {preview.alertas_cosecha.cosechas
+                      .filter((c) => c.alerta_despacho === 'ALTA')
+                      .map((c) => (
+                        <p key={c.cosecha_id} className="text-xs text-orange-900/90 dark:text-orange-100/90">
+                          • {c.fecha} · {c.lote}{c.sublote ? ` · ${c.sublote}` : ''}: se pagarán {c.gajos_asignados_a_viajes} de {c.gajos_reportados} gajos
+                        </p>
+                      ))}
+                  </div>
+                </div>
               </div>
             </div>
           )}

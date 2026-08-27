@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { sortByFirstName } from '../../utils/personas';
+import { mostrarAdvertenciasBulk } from '../../utils/advertenciasOperaciones';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -48,7 +49,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { operacionesApi, cosechasApi, jornalesApi, jornalGruposApi, horasExtraApi, ausenciasApi, selectsApi } from '../../../api/operaciones';
+import { operacionesApi, cosechasApi, jornalesApi, jornalGruposApi, horasExtraApi, ausenciasApi, selectsApi, OperacionesErrorCodes } from '../../../api/operaciones';
 import { configuracionApi, ConfiguracionErrorCodes } from '../../../api/configuracion';
 import { toast } from 'sonner';
 
@@ -1257,10 +1258,18 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                 const res = await selectsApi.crearInsumo(nombreNuevo);
                 insumoId = res.data.id;
                 setInsumosMap(prev => new Map(prev).set(res.data.nombre, res.data.id));
-              } catch (e) {
-                console.error('[NuevaPlanillaWizard] No se pudo crear insumo "' + nombreNuevo + '":', e);
-                fertSaltadas.push(nombreNuevo);
-                continue;
+              } catch (e: any) {
+                // 409 INSUMO_DUPLICADO: el backend devuelve el `data.id` del
+                // insumo existente. Lo reutilizamos igual (mismo patrón que
+                // LABOR_FINCA_DUPLICADA en labores de finca).
+                if (e?.code === OperacionesErrorCodes.INSUMO_DUPLICADO && e?.data?.id) {
+                  insumoId = Number(e.data.id);
+                  setInsumosMap(prev => new Map(prev).set(nombreNuevo, Number(e.data.id)));
+                } else {
+                  console.error('[NuevaPlanillaWizard] No se pudo crear insumo "' + nombreNuevo + '":', e);
+                  fertSaltadas.push(nombreNuevo);
+                  continue;
+                }
               }
             }
           } else {
@@ -1739,6 +1748,18 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         Promise.allSettled(updates),
         Promise.all(gruposReqs),
       ])) as [any, any, any, any, any, any, Array<{ data: { id: number } } | null>];
+
+      // Advertencias — §3.2 API_OPERACIONES: cada respuesta bulk (y cada
+      // grupo individual) puede traer `advertencias:[{codigo,mensaje}]` con
+      // avisos NO bloqueantes (precio faltante, jornal mínimo aplicado, etc.).
+      // Las consolidamos por código único y las mostramos como toasts.
+      mostrarAdvertenciasBulk([
+        jornalBulkRes,
+        cosechaBulkRes,
+        heBulkRes,
+        ausenciaBulkRes,
+        ...gruposRes.filter(Boolean) as any[],
+      ]);
 
       // ── Construir mapeos localId → backendId desde las respuestas bulk ────────
       // Posición idx en la respuesta corresponde a posición idx en el array enviado.

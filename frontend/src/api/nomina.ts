@@ -58,6 +58,18 @@ export type SubtipoConcepto =
 
 export type AplicaA = 'FIJO' | 'VARIABLE' | 'AMBOS';
 
+/**
+ * §4.4 — Advertencia post-hecho que viaja en respuestas 200 de POST /liquidar
+ * y POST /cerrar cuando había cosechas con `alerta_despacho = "ALTA"`.
+ * La operación se ejecutó normalmente — es solo un aviso.
+ */
+export interface AdvertenciaGajosSinDespachar {
+  code: 'COSECHA_GAJOS_SIN_DESPACHAR';
+  texto: string;
+  total_gajos_pendientes_enviar: number;
+  cosecha_ids: number[];
+}
+
 export interface Nomina {
   id: number;
   tenant_id?: number;
@@ -69,6 +81,8 @@ export interface Nomina {
   fecha_fin: string;
   estado: EstadoNomina;
   observacion?: string | null;
+  /** §2.6 — etiqueta opcional para distinguir dos nóminas del mismo período. */
+  etiqueta?: string | null;
   total_fijos: string;
   total_variables: string;
   total_bonificaciones: string;
@@ -79,6 +93,48 @@ export interface Nomina {
   cerrada_por?: number | null;
   cerrada_at?: string | null;
   cerrada_por_rel?: { id: number; name: string } | null;
+}
+
+/**
+ * §2.6 — Item de `nominas_existentes[]` que devuelve el 409 NOMINA_DUPLICADA.
+ * Permite al frontend abrir un diálogo "Ya existe X, ¿crear adicional?"
+ * y reintentar con `permitir_multiple: true`.
+ */
+export interface NominaExistenteResumen {
+  id: number;
+  etiqueta: string | null;
+  mes: number;
+  anio: number;
+  quincena: number | null;
+  fecha_inicio: string;
+  fecha_fin: string;
+  estado: EstadoNomina;
+  empleados_count?: number;
+}
+
+/**
+ * §2.6 — Item de `omitidos[]` en la respuesta 201 de POST /empleados / /terceros.
+ * Indica que un colaborador no entró porque ya está en otra nómina cruzada.
+ */
+export interface EmpleadoOmitido {
+  tipo: 'empleado' | 'operario';
+  id: number;
+  nombre_completo: string;
+  tercero_id?: number | null;
+  code: 'COLABORADOR_EN_NOMINA_SOLAPADA' | 'TERCERO_EN_NOMINA_SOLAPADA' | string;
+  nomina: NominaExistenteResumen;
+}
+
+/**
+ * §3.1 — Item de `meta.excluidos[]` en /empleados-disponibles.
+ * El colaborador NO aparece en `data` porque está en otra nómina cruzada.
+ */
+export interface EmpleadoExcluido {
+  tipo: 'empleado' | 'operario';
+  id: number;
+  nombre_completo: string;
+  motivo: 'EN_NOMINA_SOLAPADA' | string;
+  nomina: NominaExistenteResumen;
 }
 
 export interface NominaIndicadores {
@@ -327,6 +383,33 @@ export interface PreviewLiquidacion {
    * NO están incluidos en el cálculo actual). Solo empleados internos.
    */
   pendientes_por_aprobar?: PendientesPorAprobar;
+  /**
+   * §4.4 — Cosechas de ESTE colaborador dentro del período con gajos sin
+   * cargar a ningún camión. `total_alta > 0` implica que se liquida DE MENOS.
+   * El objeto siempre llega (nunca null) — si no hay pendientes, `total_alta`
+   * y `total_baja` son 0 y `cosechas[]` viene vacío.
+   */
+  alertas_cosecha?: {
+    total_alta: number;
+    total_baja: number;
+    total_gajos_pendientes_enviar: number;
+    cosechas: Array<{
+      cosecha_id: number;
+      fecha: string;
+      lote: string;
+      sublote: string | null;
+      gajos_reportados: number;
+      gajos_asignados_a_viajes: number;
+      gajos_pendientes_enviar: number;
+      alerta_despacho: 'ALTA' | 'BAJA';
+      ajuste_gajos: {
+        accion: 'MANTENIDO' | 'CLAVIJO' | 'REASIGNADO';
+        motivo: string | null;
+        ajustado_por: string | null;
+        ajustado_at: string | null;
+      } | null;
+    }>;
+  };
   empleado: {
     id: number;
     nombre_completo: string;
@@ -482,6 +565,37 @@ export interface ValidacionCosechaItem {
   gajos_trabajados: number;
   gajos_verificados: number;
   diferencia_gajos: number;
+  /**
+   * §4.1 — Split parcial: cuántos viaje_detalle activos de esta cosecha
+   * pertenecen a viajes que aún no están FINALIZADOS. Si > 0, `kg_extractora`
+   * está incompleto.
+   */
+  splits_pendientes?: number;
+  /** §4.1 — true si ningún viaje FINALIZADO tocó esta cosecha. */
+  sin_despachar?: boolean;
+  /**
+   * §4.4 — Gajos reportados que NO están cargados a ningún camión. Único
+   * caso donde se liquida DE MENOS. Solo alerta si es > 0.
+   */
+  gajos_pendientes_enviar?: number;
+  /**
+   * §4.4 — Severidad de la alerta:
+   *  - "ALTA" → gajos_pendientes_enviar > 10 (probablemente fruta sin despachar)
+   *  - "BAJA" → 1..10 (probablemente clavijo, informativa)
+   *  - null → sin pendientes
+   */
+  alerta_despacho?: 'ALTA' | 'BAJA' | null;
+  /**
+   * §4.4 — Contexto del ajuste MANTENIDO más reciente sobre esta cosecha.
+   * `null` si no hay ajuste registrado. Un `MANTENIDO` NO silencia la alerta
+   * pero informa al liquidador quién ya miró esta cosecha.
+   */
+  ajuste_gajos?: {
+    accion: 'MANTENIDO' | 'CLAVIJO' | 'REASIGNADO';
+    motivo: string | null;
+    ajustado_por: string | null;
+    ajustado_at: string | null;
+  } | null;
   /** floor(gajos_efectivos / N) × promedio_efectivo_del_lote */
   kg_trabajado: number;
   /** peso_calculado_empleado del viaje, o fallback legacy, o 0. */
@@ -492,6 +606,12 @@ export interface ValidacionCosechaItem {
 export interface ValidacionCosechaDetalleColaborador {
   tipo: 'EMPLEADO' | 'OPERARIO';
   colaborador_id: number;
+  /**
+   * §4.1 — true si este cuadrillero está en la nómina que se está validando.
+   * Cuando el período tiene varias nóminas, permite atenuar las filas de
+   * colaboradores que pertenecen a otra nómina del mismo período.
+   */
+  en_esta_nomina?: boolean;
   nombre_completo: string;
   cargo: string;
   kg: number;
@@ -523,6 +643,28 @@ export interface ValidacionCosechaBundle {
   total_kg_colaboradores: number;
   total_kg_extractora: number;
   diferencia_kg: number;
+  /**
+   * §4.1 — Cosechas del período sin ningún viaje FINALIZADO tocándolas.
+   */
+  cosechas_sin_despachar?: number;
+  total_kg_sin_despachar?: number;
+  /**
+   * §4.4 — Cosechas del período con `gajos_pendientes_enviar > 0`.
+   * El frontend debe mostrar banner de advertencia si es > 0 y pedir
+   * confirmación explícita antes de cerrar la nómina (cierre irreversible).
+   */
+  cosechas_con_gajos_pendientes?: number;
+  total_gajos_pendientes_enviar?: number;
+  /**
+   * §4.1 — Cuando el período tiene varias nóminas, cuenta cuántos
+   * colaboradores del bundle pertenecen a ESTA nómina.
+   */
+  colaboradores_de_esta_nomina?: number;
+  /**
+   * §4.1 — Recorte de `total_kg_colaboradores` a los colaboradores de
+   * esta nómina. Cuando el período NO está partido, coincide con el total.
+   */
+  total_kg_de_esta_nomina?: number;
   /** Promedios efectivos por lote del período (con auto/manual/efectivo). */
   promedios_por_lote: ValidacionCosechaPromedioLote[];
   detalle_por_colaborador: ValidacionCosechaDetalleColaborador[];
@@ -1014,56 +1156,95 @@ export const nominaApi = {
   ver: (id: number) =>
     apiClient.get<{ data: Nomina & { empleados?: NominaEmpleado[] } }>(`/v1/tenant/nominas/${id}`, T),
 
+  /**
+   * §2.6 — POST /nominas.
+   *
+   * Payload extendido:
+   *  - `etiqueta` (≤60 chars): distingue dos nóminas del mismo período.
+   *  - `fecha_inicio`/`fecha_fin`: corte custom, obligatorias juntas, dentro
+   *     de `mes`/`anio`. Sobrescriben el rango derivado.
+   *  - `permitir_multiple: true`: opt-in para crear una segunda nómina en el
+   *     mismo período (default 409 `NOMINA_DUPLICADA`).
+   *
+   * En caso de 409 `NOMINA_DUPLICADA`, la respuesta incluye
+   * `nominas_existentes[]` para que el frontend ofrezca reintentar.
+   */
   crear: (payload: {
     mes: number;
     anio: number;
     periodicidad: Periodicidad;
     quincena?: 1 | 2 | null;
     observacion?: string | null;
+    etiqueta?: string | null;
+    fecha_inicio?: string | null;
+    fecha_fin?: string | null;
+    permitir_multiple?: boolean;
   }) =>
     apiClient.post<{ data: Nomina; message: string }>(`/v1/tenant/nominas`, payload, T),
 
+  /**
+   * §2.6 — PUT /nominas/{id}. Acepta `fecha_inicio`/`fecha_fin`/`etiqueta`.
+   * Si mover el rango deja a algún colaborador en dos nóminas cruzadas,
+   * responde 409 `COLABORADOR_EN_NOMINA_SOLAPADA` (bloqueante).
+   */
   editar: (id: number, payload: Partial<{
     mes: number;
     anio: number;
     periodicidad: Periodicidad;
     quincena: 1 | 2 | null;
     observacion: string | null;
+    etiqueta: string | null;
+    fecha_inicio: string | null;
+    fecha_fin: string | null;
   }>) =>
     apiClient.put<{ data: Nomina; message: string }>(`/v1/tenant/nominas/${id}`, payload, T),
 
   eliminar: (id: number) =>
     apiClient.delete<{ message: string }>(`/v1/tenant/nominas/${id}`, T),
 
+  /**
+   * §6.1 — Cierra la nómina. Puede devolver `advertencia` (200, no bloqueante)
+   * si algún colaborador tiene gajos sin despachar. El frontend debe pedir
+   * confirmación explícita ANTES de disparar este POST leyendo
+   * `GET /validar-cosecha` — el cierre es irreversible.
+   */
   cerrar: (id: number) =>
-    apiClient.post<{ data: Nomina; message: string }>(`/v1/tenant/nominas/${id}/cerrar`, undefined, T),
+    apiClient.post<{
+      data: Nomina;
+      message: string;
+      advertencia?: AdvertenciaGajosSinDespachar;
+    }>(`/v1/tenant/nominas/${id}/cerrar`, undefined, T),
 
   /**
-   * Lista empleados internos y operarios de terceros disponibles para esta nómina.
-   * Respuesta extendida (doc §3.1): { empleados: [...], operarios: [...] }.
+   * §3.1 — Lista empleados internos y operarios disponibles.
+   * Respuesta ahora incluye `meta.excluidos[]` con colaboradores filtrados
+   * por estar en otra nómina cuyos días se cruzan.
    *
    * Opcional `?tercero_id=N` para filtrar solo operarios de un tercero.
    */
   empleadosDisponibles: (id: number, params?: { tercero_id?: number }) =>
-    apiClient.get<{ data: EmpleadosDisponiblesResponse }>(
-      `/v1/tenant/nominas/${id}/empleados-disponibles${toQuery(params)}`,
-      T,
-    ),
+    apiClient.get<{
+      data: EmpleadosDisponiblesResponse;
+      meta?: { excluidos: EmpleadoExcluido[] };
+    }>(`/v1/tenant/nominas/${id}/empleados-disponibles${toQuery(params)}`, T),
 
   /**
-   * Agrega cualquier combinación de empleados internos y operarios de terceros.
-   * Al menos uno de los dos arrays debe traer elementos (doc §3.2).
+   * §3.2 — Agrega empleados y/o operarios. Respuesta 201 incluye `omitidos[]`
+   * (éxito parcial): los colaboradores que ya estaban en otra nómina cruzada
+   * NO caen el lote, solo se saltan y se listan aquí. El frontend debe leer
+   * `omitidos` para avisar al usuario — sin eso, cree que agregó 20 y liquidó
+   * con 18.
    */
   agregarEmpleados: (
     id: number,
     payload: { empleado_ids?: number[]; operario_ids?: number[] } | number[],
   ) => {
     const body = Array.isArray(payload) ? { empleado_ids: payload } : payload;
-    return apiClient.post<{ data: NominaEmpleado[]; message: string }>(
-      `/v1/tenant/nominas/${id}/empleados`,
-      body,
-      T,
-    );
+    return apiClient.post<{
+      data: NominaEmpleado[];
+      message: string;
+      omitidos?: EmpleadoOmitido[];
+    }>(`/v1/tenant/nominas/${id}/empleados`, body, T);
   },
 
   // ─── Paso 3 — Validar Cosecha (doc §4) ─────────────────────────────────────
@@ -1236,11 +1417,11 @@ export const nominaApi = {
      * Pre-hidrata `nomina_tercero` y `nomina_tercero_operario` con totales 0.
      */
     agregar: (nominaId: number, payload: AgregarTercerosPayload) =>
-      apiClient.post<{ data: NominaEmpleado[]; message: string }>(
-        `/v1/tenant/nominas/${nominaId}/terceros`,
-        payload,
-        T,
-      ),
+      apiClient.post<{
+        data: NominaEmpleado[];
+        message: string;
+        omitidos?: EmpleadoOmitido[];
+      }>(`/v1/tenant/nominas/${nominaId}/terceros`, payload, T),
 
     /**
      * DELETE /nominas/{id}/terceros/{tercero} (doc §3.5) — elimina TODOS
@@ -1325,18 +1506,18 @@ export const nominaApi = {
     ),
 
   liquidar: (nominaEmpleadoId: number, payload: LiquidarPayload) =>
-    apiClient.post<{ data: NominaEmpleado; message: string }>(
-      `/v1/tenant/nomina-empleado/${nominaEmpleadoId}/liquidar`,
-      payload,
-      T,
-    ),
+    apiClient.post<{
+      data: NominaEmpleado;
+      message: string;
+      advertencia?: AdvertenciaGajosSinDespachar;
+    }>(`/v1/tenant/nomina-empleado/${nominaEmpleadoId}/liquidar`, payload, T),
 
   reLiquidar: (nominaEmpleadoId: number, payload: LiquidarPayload) =>
-    apiClient.put<{ data: NominaEmpleado; message: string }>(
-      `/v1/tenant/nomina-empleado/${nominaEmpleadoId}/liquidacion`,
-      payload,
-      T,
-    ),
+    apiClient.put<{
+      data: NominaEmpleado;
+      message: string;
+      advertencia?: AdvertenciaGajosSinDespachar;
+    }>(`/v1/tenant/nomina-empleado/${nominaEmpleadoId}/liquidacion`, payload, T),
 
   desprendible: (nominaEmpleadoId: number) =>
     apiClient.get<{ data: DesprendibleData }>(
@@ -1418,6 +1599,18 @@ export const NominaErrorCodes = {
   CONCEPTO_OBLIGATORIO: 'CONCEPTO_OBLIGATORIO',
   /** Cierre falla porque hay cosechas y no se confirmó el paso 3. */
   NOMINA_VALIDACION_COSECHA_REQUERIDA: 'NOMINA_VALIDACION_COSECHA_REQUERIDA',
+  /**
+   * §2.6 — Un colaborador ya está en otra nómina cuyo rango de días se cruza.
+   * En 201 viaja como `omitidos[]`; en 409 (mover el período de una nómina)
+   * bloquea el PUT.
+   */
+  COLABORADOR_EN_NOMINA_SOLAPADA: 'COLABORADOR_EN_NOMINA_SOLAPADA',
+  /**
+   * §2.6 — El contratista del operario ya tiene gente en otra nómina con
+   * días cruzados. Viaja en `omitidos[]`: un tercero no se parte entre
+   * dos nóminas del mismo período.
+   */
+  TERCERO_EN_NOMINA_SOLAPADA: 'TERCERO_EN_NOMINA_SOLAPADA',
   /** Cierre falla porque hay un tercero presente sin `nomina_tercero` calculado. */
   NOMINA_TERCERO_NO_LIQUIDADO: 'NOMINA_TERCERO_NO_LIQUIDADO',
   /** El operario reportó una labor sin precio en `tercero_labor_precios`. */

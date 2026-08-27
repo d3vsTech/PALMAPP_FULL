@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { sortByFirstName } from '../../utils/personas';
+import { formatCOP } from '../../components/lib/format';
+import { colaboradoresApi } from '../../../api/colaboradores';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import { Checkbox } from '../../components/ui/checkbox';
@@ -28,6 +30,7 @@ import {
   ChevronUp,
   AlertCircle,
   Trash2,
+  Building2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -39,7 +42,7 @@ import {
   NominaErrorCodes,
 } from '../../../api/nomina';
 import { configuracionApi } from '../../../api/configuracion';
-import { operariosApi, type OperarioSelectItem } from '../../../api/terceros';
+import { operariosApi, tercerosApi, type OperarioSelectItem, type Tercero } from '../../../api/terceros';
 import type { ApiError } from '../../../api/client';
 import {
   Dialog,
@@ -103,6 +106,7 @@ function mapearAgregados(
         salarioBase: Number(e.salario_base ?? 0) || undefined,
         salarioTipo: e.salario_tipo as string | null | undefined,
         estado: e.estado as 'PENDIENTE' | 'LIQUIDADO',
+        empleadoId: Number(e.empleado_id) || undefined,
       };
     }
     const op = e.operario ?? {};
@@ -225,6 +229,16 @@ export default function NuevaNominaWizard() {
   const [quincena, setQuincena] = useState<'1' | '2' | ''>('');
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
+  // §2.6 — Etiqueta opcional para distinguir dos nóminas del mismo período,
+  // y toggle "Usar corte de días personalizado" que permite override manual
+  // de fechaInicio/fechaFin (por default se derivan de mes+quincena).
+  const [etiqueta, setEtiqueta] = useState('');
+  const [cortePersonalizado, setCortePersonalizado] = useState(false);
+  // §2.6 — Datos del diálogo de reintento cuando 409 NOMINA_DUPLICADA.
+  const [nominasExistentes, setNominasExistentes] = useState<
+    import('../../../api/nomina').NominaExistenteResumen[]
+  >([]);
+  const [dialogoDuplicadaOpen, setDialogoDuplicadaOpen] = useState(false);
 
   // ── Estado global del wizard ──────────────────────────────────────────────
   /** ID de la nómina creada al pasar del paso 1 al 2. null antes de eso. */
@@ -239,6 +253,27 @@ export default function NuevaNominaWizard() {
   // ── Paso 2 — colaboradores y operarios disponibles ────────────────────────
   const [empleados, setEmpleados] = useState<EmpleadoDisponible[]>([]);
   const [operarios, setOperarios] = useState<OperarioDisponible[]>([]);
+  // Terceros completos (con nit, representante) para el listado de empresas
+  // contratistas del paso 2. Fetch en paralelo al de operarios.
+  const [tercerosMap, setTercerosMap] = useState<Map<number, Tercero>>(new Map());
+  // §3.1 — colaboradores filtrados de `data` porque están en otra nómina
+  // cuyos días se cruzan. El backend los deja fuera pero los lista aquí
+  // para que el frontend explique al usuario por qué no aparecen.
+  const [excluidos, setExcluidos] = useState<
+    import('../../../api/nomina').EmpleadoExcluido[]
+  >([]);
+  // Lookup de salario_base maestro por empleado_id — usado en paso 4 para
+  // mostrar el mismo valor que la liquidacion. El snapshot en `nomina_empleado`
+  // puede quedar viejo si el salario del colaborador cambio despues.
+  const [salariosMaestros, setSalariosMaestros] = useState<Map<number, number>>(new Map());
+  // Preview de liquidacion por nomina_empleado_id — muestra el total que
+  // efectivamente ganaria cada colaborador en la quincena (jornales +
+  // cosecha + salario segun modalidad). Se carga en paso 4.
+  const [previewsPorEmpleado, setPreviewsPorEmpleado] = useState<Map<number, {
+    total_devengado: number;
+    total_neto_propuesto: number;
+  }>>(new Map());
+  const [cargandoPreviews, setCargandoPreviews] = useState(false);
   const [empleadosSeleccionados, setEmpleadosSeleccionados] = useState<number[]>([]);
   const [operariosSeleccionados, setOperariosSeleccionados] = useState<number[]>([]);
   const [cargandoEmpleados, setCargandoEmpleados] = useState(false);
@@ -255,6 +290,11 @@ export default function NuevaNominaWizard() {
     salarioBase?: number;
     salarioTipo?: string | null;
     estado: 'PENDIENTE' | 'LIQUIDADO';
+    /** Solo para tipo='EMP'. Permite hacer lookup en `empleados[]` (paso 2)
+     *  para recuperar el `salario_base` maestro del colaborador cuando el
+     *  backend guardo un valor distinto en `nomina_empleado` (p.ej. un valor
+     *  antiguo antes de actualizar el salario del colaborador). */
+    empleadoId?: number;
     /** Solo para tipo='OP'. Permite hacer lookup en `operarios[]` para
      *  recuperar `salario_base` / `tarifa_dia_estimada` cuando el backend
      *  no los persiste en el registro `nomina_empleado`. */
@@ -262,7 +302,6 @@ export default function NuevaNominaWizard() {
   }>>([]);
   const colaboradoresYaAgregados = colaboradoresAgregados.length;
   /** Filtro de la tabla de operarios por empresa (?tercero_id=N). */
-  const [filtroTerceroId, setFiltroTerceroId] = useState<string>('todos');
   /**
    * Lookup global de operarios del tenant (id → OperarioSelectItem + cargo).
    * Se usa como fallback para resolver nombres/cargos/empresa cuando
@@ -394,7 +433,11 @@ export default function NuevaNominaWizard() {
   // Calcular fechas automáticamente. Las quincenas respetan las fechas de
   // corte del tenant (§8): `dia_inicio_q1..dia_fin_q2`. Si el día configurado
   // excede el último día del mes (ej. 31 en febrero) se hace clamp.
+  //
+  // §2.6 — Si `cortePersonalizado=true`, el useEffect NO sobrescribe las
+  // fechas (el usuario las está editando manualmente).
   useEffect(() => {
+    if (cortePersonalizado) return;
     if (!mes) {
       setFechaInicio('');
       setFechaFin('');
@@ -419,7 +462,7 @@ export default function NuevaNominaWizard() {
       setFechaInicio('');
       setFechaFin('');
     }
-  }, [ano, mes, periodicidad, quincena, diasQuincena]);
+  }, [ano, mes, periodicidad, quincena, diasQuincena, cortePersonalizado]);
 
   // Cargar empleados+operarios disponibles al entrar al paso 2.
   // Requiere nominaId — si no existe, no carga.
@@ -427,11 +470,19 @@ export default function NuevaNominaWizard() {
     if (pasoActual !== 2 || !nominaId) return;
     if (empleados.length > 0 || operarios.length > 0) return;
     setCargandoEmpleados(true);
-    nominaApi
-      .empleadosDisponibles(nominaId)
-      .then((res) => {
-        setEmpleados(res.data.empleados ?? []);
-        setOperarios(res.data.operarios ?? []);
+    Promise.all([
+      nominaApi.empleadosDisponibles(nominaId),
+      // Terceros con nit + representante para la card de "Empresas Terceras".
+      tercerosApi.listar({ per_page: 500 } as any).catch(() => ({ data: [] as Tercero[] })),
+    ])
+      .then(([empRes, terRes]) => {
+        setEmpleados(empRes.data.empleados ?? []);
+        setOperarios(empRes.data.operarios ?? []);
+        // §3.1 — colaboradores excluidos por estar en nómina cruzada.
+        setExcluidos(empRes.meta?.excluidos ?? []);
+        const m = new Map<number, Tercero>();
+        for (const t of (terRes.data ?? []) as Tercero[]) m.set(t.id, t);
+        setTercerosMap(m);
       })
       .catch((err: ApiError) => toast.error(err.message ?? 'Error al cargar colaboradores'))
       .finally(() => setCargandoEmpleados(false));
@@ -447,6 +498,68 @@ export default function NuevaNominaWizard() {
       .catch((err: ApiError) => toast.error(err.message ?? 'Error al cargar validación de cosecha'))
       .finally(() => setCargandoBundle(false));
   }, [pasoActual, nominaId]);
+
+  // Al entrar al paso 4, cargamos el salario MAESTRO de cada colaborador
+  // agregado a la nomina. Necesario porque el snapshot en `nomina_empleado`
+  // puede estar desactualizado y la liquidacion usa el maestro.
+  useEffect(() => {
+    if (pasoActual !== 4) return;
+    const empleadoIds = Array.from(
+      new Set(
+        colaboradoresAgregados
+          .filter((c) => c.tipo === 'EMP' && c.empleadoId)
+          .map((c) => c.empleadoId as number),
+      ),
+    );
+    if (empleadoIds.length === 0) return;
+    // Skip si ya tenemos todos.
+    const faltantes = empleadoIds.filter((id) => !salariosMaestros.has(id));
+    if (faltantes.length === 0) return;
+
+    colaboradoresApi
+      .listar({ per_page: 500 } as any)
+      .then((res) => {
+        const nuevo = new Map(salariosMaestros);
+        for (const col of res.data ?? []) {
+          const val = Number(col.salario_base ?? 0);
+          if (Number.isFinite(val) && val > 0) nuevo.set(col.id, val);
+        }
+        setSalariosMaestros(nuevo);
+      })
+      .catch(() => { /* fallback al snapshot */ });
+  }, [pasoActual, colaboradoresAgregados, salariosMaestros]);
+
+  // Al entrar al paso 4, fetch preview por cada colaborador agregado.
+  // Nos da el total que efectivamente ganaria en esa quincena (jornales +
+  // cosecha + salario segun modalidad). Es el mismo calculo que la
+  // liquidacion, asi que el numero coincide con lo que se ve al liquidar.
+  useEffect(() => {
+    if (pasoActual !== 4) return;
+    if (colaboradoresAgregados.length === 0) return;
+    const faltantes = colaboradoresAgregados.filter(
+      (c) => !previewsPorEmpleado.has(c.nominaEmpleadoId),
+    );
+    if (faltantes.length === 0) return;
+
+    setCargandoPreviews(true);
+    Promise.allSettled(
+      faltantes.map((c) => nominaApi.preview(c.nominaEmpleadoId)),
+    )
+      .then((results) => {
+        const nuevo = new Map(previewsPorEmpleado);
+        results.forEach((r, i) => {
+          if (r.status === 'fulfilled') {
+            const p = r.value.data;
+            nuevo.set(faltantes[i].nominaEmpleadoId, {
+              total_devengado: Number(p.total_devengado ?? 0),
+              total_neto_propuesto: Number(p.total_neto_propuesto ?? 0),
+            });
+          }
+        });
+        setPreviewsPorEmpleado(nuevo);
+      })
+      .finally(() => setCargandoPreviews(false));
+  }, [pasoActual, colaboradoresAgregados, previewsPorEmpleado]);
 
   // Al abrir el modal, simplemente reseteamos las ediciones locales — los
   // promedios vienen del bundle de cosecha (`promedios_por_lote`), ya cargado.
@@ -648,12 +761,20 @@ export default function NuevaNominaWizard() {
    *    la nómina cargada (mes / quincena / periodicidad). Si no hay cambios,
    *    avanza sin tocar el backend.
    */
-  const crearNominaSiHaceFalta = async (): Promise<boolean> => {
-    const payload = {
+  const crearNominaSiHaceFalta = async (
+    permitirMultiple = false,
+  ): Promise<boolean> => {
+    const payload: Parameters<typeof nominaApi.crear>[0] = {
       mes: parseInt(mes),
       anio: parseInt(ano),
       periodicidad,
       quincena: periodicidad === 'QUINCENAL' ? (parseInt(quincena) as 1 | 2) : null,
+      // §2.6 — extras opcionales.
+      ...(etiqueta.trim() ? { etiqueta: etiqueta.trim() } : {}),
+      ...(cortePersonalizado && fechaInicio && fechaFin
+        ? { fecha_inicio: fechaInicio, fecha_fin: fechaFin }
+        : {}),
+      ...(permitirMultiple ? { permitir_multiple: true } : {}),
     };
 
     if (nominaId) {
@@ -675,6 +796,10 @@ export default function NuevaNominaWizard() {
           toast.error('Ya existe otra nómina para ese período');
           return false;
         }
+        if (e.code === NominaErrorCodes.COLABORADOR_EN_NOMINA_SOLAPADA) {
+          toast.error('Cambio bloqueado: algún colaborador quedaría en dos nóminas con días cruzados');
+          return false;
+        }
         toast.error(e.message ?? 'No se pudo actualizar la nómina');
         return false;
       } finally {
@@ -689,9 +814,21 @@ export default function NuevaNominaWizard() {
       toast.success('Nómina creada en borrador');
       return true;
     } catch (err) {
-      const e = err as ApiError;
+      const e = err as ApiError & { data?: { nominas_existentes?: any[] } };
       if (e.code === NominaErrorCodes.NOMINA_DUPLICADA) {
-        toast.error('Ya existe una nómina para ese período');
+        // §2.6 — El backend adjunta `nominas_existentes[]` en el error para
+        // que el frontend ofrezca crear una nómina adicional.
+        const existentes = (e.data as any)?.nominas_existentes
+          ?? (e as any)?.nominas_existentes
+          ?? [];
+        if (existentes.length > 0 && !permitirMultiple) {
+          setNominasExistentes(existentes);
+          setDialogoDuplicadaOpen(true);
+        } else {
+          toast.error('Ya existe una nómina para ese período');
+        }
+      } else if (e.code === NominaErrorCodes.COLABORADOR_EN_NOMINA_SOLAPADA) {
+        toast.error('Alguno de los colaboradores ya está en otra nómina con días cruzados');
       } else {
         toast.error(e.message ?? 'No se pudo crear la nómina');
       }
@@ -713,10 +850,20 @@ export default function NuevaNominaWizard() {
     }
     setProcesando(true);
     try {
-      await nominaApi.agregarEmpleados(nominaId, {
+      const res = await nominaApi.agregarEmpleados(nominaId, {
         empleado_ids: empleadosSeleccionados,
         operario_ids: operariosSeleccionados,
       });
+      // §3.2 — Éxito parcial: leer `omitidos[]` y avisar al usuario. Sin
+      // esto el usuario cree que agregó 20 personas y liquidó con 18.
+      if (res.omitidos && res.omitidos.length > 0) {
+        for (const om of res.omitidos) {
+          const razon = om.code === 'TERCERO_EN_NOMINA_SOLAPADA'
+            ? `su empresa ya tiene gente en la nómina "${om.nomina.etiqueta ?? 'sin etiqueta'}"`
+            : `ya está en la nómina "${om.nomina.etiqueta ?? 'sin etiqueta'}"`;
+          toast.warning(`${om.nombre_completo} no se agregó: ${razon}`, { duration: 7000 });
+        }
+      }
       // Refrescar la lista de agregados con los nuevos ya incluidos para
       // que el paso 4 los muestre con nombres correctos.
       await recargarAgregados();
@@ -972,14 +1119,62 @@ export default function NuevaNominaWizard() {
                 </div>
               </div>
 
+              {/* §2.6 — Etiqueta opcional para distinguir dos nóminas del
+                  mismo período (p.ej. "Campo" vs "Administrativos"). */}
+              <div className="space-y-2 mt-4">
+                <Label htmlFor="etiqueta">Etiqueta (opcional)</Label>
+                <Input
+                  id="etiqueta"
+                  value={etiqueta}
+                  onChange={(e) => setEtiqueta(e.target.value.slice(0, 60))}
+                  placeholder="Ej: Campo, Administrativos, Cuadrilla A…"
+                  maxLength={60}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Distingue esta nómina de otras del mismo período.
+                </p>
+              </div>
+
+              {/* §2.6 — Toggle "Usar corte de días personalizado". Cuando se
+                  activa, el usuario puede editar fecha_inicio/fecha_fin
+                  manualmente (útil para "esta quincena a este trabajador se
+                  le liquida hasta el 27"). */}
+              <div className="flex items-center gap-3 mt-4 p-3 rounded-lg border border-border bg-muted/20">
+                <input
+                  type="checkbox"
+                  id="cortePersonalizado"
+                  checked={cortePersonalizado}
+                  onChange={(e) => setCortePersonalizado(e.target.checked)}
+                  className="h-4 w-4"
+                />
+                <label htmlFor="cortePersonalizado" className="text-sm cursor-pointer flex-1">
+                  Usar corte de días personalizado
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Permite ajustar el rango de fechas para casos especiales (p.ej. liquidar hasta el día 27).
+                  </p>
+                </label>
+              </div>
+
               <div className="grid gap-6 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="fechaInicio">Fecha Inicio *</Label>
-                  <Input id="fechaInicio" type="date" value={fechaInicio} readOnly />
+                  <Input
+                    id="fechaInicio"
+                    type="date"
+                    value={fechaInicio}
+                    readOnly={!cortePersonalizado}
+                    onChange={(e) => cortePersonalizado && setFechaInicio(e.target.value)}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="fechaFin">Fecha Fin *</Label>
-                  <Input id="fechaFin" type="date" value={fechaFin} readOnly />
+                  <Input
+                    id="fechaFin"
+                    type="date"
+                    value={fechaFin}
+                    readOnly={!cortePersonalizado}
+                    onChange={(e) => cortePersonalizado && setFechaFin(e.target.value)}
+                  />
                 </div>
               </div>
 
@@ -1185,6 +1380,26 @@ export default function NuevaNominaWizard() {
                 </div>
               )}
 
+              {/* §3.1 — Banner de colaboradores excluidos por estar en otra
+                  nómina cruzada. Sin esto, el usuario busca a Juan, no lo
+                  encuentra y no sabe por qué. */}
+              {excluidos.length > 0 && (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-50/60 dark:bg-amber-950/20 p-3">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 mt-0.5 text-amber-700 shrink-0" />
+                    <div className="flex-1 space-y-1">
+                      <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                        {excluidos.length} colaborador{excluidos.length !== 1 ? 'es' : ''} no aparece{excluidos.length !== 1 ? 'n' : ''} en la lista
+                      </p>
+                      <p className="text-xs text-amber-800/80 dark:text-amber-200/80">
+                        {excluidos.map((e) => e.nombre_completo).join(', ')}
+                        {' — '}ya está{excluidos.length !== 1 ? 'n' : ''} en otra nómina cuyos días se cruzan con este período.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <p className="text-sm font-medium">
@@ -1307,81 +1522,64 @@ export default function NuevaNominaWizard() {
                 </Card>
               </div>
 
-              {/* Operarios de terceros — segunda tabla */}
+              {/* Empresas Terceras — tabla resumen. Cada fila es una empresa
+                  contratista con checkbox que selecciona todos sus operarios
+                  a la vez. Nombre, NIT, operarios activos y valor total (suma
+                  de tarifas de todos los operarios). */}
               {(() => {
-                // Terceros únicos en la lista, para el filtro.
-                const tercerosUnicos = Array.from(
-                  new Map(operarios.map((o) => [o.tercero.id, o.tercero])).values(),
+                // Agrupar operarios por empresa. Cada grupo lleva:
+                //  - tercero completo (para NIT + representante)
+                //  - operarios de esa empresa
+                //  - valor total = suma de tarifa/dia
+                const gruposMap = new Map<number, {
+                  terceroId: number;
+                  razon_social: string;
+                  operarios: OperarioDisponible[];
+                }>();
+                for (const op of operarios) {
+                  const g = gruposMap.get(op.tercero.id);
+                  if (g) g.operarios.push(op);
+                  else gruposMap.set(op.tercero.id, {
+                    terceroId: op.tercero.id,
+                    razon_social: op.tercero.razon_social,
+                    operarios: [op],
+                  });
+                }
+                const grupos = Array.from(gruposMap.values()).sort((a, b) =>
+                  a.razon_social.localeCompare(b.razon_social, 'es', { sensitivity: 'base' }),
                 );
-                const operariosFiltrados = filtroTerceroId === 'todos'
-                  ? operarios
-                  : operarios.filter((o) => String(o.tercero.id) === filtroTerceroId);
+
+                const iniciales2 = (nombre: string): string => {
+                  const p = (nombre ?? '').split(/\s+/).filter(Boolean);
+                  const a = p[0]?.[0] ?? '';
+                  const b = p[1]?.[0] ?? '';
+                  return (a + b).toUpperCase() || '?';
+                };
+                const tarifaDe = (op: OperarioDisponible): number => {
+                  if (op.salario_base && op.salario_base > 0) return Number(op.salario_base);
+                  if (op.tarifa_dia_estimada && op.tarifa_dia_estimada > 0) return Number(op.tarifa_dia_estimada);
+                  return 0;
+                };
 
                 return (
               <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium">Operarios Terceros</p>
-                    <Badge className="text-xs bg-amber-500/10 text-amber-700 border-amber-300">
-                      Prestación de Servicios
-                    </Badge>
-                    {operariosSeleccionados.length > 0 && (
-                      <span className="text-xs text-muted-foreground">
-                        ({operariosSeleccionados.length} seleccionado
-                        {operariosSeleccionados.length !== 1 ? 's' : ''})
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {tercerosUnicos.length > 1 && (
-                      <Select value={filtroTerceroId} onValueChange={setFiltroTerceroId}>
-                        <SelectTrigger className="w-56 h-9">
-                          <SelectValue placeholder="Filtrar por empresa" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="todos">Todas las empresas</SelectItem>
-                          {tercerosUnicos.map((t) => (
-                            <SelectItem key={t.id} value={String(t.id)}>
-                              {t.razon_social}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                    {operariosFiltrados.length > 0 && (
-                      <>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            setOperariosSeleccionados((prev) =>
-                              Array.from(new Set([...prev, ...operariosFiltrados.map((o) => o.id)])),
-                            )
-                          }
-                          disabled={operariosFiltrados.every((o) => operariosSeleccionados.includes(o.id))}
-                        >
-                          Agregar {filtroTerceroId === 'todos' ? 'Todos' : 'Visibles'}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setOperariosSeleccionados([])}
-                          disabled={operariosSeleccionados.length === 0}
-                        >
-                          Quitar Todos
-                        </Button>
-                      </>
-                    )}
-                  </div>
+                <div className="flex items-center gap-2 mb-3">
+                  <h3 className="text-base font-bold">Empresas Terceras</h3>
+                  <Badge className="text-xs bg-amber-500/10 text-amber-700 border-amber-300">
+                    Prestación de Servicios
+                  </Badge>
+                  {operariosSeleccionados.length > 0 && (
+                    <span className="text-xs text-muted-foreground">
+                      ({operariosSeleccionados.length} operario{operariosSeleccionados.length !== 1 ? 's' : ''} seleccionado{operariosSeleccionados.length !== 1 ? 's' : ''})
+                    </span>
+                  )}
                 </div>
 
                 <Card className="border-border">
                   <CardContent className="p-0">
-                    {operariosFiltrados.length === 0 ? (
+                    {grupos.length === 0 ? (
                       <div className="text-center py-8 text-sm text-muted-foreground">
-                        {operarios.length === 0
-                          ? 'No hay operarios de empresas contratistas disponibles.'
-                          : 'No hay operarios para la empresa seleccionada.'}
+                        No hay operarios de empresas contratistas disponibles.
                       </div>
                     ) : (
                       <div className="overflow-x-auto">
@@ -1392,80 +1590,73 @@ export default function NuevaNominaWizard() {
                                 <span className="sr-only">Seleccionar</span>
                               </th>
                               <th className="text-left p-4 font-semibold text-sm text-muted-foreground">
-                                Nombre
+                                Nombre Empresa
                               </th>
                               <th className="text-left p-4 font-semibold text-sm text-muted-foreground">
-                                Empresa
+                                NIT
                               </th>
-                              <th className="text-left p-4 font-semibold text-sm text-muted-foreground">
-                                Cargo
+                              <th className="text-center p-4 font-semibold text-sm text-muted-foreground">
+                                Operarios
                               </th>
                               <th className="text-right p-4 font-semibold text-sm text-muted-foreground">
-                                Tarifa/Día
+                                Valor Total
                               </th>
                             </tr>
                           </thead>
                           <tbody>
-                            {sortByFirstName(operariosFiltrados).map((op, index) => {
-                              const isSelected = operariosSeleccionados.includes(op.id);
-                              const partes = op.nombre_completo.split(' ');
-                              const iniciales = ((partes[0]?.[0] ?? '') + (partes[1]?.[0] ?? '')).toUpperCase() || '?';
+                            {grupos.map((g, idx) => {
+                              const t = tercerosMap.get(g.terceroId);
+                              const seleccionadosEmpresa = g.operarios.filter((o) => operariosSeleccionados.includes(o.id)).length;
+                              const todosSeleccionados = seleccionadosEmpresa === g.operarios.length && g.operarios.length > 0;
+                              const algunosSeleccionados = seleccionadosEmpresa > 0 && !todosSeleccionados;
+                              const valorTotal = g.operarios.reduce((s, o) => s + tarifaDe(o), 0);
+                              const representante = t?.representante ?? '';
+                              const toggleEmpresa = () =>
+                                setOperariosSeleccionados((prev) =>
+                                  todosSeleccionados
+                                    ? prev.filter((id) => !g.operarios.some((o) => o.id === id))
+                                    : Array.from(new Set([...prev, ...g.operarios.map((o) => o.id)])),
+                                );
                               return (
                                 <tr
-                                  key={op.id}
-                                  className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors cursor-pointer ${
-                                    index % 2 === 0 ? 'bg-background' : 'bg-muted/5'
-                                  } ${isSelected ? 'bg-amber-500/5' : ''}`}
-                                  onClick={() => toggleOperario(op.id)}
+                                  key={`empresa-${g.terceroId}`}
+                                  className={`border-b border-border last:border-0 hover:bg-amber-50/40 dark:hover:bg-amber-950/10 transition-colors cursor-pointer ${
+                                    idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'
+                                  } ${todosSeleccionados ? 'bg-amber-50/60 dark:bg-amber-950/20' : ''}`}
+                                  onClick={toggleEmpresa}
                                 >
                                   <td className="p-4" onClick={(e) => e.stopPropagation()}>
                                     <Checkbox
-                                      checked={isSelected}
-                                      onCheckedChange={() => toggleOperario(op.id)}
+                                      checked={todosSeleccionados || (algunosSeleccionados ? 'indeterminate' : false)}
+                                      onCheckedChange={toggleEmpresa}
                                     />
                                   </td>
                                   <td className="p-4">
                                     <div className="flex items-center gap-3">
-                                      <div
-                                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${
-                                          isSelected
-                                            ? 'bg-amber-500/10 text-amber-700 border-amber-500/30'
-                                            : 'bg-muted text-muted-foreground border-border'
-                                        }`}
-                                      >
-                                        <span className="text-sm font-bold">{iniciales}</span>
+                                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground border border-border">
+                                        <span className="text-sm font-bold">{iniciales2(g.razon_social)}</span>
                                       </div>
                                       <div>
-                                        <span className="font-semibold text-sm">{op.nombre_completo}</span>
-                                        <p className="text-xs text-muted-foreground">CC {op.cedula}</p>
+                                        <p className="font-semibold text-sm">{g.razon_social}</p>
+                                        {representante && (
+                                          <p className="text-xs text-muted-foreground">{representante}</p>
+                                        )}
                                       </div>
                                     </div>
                                   </td>
                                   <td className="p-4">
-                                    <span className="text-sm text-muted-foreground">
-                                      {op.tercero.razon_social}
+                                    <span className="text-sm text-muted-foreground font-mono">
+                                      {t?.nit ?? '—'}
                                     </span>
                                   </td>
-                                  <td className="p-4">
-                                    <span className="text-sm font-medium">{op.cargo}</span>
+                                  <td className="p-4 text-center">
+                                    <span className="text-sm font-semibold">
+                                      {g.operarios.length}
+                                    </span>
                                   </td>
                                   <td className="p-4 text-right">
-                                    <span className="text-sm font-medium">
-                                      {(() => {
-                                        // Prioridad: `salario_base` declarado
-                                        // en el operario → `tarifa_dia_estimada`
-                                        // (derivada de la labor JORNAL_FIJO más
-                                        // frecuente del tercero) → guión.
-                                        const tarifa =
-                                          op.salario_base && op.salario_base > 0
-                                            ? op.salario_base
-                                            : op.tarifa_dia_estimada && op.tarifa_dia_estimada > 0
-                                              ? op.tarifa_dia_estimada
-                                              : 0;
-                                        return tarifa > 0
-                                          ? `$${tarifa.toLocaleString('es-CO')}`
-                                          : '—';
-                                      })()}
+                                    <span className="text-sm font-bold text-amber-700">
+                                      {valorTotal > 0 ? formatCOP(valorTotal) : '—'}
                                     </span>
                                   </td>
                                 </tr>
@@ -1589,6 +1780,26 @@ export default function NuevaNominaWizard() {
 
                 return (
                   <>
+                    {/* §4.4 — Banner de alerta cuando hay cosechas con gajos
+                        sin cargar a ningún camión. Es EL único caso donde se
+                        liquida DE MENOS. Se resuelve cargando la fruta al
+                        viaje y volviendo a liquidar. */}
+                    {(bundleCosecha?.cosechas_con_gajos_pendientes ?? 0) > 0 && (
+                      <div className="rounded-lg border-2 border-orange-500/40 bg-orange-50/60 dark:bg-orange-950/20 p-4 mb-4">
+                        <div className="flex items-start gap-3">
+                          <AlertCircle className="h-5 w-5 mt-0.5 text-orange-700 shrink-0" />
+                          <div className="flex-1 space-y-1">
+                            <p className="text-sm font-semibold text-orange-900 dark:text-orange-200">
+                              {bundleCosecha?.total_gajos_pendientes_enviar} gajos sin despachar en {bundleCosecha?.cosechas_con_gajos_pendientes} cosecha{(bundleCosecha?.cosechas_con_gajos_pendientes ?? 0) !== 1 ? 's' : ''}
+                            </p>
+                            <p className="text-xs text-orange-800/80 dark:text-orange-200/80">
+                              Esa fruta se cortó en este período pero no está cargada a ningún camión, así que no entra en la liquidación. Cárgala a un viaje y vuelve a liquidar, o continúa si ya sabes que no va a despacharse.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Card resumen totales con datos reales */}
                     <div className="rounded-xl border border-border bg-card overflow-hidden">
                       <div className="flex items-center justify-between px-5 py-3 border-b border-border bg-muted/30">
@@ -1746,15 +1957,26 @@ export default function NuevaNominaWizard() {
                                             <th className="text-right p-2">Kg Trabajados</th>
                                             <th className="text-right p-2">Kg Extractora</th>
                                             <th className="text-right p-2">Diferencia Kg</th>
+                                            {/* §4.4 — Columna de gajos sin despachar. Solo se
+                                                pinta cuando alguna fila del bloque tiene alerta,
+                                                para no meter ruido visual innecesario. */}
+                                            {d.cosechas.some((c) => (c.gajos_pendientes_enviar ?? 0) > 0) && (
+                                              <th className="text-right p-2">Sin despachar</th>
+                                            )}
                                           </tr>
                                         </thead>
                                         <tbody>
                                           {d.cosechas.map((c, idx) => {
                                             const { kgTrab, kgExtr, difKg } = ajustarKgCosecha(c);
+                                            const gajosPend = c.gajos_pendientes_enviar ?? 0;
+                                            const hayCol = d.cosechas.some((x) => (x.gajos_pendientes_enviar ?? 0) > 0);
+                                            const tooltipAjuste = c.ajuste_gajos
+                                              ? `${c.ajuste_gajos.accion} · ${c.ajuste_gajos.ajustado_por ?? 'sistema'}${c.ajuste_gajos.motivo ? ' — ' + c.ajuste_gajos.motivo : ''}`
+                                              : undefined;
                                             return (
                                               <tr
                                                 key={idx}
-                                                className={`border-b border-border/40 last:border-0 ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}
+                                                className={`border-b border-border/40 last:border-0 ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'} ${c.alerta_despacho === 'ALTA' ? 'bg-orange-50/40 dark:bg-orange-950/10' : ''}`}
                                               >
                                                 <td className="p-2 whitespace-nowrap">{c.fecha}</td>
                                                 <td className="p-2">{c.lote}</td>
@@ -1770,6 +1992,21 @@ export default function NuevaNominaWizard() {
                                                 <td className={`p-2 text-right font-semibold ${Math.abs(difKg) < 1 ? 'text-muted-foreground' : difKg > 0 ? 'text-amber-600' : 'text-primary'}`}>
                                                   {difKg > 0 ? '+' : ''}{Math.round(difKg).toLocaleString('es-CO')}
                                                 </td>
+                                                {hayCol && (
+                                                  <td className="p-2 text-right">
+                                                    {gajosPend > 0 ? (
+                                                      <span
+                                                        className={`inline-flex items-center gap-1 font-semibold ${c.alerta_despacho === 'ALTA' ? 'text-orange-700' : 'text-muted-foreground'}`}
+                                                        title={tooltipAjuste}
+                                                      >
+                                                        {c.alerta_despacho === 'ALTA' && <AlertCircle className="h-3 w-3" />}
+                                                        {gajosPend}
+                                                      </span>
+                                                    ) : (
+                                                      <span className="text-muted-foreground">—</span>
+                                                    )}
+                                                  </td>
+                                                )}
                                               </tr>
                                             );
                                           })}
@@ -1905,6 +2142,10 @@ export default function NuevaNominaWizard() {
                   const renderFilaEmp = (c: typeof colaboradoresAgregados[number]) => {
                     const partes = c.nombre.split(' ');
                     const iniciales = ((partes[0]?.[0] ?? '') + (partes[1]?.[0] ?? '')).toUpperCase() || '?';
+                    // Total que efectivamente ganaria en esta quincena
+                    // segun el preview del backend (mismo calculo que la
+                    // liquidacion): salario + jornales + cosecha.
+                    const preview = previewsPorEmpleado.get(c.nominaEmpleadoId);
                     return (
                       <div
                         key={`emp-${c.nominaEmpleadoId}`}
@@ -1924,14 +2165,20 @@ export default function NuevaNominaWizard() {
                             {c.cargo ?? 'Sin cargo'}
                           </p>
                         </div>
-                        {c.salarioBase && c.salarioBase > 0 && (
+                        {/* Total que gana en esta quincena — mismo calculo
+                            que la liquidacion (salario + jornales + cosecha). */}
+                        {preview ? (
                           <div className="text-right">
                             <p className="text-sm font-semibold text-foreground">
-                              ${c.salarioBase.toLocaleString('es-CO')}
+                              {formatCOP(preview.total_devengado)}
                             </p>
-                            <p className="text-[10px] text-muted-foreground">Salario base</p>
+                            <p className="text-[10px] text-muted-foreground">Total quincena</p>
                           </div>
-                        )}
+                        ) : cargandoPreviews ? (
+                          <div className="text-right">
+                            <p className="text-[10px] text-muted-foreground">Calculando…</p>
+                          </div>
+                        ) : null}
                       </div>
                     );
                   };
@@ -1939,17 +2186,8 @@ export default function NuevaNominaWizard() {
                   const renderFilaOp = (c: typeof colaboradoresAgregados[number]) => {
                     const partes = c.nombre.split(' ');
                     const iniciales = ((partes[0]?.[0] ?? '') + (partes[1]?.[0] ?? '')).toUpperCase() || '?';
-                    // Fallback: si `salario_base` no viene del backend en el
-                    // registro `nomina_empleado`, resolvemos contra la lista
-                    // de operarios disponibles (paso 2). `tarifa_dia_estimada`
-                    // se muestra como valor de referencia por día.
-                    const opInfo = c.operarioId
-                      ? operarios.find((o) => o.id === c.operarioId)
-                      : undefined;
-                    const salarioResuelto =
-                      (c.salarioBase && c.salarioBase > 0 ? c.salarioBase : 0)
-                      || (opInfo?.salario_base && opInfo.salario_base > 0 ? opInfo.salario_base : 0);
-                    const tarifaDia = opInfo?.tarifa_dia_estimada;
+                    // Total que gana en la quincena via preview del backend.
+                    const preview = previewsPorEmpleado.get(c.nominaEmpleadoId);
                     return (
                       <div
                         key={`op-${c.nominaEmpleadoId}`}
@@ -1970,19 +2208,16 @@ export default function NuevaNominaWizard() {
                             {c.tercero ? ` · ${c.tercero}` : ''}
                           </p>
                         </div>
-                        {salarioResuelto > 0 ? (
+                        {preview ? (
                           <div className="text-right">
                             <p className="text-sm font-semibold text-foreground">
-                              ${salarioResuelto.toLocaleString('es-CO')}
+                              {formatCOP(preview.total_devengado)}
                             </p>
-                            <p className="text-[10px] text-muted-foreground">Salario base</p>
+                            <p className="text-[10px] text-muted-foreground">Total quincena</p>
                           </div>
-                        ) : tarifaDia && tarifaDia > 0 ? (
+                        ) : cargandoPreviews ? (
                           <div className="text-right">
-                            <p className="text-sm font-semibold text-foreground">
-                              ${tarifaDia.toLocaleString('es-CO')}
-                            </p>
-                            <p className="text-[10px] text-muted-foreground">Tarifa/día</p>
+                            <p className="text-[10px] text-muted-foreground">Calculando…</p>
                           </div>
                         ) : (
                           <div className="text-right">
@@ -2311,6 +2546,49 @@ export default function NuevaNominaWizard() {
             >
               {ajustandoPromedio ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               Guardar Cambios
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* §2.6 — Diálogo cuando POST /nominas responde 409 con
+          `nominas_existentes[]`. Ofrece crear una nómina adicional para el
+          mismo período (reintenta con `permitir_multiple: true`). */}
+      <Dialog open={dialogoDuplicadaOpen} onOpenChange={setDialogoDuplicadaOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Ya existe una nómina para este período</DialogTitle>
+            <DialogDescription>
+              Puedes crear una nómina adicional para el mismo período (p.ej. para separar administrativos de personal de campo, o para un corte de días diferente).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            {nominasExistentes.map((n) => (
+              <div key={n.id} className="p-3 rounded-lg border border-border bg-muted/30">
+                <p className="text-sm font-semibold">
+                  {n.etiqueta ?? 'Sin etiqueta'} — {n.fecha_inicio} al {n.fecha_fin}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Estado: {n.estado} · {n.empleados_count ?? 0} colaboradores
+                </p>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogoDuplicadaOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={async () => {
+                setDialogoDuplicadaOpen(false);
+                const ok = await crearNominaSiHaceFalta(true);
+                if (ok) setPasoActual(2);
+              }}
+              disabled={procesando}
+              className="gap-2"
+            >
+              {procesando && <Loader2 className="h-4 w-4 animate-spin" />}
+              Crear nómina adicional
             </Button>
           </DialogFooter>
         </DialogContent>

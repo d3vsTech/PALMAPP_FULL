@@ -48,11 +48,23 @@ const MESES_NOMBRE: Record<number, string> = {
 
 function periodoLabel(n: NominaT): string {
   const mes = MESES_NOMBRE[n.mes] ?? String(n.mes);
-  if (n.tipo_pago_snapshot === 'QUINCENAL' && n.quincena) {
-    const q = n.quincena === 1 ? 'Primera' : 'Segunda';
-    return `${mes} ${n.anio} - ${q} quincena`;
-  }
-  return `${mes} ${n.anio}`;
+  const base = n.tipo_pago_snapshot === 'QUINCENAL' && n.quincena
+    ? `${mes} ${n.anio} - ${n.quincena === 1 ? 'Primera' : 'Segunda'} quincena`
+    : `${mes} ${n.anio}`;
+  // §2.6 — Si la nómina tiene `etiqueta`, se anexa entre paréntesis para
+  // distinguirla de otras del mismo período (p.ej. "Campo" vs "Admin").
+  return n.etiqueta ? `${base} · ${n.etiqueta}` : base;
+}
+
+/** §2.6 — Rango real de días (puede ser custom, no solo derivado del mes). */
+function rangoFechasLabel(n: NominaT): string {
+  const fmt = (iso: string) => {
+    const d = new Date(iso + 'T00:00:00');
+    return isNaN(d.getTime()) ? iso : d.toLocaleDateString('es-CO', {
+      day: '2-digit', month: 'short',
+    });
+  };
+  return `${fmt(n.fecha_inicio)} - ${fmt(n.fecha_fin)}`;
 }
 
 function toNumber(v: string | number): number {
@@ -481,8 +493,7 @@ export default function Nomina() {
                               <div className="flex flex-col">
                                 <span className="font-semibold text-sm">{periodoLabel(n)}</span>
                                 <span className="text-xs text-muted-foreground">
-                                  {n.mes}/{n.anio}
-                                  {n.quincena ? ` - Quincena ${n.quincena}` : ''}
+                                  {rangoFechasLabel(n)}
                                 </span>
                               </div>
                             </div>
