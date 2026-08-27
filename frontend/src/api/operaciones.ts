@@ -713,12 +713,33 @@ export const operacionesApi = {
    * Aprueba la planilla + en cascada todas las HorasExtra y Ausencias
    * PENDIENTE de esa planilla. El response incluye `aprobaciones_cascada`
    * con los conteos aprobados automáticamente.
+   *
+   * §7.2 — Puede traer `advertencias[]` con `PLANILLA_CON_PERSONAL_SIN_REGISTRAR`
+   * cuando hay colaboradores propios que no aparecen en la planilla. Es
+   * informativo: la planilla queda APROBADA. El frontend puede usar el
+   * `detalle.colaboradores_faltantes[]` para ofrecer registro masivo vía
+   * `POST /operaciones/{id}/ausencias/faltantes` (que sí funciona con
+   * planilla ya aprobada). Los operarios de tercero NO entran aquí.
    */
   aprobar: (id: number) =>
     smartRequest<{
       message: string;
       data: Planilla;
       aprobaciones_cascada?: { horas_extra: number; ausencias: number };
+      advertencias?: Array<{
+        code:
+          | 'PLANILLA_CON_PERSONAL_SIN_REGISTRAR'
+          | string;
+        message: string;
+        detalle?: {
+          colaboradores_faltantes?: Array<{
+            id: number;
+            nombre_completo: string;
+            documento?: string;
+            modalidad_pago?: string;
+          }>;
+        };
+      }>;
     }>(`${BASE}/operaciones/${id}/aprobar`, { method: 'POST' }),
 
   resumen: (id: number) =>
@@ -1202,6 +1223,36 @@ export const ausenciasApi = {
       `${BASE}/operaciones/${operacionId}/ausencias/bulk`,
       { method: 'POST', body: JSON.stringify({ items }) },
     ),
+
+  /**
+   * POST /operaciones/{id}/ausencias/faltantes (API_AUSENCIAS.md §2.8)
+   *
+   * Registra la MISMA novedad para varios colaboradores faltantes en una sola
+   * operación. Cierre del círculo de `GET /operaciones/{id}/cobertura` y de la
+   * advertencia `PLANILLA_CON_PERSONAL_SIN_REGISTRAR` que devuelve `aprobar`.
+   *
+   * Diferencias con `bulkCrear`:
+   *  - Un solo `motivo_ausencia_id` para todos los `empleado_ids`.
+   *  - Funciona con la planilla APROBADA (post-cierre).
+   *  - Deduplica: si un colaborador ya tenía novedad ese día, va a `omitidas[]`
+   *    con `motivo: 'YA_TIENE_NOVEDAD_ESE_DIA'`.
+   *
+   * Requiere permiso `operaciones.crear`.
+   */
+  crearFaltantes: (
+    operacionId: number,
+    payload: { motivo_ausencia_id: number; empleado_ids: number[]; motivo?: string },
+  ) =>
+    smartRequest<{
+      message: string;
+      data: {
+        creadas: Array<{ id: number; empleado_id: number }>;
+        omitidas: Array<{ empleado_id: number; motivo: string }>;
+      };
+    }>(`${BASE}/operaciones/${operacionId}/ausencias/faltantes`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 
   editar: (id: number, payload: Partial<{
     motivo_ausencia_id: number;

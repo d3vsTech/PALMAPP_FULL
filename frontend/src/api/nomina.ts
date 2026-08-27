@@ -93,6 +93,22 @@ export interface Nomina {
   cerrada_por?: number | null;
   cerrada_at?: string | null;
   cerrada_por_rel?: { id: number; name: string } | null;
+  /**
+   * §9.9 y PLAN_AUSENCIAS_IMPLICITAS §1.4/§2.3 — Advertencias del GET nomina.
+   * `FALTAS_NO_REGISTRADAS_EN_PLANILLA` incluye `detalle.empleados[]` con
+   * `empleado_id`, `dias` y `fechas`; `PLANILLAS_SIN_APROBAR_EN_EL_RANGO`
+   * incluye `detalle.fechas[]`. No bloquean nada.
+   */
+  advertencias?: Array<{
+    codigo:
+      | 'CALENDARIO_FESTIVOS_DESACTUALIZADO'
+      | 'RECARGO_DOMINICAL_DESACTUALIZADO'
+      | 'FALTAS_NO_REGISTRADAS_EN_PLANILLA'
+      | 'PLANILLAS_SIN_APROBAR_EN_EL_RANGO'
+      | string;
+    mensaje: string;
+    detalle?: unknown;
+  }>;
 }
 
 /**
@@ -214,6 +230,8 @@ export interface NominaEmpleado {
   dias_trabajados: number | null;
   total_jornales: string;
   total_cosecha: string;
+  /** §9.2 — Garantía SMLV. String decimal en la respuesta de liquidar. */
+  complemento_smlv?: string;
   total_horas_extra: string;
   total_recargos: string;
   total_incapacidades: string;
@@ -227,6 +245,42 @@ export interface NominaEmpleado {
   salario_minimo_snapshot?: string | null;
   liquidado_por?: number | null;
   liquidado_at?: string | null;
+  /**
+   * §9.9 — Columnas congeladas al LIQUIDAR (no al cerrar). Snapshot del
+   * descanso por día calculado con `festivos_snapshot` + asistencia.
+   * Todas opcionales: si el backend responde en versión antigua o la
+   * fila es de operario de tercero, quedan `undefined`.
+   */
+  dias_descanso_ganados?: number | null;
+  dias_descanso_perdidos?: number | null;
+  total_dominicales?: string | null;
+  total_festivos?: string | null;
+  total_recargo_dominical?: string | null;
+  total_recargo_festivo?: string | null;
+  porcentaje_recargo_dominical?: number | null;
+  /** §9.9 — Días productivos (jornal/cosecha), sin contar descansos. */
+  dias_productivos?: number | null;
+  /** §9.9 — Descansos PAGADOS congelados. */
+  dias_descanso_pagados?: number | null;
+  /** §9.9 — Descansos trabajados. */
+  dias_descanso_trabajados?: number | null;
+  /** §9.9 — Informativo. Lo que habría cobrado de no faltar. */
+  total_descanso_perdido?: string | null;
+  /** §9.9 art. 179 par. 1 — HABITUAL | OCASIONAL | NINGUNO. */
+  clasificacion_descanso?: 'HABITUAL' | 'OCASIONAL' | 'NINGUNO' | string | null;
+  /**
+   * PLAN_AUSENCIAS_IMPLICITAS §1.5 — Faltas por no-registro en la planilla,
+   * congeladas al LIQUIDAR. `jsonb` en la BD, array aquí.
+   */
+  dias_injustificados?: number | null;
+  detalle_faltas_injustificadas?: Array<{
+    fecha: string;
+    origen: string;
+    operacion_id: number;
+    valor_dia: number;
+    impacto: string;
+    consecuencia_dominical?: string | null;
+  }> | null;
   empleado?: {
     id: number;
     nombre_completo?: string;
@@ -338,9 +392,25 @@ export interface DetalleAusenciaPreview {
  * las apruebe (doc §5.1). El frontend debe mostrar una advertencia clara
  * si alguno de los conteos es > 0. Solo se envía para colaboradores internos.
  */
+/**
+ * §1.7 PLAN_AUSENCIAS_IMPLICITAS — `ausencias` deja de ser un entero desnudo
+ * y pasa a incluir fechas + impacto estimado, para que el liquidador entienda
+ * que aprobar la ausencia cambia la cifra y en cuánto.
+ *
+ * Backward compat: si el backend responde en versión antigua, `ausencias`
+ * llega como `number`; en el nuevo formato llega como objeto rico.
+ * El frontend detecta con `typeof` en el render.
+ */
+export interface PendientesAusenciasRich {
+  total: number;
+  fechas?: string[];
+  dias_impactados?: number;
+  impacto_estimado?: number;
+}
+
 export interface PendientesPorAprobar {
   horas_extra: number;
-  ausencias: number;
+  ausencias: number | PendientesAusenciasRich;
 }
 
 export interface PreviewLiquidacion {
@@ -349,6 +419,12 @@ export interface PreviewLiquidacion {
   salario_base: number;
   total_jornales: number;
   total_cosecha: number;
+  /**
+   * §9.2 — Garantía legal CST Art. 145-146. Si la producción del período es
+   * inferior a `SMLV × (dias_trabajados / 30)`, el motor eleva el devengado
+   * hasta ese piso. Solo aplica a PRODUCCION (VARIABLE); en FIJO viene 0.
+   */
+  complemento_smlv?: number;
   total_horas_extra?: number;
   total_recargos?: number;
   total_incapacidades?: number;
@@ -421,6 +497,121 @@ export interface PreviewLiquidacion {
     /** Solo presente para operarios. */
     tercero?: { id: number; razon_social: string };
   };
+  /**
+   * §9.9 — Días de descanso (dominicales + festivos) que el colaborador
+   * ganó dentro del período. Regla art. 173 num. 1 (todo o nada): si faltó
+   * sin justa causa a algún día laboral de la semana previa a un descanso,
+   * se pierde ese descanso; queda en `dias_descanso_perdidos` con motivo.
+   * Todos los campos son opcionales para no romper si el backend responde
+   * en versión antigua.
+   */
+  dias_descanso_ganados?: number;
+  dias_descanso_perdidos?: number;
+  total_dominicales?: number;
+  total_festivos?: number;
+  total_recargo_dominical?: number;
+  total_recargo_festivo?: number;
+  /** Escalón legal aplicado (75/80/90/100). Vigente desde §9.9 tabla. */
+  porcentaje_recargo_dominical?: number;
+  /** §9.9 — Días efectivamente trabajados (jornal o cosecha), sin contar descansos. */
+  dias_productivos?: number;
+  /** §9.9 — Días de descanso PAGADOS (resultado = PAGADO). */
+  dias_descanso_pagados?: number;
+  /** §9.9 — Días de descanso trabajados por el colaborador. */
+  dias_descanso_trabajados?: number;
+  /**
+   * §9.9 — INFORMATIVO. Lo que el trabajador habría recibido de no haber
+   * faltado. Nunca se resta de nada; explica el "por qué me pagaron menos".
+   * Se emite también para FIJO (donde total_dominicales = 0).
+   */
+  total_descanso_perdido?: number;
+  /**
+   * §9.9 art. 179 par. 1 — HABITUAL (≥3 descansos trabajados/mes),
+   * OCASIONAL (1-2), NINGUNO (0). Informativo. HABITUAL genera además
+   * descanso compensatorio (art. 181), NO gestionado por este módulo.
+   */
+  clasificacion_descanso?: 'HABITUAL' | 'OCASIONAL' | 'NINGUNO' | string;
+  /**
+   * Serie día por día. `resultado` es la fuente autoritativa; `pagado`
+   * queda como alias para compat con la primera versión del contrato.
+   */
+  detalle_dominicales_festivos?: Array<{
+    fecha: string;
+    tipo: 'DOMINICAL' | 'FESTIVO';
+    /** true si resultado = PAGADO. Alias de conveniencia. */
+    pagado: boolean;
+    valor_descanso: number;
+    valor_recargo: number;
+    porcentaje_recargo: number;
+    motivo?: string | null;
+    nombre_festivo?: string | null;
+    // ─── Campos §9.9 extendidos (opcionales para no romper) ────────────
+    /** Nombre del festivo o "Descanso dominical". */
+    nombre?: string;
+    /** true si el festivo cayó en domingo (se paga UNA vez, §9.9). */
+    coincide_domingo?: boolean;
+    /** true si el trabajador trabajó ese día. */
+    trabajado?: boolean;
+    /** Valor base del día (art. 176). */
+    valor_dia_base?: number;
+    /** SEMANA | SEMANA_ANTERIOR | PERIODO | SMLV | CERO | SALARIO_FIJO */
+    origen_promedio?: string;
+    /** Ventana lunes-sábado usada (art. 176). */
+    ventana_inicio?: string;
+    ventana_fin?: string;
+    dias_trabajados_ventana?: number;
+    dias_laborables_ventana?: number;
+    /** Faltas dentro de la ventana (art. 173 num. 1). */
+    dias_falta_injustificada?: number;
+    /** PAGADO | PERDIDO_INASISTENCIA | SUSPENDIDO_INCAPACIDAD */
+    resultado?: 'PAGADO' | 'PERDIDO_INASISTENCIA' | 'SUSPENDIDO_INCAPACIDAD' | string;
+    /** Base del cálculo del recargo (art. 179). */
+    base_recargo?: number;
+    /** AUTOMATICO | HORA_EXTRA_MANUAL (cuando HRD/RND ya cubren). */
+    origen_recargo?: string;
+    observacion?: string | null;
+  }>;
+  /**
+   * §9.9 y PLAN_AUSENCIAS_IMPLICITAS §1.4 — Advertencias no bloqueantes del
+   * preview. Un array vacío o `undefined` = todo limpio. El frontend nunca
+   * bloquea por estas, solo las muestra.
+   */
+  advertencias?: Array<{
+    codigo:
+      | 'CALENDARIO_FESTIVOS_DESACTUALIZADO'
+      | 'RECARGO_DOMINICAL_DESACTUALIZADO'
+      | 'DESCANSO_DOMINICAL_PERDIDO'
+      | 'FALTAS_NO_REGISTRADAS_EN_PLANILLA'
+      | 'PLANILLAS_SIN_APROBAR_EN_EL_RANGO'
+      | string;
+    mensaje: string;
+    detalle?: unknown;
+  }>;
+
+  /**
+   * PLAN_AUSENCIAS_IMPLICITAS §1.3 — Días con `Operacion` APROBADA donde el
+   * colaborador no aparece y no tiene ausencia registrada. Se tratan como
+   * inasistencia injustificada: descuenta día al FIJO y hace perder el
+   * dominical de la semana.
+   */
+  dias_injustificados?: number;
+  detalle_faltas_injustificadas?: Array<{
+    fecha: string;
+    /**
+     * `NO_REGISTRADO_EN_PLANILLA` hoy; el enum deja sitio a `FUERA_DE_CONTRATO`
+     * (Fase 3 del plan) sin romper el contrato.
+     */
+    origen: 'NO_REGISTRADO_EN_PLANILLA' | 'FUERA_DE_CONTRATO' | string;
+    operacion_id: number;
+    valor_dia: number;
+    /**
+     * `DIA_DESCONTADO` para FIJO; `SIN_IMPACTO_DIRECTO` para PRODUCCION
+     * (no hay salario fijo que prorratear, pero el dominical igual se pierde).
+     */
+    impacto: 'DIA_DESCONTADO' | 'SIN_IMPACTO_DIRECTO' | string;
+    /** Fecha del domingo que esta falta hizo perder, o `null` si no lo hizo perder. */
+    consecuencia_dominical?: string | null;
+  }>;
 }
 
 export interface FilaResumenTrabajo {
@@ -546,6 +737,66 @@ export interface DesprendibleData {
     detalle_ausencias?: (Omit<DetalleAusenciaPreview, 'dias_en_rango' | 'valor_calculado'> & {
       dias_calendario: number;
     })[];
+    /**
+     * §9.9 — Desglose de descansos en el desprendible. Coincide con lo que
+     * quedó congelado en `nomina_empleado_descanso` al liquidar. Vacío si el
+     * colaborador no tuvo descansos en el período o si la nómina se liquidó
+     * antes del cambio §9.9.
+     */
+    dias_descanso_ganados?: number;
+    dias_descanso_perdidos?: number;
+    total_dominicales?: number;
+    total_festivos?: number;
+    total_recargo_dominical?: number;
+    total_recargo_festivo?: number;
+    porcentaje_recargo_dominical?: number;
+    /** §9.9 — Días productivos. */
+    dias_productivos?: number;
+    dias_descanso_pagados?: number;
+    dias_descanso_trabajados?: number;
+    /** §9.9 — Informativo. Nota al pie del desprendible cuando > 0. */
+    total_descanso_perdido?: number;
+    clasificacion_descanso?: 'HABITUAL' | 'OCASIONAL' | 'NINGUNO' | string;
+    detalle_descansos?: Array<{
+      fecha: string;
+      tipo: 'DOMINICAL' | 'FESTIVO';
+      pagado: boolean;
+      valor_descanso: number;
+      valor_recargo: number;
+      porcentaje_recargo: number;
+      motivo?: string | null;
+      nombre_festivo?: string | null;
+      // Extras opcionales (mismo shape que preview.detalle_dominicales_festivos)
+      nombre?: string;
+      coincide_domingo?: boolean;
+      trabajado?: boolean;
+      valor_dia_base?: number;
+      origen_promedio?: string;
+      ventana_inicio?: string;
+      ventana_fin?: string;
+      dias_trabajados_ventana?: number;
+      dias_laborables_ventana?: number;
+      dias_falta_injustificada?: number;
+      resultado?: string;
+      base_recargo?: number;
+      origen_recargo?: string;
+      observacion?: string | null;
+    }>;
+    /**
+     * PLAN_AUSENCIAS_IMPLICITAS §1.6 — Días no laborados sin novedad
+     * registrada. Sección propia del desprendible, con encabezado distinto
+     * a `detalle_ausencias` porque legalmente no es lo mismo: no tiene
+     * tipo, ni soporte, ni aprobación.
+     */
+    dias_injustificados?: number;
+    detalle_faltas_injustificadas?: Array<{
+      fecha: string;
+      origen: string;
+      operacion_id: number;
+      valor_dia: number;
+      impacto: string;
+      consecuencia_dominical?: string | null;
+    }>;
   };
   resumen_trabajo: ResumenTrabajo | null;
 }
@@ -1094,6 +1345,17 @@ export interface PasoCuatroChecklist {
   nomina_validacion_cosecha_confirmada: boolean;
   requiere_validacion_cosecha: boolean;
   listo_para_cerrar: boolean;
+  /**
+   * §3.6 — Domingos y festivos del mes que NINGUNA nómina del tenant cubre.
+   * Con cortes personalizados (§2.1) un domingo puede caer en el hueco entre
+   * dos nóminas y no pagarse nunca. Aviso, NO bloqueo: no entra en
+   * `listo_para_cerrar` porque el hueco puede ser deliberado.
+   */
+  dias_descanso_fuera_de_rango?: Array<{
+    fecha: string;
+    tipo: 'DOMINICAL' | 'FESTIVO';
+    nombre: string;
+  }>;
 }
 
 export interface NominaConcepto {
@@ -1611,6 +1873,35 @@ export const NominaErrorCodes = {
    * dos nóminas del mismo período.
    */
   TERCERO_EN_NOMINA_SOLAPADA: 'TERCERO_EN_NOMINA_SOLAPADA',
+  /**
+   * §2.1 — Crear (o mover el rango de) una nómina en un año sin calendario
+   * de festivos materializado. El mensaje incluye el comando artisan literal
+   * porque quien recibe este 409 casi nunca es quien puede correr artisan.
+   */
+  CALENDARIO_FESTIVOS_AUSENTE: 'CALENDARIO_FESTIVOS_AUSENTE',
+  /**
+   * §9.9 — Advertencia (200 ⚠) dentro de respuestas exitosas cuando la
+   * última conciliación del calendario contra la fuente externa reportó
+   * discrepancia. No bloquea.
+   */
+  CALENDARIO_FESTIVOS_DESACTUALIZADO: 'CALENDARIO_FESTIVOS_DESACTUALIZADO',
+  /**
+   * §9.9 — Advertencia (200 ⚠) del preview cuando `tipos_hora_extra.HRD`
+   * diverge del escalón legal vigente para las fechas liquidadas.
+   */
+  RECARGO_DOMINICAL_DESACTUALIZADO: 'RECARGO_DOMINICAL_DESACTUALIZADO',
+  /**
+   * §9.9 — Advertencia (200 ⚠) del preview cuando se perdieron dominicales
+   * por inasistencia sin justa causa (art. 173 num. 1). Es el aviso que
+   * explica un devengado menor.
+   */
+  DESCANSO_DOMINICAL_PERDIDO: 'DESCANSO_DOMINICAL_PERDIDO',
+  /** §14.1 — Admin de tenant intentó mutar una fila del calendario nacional. */
+  FESTIVO_NACIONAL_INMUTABLE: 'FESTIVO_NACIONAL_INMUTABLE',
+  /** §14.1 — El tenant ya tiene configuración de festivo para esa fecha. */
+  FESTIVO_DUPLICADO: 'FESTIVO_DUPLICADO',
+  /** §14.1 — Año fuera de [1984, año actual + 5]. */
+  FESTIVO_FUERA_DE_RANGO: 'FESTIVO_FUERA_DE_RANGO',
   /** Cierre falla porque hay un tercero presente sin `nomina_tercero` calculado. */
   NOMINA_TERCERO_NO_LIQUIDADO: 'NOMINA_TERCERO_NO_LIQUIDADO',
   /** El operario reportó una labor sin precio en `tercero_labor_precios`. */

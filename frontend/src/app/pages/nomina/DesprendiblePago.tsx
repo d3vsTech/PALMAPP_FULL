@@ -23,6 +23,8 @@ import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import { nominaApi, DesprendibleData } from '../../../api/nomina';
 import type { ApiError } from '../../../api/client';
+import { DetalleDescansos } from '../../components/nomina/DetalleDescansos';
+import { FaltasInjustificadas } from '../../components/nomina/FaltasInjustificadas';
 
 function fmt(n: number): string {
   return `$${n.toLocaleString('es-CO')}`;
@@ -284,7 +286,13 @@ export default function DesprendiblePago() {
   const totalBruto =
     liquidacion.total_jornales + liquidacion.total_cosecha +
     liquidacion.total_horas_extra + liquidacion.total_recargos +
-    liquidacion.total_incapacidades;
+    liquidacion.total_incapacidades +
+    // §9.9 — Descansos + recargos dominicales/festivos. Fallback a 0
+    // cuando la nómina se liquidó antes del cambio.
+    (liquidacion.total_dominicales ?? 0) +
+    (liquidacion.total_festivos ?? 0) +
+    (liquidacion.total_recargo_dominical ?? 0) +
+    (liquidacion.total_recargo_festivo ?? 0);
   const adelantos = liquidacion.deducciones
     .filter((d) => /adelant|prestam/i.test(d.nombre))
     .reduce((s, d) => s + d.valor, 0);
@@ -360,6 +368,27 @@ export default function DesprendiblePago() {
                   />
                 )}
                 <RowSmall label="Incapacidades" value={fmt(liquidacion.total_incapacidades)} />
+                {/* §9.9 — Dominicales / festivos / recargo. Solo se muestra si
+                    llegan del backend (nóminas anteriores al cambio no los
+                    tienen). Sistema todo-o-nada según art. 173 num. 1. */}
+                {(liquidacion.total_dominicales ?? 0) > 0 && (
+                  <RowSmall label="Dominicales" value={fmt(liquidacion.total_dominicales!)} />
+                )}
+                {(liquidacion.total_festivos ?? 0) > 0 && (
+                  <RowSmall label="Festivos" value={fmt(liquidacion.total_festivos!)} />
+                )}
+                {((liquidacion.total_recargo_dominical ?? 0) + (liquidacion.total_recargo_festivo ?? 0)) > 0 && (
+                  <RowSmall
+                    label={
+                      liquidacion.porcentaje_recargo_dominical != null
+                        ? `Recargo dominical/festivo (${liquidacion.porcentaje_recargo_dominical}%)`
+                        : 'Recargo dominical/festivo'
+                    }
+                    value={fmt(
+                      (liquidacion.total_recargo_dominical ?? 0) + (liquidacion.total_recargo_festivo ?? 0),
+                    )}
+                  />
+                )}
                 <div className="border-t border-success/30 pt-2 mt-2">
                   <div className="flex justify-between items-center bg-success/10 p-2 rounded">
                     <span className="font-bold text-success text-xs">Total Bruto</span>
@@ -414,6 +443,34 @@ export default function DesprendiblePago() {
                 <span className="font-bold text-lg">TOTAL NETO</span>
                 <span className="font-bold text-3xl text-primary">{fmt(liquidacion.total_neto)}</span>
               </div>
+            </div>
+
+            {/* §9.9 — Detalle día por día de descansos. Componente compartido
+                con `LiquidarColaborador` (mismo shape, variante compacta para
+                el desprendible impreso). */}
+            <div className="mt-4">
+              <DetalleDescansos
+                items={liquidacion.detalle_descansos}
+                diasPerdidos={liquidacion.dias_descanso_perdidos}
+                totalDescansoPerdido={liquidacion.total_descanso_perdido}
+                formatMoney={fmt}
+                variant="compact"
+                titulo="Detalle de descansos"
+              />
+            </div>
+
+            {/* PLAN_AUSENCIAS_IMPLICITAS §1.6 — Días no laborados sin novedad
+                registrada. Sección propia bajo detalle_ausencias porque
+                legalmente no es lo mismo. Solo se muestra si el backend adjunta
+                el detalle. */}
+            <div className="mt-4">
+              <FaltasInjustificadas
+                items={liquidacion.detalle_faltas_injustificadas}
+                total={liquidacion.dias_injustificados}
+                formatMoney={fmt}
+                variant="compact"
+                titulo="Días no laborados sin novedad registrada"
+              />
             </div>
           </div>
 

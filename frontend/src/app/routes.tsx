@@ -145,6 +145,7 @@ const NuevoConceptoNomina = lazyWithRetry(() => import('./pages/configuracion/Nu
 const NuevoTerceroWizard  = lazyWithRetry(() => import('./pages/configuracion/NuevoTerceroWizard'));
 const EditarTerceroWizard = lazyWithRetry(() => import('./pages/configuracion/EditarTerceroWizard'));
 const NuevaExtractora = lazyWithRetry(() => import('./pages/configuracion/NuevaExtractora'));
+const CalendarioFestivos = lazyWithRetry(() => import('./pages/configuracion/CalendarioFestivos'));
 
 const MiPerfil = lazyWithRetry(() => import('./pages/perfil/MiPerfil'));
 
@@ -347,6 +348,7 @@ export const router = createBrowserRouter([
       { path: 'configuracion/extractoras/editar/:id', element: <ProtectedRoute permiso="configuracion.editar">{L(<NuevaExtractora />)}</ProtectedRoute> },
       { path: 'configuracion/terceros/nuevo',        element: <ProtectedRoute permiso="configuracion.editar">{L(<NuevoTerceroWizard />)}</ProtectedRoute> },
       { path: 'configuracion/terceros/editar/:id',   element: <ProtectedRoute permiso="configuracion.editar">{L(<EditarTerceroWizard />)}</ProtectedRoute> },
+      { path: 'configuracion/festivos',              element: <ProtectedRoute permiso="configuracion.editar">{L(<CalendarioFestivos />)}</ProtectedRoute> },
       { path: 'maestros', element: <Navigate to="/configuracion" replace /> },
 
       { path: '403', element: <SinPermisos /> },

@@ -49,6 +49,7 @@ import {
   FileText, Eye, Loader2, Trash2, Download, Users, Building2, Check,
   Pencil, Printer,
 } from 'lucide-react';
+import { AdvertenciasBanner } from '../../components/nomina/AdvertenciasBanner';
 import StatusBadge from '../../components/common/StatusBadge';
 import { toast } from 'sonner';
 import {
@@ -114,6 +115,12 @@ export default function NominaDetalle() {
     total_gajos_pendientes_enviar: number;
   } | null>(null);
   const [cargandoValidacionPreCierre, setCargandoValidacionPreCierre] = useState(false);
+  // §3.6 — Domingos/festivos que ninguna nómina del mes cubre (por cortes
+  // personalizados que dejan huecos). Se lee del paso-4-checklist antes de
+  // cerrar. Aviso, NO bloqueo — el hueco puede ser deliberado.
+  const [descansosHuerfanosPreCierre, setDescansosHuerfanosPreCierre] = useState<
+    Array<{ fecha: string; tipo: 'DOMINICAL' | 'FESTIVO'; nombre: string }>
+  >([]);
   const [confirmarEliminar, setConfirmarEliminar] = useState(false);
   const [accionando, setAccionando] = useState(false);
 
@@ -1120,19 +1127,33 @@ export default function NominaDetalle() {
                     if (!nominaId) return;
                     setCargandoValidacionPreCierre(true);
                     try {
-                      const res = await nominaApi.validarCosecha(nominaId);
-                      const pendientes = res.data.cosechas_con_gajos_pendientes ?? 0;
-                      const totalGajos = res.data.total_gajos_pendientes_enviar ?? 0;
-                      if (pendientes > 0) {
-                        setAlertaGajosPreCierre({
-                          cosechas_con_gajos_pendientes: pendientes,
-                          total_gajos_pendientes_enviar: totalGajos,
-                        });
+                      // §4.4 + §3.6 — dos precargas en paralelo. Si alguna
+                      // falla, seguimos con lo que sí cargó; ninguna bloquea.
+                      const [validRes, checkRes] = await Promise.allSettled([
+                        nominaApi.validarCosecha(nominaId),
+                        nominaApi.pasoCuatroChecklist(nominaId),
+                      ]);
+                      if (validRes.status === 'fulfilled') {
+                        const pendientes = validRes.value.data.cosechas_con_gajos_pendientes ?? 0;
+                        const totalGajos = validRes.value.data.total_gajos_pendientes_enviar ?? 0;
+                        setAlertaGajosPreCierre(
+                          pendientes > 0
+                            ? { cosechas_con_gajos_pendientes: pendientes, total_gajos_pendientes_enviar: totalGajos }
+                            : null,
+                        );
                       } else {
                         setAlertaGajosPreCierre(null);
                       }
+                      if (checkRes.status === 'fulfilled') {
+                        setDescansosHuerfanosPreCierre(
+                          checkRes.value.data.dias_descanso_fuera_de_rango ?? [],
+                        );
+                      } else {
+                        setDescansosHuerfanosPreCierre([]);
+                      }
                     } catch {
                       setAlertaGajosPreCierre(null);
+                      setDescansosHuerfanosPreCierre([]);
                     } finally {
                       setCargandoValidacionPreCierre(false);
                       setConfirmarCerrar(true);
@@ -1153,6 +1174,12 @@ export default function NominaDetalle() {
           </div>
         </div>
       </div>
+
+      {/* §9.9 — Advertencias del snapshot del calendario (200 ⚠). No bloquean
+          la operación pero avisan si el calendario congelado quedó obsoleto
+          respecto a la fuente externa o si el recargo dominical se desactualizó
+          por Ley posterior. */}
+      <AdvertenciasBanner items={nomina.advertencias} size="md" />
 
       {/* Selector de vista (tabs visuales V.15) */}
       <div className="grid grid-cols-2 gap-3">
@@ -1892,6 +1919,29 @@ export default function NominaDetalle() {
               <p className="text-xs text-orange-800/80 dark:text-orange-200/80 mt-1">
                 Esos gajos quedarán fuera de la liquidación de forma permanente: la cosecha pertenece a este período por fecha de operación, así que la nómina siguiente no los va a tomar.
               </p>
+            </div>
+          )}
+          {/* §3.6 — Domingos/festivos huérfanos: fechas del mes que ninguna
+              nómina del tenant cubre por cortes personalizados. Aviso, no
+              bloqueo — el hueco puede ser deliberado. */}
+          {descansosHuerfanosPreCierre.length > 0 && (
+            <div className="rounded-lg border-2 border-amber-500/40 bg-amber-50/60 dark:bg-amber-950/20 p-3 my-2">
+              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                {descansosHuerfanosPreCierre.length} descanso{descansosHuerfanosPreCierre.length !== 1 ? 's' : ''} del mes fuera del rango de esta nómina
+              </p>
+              <p className="text-xs text-amber-800/80 dark:text-amber-200/80 mt-1">
+                Estos días caen en un hueco entre nóminas y no se están pagando en ninguna. Puede ser deliberado.
+              </p>
+              <ul className="text-xs text-amber-900/90 dark:text-amber-100/90 mt-2 space-y-0.5">
+                {descansosHuerfanosPreCierre.slice(0, 6).map((d) => (
+                  <li key={d.fecha}>
+                    <span className="font-mono">{d.fecha}</span> · {d.nombre}
+                  </li>
+                ))}
+                {descansosHuerfanosPreCierre.length > 6 && (
+                  <li className="italic">+ {descansosHuerfanosPreCierre.length - 6} más</li>
+                )}
+              </ul>
             </div>
           )}
           <AlertDialogFooter>

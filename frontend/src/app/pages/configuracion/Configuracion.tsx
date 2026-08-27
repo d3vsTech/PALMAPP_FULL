@@ -34,6 +34,12 @@ import { ParametrosNominaTab } from '../../components/configuracion/ParametrosNo
 import { PreciosLaboresTab } from '../../components/configuracion/PreciosLaboresTab';
 // Tab nuevo portado desde V.15 (sin backend todavía).
 import { TercerosTab } from '../../components/configuracion/TercerosTab';
+// §14.1 — Calendario de festivos. La pantalla completa vive en
+// `pages/configuracion/CalendarioFestivos.tsx` y también se enruta
+// como `/configuracion/festivos`. Aquí se embebe como tab sin el
+// botón "Volver" (`standalone={false}`).
+import CalendarioFestivos from './CalendarioFestivos';
+const CalendarioFestivosTab = () => <CalendarioFestivos standalone={false} />;
 
 type SubItem = {
   id: string;
@@ -125,6 +131,7 @@ const CATEGORIAS: Categoria[] = [
       { id: 'precios-labores',   nombre: 'Precios de Labores',   component: PreciosLaboresTab },
       { id: 'horas-extra',       nombre: 'Horas Extra',          component: HorasExtrasTab },
       { id: 'novedades',         nombre: 'Novedades',            component: AusenciasTab },
+      { id: 'festivos',          nombre: 'Calendario de Festivos', component: CalendarioFestivosTab },
     ],
   },
 ];

@@ -34,6 +34,9 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { AdvertenciasBanner } from '../../components/nomina/AdvertenciasBanner';
+import { DetalleDescansos } from '../../components/nomina/DetalleDescansos';
+import { FaltasInjustificadas } from '../../components/nomina/FaltasInjustificadas';
 import {
   nominaApi,
   PreviewLiquidacion,
@@ -357,14 +360,22 @@ export default function LiquidarColaborador() {
 
     setEnviando(true);
     try {
+      // §9.9 — Para VARIABLE los días se derivan del sistema (asistencia +
+      // ausencias). No se puede sobrescribir el valor calculado; el backend
+      // responde 422 si viene `dias_trabajados`. Para FIJO / operario sí se
+      // permite el override.
+      const esVariable = empleado.salario_tipo === 'VARIABLE';
+      const diasTrabajadosPayload = esVariable
+        ? undefined
+        : (diasTrabajados === '' ? undefined : Number(diasTrabajados));
       // Para operarios solo se manda `dias_trabajados`. El backend rechaza
       // con 422 si vienen `bonificaciones` o `deducciones_voluntarias`.
       const payload = esOperario
         ? {
-            dias_trabajados: diasTrabajados === '' ? undefined : Number(diasTrabajados),
+            dias_trabajados: diasTrabajadosPayload,
           }
         : {
-            dias_trabajados: diasTrabajados === '' ? undefined : Number(diasTrabajados),
+            dias_trabajados: diasTrabajadosPayload,
             bonificaciones: bonificacionesEfectivas.map((b) => ({
               nombre: b.nombre,
               valor: Number(b.valor),
@@ -617,55 +628,91 @@ export default function LiquidarColaborador() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Días Trabajados</p>
-              <Input
-                type="number" step="0.001"
-                value={diasTrabajados}
-                onChange={(e) =>
-                  setDiasTrabajados(e.target.value === '' ? '' : Number(e.target.value))
-                }
-                onBlur={refetchPreview}
-                max={preview.dias_periodo}
-                className="h-9 text-lg font-semibold border-0 bg-transparent px-0 focus-visible:ring-0"
-              />
+              {/* §9.9 — Para VARIABLE los días trabajados se derivan de la
+                  asistencia + ausencias; el override manual queda deshabilitado
+                  para evitar que la UI y el backend queden desalineados
+                  (backend responde 422 si se sobrescribe en VARIABLE). */}
+              {empleado.salario_tipo === 'VARIABLE' ? (
+                <p className="h-9 text-lg font-semibold flex items-center">
+                  {preview.dias_trabajados}
+                </p>
+              ) : (
+                <Input
+                  type="number" step="0.001"
+                  value={diasTrabajados}
+                  onChange={(e) =>
+                    setDiasTrabajados(e.target.value === '' ? '' : Number(e.target.value))
+                  }
+                  onBlur={refetchPreview}
+                  max={preview.dias_periodo}
+                  className="h-9 text-lg font-semibold border-0 bg-transparent px-0 focus-visible:ring-0"
+                />
+              )}
             </div>
           </div>
 
           {/* Aviso de horas extras / ausencias PENDIENTES por aprobar. Doc
               §5.1: estos registros NO se incluyen en el cálculo actual hasta
-              que se aprueben desde la planilla. */}
-          {!esOperario
-            && preview.pendientes_por_aprobar
-            && ((preview.pendientes_por_aprobar.horas_extra ?? 0) > 0
-              || (preview.pendientes_por_aprobar.ausencias ?? 0) > 0) && (
-            <div className="flex items-start gap-3 p-4 rounded-lg border border-amber-400/40 bg-amber-50/60 dark:bg-amber-950/20">
-              <TrendingDown className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
-              <div className="flex-1 text-sm">
-                <p className="font-semibold text-amber-800 dark:text-amber-300">
-                  Registros pendientes de aprobar
-                </p>
-                <p className="text-amber-700 dark:text-amber-400 mt-1">
-                  Este colaborador tiene{' '}
-                  {preview.pendientes_por_aprobar.horas_extra > 0 && (
-                    <strong>
-                      {preview.pendientes_por_aprobar.horas_extra} hora
-                      {preview.pendientes_por_aprobar.horas_extra !== 1 ? 's' : ''} extra
-                    </strong>
+              que se aprueben desde la planilla.
+
+              PLAN_AUSENCIAS_IMPLICITAS §1.7: `ausencias` puede llegar como
+              número (versión antigua) o como objeto `{ total, fechas[],
+              dias_impactados, impacto_estimado }` (versión nueva). Se
+              normaliza acá para no duplicar renderizado. */}
+          {(() => {
+            if (esOperario || !preview.pendientes_por_aprobar) return null;
+            const pend = preview.pendientes_por_aprobar;
+            const horasExtra = pend.horas_extra ?? 0;
+            const ausenciasRaw = pend.ausencias;
+            const totalAusencias =
+              typeof ausenciasRaw === 'number'
+                ? ausenciasRaw
+                : (ausenciasRaw?.total ?? 0);
+            const ausenciasRich =
+              typeof ausenciasRaw === 'object' && ausenciasRaw !== null
+                ? ausenciasRaw
+                : null;
+            if (horasExtra === 0 && totalAusencias === 0) return null;
+            return (
+              <div className="flex items-start gap-3 p-4 rounded-lg border border-amber-400/40 bg-amber-50/60 dark:bg-amber-950/20">
+                <TrendingDown className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div className="flex-1 text-sm">
+                  <p className="font-semibold text-amber-800 dark:text-amber-300">
+                    Registros pendientes de aprobar
+                  </p>
+                  <p className="text-amber-700 dark:text-amber-400 mt-1">
+                    Este colaborador tiene{' '}
+                    {horasExtra > 0 && (
+                      <strong>
+                        {horasExtra} hora{horasExtra !== 1 ? 's' : ''} extra
+                      </strong>
+                    )}
+                    {horasExtra > 0 && totalAusencias > 0 && ' y '}
+                    {totalAusencias > 0 && (
+                      <strong>
+                        {totalAusencias} ausencia{totalAusencias !== 1 ? 's' : ''}
+                      </strong>
+                    )}
+                    {' '}en estado PENDIENTE — no se incluyen en el cálculo hasta que
+                    se aprueben desde la planilla correspondiente.
+                  </p>
+                  {ausenciasRich && (ausenciasRich.fechas?.length ?? 0) > 0 && (
+                    <p className="text-xs text-amber-700/90 dark:text-amber-400/90 mt-2">
+                      Fechas: {ausenciasRich.fechas!.join(', ')}
+                      {(ausenciasRich.impacto_estimado ?? 0) > 0 && (
+                        <>
+                          {' · '}Impacto estimado si se aprueban:{' '}
+                          <strong>
+                            ${ausenciasRich.impacto_estimado!.toLocaleString('es-CO')}
+                          </strong>
+                        </>
+                      )}
+                    </p>
                   )}
-                  {preview.pendientes_por_aprobar.horas_extra > 0
-                    && preview.pendientes_por_aprobar.ausencias > 0
-                    && ' y '}
-                  {preview.pendientes_por_aprobar.ausencias > 0 && (
-                    <strong>
-                      {preview.pendientes_por_aprobar.ausencias} ausencia
-                      {preview.pendientes_por_aprobar.ausencias !== 1 ? 's' : ''}
-                    </strong>
-                  )}
-                  {' '}en estado PENDIENTE — no se incluyen en el cálculo hasta que
-                  se aprueben desde la planilla correspondiente.
-                </p>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* §4.4 — Alerta de gajos sin despachar. Solo mostrar las cosechas
               con `alerta_despacho = "ALTA"` (las BAJA son clavijos esperados
@@ -695,6 +742,11 @@ export default function LiquidarColaborador() {
               </div>
             </div>
           )}
+
+          {/* §9.9 — Advertencias no bloqueantes del preview (calendario
+              desactualizado, recargo desactualizado, descanso perdido).
+              Se rederivan en cada re-liquidación así que no se congelan. */}
+          <AdvertenciasBanner items={preview.advertencias} size="sm" />
 
           {/* ── DEVENGADO ─────────────────────────────────────────────── */}
           <div>
@@ -742,6 +794,48 @@ export default function LiquidarColaborador() {
                   <span className="font-semibold">${preview.total_recargos.toLocaleString('es-CO')}</span>
                 </div>
               )}
+              {/* §9.9 — Descansos. `total_*` puede venir 0 cuando no hubo
+                  dominicales/festivos en el rango o cuando el backend responde
+                  en versión antigua (campos undefined). En ambos casos no
+                  se muestra la fila. */}
+              {(preview.total_dominicales ?? 0) > 0 && (
+                <div className="flex justify-between px-4 py-3 border-b border-success/10">
+                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Dominicales
+                    {(preview.dias_descanso_ganados ?? 0) > 0 && (
+                      <span className="ml-2 normal-case tracking-normal text-muted-foreground/80">
+                        · {preview.dias_descanso_ganados} día{preview.dias_descanso_ganados !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </span>
+                  <span className="font-semibold">
+                    ${(preview.total_dominicales ?? 0).toLocaleString('es-CO')}
+                  </span>
+                </div>
+              )}
+              {(preview.total_festivos ?? 0) > 0 && (
+                <div className="flex justify-between px-4 py-3 border-b border-success/10">
+                  <span className="text-xs uppercase tracking-wide text-muted-foreground">Festivos</span>
+                  <span className="font-semibold">
+                    ${(preview.total_festivos ?? 0).toLocaleString('es-CO')}
+                  </span>
+                </div>
+              )}
+              {((preview.total_recargo_dominical ?? 0) + (preview.total_recargo_festivo ?? 0)) > 0 && (
+                <div className="flex justify-between px-4 py-3 border-b border-success/10">
+                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Recargo dominical / festivo
+                    {preview.porcentaje_recargo_dominical != null && (
+                      <span className="ml-2 normal-case tracking-normal text-muted-foreground/80">
+                        · {preview.porcentaje_recargo_dominical}%
+                      </span>
+                    )}
+                  </span>
+                  <span className="font-semibold">
+                    ${((preview.total_recargo_dominical ?? 0) + (preview.total_recargo_festivo ?? 0)).toLocaleString('es-CO')}
+                  </span>
+                </div>
+              )}
               {preview.total_incapacidades > 0 && (
                 <div className="flex justify-between px-4 py-3 border-b border-success/10">
                   <span className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -775,6 +869,26 @@ export default function LiquidarColaborador() {
               )}
             </div>
           </div>
+
+          {/* §9.9 — Descansos por día. Componente compartido con el
+              desprendible (mismo shape, distinta variante visual). */}
+          <DetalleDescansos
+            items={preview.detalle_dominicales_festivos}
+            diasPerdidos={preview.dias_descanso_perdidos ?? undefined}
+            totalDescansoPerdido={preview.total_descanso_perdido ?? undefined}
+            formatMoney={(n) => `$${n.toLocaleString('es-CO')}`}
+            titulo="Descansos por día"
+          />
+
+          {/* PLAN_AUSENCIAS_IMPLICITAS §1.3 — Faltas injustificadas por
+              no-registro en la planilla. Solo aparece si el backend adjunta
+              el detalle (versión antigua = undefined = nada). */}
+          <FaltasInjustificadas
+            items={preview.detalle_faltas_injustificadas}
+            total={preview.dias_injustificados}
+            formatMoney={(n) => `$${n.toLocaleString('es-CO')}`}
+            titulo="Faltas sin novedad registrada"
+          />
 
           {/* ── DEDUCCIONES ───────────────────────────────────────────── */}
           {!esOperario && (

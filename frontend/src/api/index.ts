@@ -142,3 +142,9 @@ export type {
 
 export { superAdminApi } from './superAdmin';
 export type { Tenant, CreateTenantPayload, GlobalUser, AuditoriaEntry } from './superAdmin';
+
+// §14.1 Calendario de festivos (Configuración → Festivos).
+export { festivosApi } from './festivos';
+export type {
+  Festivo, FestivoOrigen, FestivoPayload, FestivosResponse, FestivoVerificacion,
+} from './festivos';

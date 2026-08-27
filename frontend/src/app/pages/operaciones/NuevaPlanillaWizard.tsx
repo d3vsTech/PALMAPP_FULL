@@ -11,6 +11,10 @@ import { Badge } from '../../components/ui/badge';
 import { MultiSelectColaboradores } from '../../components/operaciones/MultiSelectColaboradores';
 import { SelectActividadLabor } from '../../components/operaciones/SelectActividadLabor';
 import {
+  DialogoFaltantesPostAprobar,
+  type ColaboradorFaltante,
+} from '../../components/operaciones/DialogoFaltantesPostAprobar';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -300,6 +304,12 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
    * todas formas" desde el modal, ejecutamos la acción original.
    */
   const [accionPendiente, setAccionPendiente] = useState<'aprobar' | 'guardar' | null>(null);
+
+  // §7.2 — Cuando POST /aprobar responde con la advertencia
+  // PLANILLA_CON_PERSONAL_SIN_REGISTRAR, abrimos un diálogo para ofrecer el
+  // registro masivo de novedad. La planilla ya quedó APROBADA en el backend
+  // — este flujo solo sirve para cerrar el círculo con los faltantes.
+  const [faltantesPostAprobar, setFaltantesPostAprobar] = useState<ColaboradorFaltante[] | null>(null);
 
   // ── Estado planilla ID + loading ─────────────────────────────────────────
   const [planillaId, setPlanillaId] = useState<number | null>(idParam ? Number(idParam) : null);
@@ -2027,6 +2037,16 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         toast.success('Planilla aprobada');
       }
       setEstadoPlanilla('APROBADA');
+
+      // §7.2 — La planilla queda APROBADA aunque haya faltantes. Si el backend
+      // los reporta en `advertencias[]`, abrimos el diálogo de registro masivo.
+      const advFaltantes = (res.advertencias ?? []).find(
+        (a) => a.code === 'PLANILLA_CON_PERSONAL_SIN_REGISTRAR',
+      );
+      const faltantes = advFaltantes?.detalle?.colaboradores_faltantes ?? [];
+      if (faltantes.length > 0) {
+        setFaltantesPostAprobar(faltantes);
+      }
     } catch (err: any) {
       toast.error(err?.message ?? 'Error al aprobar');
     } finally {
@@ -5567,6 +5587,24 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* §7.2 — Diálogo post-aprobar cuando el backend reporta faltantes.
+          La planilla YA está APROBADA; este flujo es para registrar la novedad
+          en masa vía POST /ausencias/faltantes (funciona post-cierre). */}
+      {faltantesPostAprobar && planillaId !== null && (
+        <DialogoFaltantesPostAprobar
+          open={faltantesPostAprobar !== null}
+          onOpenChange={(open) => {
+            if (!open) setFaltantesPostAprobar(null);
+          }}
+          operacionId={planillaId}
+          faltantes={faltantesPostAprobar}
+          motivosMap={motivosMap}
+          onCerrado={() => {
+            setFaltantesPostAprobar(null);
+          }}
+        />
+      )}
     </div>
   );
 }

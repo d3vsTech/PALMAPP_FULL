@@ -800,6 +800,15 @@ export default function NuevaNominaWizard() {
           toast.error('Cambio bloqueado: algún colaborador quedaría en dos nóminas con días cruzados');
           return false;
         }
+        if (e.code === NominaErrorCodes.CALENDARIO_FESTIVOS_AUSENTE) {
+          // §9.9 — El backend adjunta el comando artisan literal en el mensaje.
+          // Lo mostramos en un toast largo para que el usuario pueda copiarlo.
+          toast.error(
+            e.message ?? 'Falta el calendario de festivos para ese año. Pide al soporte que lo materialice.',
+            { duration: 15000 },
+          );
+          return false;
+        }
         toast.error(e.message ?? 'No se pudo actualizar la nómina');
         return false;
       } finally {
@@ -829,6 +838,11 @@ export default function NuevaNominaWizard() {
         }
       } else if (e.code === NominaErrorCodes.COLABORADOR_EN_NOMINA_SOLAPADA) {
         toast.error('Alguno de los colaboradores ya está en otra nómina con días cruzados');
+      } else if (e.code === NominaErrorCodes.CALENDARIO_FESTIVOS_AUSENTE) {
+        toast.error(
+          e.message ?? 'Falta el calendario de festivos para ese año. Pide al soporte que lo materialice.',
+          { duration: 15000 },
+        );
       } else {
         toast.error(e.message ?? 'No se pudo crear la nómina');
       }
