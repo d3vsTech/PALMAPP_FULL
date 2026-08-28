@@ -266,11 +266,6 @@ function ColaboradorChip({
           {col.terceroNombre}
         </span>
       )}
-      {esFijo && (
-        <span className="ml-1.5 text-[9px] font-semibold uppercase tracking-wide bg-slate-200 text-slate-700 rounded px-1 py-[1px]">
-          FIJO · $0
-        </span>
-      )}
     </Badge>
   );
 }
@@ -2975,14 +2970,6 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                                 Tercero · {col.terceroNombre}
                                               </span>
                                             )}
-                                            {!col.terceroNombre && col.modalidad_pago === 'FIJO' && (
-                                              <span
-                                                className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-slate-200 text-slate-700 border border-slate-300 font-medium align-middle"
-                                                title="Empleado con salario fijo — su jornal diario queda en $0. La nómina lo paga por salario_base."
-                                              >
-                                                FIJO · $0
-                                              </span>
-                                            )}
                                           </span>
                                           <button
                                             type="button"
@@ -3382,14 +3369,6 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                                 Tercero · {col.terceroNombre}
                                               </span>
                                             )}
-                                            {!col.terceroNombre && col.modalidad_pago === 'FIJO' && (
-                                              <span
-                                                className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-slate-200 text-slate-700 border border-slate-300 font-medium align-middle"
-                                                title="Empleado con salario fijo — su jornal diario queda en $0. La nómina lo paga por salario_base."
-                                              >
-                                                FIJO · $0
-                                              </span>
-                                            )}
                                           </span>
                                           <button
                                             type="button"
@@ -3579,14 +3558,6 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                                 title={`Operario del tercero ${col.terceroNombre}`}
                                               >
                                                 Tercero · {col.terceroNombre}
-                                              </span>
-                                            )}
-                                            {!col.terceroNombre && col.modalidad_pago === 'FIJO' && (
-                                              <span
-                                                className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-slate-200 text-slate-700 border border-slate-300 font-medium align-middle"
-                                                title="Empleado con salario fijo — su jornal diario queda en $0. La nómina lo paga por salario_base."
-                                              >
-                                                FIJO · $0
                                               </span>
                                             )}
                                           </span>
@@ -3849,14 +3820,6 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                                 Tercero · {col.terceroNombre}
                                               </span>
                                             )}
-                                            {!col.terceroNombre && col.modalidad_pago === 'FIJO' && (
-                                              <span
-                                                className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-slate-200 text-slate-700 border border-slate-300 font-medium align-middle"
-                                                title="Empleado con salario fijo — su jornal diario queda en $0. La nómina lo paga por salario_base."
-                                              >
-                                                FIJO · $0
-                                              </span>
-                                            )}
                                           </span>
                                           <button
                                             type="button"
@@ -4063,14 +4026,6 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                                                 title={`Operario del tercero ${col.terceroNombre}`}
                                               >
                                                 Tercero · {col.terceroNombre}
-                                              </span>
-                                            )}
-                                            {!col.terceroNombre && col.modalidad_pago === 'FIJO' && (
-                                              <span
-                                                className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-slate-200 text-slate-700 border border-slate-300 font-medium align-middle"
-                                                title="Empleado con salario fijo — su jornal diario queda en $0. La nómina lo paga por salario_base."
-                                              >
-                                                FIJO · $0
                                               </span>
                                             )}
                                           </span>

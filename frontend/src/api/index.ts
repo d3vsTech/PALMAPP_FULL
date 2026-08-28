@@ -14,8 +14,9 @@ export type {
   ForgotPasswordPayload, ResetPasswordPayload,
 } from './auth';
 
-export { plantacionApi } from './plantacion';
-export type { Predio, Lote, Sublote, Palma, PredioPayload, LotePayload } from './plantacion';
+// Plantación — reexporta los apis que sí existen en plantacion.ts.
+// (El símbolo agregado `plantacionApi` nunca existió; se quitó.)
+export { prediosApi, lotesApi, sublotesApi, palmasApi, lineasApi } from './plantacion';
 
 export { usuariosApi } from './usuarios';
 export type { UsuarioTenant, CreateUsuarioPayload, UpdateUsuarioPayload } from './usuarios';
