@@ -104,6 +104,7 @@ export type {
   CrearRangoNumeracionPayload,
   EditarRangoNumeracionPayload,
   TipoDocumentoRango,
+  TipoEliminacionRango,
   RangoNumeracionErrorCode,
 } from './rangosNumeracion';
 

@@ -6,10 +6,15 @@
  * `numero_hasta` + `numero_actual` + `descripcion` + `estado`.
  *
  * Reglas (§18):
- *  - `tipo_documento` y `prefijo` son INMUTABLES tras crear.
+ *  - `tipo_documento`, `prefijo` y `numero_desde` son INMUTABLES tras crear.
+ *    Solo se editan `numero_hasta`, `numero_actual`, `descripcion` y `estado`.
  *  - `numero_actual` no se puede editar si el rango tiene viajes activos
- *    (backend responde 409 `RANGO_CON_VIAJES`).
- *  - `DELETE` es soft (marca `estado = false`).
+ *    (backend responde 409 `RANGO_CON_VIAJES`), por eso solo lo enviamos
+ *    cuando cambió de verdad.
+ *  - `DELETE` decide entre borrado lógico (el rango emitió remisiones que
+ *    luego se anularon → queda la fila con `deleted_at`) y físico (nunca
+ *    emitió nada → la fila desaparece). Con viajes ACTIVOS no se elimina.
+ *    El switch `estado` es lo que retira un rango de circulación sin borrarlo.
  *  - El uso del rango en viajes es OPCIONAL — si un viaje no incluye
  *    `rango_numeracion_id`, el backend usa el formato automático
  *    `REM-{YYYY}-{NNN}`.
@@ -95,7 +100,8 @@ export function RangosNumeracionTab() {
     try {
       // Pedimos hasta 100 rangos — la UI hace filtrado y paginación local
       // porque el volumen típico es muy pequeño (< 20 por finca).
-      // `estado` sin valor trae activos e inactivos.
+      // `estado` sin valor trae activos e inactivos; los eliminados quedan
+      // fuera salvo que se pida `incluir_eliminados: true`.
       const res = await rangosNumeracionApi.listar({ per_page: 100 });
       setRangos(res.data ?? []);
     } catch (err: any) {
@@ -225,20 +231,20 @@ export function RangosNumeracionTab() {
     if (!validar()) return;
     setGuardando(true);
 
-    // Nota §18: `tipo_documento` y `prefijo` son inmutables tras crear;
-    // en edición solo enviamos los campos que la API acepta.
+    // Nota §18: `tipo_documento`, `prefijo` y `numero_desde` son inmutables
+    // tras crear — el backend los ignora, así que ni los mandamos.
     try {
       if (editando) {
-        const nuevoPrefijo = form.prefijo.trim().toUpperCase();
-        const nuevoDesde = parseInt(form.numero_desde);
+        const nuevoActual = parseInt(form.numero_actual);
         const res = await rangosNumeracionApi.editar(editando.id, {
-          // Solo enviamos prefijo/numero_desde si el usuario los cambió,
-          // así evitamos pisar el registro con campos que el backend §18
-          // podría rechazar cuando no hay diferencia real.
-          ...(nuevoPrefijo !== editando.prefijo ? { prefijo: nuevoPrefijo } : {}),
-          ...(nuevoDesde !== editando.numero_desde ? { numero_desde: nuevoDesde } : {}),
+          // `numero_actual` solo viaja si el usuario realmente lo cambió: si
+          // el rango ya tiene viajes activos el backend responde 409
+          // RANGO_CON_VIAJES, y mandarlo sin cambios haría rebotar hasta una
+          // edición inocente de la descripción.
+          ...(nuevoActual !== editando.numero_actual
+            ? { numero_actual: nuevoActual }
+            : {}),
           numero_hasta: parseInt(form.numero_hasta),
-          numero_actual: parseInt(form.numero_actual),
           descripcion: form.descripcion.trim() || null,
         });
         setRangos((prev) =>
@@ -284,9 +290,10 @@ export function RangosNumeracionTab() {
   };
 
   const toggleActivo = async (r: RangoNumeracion) => {
-    // PUT con solo `estado` — el backend valida y actualiza. No usamos
-    // DELETE porque queremos poder reactivar el rango después (los soft
-    // deletes solo aceptan un solo estado de baja).
+    // PUT con solo `estado` — §18: es la forma de retirar un rango de
+    // circulación sin eliminarlo. Deja de aparecer en `/select` (o sea, al
+    // crear viajes) pero sigue en el listado y se puede reactivar. El DELETE
+    // en cambio lo saca del listado para siempre.
     setToggleandoId(r.id);
     const nuevoEstado = !r.estado;
     try {
@@ -301,37 +308,36 @@ export function RangosNumeracionTab() {
   };
 
   const eliminarRango = (r: RangoNumeracion) => {
-    // §18: DELETE es soft (marca `estado = false`). Si el rango ya está
-    // inactivo, refleja mejor la acción decir "Eliminar del listado".
-    // La UI local lo saca del listado; el backend sigue conservando el
-    // registro (mismo comportamiento que soft-delete idempotente).
-    const yaInactivo = !r.estado;
+    // §18: el DELETE decide solo entre borrado lógico y físico según los
+    // viajes que referencien el rango, y lo informa en `tipo_eliminacion`:
+    //  - viajes activos      → 409 RANGO_CON_VIAJES (ni se intenta borrar)
+    //  - solo viajes anulados → LOGICA  (queda la fila con `deleted_at`)
+    //  - sin viajes           → FISICA  (la fila desaparece)
+    // En los dos últimos casos el rango sale del listado y del /select, así
+    // que basta con recargar. El prefijo queda libre para reutilizarse: el
+    // índice único es parcial (`WHERE deleted_at IS NULL`).
     confirmDelete({
-      title: yaInactivo ? '¿Eliminar rango del listado?' : '¿Eliminar rango de numeración?',
-      description: yaInactivo
-        ? `El rango "${r.prefijo}" está inactivo. Se removerá del listado.`
-        : `Se inactivará el rango "${r.prefijo}". Los viajes ya emitidos con este rango conservan su remisión.`,
+      title: '¿Eliminar rango de numeración?',
+      description:
+        `Se eliminará el rango "${r.prefijo}" y dejará de estar disponible al crear viajes. ` +
+        'Los viajes ya emitidos con este rango conservan su remisión. ' +
+        'Si el rango tiene viajes activos no se podrá eliminar; en ese caso desactívalo con el switch.',
       confirmText: 'Eliminar',
       onConfirm: async () => {
         try {
-          await rangosNumeracionApi.eliminar(r.id);
+          const res = await rangosNumeracionApi.eliminar(r.id);
           await recargar();
-          toast.success(yaInactivo ? 'Rango eliminado' : 'Rango inactivado');
+          toast.success(
+            res?.tipo_eliminacion === 'LOGICA'
+              ? `Rango "${r.prefijo}" eliminado. Se conserva como respaldo de las remisiones anuladas que emitió.`
+              : `Rango "${r.prefijo}" eliminado.`,
+          );
         } catch (err: any) {
           const code = err?.code ?? '';
           if (code === RangosNumeracionErrorCodes.RANGO_CON_VIAJES) {
             toast.error(
-              'No se puede eliminar: el rango tiene viajes asociados. Puedes desactivarlo con el switch en su lugar.',
+              'No se puede eliminar: el rango tiene viajes activos, hay documentos en circulación. Desactívalo con el switch para sacarlo del listado de creación de viajes.',
             );
-          } else if (yaInactivo) {
-            // Fallback pragmático: si el backend rechaza el DELETE de un
-            // rango ya inactivo, lo sacamos del listado local igual — para
-            // el usuario "eliminar un inactivo" ya no debería tener efectos
-            // colaterales sobre viajes existentes (los viajes conservan la
-            // remisión emitida). No perdemos consistencia porque en el
-            // próximo recargar() el backend sigue mandando lo que tenga.
-            setRangos((prev) => prev.filter((x) => x.id !== r.id));
-            toast.success('Rango removido del listado');
           } else {
             toast.error(err?.message ?? 'No se pudo eliminar el rango');
           }
@@ -552,11 +558,18 @@ export function RangosNumeracionTab() {
                 onChange={(e) => setCampo('prefijo', e.target.value.toUpperCase())}
                 placeholder="Ej: R-A"
                 maxLength={20}
-                className={erroresForm.prefijo ? 'border-destructive' : ''}
+                // §18: inmutable tras crear — garantiza la trazabilidad de los
+                // documentos ya emitidos con este prefijo.
+                disabled={!!editando}
+                className={`${editando ? 'bg-muted' : ''} ${erroresForm.prefijo ? 'border-destructive' : ''}`}
               />
-              {erroresForm.prefijo && (
+              {erroresForm.prefijo ? (
                 <p className="text-xs text-destructive">{erroresForm.prefijo}</p>
-              )}
+              ) : editando ? (
+                <p className="text-xs text-muted-foreground">
+                  El prefijo no se puede cambiar después de crear el rango.
+                </p>
+              ) : null}
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -566,7 +579,9 @@ export function RangosNumeracionTab() {
                 </Label>
                 <Input
                   id="numero-desde"
-                  type="number" step="0.001"
+                  // Consecutivos: enteros. `step={1}` evita que el spinner y
+                  // la validación nativa admitan decimales.
+                  type="number" step={1}
                   min={1}
                   value={form.numero_desde}
                   onChange={(e) => {
@@ -578,11 +593,16 @@ export function RangosNumeracionTab() {
                       setCampo('numero_actual', v);
                     }
                   }}
-                  className={erroresForm.numero_desde ? 'border-destructive' : ''}
+                  // §18: solo `numero_hasta`, `numero_actual`, `descripcion` y
+                  // `estado` son editables. El inicio del rango queda fijo.
+                  disabled={!!editando}
+                  className={`${editando ? 'bg-muted' : ''} ${erroresForm.numero_desde ? 'border-destructive' : ''}`}
                 />
-                {erroresForm.numero_desde && (
+                {erroresForm.numero_desde ? (
                   <p className="text-xs text-destructive">{erroresForm.numero_desde}</p>
-                )}
+                ) : editando ? (
+                  <p className="text-xs text-muted-foreground">No editable.</p>
+                ) : null}
               </div>
 
               <div className="space-y-1.5">
@@ -591,7 +611,7 @@ export function RangosNumeracionTab() {
                 </Label>
                 <Input
                   id="numero-hasta"
-                  type="number" step="0.001"
+                  type="number" step={1}
                   min={1}
                   value={form.numero_hasta}
                   onChange={(e) => setCampo('numero_hasta', e.target.value)}
@@ -609,7 +629,7 @@ export function RangosNumeracionTab() {
               </Label>
               <Input
                 id="numero-actual"
-                type="number" step="0.001"
+                type="number" step={1}
                 min={1}
                 value={form.numero_actual}
                 onChange={(e) => {
@@ -625,7 +645,7 @@ export function RangosNumeracionTab() {
               )}
               <p className="text-xs text-muted-foreground">
                 Consecutivo que se asignará al próximo documento.
-                {editando && ' Si el rango ya tiene viajes emitidos, el backend rechaza el cambio.'}
+                {editando && ' Solo se puede cambiar mientras el rango no tenga viajes activos emitidos.'}
               </p>
             </div>
 
