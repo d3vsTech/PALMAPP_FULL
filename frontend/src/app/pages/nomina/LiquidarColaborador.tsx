@@ -543,7 +543,28 @@ export default function LiquidarColaborador() {
                             <th className="text-left p-2 font-semibold text-muted-foreground">Cosecha</th>
                           )}
                           {cat.filas.some((f) => f.racimos !== undefined) && (
-                            <th className="text-right p-2 font-semibold text-muted-foreground">Racimos</th>
+                            <th
+                              className="text-right p-2 font-semibold text-muted-foreground"
+                              title="Racimos reportados por la cuadrilla en campo. Cuando hay reconteo del viaje se muestra el ajuste."
+                            >
+                              Racimos
+                            </th>
+                          )}
+                          {cat.filas.some((f) => f.cuadrilla !== undefined) && (
+                            <th
+                              className="text-right p-2 font-semibold text-muted-foreground"
+                              title="Personas entre las que se reparte la cosecha"
+                            >
+                              Cuadrilla
+                            </th>
+                          )}
+                          {cat.filas.some((f) => f.racimos_empleado !== undefined) && (
+                            <th
+                              className="text-right p-2 font-semibold text-muted-foreground"
+                              title="Porción del empleado: floor(racimos_verificados / cuadrilla). Es lo que multiplica el jornal."
+                            >
+                              Racimos empleado
+                            </th>
                           )}
                           {cat.filas.some((f) => f.peso_kg !== undefined) && (
                             <th className="text-right p-2 font-semibold text-muted-foreground">Peso (kg)</th>
@@ -558,7 +579,21 @@ export default function LiquidarColaborador() {
                         </tr>
                       </thead>
                       <tbody>
-                        {cat.filas.map((f, i) => (
+                        {/* Ordenar por fecha ascendente. El backend devuelve
+                            las fechas ya formateadas como `dd/mm/yyyy` o como
+                            ISO — la función parsea ambas y cae al string si
+                            no reconoce el formato para no romper. */}
+                        {[...cat.filas].sort((a, b) => {
+                          const toDate = (raw?: string): number => {
+                            if (!raw) return 0;
+                            const m = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+                            if (m) return new Date(`${m[3]}-${m[2]}-${m[1]}T00:00:00`).getTime();
+                            const iso = raw.includes('T') ? new Date(raw) : new Date(raw + 'T00:00:00');
+                            const t = iso.getTime();
+                            return isNaN(t) ? 0 : t;
+                          };
+                          return toDate(a.fecha) - toDate(b.fecha);
+                        }).map((f, i) => (
                           <tr
                             key={i}
                             className={`border-b border-border last:border-0 ${
@@ -572,7 +607,38 @@ export default function LiquidarColaborador() {
                               <td className="p-2 whitespace-nowrap">{f.cosecha ?? '-'}</td>
                             )}
                             {cat.filas.some((x) => x.racimos !== undefined) && (
-                              <td className="p-2 text-right">{f.racimos ?? '-'}</td>
+                              <td className="p-2 text-right">
+                                {f.racimos ?? '-'}
+                                {/* §5.2 — Mostrar ajuste cuando el reconteo del
+                                    viaje difiere del reporte de campo. */}
+                                {f.racimos !== undefined
+                                  && f.racimos_verificados !== undefined
+                                  && f.racimos_verificados !== f.racimos && (
+                                  <span
+                                    className="text-amber-600 ml-1"
+                                    title="Reconteo del viaje (lo que efectivamente paga)"
+                                  >
+                                    → {f.racimos_verificados}
+                                  </span>
+                                )}
+                              </td>
+                            )}
+                            {cat.filas.some((x) => x.cuadrilla !== undefined) && (
+                              <td className="p-2 text-right text-muted-foreground">
+                                {f.cuadrilla ?? '-'}
+                              </td>
+                            )}
+                            {cat.filas.some((x) => x.racimos_empleado !== undefined) && (
+                              <td
+                                className="p-2 text-right font-medium"
+                                title={
+                                  f.promedio_liquidacion != null && f.precio_kg != null
+                                    ? `Jornal = ${f.racimos_empleado} × ${Number(f.promedio_liquidacion).toFixed(2)} × ${Number(f.precio_kg).toLocaleString('es-CO')}`
+                                    : undefined
+                                }
+                              >
+                                {f.racimos_empleado ?? '-'}
+                              </td>
                             )}
                             {cat.filas.some((x) => x.peso_kg !== undefined) && (
                               <td className="p-2 text-right">{f.peso_kg ?? '-'}</td>
@@ -590,6 +656,14 @@ export default function LiquidarColaborador() {
                         ))}
                       </tbody>
                     </table>
+                    {/* §5.2 — Nota aclaratoria SOLO para cosecha en cuadrilla:
+                        total_cosecha es del grupo, no del empleado. Aparece
+                        solo si al menos una fila trae `cuadrilla`. */}
+                    {cat.filas.some((f) => (f.cuadrilla ?? 0) > 1) && (
+                      <p className="text-xs text-muted-foreground italic px-2 py-2 border-t border-border/50">
+                        <strong>Nota:</strong> el valor bruto de cada cosecha corresponde a la cuadrilla completa. El jornal del colaborador se calcula sobre su porción (racimos empleado × promedio × precio).
+                      </p>
+                    )}
                   </div>
                 </div>
               );

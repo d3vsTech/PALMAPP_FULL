@@ -11,7 +11,7 @@
  * seleccionada. Se conserva la conexión al backend real (§13 API_VIAJES.md).
  */
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useLocation } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import {
@@ -39,6 +39,28 @@ function formatFechaCorta(fecha: string | null | undefined): string {
 
 export default function AjustesCosecha() {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Cuando la pantalla se abre desde la alerta del wizard/detalle de nómina
+  // (navigate con { state: { from: 'nomina', nominaId, paso } }), el botón
+  // "Volver" regresa a la nómina en vez de al listado de Viajes.
+  const navState = (location.state ?? null) as
+    | { from?: string; nominaId?: number | null; paso?: number }
+    | null;
+  const vieneDeNomina = navState?.from === 'nomina' && !!navState?.nominaId;
+  const volverLabel = vieneDeNomina ? 'Volver a Nómina' : 'Volver a Viajes';
+  const volverAlOrigen = () => {
+    if (vieneDeNomina && navState?.nominaId) {
+      // Al wizard en modo edición; el `state.from` le dice al wizard que
+      // restaure el paso desde donde vino (sessionStorage). Sin ese flag,
+      // el wizard arranca en paso 1 (comportamiento normal de "Editar").
+      navigate(`/nomina/${navState.nominaId}/editar`, {
+        state: { from: 'ajustes-cosecha' },
+      });
+    } else {
+      navigate('/viajes');
+    }
+  };
 
   const [items, setItems] = useState<CosechaConAjustePendiente[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -140,11 +162,11 @@ export default function AjustesCosecha() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => navigate('/viajes')}
+          onClick={volverAlOrigen}
           className="mb-2 gap-2 -ml-2"
         >
           <ArrowLeft className="h-4 w-4" />
-          Volver a Viajes
+          {volverLabel}
         </Button>
         <h1>Ajustes de cosecha</h1>
         <p className="text-muted-foreground mt-1">
@@ -170,8 +192,8 @@ export default function AjustesCosecha() {
             <p className="text-sm text-muted-foreground mt-1">
               No hay cosechas con gajos pendientes que requieran ajuste.
             </p>
-            <Button onClick={() => navigate('/viajes')} className="mt-4">
-              Volver a Viajes
+            <Button onClick={volverAlOrigen} className="mt-4">
+              {volverLabel}
             </Button>
           </CardContent>
         </Card>

@@ -85,6 +85,8 @@ interface FormData {
   aplicaSubsidioTransporte: boolean;
   fechaContratacion: string;
   fechaFinalizacion: string;
+  // Detalle de finalización — se despliega cuando hay fechaFinalizacion.
+  motivoFinalizacion: string;
   // Seguridad Social
   eps: string;
   arl: string;
@@ -144,7 +146,7 @@ const FORM_INICIAL: FormData = {
   estado: true,
   primerApellido: '', segundoApellido: '', primerNombre: '', segundoNombre: '',
   tipoDocumento: 'CC', numeroDocumento: '', fechaExpedicion: '', fechaNacimiento: '', lugarExpedicion: '',
-  cargo: '', predioAsignado: '', modalidadPago: 'FIJO', salarioBase: 0, aplicaSubsidioTransporte: false, fechaContratacion: '', fechaFinalizacion: '',
+  cargo: '', predioAsignado: '', modalidadPago: 'FIJO', salarioBase: 0, aplicaSubsidioTransporte: false, fechaContratacion: '', fechaFinalizacion: '', motivoFinalizacion: '',
   eps: '', arl: '', fondoPension: '', fondoCesantias: '', cajaCompensacion: '',
   tallaCamisa: '', tallaPantalon: '', tallaCalzado: '',
   banco: '', tipoCuenta: 'AHORROS', numeroCuenta: '',
@@ -243,6 +245,14 @@ export default function NuevoColaboradorWizard() {
 
   // Documentos (solo edición)
   const [documentos, setDocumentos] = useState<any[]>([]);
+  // Soporte documental de finalización de contrato — solo-cliente por ahora.
+  const [soporteFinalizacion, setSoporteFinalizacion] = useState<{
+    nombre: string;
+    tipo: string;
+    fecha: string;
+    tamaño: string;
+    url: string;
+  } | null>(null);
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState(false);
 
@@ -381,6 +391,7 @@ export default function NuevoColaboradorWizard() {
                 : false),
             fechaContratacion: toDateInput(d.fecha_ingreso),
             fechaFinalizacion: toDateInput(d.fecha_retiro),
+            motivoFinalizacion: (d as any).motivo_retiro ?? '',
             eps: d.eps ?? '',
             arl: d.arl ?? '',
             fondoPension: d.fondo_pension ?? '',
@@ -773,6 +784,11 @@ export default function NuevoColaboradorWizard() {
     if (formData.lugarExpedicion.trim())           body.lugar_expedicion             = formData.lugarExpedicion.trim();
     if (formData.predioAsignado)                   body.predio_id                    = Number(formData.predioAsignado);
     if (formData.fechaFinalizacion)                body.fecha_retiro                 = formData.fechaFinalizacion;
+    // Motivo de la finalización — solo si hay fecha. Backend lo ignora si aún
+    // no lo soporta; cuando lo soporte, el UI ya lo está mandando.
+    if (formData.fechaFinalizacion && formData.motivoFinalizacion) {
+      body.motivo_retiro = formData.motivoFinalizacion;
+    }
     if (formData.eps.trim())                       body.eps                          = formData.eps.trim();
     if (formData.arl.trim())                       body.arl                          = formData.arl.trim();
     if (formData.fondoPension.trim())              body.fondo_pension                = formData.fondoPension.trim();
@@ -1263,8 +1279,9 @@ export default function NuevoColaboradorWizard() {
                   </div>
                 </div>
 
-                {/* Grid 3 columnas (V.10) — Subsidio · Fecha Contratación · Fecha Finalización */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Grid 2 columnas — Subsidio · Fecha Contratación. La Fecha
+                    de Finalización pasa abajo a su propia sección con detalle. */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="aplicaSubsidioTransporte">Subsidio de Transporte</Label>
                     <Select
@@ -1285,7 +1302,7 @@ export default function NuevoColaboradorWizard() {
 
                   <div className="space-y-2">
                     <Label htmlFor="fechaContratacion">
-                      Fecha de Contratación <span className="text-destructive">*</span>
+                      Fecha de Contratación *
                     </Label>
                     <Input
                       id="fechaContratacion"
@@ -1294,6 +1311,18 @@ export default function NuevoColaboradorWizard() {
                       onChange={(e) => handleInputChange('fechaContratacion', e.target.value)}
                     />
                   </div>
+                </div>
+
+                {/* Sección "Finalización de Contrato" — visible siempre (crear
+                    y editar). Al poner una fecha, se despliega el bloque rojo
+                    con motivo + soporte documental. */}
+                <div className="pt-5 mt-2 border-t border-border space-y-5">
+                  <div>
+                    <h3 className="font-semibold text-sm text-foreground">Finalización de Contrato</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Si el contrato se termina antes de la fecha pactada, registra la fecha, el motivo y adjunta el soporte.
+                    </p>
+                  </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="fechaFinalizacion">Fecha de Finalización</Label>
@@ -1301,9 +1330,117 @@ export default function NuevoColaboradorWizard() {
                       id="fechaFinalizacion"
                       type="date"
                       value={formData.fechaFinalizacion}
-                      onChange={(e) => handleInputChange('fechaFinalizacion', e.target.value)}
+                      onChange={(e) => {
+                        handleInputChange('fechaFinalizacion', e.target.value);
+                        if (!e.target.value) {
+                          handleInputChange('motivoFinalizacion', '');
+                          setSoporteFinalizacion(null);
+                        }
+                      }}
                     />
                   </div>
+
+                  {formData.fechaFinalizacion && (
+                    <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 space-y-4">
+                      <div className="flex items-start gap-2">
+                        <div className="h-5 w-5 rounded-full bg-destructive/15 flex items-center justify-center shrink-0 mt-0.5">
+                          <span className="text-destructive text-xs font-bold">!</span>
+                        </div>
+                        <p className="text-xs text-destructive font-medium">
+                          Para guardar con esta fecha de finalización debes registrar el motivo y adjuntar el soporte documental.
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="motivoFinalizacion">
+                          Motivo de finalización *
+                        </Label>
+                        <Select
+                          value={formData.motivoFinalizacion}
+                          onValueChange={(v) => handleInputChange('motivoFinalizacion', v)}
+                        >
+                          <SelectTrigger id="motivoFinalizacion">
+                            <SelectValue placeholder="Selecciona el motivo..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="renuncia">Renuncia voluntaria</SelectItem>
+                            <SelectItem value="despido_justa">Despido con justa causa</SelectItem>
+                            <SelectItem value="despido_sin_justa">Despido sin justa causa</SelectItem>
+                            <SelectItem value="mutuo_acuerdo">Mutuo acuerdo</SelectItem>
+                            <SelectItem value="vencimiento">Vencimiento de contrato</SelectItem>
+                            <SelectItem value="abandono">Abandono de cargo</SelectItem>
+                            <SelectItem value="otro">Otro</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>
+                          Soporte documental *
+                        </Label>
+                        {soporteFinalizacion ? (
+                          <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-background">
+                            <div className="flex items-center gap-3">
+                              <FileText className="h-8 w-8 text-primary shrink-0" />
+                              <div>
+                                <p className="text-sm font-medium">{soporteFinalizacion.nombre}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {soporteFinalizacion.fecha} · {soporteFinalizacion.tamaño}
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setSoporteFinalizacion(null)}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div>
+                            <input
+                              type="file"
+                              id="upload-soporte-finalizacion"
+                              className="hidden"
+                              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                if (file.size > 10 * 1024 * 1024) {
+                                  toast.error('El archivo supera los 10 MB');
+                                  return;
+                                }
+                                setSoporteFinalizacion({
+                                  nombre: file.name,
+                                  tipo: file.type.includes('pdf')
+                                    ? 'PDF'
+                                    : file.type.includes('image')
+                                      ? 'IMG'
+                                      : 'DOC',
+                                  fecha: new Date().toISOString().split('T')[0],
+                                  tamaño: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
+                                  url: URL.createObjectURL(file),
+                                });
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => document.getElementById('upload-soporte-finalizacion')?.click()}
+                              className="w-full flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors px-4 py-5 cursor-pointer"
+                            >
+                              <Upload className="h-6 w-6 text-muted-foreground" />
+                              <div className="text-center">
+                                <p className="text-sm font-medium text-foreground">Adjuntar soporte</p>
+                                <p className="text-xs text-muted-foreground">PDF, DOC o imagen (máx. 10 MB)</p>
+                              </div>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
               </CardContent>

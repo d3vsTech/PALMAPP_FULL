@@ -619,14 +619,47 @@ export interface FilaResumenTrabajo {
   lote?: string;
   sublote?: string;
   cosecha?: string;
+  /**
+   * §5.2 — Racimos REPORTADOS en campo por la cuadrilla completa. Es el número
+   * bruto de entrada; la liquidación real usa `racimos_verificados`.
+   */
   racimos?: number;
+  /** Promedio kg/gajo snapshot (informativo). */
   promedio_kg?: number;
   peso_kg?: number;
   precio_kg?: number;
+  /**
+   * §5.2 — Valor BRUTO de la cosecha ENTERA (cuadrilla completa). NO es lo
+   * que cobra el colaborador: usa el promedio snapshot y `racimos`, mientras
+   * que `jornal` usa `promedio_liquidacion` y `racimos_verificados`. Son dos
+   * varas distintas a propósito — no derivar `jornal` de esto.
+   */
   total_cosecha?: number;
+  /** §5.2 — Lo que efectivamente cobra ESTE empleado. Pintar tal cual. */
   jornal: number;
   palmas?: number;
   descripcion?: string;
+
+  // ─── §5.2 campos nuevos (opcionales por retro-compat) ─────────────────
+  /**
+   * Conteo del RECONTEO del viaje. Es lo que efectivamente PAGA (a diferencia
+   * de `racimos`, que es lo reportado). Si difiere, el frontend debería
+   * mostrar el ajuste (p.ej. "412 → 415").
+   */
+  racimos_verificados?: number;
+  /** N personas entre las que se reparte la cosecha. */
+  cuadrilla?: number;
+  /**
+   * Porción del empleado: `floor(racimos_verificados / cuadrilla)`. Es la
+   * cifra que multiplica el jornal.
+   */
+  racimos_empleado?: number;
+  /**
+   * Promedio kg/gajo que se usó al liquidar. Puede ser `null` cuando no
+   * hay conciliación disponible.
+   *   jornal = racimos_empleado × promedio_liquidacion × precio_kg
+   */
+  promedio_liquidacion?: number | null;
 }
 
 export interface CategoriaResumenTrabajo {
@@ -634,6 +667,10 @@ export interface CategoriaResumenTrabajo {
   subtotal_valor?: number;
   subtotal_jornal: number;
   subtotal_racimos?: number;
+  /** §5.2 — Suma de `racimos_verificados` de todas las filas de la categoría. */
+  subtotal_racimos_verificados?: number;
+  /** §5.2 — Suma de `racimos_empleado`. */
+  subtotal_racimos_empleado?: number;
   subtotal_peso?: number;
   subtotal_palmas?: number;
 }
@@ -849,9 +886,52 @@ export interface ValidacionCosechaItem {
   } | null;
   /** floor(gajos_efectivos / N) × promedio_efectivo_del_lote */
   kg_trabajado: number;
-  /** peso_calculado_empleado del viaje, o fallback legacy, o 0. */
+  /**
+   * §4.6 — Solo viajes FINALIZADOS con `fecha_viaje` DENTRO del rango de la
+   * nómina. Ya no incluye viajes despachados fuera del período; esos se
+   * conciliarán en la nómina siguiente. `0` cuando no hay medición aplicable.
+   */
   kg_extractora: number;
-  diferencia_kg: number;
+  /**
+   * §4.6 — Puede ser `null` cuando la fila NO es conciliable en este período
+   * (típicamente `despachado_fuera_del_periodo = true`). `0` = cuadró; `null`
+   * = no aplica acá. La UI debe pintar `—` cuando es `null`, nunca `0`.
+   */
+  diferencia_kg: number | null;
+  // ─── Campos §4.6 breaking change (opcionales por retro-compat) ────────
+  /** `Y-m-d` del viaje vinculado, o `null` si no hay. */
+  fecha_viaje?: string | null;
+  /** `true` si el viaje llevaba un solo lote (medición real, no estimación). */
+  viaje_homogeneo?: boolean;
+  /** El kg/gajo con el que se calculó `kg_trabajado` (para toda la quincena). */
+  promedio_efectivo?: number;
+  /** El kg/gajo que aplicó el viaje al calcular `kg_extractora`. `null` si no hay nada conciliable. */
+  promedio_aplicado?: number | null;
+  /**
+   * §4.6 — De dónde salió `kg_extractora`.
+   *  - `PESO_CONFIRMADO`: pesaje manual sobre la cosecha.
+   *  - `BASCULA`: viaje homogéneo → medición real.
+   *  - `MIXTO`: cosecha partida entre viaje homogéneo y mixto.
+   *  - `BASELINE`: viaje mixto → estimación (±6% típico).
+   *  - `SIN_DESPACHAR`: no pasó por báscula todavía.
+   *  - `FUERA_DEL_PERIODO`: se despachó, pero en otra quincena.
+   *  - `FALLBACK_SNAPSHOT`: dato legacy sin `promedio_aplicado`.
+   *  - `SIN_DATOS`: no hay medición aplicable.
+   */
+  origen_kg_extractora?:
+    | 'PESO_CONFIRMADO'
+    | 'BASCULA'
+    | 'MIXTO'
+    | 'BASELINE'
+    | 'SIN_DESPACHAR'
+    | 'FUERA_DEL_PERIODO'
+    | 'FALLBACK_SNAPSHOT'
+    | 'SIN_DATOS'
+    | string;
+  /** `true` si la cosecha se despachó pero todos sus viajes son de otra quincena. */
+  despachado_fuera_del_periodo?: boolean;
+  /** Porción de `kg_trabajado` que viajó en un camión de otra quincena. */
+  kg_trabajado_fuera_del_periodo?: number;
 }
 
 export interface ValidacionCosechaDetalleColaborador {
@@ -887,13 +967,38 @@ export interface ValidacionCosechaPromedioLote {
   promedio_manual: number | null;
   /** El que realmente se usa en los cálculos de pago y cierre. */
   promedio_efectivo: number;
+  /**
+   * §4.6 — Cuántas filas del AVG vienen de viaje homogéneo (medición real).
+   * `0` = **ninguna medición**: `promedio_efectivo` es baseline puro, los
+   * dos lados de la comparación usan el mismo número y la diferencia da 0
+   * de forma engañosa. La UI debe marcarlo (F4).
+   */
+  mediciones_bascula?: number;
+  /**
+   * §4.6 — Procedencia del promedio.
+   *  - `BASCULA`: todas las filas vienen de viajes homogéneos.
+   *  - `MIXTO`: mezcla mediciones + baseline.
+   *  - `BASELINE`: **cero mediciones** → cero falso.
+   */
+  origen?: 'BASCULA' | 'MIXTO' | 'BASELINE' | string;
 }
 
 /** Bundle calculado de comparación: lo registrado vs el reporte de la extractora. */
 export interface ValidacionCosechaBundle {
   total_kg_colaboradores: number;
   total_kg_extractora: number;
+  /**
+   * §4.6 — Fórmula NUEVA: `colaboradores − fuera_del_periodo − extractora`.
+   * Cambió de significado desde 2026-09; la UI muestra 4 líneas, no 3.
+   */
   diferencia_kg: number;
+  /**
+   * §4.6 — Kilos que se cortaron en este período pero se despacharon en
+   * viajes de otra quincena. **Se paga acá**; el peso se concilia allá.
+   */
+  total_kg_despachado_fuera_del_periodo?: number;
+  /** §4.6 — Cuántas cosechas cayeron en la situación anterior. */
+  cosechas_despachadas_fuera_del_periodo?: number;
   /**
    * §4.1 — Cosechas del período sin ningún viaje FINALIZADO tocándolas.
    */

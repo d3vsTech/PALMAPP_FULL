@@ -47,7 +47,7 @@ import { Badge } from '../../components/ui/badge';
 import {
   ArrowLeft, Calculator, Lock, DollarSign, TrendingUp, TrendingDown,
   FileText, Eye, Loader2, Trash2, Download, Users, Building2, Check,
-  Pencil, Printer,
+  Pencil, Printer, AlertCircle,
 } from 'lucide-react';
 import { AdvertenciasBanner } from '../../components/nomina/AdvertenciasBanner';
 import StatusBadge from '../../components/common/StatusBadge';
@@ -119,6 +119,12 @@ export default function NominaDetalle() {
   // personalizados que dejan huecos). Se lee del paso-4-checklist antes de
   // cerrar. Aviso, NO bloqueo — el hueco puede ser deliberado.
   const [descansosHuerfanosPreCierre, setDescansosHuerfanosPreCierre] = useState<
+    Array<{ fecha: string; tipo: 'DOMINICAL' | 'FESTIVO'; nombre: string }>
+  >([]);
+  // §3.6 — También lo cargamos AL ABRIR la nómina (no solo antes de cerrar)
+  // para que el liquidador sepa antes de entrar a liquidar que hay días de
+  // descanso en un hueco entre nóminas por cortes personalizados.
+  const [descansosHuerfanos, setDescansosHuerfanos] = useState<
     Array<{ fecha: string; tipo: 'DOMINICAL' | 'FESTIVO'; nombre: string }>
   >([]);
   const [confirmarEliminar, setConfirmarEliminar] = useState(false);
@@ -194,6 +200,12 @@ export default function NominaDetalle() {
       })
       .catch((err: ApiError) => toast.error(err.message ?? 'Error al cargar nómina'))
       .finally(() => setCargando(false));
+    // §3.6 — En paralelo, el checklist para saber si hay descansos huérfanos
+    // por cortes personalizados. No es bloqueante: si falla, no rompe nada.
+    nominaApi
+      .pasoCuatroChecklist(nominaId)
+      .then((res) => setDescansosHuerfanos(res.data.dias_descanso_fuera_de_rango ?? []))
+      .catch(() => setDescansosHuerfanos([]));
   };
 
   const cargarTerceros = async () => {
@@ -1181,6 +1193,45 @@ export default function NominaDetalle() {
           por Ley posterior. */}
       <AdvertenciasBanner items={nomina.advertencias} size="md" />
 
+      {/* §3.6 — Aviso de descansos huérfanos por CORTES PERSONALIZADOS que
+          dejan huecos DENTRO del rango de esta nómina. El backend devuelve
+          todos los descansos del mes que ninguna nómina cubre, pero un día
+          del 24 no le compete a la nómina del 1 al 15 — le corresponde a
+          la Q2 (aún no creada). Filtramos por rango local para no confundir. */}
+      {(() => {
+        const inicio = nomina?.fecha_inicio ?? '';
+        const fin = nomina?.fecha_fin ?? '';
+        const enRango = descansosHuerfanos.filter(
+          (d) => !!inicio && !!fin && d.fecha >= inicio && d.fecha <= fin,
+        );
+        if (enRango.length === 0) return null;
+        return (
+          <div className="rounded-lg border-2 border-amber-500/40 bg-amber-50/60 dark:bg-amber-950/20 p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 mt-0.5 text-amber-700 shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200 mb-1">
+                  {enRango.length} día{enRango.length !== 1 ? 's' : ''} de descanso dentro del rango de esta nómina sin cubrir
+                </p>
+                <p className="text-xs text-amber-800/80 dark:text-amber-200/80 mb-2">
+                  Con cortes personalizados hay días de descanso que caen en el hueco entre dos nóminas y no se están pagando en ninguna. Puede ser deliberado.
+                </p>
+                <ul className="text-xs text-amber-900/90 dark:text-amber-100/90 space-y-0.5">
+                  {enRango.slice(0, 6).map((d) => (
+                    <li key={d.fecha}>
+                      <span className="font-mono">{d.fecha}</span> · {d.nombre}
+                    </li>
+                  ))}
+                  {enRango.length > 6 && (
+                    <li className="italic">+ {enRango.length - 6} más</li>
+                  )}
+                </ul>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Selector de vista (tabs visuales V.15) */}
       <div className="grid grid-cols-2 gap-3">
         <button
@@ -1921,29 +1972,37 @@ export default function NominaDetalle() {
               </p>
             </div>
           )}
-          {/* §3.6 — Domingos/festivos huérfanos: fechas del mes que ninguna
-              nómina del tenant cubre por cortes personalizados. Aviso, no
-              bloqueo — el hueco puede ser deliberado. */}
-          {descansosHuerfanosPreCierre.length > 0 && (
-            <div className="rounded-lg border-2 border-amber-500/40 bg-amber-50/60 dark:bg-amber-950/20 p-3 my-2">
-              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-                {descansosHuerfanosPreCierre.length} descanso{descansosHuerfanosPreCierre.length !== 1 ? 's' : ''} del mes fuera del rango de esta nómina
-              </p>
-              <p className="text-xs text-amber-800/80 dark:text-amber-200/80 mt-1">
-                Estos días caen en un hueco entre nóminas y no se están pagando en ninguna. Puede ser deliberado.
-              </p>
-              <ul className="text-xs text-amber-900/90 dark:text-amber-100/90 mt-2 space-y-0.5">
-                {descansosHuerfanosPreCierre.slice(0, 6).map((d) => (
-                  <li key={d.fecha}>
-                    <span className="font-mono">{d.fecha}</span> · {d.nombre}
-                  </li>
-                ))}
-                {descansosHuerfanosPreCierre.length > 6 && (
-                  <li className="italic">+ {descansosHuerfanosPreCierre.length - 6} más</li>
-                )}
-              </ul>
-            </div>
-          )}
+          {/* §3.6 — Filtramos igual que arriba: solo mostramos los huérfanos
+              que caen DENTRO del rango de esta nómina. Los que caen fuera le
+              corresponden a otra quincena. */}
+          {(() => {
+            const inicio = nomina?.fecha_inicio ?? '';
+            const fin = nomina?.fecha_fin ?? '';
+            const enRango = descansosHuerfanosPreCierre.filter(
+              (d) => !!inicio && !!fin && d.fecha >= inicio && d.fecha <= fin,
+            );
+            if (enRango.length === 0) return null;
+            return (
+              <div className="rounded-lg border-2 border-amber-500/40 bg-amber-50/60 dark:bg-amber-950/20 p-3 my-2">
+                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                  {enRango.length} descanso{enRango.length !== 1 ? 's' : ''} del rango de esta nómina sin cubrir
+                </p>
+                <p className="text-xs text-amber-800/80 dark:text-amber-200/80 mt-1">
+                  Estos días caen en un hueco entre nóminas y no se están pagando en ninguna. Puede ser deliberado.
+                </p>
+                <ul className="text-xs text-amber-900/90 dark:text-amber-100/90 mt-2 space-y-0.5">
+                  {enRango.slice(0, 6).map((d) => (
+                    <li key={d.fecha}>
+                      <span className="font-mono">{d.fecha}</span> · {d.nombre}
+                    </li>
+                  ))}
+                  {enRango.length > 6 && (
+                    <li className="italic">+ {enRango.length - 6} más</li>
+                  )}
+                </ul>
+              </div>
+            );
+          })()}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={accionando}>Cancelar</AlertDialogCancel>
             <AlertDialogAction

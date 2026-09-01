@@ -58,10 +58,23 @@ function periodoLabel(n: NominaT): string {
 
 /** §2.6 — Rango real de días (puede ser custom, no solo derivado del mes). */
 function rangoFechasLabel(n: NominaT): string {
-  const fmt = (iso: string) => {
-    const d = new Date(iso + 'T00:00:00');
-    return isNaN(d.getTime()) ? iso : d.toLocaleDateString('es-CO', {
-      day: '2-digit', month: 'short',
+  const fmt = (raw: string) => {
+    if (!raw) return '';
+    // El backend puede devolver `YYYY-MM-DD` (fecha simple, sin zona) o un
+    // ISO datetime completo tipo `2026-05-01T05:00:00.000000Z`. Detectamos
+    // por la presencia de la `T`: si viene datetime, se parsea directo;
+    // si viene fecha simple, se le pone `T00:00:00` para evitar que la
+    // conversión de zona corra un día atrás.
+    const d = raw.includes('T') ? new Date(raw) : new Date(raw + 'T00:00:00');
+    if (isNaN(d.getTime())) {
+      // Fallback: mostrar solo la parte de la fecha (`YYYY-MM-DD`) si algo
+      // muy raro llegó, para no ensuciar la tabla con el ISO completo.
+      return raw.slice(0, 10);
+    }
+    return d.toLocaleDateString('es-CO', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
     });
   };
   return `${fmt(n.fecha_inicio)} - ${fmt(n.fecha_fin)}`;

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useNavigate, useParams, useLocation } from 'react-router';
 import { sortByFirstName } from '../../utils/personas';
 import { formatCOP } from '../../components/lib/format';
 import { colaboradoresApi } from '../../../api/colaboradores';
@@ -17,6 +17,16 @@ import {
 } from '../../components/ui/select';
 import { Badge } from '../../components/ui/badge';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../../components/ui/alert-dialog';
+import {
   ArrowLeft,
   ArrowRight,
   Check,
@@ -31,7 +41,9 @@ import {
   AlertCircle,
   Trash2,
   Building2,
+  Info,
 } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip';
 import { toast } from 'sonner';
 import {
   nominaApi,
@@ -189,18 +201,36 @@ export default function NuevaNominaWizard() {
    */
   const { id: idEditar } = useParams<{ id?: string }>();
   const esEdicion = !!idEditar;
+  const location = useLocation();
+  // Si el usuario está en un flujo de creación (empezó en /nomina/nueva,
+  // la nómina se creó y el URL se replaceó a /nomina/{id}/editar), el
+  // título sigue siendo "Nuevo Período de Pago". Solo cuando entra desde
+  // el listado por "Editar" o vuelve después de terminar el flujo, aparece
+  // "Editar Período de Pago". La marca vive en sessionStorage.
+  const esFlujoCreacion = (() => {
+    if (!idEditar) return true; // URL /nomina/nueva
+    try {
+      return sessionStorage.getItem('wizard_flujo_creacion') === idEditar;
+    } catch {
+      return false;
+    }
+  })();
   /**
-   * Restauración inicial del paso al volver al wizard:
-   *  - URL `/nomina/:id/editar` → si en localStorage el progreso es del mismo
-   *    `nominaId`, arrancamos en `pasoActual` guardado. Si no, paso 1.
-   *  - URL `/nomina/nueva` → siempre paso 1.
-   * El paso queda al final de este hook (no rompe lazy initialization).
+   * Restauración inicial del paso al montar el wizard:
+   *  - Si viene desde AjustesCosecha (state.from === 'ajustes-cosecha' o
+   *    'nomina'), restaurar del sessionStorage el paso donde estaba —así
+   *    conserva el contexto de trabajo.
+   *  - En cualquier otro caso (clic en "Editar" desde el listado o el
+   *    detalle), empezar SIEMPRE en el paso 1. Es lo que espera el usuario:
+   *    ver la información del período primero.
    */
   const [pasoActual, setPasoActual] = useState<number>(() => {
-    if (esEdicion && idEditar) {
-      const p = leerProgresoPersistido();
-      if (p && p.nominaId === parseInt(idEditar)) return p.pasoActual;
-    }
+    if (!esEdicion || !idEditar) return 1;
+    const st = (location.state ?? null) as { from?: string } | null;
+    const vieneDeAjustes = st?.from === 'ajustes-cosecha' || st?.from === 'nomina';
+    if (!vieneDeAjustes) return 1;
+    const p = leerProgresoPersistido();
+    if (p && p.nominaId === parseInt(idEditar)) return p.pasoActual;
     return 1;
   });
 
@@ -266,13 +296,43 @@ export default function NuevaNominaWizard() {
   // mostrar el mismo valor que la liquidacion. El snapshot en `nomina_empleado`
   // puede quedar viejo si el salario del colaborador cambio despues.
   const [salariosMaestros, setSalariosMaestros] = useState<Map<number, number>>(new Map());
+  // §2.6 — Nóminas ya existentes en el mismo (mes, año, quincena). Consultado
+  // en paso 4 ANTES del POST para avisar al usuario que va a crear una
+  // "quincena partida" (segunda nómina en el mismo período). No bloquea.
+  const [nominasMismoPeriodo, setNominasMismoPeriodo] = useState<Array<{
+    id: number;
+    etiqueta?: string | null;
+    fecha_inicio: string;
+    fecha_fin: string;
+    estado: string;
+    empleados_count?: number;
+  }>>([]);
   // Preview de liquidacion por nomina_empleado_id — muestra el total que
   // efectivamente ganaria cada colaborador en la quincena (jornales +
   // cosecha + salario segun modalidad). Se carga en paso 4.
+  //
+  // Cacheado en sessionStorage por nominaId con TTL 10 min: sin caché una
+  // nómina de 100 colaboradores dispara 100 peticiones al backend cada vez
+  // que se entra al paso 4 (incluido volver desde AjustesCosecha). El caché
+  // se invalida al navegar a "Revisar" desde la alerta de cosechas (§4.4).
   const [previewsPorEmpleado, setPreviewsPorEmpleado] = useState<Map<number, {
     total_devengado: number;
     total_neto_propuesto: number;
-  }>>(new Map());
+  }>>(() => {
+    if (!idEditar) return new Map();
+    try {
+      const raw = sessionStorage.getItem(`wizard_previews_${idEditar}`);
+      if (!raw) return new Map();
+      const { data, timestamp } = JSON.parse(raw) as {
+        data: Array<[number, { total_devengado: number; total_neto_propuesto: number }]>;
+        timestamp: number;
+      };
+      if (Date.now() - timestamp > 10 * 60 * 1000) return new Map(); // 10 min TTL
+      return new Map(data);
+    } catch {
+      return new Map();
+    }
+  });
   const [cargandoPreviews, setCargandoPreviews] = useState(false);
   const [empleadosSeleccionados, setEmpleadosSeleccionados] = useState<number[]>([]);
   const [operariosSeleccionados, setOperariosSeleccionados] = useState<number[]>([]);
@@ -309,9 +369,25 @@ export default function NuevaNominaWizard() {
    * `nomina_empleado`. El `cargo` se enriquece en segunda fase desde
    * `operariosApi.listarPorTercero` (el select global no lo trae).
    */
+  // Hidrata desde sessionStorage con TTL 10 min para no re-fetchear los
+  // N+1 requests de operarios (select global + N terceros) cada vez que
+  // se re-monta el wizard (por ejemplo al volver de AjustesCosecha).
   const [operariosLookup, setOperariosLookup] = useState<
     Map<number, OperarioSelectItem & { cargo?: string | null }>
-  >(new Map());
+  >(() => {
+    try {
+      const raw = sessionStorage.getItem('wizard_operarios_lookup');
+      if (!raw) return new Map();
+      const { data, timestamp } = JSON.parse(raw) as {
+        data: Array<[number, OperarioSelectItem & { cargo?: string | null }]>;
+        timestamp: number;
+      };
+      if (Date.now() - timestamp > 10 * 60 * 1000) return new Map();
+      return new Map(data);
+    } catch {
+      return new Map();
+    }
+  });
 
   // ── Paso 3 — Validar Cosecha ──────────────────────────────────────────────
   const [bundleCosecha, setBundleCosecha] = useState<ValidacionCosechaBundle | null>(null);
@@ -330,6 +406,26 @@ export default function NuevaNominaWizard() {
   /** Ediciones locales lote_id → nuevo promedio manual (solo lotes modificados).
    *  Se compara contra `bundleCosecha.promedios_por_lote[*].promedio_efectivo`. */
   const [promediosEditados, setPromediosEditados] = useState<Record<number, number>>({});
+  // §4.6 F6 — Detalle del cambio pendiente para el diálogo de confirmación.
+  // Se llena al hacer clic en "Guardar promedios" y se limpia al aceptar/cancelar.
+  // Diálogo al salir del wizard en flujo de creación con nómina ya
+  // persistida en el backend (paso 1 hace POST /nominas). Sin este diálogo,
+  // el usuario que entra al wizard, revisa cosecha y no vuelve a terminar
+  // deja una nómina huérfana en borrador.
+  const [confirmarSalirWizard, setConfirmarSalirWizard] = useState(false);
+  const [descartandoBorrador, setDescartandoBorrador] = useState(false);
+  const [confirmarAjustePromedios, setConfirmarAjustePromedios] = useState<
+    | null
+    | Array<{
+        lote_id: number;
+        lote_nombre: string;
+        promedio_original: number;
+        promedio_nuevo: number;
+        delta: number;
+        colaboradores_impactados: number;
+        gajos_totales: number;
+      }>
+  >(null);
   /** Snapshot al abrir el modal para poder revertir con "Cancelar". */
   const promediosEditadosSnapshot = useRef<Record<number, number>>({});
   const [ajustandoPromedio, setAjustandoPromedio] = useState(false);
@@ -499,6 +595,39 @@ export default function NuevaNominaWizard() {
       .finally(() => setCargandoBundle(false));
   }, [pasoActual, nominaId]);
 
+  // §2.6 — Al entrar al paso 4, consultamos si ya existen otras nóminas para
+  // el mismo (mes, año, quincena). Si hay, avisamos que va a ser una "quincena
+  // partida" (varias nóminas del mismo período). Preventivo, así el usuario no
+  // se lleva la sorpresa del 409 NOMINA_DUPLICADA al confirmar. No bloquea.
+  useEffect(() => {
+    if (pasoActual !== 4) return;
+    if (!mes || !ano) return;
+    const anioNum = parseInt(ano);
+    const mesNum = parseInt(mes);
+    if (!anioNum || !mesNum) return;
+    nominaApi
+      .listar({ mes: mesNum, anio: anioNum, per_page: 50 } as any)
+      .then((res) => {
+        const quincenaEsperada = periodicidad === 'MENSUAL' ? null : (quincena ? Number(quincena) : null);
+        // Excluimos la nómina que ESTAMOS creando (ya existe en BORRADOR
+        // desde el paso 1) y filtramos por misma quincena.
+        const otras = (res.data ?? []).filter((n: any) => {
+          if (nominaId && n.id === nominaId) return false;
+          if (periodicidad === 'MENSUAL') return n.quincena == null;
+          return n.quincena === quincenaEsperada;
+        });
+        setNominasMismoPeriodo(otras.map((n: any) => ({
+          id: n.id,
+          etiqueta: n.etiqueta ?? null,
+          fecha_inicio: n.fecha_inicio,
+          fecha_fin: n.fecha_fin,
+          estado: n.estado,
+          empleados_count: n.empleados_count,
+        })));
+      })
+      .catch(() => setNominasMismoPeriodo([]));
+  }, [pasoActual, nominaId, mes, ano, periodicidad, quincena]);
+
   // Al entrar al paso 4, cargamos el salario MAESTRO de cada colaborador
   // agregado a la nomina. Necesario porque el snapshot en `nomina_empleado`
   // puede estar desactualizado y la liquidacion usa el maestro.
@@ -557,9 +686,19 @@ export default function NuevaNominaWizard() {
           }
         });
         setPreviewsPorEmpleado(nuevo);
+        // Persistir en sessionStorage con TTL 10 min para no re-fetchear al
+        // volver desde AjustesCosecha o al re-montar el wizard.
+        if (idEditar) {
+          try {
+            sessionStorage.setItem(
+              `wizard_previews_${idEditar}`,
+              JSON.stringify({ data: Array.from(nuevo.entries()), timestamp: Date.now() }),
+            );
+          } catch { /* quota excedida — se re-fetchea */ }
+        }
       })
       .finally(() => setCargandoPreviews(false));
-  }, [pasoActual, colaboradoresAgregados, previewsPorEmpleado]);
+  }, [pasoActual, colaboradoresAgregados, previewsPorEmpleado, idEditar]);
 
   // Al abrir el modal, simplemente reseteamos las ediciones locales — los
   // promedios vienen del bundle de cosecha (`promedios_por_lote`), ya cargado.
@@ -597,7 +736,15 @@ export default function NuevaNominaWizard() {
    *  el manual sobre el auto). Solo se envía lo que cambió. Tras el batch de
    *  PUTs se recarga el bundle (doc §4.2: "el frontend debe llamar GET
    *  /validar-cosecha después del PUT"). */
-  const guardarPromedios = async () => {
+  /** §4.6 F6 — Antes de guardar, calcula el impacto (por lote: promedio,
+   *  cuántos colaboradores usan ese lote, cuántos gajos totales) y abre el
+   *  diálogo de confirmación. El PUT solo se dispara si el usuario acepta.
+   *
+   *  Motivo: el ajuste manual del promedio escribe en
+   *  `nomina_promedio_lote.promedio_efectivo`, que es el peldaño 1 de la
+   *  escalera que PAGA. No es un ajuste de conciliación — cambia lo que
+   *  cobra la gente. */
+  const pedirConfirmacionGuardarPromedios = () => {
     if (!nominaId || !bundleCosecha) return;
     const cambios = Object.entries(promediosEditados)
       .map(([loteId, valor]) => ({ loteId: parseInt(loteId), valor }))
@@ -610,6 +757,51 @@ export default function NuevaNominaWizard() {
       toast.info('No hay cambios para guardar');
       return;
     }
+    // Construye la lista rica para el diálogo.
+    const detalle = cambios.map(({ loteId, valor }) => {
+      const p = bundleCosecha.promedios_por_lote.find((x) => x.lote_id === loteId);
+      const promedioOriginal = p?.promedio_efectivo ?? 0;
+      // Colaboradores impactados = los que tienen al menos una cosecha del lote.
+      // Se usa lote_nombre como match porque los cosechas del bundle vienen
+      // por nombre, no por id.
+      const nombreLote = p?.lote_nombre ?? '';
+      const colabsSet = new Set<number>();
+      let gajosTotales = 0;
+      for (const d of bundleCosecha.detalle_por_colaborador ?? []) {
+        for (const c of d.cosechas ?? []) {
+          if (c.lote === nombreLote) {
+            colabsSet.add(d.colaborador_id);
+            gajosTotales += c.gajos_verificados ?? c.gajos_trabajados ?? 0;
+          }
+        }
+      }
+      return {
+        lote_id: loteId,
+        lote_nombre: nombreLote,
+        promedio_original: promedioOriginal,
+        promedio_nuevo: valor,
+        delta: valor - promedioOriginal,
+        colaboradores_impactados: colabsSet.size,
+        gajos_totales: gajosTotales,
+      };
+    });
+    setConfirmarAjustePromedios(detalle);
+  };
+
+  /** Ejecuta el guardado real después de confirmar. */
+  const ejecutarGuardarPromedios = async () => {
+    if (!nominaId || !bundleCosecha) return;
+    const cambios = Object.entries(promediosEditados)
+      .map(([loteId, valor]) => ({ loteId: parseInt(loteId), valor }))
+      .filter(({ loteId, valor }) => {
+        const original = bundleCosecha.promedios_por_lote
+          .find((p) => p.lote_id === loteId)?.promedio_efectivo ?? 0;
+        return valor !== original && valor > 0;
+      });
+    if (cambios.length === 0) {
+      setConfirmarAjustePromedios(null);
+      return;
+    }
     setAjustandoPromedio(true);
     try {
       await Promise.all(
@@ -620,10 +812,9 @@ export default function NuevaNominaWizard() {
       toast.success(`${cambios.length} promedio${cambios.length !== 1 ? 's' : ''} actualizado${cambios.length !== 1 ? 's' : ''}`);
       const res = await nominaApi.validarCosecha(nominaId);
       setBundleCosecha(res.data);
-      // Confirmar snapshot: el guardado quedó persistido, no revertir si se
-      // reabre y se cancela más tarde.
       promediosEditadosSnapshot.current = { ...promediosEditados };
       setMostrarAjustePromedios(false);
+      setConfirmarAjustePromedios(null);
     } catch (err) {
       const e = err as ApiError;
       toast.error(e.message ?? 'No se pudieron guardar los promedios');
@@ -671,6 +862,9 @@ export default function NuevaNominaWizard() {
    * los cargos aparecen después sin recarga manual.
    */
   useEffect(() => {
+    // Si ya hidratamos desde caché (>0 entries), no re-fetcheamos: los
+    // operarios activos del tenant no cambian entre navegaciones internas.
+    if (operariosLookup.size > 0) return;
     operariosApi
       .selectGlobal()
       .then(async (res) => {
@@ -697,6 +891,13 @@ export default function NuevaNominaWizard() {
           ),
         );
         setOperariosLookup(new Map(map));
+        // Persistir con TTL 10 min para evitar N+1 en la próxima navegación.
+        try {
+          sessionStorage.setItem(
+            'wizard_operarios_lookup',
+            JSON.stringify({ data: Array.from(map.entries()), timestamp: Date.now() }),
+          );
+        } catch { /* quota — se re-fetchea */ }
       })
       .catch(() => {
         // silencioso — sin lookup solo veremos "Operario #N" como fallback
@@ -769,9 +970,12 @@ export default function NuevaNominaWizard() {
       anio: parseInt(ano),
       periodicidad,
       quincena: periodicidad === 'QUINCENAL' ? (parseInt(quincena) as 1 | 2) : null,
-      // §2.6 — extras opcionales.
+      // §2.6 — extras opcionales. `etiqueta` está oculta del UI pero el
+      // state se conserva por si vuelve a mostrarse. `fecha_inicio`/`fecha_fin`
+      // se envían siempre que existan: la Fecha Fin es editable en el UI, y
+      // el backend valida que ambas caigan dentro del mes/año declarados.
       ...(etiqueta.trim() ? { etiqueta: etiqueta.trim() } : {}),
-      ...(cortePersonalizado && fechaInicio && fechaFin
+      ...(fechaInicio && fechaFin
         ? { fecha_inicio: fechaInicio, fecha_fin: fechaFin }
         : {}),
       ...(permitirMultiple ? { permitir_multiple: true } : {}),
@@ -820,6 +1024,13 @@ export default function NuevaNominaWizard() {
     try {
       const res = await nominaApi.crear(payload);
       setNominaId(res.data.id);
+      // Marcamos esta nómina como "flujo de creación en curso" — así el
+      // título del wizard sigue diciendo "Nuevo Período de Pago" aunque el
+      // URL redirija a `/nomina/{id}/editar`. Se limpia al cerrar la nómina
+      // o al salir del wizard hacia el listado.
+      try {
+        sessionStorage.setItem('wizard_flujo_creacion', String(res.data.id));
+      } catch { /* noop */ }
       toast.success('Nómina creada en borrador');
       return true;
     } catch (err) {
@@ -938,8 +1149,13 @@ export default function NuevaNominaWizard() {
       toast.error('La nómina no se ha creado correctamente');
       return;
     }
-    // Wizard completado → limpiar progreso persistido.
-    try { localStorage.removeItem(STORAGE_KEY_NOMINA_WIZARD); } catch {}
+    // Wizard completado → limpiar progreso persistido y la marca de flujo
+    // de creación (para que la próxima vez que se entre a esta nómina el
+    // título sea "Editar Período de Pago", no "Nuevo").
+    try {
+      localStorage.removeItem(STORAGE_KEY_NOMINA_WIZARD);
+      sessionStorage.removeItem('wizard_flujo_creacion');
+    } catch {}
     toast.success('Nómina lista. Continúa con las liquidaciones.');
     navigate(`/nomina/${nominaId}`);
   };
@@ -991,19 +1207,28 @@ export default function NuevaNominaWizard() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => navigate('/nomina')}
+          onClick={() => {
+            // Si estamos creando y ya hay nómina persistida (paso 1 la crea
+            // en el backend), preguntar si descartar el borrador o dejarlo.
+            // Si es edición o aún no se persistió nada, volver directo.
+            if (esFlujoCreacion && nominaId) {
+              setConfirmarSalirWizard(true);
+            } else {
+              navigate('/nomina');
+            }
+          }}
           className="mb-4 gap-2"
         >
           <ArrowLeft className="h-4 w-4" />
           Volver
         </Button>
         <h1 className="text-3xl font-bold text-primary">
-          {esEdicion ? 'Editar Período de Pago' : 'Nuevo Período de Pago'}
+          {esFlujoCreacion ? 'Nuevo Período de Pago' : 'Editar Período de Pago'}
         </h1>
         <p className="text-muted-foreground mt-2">
-          {esEdicion
-            ? 'Modifica el período, agrega más colaboradores y vuelve a validar la cosecha'
-            : 'Crea un nuevo período de nómina paso a paso'}
+          {esFlujoCreacion
+            ? 'Crea un nuevo período de nómina paso a paso'
+            : 'Modifica el período, agrega más colaboradores y vuelve a validar la cosecha'}
         </p>
       </div>
 
@@ -1082,6 +1307,9 @@ export default function NuevaNominaWizard() {
                 </div>
               </div>
 
+              {/* Fila de 2 columnas: Mes | Quincena. Periodicidad viene de
+                  Configuración → Parámetros de Nómina y ni siquiera se
+                  muestra: es fija para toda la finca. */}
               <div className={`grid gap-6 ${periodicidad === 'QUINCENAL' ? 'md:grid-cols-2' : ''}`}>
                 <div className="space-y-2">
                   <Label htmlFor="mes">Mes *</Label>
@@ -1119,56 +1347,10 @@ export default function NuevaNominaWizard() {
                 )}
               </div>
 
-              {/* Periodicidad readonly — viene de Configuración → Parámetros de Nómina */}
-              <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 flex items-start gap-3">
-                <Calendar className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium">
-                    Periodicidad: <span className="text-primary font-bold">{periodicidad === 'QUINCENAL' ? 'Quincenal' : 'Mensual'}</span>
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Este valor se define en <strong>Configuración → Pagos y Liquidaciones → Parámetros de Nómina</strong>
-                    {' '}y aplica a todas las nóminas de la finca.
-                  </p>
-                </div>
-              </div>
-
-              {/* §2.6 — Etiqueta opcional para distinguir dos nóminas del
-                  mismo período (p.ej. "Campo" vs "Administrativos"). */}
-              <div className="space-y-2 mt-4">
-                <Label htmlFor="etiqueta">Etiqueta (opcional)</Label>
-                <Input
-                  id="etiqueta"
-                  value={etiqueta}
-                  onChange={(e) => setEtiqueta(e.target.value.slice(0, 60))}
-                  placeholder="Ej: Campo, Administrativos, Cuadrilla A…"
-                  maxLength={60}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Distingue esta nómina de otras del mismo período.
-                </p>
-              </div>
-
-              {/* §2.6 — Toggle "Usar corte de días personalizado". Cuando se
-                  activa, el usuario puede editar fecha_inicio/fecha_fin
-                  manualmente (útil para "esta quincena a este trabajador se
-                  le liquida hasta el 27"). */}
-              <div className="flex items-center gap-3 mt-4 p-3 rounded-lg border border-border bg-muted/20">
-                <input
-                  type="checkbox"
-                  id="cortePersonalizado"
-                  checked={cortePersonalizado}
-                  onChange={(e) => setCortePersonalizado(e.target.checked)}
-                  className="h-4 w-4"
-                />
-                <label htmlFor="cortePersonalizado" className="text-sm cursor-pointer flex-1">
-                  Usar corte de días personalizado
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Permite ajustar el rango de fechas para casos especiales (p.ej. liquidar hasta el día 27).
-                  </p>
-                </label>
-              </div>
-
+              {/* §2.6 — Fechas del período. Fecha Inicio siempre bloqueada
+                  (la deriva la periodicidad). Fecha Fin editable con tooltip
+                  explicativo — es el "corte de días personalizado" del backend
+                  sin exponer un toggle explícito. */}
               <div className="grid gap-6 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="fechaInicio">Fecha Inicio *</Label>
@@ -1176,18 +1358,35 @@ export default function NuevaNominaWizard() {
                     id="fechaInicio"
                     type="date"
                     value={fechaInicio}
-                    readOnly={!cortePersonalizado}
-                    onChange={(e) => cortePersonalizado && setFechaInicio(e.target.value)}
+                    readOnly
+                    className="bg-muted/40 cursor-not-allowed"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="fechaFin">Fecha Fin *</Label>
+                  <Label htmlFor="fechaFin" className="flex items-center gap-1.5">
+                    Fecha Fin
+                    <TooltipProvider delayDuration={150}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex items-center text-muted-foreground cursor-help">
+                            <Info className="h-3.5 w-3.5" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent
+                          side="top"
+                          align="center"
+                          className="max-w-xs bg-primary text-primary-foreground text-xs leading-relaxed px-3 py-2"
+                        >
+                          Puedes ajustar la fecha fin para usar un corte de días personalizado — útil en casos especiales como liquidaciones o períodos incompletos.
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </Label>
                   <Input
                     id="fechaFin"
                     type="date"
                     value={fechaFin}
-                    readOnly={!cortePersonalizado}
-                    onChange={(e) => cortePersonalizado && setFechaFin(e.target.value)}
+                    onChange={(e) => setFechaFin(e.target.value)}
                   />
                 </div>
               </div>
@@ -1575,9 +1774,23 @@ export default function NuevaNominaWizard() {
                   return 0;
                 };
 
+                // Ids de todos los operarios visibles, para los botones
+                // "Agregar todas" / "Quitar todas" del header.
+                const todosLosIds = grupos.flatMap((g) => g.operarios.map((o) => o.id));
+                const todosSeleccionadosGlobal =
+                  todosLosIds.length > 0 &&
+                  todosLosIds.every((id) => operariosSeleccionados.includes(id));
+                const agregarTodas = () =>
+                  setOperariosSeleccionados((prev) =>
+                    Array.from(new Set([...prev, ...todosLosIds])),
+                  );
+                const quitarTodas = () =>
+                  setOperariosSeleccionados((prev) =>
+                    prev.filter((id) => !todosLosIds.includes(id)),
+                  );
                 return (
               <div>
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-2 mb-3 flex-wrap">
                   <h3 className="text-base font-bold">Empresas Terceras</h3>
                   <Badge className="text-xs bg-amber-500/10 text-amber-700 border-amber-300">
                     Prestación de Servicios
@@ -1586,6 +1799,30 @@ export default function NuevaNominaWizard() {
                     <span className="text-xs text-muted-foreground">
                       ({operariosSeleccionados.length} operario{operariosSeleccionados.length !== 1 ? 's' : ''} seleccionado{operariosSeleccionados.length !== 1 ? 's' : ''})
                     </span>
+                  )}
+                  {grupos.length > 0 && (
+                    <div className="ml-auto flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={agregarTodas}
+                        disabled={todosSeleccionadosGlobal}
+                        className="h-8 text-xs"
+                      >
+                        Agregar todas
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={quitarTodas}
+                        disabled={operariosSeleccionados.length === 0}
+                        className="h-8 text-xs"
+                      >
+                        Quitar todas
+                      </Button>
+                    </div>
                   )}
                 </div>
 
@@ -1730,15 +1967,25 @@ export default function NuevaNominaWizard() {
               ) : (() => {
                 const totalColabs = bundleCosecha?.total_kg_colaboradores ?? 0;
                 const totalExtr = bundleCosecha?.total_kg_extractora ?? 0;
+                // §4.6 — Nueva cifra: kilos que se pagan acá pero cuyo peso se
+                // concilia en la quincena siguiente porque el viaje salió fuera
+                // del rango. `diff` viene ya calculado por el backend:
+                //   diff = colaboradores − fuera − extractora
+                const totalFuera = bundleCosecha?.total_kg_despachado_fuera_del_periodo ?? 0;
+                const cosechasFuera = bundleCosecha?.cosechas_despachadas_fuera_del_periodo ?? 0;
                 const diff = bundleCosecha?.diferencia_kg ?? 0;
                 const detalle = bundleCosecha?.detalle_por_colaborador ?? [];
 
-                // Helpers de ajuste:
-                //  1) kg_trabajado ajustado con el promedio manual del lote (si hay).
-                //  2) kg_extractora proporcionalizado GLOBALMENTE al kg_trabajado
-                //     del colaborador. Como el header global cuadra
-                //     (colaboradores ≈ extractora), cada colab debe tener una
-                //     diferencia cercana a cero, proporcional a su aporte.
+                // F1 (§4.6) — kg_extractora y diferencia_kg se pintan TAL CUAL
+                // llegan del API. El prorrateo global anterior (factor sobre el
+                // total) hacía que cada fila mostrara ~11 % de descuadre
+                // uniforme, imposible de usar para diagnosticar cuál cosecha
+                // realmente descuadra. Se elimina.
+                //
+                // kg_trabajado sí se simula localmente cuando el usuario está
+                // editando el promedio del lote (aún no persistido). En cuanto
+                // el promedio se guarda con PUT, el backend recalcula y ya no
+                // hay ajuste local.
                 const promediosPorLote = bundleCosecha?.promedios_por_lote ?? [];
                 const nombreALoteIdMap = new Map<string, number>();
                 for (const p of promediosPorLote) nombreALoteIdMap.set(p.lote_nombre, p.lote_id);
@@ -1755,28 +2002,44 @@ export default function NuevaNominaWizard() {
                   return gajosPorMiembro * promNuevo;
                 };
 
-                // Total kg_trabajado ajustado sobre todos los colaboradores.
-                // Se usa para calcular el factor de proporcionalidad con la extractora.
-                let totalTrabAjustadoGlobal = 0;
-                for (const d of detalle) {
-                  for (const c of d.cosechas ?? []) {
-                    totalTrabAjustadoGlobal += kgTrabDeCosecha(c);
-                  }
-                }
-                const factorExtractora = totalTrabAjustadoGlobal > 0
-                  ? totalExtr / totalTrabAjustadoGlobal
-                  : 1;
-
-                const ajustarKgCosecha = (c: { lote: string; kg_trabajado: number; kg_extractora: number }) => {
+                const ajustarKgCosecha = (c: {
+                  lote: string;
+                  kg_trabajado: number;
+                  kg_extractora: number;
+                  diferencia_kg?: number | null;
+                }) => {
                   const kgTrab = kgTrabDeCosecha(c);
-                  const kgExtr = kgTrab * factorExtractora;
-                  return { kgTrab, kgExtr, difKg: kgTrab - kgExtr };
+                  // §4.6 — kg_extractora viene ya filtrado por rango. Cero
+                  // implica sin medición o despachado_fuera_del_periodo; en
+                  // ese caso `diferencia_kg` del API llega null.
+                  const kgExtr = c.kg_extractora ?? 0;
+                  // Si el usuario editó localmente el promedio del lote,
+                  // recalculamos la diferencia (simulación pre-guardar).
+                  // Si no, respetamos la del API (que puede ser null cuando
+                  // la fila no es conciliable en este período).
+                  const loteId = nombreALoteIdMap.get(c.lote);
+                  const editado = loteId !== undefined ? promediosEditados[loteId] : undefined;
+                  const hayEdicionLocal = editado !== undefined && editado > 0;
+                  const difKg: number | null = hayEdicionLocal
+                    ? kgTrab - kgExtr
+                    : (c.diferencia_kg ?? null);
+                  return { kgTrab, kgExtr, difKg };
                 };
+                // F7 (§4.6) — Semáforo por PORCENTAJE, no por kilos absolutos.
+                // Base = colaboradores − despachado_fuera (lo realmente
+                // conciliable en este período). En camiones mixtos el ruido
+                // típico es ±6 %, y el residuo del floor es <1 %.
+                //   < 2 %  normal (ruido esperado)
+                //   2-5 %  revisar
+                //   > 5 %  significativa
+                const baseConciliable = Math.max(0, totalColabs - totalFuera);
+                const pctDiff = baseConciliable > 0 ? Math.abs(diff) / baseConciliable : 0;
                 const estadoDif: 'ok' | 'critico' | 'atencion' | 'vacio' =
                   totalColabs === 0 && totalExtr === 0 ? 'vacio'
-                    : diff === 0 ? 'ok'
-                      : Math.abs(diff) > 500 ? 'critico'
-                        : 'atencion';
+                    : baseConciliable === 0 ? 'vacio'
+                      : pctDiff < 0.02 ? 'ok'
+                        : pctDiff > 0.05 ? 'critico'
+                          : 'atencion';
                 const colorBadge = estadoDif === 'ok'
                   ? 'bg-success/10 text-success'
                   : estadoDif === 'critico'
@@ -1787,10 +2050,10 @@ export default function NuevaNominaWizard() {
                 const labelEstado = estadoDif === 'vacio'
                   ? 'Sin cosechas en el período'
                   : estadoDif === 'ok'
-                    ? 'Sin diferencias'
+                    ? `${(pctDiff * 100).toFixed(1)}% · Normal`
                     : estadoDif === 'critico'
-                      ? 'Revisar remisiones'
-                      : 'Verificar registros';
+                      ? `${(pctDiff * 100).toFixed(1)}% · Significativa`
+                      : `${(pctDiff * 100).toFixed(1)}% · Revisar`;
 
                 return (
                   <>
@@ -1810,6 +2073,27 @@ export default function NuevaNominaWizard() {
                               Esa fruta se cortó en este período pero no está cargada a ningún camión, así que no entra en la liquidación. Cárgala a un viaje y vuelve a liquidar, o continúa si ya sabes que no va a despacharse.
                             </p>
                           </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => {
+                              // Los ajustes de cosecha cambian los previews
+                              // de los colaboradores involucrados, así que
+                              // invalidamos el caché para forzar refresh al
+                              // volver al paso 4.
+                              if (idEditar) {
+                                try {
+                                  sessionStorage.removeItem(`wizard_previews_${idEditar}`);
+                                } catch { /* noop */ }
+                              }
+                              navigate('/viajes/ajustes-cosecha', {
+                                state: { from: 'nomina', nominaId, paso: 3 },
+                              });
+                            }}
+                            className="shrink-0 bg-orange-600 hover:bg-orange-700 text-white"
+                          >
+                            Revisar
+                          </Button>
                         </div>
                       </div>
                     )}
@@ -1823,7 +2107,11 @@ export default function NuevaNominaWizard() {
                           {labelEstado}
                         </span>
                       </div>
-                      <div className="grid grid-cols-3 divide-x divide-border">
+                      {/* §4.6 F2 — Cabecera de 4 líneas. Cuando no hay fruta
+                          despachada fuera del período (`totalFuera === 0`),
+                          la línea intermedia se colapsa a 3 columnas para no
+                          confundir con un dato inexistente. */}
+                      <div className={`grid divide-x divide-border ${totalFuera > 0 ? 'grid-cols-4' : 'grid-cols-3'}`}>
                         <div className="px-6 py-5 space-y-2">
                           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Colaboradores</p>
                           <div className="flex items-end gap-1.5">
@@ -1837,11 +2125,31 @@ export default function NuevaNominaWizard() {
                             <p className="text-xs text-muted-foreground">{detalle.length} colaborador{detalle.length !== 1 ? 'es' : ''} con cosecha</p>
                           </div>
                         </div>
+                        {totalFuera > 0 && (
+                          <div
+                            className="px-6 py-5 space-y-2 bg-muted/10"
+                            title="Esta fruta se cortó en este período y se paga acá. Su peso viajó en un camión de otra quincena, así que se concilia en la siguiente. No es un descuadre real."
+                          >
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Despachado fuera</p>
+                            <div className="flex items-end gap-1.5">
+                              <p className="text-3xl font-bold text-muted-foreground leading-none">
+                                −{totalFuera.toLocaleString('es-CO')}
+                              </p>
+                              <p className="text-sm text-muted-foreground mb-0.5">kg</p>
+                            </div>
+                            <div className="flex items-center gap-1.5 pt-1 border-t border-border/50">
+                              <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />
+                              <p className="text-xs text-muted-foreground">
+                                {cosechasFuera} cosecha{cosechasFuera !== 1 ? 's' : ''} · se concilia en la siguiente
+                              </p>
+                            </div>
+                          </div>
+                        )}
                         <div className="px-6 py-5 space-y-2">
                           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Extractora</p>
                           <div className="flex items-end gap-1.5">
                             <p className="text-3xl font-bold text-foreground leading-none">
-                              {totalExtr > 0 ? totalExtr.toLocaleString('es-CO') : '—'}
+                              {totalExtr > 0 ? `−${totalExtr.toLocaleString('es-CO')}` : '—'}
                             </p>
                             <p className="text-sm text-muted-foreground mb-0.5">kg</p>
                           </div>
@@ -1851,7 +2159,7 @@ export default function NuevaNominaWizard() {
                           </div>
                         </div>
                         <div className={`px-6 py-5 space-y-2 ${estadoDif === 'ok' ? 'bg-success/5' : estadoDif === 'critico' ? 'bg-destructive/5' : estadoDif === 'atencion' ? 'bg-amber-500/5' : 'bg-muted/10'}`}>
-                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Diferencia</p>
+                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Diferencia real</p>
                           <div className="flex items-end gap-1.5">
                             <p className={`text-3xl font-bold leading-none ${estadoDif === 'ok' ? 'text-success' : estadoDif === 'critico' ? 'text-destructive' : estadoDif === 'atencion' ? 'text-amber-600' : 'text-muted-foreground'}`}>
                               {estadoDif === 'vacio' ? '—' : `${diff > 0 ? '+' : ''}${diff.toLocaleString('es-CO')}`}
@@ -1861,7 +2169,9 @@ export default function NuevaNominaWizard() {
                           <div className="flex items-center gap-1.5 pt-1 border-t border-border/50">
                             <span className={`w-1.5 h-1.5 rounded-full ${estadoDif === 'ok' ? 'bg-success' : estadoDif === 'critico' ? 'bg-destructive' : estadoDif === 'atencion' ? 'bg-amber-500' : 'bg-muted-foreground'}`} />
                             <p className={`text-xs font-medium ${estadoDif === 'ok' ? 'text-success' : estadoDif === 'critico' ? 'text-destructive' : estadoDif === 'atencion' ? 'text-amber-600' : 'text-muted-foreground'}`}>
-                              {estadoDif === 'vacio' ? 'No hay datos para comparar' : estadoDif === 'ok' ? 'Cuadre perfecto' : estadoDif === 'critico' ? 'Diferencia significativa' : 'Diferencia menor'}
+                              {estadoDif === 'vacio'
+                                ? 'No hay datos para comparar'
+                                : `${(pctDiff * 100).toFixed(1)}% · ${estadoDif === 'ok' ? 'Normal' : estadoDif === 'critico' ? 'Significativa' : 'Revisar'}`}
                             </p>
                           </div>
                         </div>
@@ -1916,9 +2226,11 @@ export default function NuevaNominaWizard() {
                                     // kg_trabajado y kg_extractora se recalculan
                                     // con el promedio ajustado y la proporción de gajos.
                                     const cosechas = d.cosechas ?? [];
-                                    const totalTrab = cosechas.reduce((s, c) => s + ajustarKgCosecha(c).kgTrab, 0);
-                                    const totalExtr = cosechas.reduce((s, c) => s + ajustarKgCosecha(c).kgExtr, 0);
-                                    const diff = totalTrab - totalExtr;
+                                    const ajustadas = cosechas.map((c) => ajustarKgCosecha(c));
+                                    const totalTrab = ajustadas.reduce((s, r) => s + r.kgTrab, 0);
+                                    const totalExtr = ajustadas.reduce((s, r) => s + r.kgExtr, 0);
+                                    // §4.6 — Diferencia = suma de diferencias conciliables (no null).
+                                    const diff = ajustadas.reduce((s, r) => s + (r.difKg ?? 0), 0);
                                     const colorDiff = diff === 0
                                       ? 'text-success'
                                       : diff > 0
@@ -1968,6 +2280,20 @@ export default function NuevaNominaWizard() {
                                             <th className="text-right p-2">Gajos Totales</th>
                                             <th className="text-right p-2">Gajos Verificados</th>
                                             <th className="text-right p-2">Diferencia Gajos</th>
+                                            {/* §4.6 F5 — Promedio efectivo (lote) vs aplicado
+                                                (viaje). Solo se pinta si al menos una fila trae
+                                                el dato — evita ruido cuando el backend responde
+                                                en versión antigua. */}
+                                            {d.cosechas.some((c) => c.promedio_efectivo != null || c.promedio_aplicado != null) && (
+                                              <>
+                                                <th className="text-right p-2" title="Promedio kg/gajo del lote para toda la quincena">
+                                                  Prom. lote
+                                                </th>
+                                                <th className="text-right p-2" title="Promedio kg/gajo que aplicó el viaje al pesar (BÁSCULA si medido, BASELINE si estimado)">
+                                                  Prom. viaje
+                                                </th>
+                                              </>
+                                            )}
                                             <th className="text-right p-2">Kg Trabajados</th>
                                             <th className="text-right p-2">Kg Extractora</th>
                                             <th className="text-right p-2">Diferencia Kg</th>
@@ -1980,7 +2306,9 @@ export default function NuevaNominaWizard() {
                                           </tr>
                                         </thead>
                                         <tbody>
-                                          {d.cosechas.map((c, idx) => {
+                                          {[...d.cosechas]
+                                            .sort((a, b) => (a.fecha ?? '').localeCompare(b.fecha ?? ''))
+                                            .map((c, idx) => {
                                             const { kgTrab, kgExtr, difKg } = ajustarKgCosecha(c);
                                             const gajosPend = c.gajos_pendientes_enviar ?? 0;
                                             const hayCol = d.cosechas.some((x) => (x.gajos_pendientes_enviar ?? 0) > 0);
@@ -1990,21 +2318,110 @@ export default function NuevaNominaWizard() {
                                             return (
                                               <tr
                                                 key={idx}
-                                                className={`border-b border-border/40 last:border-0 ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'} ${c.alerta_despacho === 'ALTA' ? 'bg-orange-50/40 dark:bg-orange-950/10' : ''}`}
+                                                className={`border-b border-border/40 last:border-0 ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'} ${c.alerta_despacho === 'ALTA' ? 'bg-orange-50/40 dark:bg-orange-950/10' : ''} ${c.despachado_fuera_del_periodo ? 'opacity-70' : ''}`}
+                                                title={c.despachado_fuera_del_periodo
+                                                  ? `Esta cosecha se pagó en esta nómina; su peso se concilia en la siguiente porque el viaje salió el ${c.fecha_viaje ?? 'día siguiente'}.`
+                                                  : undefined}
                                               >
                                                 <td className="p-2 whitespace-nowrap">{c.fecha}</td>
                                                 <td className="p-2">{c.lote}</td>
                                                 <td className="p-2 text-muted-foreground">{c.sublote ?? '—'}</td>
-                                                <td className="p-2 text-muted-foreground">{c.remision ?? '—'}</td>
+                                                <td className="p-2 text-muted-foreground">
+                                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                                    {/* Parche visual: normalizamos a 3 dígitos
+                                                        exactos cuando la remisión es puramente
+                                                        numérica. Se remueven ceros a la izquierda
+                                                        y se re-paddea (`0074` → `074`, `69` → `069`).
+                                                        Los prefijos con letras (GE-001, TX-42) se
+                                                        dejan tal cual. Remisiones con más de 3
+                                                        dígitos reales (`1234`) también se dejan
+                                                        para no perder información. */}
+                                                    <span className="font-mono">
+                                                      {c.remision == null
+                                                        ? '—'
+                                                        : (() => {
+                                                            if (!/^\d+$/.test(c.remision)) return c.remision;
+                                                            const sinCeros = c.remision.replace(/^0+/, '') || '0';
+                                                            return sinCeros.length > 3
+                                                              ? sinCeros
+                                                              : sinCeros.padStart(3, '0');
+                                                          })()}
+                                                    </span>
+                                                    {/* §4.6 F3 — chip cuando la cosecha se despachó
+                                                        en otra quincena. Su peso no se concilia acá. */}
+                                                    {c.despachado_fuera_del_periodo && c.fecha_viaje && (
+                                                      <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wide bg-muted/60 text-muted-foreground border border-border rounded-md px-1.5 py-0.5">
+                                                        despachado {c.fecha_viaje.slice(8, 10)}/{c.fecha_viaje.slice(5, 7)}
+                                                      </span>
+                                                    )}
+                                                  </div>
+                                                </td>
                                                 <td className="p-2 text-right">{c.gajos_trabajados}</td>
                                                 <td className="p-2 text-right">{c.gajos_verificados}</td>
                                                 <td className={`p-2 text-right font-semibold ${c.diferencia_gajos === 0 ? 'text-muted-foreground' : c.diferencia_gajos > 0 ? 'text-amber-600' : 'text-primary'}`}>
                                                   {c.diferencia_gajos > 0 ? '+' : ''}{c.diferencia_gajos}
                                                 </td>
+                                                {/* §4.6 F5 — Promedios efectivo/aplicado con
+                                                    icono según origen. Solo se renderiza cuando
+                                                    la fila los trae; garantiza consistencia con
+                                                    la cabecera de la tabla. */}
+                                                {d.cosechas.some((x) => x.promedio_efectivo != null || x.promedio_aplicado != null) && (
+                                                  <>
+                                                    <td className="p-2 text-right text-muted-foreground">
+                                                      {c.promedio_efectivo != null
+                                                        ? Number(c.promedio_efectivo).toFixed(2)
+                                                        : '—'}
+                                                    </td>
+                                                    <td className="p-2 text-right">
+                                                      {c.promedio_aplicado != null ? (() => {
+                                                        // §4.6 — Origen del kg_extractora:
+                                                        // BASCULA = medición real, MIXTO = mixto,
+                                                        // BASELINE = estimación (±6 % típico),
+                                                        // PESO_CONFIRMADO = pesaje manual.
+                                                        const o = c.origen_kg_extractora;
+                                                        const esBascula = o === 'BASCULA' || o === 'PESO_CONFIRMADO';
+                                                        const esBaseline = o === 'BASELINE' || o === 'MIXTO';
+                                                        const tooltip =
+                                                          o === 'BASCULA' ? 'Medición real (viaje homogéneo)'
+                                                            : o === 'PESO_CONFIRMADO' ? 'Pesaje registrado a mano'
+                                                              : o === 'MIXTO' ? 'Cosecha partida entre viaje homogéneo y mixto'
+                                                                : o === 'BASELINE' ? 'Estimación (camión mixto, sin medición real). Puede desviar ±6 %.'
+                                                                  : o === 'FALLBACK_SNAPSHOT' ? 'Dato legacy sin promedio aplicado'
+                                                                    : (o ?? '');
+                                                        return (
+                                                          <span
+                                                            className={`inline-flex items-center gap-1 ${esBaseline ? 'text-amber-700' : ''}`}
+                                                            title={tooltip}
+                                                          >
+                                                            {esBascula && <span aria-hidden="true">⚖</span>}
+                                                            {esBaseline && <span aria-hidden="true">≈</span>}
+                                                            {Number(c.promedio_aplicado).toFixed(2)}
+                                                          </span>
+                                                        );
+                                                      })() : <span className="text-muted-foreground">—</span>}
+                                                    </td>
+                                                  </>
+                                                )}
                                                 <td className="p-2 text-right">{Math.round(kgTrab).toLocaleString('es-CO')}</td>
-                                                <td className="p-2 text-right">{Math.round(kgExtr).toLocaleString('es-CO')}</td>
-                                                <td className={`p-2 text-right font-semibold ${Math.abs(difKg) < 1 ? 'text-muted-foreground' : difKg > 0 ? 'text-amber-600' : 'text-primary'}`}>
-                                                  {difKg > 0 ? '+' : ''}{Math.round(difKg).toLocaleString('es-CO')}
+                                                <td className="p-2 text-right">
+                                                  {kgExtr > 0
+                                                    ? Math.round(kgExtr).toLocaleString('es-CO')
+                                                    : <span className="text-muted-foreground">—</span>}
+                                                </td>
+                                                <td className={`p-2 text-right font-semibold ${
+                                                  difKg === null
+                                                    ? 'text-muted-foreground'
+                                                    : Math.abs(difKg) < 1
+                                                      ? 'text-muted-foreground'
+                                                      : difKg > 0
+                                                        ? 'text-amber-600'
+                                                        : 'text-primary'
+                                                }`}>
+                                                  {/* §4.6 — `null` = no conciliable en este período (típico:
+                                                      despachado_fuera_del_periodo). Nunca pintar `0`. */}
+                                                  {difKg === null
+                                                    ? '—'
+                                                    : `${difKg > 0 ? '+' : ''}${Math.round(difKg).toLocaleString('es-CO')}`}
                                                 </td>
                                                 {hayCol && (
                                                   <td className="p-2 text-right">
@@ -2029,9 +2446,20 @@ export default function NuevaNominaWizard() {
                                             const totGT = d.cosechas.reduce((s, c) => s + c.gajos_trabajados, 0);
                                             const totGV = d.cosechas.reduce((s, c) => s + c.gajos_verificados, 0);
                                             const totDifG = d.cosechas.reduce((s, c) => s + c.diferencia_gajos, 0);
-                                            const totKgT = d.cosechas.reduce((s, c) => s + ajustarKgCosecha(c).kgTrab, 0);
-                                            const totKgE = d.cosechas.reduce((s, c) => s + ajustarKgCosecha(c).kgExtr, 0);
-                                            const totDifKg = totKgT - totKgE;
+                                            // §4.6 — Sumar solo lo conciliable en este período. Las
+                                            // filas con difKg = null (despachado_fuera_del_periodo)
+                                            // no entran al total de descuadre — su peso se
+                                            // reconcilia en la nómina siguiente.
+                                            const filasAjustadas = d.cosechas.map((c) => ajustarKgCosecha(c));
+                                            const totKgT = filasAjustadas.reduce((s, r) => s + r.kgTrab, 0);
+                                            const totKgE = filasAjustadas.reduce((s, r) => s + r.kgExtr, 0);
+                                            const totDifKg = filasAjustadas.reduce(
+                                              (s, r) => s + (r.difKg ?? 0),
+                                              0,
+                                            );
+                                            const mostrarPromedios = d.cosechas.some(
+                                              (c) => c.promedio_efectivo != null || c.promedio_aplicado != null,
+                                            );
                                             return (
                                               <tr className="border-t-2 border-primary/40 bg-primary/5 font-semibold">
                                                 <td className="p-2 font-bold uppercase text-primary" colSpan={4}>Totales</td>
@@ -2040,10 +2468,16 @@ export default function NuevaNominaWizard() {
                                                 <td className={`p-2 text-right font-bold ${totDifG === 0 ? 'text-muted-foreground' : totDifG > 0 ? 'text-amber-600' : 'text-primary'}`}>
                                                   {totDifG > 0 ? '+' : ''}{totDifG}
                                                 </td>
-                                                <td className="p-2 text-right font-bold">{totKgT.toLocaleString('es-CO')} kg</td>
-                                                <td className="p-2 text-right font-bold">{totKgE.toLocaleString('es-CO')} kg</td>
-                                                <td className={`p-2 text-right font-bold ${totDifKg === 0 ? 'text-success' : totDifKg > 0 ? 'text-amber-600' : 'text-primary'}`}>
-                                                  {totDifKg > 0 ? '+' : ''}{totDifKg.toLocaleString('es-CO')} kg
+                                                {mostrarPromedios && (
+                                                  <>
+                                                    <td className="p-2" />
+                                                    <td className="p-2" />
+                                                  </>
+                                                )}
+                                                <td className="p-2 text-right font-bold">{Math.round(totKgT).toLocaleString('es-CO')} kg</td>
+                                                <td className="p-2 text-right font-bold">{Math.round(totKgE).toLocaleString('es-CO')} kg</td>
+                                                <td className={`p-2 text-right font-bold ${Math.abs(totDifKg) < 1 ? 'text-success' : totDifKg > 0 ? 'text-amber-600' : 'text-primary'}`}>
+                                                  {totDifKg > 0 ? '+' : ''}{Math.round(totDifKg).toLocaleString('es-CO')} kg
                                                 </td>
                                               </tr>
                                             );
@@ -2100,6 +2534,40 @@ export default function NuevaNominaWizard() {
               </div>
 
               <div className="space-y-4">
+                {/* §2.6 — Aviso de "quincena partida". Ya existen OTRAS
+                    nóminas en el mismo (mes, año, quincena). Excluye la
+                    nómina que se está creando en este wizard (que ya vive en
+                    BORRADOR desde el paso 1). */}
+                {nominasMismoPeriodo.length > 0 && (
+                  <Card className="border-2 border-amber-500/40 bg-amber-50/60 dark:bg-amber-950/20">
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-3">
+                        <AlertCircle className="h-5 w-5 mt-0.5 text-amber-700 shrink-0" />
+                        <div className="flex-1">
+                          <p className="text-sm font-semibold text-amber-900 dark:text-amber-200 mb-1">
+                            Quincena partida — existe{nominasMismoPeriodo.length !== 1 ? 'n' : ''}{' '}
+                            {nominasMismoPeriodo.length} nómina{nominasMismoPeriodo.length !== 1 ? 's' : ''} más para este período
+                          </p>
+                          <p className="text-xs text-amber-800/80 dark:text-amber-200/80 mb-2">
+                            Esta nómina no es la única del mes/quincena. Cada nómina cubre a un grupo distinto de colaboradores; ningún día se pagará dos veces (Postgres lo bloquea).
+                          </p>
+                          <ul className="text-xs text-amber-900/90 dark:text-amber-100/90 space-y-0.5">
+                            {nominasMismoPeriodo.map((n) => (
+                              <li key={n.id}>
+                                <strong>{n.etiqueta ?? 'Sin etiqueta'}</strong>{' '}
+                                · {n.fecha_inicio} al {n.fecha_fin}
+                                {' · '}{n.estado}
+                                {n.empleados_count != null && (
+                                  <> · {n.empleados_count} colaborador{n.empleados_count !== 1 ? 'es' : ''}</>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
                 <Card className="border-border">
                   <CardContent className="p-6">
                     <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
@@ -2303,16 +2771,9 @@ export default function NuevaNominaWizard() {
         <Button
           variant="outline"
           onClick={handleAtras}
-          disabled={
-            pasoActual === 1 || procesando ||
-            // En modo CREAR: una vez creada (paso 2+), no se puede volver atrás
-            // porque cambiar el período de una nómina existente requiere PUT y
-            // si hay liquidados el backend lo rechazaría.
-            // En modo EDITAR: sí permitimos volver al paso 1 para reintentar PUT.
-            (!esEdicion && pasoActual === 2 && !!nominaId)
-          }
+          disabled={pasoActual === 1 || procesando}
           className="gap-2"
-          title={!esEdicion && pasoActual === 2 && nominaId ? 'La nómina ya está creada, no puedes cambiar el período' : undefined}
+          title="Volver al paso anterior"
         >
           <ArrowLeft className="h-4 w-4" />
           Atrás
@@ -2378,6 +2839,9 @@ export default function NuevaNominaWizard() {
               Extractora es dato fijo del backend — no depende de promedios. */}
           {bundleCosecha && (() => {
             const totalExtr = bundleCosecha.total_kg_extractora ?? 0;
+            // §4.6 — La diferencia real descuenta la fruta que se despachó
+            // fuera del período (peso conciliable en la quincena siguiente).
+            const totalFueraModal = bundleCosecha.total_kg_despachado_fuera_del_periodo ?? 0;
 
             // Mapa lote_id → promedio efectivo actual (editado o del bundle).
             const promedioEfectivoActual = new Map<number, number>();
@@ -2423,9 +2887,13 @@ export default function NuevaNominaWizard() {
               }
             }
 
-            const diff = totalColabs - totalExtr;
+            // §4.6 — Misma fórmula que en la card grande de afuera:
+            //   diff = colaboradores − despachado_fuera − extractora
+            const diff = totalColabs - totalFueraModal - totalExtr;
+            const baseConciliable = Math.max(0, totalColabs - totalFueraModal);
+            const pctModal = baseConciliable > 0 ? Math.abs(diff) / baseConciliable : 0;
             const estado: 'ok' | 'critico' | 'atencion' =
-              Math.abs(diff) < 1 ? 'ok' : Math.abs(diff) > 500 ? 'critico' : 'atencion';
+              pctModal < 0.02 ? 'ok' : pctModal > 0.05 ? 'critico' : 'atencion';
             const colorTexto = estado === 'ok' ? 'text-success' : estado === 'critico' ? 'text-destructive' : 'text-amber-700';
 
             return (
@@ -2433,7 +2901,10 @@ export default function NuevaNominaWizard() {
                 <div className="flex items-center px-5 py-3 border-b border-border bg-muted/30">
                   <p className="text-sm font-semibold">Resumen de Cosecha</p>
                 </div>
-                <div className="grid grid-cols-3 divide-x divide-border">
+                {/* §4.6 — Cuando hay fruta despachada fuera del período, la
+                    tarjeta se abre a 4 celdas para reflejar la misma fórmula
+                    que la card grande de afuera. Si no hay, se colapsa a 3. */}
+                <div className={`grid divide-x divide-border ${totalFueraModal > 0 ? 'grid-cols-4' : 'grid-cols-3'}`}>
                   <div className="px-6 py-4">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
                       Colaboradores
@@ -2442,21 +2913,37 @@ export default function NuevaNominaWizard() {
                       {Math.round(totalColabs).toLocaleString('es-CO')} <span className="text-sm text-muted-foreground font-normal">kg</span>
                     </p>
                   </div>
+                  {totalFueraModal > 0 && (
+                    <div
+                      className="px-6 py-4 bg-muted/10"
+                      title="Fruta cortada en este período pero despachada en otra quincena. Se paga acá; su peso se concilia allá."
+                    >
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+                        Despachado fuera
+                      </p>
+                      <p className="text-2xl font-bold text-muted-foreground">
+                        −{Math.round(totalFueraModal).toLocaleString('es-CO')} <span className="text-sm font-normal">kg</span>
+                      </p>
+                    </div>
+                  )}
                   <div className="px-6 py-4">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
                       Extractora
                     </p>
                     <p className="text-2xl font-bold">
-                      {totalExtr.toLocaleString('es-CO')} <span className="text-sm text-muted-foreground font-normal">kg</span>
+                      {totalExtr > 0 ? `−${totalExtr.toLocaleString('es-CO')}` : '—'} <span className="text-sm text-muted-foreground font-normal">kg</span>
                     </p>
                   </div>
                   <div className={`px-6 py-4 ${estado === 'ok' ? 'bg-success/5' : estado === 'critico' ? 'bg-destructive/5' : 'bg-amber-500/5'}`}>
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
-                      Diferencia
+                      Diferencia real
                     </p>
                     <p className={`text-2xl font-bold ${colorTexto}`}>
                       {diff > 0 ? '+' : ''}{Math.round(diff).toLocaleString('es-CO')}
                       <span className="text-sm text-muted-foreground font-normal ml-1">kg</span>
+                    </p>
+                    <p className={`text-xs mt-1 ${colorTexto}`}>
+                      {(pctModal * 100).toFixed(1)}% · {estado === 'ok' ? 'Normal' : estado === 'critico' ? 'Significativa' : 'Revisar'}
                     </p>
                   </div>
                 </div>
@@ -2554,7 +3041,7 @@ export default function NuevaNominaWizard() {
               Cancelar
             </Button>
             <Button
-              onClick={guardarPromedios}
+              onClick={pedirConfirmacionGuardarPromedios}
               disabled={ajustandoPromedio || !hayCambiosPromedios}
               className="gap-2"
             >
@@ -2607,6 +3094,138 @@ export default function NuevaNominaWizard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* §4.6 F6 — Confirmación al guardar promedios manuales.
+          El ajuste cambia lo que cobra la gente (peldaño 1 de la escalera
+          que paga cosecha), no solo la conciliación de la pantalla. */}
+      <AlertDialog
+        open={confirmarAjustePromedios !== null}
+        onOpenChange={(open) => !open && setConfirmarAjustePromedios(null)}
+      >
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar ajuste de promedios</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>
+                  Estos cambios afectan lo que cobra cada colaborador por cosecha, no solo la conciliación de esta pantalla. Revísalos antes de guardar.
+                </p>
+                <ul className="space-y-2">
+                  {(confirmarAjustePromedios ?? []).map((c) => {
+                    const deltaKg = c.gajos_totales * c.delta;
+                    const sube = c.delta > 0;
+                    return (
+                      <li
+                        key={c.lote_id}
+                        className={`rounded-lg border p-3 ${sube ? 'border-amber-500/30 bg-amber-50/40 dark:bg-amber-950/20' : 'border-destructive/30 bg-destructive/5'}`}
+                      >
+                        <p className="text-sm font-semibold text-foreground">
+                          {c.lote_nombre}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {Number(c.promedio_original).toFixed(2)} → {Number(c.promedio_nuevo).toFixed(2)} kg/gajo
+                          {' '}({sube ? '+' : ''}{c.delta.toFixed(2)})
+                        </p>
+                        <p className="text-xs text-foreground mt-1.5">
+                          Impacta a <strong>{c.colaboradores_impactados} colaborador{c.colaboradores_impactados !== 1 ? 'es' : ''}</strong>
+                          {' '}({c.gajos_totales.toLocaleString('es-CO')} gajos):
+                          {' '}
+                          <strong className={sube ? 'text-amber-700' : 'text-destructive'}>
+                            {sube ? '+' : ''}{Math.round(deltaKg).toLocaleString('es-CO')} kg
+                          </strong>
+                          {' '}en el pago total de cosecha del lote.
+                        </p>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <p className="text-xs text-muted-foreground">
+                  El cambio se aplica desde ya y afecta todos los cálculos de esta nómina hasta que se cierre.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={ajustandoPromedio}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={ejecutarGuardarPromedios}
+              disabled={ajustandoPromedio}
+            >
+              {ajustandoPromedio && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Guardar y aplicar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirmar al salir del wizard con borrador persistido.
+          Sin este diálogo, entrar al wizard → revisar cosecha → salirse
+          dejaba una nómina huérfana en la lista de Pagos. */}
+      <AlertDialog
+        open={confirmarSalirWizard}
+        onOpenChange={(open) => !open && !descartandoBorrador && setConfirmarSalirWizard(false)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Descartar la nómina en borrador?</AlertDialogTitle>
+            <AlertDialogDescription>
+              La nómina ya se guardó en el backend como borrador desde el paso 1. Si sales sin terminar puedes descartarla, o dejarla guardada para continuarla después desde el listado.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel disabled={descartandoBorrador}>
+              Seguir editando
+            </AlertDialogCancel>
+            <Button
+              variant="outline"
+              onClick={() => {
+                // Dejar el borrador tal cual y salir. Limpiamos la marca
+                // de "flujo de creación" para que la próxima vez que entre
+                // el título diga "Editar" y no "Nuevo".
+                try {
+                  sessionStorage.removeItem('wizard_flujo_creacion');
+                  localStorage.removeItem(STORAGE_KEY_NOMINA_WIZARD);
+                } catch { /* noop */ }
+                setConfirmarSalirWizard(false);
+                navigate('/nomina');
+              }}
+              disabled={descartandoBorrador}
+            >
+              Dejar borrador
+            </Button>
+            <AlertDialogAction
+              onClick={async () => {
+                if (!nominaId) {
+                  setConfirmarSalirWizard(false);
+                  navigate('/nomina');
+                  return;
+                }
+                setDescartandoBorrador(true);
+                try {
+                  await nominaApi.eliminar(nominaId);
+                  toast.success('Borrador descartado');
+                  try {
+                    sessionStorage.removeItem('wizard_flujo_creacion');
+                    localStorage.removeItem(STORAGE_KEY_NOMINA_WIZARD);
+                  } catch { /* noop */ }
+                  setConfirmarSalirWizard(false);
+                  navigate('/nomina');
+                } catch (err) {
+                  const e = err as ApiError;
+                  toast.error(e.message ?? 'No se pudo descartar el borrador');
+                } finally {
+                  setDescartandoBorrador(false);
+                }
+              }}
+              disabled={descartandoBorrador}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+            >
+              {descartandoBorrador && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Descartar borrador
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
