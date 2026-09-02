@@ -52,9 +52,12 @@ export function DetalleDescansos({
   if (!items || items.length === 0) return null;
 
   const isCompact = variant === 'compact';
+  // Anchos fijos en las columnas numéricas para que cada valor caiga debajo
+  // de su header. Con `auto` el "—" (más angosto que el título) se colapsaba
+  // al lado derecho y dejaba las dos celdas apretadas bajo "Recargo".
   const gridCols = isCompact
-    ? 'grid-cols-[80px_70px_1fr_auto_auto]'
-    : 'grid-cols-[100px_90px_1fr_auto_auto]';
+    ? 'grid-cols-[80px_70px_1fr_90px_90px]'
+    : 'grid-cols-[100px_90px_1fr_120px_120px]';
   const headerText = isCompact ? 'text-[10px]' : 'text-xs';
   const rowText = 'text-xs';
   const container = isCompact
@@ -86,30 +89,43 @@ export function DetalleDescansos({
           <span className="text-right pr-2">Descanso</span>
           <span className="text-right">Recargo</span>
         </div>
-        {items.map((d) => (
-          <div
-            key={d.fecha}
-            className={`grid ${gridCols} ${rowText} ${
-              isCompact
-                ? 'py-0.5'
-                : `px-4 py-2 border-b last:border-b-0 ${d.pagado ? '' : 'bg-destructive/5'}`
-            }`}
-          >
-            <span className="font-mono">{d.fecha}</span>
-            <span>{d.tipo === 'DOMINICAL' ? 'Dominical' : 'Festivo'}</span>
-            <span className={d.pagado ? '' : 'text-destructive'}>
-              {d.pagado
-                ? (d.nombre ?? d.nombre_festivo ?? 'Pagado')
-                : (d.motivo ?? d.resultado ?? 'No pagado')}
-            </span>
-            <span className="text-right pr-2 font-semibold">
-              {d.pagado ? formatMoney(d.valor_descanso) : '—'}
-            </span>
-            <span className="text-right font-semibold">
-              {d.pagado && d.valor_recargo > 0 ? formatMoney(d.valor_recargo) : '—'}
-            </span>
-          </div>
-        ))}
+        {items.map((d) => {
+          // §9.9 — El backend puede enviar `resultado` (PAGADO / PERDIDO / SUSPENDIDO)
+          // y no siempre incluye el flag `pagado`. Derivamos localmente para no
+          // pintar "—" cuando el día sí fue pagado.
+          const esPagado = d.pagado ?? d.resultado === 'PAGADO';
+          const valorDescanso = Number(d.valor_descanso ?? 0);
+          const valorRecargo = Number(d.valor_recargo ?? 0);
+          return (
+            <div
+              key={d.fecha}
+              className={`grid ${gridCols} ${rowText} ${
+                isCompact
+                  ? 'py-0.5'
+                  : `px-4 py-2 border-b last:border-b-0 ${esPagado ? '' : 'bg-destructive/5'}`
+              }`}
+            >
+              <span className="font-mono">{d.fecha}</span>
+              <span>{d.tipo === 'DOMINICAL' ? 'Dominical' : 'Festivo'}</span>
+              <span className={esPagado ? '' : 'text-destructive'}>
+                {esPagado
+                  ? (d.nombre ?? d.nombre_festivo ?? 'Pagado')
+                  : (d.motivo ?? d.resultado ?? 'No pagado')}
+              </span>
+              {/* Descanso: pintamos el valor cuando exista, aunque el día no
+                  esté PAGADO (para SUSPENDIDO_INCAPACIDAD suele venir 0 y sale
+                  "—" naturalmente). */}
+              <span className="text-right pr-2 font-semibold">
+                {valorDescanso > 0 ? formatMoney(valorDescanso) : '—'}
+              </span>
+              {/* Recargo: solo si el colaborador TRABAJÓ ese día (art. 179).
+                  Si no hay valor o no trabajó, sale "—". */}
+              <span className="text-right font-semibold">
+                {valorRecargo > 0 ? formatMoney(valorRecargo) : '—'}
+              </span>
+            </div>
+          );
+        })}
       </div>
       {(diasPerdidos ?? 0) > 0 && (
         <p className={notaText}>

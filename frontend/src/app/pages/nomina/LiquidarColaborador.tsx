@@ -155,6 +155,15 @@ export default function LiquidarColaborador() {
       .then(async (prev) => {
         setPreview(prev.data);
         setDiasTrabajados(prev.data.dias_trabajados);
+        // Persistimos el bruto recalculado en sessionStorage para que el
+        // listado de la nómina lo muestre sin volver a pedir preview cuando
+        // el usuario regrese. TTL de 10 min lo maneja el listado al leer.
+        try {
+          sessionStorage.setItem(
+            `nomina_preview_bruto_${nominaEmpleadoId}`,
+            JSON.stringify({ total: Number(prev.data.total_devengado ?? 0), at: Date.now() }),
+          );
+        } catch { /* sessionStorage puede estar deshabilitado */ }
 
         // Los detalles de horas extras y ausencias (con motivo, tipo, etc.)
         // ahora vienen directamente en el preview (§5.1 nuevos campos

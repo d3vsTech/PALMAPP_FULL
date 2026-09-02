@@ -55,9 +55,11 @@ import { toast } from 'sonner';
 import {
   nominaApi, Nomina, NominaEmpleado, NominaTercero, Periodicidad,
   NominaErrorCodes, NominaTerceroActaDetalle, MetodoPagoTercero,
+  DetalleLaboresOperario,
 } from '../../../api/nomina';
-import { operacionesApi } from '../../../api/operaciones';
-import type { PlanillaDetalle } from '../../../api/operaciones';
+// `operacionesApi` y `PlanillaDetalle` se removieron tras el refactor a
+// endpoints dedicados de nómina (§7.4). El listado de terceros ya no
+// consulta el módulo de planillas para armar el desglose.
 import type { ApiError } from '../../../api/client';
 
 const MESES_NOMBRE: Record<number, string> = {
@@ -94,6 +96,131 @@ function getIniciales(nombre: string): string {
   if (partes.length === 0) return '?';
   if (partes.length === 1) return partes[0].substring(0, 2).toUpperCase();
   return `${partes[0][0]}${partes[1][0]}`.toUpperCase();
+}
+
+// ── Tipos y catálogo compartidos para el desglose por tercero ──────────────
+// Se declaran a nivel de módulo para poder tiparlos en el useState del mapa.
+type FilaLabor = {
+  lote: string;
+  sublote: string;
+  cantidad: number;
+  unidad: 'gajos' | 'palmas';
+  promedio_kg: number | null;
+  peso_kg: number | null;
+  precio: number;
+  precio_unidad: string;
+  total: number;
+};
+type CategoriaLabor = {
+  key: 'cosecha' | 'poda' | 'fertilizacion' | 'plateo' | 'sanidad' | 'otros' | 'finca';
+  titulo: string;
+  color: 'amber' | 'green' | 'blue' | 'purple' | 'red' | 'gray';
+  filas: FilaLabor[];
+  subtotal: number;
+};
+const CATS: Array<{ key: CategoriaLabor['key']; titulo: string; color: CategoriaLabor['color'] }> = [
+  { key: 'cosecha', titulo: 'COSECHA', color: 'amber' },
+  { key: 'poda', titulo: 'PODA', color: 'green' },
+  { key: 'fertilizacion', titulo: 'FERTILIZACIÓN', color: 'blue' },
+  { key: 'plateo', titulo: 'PLATEO', color: 'green' },
+  { key: 'sanidad', titulo: 'SANIDAD', color: 'red' },
+  { key: 'otros', titulo: 'OTROS', color: 'purple' },
+  { key: 'finca', titulo: 'FINCA', color: 'gray' },
+];
+
+/**
+ * Consolida el desglose de labores para un tercero a partir de los
+ * `DetalleLaboresOperario[]` que devuelve `GET .../operarios/{op}/detalle`
+ * (doc §7.4). Reemplaza la agregación manual anterior sobre `planillasPeriodo`
+ * (que hacía N+1 sobre `/operaciones/{id}` con relaciones eager-loaded).
+ *
+ * El backend ya trae los totales por operario × labor × lote/sublote, así que
+ * solo hay que agrupar y sumar por (categoría, lote, sublote).
+ */
+function consolidarDesdeDetalles(detalles: DetalleLaboresOperario[]): CategoriaLabor[] {
+  const cats: CategoriaLabor[] = CATS.map((c) => ({ ...c, filas: [], subtotal: 0 }));
+  const acc: Record<string, Record<string, FilaLabor & { pesoTotal: number; kgAcc: number }>> = {};
+  for (const c of CATS) acc[c.key] = {};
+
+  const getRow = (
+    key: CategoriaLabor['key'],
+    loteName: string,
+    subloteName: string,
+    esCosecha: boolean,
+  ) => {
+    const k = `${loteName}|${subloteName}`;
+    if (!acc[key][k]) {
+      acc[key][k] = {
+        lote: loteName,
+        sublote: subloteName,
+        cantidad: 0,
+        unidad: esCosecha ? 'gajos' : 'palmas',
+        promedio_kg: esCosecha ? 0 : null,
+        peso_kg: esCosecha ? 0 : null,
+        precio: 0,
+        precio_unidad: esCosecha ? '/kg' : '/palma',
+        total: 0,
+        pesoTotal: 0,
+        kgAcc: 0,
+      };
+    }
+    return acc[key][k];
+  };
+
+  const categoriaDeJornal = (categoria: 'PALMA' | 'FINCA', laborNombre: string): CategoriaLabor['key'] => {
+    if (categoria === 'FINCA') return 'finca';
+    // Heurística por nombre — el endpoint §7.4 no envía `tipo` como sí lo
+    // hacía `/operaciones/{id}`. Se mapea por el `labor_nombre` snapshot.
+    const n = laborNombre.toLowerCase();
+    if (n.includes('plateo')) return 'plateo';
+    if (n.includes('poda')) return 'poda';
+    if (n.includes('fertiliza') || n.includes('abon')) return 'fertilizacion';
+    if (n.includes('sanidad') || n.includes('plaga') || n.includes('insect')) return 'sanidad';
+    return 'otros';
+  };
+
+  detalles.forEach((det) => {
+    // ── COSECHAS ──
+    (det.cosecha ?? []).forEach((c) => {
+      const row = getRow('cosecha', c.lote, c.sublote ?? '—', true);
+      row.cantidad += Number(c.gajos ?? 0);
+      const peso = Number(c.peso_kg ?? 0);
+      const precio = Number(c.precio_unit_kg ?? 0);
+      const promedio = Number(c.promedio_kg_gajo ?? 0);
+      row.peso_kg = (row.peso_kg ?? 0) + peso;
+      row.total += Number(c.total ?? 0);
+      if (peso > 0 && promedio > 0) {
+        row.kgAcc += promedio * peso;
+        row.pesoTotal += peso;
+      }
+      if (precio > 0) row.precio = precio;
+    });
+    // ── JORNALES ──
+    (det.jornales ?? []).forEach((j) => {
+      const key = categoriaDeJornal(j.categoria, j.labor_nombre);
+      const loteName = key === 'finca'
+        ? (j.labor_nombre || 'Trabajo de finca')
+        : (j.lote ?? '—');
+      const subloteName = key === 'finca' ? '—' : (j.sublote ?? '—');
+      const row = getRow(key, loteName, subloteName, false);
+      row.cantidad += Number(j.unidades ?? 0);
+      row.total += Number(j.total ?? 0);
+      if (Number(j.precio_unit) > 0) row.precio = Number(j.precio_unit);
+    });
+  });
+
+  CATS.forEach((c, idx) => {
+    const rows = Object.values(acc[c.key]);
+    rows.forEach((r) => {
+      if (c.key === 'cosecha' && r.pesoTotal > 0) {
+        r.promedio_kg = r.kgAcc / r.pesoTotal;
+      }
+    });
+    cats[idx].filas = rows;
+    cats[idx].subtotal = rows.reduce((s, r) => s + r.total, 0);
+  });
+
+  return cats.filter((c) => c.filas.length > 0);
 }
 
 export default function NominaDetalle() {
@@ -154,11 +281,12 @@ export default function NominaDetalle() {
   // no null). Para operarios el consolidado se arma desde `planillasPeriodo`
   // que ya trae cosechas[].cuadrilla y jornales[] eager-loaded.
   /**
-   * Registros de campo del período (planillas APROBADAS). Fuente real del
-   * desglose por lote/labor para operarios de terceros — el endpoint
-   * `resumen-trabajo` NO funciona con operarios (422 EMPLEADO_NO_VARIABLE).
+   * Desglose por lote/labor por tercero — resultado ya consolidado desde el
+   * endpoint dedicado `GET /nominas/{n}/terceros/{t}/operarios/{op}/detalle`
+   * (doc §7.4). Reemplaza al antiguo `planillasPeriodo` que hacía N+1 sobre
+   * `/operaciones/{id}`. Clave: `tercero_id`.
    */
-  const [planillasPeriodo, setPlanillasPeriodo] = useState<PlanillaDetalle[]>([]);
+  const [detallesPorTercero, setDetallesPorTercero] = useState<Map<number, CategoriaLabor[]>>(new Map());
 
   // Nota: `tercerosLookup` se eliminó — solo era un fallback defensivo
   // para `nombre_display`, pero el backend siempre eager-loadea el tercero
@@ -189,6 +317,38 @@ export default function NominaDetalle() {
   const [descuentosTercero, setDescuentosTercero] = useState<DescuentoTercero[]>([]);
   const [liquidandoTercero, setLiquidandoTercero] = useState(false);
 
+  // Cache de brutos reales (recalculados vía preview) — se llena BAJO DEMANDA.
+  // Antes hacíamos batch de 19+ previews al abrir el detalle, lo que saturaba
+  // el navegador y demoraba varios segundos. Ahora la columna muestra el
+  // snapshot original (proyectado) y solo se recalcula la fila cuando el
+  // usuario abre el editor de liquidación de ese colaborador (el editor
+  // guarda su preview en sessionStorage con TTL para que al volver al
+  // listado la fila se muestre actualizada sin nueva request).
+  const [previewsPorEmpleado, setPreviewsPorEmpleado] = useState<Map<number, number>>(new Map());
+
+  // TTL de 10 min para el cache — mismo criterio que otros previews del wizard.
+  const PREVIEW_CACHE_TTL_MS = 10 * 60 * 1000;
+  const previewCacheKey = (empleadoId: number) => `nomina_preview_bruto_${empleadoId}`;
+
+  // Lee sessionStorage al montar y cuando se vuelve a la pantalla (por ejemplo
+  // desde el editor de liquidación) para reflejar valores en cache sin pedir
+  // nada al backend.
+  const hidratarCacheLocal = (empleadoIds: number[]) => {
+    const mapa = new Map<number, number>();
+    const ahora = Date.now();
+    for (const id of empleadoIds) {
+      try {
+        const raw = sessionStorage.getItem(previewCacheKey(id));
+        if (!raw) continue;
+        const parsed = JSON.parse(raw) as { total: number; at: number };
+        if (parsed.at && ahora - parsed.at < PREVIEW_CACHE_TTL_MS) {
+          mapa.set(id, Number(parsed.total ?? 0));
+        }
+      } catch { /* ignora entradas corruptas */ }
+    }
+    setPreviewsPorEmpleado(mapa);
+  };
+
   const cargar = () => {
     if (!nominaId) return;
     setCargando(true);
@@ -196,7 +356,12 @@ export default function NominaDetalle() {
       .ver(nominaId)
       .then((res) => {
         setNomina(res.data);
-        setEmpleados(res.data.empleados ?? []);
+        const emps = res.data.empleados ?? [];
+        setEmpleados(emps);
+        // Sin precarga: la columna Salario Base arranca con el snapshot y
+        // se hidrata desde sessionStorage con los previews que ya se hayan
+        // calculado en editores previos.
+        hidratarCacheLocal(emps.map((e) => e.id));
       })
       .catch((err: ApiError) => toast.error(err.message ?? 'Error al cargar nómina'))
       .finally(() => setCargando(false));
@@ -253,52 +418,93 @@ export default function NominaDetalle() {
   // desde `planillasPeriodo` que ya trae los eager-loads necesarios.
 
   /**
-   * Carga LAZY de las planillas APROBADAS entre fecha_inicio y fecha_fin de
-   * la nómina. Solo se dispara cuando el usuario abre el tab "Terceros" y
-   * hay operarios en la nómina — antes se cargaba upfront aunque el usuario
-   * nunca abriera ese tab (era 1 `listar` + N `ver` que a veces sumaban
-   * ~50 kB por nómina y no se usaban para colaboradores internos).
+   * Carga del desglose por tercero usando los endpoints DEDICADOS de nómina
+   * (doc §7.4). Reemplaza el N+1 anterior que hacía `GET /operaciones` +
+   * N × `GET /operaciones/{id}` (una petición por planilla del período con
+   * TODAS las relaciones eager-loaded — cientos de kB para pintar 5 filas).
    *
-   * `planillasPeriodoCargadasRef` evita re-cargar si el usuario abre y
-   * cierra el tab Terceros varias veces sin que cambien las fechas.
+   * Nuevo flujo:
+   *   1. Por cada tercero en `terceros[]`, y por cada operario del tercero:
+   *   2. `GET /nominas/{n}/terceros/{t}/operarios/{op}/detalle` (§7.4) →
+   *      { cosecha[], jornales[] } con exactamente las columnas de la tabla.
+   *   3. Si alguno responde 404 ACTA_NO_CALCULADA, disparar `liquidar` una vez
+   *      y reintentar los detalles del tercero (idempotente).
+   *
+   * Resultado: 2-3 peticiones ligeras en vez de 15+ pesadas.
+   *
+   * Se dispara al entrar al tab "Terceros" y solo re-carga si cambian los
+   * `terceros` o los `empleados` (nuevos operarios agregados).
    */
-  const hayOperariosRef = useRef(false);
-  useEffect(() => {
-    hayOperariosRef.current = empleados.some((e) => e.operario_id != null);
-  }, [empleados]);
-
-  const planillasPeriodoCargadasRef = useRef<string | null>(null);
+  const detallesTerceroCacheRef = useRef<string | null>(null);
   useEffect(() => {
     if (tabActivo !== 'terceros') return;
-    if (!nomina) return;
-    if (!hayOperariosRef.current) return;
-    // Key de caché in-memory por rango de fechas — si el rango no cambió,
-    // no volvemos a cargar aunque el usuario re-abra el tab Terceros.
-    const key = `${nomina.fecha_inicio}::${nomina.fecha_fin}`;
-    if (planillasPeriodoCargadasRef.current === key) return;
-    planillasPeriodoCargadasRef.current = key;
-    operacionesApi
-      .listar({
-        fecha_desde: nomina.fecha_inicio,
-        fecha_hasta: nomina.fecha_fin,
-        estado: 'APROBADA',
-        per_page: 200,
+    if (!nomina || !nominaId) return;
+    if (terceros.length === 0) return;
+
+    // Key de caché por (nomina, terceros, operarios). Si nada cambió, no
+    // repetimos las peticiones al re-abrir el tab.
+    const opsPorTercero = terceros
+      .map((t) => {
+        const ops = empleados
+          .filter((e) => e.tercero_id === t.tercero_id && e.operario_id != null)
+          .map((e) => e.operario_id!)
+          .sort((a, b) => a - b);
+        return `${t.tercero_id}:${ops.join(',')}`;
       })
-      .then(async (res) => {
-        const planillas = res.data ?? [];
-        const detalles = await Promise.all(
-          planillas.map((p) =>
-            operacionesApi.ver(p.id).then((d) => d.data).catch(() => null),
+      .join('|');
+    const key = `${nominaId}::${opsPorTercero}`;
+    if (detallesTerceroCacheRef.current === key) return;
+    detallesTerceroCacheRef.current = key;
+
+    (async () => {
+      const nuevoMapa = new Map<number, CategoriaLabor[]>();
+      // Helper: pedir todos los detalles de un tercero. Devuelve la lista de
+      // exitosos y una bandera de si alguno falló por ACTA_NO_CALCULADA.
+      const pedirDetalles = async (terceroId: number, operarioIds: number[]) => {
+        const resultados = await Promise.allSettled(
+          operarioIds.map((opId) =>
+            nominaApi.terceros.detalleOperario(nominaId, terceroId, opId).then((r) => r.data),
           ),
         );
-        setPlanillasPeriodo(detalles.filter(Boolean) as PlanillaDetalle[]);
-      })
-      .catch(() => {
-        // Al fallar, reseteamos la key para que el próximo intento pueda funcionar.
-        planillasPeriodoCargadasRef.current = null;
-      });
+        const okList: DetalleLaboresOperario[] = [];
+        let necesitaLiquidar = false;
+        for (const r of resultados) {
+          if (r.status === 'fulfilled') {
+            okList.push(r.value);
+          } else if ((r.reason as ApiError | undefined)?.code === 'ACTA_NO_CALCULADA') {
+            necesitaLiquidar = true;
+          }
+        }
+        return { okList, necesitaLiquidar };
+      };
+
+      await Promise.all(
+        terceros.map(async (t) => {
+          const operariosDelTercero = empleados
+            .filter((e) => e.tercero_id === t.tercero_id && e.operario_id != null)
+            .map((e) => e.operario_id!);
+          if (operariosDelTercero.length === 0) return;
+
+          let { okList, necesitaLiquidar } = await pedirDetalles(t.tercero_id, operariosDelTercero);
+
+          // Si el acta aún no fue liquidada, la calculamos y reintentamos
+          // UNA vez. Idempotente por doc §7.3.
+          if (necesitaLiquidar) {
+            try {
+              await nominaApi.terceros.liquidar(nominaId, t.tercero_id);
+              ({ okList } = await pedirDetalles(t.tercero_id, operariosDelTercero));
+            } catch {
+              /* silencio — el mapa quedará vacío para este tercero */
+            }
+          }
+
+          nuevoMapa.set(t.tercero_id, consolidarDesdeDetalles(okList));
+        }),
+      );
+      setDetallesPorTercero(nuevoMapa);
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabActivo, nomina?.fecha_inicio, nomina?.fecha_fin]);
+  }, [tabActivo, nominaId, terceros, empleados]);
 
   const esBorrador = nomina?.estado === 'BORRADOR';
   // Los operarios NO van en la tabla de "Liquidación de Colaboradores" — se
@@ -858,194 +1064,35 @@ export default function NominaDetalle() {
   const totalOperarios = empleadosOperarios.length;
 
   // ── Consolidación de labores por lote+sublote para el desglose por acta ─
-  type FilaLabor = {
-    lote: string;
-    sublote: string;
-    cantidad: number;
-    unidad: 'gajos' | 'palmas';
-    promedio_kg: number | null;
-    peso_kg: number | null;
-    precio: number;
-    precio_unidad: string;
-    total: number;
-  };
-  type CategoriaLabor = {
-    key: 'cosecha' | 'poda' | 'fertilizacion' | 'plateo' | 'sanidad' | 'otros' | 'finca';
-    titulo: string;
-    color: 'amber' | 'green' | 'blue' | 'purple' | 'red' | 'gray';
-    filas: FilaLabor[];
-    subtotal: number;
-  };
-
-  const CATS: Array<{ key: CategoriaLabor['key']; titulo: string; color: CategoriaLabor['color'] }> = [
-    { key: 'cosecha', titulo: 'COSECHA', color: 'amber' },
-    { key: 'poda', titulo: 'PODA', color: 'green' },
-    { key: 'fertilizacion', titulo: 'FERTILIZACIÓN', color: 'blue' },
-    { key: 'plateo', titulo: 'PLATEO', color: 'green' },
-    { key: 'sanidad', titulo: 'SANIDAD', color: 'red' },
-    { key: 'otros', titulo: 'OTROS', color: 'purple' },
-    { key: 'finca', titulo: 'FINCA', color: 'gray' },
-  ];
+  // Los tipos FilaLabor / CategoriaLabor y el catálogo CATS ahora viven a
+  // nivel de módulo (arriba del archivo) para poder tiparlos en el useState
+  // del mapa `detallesPorTercero`.
 
   /**
-   * `GET /operaciones/{id}` siempre trae `lote` y `sublote` eager-loaded
-   * en cosechas y jornales (ver API_OPERACIONES.md §3.4). Confiamos en el
-   * embed; solo caemos a "Lote #N" si por algún motivo llegara nulo.
+   * Los helpers `nombreLote` / `nombreSublote` / `catDeJornal` se eliminaron
+   * junto con el consolidado legacy. El endpoint dedicado (§7.4) ya entrega
+   * los nombres de lote/sublote como strings y no necesita re-mapear la
+   * categoría desde tipos internos de `operaciones`.
    */
-  const nombreLote = (id: number | null | undefined, embed?: any): string => {
-    if (embed && typeof embed === 'object' && 'nombre' in embed && typeof (embed as any).nombre === 'string') {
-      return (embed as any).nombre;
-    }
-    if (id == null) return '—';
-    return `Lote #${id}`;
-  };
-  const nombreSublote = (id: number | null | undefined, embed?: any): string => {
-    if (embed && typeof embed === 'object' && 'nombre' in embed && typeof (embed as any).nombre === 'string') {
-      return (embed as any).nombre;
-    }
-    if (id == null) return '—';
-    return `#${id}`;
-  };
-
-  const catDeJornal = (categoria: 'PALMA' | 'FINCA', tipo?: string | null): CategoriaLabor['key'] => {
-    if (categoria === 'FINCA') return 'finca';
-    if (tipo === 'PLATEO') return 'plateo';
-    if (tipo === 'PODA') return 'poda';
-    if (tipo === 'FERTILIZACION') return 'fertilizacion';
-    if (tipo === 'SANIDAD') return 'sanidad';
-    return 'otros';
-  };
 
   /**
-   * Consolida el desglose por labor/lote/sublote para un tercero.
+   * Desglose por labor/lote/sublote para un tercero — LEE del mapa
+   * `detallesPorTercero` que se llena una vez desde los endpoints dedicados
+   * (§7.4). Mantiene la firma `(operariosDelTercero)` para no tocar los 4
+   * sitios de llamada; el `tercero_id` se infiere del primer operario.
    *
-   * Fuente: `planillasPeriodo` (planillas APROBADAS del período de la nómina).
-   * Se filtra cuadrilla/jornales por `operario_id ∈ operariosSet`.
-   * NO se usa `resumen-trabajo` porque el backend lo rechaza para operarios
-   * (422 EMPLEADO_NO_VARIABLE).
+   * El código antiguo que hacía el consolidado desde `planillasPeriodo` fue
+   * removido — el backend ya devuelve los totales por lote/labor. Ver el
+   * refactor de rendimiento (N+1 → 2-3 requests) más arriba en el useEffect.
    */
   const consolidarPorTercero = (operariosDelTercero: NominaEmpleado[]): CategoriaLabor[] => {
-    const operariosSet = new Set<number>(
-      operariosDelTercero.map((o) => o.operario_id ?? 0).filter((x) => x > 0),
-    );
-    if (operariosSet.size === 0) return [];
-
-    const cats: CategoriaLabor[] = CATS.map((c) => ({ ...c, filas: [], subtotal: 0 }));
-    const acc: Record<string, Record<string, FilaLabor & { pesoTotal: number; kgAcc: number }>> = {};
-    for (const c of CATS) acc[c.key] = {};
-
-    const getRow = (
-      key: CategoriaLabor['key'],
-      loteName: string,
-      subloteName: string,
-      esCosecha: boolean,
-    ) => {
-      const k = `${loteName}|${subloteName}`;
-      if (!acc[key][k]) {
-        acc[key][k] = {
-          lote: loteName,
-          sublote: subloteName,
-          cantidad: 0,
-          unidad: esCosecha ? 'gajos' : 'palmas',
-          promedio_kg: esCosecha ? 0 : null,
-          peso_kg: esCosecha ? 0 : null,
-          precio: 0,
-          precio_unidad: esCosecha ? '/kg' : '/palma',
-          total: 0,
-          pesoTotal: 0,
-          kgAcc: 0,
-        };
-      }
-      return acc[key][k];
-    };
-
-    planillasPeriodo.forEach((planilla) => {
-      // ── COSECHAS ──
-      (planilla.cosechas ?? []).forEach((c) => {
-        const miembros = (c.cuadrilla ?? []).filter(
-          (m) => m.operario_id != null && operariosSet.has(m.operario_id),
-        );
-        if (miembros.length === 0) return;
-        const loteName = nombreLote(c.lote_id, c.lote);
-        const subloteName = nombreSublote(c.sublote_id, c.sublote);
-        const row = getRow('cosecha', loteName, subloteName, true);
-
-        const gajos = Number(c.gajos_reconteo ?? c.gajos_reportados ?? 0);
-        const promedio = Number(c.promedio_kg_gajo ?? 0);
-        const precio = Number(c.precio_cosecha ?? 0);
-        const proporcion = miembros.length / Math.max((c.cuadrilla ?? []).length, 1);
-
-        row.cantidad += Math.round(gajos * proporcion);
-        // Fallback si el backend no calcula por miembro: prorratear a partes
-        // iguales el `valor_total` de la cosecha entre miembros del tercero.
-        const valorCosecha = Number((c as any).valor_total ?? 0);
-        const valorProrrateado = (c.cuadrilla?.length ?? 0) > 0
-          ? valorCosecha / (c.cuadrilla?.length ?? 1)
-          : 0;
-        miembros.forEach((m) => {
-          const peso = Number(m.peso_calculado_empleado ?? 0);
-          let valor = Number(m.valor_calculado ?? 0);
-          // Si el backend no puso valor por miembro, usar peso × precio_kg;
-          // si tampoco hay peso, usar prorrateo del valor total de la cosecha.
-          if (valor <= 0) {
-            if (peso > 0 && precio > 0) valor = peso * precio;
-            else valor = valorProrrateado;
-          }
-          row.peso_kg = (row.peso_kg ?? 0) + peso;
-          row.total += valor;
-          if (peso > 0 && promedio > 0) {
-            row.kgAcc += promedio * peso;
-            row.pesoTotal += peso;
-          }
-        });
-        if (precio > 0) row.precio = precio;
-      });
-
-      // ── JORNALES ──
-      (planilla.jornales ?? []).forEach((j) => {
-        if (j.operario_id == null || !operariosSet.has(j.operario_id)) return;
-        const key = catDeJornal(j.categoria, j.tipo ?? null);
-        // FINCA no tiene lote/sublote — se agrupa por trabajo realizado
-        // (nombre de la labor, nombre_trabajo o descripción libre).
-        let loteName: string;
-        let subloteName: string;
-        if (key === 'finca') {
-          const nombreLabor = (j as any).labor?.nombre as string | undefined;
-          loteName = nombreLabor
-            || j.nombre_trabajo
-            || j.descripcion
-            || 'Trabajo de finca';
-          subloteName = '—';
-        } else {
-          loteName = nombreLote(j.lote_id, (j as any).lote);
-          subloteName = nombreSublote(j.sublote_id, (j as any).sublote);
-        }
-        const row = getRow(key, loteName, subloteName, false);
-
-        const palmas = Number(j.cantidad_palmas ?? 0);
-        const total = Number(j.valor_total ?? 0);
-        const unit = Number(j.valor_unitario ?? 0);
-
-        row.cantidad += palmas;
-        row.total += total;
-        if (unit > 0) row.precio = unit;
-        else if (palmas > 0) row.precio = Math.round(total / palmas);
-      });
-    });
-
-    CATS.forEach((c, idx) => {
-      const rows = Object.values(acc[c.key]);
-      rows.forEach((r) => {
-        if (c.key === 'cosecha' && r.pesoTotal > 0) {
-          r.promedio_kg = r.kgAcc / r.pesoTotal;
-        }
-      });
-      cats[idx].filas = rows;
-      cats[idx].subtotal = rows.reduce((s, r) => s + r.total, 0);
-    });
-
-    return cats.filter((c) => c.filas.length > 0);
+    if (operariosDelTercero.length === 0) return [];
+    const terceroId = operariosDelTercero[0].tercero_id;
+    if (terceroId == null) return [];
+    return detallesPorTercero.get(terceroId) ?? [];
   };
+  // (código legacy del consolidado desde `planillasPeriodo` eliminado tras
+  // el refactor a los endpoints dedicados §7.4)
 
   // Colores por categoría (mismo esquema visual de V.16):
   //  - cosecha  → amber
@@ -1544,7 +1591,7 @@ export default function NominaDetalle() {
                       al final después de ambas tablas. */}
                   {categorias.length === 0 ? (
                     <div className="py-10 text-center text-sm text-muted-foreground">
-                      {planillasPeriodo.length === 0
+                      {detallesPorTercero.size === 0
                         ? 'Cargando desglose por labor...'
                         : 'Sin registros de campo en el período para los operarios de esta empresa.'}
                     </div>
@@ -1817,9 +1864,29 @@ export default function NominaDetalle() {
                               )}
                             </td>
                             <td className="p-4 text-right">
-                              <span className="text-sm font-medium">
-                                ${toNumber(emp.salario_base).toLocaleString('es-CO')}
-                              </span>
+                              {/* Muestra el snapshot original (proyectado al
+                                  agregar) por defecto. Si el usuario ya abrió
+                                  el editor de este colaborador durante esta
+                                  sesión, mostramos el valor recalculado guardado
+                                  en sessionStorage. Sin batch de previews al
+                                  abrir el listado — evita saturar el navegador
+                                  con 19+ requests. */}
+                              {(() => {
+                                const enCache = previewsPorEmpleado.get(emp.id);
+                                const mostrar = enCache != null ? enCache : toNumber(emp.salario_base);
+                                return (
+                                  <span
+                                    className="text-sm font-medium"
+                                    title={
+                                      enCache != null
+                                        ? 'Valor recalculado (visto en el editor de liquidación)'
+                                        : 'Proyección al agregar. Abre "Liquidar" para ver el valor real con planillas aprobadas.'
+                                    }
+                                  >
+                                    ${mostrar.toLocaleString('es-CO')}
+                                  </span>
+                                );
+                              })()}
                             </td>
                             {!esBorrador && (
                               <>

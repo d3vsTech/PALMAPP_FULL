@@ -61,9 +61,12 @@ export function FaltasInjustificadas({
   if (!items || items.length === 0) return null;
 
   const isCompact = variant === 'compact';
+  // Anchos fijos en las columnas numéricas (VALOR DÍA y DOMINGO PERDIDO)
+  // para que cada valor caiga debajo de su header. Con `auto` el "—" (más
+  // angosto que el título) colapsaba y desalineaba la tabla.
   const gridCols = isCompact
-    ? 'grid-cols-[80px_1fr_120px_auto_100px]'
-    : 'grid-cols-[100px_1fr_140px_auto_120px]';
+    ? 'grid-cols-[80px_1fr_120px_100px_100px]'
+    : 'grid-cols-[100px_1fr_160px_120px_140px]';
   const headerText = isCompact ? 'text-[10px]' : 'text-xs';
   const container = isCompact
     ? 'bg-muted/30 rounded-lg p-3 border border-border'
