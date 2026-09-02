@@ -111,14 +111,21 @@ export default function Nomina() {
   const [nominaAEliminar, setNominaAEliminar] = useState<NominaT | null>(null);
   const [eliminando, setEliminando] = useState(false);
 
-  // Nota: se eliminó el cálculo en cliente de "estimados" para las nóminas
-  // en BORRADOR sin liquidados. Antes hacía `nominaApi.ver()` + un
-  // `nominaApi.preview()` por cada empleado (hasta 8-10 requests por
-  // nómina cada vez que entrabas a esta pantalla), solo para pintar
-  // "Ingresos estimados / Descuentos estimados" en la tabla. Ahora la
-  // tabla muestra directamente lo que el backend trae en el listado:
-  // $0 mientras nadie esté liquidado, y el total real cuando ya se
-  // liquidó al menos un empleado.
+  // Proyección de lo que se va a liquidar por nómina en BORRADOR — se
+  // calcula sumando el `salario_base` (snapshot) de cada colaborador, ya que
+  // los PENDIENTES no aportan al `total_general` del backend hasta que
+  // pasan por el editor.
+  //
+  // Compromiso vs performance: hacemos UNA request por nómina en BORRADOR
+  // (GET /nominas/{id}). Con la paginación default (50) y pocas borradores
+  // activas simultáneamente, es aceptable. Se ejecuta con Promise.allSettled
+  // para que una falla no bloquee el resto.
+  //
+  // Las deducciones se estiman al 8% (Salud 4% + Pensión 4%) sobre el
+  // devengado de INTERNOS. Los operarios de tercero no cotizan (§9.8).
+  const [proyeccionesPorNomina, setProyeccionesPorNomina] = useState<
+    Map<number, { devengado: number; deducciones: number; neto: number }>
+  >(new Map());
 
   // Editar nómina: navega a `/nomina/:id/editar` que carga el wizard completo
   // en modo edición (paso 1 pre-poblado, paso 2 con colaboradores ya agregados,
@@ -138,11 +145,56 @@ export default function Nomina() {
         setNominas(listRes.data);
         setIndicadores(indRes.data);
         setCargando(false);
+        // Dispara la proyección de lo que se va a liquidar solo para las
+        // nóminas en BORRADOR (las CERRADAS ya tienen total_general definitivo).
+        const borradores = listRes.data.filter((n) => n.estado === 'BORRADOR');
+        if (borradores.length > 0) refrescarProyecciones(borradores.map((n) => n.id));
       })
       .catch((err: ApiError) => {
         toast.error(err.message ?? 'Error al cargar nóminas');
         setCargando(false);
       });
+  };
+
+  // Trae `GET /nominas/{id}` para cada nómina en BORRADOR y arma la
+  // proyección con `salario_base` de los PENDIENTES + `total_devengado` de
+  // los ya LIQUIDADOS + total de actas de tercero. Es incremental — cada
+  // fila se actualiza en cuanto llega su request.
+  const refrescarProyecciones = async (ids: number[]) => {
+    setProyeccionesPorNomina(new Map());
+    await Promise.all(
+      ids.map((id) =>
+        nominaApi
+          .ver(id)
+          .then((r) => {
+            const emps = r.data.empleados ?? [];
+            let devengadoInternos = 0;
+            let devengadoTercerosOperarios = 0;
+            for (const e of emps) {
+              // Si ya está liquidado, usar el valor real congelado.
+              const usar = e.estado === 'LIQUIDADO'
+                ? Number(e.total_devengado ?? 0)
+                : Number(e.salario_base ?? 0);
+              if (e.tercero_id != null) devengadoTercerosOperarios += usar;
+              else devengadoInternos += usar;
+            }
+            // Estimación: solo internos cotizan Salud + Pensión (8%).
+            // Es una aproximación intencional — el valor exacto solo lo
+            // sabe el motor al liquidar. Los operarios NO cotizan (§9.8).
+            const deducciones = Math.round(devengadoInternos * 0.08);
+            const devengado = devengadoInternos + devengadoTercerosOperarios;
+            const neto = devengado - deducciones;
+            setProyeccionesPorNomina((prev) => {
+              const nuevo = new Map(prev);
+              nuevo.set(id, { devengado, deducciones, neto });
+              return nuevo;
+            });
+          })
+          .catch(() => {
+            /* silencio — la fila conserva el valor del backend */
+          }),
+      ),
+    );
   };
 
   useEffect(() => {
@@ -484,13 +536,18 @@ export default function Nomina() {
                     {nominasFiltradas.map((n, index) => {
                       const totalReal = toNumber(n.total_general);
                       const dedReal = toNumber(n.total_deducciones);
-                      // La tabla muestra los valores REALES del backend.
-                      // Nóminas BORRADOR sin liquidar salen en $0 hasta
-                      // que el usuario empiece a liquidar empleados.
-                      const usarEstimado = false;
-                      const total = totalReal;
-                      const ded = dedReal;
-                      const dev = totalReal + dedReal;
+                      // Para las CERRADAS mostramos el total_general real.
+                      // Para las BORRADOR mostramos la PROYECCIÓN de lo que
+                      // se va a liquidar (snapshot de salario_base de los
+                      // pendientes + total de los ya liquidados). Cae al
+                      // valor real si la proyección aún no llegó.
+                      const proy = n.estado === 'BORRADOR'
+                        ? proyeccionesPorNomina.get(n.id)
+                        : undefined;
+                      const usarEstimado = !!proy;
+                      const dev = proy ? proy.devengado : totalReal + dedReal;
+                      const ded = proy ? proy.deducciones : dedReal;
+                      const total = proy ? proy.neto : totalReal;
                       return (
                         <tr
                           key={n.id}
