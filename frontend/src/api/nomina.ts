@@ -1860,10 +1860,11 @@ export const nominaApi = {
   quitarEmpleado: (nominaEmpleadoId: number) =>
     apiClient.delete<{ message: string }>(`/v1/tenant/nomina-empleado/${nominaEmpleadoId}`, T),
 
-  preview: (nominaEmpleadoId: number) =>
+  preview: (nominaEmpleadoId: number, signal?: AbortSignal) =>
     apiClient.get<{ data: PreviewLiquidacion }>(
       `/v1/tenant/nomina-empleado/${nominaEmpleadoId}/preview`,
       T,
+      signal,
     ),
 
   resumenTrabajo: (nominaEmpleadoId: number) =>

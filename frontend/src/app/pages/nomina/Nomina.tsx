@@ -536,18 +536,17 @@ export default function Nomina() {
                     {nominasFiltradas.map((n, index) => {
                       const totalReal = toNumber(n.total_general);
                       const dedReal = toNumber(n.total_deducciones);
-                      // Para las CERRADAS mostramos el total_general real.
-                      // Para las BORRADOR mostramos la PROYECCIÓN de lo que
-                      // se va a liquidar (snapshot de salario_base de los
-                      // pendientes + total de los ya liquidados). Cae al
-                      // valor real si la proyección aún no llegó.
-                      const proy = n.estado === 'BORRADOR'
-                        ? proyeccionesPorNomina.get(n.id)
-                        : undefined;
+                      const esBorrador = n.estado === 'BORRADOR';
+                      const proy = esBorrador ? proyeccionesPorNomina.get(n.id) : undefined;
+                      // Mientras la proyección de un BORRADOR está en vuelo
+                      // NO mostramos el `total_general` parcial (que solo
+                      // incluye actas de tercero y confunde al usuario). Se
+                      // renderiza un skeleton hasta que llegue la proyección.
+                      const cargandoProy = esBorrador && !proy;
                       const usarEstimado = !!proy;
-                      const dev = proy ? proy.devengado : totalReal + dedReal;
-                      const ded = proy ? proy.deducciones : dedReal;
-                      const total = proy ? proy.neto : totalReal;
+                      const dev = proy ? proy.devengado : (esBorrador ? 0 : totalReal + dedReal);
+                      const ded = proy ? proy.deducciones : (esBorrador ? 0 : dedReal);
+                      const total = proy ? proy.neto : (esBorrador ? 0 : totalReal);
                       return (
                         <tr
                           key={n.id}
@@ -573,33 +572,45 @@ export default function Nomina() {
                           </td>
                           <td className="p-4 text-right">
                             <div className="flex flex-col items-end">
-                              <span className="text-sm font-semibold text-success">
-                                ${dev.toLocaleString('es-CO')}
-                              </span>
+                              {cargandoProy ? (
+                                <span className="inline-block h-4 w-20 rounded bg-muted animate-pulse" />
+                              ) : (
+                                <span className="text-sm font-semibold text-success">
+                                  ${dev.toLocaleString('es-CO')}
+                                </span>
+                              )}
                               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                 <TrendingUp className="h-3 w-3 text-success" />
-                                {usarEstimado ? 'Ingresos estimados' : 'Ingresos'}
+                                {cargandoProy ? 'Calculando...' : (usarEstimado ? 'Ingresos estimados' : 'Ingresos')}
                               </div>
                             </div>
                           </td>
                           <td className="p-4 text-right">
                             <div className="flex flex-col items-end">
-                              <span className="text-sm font-semibold text-destructive">
-                                ${ded.toLocaleString('es-CO')}
-                              </span>
+                              {cargandoProy ? (
+                                <span className="inline-block h-4 w-16 rounded bg-muted animate-pulse" />
+                              ) : (
+                                <span className="text-sm font-semibold text-destructive">
+                                  ${ded.toLocaleString('es-CO')}
+                                </span>
+                              )}
                               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                 <TrendingDown className="h-3 w-3 text-destructive" />
-                                {usarEstimado ? 'Descuentos estimados' : 'Descuentos'}
+                                {cargandoProy ? 'Calculando...' : (usarEstimado ? 'Descuentos estimados' : 'Descuentos')}
                               </div>
                             </div>
                           </td>
                           <td className="p-4 text-right">
                             <div className="flex flex-col items-end">
-                              <span className="text-sm font-bold text-primary">
-                                ${total.toLocaleString('es-CO')}
-                              </span>
+                              {cargandoProy ? (
+                                <span className="inline-block h-5 w-24 rounded bg-muted animate-pulse" />
+                              ) : (
+                                <span className="text-sm font-bold text-primary">
+                                  ${total.toLocaleString('es-CO')}
+                                </span>
+                              )}
                               <span className="text-xs text-muted-foreground">
-                                {usarEstimado ? 'A pagar (est.)' : 'A pagar'}
+                                {cargandoProy ? 'Calculando...' : (usarEstimado ? 'A pagar (est.)' : 'A pagar')}
                               </span>
                             </div>
                           </td>

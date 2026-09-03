@@ -317,53 +317,111 @@ export default function NominaDetalle() {
   const [descuentosTercero, setDescuentosTercero] = useState<DescuentoTercero[]>([]);
   const [liquidandoTercero, setLiquidandoTercero] = useState(false);
 
-  // Cache de brutos reales (recalculados vía preview) — se llena BAJO DEMANDA.
-  // Antes hacíamos batch de 19+ previews al abrir el detalle, lo que saturaba
-  // el navegador y demoraba varios segundos. Ahora la columna muestra el
-  // snapshot original (proyectado) y solo se recalcula la fila cuando el
-  // usuario abre el editor de liquidación de ese colaborador (el editor
-  // guarda su preview en sessionStorage con TTL para que al volver al
-  // listado la fila se muestre actualizada sin nueva request).
+  // Cache de netos reales (recalculados vía preview) por empleado.
+  // Estrategia mixta:
+  //   1. Al montar hidratamos desde localStorage (TTL 1h) → 0 requests si el
+  //      usuario visitó la pantalla recientemente.
+  //   2. Los que no estén en cache se piden en batches de 6 en paralelo (mismo
+  //      límite HTTP del navegador). Cada fila cambia en cuanto llega.
+  //   3. AbortController cancela los pendientes al desmontar el componente
+  //      (por ejemplo al abrir "Liquidar") → libera conexiones para el editor.
   const [previewsPorEmpleado, setPreviewsPorEmpleado] = useState<Map<number, number>>(new Map());
 
-  // TTL de 10 min para el cache — mismo criterio que otros previews del wizard.
-  const PREVIEW_CACHE_TTL_MS = 10 * 60 * 1000;
-  const previewCacheKey = (empleadoId: number) => `nomina_preview_bruto_${empleadoId}`;
+  const PREVIEW_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hora
+  const PREVIEW_BATCH_SIZE = 6;
+  const previewCacheKey = (empleadoId: number) => `nomina_preview_neto_${empleadoId}`;
+  // Controller compartido — se aborta en el cleanup del useEffect principal
+  // y se renueva al re-cargar. Marca todas las requests en vuelo como
+  // canceladas y libera las conexiones HTTP inmediatamente.
+  const abortRef = useRef<AbortController | null>(null);
 
-  // Lee sessionStorage al montar y cuando se vuelve a la pantalla (por ejemplo
-  // desde el editor de liquidación) para reflejar valores en cache sin pedir
-  // nada al backend.
-  const hidratarCacheLocal = (empleadoIds: number[]) => {
+  // Hidrata desde localStorage (persiste entre sesiones). Devuelve el set
+  // de ids con entrada válida — el caller lo usa para NO re-pedir preview.
+  const hidratarCacheLocal = (empleadoIds: number[]): Set<number> => {
     const mapa = new Map<number, number>();
+    const yaCacheados = new Set<number>();
     const ahora = Date.now();
     for (const id of empleadoIds) {
       try {
-        const raw = sessionStorage.getItem(previewCacheKey(id));
+        const raw = localStorage.getItem(previewCacheKey(id));
         if (!raw) continue;
         const parsed = JSON.parse(raw) as { total: number; at: number };
         if (parsed.at && ahora - parsed.at < PREVIEW_CACHE_TTL_MS) {
           mapa.set(id, Number(parsed.total ?? 0));
+          yaCacheados.add(id);
         }
       } catch { /* ignora entradas corruptas */ }
     }
     setPreviewsPorEmpleado(mapa);
+    return yaCacheados;
+  };
+
+  // Batch en tandas de PREVIEW_BATCH_SIZE en paralelo. Cada preview:
+  //   - Guarda el neto en state (fila se actualiza incremental).
+  //   - Persiste en localStorage con TTL 1h.
+  //   - Es cancelable vía AbortController.
+  const precargarNetosEnBatches = async (ids: number[], signal: AbortSignal) => {
+    for (let i = 0; i < ids.length; i += PREVIEW_BATCH_SIZE) {
+      if (signal.aborted) return;
+      const batch = ids.slice(i, i + PREVIEW_BATCH_SIZE);
+      await Promise.all(
+        batch.map((id) =>
+          nominaApi
+            .preview(id, signal)
+            .then((r) => {
+              if (signal.aborted) return;
+              const total = Number(r.data.total_neto_propuesto ?? 0);
+              setPreviewsPorEmpleado((prev) => {
+                const nuevo = new Map(prev);
+                nuevo.set(id, total);
+                return nuevo;
+              });
+              try {
+                localStorage.setItem(
+                  previewCacheKey(id),
+                  JSON.stringify({ total, at: Date.now() }),
+                );
+              } catch { /* localStorage puede estar lleno */ }
+            })
+            .catch(() => { /* aborted o falló — no rompe */ }),
+        ),
+      );
+    }
   };
 
   const cargar = () => {
     if (!nominaId) return;
     setCargando(true);
+    // Renovar AbortController: si había uno anterior de esta pantalla, se
+    // aborta para que sus previews no compitan con los nuevos.
+    if (abortRef.current) abortRef.current.abort();
+    abortRef.current = new AbortController();
+    const signal = abortRef.current.signal;
+
     nominaApi
       .ver(nominaId)
       .then((res) => {
+        if (signal.aborted) return;
         setNomina(res.data);
         const emps = res.data.empleados ?? [];
         setEmpleados(emps);
-        // Sin precarga: la columna Salario Base arranca con el snapshot y
-        // se hidrata desde sessionStorage con los previews que ya se hayan
-        // calculado en editores previos.
-        hidratarCacheLocal(emps.map((e) => e.id));
+        // Paso 1: hidratar desde localStorage (0 requests). Los que abrieron
+        // el editor recientemente aparecen con su neto real al instante.
+        const yaCacheados = hidratarCacheLocal(emps.map((e) => e.id));
+        // Paso 2: disparar previews de los PENDIENTES que faltan, en batches
+        // de 6 para no saturar el navegador. Cancelables si el usuario navega
+        // (ej. abre "Liquidar" antes de que terminen).
+        if (res.data.estado === 'BORRADOR') {
+          const faltan = emps
+            .filter((e) => e.estado === 'PENDIENTE' && !yaCacheados.has(e.id))
+            .map((e) => e.id);
+          if (faltan.length > 0) precargarNetosEnBatches(faltan, signal);
+        }
       })
-      .catch((err: ApiError) => toast.error(err.message ?? 'Error al cargar nómina'))
+      .catch((err: ApiError) => {
+        if (signal.aborted) return;
+        toast.error(err.message ?? 'Error al cargar nómina');
+      })
       .finally(() => setCargando(false));
     // §3.6 — En paralelo, el checklist para saber si hay descansos huérfanos
     // por cortes personalizados. No es bloqueante: si falla, no rompe nada.
@@ -372,6 +430,15 @@ export default function NominaDetalle() {
       .then((res) => setDescansosHuerfanos(res.data.dias_descanso_fuera_de_rango ?? []))
       .catch(() => setDescansosHuerfanos([]));
   };
+
+  // Al desmontar (por ejemplo al navegar al editor), abortamos los previews
+  // pendientes para liberar las conexiones HTTP. Sin esto, el preview del
+  // editor tenía que esperar a que se vaciara la cola de los 19 del listado.
+  useEffect(() => {
+    return () => {
+      if (abortRef.current) abortRef.current.abort();
+    };
+  }, []);
 
   const cargarTerceros = async () => {
     if (!nominaId) return;
@@ -1864,27 +1931,43 @@ export default function NominaDetalle() {
                               )}
                             </td>
                             <td className="p-4 text-right">
-                              {/* Muestra el snapshot original (proyectado al
-                                  agregar) por defecto. Si el usuario ya abrió
-                                  el editor de este colaborador durante esta
-                                  sesión, mostramos el valor recalculado guardado
-                                  en sessionStorage. Sin batch de previews al
-                                  abrir el listado — evita saturar el navegador
-                                  con 19+ requests. */}
+                              {/* Prioridad: LIQUIDADO usa total_devengado
+                                  congelado. Si el usuario abrió el editor de
+                                  este colaborador durante la sesión, mostramos
+                                  el valor real cacheado. En cualquier otro
+                                  caso mostramos el snapshot proyectado (rápido,
+                                  sin request). Al abrir el editor y volver, la
+                                  fila se actualiza sola con el valor real. */}
                               {(() => {
+                                // Muestra siempre el TOTAL NETO real que cobra
+                                // el colaborador (mismo valor que "Total Neto"
+                                // del editor). Se calcula automáticamente al
+                                // abrir el detalle vía previews en batches de 6.
+                                if (emp.estado === 'LIQUIDADO') {
+                                  return (
+                                    <span className="text-sm font-medium">
+                                      ${toNumber(emp.total_neto).toLocaleString('es-CO')}
+                                    </span>
+                                  );
+                                }
                                 const enCache = previewsPorEmpleado.get(emp.id);
-                                const mostrar = enCache != null ? enCache : toNumber(emp.salario_base);
+                                if (enCache != null) {
+                                  return (
+                                    <span
+                                      className="text-sm font-medium"
+                                      title="Neto real que va a cobrar"
+                                    >
+                                      ${enCache.toLocaleString('es-CO')}
+                                    </span>
+                                  );
+                                }
+                                // Aún no llegó su preview — skeleton mientras
+                                // carga (no mostramos snapshot para no confundir).
                                 return (
                                   <span
-                                    className="text-sm font-medium"
-                                    title={
-                                      enCache != null
-                                        ? 'Valor recalculado (visto en el editor de liquidación)'
-                                        : 'Proyección al agregar. Abre "Liquidar" para ver el valor real con planillas aprobadas.'
-                                    }
-                                  >
-                                    ${mostrar.toLocaleString('es-CO')}
-                                  </span>
+                                    className="inline-block h-4 w-24 rounded bg-muted animate-pulse"
+                                    title="Calculando neto real..."
+                                  />
                                 );
                               })()}
                             </td>

@@ -154,8 +154,11 @@ async function refreshToken(): Promise<void> {
 // ─── HTTP methods ─────────────────────────────────────────────────────────────
 
 export const apiClient = {
-  get: <T>(path: string, requiresTenant = false) =>
-    request<T>(path, { method: 'GET', requiresTenant }),
+  // `signal` opcional permite cancelar la request desde afuera (AbortController).
+  // Se usa en pantallas que disparan muchos previews en paralelo — al desmontar
+  // el componente se abortan y se liberan las conexiones HTTP del navegador.
+  get: <T>(path: string, requiresTenant = false, signal?: AbortSignal) =>
+    request<T>(path, { method: 'GET', requiresTenant, signal }),
 
   post: <T>(path: string, body: unknown, requiresTenant = false) =>
     request<T>(path, {

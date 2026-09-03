@@ -155,13 +155,14 @@ export default function LiquidarColaborador() {
       .then(async (prev) => {
         setPreview(prev.data);
         setDiasTrabajados(prev.data.dias_trabajados);
-        // Persistimos el bruto recalculado en sessionStorage para que el
-        // listado de la nómina lo muestre sin volver a pedir preview cuando
-        // el usuario regrese. TTL de 10 min lo maneja el listado al leer.
+        // Persistimos el NETO propuesto recalculado en sessionStorage — es
+        // lo que efectivamente cobra el colaborador (bruto + subsidio − ded.).
+        // El listado del detalle de nómina lo lee para pintar el mismo valor
+        // que ve el liquidador acá. TTL de 10 min lo maneja el listado.
         try {
           sessionStorage.setItem(
-            `nomina_preview_bruto_${nominaEmpleadoId}`,
-            JSON.stringify({ total: Number(prev.data.total_devengado ?? 0), at: Date.now() }),
+            `nomina_preview_neto_${nominaEmpleadoId}`,
+            JSON.stringify({ total: Number(prev.data.total_neto_propuesto ?? 0), at: Date.now() }),
           );
         } catch { /* sessionStorage puede estar deshabilitado */ }
 
@@ -840,7 +841,21 @@ export default function LiquidarColaborador() {
             <div className="rounded-lg border border-success/20 overflow-hidden bg-success/5">
               <div className="flex justify-between px-4 py-3 border-b border-success/10">
                 <span className="text-xs uppercase tracking-wide text-muted-foreground">Sueldo base</span>
-                <span className="font-semibold">${preview.salario_base.toLocaleString('es-CO')}</span>
+                {/* El backend hoy manda `preview.salario_base` ya incluyendo
+                    el recargo dominical/festivo dentro (contradice doc §9.2).
+                    Para no duplicar en pantalla, mostramos el salario_base
+                    PURO = valor del backend − recargo, y el recargo va en su
+                    línea propia abajo. El TOTAL BRUTO sigue siendo
+                    `preview.total_devengado` (no cambia).
+                    TODO backend: emitir `salario_base` sin el recargo, como
+                    dice §9.2 — cuando eso llegue esta resta queda inocua. */}
+                <span className="font-semibold">
+                  ${(
+                    preview.salario_base
+                    - (preview.total_recargo_dominical ?? 0)
+                    - (preview.total_recargo_festivo ?? 0)
+                  ).toLocaleString('es-CO')}
+                </span>
               </div>
               {(preview.total_jornales > 0 && empleado.salario_tipo !== 'FIJO') && (
                 <div className="flex justify-between px-4 py-3 border-b border-success/10">
