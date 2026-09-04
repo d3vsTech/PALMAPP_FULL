@@ -556,9 +556,15 @@ export function resolverPrecioPersonaLabor(
     };
   }
   // Colaborador propio — la sublabor solo overridea el monto.
+  // OJO (§19 API_PARAMETRICAS): `precio` en 0 cuenta como SIN precio propio y
+  // hereda el de la labor. No se puede usar `??` directo — `0 ?? x` devuelve 0
+  // y dejaría el jornal en cero teniendo la labor padre una tarifa válida.
+  // Cero no es una tarifa de cero pesos: es lo que manda el formulario cuando
+  // el campo se deja vacío.
+  const precioSublabor = Number(actividad?.precio) > 0 ? Number(actividad!.precio) : null;
   return {
     tipo_pago: labor.tipo_pago,
-    precio_palma: actividad?.precio ?? labor.precio_palma,
+    precio_palma: precioSublabor ?? labor.precio_palma,
   };
 }
 

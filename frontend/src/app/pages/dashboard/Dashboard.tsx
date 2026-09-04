@@ -215,7 +215,7 @@ export default function Dashboard() {
           />
           <KPICard
             title="Promedio Kg/Gajo"
-            value={data ? Number(data.indicadores.promedio_kg_gajo).toFixed(3) : '—'}
+            value={data ? Number(data.indicadores.promedio_kg_gajo).toFixed(4) : '—'}
             subtitle="kg (plantación)"
           />
         </div>
@@ -259,7 +259,13 @@ export default function Dashboard() {
               // Cuando aún no hay viajes registrados, mostramos un dataset
               // placeholder de 6 entradas vacías para que los ejes X/Y se
               // pinten igual y el usuario vea cómo se verá el gráfico.
-              const viajesReales = data?.viajes ?? [];
+              // §9 — `peso_viaje` puede llegar como string con 4 decimales
+              // ("12070.0000"). Normalizamos a number para que recharts
+              // grafique bien y el tooltip no muestre el string crudo.
+              const viajesReales = (data?.viajes ?? []).map((v) => ({
+                ...v,
+                peso_viaje: Number(v.peso_viaje) || 0,
+              }));
               const sinDatos = viajesReales.length === 0;
               const chartData = sinDatos
                 ? Array.from({ length: 6 }, () => ({ remision: '', peso_viaje: 0, fecha_viaje: '' }))

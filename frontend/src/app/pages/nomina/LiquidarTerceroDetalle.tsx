@@ -664,7 +664,7 @@ export default function LiquidarTerceroDetalle() {
                                         <span className="text-xs text-muted-foreground">gajos</span>
                                       </td>
                                       <td className="p-3 text-right text-muted-foreground">
-                                        {c.promedio_kg_gajo > 0 ? c.promedio_kg_gajo.toFixed(1) : '—'}
+                                        {c.promedio_kg_gajo > 0 ? c.promedio_kg_gajo.toFixed(4) : '—'}
                                       </td>
                                       <td className="p-3 text-right font-semibold">
                                         {c.peso_kg > 0 ? c.peso_kg.toLocaleString('es-CO') : '—'}

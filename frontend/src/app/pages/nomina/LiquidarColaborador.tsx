@@ -643,11 +643,17 @@ export default function LiquidarColaborador() {
                                 className="p-2 text-right font-medium"
                                 title={
                                   f.promedio_liquidacion != null && f.precio_kg != null
-                                    ? `Jornal = ${f.racimos_empleado} × ${Number(f.promedio_liquidacion).toFixed(2)} × ${Number(f.precio_kg).toLocaleString('es-CO')}`
+                                    ? `Jornal = ${Number(f.racimos_empleado).toLocaleString('es-CO', { maximumFractionDigits: 4 })} × ${Number(f.promedio_liquidacion).toFixed(4)} × ${Number(f.precio_kg).toLocaleString('es-CO')}`
                                     : undefined
                                 }
                               >
-                                {f.racimos_empleado ?? '-'}
+                                {/* §5.2 (2026-09-04) — fracción exacta, ya no
+                                    entero: 415/2 = 207,5. Formateamos con coma
+                                    decimal y sin decimales fantasma cuando el
+                                    reparto da entero. */}
+                                {f.racimos_empleado != null
+                                  ? Number(f.racimos_empleado).toLocaleString('es-CO', { maximumFractionDigits: 4 })
+                                  : '-'}
                               </td>
                             )}
                             {cat.filas.some((x) => x.peso_kg !== undefined) && (
@@ -949,6 +955,29 @@ export default function LiquidarColaborador() {
                         )).join(', ')}
                       </span>
                     )}
+                    {/* §9.6 (FIX B) — Si alguna incapacidad EPS agrupa varios
+                        tramos contiguos en un mismo evento, mostramos un
+                        badge sutil para que el liquidador sepa que la regla
+                        100%/66.67% se aplicó desde el inicio real, no desde
+                        cada fila. Sale con tooltip explicando qué es. */}
+                    {(() => {
+                      const agrupadas = (preview.detalle_ausencias ?? []).filter(
+                        (a) => a.afecta === 'INCAPACIDAD' && (a.ausencia_ids?.length ?? 0) > 1,
+                      );
+                      if (agrupadas.length === 0) return null;
+                      const totalTramos = agrupadas.reduce(
+                        (s, a) => s + (a.ausencia_ids?.length ?? 0),
+                        0,
+                      );
+                      return (
+                        <span
+                          className="ml-2 inline-flex items-center gap-1 rounded-full bg-blue-500/10 border border-blue-500/30 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:text-blue-300 normal-case tracking-normal"
+                          title={`Se agruparon ${totalTramos} tramos contiguos en ${agrupadas.length} evento(s) EPS. La regla 100%/66.67% se aplicó desde el inicio real del evento (§9.6).`}
+                        >
+                          {agrupadas.length} evento{agrupadas.length !== 1 ? 's' : ''} agrupado{agrupadas.length !== 1 ? 's' : ''}
+                        </span>
+                      );
+                    })()}
                   </span>
                   <span className="font-semibold">${preview.total_incapacidades.toLocaleString('es-CO')}</span>
                 </div>

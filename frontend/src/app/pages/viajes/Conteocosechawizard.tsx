@@ -565,13 +565,20 @@ export default function ConteoCosechaWizard({ viaje, onClose }: ConteoCosechaWiz
 
                             <div className="space-y-2">
                               <Label>Peso en kg (opcional)</Label>
+                              {/* §9 API_NOMINA — Backend valida decimal:0,4 en
+                                  `peso_confirmado`. Aceptamos hasta 4 decimales. */}
                               <Input
-                                type="number" step="0.001"
+                                type="number"
+                                step="0.0001"
                                 placeholder="0"
                                 value={cosecha.pesoKg || ''}
                                 onChange={(e) => {
+                                  const raw = parseFloat(e.target.value);
+                                  // Redondeo local a 4 decimales para no enviar
+                                  // valores con más precisión que la que acepta el backend.
+                                  const val = isNaN(raw) ? 0 : Math.round(raw * 10000) / 10000;
                                   const updated = cosechas.map(c =>
-                                    c.id === cosecha.id ? { ...c, pesoKg: parseFloat(e.target.value) || 0 } : c
+                                    c.id === cosecha.id ? { ...c, pesoKg: val } : c
                                   );
                                   setCosechas(updated);
                                 }}

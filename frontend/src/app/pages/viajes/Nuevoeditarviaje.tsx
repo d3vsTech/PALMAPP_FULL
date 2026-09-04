@@ -42,26 +42,34 @@ import { toast } from 'sonner';
 const PREFIJO_AUTOMATICO = '__automatico__';
 
 /**
- * Reproduce el formato de remisión que generará el backend a partir del rango
- * (§18): `{prefijo}-{numero_actual}` con zero-padding al ancho de
- * `numero_hasta`. Ej: prefijo=`DEV`, numero_hasta=333, numero_actual=34
- * → `DEV-034`.
+ * Vista previa de la remisión que generará el backend.
+ *
+ * §18 — El select ahora trae `siguiente_remision` calculada por el backend
+ * con el salto de consecutivos ya emitidos aplicado (`numero_actual` puede
+ * apuntar a números que ya salieron en viajes anulados y el sistema los
+ * salta al guardar). Se usa esa cuando viene; el cálculo local con
+ * `numero_actual` queda solo como fallback para backends sin el campo.
  *
  * Es solo una vista previa: el número definitivo lo asigna el backend al
  * crear el viaje (dos usuarios creando a la vez toman consecutivos distintos).
  */
 function previewRemision(r: RangoNumeracionSelectItem): string {
+  if (r.siguiente_remision) return r.siguiente_remision;
   const ancho = String(Number(r.numero_hasta) || '').length;
   const actual = String(Number(r.numero_actual) || '');
   return `${r.prefijo}-${actual.padStart(ancho, '0')}`;
 }
 
 /**
- * Un rango agotado (`numero_actual > numero_hasta`) hace fallar el POST con
- * 422 RANGO_AGOTADO. Comparamos como números: Laravel a veces serializa los
- * enteros como string y `'9' > '10'` sería `true`.
+ * Un rango agotado hace fallar el POST con 422 RANGO_AGOTADO.
+ *
+ * §18 — El backend ahora manda el flag `agotado` ya resuelto (contempla
+ * también el caso "quedan números pero todos ya fueron emitidos", que el
+ * cálculo local no puede ver). Fallback: comparar como números — Laravel a
+ * veces serializa los enteros como string y `'9' > '10'` sería `true`.
  */
 function rangoAgotado(r: RangoNumeracionSelectItem): boolean {
+  if (r.agotado !== undefined) return r.agotado;
   return Number(r.numero_actual) > Number(r.numero_hasta);
 }
 

@@ -496,9 +496,14 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
    * §19 API_PARAMETRICAS — actividades predefinidas indexadas por `labor_id`.
    * Alimenta el select "Trabajo realizado" en las tabs SANIDAD y OTROS.
    * Puede quedar vacío si el tenant aún no ha creado actividades.
+   *
+   * `precio` (nuevo) es el precio propio de la sublabor. Solo aplica a
+   * colaboradores propios (los operarios usan `tercero_labor_precios`);
+   * `null` o `0` = hereda `labor.precio_palma`. La resolución del preview
+   * pasa por `resolverPrecioPersonaLabor` de api/operaciones.
    */
   const [actividadesPorLabor, setActividadesPorLabor] = useState<
-    Record<string, Array<{ id: number; labor_id: number; nombre: string }>>
+    Record<string, Array<{ id: number; labor_id: number; nombre: string; precio?: string | number | null }>>
   >({});
 
   /** Planilla cruda traída por `wizard-init`. La consume el useEffect de

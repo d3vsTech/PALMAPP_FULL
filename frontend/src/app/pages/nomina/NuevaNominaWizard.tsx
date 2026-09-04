@@ -1998,7 +1998,13 @@ export default function NuevaNominaWizard() {
                   const editado = promediosEditados[loteId];
                   const promNuevo = editado !== undefined && editado > 0 ? editado : promOrig;
                   if (promNuevo === promOrig || promOrig <= 0) return c.kg_trabajado;
-                  const gajosPorMiembro = Math.round(c.kg_trabajado / promOrig);
+                  // §9 (2026-09-04) — el reparto de gajos es EXACTO, sin floor:
+                  // 315 gajos entre 2 son 157,5 por persona. La división recupera
+                  // esa fracción tal cual; solo limpiamos ruido flotante a 4
+                  // decimales (la precisión que persiste el backend). Un
+                  // Math.round acá redondearía 157,5 → 158 y el preview quedaría
+                  // desviado medio gajo × promedio.
+                  const gajosPorMiembro = Math.round((c.kg_trabajado / promOrig) * 10000) / 10000;
                   return gajosPorMiembro * promNuevo;
                 };
 
@@ -2368,8 +2374,10 @@ export default function NuevaNominaWizard() {
                                                 {d.cosechas.some((x) => x.promedio_efectivo != null || x.promedio_aplicado != null) && (
                                                   <>
                                                     <td className="p-2 text-right text-muted-foreground">
+                                                      {/* §9 API_NOMINA — promedios kg/gajo con 4 decimales
+                                                          (el cuarto decimal es lo que decide si cuadra o no). */}
                                                       {c.promedio_efectivo != null
-                                                        ? Number(c.promedio_efectivo).toFixed(2)
+                                                        ? Number(c.promedio_efectivo).toFixed(4)
                                                         : '—'}
                                                     </td>
                                                     <td className="p-2 text-right">
@@ -2395,7 +2403,7 @@ export default function NuevaNominaWizard() {
                                                           >
                                                             {esBascula && <span aria-hidden="true">⚖</span>}
                                                             {esBaseline && <span aria-hidden="true">≈</span>}
-                                                            {Number(c.promedio_aplicado).toFixed(2)}
+                                                            {Number(c.promedio_aplicado).toFixed(4)}
                                                           </span>
                                                         );
                                                       })() : <span className="text-muted-foreground">—</span>}
@@ -2828,14 +2836,14 @@ export default function NuevaNominaWizard() {
           </DialogHeader>
 
           {/* Card resumen de cosecha con RECÁLCULO EN VIVO al editar promedios.
-              Fórmula del backend (doc §4.1):
-                kg_trabajado = floor(gajos_efectivos / N) × promedio_efectivo
-              Extraemos `floor(gajos_efectivos / N)` de cada cosecha usando
-              `Math.round(kg_trabajado_original / promedio_original)` — ese
-              redondeo recupera el ENTERO exacto que produjo el backend,
-              incluso si el kg_trabajado viene con decimales imprecisos.
-              Luego multiplicamos por el promedio editado → resultado idéntico
-              al que devolverá `GET /validar-cosecha` tras el PUT.
+              Fórmula del backend (doc §4.1, actualizada 2026-09-04):
+                kg_trabajado = (gajos_efectivos / N) × promedio_efectivo
+              El reparto de gajos es EXACTO — sin floor: 315 gajos entre 2 son
+              157,5 por persona. Recuperamos esa fracción dividiendo
+              kg_trabajado / promedio_original y limpiando ruido flotante a 4
+              decimales (la precisión que persiste el backend). Luego
+              multiplicamos por el promedio editado → resultado idéntico al que
+              devolverá `GET /validar-cosecha` tras el PUT.
               Extractora es dato fijo del backend — no depende de promedios. */}
           {bundleCosecha && (() => {
             const totalExtr = bundleCosecha.total_kg_extractora ?? 0;
@@ -2856,8 +2864,8 @@ export default function NuevaNominaWizard() {
             }
 
             // Recalcular kg_trabajado por cada cosecha con el nuevo promedio.
-            // El cálculo replica floor(gajos_efectivos / N) × promedio_nuevo
-            // de forma EXACTA — igual a como lo hará el backend al guardar.
+            // Replica (gajos_efectivos / N) × promedio_nuevo con el reparto
+            // exacto (sin floor) — igual a como lo hará el backend al guardar.
             let totalColabs = 0;
             for (const d of bundleCosecha.detalle_por_colaborador) {
               for (const c of d.cosechas ?? []) {
@@ -2876,13 +2884,15 @@ export default function NuevaNominaWizard() {
                   continue;
                 }
                 if (promOrig <= 0) {
-                  // Sin promedio original → no podemos derivar el entero base.
+                  // Sin promedio original → no podemos derivar los gajos base.
                   totalColabs += c.kg_trabajado;
                   continue;
                 }
-                // Recuperar el entero `floor(gajos_efectivos / N)` del backend.
-                // Math.round elimina el ruido de decimales en la división.
-                const gajosPorMiembro = Math.round(c.kg_trabajado / promOrig);
+                // §9 (2026-09-04) — reparto EXACTO de gajos, sin floor. La
+                // división recupera la fracción (157,5); solo limpiamos ruido
+                // flotante a 4 decimales. Un Math.round a entero desviaría el
+                // preview medio gajo × promedio en cosechas con residuo.
+                const gajosPorMiembro = Math.round((c.kg_trabajado / promOrig) * 10000) / 10000;
                 totalColabs += gajosPorMiembro * promNuevo;
               }
             }
@@ -3000,23 +3010,28 @@ export default function NuevaNominaWizard() {
                         </td>
                         <td className="p-3 font-medium text-sm">{p.lote_nombre}</td>
                         <td className="p-3 text-right text-sm text-muted-foreground">
-                          {p.promedio_auto.toFixed(2)}
+                          {/* §9 API_NOMINA — promedios kg/gajo con 4 decimales. */}
+                          {p.promedio_auto.toFixed(4)}
                         </td>
                         <td className="p-3 pr-5 text-right">
                           <div className="flex items-center justify-end gap-2">
+                            {/* §9 — Backend valida decimal:0,4 en `promedio`.
+                                Aceptamos hasta 4 decimales en la entrada. */}
                             <Input
-                              type="number" step="0.001"
-                              step="0.1"
+                              type="number"
+                              step="0.0001"
                               min="0"
-                              className="w-24 h-8 text-right text-sm"
+                              className="w-28 h-8 text-right text-sm"
                               value={valorActual || ''}
-                              placeholder={p.promedio_manual != null ? p.promedio_manual.toFixed(2) : '—'}
-                              onChange={(e) =>
-                                setPromediosEditados((prev) => ({
-                                  ...prev,
-                                  [p.lote_id]: parseFloat(e.target.value) || 0,
-                                }))
-                              }
+                              placeholder={p.promedio_manual != null ? p.promedio_manual.toFixed(4) : '—'}
+                              onChange={(e) => {
+                                const raw = parseFloat(e.target.value);
+                                // Redondeo a 4 decimales antes de guardar en state para
+                                // no enviar valores con más precisión que la que acepta
+                                // el backend (`decimal:0,4`).
+                                const val = isNaN(raw) ? 0 : Math.round(raw * 10000) / 10000;
+                                setPromediosEditados((prev) => ({ ...prev, [p.lote_id]: val }));
+                              }}
                             />
                           </div>
                         </td>

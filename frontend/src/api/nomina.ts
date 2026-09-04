@@ -384,6 +384,14 @@ export interface DetalleAusenciaPreview {
   /** `INCAPACIDAD` = remunerada, suma al devengado.
    *  `DESCUENTO`   = no remunerada, descuenta del salario. */
   afecta: 'INCAPACIDAD' | 'DESCUENTO';
+  /**
+   * §9.6 (FIX B) — Ausencias EPS contiguas del mismo empleado se agrupan
+   * en un ÚNICO evento para aplicar la regla 100% / 66.67% desde el inicio
+   * real (no desde cada fila). Este array trae los `ausencia_id` de las
+   * filas de la BD que se consolidaron en esta línea del preview.
+   * Puede venir `undefined` para ausencias no-EPS o cuando no hay agrupación.
+   */
+  ausencia_ids?: number[];
 }
 
 /**
@@ -650,8 +658,10 @@ export interface FilaResumenTrabajo {
   /** N personas entre las que se reparte la cosecha. */
   cuadrilla?: number;
   /**
-   * Porción del empleado: `floor(racimos_verificados / cuadrilla)`. Es la
-   * cifra que multiplica el jornal.
+   * Porción del empleado: `racimos_verificados / cuadrilla` — fracción
+   * EXACTA con hasta 4 decimales (415 / 2 = 207.5), **ya no es entero**
+   * desde 2026-09-04 (antes se truncaba con floor y el gajo impar no se le
+   * pagaba a nadie). Es la cifra que multiplica el jornal.
    */
   racimos_empleado?: number;
   /**
@@ -884,7 +894,10 @@ export interface ValidacionCosechaItem {
     ajustado_por: string | null;
     ajustado_at: string | null;
   } | null;
-  /** floor(gajos_efectivos / N) × promedio_efectivo_del_lote */
+  /**
+   * (gajos_efectivos / N) × promedio_efectivo_del_lote — reparto EXACTO,
+   * sin floor desde 2026-09-04 (§9 API_NOMINA).
+   */
   kg_trabajado: number;
   /**
    * §4.6 — Solo viajes FINALIZADOS con `fecha_viaje` DENTRO del rango de la

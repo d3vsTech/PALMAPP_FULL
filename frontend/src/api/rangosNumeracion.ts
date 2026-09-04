@@ -157,7 +157,22 @@ export interface RangoNumeracionSelectItem {
   prefijo: string;
   numero_desde: number;
   numero_hasta: number;
+  /**
+   * Punto de partida del rango — NO usarlo para previsualizar la remisión:
+   * si esos consecutivos ya fueron emitidos (viajes anulados que conservan
+   * su remisión), el sistema los salta al guardar. Ver `siguiente_remision`.
+   */
   numero_actual: number;
+  /**
+   * §18 — El número que REALMENTE va a quedar en el próximo viaje, con el
+   * salto de consecutivos ya emitidos aplicado (sin mutar nada). `null`
+   * cuando el rango se quedó sin números libres (`agotado: true`).
+   */
+  siguiente_numero?: number | null;
+  /** §18 — La remisión ya formateada (`DEV-041`). `null` si agotado. */
+  siguiente_remision?: string | null;
+  /** §18 — `true` cuando no quedan números libres en el rango. */
+  agotado?: boolean;
 }
 
 /** Payload de POST /rangos-numeracion — todos los campos requeridos. */
@@ -205,8 +220,19 @@ export const RangosNumeracionErrorCodes = {
    * o eliminado lógicamente.
    */
   RANGO_INACTIVO: 'RANGO_INACTIVO',
-  /** `numero_actual > numero_hasta` al intentar generar una remisión. */
+  /**
+   * No quedan números libres: `numero_actual > numero_hasta`, o todos los
+   * restantes ya fueron emitidos por viajes anulados que conservan su
+   * remisión.
+   */
   RANGO_AGOTADO: 'RANGO_AGOTADO',
+  /**
+   * §18 — Se intentó crear un rango (o mover `numero_actual`) sobre
+   * consecutivos que el prefijo ya emitió. La respuesta trae
+   * `data.ultimo_emitido` y `data.siguiente_disponible` para sugerir el
+   * arranque válido.
+   */
+  RANGO_CONSECUTIVO_EMITIDO: 'RANGO_CONSECUTIVO_EMITIDO',
 } as const;
 
 export type RangoNumeracionErrorCode =

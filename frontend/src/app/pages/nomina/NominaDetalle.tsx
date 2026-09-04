@@ -965,7 +965,7 @@ export default function NominaDetalle() {
           f.lote,
           f.sublote,
           `${f.cantidad.toLocaleString('es-CO')} ${f.unidad}`,
-          f.promedio_kg && f.promedio_kg > 0 ? f.promedio_kg.toFixed(1) : '—',
+          f.promedio_kg && f.promedio_kg > 0 ? f.promedio_kg.toFixed(4) : '—',
           f.peso_kg && f.peso_kg > 0 ? f.peso_kg.toLocaleString('es-CO') : '—',
           `$${f.precio.toLocaleString('es-CO')} ${f.precio_unidad}`,
           `$${f.total.toLocaleString('es-CO')}`,
@@ -1702,7 +1702,7 @@ export default function NominaDetalle() {
                                         </td>
                                         <td className="p-3 text-right text-muted-foreground">
                                           {f.promedio_kg != null && f.promedio_kg > 0
-                                            ? f.promedio_kg.toFixed(1)
+                                            ? f.promedio_kg.toFixed(4)
                                             : '—'}
                                         </td>
                                         <td className="p-3 text-right font-semibold">

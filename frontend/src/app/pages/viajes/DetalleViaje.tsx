@@ -605,7 +605,16 @@ export default function DetalleViaje() {
                             </div>
                             <div className="space-y-2 md:col-span-2">
                               <Label>Peso (kg)</Label>
-                              <Input value={d.cosecha?.peso_confirmado ?? '—'} disabled />
+                              {/* §9 — el backend ahora serializa a 4 decimales
+                                  ("1800.5000"). Formateamos a 2 para mostrar. */}
+                              <Input
+                                value={
+                                  d.cosecha?.peso_confirmado != null
+                                    ? Number(d.cosecha.peso_confirmado).toLocaleString('es-CO', { maximumFractionDigits: 2 })
+                                    : '—'
+                                }
+                                disabled
+                              />
                             </div>
                           </div>
                         </CardContent>
@@ -732,7 +741,16 @@ export default function DetalleViaje() {
                           </div>
                           <div className="space-y-2">
                             <Label>Peso Recibido (kg)</Label>
-                            <Input value={String(viaje?.peso_viaje ?? '')} disabled />
+                            {/* §9 — el backend serializa a 4 decimales; se
+                                muestra formateado a máximo 2. */}
+                            <Input
+                              value={
+                                viaje?.peso_viaje != null && viaje.peso_viaje !== ''
+                                  ? Number(viaje.peso_viaje).toLocaleString('es-CO', { maximumFractionDigits: 2 })
+                                  : ''
+                              }
+                              disabled
+                            />
                           </div>
                           <div className="space-y-2 md:col-span-2">
                             <Label className="text-sm font-semibold">Calificación de fruto (%)</Label>
@@ -866,8 +884,13 @@ export default function DetalleViaje() {
                         </div>
                         <div className="space-y-2">
                           <Label>Peso Recibido (kg)</Label>
-                          <Input type="number" step="0.001" value={datosExtractora.pesoRecibido}
-                            onChange={(e) => setDatosExtractora({ ...datosExtractora, pesoRecibido: parseFloat(e.target.value) || 0 })}
+                          {/* §9 API_NOMINA — `peso_viaje` valida decimal:0,4. */}
+                          <Input type="number" step="0.0001" value={datosExtractora.pesoRecibido}
+                            onChange={(e) => {
+                              const raw = parseFloat(e.target.value);
+                              const val = isNaN(raw) ? 0 : Math.round(raw * 10000) / 10000;
+                              setDatosExtractora({ ...datosExtractora, pesoRecibido: val });
+                            }}
                             disabled={procesandoIA || estadoActual === 'Finalizado'} />
                         </div>
                         <div className="space-y-2 md:col-span-2">
