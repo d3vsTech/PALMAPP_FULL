@@ -863,6 +863,14 @@ export interface ValidacionCosechaItem {
   gajos_trabajados: number;
   gajos_verificados: number;
   diferencia_gajos: number;
+  /** §4.1 — Miembros activos de la cuadrilla de esa cosecha (N). */
+  n_cuadrilla?: number;
+  /**
+   * §4.1 — Porción de ESTE cuadrillero: `gajos_verificados / N`, exacta
+   * (157.5 si son 315 entre 2). Es la base de `kg_trabajado` y
+   * `kg_extractora` de la fila.
+   */
+  gajos_persona?: number;
   /**
    * §4.1 — Split parcial: cuántos viaje_detalle activos de esta cosecha
    * pertenecen a viajes que aún no están FINALIZADOS. Si > 0, `kg_extractora`
@@ -900,15 +908,17 @@ export interface ValidacionCosechaItem {
    */
   kg_trabajado: number;
   /**
-   * §4.6 — Solo viajes FINALIZADOS con `fecha_viaje` DENTRO del rango de la
-   * nómina. Ya no incluye viajes despachados fuera del período; esos se
-   * conciliarán en la nómina siguiente. `0` cuando no hay medición aplicable.
+   * §4.1/§4.6 (2026-09-05) — Lo que la báscula recibió de esta cosecha, de
+   * TODOS los viajes FINALIZADOS que la tocaron: los del rango con su
+   * `promedio_aplicado`, los de otra quincena con el promedio de
+   * conciliación (esa porción se reporta en `kg_extractora_fuera_del_periodo`).
+   * `0` cuando no hay medición aplicable.
    */
   kg_extractora: number;
   /**
-   * §4.6 — Puede ser `null` cuando la fila NO es conciliable en este período
-   * (típicamente `despachado_fuera_del_periodo = true`). `0` = cuadró; `null`
-   * = no aplica acá. La UI debe pintar `—` cuando es `null`, nunca `0`.
+   * §4.6 (2026-09-05) — `kg_trabajado − kg_extractora`. SIEMPRE un número:
+   * toda fila concilia contra su viaje sin importar la quincena. El tipo
+   * conserva `null` solo por tolerancia contra un backend viejo.
    */
   diferencia_kg: number | null;
   // ─── Campos §4.6 breaking change (opcionales por retro-compat) ────────
@@ -972,7 +982,17 @@ export interface ValidacionCosechaDetalleColaborador {
   en_esta_nomina?: boolean;
   nombre_completo: string;
   cargo: string;
+  /** Σ `kg_trabajado` de sus filas, redondeado a 2 por el backend. */
   kg: number;
+  /** §4.1 — Σ `gajos_persona` de sus filas, redondeado a 4 por el backend. */
+  gajos?: number;
+  /**
+   * §4.1 — Σ `kg_extractora` de sus filas, redondeado por el backend.
+   * La UI no necesita sumar filas para pintar la cabecera del colaborador.
+   */
+  kg_extractora?: number;
+  /** §4.1 — Σ `diferencia_kg` de sus filas, redondeado por el backend. */
+  diferencia_kg?: number;
   /** Detalle por cosecha (doc §4.1). */
   cosechas?: ValidacionCosechaItem[];
 }

@@ -151,30 +151,57 @@ export default function LiquidarTerceroDetalle() {
   const [guardandoDescuento, setGuardandoDescuento] = useState(false);
   const [eliminandoDescuentoId, setEliminandoDescuentoId] = useState<number | null>(null);
 
-  // ── Carga inicial: detalle del acta ───────────────────────────────────────
-  useEffect(() => {
+  /**
+   * `true` cuando `GET /terceros/{t}` respondió 404 ACTA_NO_CALCULADA.
+   * Entrar a esta pantalla es SOLO LECTURA — el POST /liquidar (que calcula
+   * el acta y ADEMÁS auto-liquida los operarios PENDIENTES del tercero,
+   * doc §7.3) corre únicamente con el botón "Calcular acta".
+   */
+  const [actaSinCalcular, setActaSinCalcular] = useState(false);
+  const [calculandoActa, setCalculandoActa] = useState(false);
+
+  // ── Carga inicial: detalle del acta (solo lectura, sin mutaciones) ───────
+  const cargarActa = () => {
     if (!nominaId || !terceroId) return;
     setCargando(true);
     nominaApi.terceros
       .ver(nominaId, terceroId)
-      .then(async (res) => {
-        const acta = res.data;
-        // Auto-liquidar si está pendiente en nómina BORRADOR (§7.3, idempotente).
-        if (acta.nomina.estado === 'BORRADOR' && acta.acta.estado_pago === 'PENDIENTE') {
-          try {
-            const liq = await nominaApi.terceros.liquidar(nominaId, terceroId);
-            setDetalle(liq.data);
-            return;
-          } catch (err) {
-            const e = err as ApiError;
-            toast.error(e.message ?? 'No se pudieron calcular los totales del acta');
-          }
-        }
-        setDetalle(acta);
+      .then((res) => {
+        setDetalle(res.data);
+        setActaSinCalcular(false);
       })
-      .catch((err: ApiError) => toast.error(err.message ?? 'Error al cargar acta'))
+      .catch((err: ApiError) => {
+        if (err.code === 'ACTA_NO_CALCULADA') {
+          // El acta existe pre-hidratada pero nunca se calculó. Mostramos el
+          // CTA en vez de calcular en silencio.
+          setActaSinCalcular(true);
+        } else {
+          toast.error(err.message ?? 'Error al cargar acta');
+        }
+      })
       .finally(() => setCargando(false));
+  };
+  useEffect(() => {
+    cargarActa();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nominaId, terceroId]);
+
+  /** Acción explícita: calcular el acta (POST /liquidar, doc §7.3). */
+  const calcularActa = async () => {
+    if (!nominaId || !terceroId) return;
+    setCalculandoActa(true);
+    try {
+      const liq = await nominaApi.terceros.liquidar(nominaId, terceroId);
+      setDetalle(liq.data);
+      setActaSinCalcular(false);
+      toast.success('Acta calculada');
+    } catch (err) {
+      const e = err as ApiError;
+      toast.error(e.message ?? 'No se pudieron calcular los totales del acta');
+    } finally {
+      setCalculandoActa(false);
+    }
+  };
 
   // Catálogo de conceptos DEDUCCION_VOLUNTARIA para el dropdown del modal
   // de descuento (doc §7.5 + §8.2).
@@ -382,6 +409,37 @@ export default function LiquidarTerceroDetalle() {
       <div className="flex items-center justify-center py-20 gap-2 text-muted-foreground">
         <Loader2 className="h-5 w-5 animate-spin" />
         Cargando acta...
+      </div>
+    );
+  }
+
+  if (actaSinCalcular) {
+    // §7.3 — el acta existe pero nunca se calculó. Ver es solo lectura;
+    // el cálculo (que además liquida a los operarios pendientes del
+    // tercero) corre solo con este botón.
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
+        <p className="text-sm text-muted-foreground max-w-md">
+          El acta de este contratista aún no está calculada. Para ver sus
+          totales y el desglose por operario se necesita calcularla — esto
+          también liquida a sus operarios pendientes con los valores del
+          período. La nómina debe estar en borrador.
+        </p>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => navigate(-1)}>
+            Volver
+          </Button>
+          <Button onClick={calcularActa} disabled={calculandoActa} className="gap-1.5">
+            {calculandoActa ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Calculando...
+              </>
+            ) : (
+              'Calcular acta'
+            )}
+          </Button>
+        </div>
       </div>
     );
   }

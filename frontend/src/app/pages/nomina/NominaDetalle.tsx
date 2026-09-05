@@ -490,19 +490,23 @@ export default function NominaDetalle() {
    * N × `GET /operaciones/{id}` (una petición por planilla del período con
    * TODAS las relaciones eager-loaded — cientos de kB para pintar 5 filas).
    *
-   * Nuevo flujo:
+   * Flujo:
    *   1. Por cada tercero en `terceros[]`, y por cada operario del tercero:
    *   2. `GET /nominas/{n}/terceros/{t}/operarios/{op}/detalle` (§7.4) →
    *      { cosecha[], jornales[] } con exactamente las columnas de la tabla.
-   *   3. Si alguno responde 404 ACTA_NO_CALCULADA, disparar `liquidar` una vez
-   *      y reintentar los detalles del tercero (idempotente).
+   *   3. Si alguno responde 404 ACTA_NO_CALCULADA, NO se dispara nada: ver es
+   *      solo lectura. El tercero entra a `actasSinCalcular` y la UI muestra
+   *      un botón "Calcular acta" — solo con ese clic se llama POST /liquidar
+   *      (que además auto-liquida los operarios PENDIENTES del tercero, por
+   *      eso no puede ser automático).
    *
-   * Resultado: 2-3 peticiones ligeras en vez de 15+ pesadas.
-   *
-   * Se dispara al entrar al tab "Terceros" y solo re-carga si cambian los
-   * `terceros` o los `empleados` (nuevos operarios agregados).
+   * Resultado: 2-3 peticiones ligeras en vez de 15+ pesadas, y CERO
+   * mutaciones sin acción explícita del usuario.
    */
   const detallesTerceroCacheRef = useRef<string | null>(null);
+  /** Terceros cuyo detalle respondió ACTA_NO_CALCULADA — pintan CTA. */
+  const [actasSinCalcular, setActasSinCalcular] = useState<Set<number>>(new Set());
+  const [calculandoActa, setCalculandoActa] = useState<number | null>(null);
   useEffect(() => {
     if (tabActivo !== 'terceros') return;
     if (!nomina || !nominaId) return;
@@ -525,6 +529,7 @@ export default function NominaDetalle() {
 
     (async () => {
       const nuevoMapa = new Map<number, CategoriaLabor[]>();
+      const sinCalcular = new Set<number>();
       // Helper: pedir todos los detalles de un tercero. Devuelve la lista de
       // exitosos y una bandera de si alguno falló por ACTA_NO_CALCULADA.
       const pedirDetalles = async (terceroId: number, operarioIds: number[]) => {
@@ -534,15 +539,15 @@ export default function NominaDetalle() {
           ),
         );
         const okList: DetalleLaboresOperario[] = [];
-        let necesitaLiquidar = false;
+        let actaNoCalculada = false;
         for (const r of resultados) {
           if (r.status === 'fulfilled') {
             okList.push(r.value);
           } else if ((r.reason as ApiError | undefined)?.code === 'ACTA_NO_CALCULADA') {
-            necesitaLiquidar = true;
+            actaNoCalculada = true;
           }
         }
-        return { okList, necesitaLiquidar };
+        return { okList, actaNoCalculada };
       };
 
       await Promise.all(
@@ -552,26 +557,50 @@ export default function NominaDetalle() {
             .map((e) => e.operario_id!);
           if (operariosDelTercero.length === 0) return;
 
-          let { okList, necesitaLiquidar } = await pedirDetalles(t.tercero_id, operariosDelTercero);
+          const { okList, actaNoCalculada } = await pedirDetalles(t.tercero_id, operariosDelTercero);
 
-          // Si el acta aún no fue liquidada, la calculamos y reintentamos
-          // UNA vez. Idempotente por doc §7.3.
-          if (necesitaLiquidar) {
-            try {
-              await nominaApi.terceros.liquidar(nominaId, t.tercero_id);
-              ({ okList } = await pedirDetalles(t.tercero_id, operariosDelTercero));
-            } catch {
-              /* silencio — el mapa quedará vacío para este tercero */
-            }
-          }
+          // Ver es SOLO LECTURA: si el acta no está calculada, NO se dispara
+          // POST /liquidar (ese endpoint auto-liquida operarios PENDIENTES).
+          // Se marca el tercero y la UI ofrece el botón "Calcular acta".
+          if (actaNoCalculada) sinCalcular.add(t.tercero_id);
 
           nuevoMapa.set(t.tercero_id, consolidarDesdeDetalles(okList));
         }),
       );
       setDetallesPorTercero(nuevoMapa);
+      setActasSinCalcular(sinCalcular);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabActivo, nominaId, terceros, empleados]);
+
+  /**
+   * Acción EXPLÍCITA del usuario: POST /liquidar del acta del tercero
+   * (doc §7.3 — calcula totales; además auto-liquida los operarios
+   * PENDIENTES de ese tercero, por eso requiere el clic). Tras calcular,
+   * recarga el desglose y las actas.
+   */
+  const calcularActaTercero = async (terceroId: number) => {
+    if (!nominaId) return;
+    setCalculandoActa(terceroId);
+    try {
+      await nominaApi.terceros.liquidar(nominaId, terceroId);
+      toast.success('Acta calculada');
+      // Invalida el cache del desglose y recarga todo (actas + detalle).
+      detallesTerceroCacheRef.current = null;
+      setActasSinCalcular((prev) => {
+        const nuevo = new Set(prev);
+        nuevo.delete(terceroId);
+        return nuevo;
+      });
+      cargar();
+      cargarTerceros();
+    } catch (err) {
+      const e = err as ApiError;
+      toast.error(e.message ?? 'Error al calcular el acta');
+    } finally {
+      setCalculandoActa(null);
+    }
+  };
 
   const esBorrador = nomina?.estado === 'BORRADOR';
   // Los operarios NO van en la tabla de "Liquidación de Colaboradores" — se
@@ -1657,11 +1686,34 @@ export default function NominaDetalle() {
                       lote/sublote/promedio/peso. El "Total orden de pago" va
                       al final después de ambas tablas. */}
                   {categorias.length === 0 ? (
-                    <div className="py-10 text-center text-sm text-muted-foreground">
-                      {detallesPorTercero.size === 0
-                        ? 'Cargando desglose por labor...'
-                        : 'Sin registros de campo en el período para los operarios de esta empresa.'}
-                    </div>
+                    actasSinCalcular.has(grupo.tercero_id) ? (
+                      /* §7.3 — El acta no está calculada y VER no debe mutar
+                         nada (el POST /liquidar auto-liquida operarios
+                         PENDIENTES). El cálculo solo corre con este clic. */
+                      <div className="py-10 flex flex-col items-center gap-3 text-center">
+                        <p className="text-sm text-muted-foreground max-w-md">
+                          El acta de este contratista aún no está calculada. Para ver el
+                          desglose por labor se necesita calcularla — esto también
+                          liquida a sus operarios pendientes con los valores del período.
+                        </p>
+                        <Button
+                          size="sm"
+                          onClick={() => calcularActaTercero(grupo.tercero_id)}
+                          disabled={calculandoActa === grupo.tercero_id}
+                          className="gap-1.5"
+                        >
+                          {calculandoActa === grupo.tercero_id
+                            ? 'Calculando...'
+                            : 'Calcular acta'}
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="py-10 text-center text-sm text-muted-foreground">
+                        {detallesPorTercero.size === 0
+                          ? 'Cargando desglose por labor...'
+                          : 'Sin registros de campo en el período para los operarios de esta empresa.'}
+                      </div>
+                    )
                   ) : (
                     <>
                       {categorias.filter((c) => c.key !== 'finca').length > 0 && (

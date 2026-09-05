@@ -87,7 +87,9 @@ function toNumber(v: string | number): number {
 
 /** Formato compacto en millones para los mini-KPIs (igual que V.15). */
 function fmtMillones(n: number): string {
-  if (!n || n <= 0) return '—';
+  // Cero se muestra como $0 (no como guion): "aún no se ha pagado nada"
+  // es un dato, no una ausencia de dato.
+  if (!n || n <= 0) return '$0';
   return `$${(n / 1_000_000).toFixed(2)}M`;
 }
 
@@ -245,16 +247,32 @@ export default function Nomina() {
   // Período específico → cálculo en cliente con la data ya listada (los KPIs de
   //   terceros por nómina vendrían del endpoint /nominas/{id}/terceros).
   const kpis = useMemo(() => {
+    // Neto de una nómina: para BORRADOR usa la PROYECCIÓN local (la misma
+    // que pinta la tabla de abajo — snapshot de pendientes + liquidados −
+    // deducciones estimadas). El `total_general` del backend solo suma lo
+    // confirmado (liquidados + actas calculadas) y quedaba muy por debajo
+    // de lo que realmente se va a pagar. Cae a total_general mientras la
+    // proyección aún carga o para CERRADAS (donde ya es definitivo).
+    const netoDeNomina = (n: NominaT): number => {
+      const proy = n.estado === 'BORRADOR' ? proyeccionesPorNomina.get(n.id) : undefined;
+      return proy ? proy.neto : toNumber(n.total_general);
+    };
+
     if (periodoKpi === 'todos' && indicadores) {
       const borradores = nominas.filter((n) => n.estado === 'BORRADOR');
       const labelBorrador = borradores.length === 1
         ? periodoLabel(borradores[0])
         : `${borradores.length} períodos abiertos`;
+      const netoBorradores = borradores.reduce((s, n) => s + netoDeNomina(n), 0);
+      // Pendiente = lo mayor entre las actas pendientes que reporta el
+      // backend y lo proyectado en borradores. Max, no suma: el acta de un
+      // tercero del borrador está contada en ambos lados.
+      const pendiente = Math.max(indicadores.pendiente_pagar ?? 0, netoBorradores);
       return {
         totalColaboradores: indicadores.total_colaboradores ?? 0,
         totalTerceros: indicadores.total_terceros ?? 0,
-        netoAPagar: indicadores.neto_pagar ?? 0,
-        totalPendiente: indicadores.pendiente_pagar ?? 0,
+        netoAPagar: netoBorradores,
+        totalPendiente: pendiente,
         labelBorrador,
         borradoresLen: borradores.length,
       };
@@ -270,7 +288,7 @@ export default function Nomina() {
 
     const totalColaboradores = cerradas.reduce((s, n) => s + toNumber(n.total_general), 0);
     const totalTerceros = 0; // requiere /nominas/{id}/terceros — se carga al ver el detalle
-    const netoAPagar = borradores.reduce((s, n) => s + toNumber(n.total_general), 0);
+    const netoAPagar = borradores.reduce((s, n) => s + netoDeNomina(n), 0);
     const totalPendiente = netoAPagar;
 
     const labelBorrador = borradores.length === 1
@@ -278,7 +296,7 @@ export default function Nomina() {
       : `${borradores.length} períodos abiertos`;
 
     return { totalColaboradores, totalTerceros, netoAPagar, totalPendiente, labelBorrador, borradoresLen: borradores.length };
-  }, [nominas, periodoKpi, indicadores]);
+  }, [nominas, periodoKpi, indicadores, proyeccionesPorNomina]);
 
   return (
     <div className="space-y-6">

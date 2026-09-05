@@ -430,7 +430,9 @@ export default function NuevaNominaWizard() {
   const promediosEditadosSnapshot = useRef<Record<number, number>>({});
   const [ajustandoPromedio, setAjustandoPromedio] = useState(false);
   /** Año seleccionado en el selector del modal — arranca en el año de la nómina. */
-  const [anioPromedios, setAnioPromedios] = useState<number>(new Date().getFullYear());
+  /** `ajustado_at` devuelto por el PUT de cada lote — manda sobre el
+   *  `updated_at` del listado en la columna "Fecha Actualización". */
+  const [fechasAjusteManual, setFechasAjusteManual] = useState<Map<number, string>>(new Map());
   /** lote_id → updated_at del último promedio del año seleccionado. */
   const [fechasPromedioLote, setFechasPromedioLote] = useState<Map<number, string>>(new Map());
 
@@ -703,19 +705,24 @@ export default function NuevaNominaWizard() {
   // Al abrir el modal, simplemente reseteamos las ediciones locales — los
   // promedios vienen del bundle de cosecha (`promedios_por_lote`), ya cargado.
   // Si el bundle aún no está, se cargará al entrar al paso 3.
-  // También iniciamos el selector de año en el año de la nómina (ano).
   useEffect(() => {
     if (!mostrarAjustePromedios) return;
     setPromediosEditados({});
-    setAnioPromedios(parseInt(ano) || new Date().getFullYear());
-  }, [mostrarAjustePromedios, ano]);
+  }, [mostrarAjustePromedios]);
 
-  // Traer fecha de actualización por lote del año seleccionado — pobla la
-  // columna "Fecha Actualización" del modal combinado. No bloquea la UI.
+  // Traer fecha de actualización por lote — pobla la columna "Fecha
+  // Actualización" del modal combinado. No bloquea la UI.
+  // Filtrado por el RANGO de la nómina (fecha_desde/fecha_hasta, inclusivos):
+  // el promedio "Auto" solo se calcula con registros cuya fecha cae dentro
+  // del rango. Con `anio` entraban registros de otras quincenas (p.ej. un
+  // viaje del 16/05 en la nómina 1–15 de mayo) y la lista no coincidía con
+  // lo que el sistema promedió. Además `anio` rompía nóminas que cruzan
+  // diciembre.
   useEffect(() => {
     if (!mostrarAjustePromedios) return;
+    if (!fechaInicio || !fechaFin) return;
     configuracionApi.promediosLote
-      .listar({ anio: anioPromedios, per_page: 100 })
+      .listar({ fecha_desde: fechaInicio, fecha_hasta: fechaFin, per_page: 100 })
       .then((res) => {
         const m = new Map<number, string>();
         for (const p of res.data ?? []) {
@@ -729,7 +736,7 @@ export default function NuevaNominaWizard() {
         setFechasPromedioLote(m);
       })
       .catch(() => setFechasPromedioLote(new Map()));
-  }, [mostrarAjustePromedios, anioPromedios]);
+  }, [mostrarAjustePromedios, fechaInicio, fechaFin]);
 
   /** Guarda los promedios editados — un PUT por cada lote modificado.
    *  El valor original es el `promedio_efectivo` del bundle (que ya considera
@@ -804,11 +811,22 @@ export default function NuevaNominaWizard() {
     }
     setAjustandoPromedio(true);
     try {
-      await Promise.all(
+      const resultados = await Promise.all(
         cambios.map(({ loteId, valor }) =>
           nominaApi.ajustarPromedioLote(nominaId, loteId, valor),
         ),
       );
+      // El `ajustado_at` del PUT es la fecha real del ajuste manual — manda
+      // sobre el `updated_at` del listado (que puede venir de un registro de
+      // otra quincena) en la columna "Fecha Actualización".
+      setFechasAjusteManual((prev) => {
+        const m = new Map(prev);
+        for (const r of resultados) {
+          const d = r.data;
+          if (d?.lote_id != null && d.ajustado_at) m.set(d.lote_id, d.ajustado_at);
+        }
+        return m;
+      });
       toast.success(`${cambios.length} promedio${cambios.length !== 1 ? 's' : ''} actualizado${cambios.length !== 1 ? 's' : ''}`);
       const res = await nominaApi.validarCosecha(nominaId);
       setBundleCosecha(res.data);
@@ -1982,6 +2000,14 @@ export default function NuevaNominaWizard() {
                 const extrDeCosechasFuera = bundleCosecha?.total_kg_extractora_de_cosechas_fuera_del_periodo ?? 0;
                 const hayDesgloseExtr = extrDeViajesFuera !== 0 || extrDeCosechasFuera !== 0;
                 const detalle = bundleCosecha?.detalle_por_colaborador ?? [];
+                // §2.6 — El bundle recorre TODO el período aunque haya varias
+                // nóminas (la conciliación es finca-vs-extractora). Cuando el
+                // período está partido, estos campos evitan dar a entender que
+                // toda esa fruta se liquida en ESTA nómina.
+                const totalKgEstaNomina = bundleCosecha?.total_kg_de_esta_nomina;
+                const colabsEstaNomina = bundleCosecha?.colaboradores_de_esta_nomina;
+                const periodoPartido = totalKgEstaNomina != null
+                  && Math.abs(totalKgEstaNomina - totalColabs) > 0.01;
 
                 // F1 (§4.6) — kg_extractora y diferencia_kg se pintan TAL CUAL
                 // llegan del API. El prorrateo global anterior (factor sobre el
@@ -1997,7 +2023,7 @@ export default function NuevaNominaWizard() {
                 const nombreALoteIdMap = new Map<string, number>();
                 for (const p of promediosPorLote) nombreALoteIdMap.set(p.lote_nombre, p.lote_id);
 
-                const kgTrabDeCosecha = (c: { lote: string; kg_trabajado: number }): number => {
+                const kgTrabDeCosecha = (c: { lote: string; kg_trabajado: number; gajos_persona?: number }): number => {
                   const loteId = nombreALoteIdMap.get(c.lote);
                   if (loteId === undefined) return c.kg_trabajado;
                   const p = promediosPorLote.find((x) => x.lote_id === loteId);
@@ -2005,13 +2031,13 @@ export default function NuevaNominaWizard() {
                   const editado = promediosEditados[loteId];
                   const promNuevo = editado !== undefined && editado > 0 ? editado : promOrig;
                   if (promNuevo === promOrig || promOrig <= 0) return c.kg_trabajado;
-                  // §9 (2026-09-04) — el reparto de gajos es EXACTO, sin floor:
-                  // 315 gajos entre 2 son 157,5 por persona. La división recupera
-                  // esa fracción tal cual; solo limpiamos ruido flotante a 4
-                  // decimales (la precisión que persiste el backend). Un
-                  // Math.round acá redondearía 157,5 → 158 y el preview quedaría
-                  // desviado medio gajo × promedio.
-                  const gajosPorMiembro = Math.round((c.kg_trabajado / promOrig) * 10000) / 10000;
+                  // §4.1 (2026-09-05) — la fila trae `gajos_persona`: la porción
+                  // EXACTA del cuadrillero (gajos_verificados / N, sin floor).
+                  // Es la base oficial de kg_trabajado. El fallback dividiendo
+                  // kg/promedio queda solo para un backend viejo; limpia ruido
+                  // flotante a 4 decimales (precisión que persiste el backend).
+                  const gajosPorMiembro = c.gajos_persona
+                    ?? Math.round((c.kg_trabajado / promOrig) * 10000) / 10000;
                   return gajosPorMiembro * promNuevo;
                 };
 
@@ -2132,16 +2158,24 @@ export default function NuevaNominaWizard() {
                             </p>
                             <p className="text-sm text-muted-foreground mb-0.5">kg</p>
                           </div>
-                          <div className="flex items-center gap-1.5 pt-1 border-t border-border/50">
-                            <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                            <p className="text-xs text-muted-foreground">{detalle.length} colaborador{detalle.length !== 1 ? 'es' : ''} con cosecha</p>
+                          <div className="pt-1 border-t border-border/50 space-y-0.5">
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                              <p className="text-xs text-muted-foreground">{detalle.length} colaborador{detalle.length !== 1 ? 'es' : ''} con cosecha</p>
+                            </div>
+                            {periodoPartido && (
+                              <p className="text-[11px] text-muted-foreground">
+                                Se liquida en esta nómina: {totalKgEstaNomina.toLocaleString('es-CO')} kg
+                                {colabsEstaNomina != null ? ` (${colabsEstaNomina} colaborador${colabsEstaNomina !== 1 ? 'es' : ''})` : ''}
+                              </p>
+                            )}
                           </div>
                         </div>
                         <div className="px-6 py-5 space-y-2">
                           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Extractora</p>
                           <div className="flex items-end gap-1.5">
                             <p className="text-3xl font-bold text-foreground leading-none">
-                              {totalExtr > 0 ? `−${totalExtr.toLocaleString('es-CO')}` : '—'}
+                              {totalExtr > 0 ? totalExtr.toLocaleString('es-CO') : '—'}
                             </p>
                             <p className="text-sm text-muted-foreground mb-0.5">kg</p>
                           </div>
@@ -2155,12 +2189,12 @@ export default function NuevaNominaWizard() {
                               </p>
                               {extrDeViajesFuera !== 0 && (
                                 <p className="text-[11px] text-muted-foreground">
-                                  + Recibido en otra quincena: {extrDeViajesFuera.toLocaleString('es-CO')} kg
+                                  Suma recibido de otro periodo: {extrDeViajesFuera.toLocaleString('es-CO')} kg
                                 </p>
                               )}
                               {extrDeCosechasFuera !== 0 && (
                                 <p className="text-[11px] text-muted-foreground">
-                                  − Fruta de otra quincena: {extrDeCosechasFuera.toLocaleString('es-CO')} kg
+                                  Resta fruta de otro periodo: {extrDeCosechasFuera.toLocaleString('es-CO')} kg
                                 </p>
                               )}
                             </div>
@@ -2179,7 +2213,7 @@ export default function NuevaNominaWizard() {
                           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Diferencia real</p>
                           <div className="flex items-end gap-1.5">
                             <p className={`text-3xl font-bold leading-none ${estadoDif === 'ok' ? 'text-success' : estadoDif === 'critico' ? 'text-destructive' : estadoDif === 'atencion' ? 'text-amber-600' : 'text-muted-foreground'}`}>
-                              {estadoDif === 'vacio' ? '—' : `${diff > 0 ? '+' : ''}${diff.toLocaleString('es-CO')}`}
+                              {estadoDif === 'vacio' ? '—' : Math.abs(diff).toLocaleString('es-CO')}
                             </p>
                             <p className="text-sm text-muted-foreground mb-0.5">kg</p>
                           </div>
@@ -2233,21 +2267,40 @@ export default function NuevaNominaWizard() {
                                             Tercero
                                           </Badge>
                                         )}
+                                        {d.en_esta_nomina === false && (
+                                          <Badge
+                                            className="text-[10px] bg-muted text-muted-foreground border-border"
+                                            title="Este cuadrillero pertenece a otra nómina del mismo período. Su fruta entra a la conciliación pero se liquida allá."
+                                          >
+                                            Otra nómina
+                                          </Badge>
+                                        )}
                                       </div>
                                       <p className="text-xs text-muted-foreground">{d.cargo}</p>
                                     </div>
                                   </div>
                                   {(() => {
-                                    // KPIs del header — igual que la imagen 2:
-                                    // Registrado / Transportadora / Diferencia
-                                    // kg_trabajado y kg_extractora se recalculan
-                                    // con el promedio ajustado y la proporción de gajos.
+                                    // KPIs del header: Registrado / Transportadora / Diferencia.
+                                    // §4.1 (2026-09-05) — el backend manda los totales por
+                                    // colaborador YA redondeados (d.kg, d.kg_extractora,
+                                    // d.diferencia_kg); se pintan tal cual. La suma local
+                                    // solo aplica mientras hay un promedio editado sin
+                                    // guardar (simulación en vivo).
                                     const cosechas = d.cosechas ?? [];
+                                    const hayEdicion = cosechas.some((c) => {
+                                      const loteId = nombreALoteIdMap.get(c.lote);
+                                      const e = loteId !== undefined ? promediosEditados[loteId] : undefined;
+                                      return e !== undefined && e > 0;
+                                    });
                                     const ajustadas = cosechas.map((c) => ajustarKgCosecha(c));
-                                    const totalTrab = ajustadas.reduce((s, r) => s + r.kgTrab, 0);
-                                    const totalExtr = ajustadas.reduce((s, r) => s + r.kgExtr, 0);
-                                    // §4.6 — Diferencia = suma de diferencias conciliables (no null).
-                                    const diff = ajustadas.reduce((s, r) => s + (r.difKg ?? 0), 0);
+                                    const totalTrab = !hayEdicion && d.kg != null
+                                      ? d.kg
+                                      : ajustadas.reduce((s, r) => s + r.kgTrab, 0);
+                                    const totalExtr = d.kg_extractora
+                                      ?? ajustadas.reduce((s, r) => s + r.kgExtr, 0);
+                                    const diff = !hayEdicion && d.diferencia_kg != null
+                                      ? d.diferencia_kg
+                                      : ajustadas.reduce((s, r) => s + (r.difKg ?? 0), 0);
                                     const colorDiff = diff === 0
                                       ? 'text-success'
                                       : diff > 0
@@ -2258,7 +2311,7 @@ export default function NuevaNominaWizard() {
                                         <div className="text-right">
                                           <p className="text-xs text-muted-foreground">Registrado</p>
                                           <p className="text-sm font-bold">
-                                            {(totalTrab || d.kg).toLocaleString('es-CO')} kg
+                                            {totalTrab.toLocaleString('es-CO')} kg
                                           </p>
                                         </div>
                                         {cosechas.length > 0 && (
@@ -2272,7 +2325,7 @@ export default function NuevaNominaWizard() {
                                             <div className="text-right hidden sm:block">
                                               <p className="text-xs text-muted-foreground">Diferencia</p>
                                               <p className={`text-sm font-bold ${colorDiff}`}>
-                                                {diff > 0 ? '+' : ''}{diff.toLocaleString('es-CO')} kg
+                                                {Math.abs(diff).toLocaleString('es-CO')} kg
                                               </p>
                                             </div>
                                           </>
@@ -2297,6 +2350,14 @@ export default function NuevaNominaWizard() {
                                             <th className="text-right p-2">Gajos Totales</th>
                                             <th className="text-right p-2">Gajos Verificados</th>
                                             <th className="text-right p-2">Diferencia Gajos</th>
+                                            {/* §4.1 (2026-09-05) — Porción exacta del cuadrillero:
+                                                gajos_verificados / N sin floor. Es la base de los
+                                                kg de la fila. Solo se pinta si el backend la manda. */}
+                                            {d.cosechas.some((c) => c.gajos_persona != null) && (
+                                              <th className="text-right p-2" title="Porción de este cuadrillero: gajos verificados divididos entre los miembros activos de la cuadrilla, sin truncar">
+                                                Gajos Persona
+                                              </th>
+                                            )}
                                             {/* §4.6 F5 — Promedio efectivo (lote) vs aplicado
                                                 (viaje). Solo se pinta si al menos una fila trae
                                                 el dato — evita ruido cuando el backend responde
@@ -2377,8 +2438,20 @@ export default function NuevaNominaWizard() {
                                                 <td className="p-2 text-right">{c.gajos_trabajados}</td>
                                                 <td className="p-2 text-right">{c.gajos_verificados}</td>
                                                 <td className={`p-2 text-right font-semibold ${c.diferencia_gajos === 0 ? 'text-muted-foreground' : c.diferencia_gajos > 0 ? 'text-amber-600' : 'text-primary'}`}>
-                                                  {c.diferencia_gajos > 0 ? '+' : ''}{c.diferencia_gajos}
+                                                  {Math.abs(c.diferencia_gajos)}
                                                 </td>
+                                                {d.cosechas.some((x) => x.gajos_persona != null) && (
+                                                  <td
+                                                    className="p-2 text-right"
+                                                    title={c.n_cuadrilla != null && c.n_cuadrilla > 1
+                                                      ? `${c.gajos_verificados} gajos entre ${c.n_cuadrilla} miembros de la cuadrilla`
+                                                      : undefined}
+                                                  >
+                                                    {c.gajos_persona != null
+                                                      ? c.gajos_persona.toLocaleString('es-CO', { maximumFractionDigits: 4 })
+                                                      : <span className="text-muted-foreground">—</span>}
+                                                  </td>
+                                                )}
                                                 {/* §4.6 F5 — Promedios efectivo/aplicado con
                                                     icono según origen. Solo se renderiza cuando
                                                     la fila los trae; garantiza consistencia con
@@ -2422,10 +2495,14 @@ export default function NuevaNominaWizard() {
                                                     </td>
                                                   </>
                                                 )}
-                                                <td className="p-2 text-right">{Math.round(kgTrab).toLocaleString('es-CO')}</td>
+                                                {/* Sin redondear: el backend manda los kg con decimales
+                                                    (945,9 / 929,7) y se pintan tal cual. El tope de 4
+                                                    decimales solo limpia ruido flotante del recálculo
+                                                    local de promedios. */}
+                                                <td className="p-2 text-right">{kgTrab.toLocaleString('es-CO', { maximumFractionDigits: 4 })}</td>
                                                 <td className="p-2 text-right">
                                                   {kgExtr > 0
-                                                    ? Math.round(kgExtr).toLocaleString('es-CO')
+                                                    ? kgExtr.toLocaleString('es-CO', { maximumFractionDigits: 4 })
                                                     : <span className="text-muted-foreground">—</span>}
                                                 </td>
                                                 <td className={`p-2 text-right font-semibold ${
@@ -2443,7 +2520,7 @@ export default function NuevaNominaWizard() {
                                                       defensiva contra un backend viejo. */}
                                                   {difKg === null
                                                     ? '—'
-                                                    : `${difKg > 0 ? '+' : ''}${Math.round(difKg).toLocaleString('es-CO')}`}
+                                                    : Math.abs(difKg).toLocaleString('es-CO', { maximumFractionDigits: 4 })}
                                                 </td>
                                                 {hayCol && (
                                                   <td className="p-2 text-right">
@@ -2482,24 +2559,34 @@ export default function NuevaNominaWizard() {
                                             const mostrarPromedios = d.cosechas.some(
                                               (c) => c.promedio_efectivo != null || c.promedio_aplicado != null,
                                             );
+                                            const mostrarGajosPersona = d.cosechas.some((c) => c.gajos_persona != null);
+                                            // §4.1 — `d.gajos` viene sumado y redondeado a 4 por el
+                                            // backend; la suma local es fallback.
+                                            const totGP = d.gajos
+                                              ?? d.cosechas.reduce((s, c) => s + (c.gajos_persona ?? 0), 0);
                                             return (
                                               <tr className="border-t-2 border-primary/40 bg-primary/5 font-semibold">
                                                 <td className="p-2 font-bold uppercase text-primary" colSpan={4}>Totales</td>
                                                 <td className="p-2 text-right font-bold">{totGT.toLocaleString('es-CO')}</td>
                                                 <td className="p-2 text-right font-bold">{totGV.toLocaleString('es-CO')}</td>
                                                 <td className={`p-2 text-right font-bold ${totDifG === 0 ? 'text-muted-foreground' : totDifG > 0 ? 'text-amber-600' : 'text-primary'}`}>
-                                                  {totDifG > 0 ? '+' : ''}{totDifG}
+                                                  {Math.abs(totDifG)}
                                                 </td>
+                                                {mostrarGajosPersona && (
+                                                  <td className="p-2 text-right font-bold">
+                                                    {totGP.toLocaleString('es-CO', { maximumFractionDigits: 4 })}
+                                                  </td>
+                                                )}
                                                 {mostrarPromedios && (
                                                   <>
                                                     <td className="p-2" />
                                                     <td className="p-2" />
                                                   </>
                                                 )}
-                                                <td className="p-2 text-right font-bold">{Math.round(totKgT).toLocaleString('es-CO')} kg</td>
-                                                <td className="p-2 text-right font-bold">{Math.round(totKgE).toLocaleString('es-CO')} kg</td>
+                                                <td className="p-2 text-right font-bold">{totKgT.toLocaleString('es-CO', { maximumFractionDigits: 4 })} kg</td>
+                                                <td className="p-2 text-right font-bold">{totKgE.toLocaleString('es-CO', { maximumFractionDigits: 4 })} kg</td>
                                                 <td className={`p-2 text-right font-bold ${Math.abs(totDifKg) < 1 ? 'text-success' : totDifKg > 0 ? 'text-amber-600' : 'text-primary'}`}>
-                                                  {totDifKg > 0 ? '+' : ''}{Math.round(totDifKg).toLocaleString('es-CO')} kg
+                                                  {Math.abs(totDifKg).toLocaleString('es-CO', { maximumFractionDigits: 4 })} kg
                                                 </td>
                                               </tr>
                                             );
@@ -2897,16 +2984,18 @@ export default function NuevaNominaWizard() {
                   totalColabs += c.kg_trabajado;
                   continue;
                 }
-                if (promOrig <= 0) {
-                  // Sin promedio original → no podemos derivar los gajos base.
+                if (promOrig <= 0 && c.gajos_persona == null) {
+                  // Sin promedio original ni porción de gajos → no podemos
+                  // derivar los gajos base.
                   totalColabs += c.kg_trabajado;
                   continue;
                 }
-                // §9 (2026-09-04) — reparto EXACTO de gajos, sin floor. La
-                // división recupera la fracción (157,5); solo limpiamos ruido
-                // flotante a 4 decimales. Un Math.round a entero desviaría el
-                // preview medio gajo × promedio en cosechas con residuo.
-                const gajosPorMiembro = Math.round((c.kg_trabajado / promOrig) * 10000) / 10000;
+                // §4.1 (2026-09-05) — la fila trae `gajos_persona` (porción
+                // exacta del cuadrillero, sin floor): es la base oficial de
+                // kg_trabajado. El fallback dividiendo kg/promedio queda para
+                // un backend viejo, limpiando ruido flotante a 4 decimales.
+                const gajosPorMiembro = c.gajos_persona
+                  ?? Math.round((c.kg_trabajado / promOrig) * 10000) / 10000;
                 totalColabs += gajosPorMiembro * promNuevo;
               }
             }
@@ -2933,7 +3022,7 @@ export default function NuevaNominaWizard() {
                       Colaboradores
                     </p>
                     <p className="text-2xl font-bold">
-                      {Math.round(totalColabs).toLocaleString('es-CO')} <span className="text-sm text-muted-foreground font-normal">kg</span>
+                      {totalColabs.toLocaleString('es-CO', { maximumFractionDigits: 4 })} <span className="text-sm text-muted-foreground font-normal">kg</span>
                     </p>
                   </div>
                   <div className="px-6 py-4">
@@ -2941,7 +3030,7 @@ export default function NuevaNominaWizard() {
                       Extractora
                     </p>
                     <p className="text-2xl font-bold">
-                      {totalExtr > 0 ? `−${totalExtr.toLocaleString('es-CO')}` : '—'} <span className="text-sm text-muted-foreground font-normal">kg</span>
+                      {totalExtr > 0 ? totalExtr.toLocaleString('es-CO') : '—'} <span className="text-sm text-muted-foreground font-normal">kg</span>
                     </p>
                   </div>
                   <div className={`px-6 py-4 ${estado === 'ok' ? 'bg-success/5' : estado === 'critico' ? 'bg-destructive/5' : 'bg-amber-500/5'}`}>
@@ -2949,7 +3038,7 @@ export default function NuevaNominaWizard() {
                       Diferencia real
                     </p>
                     <p className={`text-2xl font-bold ${colorTexto}`}>
-                      {diff > 0 ? '+' : ''}{Math.round(diff).toLocaleString('es-CO')}
+                      {Math.abs(diff).toLocaleString('es-CO', { maximumFractionDigits: 4 })}
                       <span className="text-sm text-muted-foreground font-normal ml-1">kg</span>
                     </p>
                     <p className={`text-xs mt-1 ${colorTexto}`}>
@@ -2972,7 +3061,9 @@ export default function NuevaNominaWizard() {
                   </th>
                   <th className="text-left p-3 font-semibold">Lote</th>
                   <th className="text-right p-3 font-semibold">
-                    Auto <span className="font-normal text-[10px] block leading-tight">(viajes período)</span>
+                    {/* Incluye viajes Y baselines del admin con fecha en el
+                        rango de la nómina, no solo viajes. */}
+                    Auto <span className="font-normal text-[10px] block leading-tight">(promedios del período)</span>
                   </th>
                   <th className="text-right p-3 pr-5 font-semibold">
                     Ajuste Manual <span className="font-normal text-[10px] block leading-tight">(esta nómina)</span>
@@ -2996,7 +3087,10 @@ export default function NuevaNominaWizard() {
                 ) : (
                   bundleCosecha.promedios_por_lote.map((p) => {
                     const valorActual = promedioValorActual(p.lote_id);
-                    const fechaAct = fechasPromedioLote.get(p.lote_id);
+                    // Prioridad: `ajustado_at` del PUT (fecha real del ajuste
+                    // manual) sobre el `updated_at` del listado del período.
+                    const fechaAct = fechasAjusteManual.get(p.lote_id)
+                      ?? fechasPromedioLote.get(p.lote_id);
                     const fechaFmt = fechaAct
                       ? new Date(fechaAct).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })
                       : '—';
@@ -3139,14 +3233,14 @@ export default function NuevaNominaWizard() {
                         </p>
                         <p className="text-xs text-muted-foreground mt-1">
                           {Number(c.promedio_original).toFixed(2)} → {Number(c.promedio_nuevo).toFixed(2)} kg/gajo
-                          {' '}({sube ? '+' : ''}{c.delta.toFixed(2)})
+                          {' '}({sube ? 'sube' : 'baja'} {Math.abs(c.delta).toFixed(2)})
                         </p>
                         <p className="text-xs text-foreground mt-1.5">
                           Impacta a <strong>{c.colaboradores_impactados} colaborador{c.colaboradores_impactados !== 1 ? 'es' : ''}</strong>
                           {' '}({c.gajos_totales.toLocaleString('es-CO')} gajos):
                           {' '}
                           <strong className={sube ? 'text-amber-700' : 'text-destructive'}>
-                            {sube ? '+' : ''}{Math.round(deltaKg).toLocaleString('es-CO')} kg
+                            {sube ? 'sube' : 'baja'} {Math.abs(Math.round(deltaKg)).toLocaleString('es-CO')} kg
                           </strong>
                           {' '}en el pago total de cosecha del lote.
                         </p>
