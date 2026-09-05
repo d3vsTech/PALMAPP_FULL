@@ -579,6 +579,11 @@ export default function ConteoCosecha() {
           cosechaEnEdicion.gajosEnViaje > 0 ? cosechaEnEdicion.gajosEnViaje : null,
         );
         detalleId = (r.data as any)?.id;
+        // §5.4.1 — sobreconteo dentro de tolerancia: 201 con `advertencia`.
+        // Se informa como toast, nunca bloquea.
+        if (r.advertencia) {
+          toast.warning(r.advertencia, { duration: 6000 });
+        }
       }
       if (!detalleId) {
         toast.error('No se pudo identificar el detalle');
@@ -615,6 +620,10 @@ export default function ConteoCosecha() {
         toast.error('Los gajos en viaje superan los disponibles de esta cosecha');
       } else if (e?.code === ErrorCodes.COSECHA_YA_ASIGNADA) {
         toast.error('Esta cosecha ya fue asignada completamente a otro viaje');
+      } else if (e?.code === ErrorCodes.FECHA_VIAJE_ANTERIOR_A_COSECHA) {
+        // §6.5 — el camión no puede llevar fruta que aún no se cortó. El
+        // message del backend trae las dos fechas y es reenviable tal cual.
+        toast.error(e?.message ?? 'La fecha del viaje es anterior a la de la cosecha. Corrige la fecha del viaje.', { duration: 8000 });
       } else {
         toast.error(e?.message ?? 'Error al guardar la cosecha');
       }

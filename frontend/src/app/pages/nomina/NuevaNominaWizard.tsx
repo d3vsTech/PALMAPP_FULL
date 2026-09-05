@@ -1966,14 +1966,21 @@ export default function NuevaNominaWizard() {
                 </Card>
               ) : (() => {
                 const totalColabs = bundleCosecha?.total_kg_colaboradores ?? 0;
+                // §4.6 (2026-09-05) — `total_kg_extractora` YA VIENE AJUSTADO:
+                // incluye lo recibido en viajes de otra quincena por fruta de
+                // este período y excluye la fruta ajena recibida acá. La resta
+                // "Despachado fuera" desapareció de la cabecera; el campo
+                // `total_kg_despachado_fuera_del_periodo` ya no se emite.
                 const totalExtr = bundleCosecha?.total_kg_extractora ?? 0;
-                // §4.6 — Nueva cifra: kilos que se pagan acá pero cuyo peso se
-                // concilia en la quincena siguiente porque el viaje salió fuera
-                // del rango. `diff` viene ya calculado por el backend:
-                //   diff = colaboradores − fuera − extractora
-                const totalFuera = bundleCosecha?.total_kg_despachado_fuera_del_periodo ?? 0;
-                const cosechasFuera = bundleCosecha?.cosechas_despachadas_fuera_del_periodo ?? 0;
+                // `diff` viene calculado por el backend: colaboradores − extractora.
                 const diff = bundleCosecha?.diferencia_kg ?? 0;
+                const cosechasFuera = bundleCosecha?.cosechas_despachadas_fuera_del_periodo ?? 0;
+                // Desglose opcional de la extractora ajustada — solo se pinta
+                // cuando alguno de los tres componentes es distinto de cero.
+                const extrDelPeriodo = bundleCosecha?.total_kg_extractora_viajes_del_periodo ?? 0;
+                const extrDeViajesFuera = bundleCosecha?.total_kg_extractora_de_viajes_fuera_del_periodo ?? 0;
+                const extrDeCosechasFuera = bundleCosecha?.total_kg_extractora_de_cosechas_fuera_del_periodo ?? 0;
+                const hayDesgloseExtr = extrDeViajesFuera !== 0 || extrDeCosechasFuera !== 0;
                 const detalle = bundleCosecha?.detalle_por_colaborador ?? [];
 
                 // F1 (§4.6) — kg_extractora y diferencia_kg se pintan TAL CUAL
@@ -2015,14 +2022,14 @@ export default function NuevaNominaWizard() {
                   diferencia_kg?: number | null;
                 }) => {
                   const kgTrab = kgTrabDeCosecha(c);
-                  // §4.6 — kg_extractora viene ya filtrado por rango. Cero
-                  // implica sin medición o despachado_fuera_del_periodo; en
-                  // ese caso `diferencia_kg` del API llega null.
+                  // §4.6 (2026-09-05) — kg_extractora de la fila concilia
+                  // contra su viaje sin importar la quincena de este. Cero
+                  // solo implica sin medición (SIN_DESPACHAR / SIN_DATOS).
                   const kgExtr = c.kg_extractora ?? 0;
                   // Si el usuario editó localmente el promedio del lote,
                   // recalculamos la diferencia (simulación pre-guardar).
-                  // Si no, respetamos la del API (que puede ser null cuando
-                  // la fila no es conciliable en este período).
+                  // Si no, respetamos la del API (`diferencia_kg` ya nunca
+                  // llega null; el fallback es tolerancia defensiva).
                   const loteId = nombreALoteIdMap.get(c.lote);
                   const editado = loteId !== undefined ? promediosEditados[loteId] : undefined;
                   const hayEdicionLocal = editado !== undefined && editado > 0;
@@ -2031,18 +2038,17 @@ export default function NuevaNominaWizard() {
                     : (c.diferencia_kg ?? null);
                   return { kgTrab, kgExtr, difKg };
                 };
-                // F7 (§4.6) — Semáforo por PORCENTAJE, no por kilos absolutos.
-                // Base = colaboradores − despachado_fuera (lo realmente
-                // conciliable en este período). En camiones mixtos el ruido
-                // típico es ±6 %, y el residuo del floor es <1 %.
+                // F7 (§4.6, 2026-09-05) — Semáforo por PORCENTAJE sobre
+                // `total_kg_colaboradores` sin restar nada: la extractora ya
+                // viene ajustada y la diferencia es directa. En camiones
+                // mixtos el ruido típico es ±6 %.
                 //   < 2 %  normal (ruido esperado)
                 //   2-5 %  revisar
                 //   > 5 %  significativa
-                const baseConciliable = Math.max(0, totalColabs - totalFuera);
-                const pctDiff = baseConciliable > 0 ? Math.abs(diff) / baseConciliable : 0;
+                const pctDiff = totalColabs > 0 ? Math.abs(diff) / totalColabs : 0;
                 const estadoDif: 'ok' | 'critico' | 'atencion' | 'vacio' =
                   totalColabs === 0 && totalExtr === 0 ? 'vacio'
-                    : baseConciliable === 0 ? 'vacio'
+                    : totalColabs === 0 ? 'vacio'
                       : pctDiff < 0.02 ? 'ok'
                         : pctDiff > 0.05 ? 'critico'
                           : 'atencion';
@@ -2113,11 +2119,11 @@ export default function NuevaNominaWizard() {
                           {labelEstado}
                         </span>
                       </div>
-                      {/* §4.6 F2 — Cabecera de 4 líneas. Cuando no hay fruta
-                          despachada fuera del período (`totalFuera === 0`),
-                          la línea intermedia se colapsa a 3 columnas para no
-                          confundir con un dato inexistente. */}
-                      <div className={`grid divide-x divide-border ${totalFuera > 0 ? 'grid-cols-4' : 'grid-cols-3'}`}>
+                      {/* §4.6 (2026-09-05) — Cabecera de 3 columnas. La resta
+                          "Despachado fuera" desapareció: la extractora YA viene
+                          ajustada por la conciliación cruzada entre períodos.
+                          El desglose (si aplica) va debajo de Extractora. */}
+                      <div className="grid grid-cols-3 divide-x divide-border">
                         <div className="px-6 py-5 space-y-2">
                           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Colaboradores</p>
                           <div className="flex items-end gap-1.5">
@@ -2131,26 +2137,6 @@ export default function NuevaNominaWizard() {
                             <p className="text-xs text-muted-foreground">{detalle.length} colaborador{detalle.length !== 1 ? 'es' : ''} con cosecha</p>
                           </div>
                         </div>
-                        {totalFuera > 0 && (
-                          <div
-                            className="px-6 py-5 space-y-2 bg-muted/10"
-                            title="Esta fruta se cortó en este período y se paga acá. Su peso viajó en un camión de otra quincena, así que se concilia en la siguiente. No es un descuadre real."
-                          >
-                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Despachado fuera</p>
-                            <div className="flex items-end gap-1.5">
-                              <p className="text-3xl font-bold text-muted-foreground leading-none">
-                                −{totalFuera.toLocaleString('es-CO')}
-                              </p>
-                              <p className="text-sm text-muted-foreground mb-0.5">kg</p>
-                            </div>
-                            <div className="flex items-center gap-1.5 pt-1 border-t border-border/50">
-                              <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />
-                              <p className="text-xs text-muted-foreground">
-                                {cosechasFuera} cosecha{cosechasFuera !== 1 ? 's' : ''} · se concilia en la siguiente
-                              </p>
-                            </div>
-                          </div>
-                        )}
                         <div className="px-6 py-5 space-y-2">
                           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Extractora</p>
                           <div className="flex items-end gap-1.5">
@@ -2159,10 +2145,35 @@ export default function NuevaNominaWizard() {
                             </p>
                             <p className="text-sm text-muted-foreground mb-0.5">kg</p>
                           </div>
-                          <div className="flex items-center gap-1.5 pt-1 border-t border-border/50">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                            <p className="text-xs text-muted-foreground">Viajes FINALIZADOS del período</p>
-                          </div>
+                          {hayDesgloseExtr ? (
+                            <div
+                              className="pt-1 border-t border-border/50 space-y-0.5"
+                              title="La extractora se ajusta con la conciliación cruzada: suma la fruta de este período recibida en camiones de otra quincena y resta la fruta ajena recibida acá."
+                            >
+                              <p className="text-[11px] text-muted-foreground">
+                                Del período: {extrDelPeriodo.toLocaleString('es-CO')} kg
+                              </p>
+                              {extrDeViajesFuera !== 0 && (
+                                <p className="text-[11px] text-muted-foreground">
+                                  + Recibido en otra quincena: {extrDeViajesFuera.toLocaleString('es-CO')} kg
+                                </p>
+                              )}
+                              {extrDeCosechasFuera !== 0 && (
+                                <p className="text-[11px] text-muted-foreground">
+                                  − Fruta de otra quincena: {extrDeCosechasFuera.toLocaleString('es-CO')} kg
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5 pt-1 border-t border-border/50">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                              <p className="text-xs text-muted-foreground">
+                                {cosechasFuera > 0
+                                  ? `Ajustada · ${cosechasFuera} cosecha${cosechasFuera !== 1 ? 's' : ''} conciliada${cosechasFuera !== 1 ? 's' : ''} entre períodos`
+                                  : 'Viajes FINALIZADOS conciliados'}
+                              </p>
+                            </div>
+                          )}
                         </div>
                         <div className={`px-6 py-5 space-y-2 ${estadoDif === 'ok' ? 'bg-success/5' : estadoDif === 'critico' ? 'bg-destructive/5' : estadoDif === 'atencion' ? 'bg-amber-500/5' : 'bg-muted/10'}`}>
                           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Diferencia real</p>
@@ -2324,9 +2335,9 @@ export default function NuevaNominaWizard() {
                                             return (
                                               <tr
                                                 key={idx}
-                                                className={`border-b border-border/40 last:border-0 ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'} ${c.alerta_despacho === 'ALTA' ? 'bg-orange-50/40 dark:bg-orange-950/10' : ''} ${c.despachado_fuera_del_periodo ? 'opacity-70' : ''}`}
+                                                className={`border-b border-border/40 last:border-0 ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'} ${c.alerta_despacho === 'ALTA' ? 'bg-orange-50/40 dark:bg-orange-950/10' : ''}`}
                                                 title={c.despachado_fuera_del_periodo
-                                                  ? `Esta cosecha se pagó en esta nómina; su peso se concilia en la siguiente porque el viaje salió el ${c.fecha_viaje ?? 'día siguiente'}.`
+                                                  ? `El viaje salió el ${c.fecha_viaje ?? 'día siguiente'} (otra quincena), pero la fila SÍ concilia contra su báscula acá (§4.6). ${c.regla_fuera_del_periodo ?? ''}`
                                                   : undefined}
                                               >
                                                 <td className="p-2 whitespace-nowrap">{c.fecha}</td>
@@ -2353,8 +2364,9 @@ export default function NuevaNominaWizard() {
                                                               : sinCeros.padStart(3, '0');
                                                           })()}
                                                     </span>
-                                                    {/* §4.6 F3 — chip cuando la cosecha se despachó
-                                                        en otra quincena. Su peso no se concilia acá. */}
+                                                    {/* §4.6 (2026-09-05) — chip informativo: el viaje
+                                                        salió en otra quincena, pero la fila SÍ concilia
+                                                        contra su báscula acá. Ya no atenúa la fila. */}
                                                     {c.despachado_fuera_del_periodo && c.fecha_viaje && (
                                                       <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wide bg-muted/60 text-muted-foreground border border-border rounded-md px-1.5 py-0.5">
                                                         despachado {c.fecha_viaje.slice(8, 10)}/{c.fecha_viaje.slice(5, 7)}
@@ -2425,8 +2437,10 @@ export default function NuevaNominaWizard() {
                                                         ? 'text-amber-600'
                                                         : 'text-primary'
                                                 }`}>
-                                                  {/* §4.6 — `null` = no conciliable en este período (típico:
-                                                      despachado_fuera_del_periodo). Nunca pintar `0`. */}
+                                                  {/* §4.6 (2026-09-05) — `diferencia_kg` ya nunca llega
+                                                      null: toda fila concilia contra su viaje sin importar
+                                                      la quincena. El "—" queda solo como tolerancia
+                                                      defensiva contra un backend viejo. */}
                                                   {difKg === null
                                                     ? '—'
                                                     : `${difKg > 0 ? '+' : ''}${Math.round(difKg).toLocaleString('es-CO')}`}
@@ -2846,10 +2860,10 @@ export default function NuevaNominaWizard() {
               devolverá `GET /validar-cosecha` tras el PUT.
               Extractora es dato fijo del backend — no depende de promedios. */}
           {bundleCosecha && (() => {
+            // §4.6 (2026-09-05) — `total_kg_extractora` YA viene ajustado por
+            // la conciliación cruzada entre períodos. La resta "Despachado
+            // fuera" desapareció del contrato.
             const totalExtr = bundleCosecha.total_kg_extractora ?? 0;
-            // §4.6 — La diferencia real descuenta la fruta que se despachó
-            // fuera del período (peso conciliable en la quincena siguiente).
-            const totalFueraModal = bundleCosecha.total_kg_despachado_fuera_del_periodo ?? 0;
 
             // Mapa lote_id → promedio efectivo actual (editado o del bundle).
             const promedioEfectivoActual = new Map<number, number>();
@@ -2897,11 +2911,11 @@ export default function NuevaNominaWizard() {
               }
             }
 
-            // §4.6 — Misma fórmula que en la card grande de afuera:
-            //   diff = colaboradores − despachado_fuera − extractora
-            const diff = totalColabs - totalFueraModal - totalExtr;
-            const baseConciliable = Math.max(0, totalColabs - totalFueraModal);
-            const pctModal = baseConciliable > 0 ? Math.abs(diff) / baseConciliable : 0;
+            // §4.6 (2026-09-05) — Fórmula simplificada, igual que la card
+            // grande de afuera: diff = colaboradores − extractora (ajustada).
+            // El % se calcula sobre colaboradores sin restar nada.
+            const diff = totalColabs - totalExtr;
+            const pctModal = totalColabs > 0 ? Math.abs(diff) / totalColabs : 0;
             const estado: 'ok' | 'critico' | 'atencion' =
               pctModal < 0.02 ? 'ok' : pctModal > 0.05 ? 'critico' : 'atencion';
             const colorTexto = estado === 'ok' ? 'text-success' : estado === 'critico' ? 'text-destructive' : 'text-amber-700';
@@ -2911,10 +2925,9 @@ export default function NuevaNominaWizard() {
                 <div className="flex items-center px-5 py-3 border-b border-border bg-muted/30">
                   <p className="text-sm font-semibold">Resumen de Cosecha</p>
                 </div>
-                {/* §4.6 — Cuando hay fruta despachada fuera del período, la
-                    tarjeta se abre a 4 celdas para reflejar la misma fórmula
-                    que la card grande de afuera. Si no hay, se colapsa a 3. */}
-                <div className={`grid divide-x divide-border ${totalFueraModal > 0 ? 'grid-cols-4' : 'grid-cols-3'}`}>
+                {/* §4.6 (2026-09-05) — 3 celdas fijas. La extractora ya viene
+                    ajustada por la conciliación cruzada entre períodos. */}
+                <div className="grid grid-cols-3 divide-x divide-border">
                   <div className="px-6 py-4">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
                       Colaboradores
@@ -2923,19 +2936,6 @@ export default function NuevaNominaWizard() {
                       {Math.round(totalColabs).toLocaleString('es-CO')} <span className="text-sm text-muted-foreground font-normal">kg</span>
                     </p>
                   </div>
-                  {totalFueraModal > 0 && (
-                    <div
-                      className="px-6 py-4 bg-muted/10"
-                      title="Fruta cortada en este período pero despachada en otra quincena. Se paga acá; su peso se concilia allá."
-                    >
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
-                        Despachado fuera
-                      </p>
-                      <p className="text-2xl font-bold text-muted-foreground">
-                        −{Math.round(totalFueraModal).toLocaleString('es-CO')} <span className="text-sm font-normal">kg</span>
-                      </p>
-                    </div>
-                  )}
                   <div className="px-6 py-4">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
                       Extractora

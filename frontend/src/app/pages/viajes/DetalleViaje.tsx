@@ -357,6 +357,10 @@ export default function DetalleViaje() {
         const msg = String(e2?.message ?? '');
         if (msg.includes('VIAJE_INCOMPLETO') || msg.toLowerCase().includes('incompleto')) {
           toast.error('Falta capturar el peso o el conteo de gajos antes de cerrar');
+        } else if (e2?.code === 'FECHA_VIAJE_ANTERIOR_A_COSECHA' || msg.includes('FECHA_VIAJE_ANTERIOR_A_COSECHA')) {
+          // §6.5 — el viaje figura saliendo antes de que se cortara la fruta
+          // que transporta. El message del backend trae las fechas exactas.
+          toast.error(e2?.message ?? 'La fecha del viaje es anterior a la de una cosecha que transporta. Corrige la fecha antes de finalizar.', { duration: 8000 });
         } else {
           toast.error(e2?.message ?? 'Error al finalizar el viaje');
         }

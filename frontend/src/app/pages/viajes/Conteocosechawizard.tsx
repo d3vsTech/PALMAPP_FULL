@@ -215,6 +215,10 @@ export default function ConteoCosechaWizard({ viaje, onClose }: ConteoCosechaWiz
           cosecha.gajos && cosecha.gajos > 0 ? cosecha.gajos : null,
         );
         const detalleId = detRes.data.id;
+        // §5.4.1 — sobreconteo dentro de tolerancia: 201 con `advertencia`.
+        if (detRes.advertencia) {
+          toast.warning(detRes.advertencia, { duration: 6000 });
+        }
         // Solo llamamos `PUT /reconteo` si hay peso a confirmar.
         // El POST ya persistió `gajos_en_viaje`; el PUT también actualiza
         // `registro_cosecha.gajos_reconteo = SUM(splits)`, lo cual colapsa

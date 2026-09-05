@@ -943,8 +943,22 @@ export interface ValidacionCosechaItem {
     | string;
   /** `true` si la cosecha se despachó pero todos sus viajes son de otra quincena. */
   despachado_fuera_del_periodo?: boolean;
-  /** Porción de `kg_trabajado` que viajó en un camión de otra quincena. */
+  /**
+   * @deprecated §4.6 (2026-09-05) — el backend ya no lo emite: la fila
+   * ahora concilia contra su viaje sin importar la quincena de este, y
+   * `diferencia_kg` nunca es null. Se mantiene opcional por tolerancia.
+   */
   kg_trabajado_fuera_del_periodo?: number;
+  /**
+   * §4.6 (2026-09-05, opcional) — kg de esta cosecha recibidos por la
+   * báscula en viajes de OTRA quincena. Informativo para el expandible.
+   */
+  kg_extractora_fuera_del_periodo?: number;
+  /**
+   * §4.6 (2026-09-05, opcional) — explicación de la regla aplicada cuando
+   * la fila concilia contra un viaje de otra quincena.
+   */
+  regla_fuera_del_periodo?: string | null;
 }
 
 export interface ValidacionCosechaDetalleColaborador {
@@ -999,19 +1013,42 @@ export interface ValidacionCosechaPromedioLote {
 /** Bundle calculado de comparación: lo registrado vs el reporte de la extractora. */
 export interface ValidacionCosechaBundle {
   total_kg_colaboradores: number;
+  /**
+   * §4.6 (2026-09-05) — YA VIENE AJUSTADO: incluye lo recibido de viajes de
+   * otra quincena por fruta de este período, y excluye lo recibido en este
+   * período por fruta de otra quincena. Se pinta directo; el desglose va en
+   * los tres campos siguientes.
+   */
   total_kg_extractora: number;
   /**
-   * §4.6 — Fórmula NUEVA: `colaboradores − fuera_del_periodo − extractora`.
-   * Cambió de significado desde 2026-09; la UI muestra 4 líneas, no 3.
+   * §4.6 (2026-09-05) — Fórmula simplificada: `colaboradores − extractora`.
+   * El semáforo % se calcula sobre `total_kg_colaboradores` sin restar nada.
    */
   diferencia_kg: number;
   /**
-   * §4.6 — Kilos que se cortaron en este período pero se despacharon en
-   * viajes de otra quincena. **Se paga acá**; el peso se concilia allá.
+   * @deprecated §4.6 (2026-09-05) — el backend YA NO lo emite. La resta
+   * "Despachado fuera" desapareció de la cabecera: el ajuste vive dentro de
+   * `total_kg_extractora`. Se mantiene opcional para no romper contra un
+   * backend viejo; NUNCA asumir que viene.
    */
   total_kg_despachado_fuera_del_periodo?: number;
-  /** §4.6 — Cuántas cosechas cayeron en la situación anterior. */
+  /** §4.6 — Cuántas cosechas se despacharon en viajes de otra quincena. */
   cosechas_despachadas_fuera_del_periodo?: number;
+  // ─── §4.6 (2026-09-05) desglose de la extractora ajustada ──────────────
+  /** Kg recibidos por viajes cuya fecha cae dentro del período. */
+  total_kg_extractora_viajes_del_periodo?: number;
+  /** Kg de fruta de ESTE período recibidos en viajes de otra quincena (suma). */
+  total_kg_extractora_de_viajes_fuera_del_periodo?: number;
+  /** Kg de fruta de OTRA quincena recibidos en viajes de este período (resta). */
+  total_kg_extractora_de_cosechas_fuera_del_periodo?: number;
+  /** Detalle por camión de la conciliación cruzada entre períodos. */
+  viajes_conciliados_entre_periodos?: Array<{
+    viaje_id?: number;
+    remision?: string | null;
+    fecha_viaje?: string;
+    kg?: number;
+    [k: string]: unknown;
+  }>;
   /**
    * §4.1 — Cosechas del período sin ningún viaje FINALIZADO tocándolas.
    */

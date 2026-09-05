@@ -668,15 +668,24 @@ export const viajesApi = {
    *  - Omitido / null → todos los gajos restantes de la cosecha van en este
    *    viaje (modo legacy).
    *  - Valor entero → split parcial. Solo esa cantidad va en este camión.
-   *    El backend valida contra `gajos_pendientes_enviar` de la cosecha
-   *    (422 `GAJOS_INSUFICIENTES` si excede).
+   *
+   * §5.4.1 — El sobreconteo dentro de la tolerancia (10 gajos) NO bloquea:
+   * responde 201 con `advertencia` (string informativo). Solo excede la
+   * tolerancia → 422 `GAJOS_INSUFICIENTES`. El caller debe mostrar la
+   * advertencia como toast, nunca como error.
    */
   agregarDetalle: (
     viajeId: number,
     cosechaId: number,
     gajosEnViaje?: number | null,
   ) =>
-    post<{ data: ViajeDetalle }>(`/viajes/${viajeId}/detalles`, {
+    post<{
+      data: ViajeDetalle;
+      /** Totales refrescados del viaje tras la asignación (§5.4). */
+      viaje?: { id: number; cantidad_gajos_total: number | null };
+      /** §5.4.1 — aviso de sobreconteo dentro de tolerancia; null si cabe. */
+      advertencia?: string | null;
+    }>(`/viajes/${viajeId}/detalles`, {
       cosecha_id: cosechaId,
       ...(gajosEnViaje != null ? { gajos_en_viaje: gajosEnViaje } : {}),
     }),
@@ -879,6 +888,14 @@ export const ViajesErrorCodes = {
   GAJOS_INSUFICIENTES: 'GAJOS_INSUFICIENTES',
   /** 422 — la operación padre de la cosecha no está APROBADA. */
   OPERACION_NO_APROBADA: 'OPERACION_NO_APROBADA',
+  /**
+   * 422 — §6.5: `fecha_viaje` es anterior a la fecha de la cosecha que el
+   * viaje transporta (un camión no puede llevar fruta que aún no se cortó).
+   * Se valida al enlazar la cosecha (`POST /detalles`) y al finalizar.
+   * El `detalle` de la respuesta trae `{fecha_viaje, cosecha_id, fecha_cosecha}`
+   * y el `message` es reenviable tal cual.
+   */
+  FECHA_VIAJE_ANTERIOR_A_COSECHA: 'FECHA_VIAJE_ANTERIOR_A_COSECHA',
   /** 422 — `transportador.estado = false` al crear viaje. */
   TRANSPORTADOR_INACTIVO: 'TRANSPORTADOR_INACTIVO',
   /** 422 — `extractora.estado = false` al crear viaje. */
