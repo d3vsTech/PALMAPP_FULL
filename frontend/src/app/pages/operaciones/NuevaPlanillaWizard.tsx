@@ -74,6 +74,13 @@ import { ColaboradorChip } from './planilla/ColaboradorChip';
 import { EtapaLaboresFinca } from './planilla/EtapaLaboresFinca';
 import { EtapaHorasExtras } from './planilla/EtapaHorasExtras';
 import { EtapaFinalizacion } from './planilla/EtapaFinalizacion';
+import { EtapaInfoGeneral } from './planilla/EtapaInfoGeneral';
+import { TabCosecha } from './planilla/TabCosecha';
+import { TabPlateo } from './planilla/TabPlateo';
+import { TabPoda } from './planilla/TabPoda';
+import { TabFertilizacion } from './planilla/TabFertilizacion';
+import { TabSanidad } from './planilla/TabSanidad';
+import { TabOtros } from './planilla/TabOtros';
 
 // Los fertilizantes se cargan desde Configuración → Insumos vía el bundle
 // `selectsApi.wizardInit` (campo `parametricas.insumos`). Se persisten en
@@ -2627,94 +2634,20 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           <fieldset
             className={`space-y-6 m-0 p-0 border-0 ${modoLectura ? 'wizard-modo-lectura' : ''}`}
           >
-            {/* ETAPA 1: INFORMACIÓN GENERAL */}
+            {/* ETAPA 1: INFORMACIÓN GENERAL — extraída a planilla/EtapaInfoGeneral */}
             {etapaActual === 1 && (
-              <Card className="border-border">
-                <CardHeader>
-                  <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                      <FileText className="h-6 w-6 text-primary" />
-                    </div>
-                    <div>
-                      <CardTitle>Información General</CardTitle>
-                      <p className="text-sm text-muted-foreground">
-                        Ingresa los datos básicos de la planilla
-                      </p>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="grid gap-6 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="fecha">Fecha *</Label>
-                      <Input
-                        id="fecha"
-                        type="date"
-                        value={fecha}
-                        onChange={(e) => setFecha(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="elaboradoPor">Elaborado por *</Label>
-                      <Input
-                        id="elaboradoPor"
-                        placeholder="Nombre completo"
-                        value={elaboradoPor}
-                        onChange={(e) => setElaboradoPor(e.target.value)}
-                        readOnly
-                        className="bg-muted/30 cursor-not-allowed"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid gap-6 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="huboLluvia">¿Hubo lluvia?</Label>
-                      <Select
-                        value={huboLluvia}
-                        onValueChange={(value) => {
-                          setHuboLluvia(value as 'si' | 'no');
-                          if (value === 'no') {
-                            setLluvia('');
-                          }
-                        }}
-                      >
-                        <SelectTrigger id="huboLluvia">
-                          <SelectValue placeholder="Seleccionar" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="si">Sí</SelectItem>
-                          <SelectItem value="no">No</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {huboLluvia === 'si' && (
-                      <div className="space-y-2">
-                        <Label htmlFor="lluvia">Lluvia (mm)</Label>
-                        <Input
-                          id="lluvia"
-                          type="number" step="0.001"
-                          placeholder="Ej: 15"
-                          value={lluvia}
-                          onChange={(e) => setLluvia(e.target.value)}
-                        />
-                      </div>
-                    )}
-
-                    <div className="space-y-2">
-                      <Label htmlFor="inicioLabores">Inicio de Labores</Label>
-                      <Input
-                        id="inicioLabores"
-                        type="time"
-                        value={inicioLabores}
-                        onChange={(e) => setInicioLabores(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              <EtapaInfoGeneral
+                fecha={fecha}
+                setFecha={setFecha}
+                elaboradoPor={elaboradoPor}
+                setElaboradoPor={setElaboradoPor}
+                huboLluvia={huboLluvia}
+                setHuboLluvia={setHuboLluvia}
+                lluvia={lluvia}
+                setLluvia={setLluvia}
+                inicioLabores={inicioLabores}
+                setInicioLabores={setInicioLabores}
+              />
             )}
 
             {/* ETAPA 2: LABORES DE PALMA */}
@@ -2739,1313 +2672,122 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                       <TabsTrigger value="otros">Otros</TabsTrigger>
                     </TabsList>
 
-                    {/* TAB: COSECHA */}
+                    {/* TAB: COSECHA — extraído a planilla/TabCosecha */}
                     <TabsContent value="cosecha" className="space-y-4">
-                      <div className="flex justify-end">
-                        <Button onClick={agregarCosecha} className="gap-2" disabled={cosechaEnEdicion !== null}>
-                          <Plus className="h-4 w-4" />
-                          Agregar Cosecha
-                        </Button>
-                      </div>
-
-                      {/* Formulario de edición */}
-                      {cosechaEnEdicion && (
-                        <div ref={setFormRef('cosecha')} className="scroll-mt-24">
-                        <Card className="border-border border-2 border-primary/50">
-                          <CardContent className="pt-6 space-y-4">
-                            <div className="grid gap-4 md:grid-cols-2">
-                              <div className="space-y-2 md:col-span-2">
-                                <Label>Colaboradores</Label>
-                                <MultiSelectColaboradores
-                                  colaboradores={colaboradores}
-                                  seleccionados={cosechaEnEdicion.colaboradores}
-                                  onChange={(nuevos) =>
-                                    setCosechaEnEdicion({ ...cosechaEnEdicion, colaboradores: nuevos })
-                                  }
-                                />
-                                {cosechaEnEdicion.colaboradores.length > 0 && (
-                                  <div className="flex flex-wrap gap-2 mt-2">
-                                    {cosechaEnEdicion.colaboradores.map((colId) => {
-                                      const col = colaboradores.find(c => c.id === colId);
-                                      return col ? (
-                                        <Badge
-                                          key={colId}
-                                          variant="secondary"
-                                          className="pl-2.5 pr-1 py-1 gap-1"
-                                        >
-                                          <span>
-                                            {col.nombres} {col.apellidos}
-                                            {col.terceroNombre && (
-                                              <span
-                                                className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle"
-                                                title={`Operario del tercero ${col.terceroNombre}`}
-                                              >
-                                                Tercero · {col.terceroNombre}
-                                              </span>
-                                            )}
-                                          </span>
-                                          <button
-                                            type="button"
-                                            onClick={() => eliminarColaboradorEnEdicion(colId)}
-                                            className="ml-1 hover:bg-muted rounded-sm p-0.5"
-                                          >
-                                            <X className="h-3 w-3" />
-                                          </button>
-                                        </Badge>
-                                      ) : null;
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                              <div className="space-y-2">
-                                <Label>Lote</Label>
-                                <Select
-                                  value={cosechaEnEdicion.lote}
-                                  onValueChange={(value) => {
-                                    setCosechaEnEdicion({ ...cosechaEnEdicion, lote: value, sublote: '' });
-                                  }}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Seleccionar lote" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {lotesData.map((lote) => (
-                                      <SelectItem key={lote.id} value={lote.id}>
-                                        {lote.nombre}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-2">
-                                <Label>Sublote</Label>
-                                <Select
-                                  value={cosechaEnEdicion.sublote}
-                                  onValueChange={(value) => {
-                                    setCosechaEnEdicion({ ...cosechaEnEdicion, sublote: value });
-                                  }}
-                                  disabled={!cosechaEnEdicion.lote}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Seleccionar sublote" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {sublotes
-                                      .filter(s => s.loteId === cosechaEnEdicion.lote)
-                                      .map((sublote) => (
-                                        <SelectItem key={sublote.id} value={sublote.id}>
-                                          {sublote.nombre}
-                                        </SelectItem>
-                                      ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-2">
-                                <Label>Gajos Recogidos</Label>
-                                <Input
-                                  type="number" step="0.001"
-                                  placeholder="0"
-                                  value={cosechaEnEdicion.gajosRecogidos || ''}
-                                  onChange={(e) => {
-                                    setCosechaEnEdicion({ ...cosechaEnEdicion, gajosRecogidos: parseFloat(e.target.value) || 0 });
-                                  }}
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label>Kilos (opcional)</Label>
-                                <Input
-                                  type="number" step="0.001"
-                                  placeholder="0"
-                                  value={cosechaEnEdicion.kilos || ''}
-                                  onChange={(e) => {
-                                    setCosechaEnEdicion({ ...cosechaEnEdicion, kilos: parseFloat(e.target.value) || 0 });
-                                  }}
-                                />
-                              </div>
-                            </div>
-                            <div className="flex gap-2 justify-end pt-4 border-t">
-                              <Button variant="outline" onClick={cancelarCosecha} type="button">
-                                Cancelar
-                              </Button>
-                              <Button onClick={guardarCosecha} className="gap-2" type="button">
-                                <Save className="h-4 w-4" />
-                                Guardar
-                              </Button>
-                            </div>
-                          </CardContent>
-                        </Card>
-                        </div>
-                      )}
-
-                      {/* Cards de cosechas guardadas */}
-                      {trabajosCosecha.map((trabajo) => {
-                        const lote = lotesData.find(l => l.id === trabajo.lote);
-                        const sublote = sublotes.find(s => s.id === trabajo.sublote);
-                        return (
-                          <Card key={trabajo.id} className="border-border hover:border-primary/30 transition-colors">
-                            <CardContent className="p-4">
-                              <div className="flex items-center justify-between gap-4">
-                                {/* Colaboradores */}
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs text-muted-foreground mb-1">Colaboradores</p>
-                                  {trabajo.colaboradores?.length > 0 ? (
-                                    <div className="flex flex-wrap gap-1">
-                                      {trabajo.colaboradores?.map((colId) => {
-                                        const col = colaboradores.find(c => c.id === colId);
-                                        return col ? (
-                                          <ColaboradorChip key={colId} col={col} />
-                                        ) : null;
-                                      })}
-                                    </div>
-                                  ) : (
-                                    <p className="text-xs text-muted-foreground">Sin colaboradores</p>
-                                  )}
-                                </div>
-
-                                {/* Lote/Sublote */}
-                                <div className="flex items-center gap-3">
-                                  <div>
-                                    <h4 className="font-semibold text-sm">{lote?.nombre || 'Lote no especificado'}</h4>
-                                    <p className="text-xs text-muted-foreground">
-                                      {sublote?.nombre || 'Sublote no especificado'}
-                                    </p>
-                                  </div>
-                                </div>
-
-                                {/* Gajos */}
-                                <div className="text-right shrink-0">
-                                  <p className="text-xs text-muted-foreground">Gajos</p>
-                                  <p className="font-bold text-lg">{trabajo.gajosRecogidos}</p>
-                                </div>
-
-                                {/* Kilos (si existe) */}
-                                {trabajo.kilos > 0 && (
-                                  <div className="text-right shrink-0">
-                                    <p className="text-xs text-muted-foreground">Kilos</p>
-                                    <p className="font-semibold">{trabajo.kilos}</p>
-                                  </div>
-                                )}
-
-                                {/* Botones acción */}
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => editarCosecha(trabajo.id)}
-                                    disabled={cosechaEnEdicion !== null}
-                                    title="Editar"
-                                  >
-                                    <Pencil className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => eliminarCosecha(trabajo.id)}
-                                    className="text-destructive hover:text-destructive"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        );
-                      })}
-
-                      {trabajosCosecha.length === 0 && !cosechaEnEdicion && (
-                        <div className="text-center py-12 text-muted-foreground">
-                          <p>No hay registros de cosecha</p>
-                          <p className="text-sm">Haz clic en "Agregar Cosecha" para crear uno</p>
-                        </div>
-                      )}
+                      <TabCosecha
+                        trabajosCosecha={trabajosCosecha}
+                        cosechaEnEdicion={cosechaEnEdicion}
+                        setCosechaEnEdicion={setCosechaEnEdicion}
+                        colaboradores={colaboradores}
+                        lotesData={lotesData}
+                        sublotes={sublotes}
+                        agregarCosecha={agregarCosecha}
+                        cancelarCosecha={cancelarCosecha}
+                        guardarCosecha={guardarCosecha}
+                        editarCosecha={editarCosecha}
+                        eliminarCosecha={eliminarCosecha}
+                        eliminarColaboradorEnEdicion={eliminarColaboradorEnEdicion}
+                        setFormRef={setFormRef}
+                      />
                     </TabsContent>
 
-                    {/* TAB: PLATEO */}
+                    {/* TAB: PLATEO — extraído a planilla/TabPlateo */}
                     <TabsContent value="plateo" className="space-y-4">
-                      <div className="flex justify-end">
-                        <Button onClick={agregarPlateo} className="gap-2" disabled={plateoEnEdicion !== null}>
-                          <Plus className="h-4 w-4" />
-                          Agregar Plateo
-                        </Button>
-                      </div>
-
-                      {/* Formulario de edición */}
-                      {plateoEnEdicion && (
-                        <div ref={setFormRef('plateo')} className="scroll-mt-24">
-                        <Card className="border-border border-2 border-primary/50">
-                          <CardContent className="pt-6 space-y-4">
-                            <div className="grid gap-4 md:grid-cols-2">
-                              <div className="space-y-2 md:col-span-2">
-                                <Label>Colaboradores</Label>
-                                <MultiSelectColaboradores
-                                  colaboradores={colaboradores}
-                                  seleccionados={plateoEnEdicion.colaboradores}
-                                  onChange={(nuevos) =>
-                                    setPlateoEnEdicion({ ...plateoEnEdicion, colaboradores: nuevos })
-                                  }
-                                />
-                                {plateoEnEdicion.colaboradores.length > 0 && (
-                                  <div className="flex flex-wrap gap-2 mt-2">
-                                    {plateoEnEdicion.colaboradores.map((colId) => {
-                                      const col = colaboradores.find(c => c.id === colId);
-                                      const conOverride = tieneOverrideOperario(colId, palmaTipoToId.get('PLATEO'));
-                                      return col ? (
-                                        <Badge key={colId} variant="secondary" className="pl-2.5 pr-1 py-1 gap-1">
-                                          <span>{col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}{conOverride ? <span className="ml-1 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-700 border border-emerald-200 font-medium align-middle" title="Este operario tiene precio personalizado para Plateo">$</span> : null}</span>
-                                          <button
-                                            type="button"
-                                            onClick={() => setPlateoEnEdicion({ ...plateoEnEdicion, colaboradores: plateoEnEdicion.colaboradores.filter(id => id !== colId) })}
-                                            className="ml-1 hover:bg-muted rounded-sm p-0.5"
-                                          >
-                                            <X className="h-3 w-3" />
-                                          </button>
-                                        </Badge>
-                                      ) : null;
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                              <div className="space-y-2">
-                                <Label>Lote</Label>
-                                <Select
-                                  value={plateoEnEdicion.lote}
-                                  onValueChange={(value) => setPlateoEnEdicion({ ...plateoEnEdicion, lote: value, sublote: '' })}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Seleccionar lote" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {lotesData.map((lote) => (
-                                      <SelectItem key={lote.id} value={lote.id}>
-                                        {lote.nombre}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-2">
-                                <Label>Sublote</Label>
-                                <Select
-                                  value={plateoEnEdicion.sublote}
-                                  onValueChange={(value) => {
-                                    const sub = sublotes.find(s => s.id === value);
-                                    setPlateoEnEdicion({
-                                      ...plateoEnEdicion,
-                                      sublote: value,
-                                      numeroPalmas: Number(sub?.cantidadPalmas ?? 0),
-                                    });
-                                  }}
-                                  disabled={!plateoEnEdicion.lote}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Seleccionar sublote" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {sublotes
-                                      .filter(s => s.loteId === plateoEnEdicion.lote)
-                                      .map((sublote) => (
-                                        <SelectItem key={sublote.id} value={sublote.id}>
-                                          {sublote.nombre}
-                                        </SelectItem>
-                                      ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-2">
-                                <Label>Número de Palmas</Label>
-                                <Input
-                                  type="number" step="0.001"
-                                  placeholder="0"
-                                  value={plateoEnEdicion.numeroPalmas || ''}
-                                  onChange={(e) => setPlateoEnEdicion({ ...plateoEnEdicion, numeroPalmas: parseFloat(e.target.value) || 0 })}
-                                />
-                              </div>
-                            </div>
-                            <div className="flex gap-2 justify-end pt-4 border-t">
-                              <Button variant="outline" onClick={cancelarPlateo} type="button">
-                                Cancelar
-                              </Button>
-                              <Button onClick={guardarPlateo} className="gap-2" type="button">
-                                <Save className="h-4 w-4" />
-                                Guardar
-                              </Button>
-                            </div>
-                          </CardContent>
-                        </Card>
-                        </div>
-                      )}
-
-                      {/* Cards de plateos guardados */}
-                      {trabajosPlateo.map((trabajo) => {
-                        const lote = lotesData.find(l => l.id === trabajo.lote);
-                        const sublote = sublotes.find(s => s.id === trabajo.sublote);
-                        return (
-                          <Card key={trabajo.id} className="border-border hover:border-primary/30 transition-colors">
-                            <CardContent className="p-4">
-                              <div className="flex items-center justify-between gap-4">
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs text-muted-foreground mb-1">Colaboradores</p>
-                                  {trabajo.colaboradores?.length > 0 ? (
-                                    <div className="flex flex-wrap gap-1">
-                                      {trabajo.colaboradores?.map((colId) => {
-                                        const col = colaboradores.find(c => c.id === colId);
-                                        return col ? (
-                                          <ColaboradorChip key={colId} col={col} />
-                                        ) : null;
-                                      })}
-                                    </div>
-                                  ) : (
-                                    <p className="text-xs text-muted-foreground">Sin colaboradores</p>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-3">
-                                  <div>
-                                    <h4 className="font-semibold text-sm">{lote?.nombre || 'Lote no especificado'}</h4>
-                                    <p className="text-xs text-muted-foreground">{sublote?.nombre || 'Sublote no especificado'}</p>
-                                  </div>
-                                </div>
-                                <div className="text-right shrink-0">
-                                  <p className="text-xs text-muted-foreground">Palmas</p>
-                                  <p className="font-bold text-lg">{trabajo.numeroPalmas}</p>
-                                </div>
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => editarPlateo(trabajo.id)}
-                                    disabled={plateoEnEdicion !== null}
-                                    title="Editar"
-                                  >
-                                    <Pencil className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => eliminarPlateo(trabajo.id)}
-                                    className="text-destructive hover:text-destructive"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        );
-                      })}
-
-                      {trabajosPlateo.length === 0 && !plateoEnEdicion && (
-                        <div className="text-center py-12 text-muted-foreground">
-                          <p>No hay registros de plateo</p>
-                          <p className="text-sm">Haz clic en "Agregar Plateo" para crear uno</p>
-                        </div>
-                      )}
+                      <TabPlateo
+                        trabajosPlateo={trabajosPlateo}
+                        plateoEnEdicion={plateoEnEdicion}
+                        setPlateoEnEdicion={setPlateoEnEdicion}
+                        colaboradores={colaboradores}
+                        lotesData={lotesData}
+                        sublotes={sublotes}
+                        agregarPlateo={agregarPlateo}
+                        cancelarPlateo={cancelarPlateo}
+                        guardarPlateo={guardarPlateo}
+                        editarPlateo={editarPlateo}
+                        eliminarPlateo={eliminarPlateo}
+                        tieneOverrideOperario={tieneOverrideOperario}
+                        palmaTipoToId={palmaTipoToId}
+                        setFormRef={setFormRef}
+                      />
                     </TabsContent>
 
 
-                    {/* TAB: PODA */}
+                    {/* TAB: PODA — extraído a planilla/TabPoda */}
                     <TabsContent value="poda" className="space-y-4">
-                      <div className="flex justify-end">
-                        <Button onClick={agregarPoda} className="gap-2" disabled={podaEnEdicion !== null}>
-                          <Plus className="h-4 w-4" />
-                          Agregar Poda
-                        </Button>
-                      </div>
-
-                      {/* Formulario de edición */}
-                      {podaEnEdicion && (
-                        <div ref={setFormRef('poda')} className="scroll-mt-24">
-                        <Card className="border-border border-2 border-primary/50">
-                          <CardContent className="pt-6 space-y-4">
-                            <div className="grid gap-4 md:grid-cols-2">
-                              <div className="space-y-2 md:col-span-2">
-                                <Label>Colaboradores</Label>
-                                <MultiSelectColaboradores
-                                  colaboradores={colaboradores}
-                                  seleccionados={podaEnEdicion.colaboradores}
-                                  onChange={(nuevos) =>
-                                    setPodaEnEdicion({ ...podaEnEdicion, colaboradores: nuevos })
-                                  }
-                                />
-                                {podaEnEdicion.colaboradores.length > 0 && (
-                                  <div className="flex flex-wrap gap-2 mt-2">
-                                    {podaEnEdicion.colaboradores.map((colId) => {
-                                      const col = colaboradores.find(c => c.id === colId);
-                                      return col ? (
-                                        <Badge key={colId} variant="secondary" className="pl-2.5 pr-1 py-1 gap-1">
-                                          <span>
-                                            {col.nombres} {col.apellidos}
-                                            {col.terceroNombre && (
-                                              <span
-                                                className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle"
-                                                title={`Operario del tercero ${col.terceroNombre}`}
-                                              >
-                                                Tercero · {col.terceroNombre}
-                                              </span>
-                                            )}
-                                          </span>
-                                          <button
-                                            type="button"
-                                            onClick={() => setPodaEnEdicion({ ...podaEnEdicion, colaboradores: podaEnEdicion.colaboradores.filter(id => id !== colId) })}
-                                            className="ml-1 hover:bg-muted rounded-sm p-0.5"
-                                          >
-                                            <X className="h-3 w-3" />
-                                          </button>
-                                        </Badge>
-                                      ) : null;
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                              <div className="space-y-2">
-                                <Label>Lote</Label>
-                                <Select
-                                  value={podaEnEdicion.lote}
-                                  onValueChange={(value) => setPodaEnEdicion({ ...podaEnEdicion, lote: value, sublote: '' })}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Seleccionar lote" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {lotesData.map((lote) => (
-                                      <SelectItem key={lote.id} value={lote.id}>
-                                        {lote.nombre}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-2">
-                                <Label>Sublote</Label>
-                                <Select
-                                  value={podaEnEdicion.sublote}
-                                  onValueChange={(value) => {
-                                    const sub = sublotes.find(s => s.id === value);
-                                    setPodaEnEdicion({
-                                      ...podaEnEdicion,
-                                      sublote: value,
-                                      numeroPalmas: Number(sub?.cantidadPalmas ?? 0),
-                                    });
-                                  }}
-                                  disabled={!podaEnEdicion.lote}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Seleccionar sublote" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {sublotes
-                                      .filter(s => s.loteId === podaEnEdicion.lote)
-                                      .map((sublote) => (
-                                        <SelectItem key={sublote.id} value={sublote.id}>
-                                          {sublote.nombre}
-                                        </SelectItem>
-                                      ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-2">
-                                <Label>Número de Palmas</Label>
-                                <Input
-                                  type="number" step="0.001"
-                                  placeholder="0"
-                                  value={podaEnEdicion.numeroPalmas || ''}
-                                  onChange={(e) => setPodaEnEdicion({ ...podaEnEdicion, numeroPalmas: parseFloat(e.target.value) || 0 })}
-                                />
-                              </div>
-                            </div>
-                            <div className="flex gap-2 justify-end pt-4 border-t">
-                              <Button variant="outline" onClick={cancelarPoda} type="button">
-                                Cancelar
-                              </Button>
-                              <Button onClick={guardarPoda} className="gap-2" type="button">
-                                <Save className="h-4 w-4" />
-                                Guardar
-                              </Button>
-                            </div>
-                          </CardContent>
-                        </Card>
-                        </div>
-                      )}
-
-                      {/* Cards de podas guardadas */}
-                      {trabajosPoda.map((trabajo) => {
-                        const lote = lotesData.find(l => l.id === trabajo.lote);
-                        const sublote = sublotes.find(s => s.id === trabajo.sublote);
-                        return (
-                          <Card key={trabajo.id} className="border-border hover:border-primary/30 transition-colors">
-                            <CardContent className="p-4">
-                              <div className="flex items-center justify-between gap-4">
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs text-muted-foreground mb-1">Colaboradores</p>
-                                  {trabajo.colaboradores?.length > 0 ? (
-                                    <div className="flex flex-wrap gap-1">
-                                      {trabajo.colaboradores?.map((colId) => {
-                                        const col = colaboradores.find(c => c.id === colId);
-                                        return col ? (
-                                          <ColaboradorChip key={colId} col={col} />
-                                        ) : null;
-                                      })}
-                                    </div>
-                                  ) : (
-                                    <p className="text-xs text-muted-foreground">Sin colaboradores</p>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-3">
-                                  <div>
-                                    <h4 className="font-semibold text-sm">{lote?.nombre || 'Lote no especificado'}</h4>
-                                    <p className="text-xs text-muted-foreground">{sublote?.nombre || 'Sublote no especificado'}</p>
-                                  </div>
-                                </div>
-                                <div className="text-right shrink-0">
-                                  <p className="text-xs text-muted-foreground">Palmas</p>
-                                  <p className="font-bold text-lg">{trabajo.numeroPalmas}</p>
-                                </div>
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => editarPoda(trabajo.id)}
-                                    disabled={podaEnEdicion !== null}
-                                    title="Editar"
-                                  >
-                                    <Pencil className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => eliminarPoda(trabajo.id)}
-                                    className="text-destructive hover:text-destructive"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        );
-                      })}
-
-                      {trabajosPoda.length === 0 && !podaEnEdicion && (
-                        <div className="text-center py-12 text-muted-foreground">
-                          <p>No hay registros de poda</p>
-                          <p className="text-sm">Haz clic en "Agregar Poda" para crear uno</p>
-                        </div>
-                      )}
+                      <TabPoda
+                        trabajosPoda={trabajosPoda}
+                        podaEnEdicion={podaEnEdicion}
+                        setPodaEnEdicion={setPodaEnEdicion}
+                        colaboradores={colaboradores}
+                        lotesData={lotesData}
+                        sublotes={sublotes}
+                        agregarPoda={agregarPoda}
+                        cancelarPoda={cancelarPoda}
+                        guardarPoda={guardarPoda}
+                        editarPoda={editarPoda}
+                        eliminarPoda={eliminarPoda}
+                        setFormRef={setFormRef}
+                      />
                     </TabsContent>
 
 
-                    {/* TAB: FERTILIZACIÓN */}
+                    {/* TAB: FERTILIZACIÓN — extraído a planilla/TabFertilizacion */}
                     <TabsContent value="fertilizacion" className="space-y-4">
-                      <div className="flex justify-end">
-                        <Button onClick={agregarFertilizacion} className="gap-2" disabled={fertilizacionEnEdicion !== null}>
-                          <Plus className="h-4 w-4" />
-                          Agregar Fertilización
-                        </Button>
-                      </div>
-
-                      {/* Formulario de edición */}
-                      {fertilizacionEnEdicion && (
-                        <div ref={setFormRef('fertilizacion')} className="scroll-mt-24">
-                        <Card className="border-border border-2 border-primary/50">
-                          <CardContent className="pt-6 space-y-4">
-                            <div className="grid gap-4 md:grid-cols-2">
-                              <div className="space-y-2 md:col-span-2">
-                                <Label>Colaboradores</Label>
-                                <MultiSelectColaboradores
-                                  colaboradores={colaboradores}
-                                  seleccionados={fertilizacionEnEdicion.colaboradores}
-                                  onChange={(nuevos) =>
-                                    setFertilizacionEnEdicion({ ...fertilizacionEnEdicion, colaboradores: nuevos })
-                                  }
-                                />
-                                {fertilizacionEnEdicion.colaboradores.length > 0 && (
-                                  <div className="flex flex-wrap gap-2 mt-2">
-                                    {fertilizacionEnEdicion.colaboradores.map((colId) => {
-                                      const col = colaboradores.find(c => c.id === colId);
-                                      return col ? (
-                                        <Badge key={colId} variant="secondary" className="pl-2.5 pr-1 py-1 gap-1">
-                                          <span>
-                                            {col.nombres} {col.apellidos}
-                                            {col.terceroNombre && (
-                                              <span
-                                                className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle"
-                                                title={`Operario del tercero ${col.terceroNombre}`}
-                                              >
-                                                Tercero · {col.terceroNombre}
-                                              </span>
-                                            )}
-                                          </span>
-                                          <button
-                                            type="button"
-                                            onClick={() => setFertilizacionEnEdicion({ ...fertilizacionEnEdicion, colaboradores: fertilizacionEnEdicion.colaboradores.filter(id => id !== colId) })}
-                                            className="ml-1 hover:bg-muted rounded-sm p-0.5"
-                                          >
-                                            <X className="h-3 w-3" />
-                                          </button>
-                                        </Badge>
-                                      ) : null;
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                              <div className="space-y-2">
-                                <Label>Lote</Label>
-                                <Select
-                                  value={fertilizacionEnEdicion.lote}
-                                  onValueChange={(value) => {
-                                    // Autofill: al elegir lote sin sublote,
-                                    // se asume que fertilizó el lote completo →
-                                    // suma las palmas de todos sus sublotes.
-                                    const totalLote = sublotes
-                                      .filter((s) => s.loteId === value)
-                                      .reduce((acc, s) => acc + Number(s.cantidadPalmas ?? 0), 0);
-                                    setFertilizacionEnEdicion({
-                                      ...fertilizacionEnEdicion,
-                                      lote: value,
-                                      sublote: '',
-                                      palmas: totalLote,
-                                    });
-                                  }}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Seleccionar lote" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {lotesData.map((lote) => (
-                                      <SelectItem key={lote.id} value={lote.id}>
-                                        {lote.nombre}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-2">
-                                <Label>Sublote</Label>
-                                <Select
-                                  value={fertilizacionEnEdicion.sublote}
-                                  onValueChange={(value) => {
-                                    const sub = sublotes.find(s => s.id === value);
-                                    setFertilizacionEnEdicion({
-                                      ...fertilizacionEnEdicion,
-                                      sublote: value,
-                                      palmas: Number(sub?.cantidadPalmas ?? 0),
-                                    });
-                                  }}
-                                  disabled={!fertilizacionEnEdicion.lote}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Seleccionar sublote" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {sublotes
-                                      .filter(s => s.loteId === fertilizacionEnEdicion.lote)
-                                      .map((sublote) => (
-                                        <SelectItem key={sublote.id} value={sublote.id}>
-                                          {sublote.nombre}
-                                        </SelectItem>
-                                      ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-2">
-                                <Label>Número de Palmas</Label>
-                                <Input
-                                  type="number" step="0.001"
-                                  placeholder="0"
-                                  value={fertilizacionEnEdicion.palmas || ''}
-                                  onChange={(e) => setFertilizacionEnEdicion({ ...fertilizacionEnEdicion, palmas: parseFloat(e.target.value) || 0 })}
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label>Tipo de Fertilizante</Label>
-                                <Select
-                                  value={fertilizacionEnEdicion.tipoFertilizante}
-                                  onValueChange={(value) => setFertilizacionEnEdicion({ ...fertilizacionEnEdicion, tipoFertilizante: value, otroFertilizante: value !== 'Otro' ? '' : fertilizacionEnEdicion.otroFertilizante })}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder={insumosLista.length === 0 ? 'Sin insumos registrados' : 'Seleccionar tipo'} />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {insumosLista.length === 0 ? (
-                                      <div className="px-2 py-3 text-xs text-muted-foreground">
-                                        No hay insumos registrados. Agrégalos en Configuración → Insumos.
-                                      </div>
-                                    ) : (
-                                      <>
-                                        {insumosLista.map((fert) => (
-                                          <SelectItem key={fert} value={fert}>
-                                            {fert}
-                                          </SelectItem>
-                                        ))}
-                                        <SelectItem value="Otro">Otro (especificar)</SelectItem>
-                                      </>
-                                    )}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              {fertilizacionEnEdicion.tipoFertilizante === 'Otro' && (
-                                <div className="space-y-2">
-                                  <Label>Especificar otro fertilizante</Label>
-                                  <Input
-                                    placeholder="Ingrese el tipo de fertilizante"
-                                    value={fertilizacionEnEdicion.otroFertilizante || ''}
-                                    onChange={(e) => setFertilizacionEnEdicion({ ...fertilizacionEnEdicion, otroFertilizante: e.target.value })}
-                                  />
-                                </div>
-                              )}
-                              <div className="space-y-2">
-                                <Label>Cantidad (gramos)</Label>
-                                <Input
-                                  type="number" step="0.001"
-                                  placeholder="0"
-                                  value={fertilizacionEnEdicion.cantidadGramos || ''}
-                                  onChange={(e) => setFertilizacionEnEdicion({ ...fertilizacionEnEdicion, cantidadGramos: parseFloat(e.target.value) || 0 })}
-                                />
-                              </div>
-                            </div>
-                            <div className="flex gap-2 justify-end pt-4 border-t">
-                              <Button variant="outline" onClick={cancelarFertilizacion} type="button">
-                                Cancelar
-                              </Button>
-                              <Button onClick={guardarFertilizacion} className="gap-2" type="button">
-                                <Save className="h-4 w-4" />
-                                Guardar
-                              </Button>
-                            </div>
-                          </CardContent>
-                        </Card>
-                        </div>
-                      )}
-
-                      {/* Cards de fertilizaciones guardadas */}
-                      {trabajosFertilizacion.map((trabajo) => {
-                        const lote = lotesData.find(l => l.id === trabajo.lote);
-                        const sublote = sublotes.find(s => s.id === trabajo.sublote);
-                        const fertTipo = trabajo.tipoFertilizante === 'Otro' ? trabajo.otroFertilizante : trabajo.tipoFertilizante;
-                        return (
-                          <Card key={trabajo.id} className="border-border hover:border-primary/30 transition-colors">
-                            <CardContent className="p-4">
-                              <div className="flex items-center justify-between gap-4">
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs text-muted-foreground mb-1">Colaboradores</p>
-                                  {trabajo.colaboradores?.length > 0 ? (
-                                    <div className="flex flex-wrap gap-1">
-                                      {trabajo.colaboradores?.map((colId) => {
-                                        const col = colaboradores.find(c => c.id === colId);
-                                        return col ? (
-                                          <ColaboradorChip key={colId} col={col} />
-                                        ) : null;
-                                      })}
-                                    </div>
-                                  ) : (
-                                    <p className="text-xs text-muted-foreground">Sin colaboradores</p>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-3">
-                                  <div>
-                                    <h4 className="font-semibold text-sm">{lote?.nombre || 'Lote no especificado'}</h4>
-                                    <p className="text-xs text-muted-foreground">{sublote?.nombre || 'Sublote no especificado'}</p>
-                                  </div>
-                                </div>
-                                <div className="text-right shrink-0">
-                                  <p className="text-xs text-muted-foreground">Palmas</p>
-                                  <p className="font-bold text-lg">{trabajo.palmas}</p>
-                                </div>
-                                <div className="text-right shrink-0 min-w-[100px]">
-                                  <p className="text-xs text-muted-foreground">Fertilizante</p>
-                                  <p className="font-semibold text-xs truncate">{fertTipo || 'No especificado'}</p>
-                                  <p className="text-xs text-muted-foreground">{trabajo.cantidadGramos}g</p>
-                                </div>
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => editarFertilizacion(trabajo.id)}
-                                    disabled={fertilizacionEnEdicion !== null}
-                                    title="Editar"
-                                  >
-                                    <Pencil className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => eliminarFertilizacion(trabajo.id)}
-                                    className="text-destructive hover:text-destructive"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        );
-                      })}
-
-                      {trabajosFertilizacion.length === 0 && !fertilizacionEnEdicion && (
-                        <div className="text-center py-12 text-muted-foreground">
-                          <p>No hay registros de fertilización</p>
-                          <p className="text-sm">Haz clic en "Agregar Fertilización" para crear uno</p>
-                        </div>
-                      )}
+                      <TabFertilizacion
+                        trabajosFertilizacion={trabajosFertilizacion}
+                        fertilizacionEnEdicion={fertilizacionEnEdicion}
+                        setFertilizacionEnEdicion={setFertilizacionEnEdicion}
+                        colaboradores={colaboradores}
+                        lotesData={lotesData}
+                        sublotes={sublotes}
+                        insumosLista={insumosLista}
+                        agregarFertilizacion={agregarFertilizacion}
+                        cancelarFertilizacion={cancelarFertilizacion}
+                        guardarFertilizacion={guardarFertilizacion}
+                        editarFertilizacion={editarFertilizacion}
+                        eliminarFertilizacion={eliminarFertilizacion}
+                        setFormRef={setFormRef}
+                      />
                     </TabsContent>
 
 
-                    {/* TAB: SANIDAD */}
+                    {/* TAB: SANIDAD — extraído a planilla/TabSanidad */}
                     <TabsContent value="sanidad" className="space-y-4">
-                      <div className="flex justify-end">
-                        <Button onClick={agregarSanidad} className="gap-2">
-                          <Plus className="h-4 w-4" />
-                          Agregar Sanidad
-                        </Button>
-                      </div>
-
-                      {/* Formulario de edición */}
-                      {sanidadEnEdicion && (
-                        <div ref={setFormRef('sanidad')} className="scroll-mt-24">
-                        <Card className="border-primary/50 shadow-lg">
-                          <CardContent className="pt-6 space-y-4">
-                            <div className="grid gap-4 md:grid-cols-2">
-                              <div className="space-y-2 md:col-span-2">
-                                <Label>Colaboradores</Label>
-                                <MultiSelectColaboradores
-                                  colaboradores={colaboradores}
-                                  seleccionados={sanidadEnEdicion.colaboradores}
-                                  onChange={(nuevos) =>
-                                    setSanidadEnEdicion({ ...sanidadEnEdicion, colaboradores: nuevos })
-                                  }
-                                />
-                                {sanidadEnEdicion.colaboradores.length > 0 && (
-                                  <div className="flex flex-wrap gap-2 mt-2">
-                                    {sanidadEnEdicion.colaboradores.map((colId) => {
-                                      const col = colaboradores.find(c => c.id === colId);
-                                      return col ? (
-                                        <Badge
-                                          key={colId}
-                                          variant="secondary"
-                                          className="pl-2.5 pr-1 py-1 gap-1"
-                                        >
-                                          <span>
-                                            {col.nombres} {col.apellidos}
-                                            {col.terceroNombre && (
-                                              <span
-                                                className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle"
-                                                title={`Operario del tercero ${col.terceroNombre}`}
-                                              >
-                                                Tercero · {col.terceroNombre}
-                                              </span>
-                                            )}
-                                          </span>
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              setSanidadEnEdicion({
-                                                ...sanidadEnEdicion,
-                                                colaboradores: sanidadEnEdicion.colaboradores.filter(id => id !== colId)
-                                              });
-                                            }}
-                                            className="ml-1 hover:bg-muted rounded-sm p-0.5"
-                                          >
-                                            <X className="h-3 w-3" />
-                                          </button>
-                                        </Badge>
-                                      ) : null;
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                              <div className="space-y-2">
-                                <Label>Lote</Label>
-                                <Select
-                                  value={sanidadEnEdicion.lote}
-                                  onValueChange={(value) => {
-                                    setSanidadEnEdicion({ ...sanidadEnEdicion, lote: value, sublote: '' });
-                                  }}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Seleccionar lote" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {lotesData.map((lote) => (
-                                      <SelectItem key={lote.id} value={lote.id}>
-                                        {lote.nombre}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-2">
-                                <Label>Sublote</Label>
-                                <Select
-                                  value={sanidadEnEdicion.sublote}
-                                  onValueChange={(value) => {
-                                    setSanidadEnEdicion({ ...sanidadEnEdicion, sublote: value });
-                                  }}
-                                  disabled={!sanidadEnEdicion.lote}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Seleccionar sublote" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {sublotes
-                                      .filter(s => s.loteId === sanidadEnEdicion.lote)
-                                      .map((sublote) => (
-                                        <SelectItem key={sublote.id} value={sublote.id}>
-                                          {sublote.nombre}
-                                        </SelectItem>
-                                      ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-2 md:col-span-2">
-                                <Label>Trabajo Realizado</Label>
-                                <SelectActividadLabor
-                                  laborId={palmaTipoToId.get('SANIDAD')}
-                                  actividades={actividadesPorLabor[String(palmaTipoToId.get('SANIDAD') ?? '')] ?? []}
-                                  value={sanidadEnEdicion.trabajoRealizado}
-                                  actividadId={sanidadEnEdicion.laborActividadId ?? null}
-                                  onChange={(nombre, id) => setSanidadEnEdicion({
-                                    ...sanidadEnEdicion,
-                                    trabajoRealizado: nombre,
-                                    laborActividadId: id,
-                                  })}
-                                />
-                              </div>
-                            </div>
-                            <div className="flex justify-end gap-2 pt-4">
-                              <Button variant="outline" onClick={cancelarSanidad}>
-                                Cancelar
-                              </Button>
-                              <Button onClick={guardarSanidad} className="gap-2">
-                                <Check className="h-4 w-4" />
-                                Guardar
-                              </Button>
-                            </div>
-                          </CardContent>
-                        </Card>
-                        </div>
-                      )}
-
-                      {/* Lista de trabajos guardados */}
-                      {trabajosSanidad.map((trabajo) => {
-                        const lote = lotesData.find(l => l.id === trabajo.lote);
-                        const sublote = sublotes.find(s => s.id === trabajo.sublote);
-                        return (
-                          <Card key={trabajo.id} className="border-border hover:border-primary/30 transition-colors">
-                            <CardContent className="p-4">
-                              <div className="flex items-center justify-between gap-4">
-                                {/* Colaboradores */}
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs text-muted-foreground mb-1">Colaboradores</p>
-                                  {trabajo.colaboradores?.length > 0 ? (
-                                    <div className="flex flex-wrap gap-1">
-                                      {trabajo.colaboradores?.map((colId) => {
-                                        const col = colaboradores.find(c => c.id === colId);
-                                        return col ? (
-                                          <ColaboradorChip key={colId} col={col} />
-                                        ) : null;
-                                      })}
-                                    </div>
-                                  ) : (
-                                    <p className="text-xs text-muted-foreground">Sin colaboradores</p>
-                                  )}
-                                </div>
-
-                                {/* Lote/Sublote */}
-                                <div className="flex items-center gap-3">
-                                  <div>
-                                    <h4 className="font-semibold text-sm">{lote?.nombre || 'Sin lote'}</h4>
-                                    <p className="text-xs text-muted-foreground">{sublote?.nombre || 'Sin sublote'}</p>
-                                  </div>
-                                </div>
-
-                                {/* Trabajo realizado */}
-                                <div className="text-right shrink-0 max-w-xs">
-                                  <p className="text-xs text-muted-foreground">Trabajo</p>
-                                  <p className="font-semibold text-sm truncate">{trabajo.trabajoRealizado || 'Sin descripción'}</p>
-                                </div>
-
-                                {/* Botón eliminar */}
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => editarSanidad(trabajo.id)}
-                                    disabled={sanidadEnEdicion !== null}
-                                    title="Editar"
-                                  >
-                                    <Pencil className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => eliminarSanidad(trabajo.id)}
-                                    className="text-destructive hover:text-destructive"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        );
-                      })}
-
-                      {trabajosSanidad.length === 0 && !sanidadEnEdicion && (
-                        <div className="text-center py-12 text-muted-foreground">
-                          <p>No hay registros de sanidad vegetal</p>
-                          <p className="text-sm">Haz clic en "Agregar Sanidad" para crear uno</p>
-                        </div>
-                      )}
+                      <TabSanidad
+                        trabajosSanidad={trabajosSanidad}
+                        sanidadEnEdicion={sanidadEnEdicion}
+                        setSanidadEnEdicion={setSanidadEnEdicion}
+                        colaboradores={colaboradores}
+                        lotesData={lotesData}
+                        sublotes={sublotes}
+                        palmaTipoToId={palmaTipoToId}
+                        actividadesPorLabor={actividadesPorLabor}
+                        agregarSanidad={agregarSanidad}
+                        cancelarSanidad={cancelarSanidad}
+                        guardarSanidad={guardarSanidad}
+                        editarSanidad={editarSanidad}
+                        eliminarSanidad={eliminarSanidad}
+                        setFormRef={setFormRef}
+                      />
                     </TabsContent>
 
-                    {/* TAB: OTROS */}
+                    {/* TAB: OTROS — extraído a planilla/TabOtros */}
                     <TabsContent value="otros" className="space-y-4">
-                      <div className="flex justify-end">
-                        <Button onClick={agregarOtros} className="gap-2">
-                          <Plus className="h-4 w-4" />
-                          Agregar Otros
-                        </Button>
-                      </div>
-
-                      {/* Formulario de edición */}
-                      {otrosEnEdicion && (
-                        <div ref={setFormRef('otros')} className="scroll-mt-24">
-                        <Card className="border-primary/50 shadow-lg">
-                          <CardContent className="pt-6 space-y-4">
-                            <div className="grid gap-4 md:grid-cols-2">
-                              <div className="space-y-2 md:col-span-2">
-                                <Label>Colaboradores</Label>
-                                <MultiSelectColaboradores
-                                  colaboradores={colaboradores}
-                                  seleccionados={otrosEnEdicion.colaboradores}
-                                  onChange={(nuevos) =>
-                                    setOtrosEnEdicion({ ...otrosEnEdicion, colaboradores: nuevos })
-                                  }
-                                />
-                                {otrosEnEdicion.colaboradores.length > 0 && (
-                                  <div className="flex flex-wrap gap-2 mt-2">
-                                    {otrosEnEdicion.colaboradores.map((colId) => {
-                                      const col = colaboradores.find(c => c.id === colId);
-                                      return col ? (
-                                        <Badge
-                                          key={colId}
-                                          variant="secondary"
-                                          className="pl-2.5 pr-1 py-1 gap-1"
-                                        >
-                                          <span>
-                                            {col.nombres} {col.apellidos}
-                                            {col.terceroNombre && (
-                                              <span
-                                                className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle"
-                                                title={`Operario del tercero ${col.terceroNombre}`}
-                                              >
-                                                Tercero · {col.terceroNombre}
-                                              </span>
-                                            )}
-                                          </span>
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              setOtrosEnEdicion({
-                                                ...otrosEnEdicion,
-                                                colaboradores: otrosEnEdicion.colaboradores.filter(id => id !== colId)
-                                              });
-                                            }}
-                                            className="ml-1 hover:bg-muted rounded-sm p-0.5"
-                                          >
-                                            <X className="h-3 w-3" />
-                                          </button>
-                                        </Badge>
-                                      ) : null;
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                              <div className="space-y-2">
-                                <Label>Lote</Label>
-                                <Select
-                                  value={otrosEnEdicion.lote}
-                                  onValueChange={(value) => {
-                                    // Al cambiar de lote también limpiamos sublote y numeroPalmas
-                                    // (queda inválido el autofill previo).
-                                    setOtrosEnEdicion({
-                                      ...otrosEnEdicion,
-                                      lote: value,
-                                      sublote: '',
-                                      numeroPalmas: otrosEnEdicion.laborOtrosTipoPago === 'POR_PALMA' ? 0 : undefined,
-                                    });
-                                  }}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Seleccionar lote" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {lotesData.map((lote) => (
-                                      <SelectItem key={lote.id} value={lote.id}>
-                                        {lote.nombre}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-2">
-                                <Label>Sublote</Label>
-                                <Select
-                                  value={otrosEnEdicion.sublote}
-                                  onValueChange={(value) => {
-                                    // Autofill de Número de Palmas solo si la labor es POR_PALMA.
-                                    const sub = sublotes.find(s => s.id === value);
-                                    setOtrosEnEdicion({
-                                      ...otrosEnEdicion,
-                                      sublote: value,
-                                      numeroPalmas: otrosEnEdicion.laborOtrosTipoPago === 'POR_PALMA'
-                                        ? Number(sub?.cantidadPalmas ?? 0)
-                                        : otrosEnEdicion.numeroPalmas,
-                                    });
-                                  }}
-                                  disabled={!otrosEnEdicion.lote}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Seleccionar sublote" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {sublotes
-                                      .filter(s => s.loteId === otrosEnEdicion.lote)
-                                      .map((sublote) => (
-                                        <SelectItem key={sublote.id} value={sublote.id}>
-                                          {sublote.nombre}
-                                        </SelectItem>
-                                      ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              {/* Trabajo Realizado — mismo componente que Sanidad,
-                                  apuntando a la fija OTROS (§19 API_PARAMETRICAS).
-                                  Al elegir "Otra" y escribir un trabajo nuevo, al
-                                  guardar la tarjeta se crea la actividad en el catálogo
-                                  y aparece en Configuración → Labores → Otros. */}
-                              <div className="space-y-2 md:col-span-2">
-                                <Label>Trabajo Realizado</Label>
-                                <SelectActividadLabor
-                                  laborId={otrosEnEdicion.laborOtrosRawId}
-                                  actividades={actividadesPorLabor[String(otrosEnEdicion.laborOtrosRawId ?? '')] ?? []}
-                                  value={otrosEnEdicion.laborRealizada}
-                                  actividadId={otrosEnEdicion.laborActividadId ?? null}
-                                  onChange={(nombre, id) => setOtrosEnEdicion({
-                                    ...otrosEnEdicion,
-                                    laborRealizada: nombre,
-                                    laborActividadId: id,
-                                  })}
-                                />
-                              </div>
-
-                              {/* Campos dependientes del tipo_pago de la labor seleccionada
-                                  (§10 doc API_OPERACIONES.md). Solo se renderizan cuando ya
-                                  hay una labor escogida. */}
-                              {otrosEnEdicion.laborOtrosTipoPago === 'POR_PALMA' && (
-                                <div className="space-y-2">
-                                  <Label>
-                                    Número de Palmas <span className="text-destructive">*</span>
-                                  </Label>
-                                  <Input
-                                    type="number" step="0.001"
-                                    placeholder="0"
-                                    value={otrosEnEdicion.numeroPalmas ?? ''}
-                                    onChange={(e) =>
-                                      setOtrosEnEdicion({
-                                        ...otrosEnEdicion,
-                                        numeroPalmas: parseFloat(e.target.value) || 0,
-                                      })
-                                    }
-                                  />
-                                </div>
-                              )}
-
-                            </div>
-                            <div className="flex justify-end gap-2 pt-4">
-                              <Button variant="outline" onClick={cancelarOtros}>
-                                Cancelar
-                              </Button>
-                              <Button onClick={guardarOtros} className="gap-2">
-                                <Check className="h-4 w-4" />
-                                Guardar
-                              </Button>
-                            </div>
-                          </CardContent>
-                        </Card>
-                        </div>
-                      )}
-
-                      {/* Lista de trabajos guardados */}
-                      {trabajosOtros.map((trabajo) => {
-                        const lote = lotesData.find(l => l.id === trabajo.lote);
-                        const sublote = sublotes.find(s => s.id === trabajo.sublote);
-                        return (
-                          <Card key={trabajo.id} className="border-border hover:border-primary/30 transition-colors">
-                            <CardContent className="p-4">
-                              <div className="flex items-center justify-between gap-4">
-                                {/* Colaboradores */}
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs text-muted-foreground mb-1">Colaboradores</p>
-                                  {trabajo.colaboradores?.length > 0 ? (
-                                    <div className="flex flex-wrap gap-1">
-                                      {trabajo.colaboradores?.map((colId) => {
-                                        const col = colaboradores.find(c => c.id === colId);
-                                        return col ? (
-                                          <ColaboradorChip key={colId} col={col} />
-                                        ) : null;
-                                      })}
-                                    </div>
-                                  ) : (
-                                    <p className="text-xs text-muted-foreground">Sin colaboradores</p>
-                                  )}
-                                </div>
-
-                                {/* Lote/Sublote */}
-                                <div className="flex items-center gap-3">
-                                  <div>
-                                    <h4 className="font-semibold text-sm">{trabajo.nombre || 'Sin nombre'}</h4>
-                                    <p className="text-xs text-muted-foreground">{lote?.nombre || 'Sin lote'} - {sublote?.nombre || 'Sin sublote'}</p>
-                                  </div>
-                                </div>
-
-                                {/* Labor realizada */}
-                                <div className="text-right shrink-0 max-w-xs">
-                                  <p className="text-xs text-muted-foreground">Labor</p>
-                                  <p className="font-semibold text-sm truncate">{trabajo.laborRealizada || 'Sin descripción'}</p>
-                                </div>
-
-                                {/* Botón eliminar */}
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => editarOtros(trabajo.id)}
-                                    disabled={otrosEnEdicion !== null}
-                                    title="Editar"
-                                  >
-                                    <Pencil className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => eliminarOtros(trabajo.id)}
-                                    className="text-destructive hover:text-destructive"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        );
-                      })}
-
-                      {trabajosOtros.length === 0 && !otrosEnEdicion && (
-                        <div className="text-center py-12 text-muted-foreground">
-                          <p>No hay registros de otros trabajos</p>
-                          <p className="text-sm">Haz clic en "Agregar Otros" para crear uno</p>
-                        </div>
-                      )}
+                      <TabOtros
+                        trabajosOtros={trabajosOtros}
+                        otrosEnEdicion={otrosEnEdicion}
+                        setOtrosEnEdicion={setOtrosEnEdicion}
+                        colaboradores={colaboradores}
+                        lotesData={lotesData}
+                        sublotes={sublotes}
+                        actividadesPorLabor={actividadesPorLabor}
+                        agregarOtros={agregarOtros}
+                        cancelarOtros={cancelarOtros}
+                        guardarOtros={guardarOtros}
+                        editarOtros={editarOtros}
+                        eliminarOtros={eliminarOtros}
+                        setFormRef={setFormRef}
+                      />
                     </TabsContent>
                   </Tabs>
                 </CardContent>
