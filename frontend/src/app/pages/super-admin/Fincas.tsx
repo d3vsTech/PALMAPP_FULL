@@ -18,6 +18,7 @@ import {
 import { toast } from 'sonner';
 import { useAuth } from '../../contexts/AuthContext';
 import { requestConToken } from '../../../api/request';
+import { formatFecha } from '../../utils/fecha';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import CrearFincaModal, {
   type FincaFormData,
@@ -93,14 +94,7 @@ function normalizeEstado(value: unknown): EstadoTenant {
  * Formatea una fecha del backend (YYYY-MM-DD o ISO completo) al formato DD/MM/YYYY.
  * Si la fecha es inválida o vacía, devuelve "—".
  */
-function formatearFecha(raw?: string | null): string {
-  if (!raw || typeof raw !== 'string') return '—';
-  // Soporta "YYYY-MM-DD", "YYYY-MM-DDTHH:mm:ss" y "YYYY-MM-DD HH:mm:ss"
-  const ymd = raw.slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return raw;
-  const [year, month, day] = ymd.split('-');
-  return `${day}/${month}/${year}`;
-}
+const formatearFecha = (raw?: string | null): string => formatFecha(raw, { day: '2-digit', month: '2-digit', year: 'numeric' });
 
 function normalizeTenant(raw: any): FincaItem {
   return {

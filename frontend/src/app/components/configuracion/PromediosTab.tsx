@@ -40,6 +40,7 @@ import {
   type PromedioLote,
 } from '../../../api/configuracion';
 import { lotesApi } from '../../../api/plantacion';
+import { formatFecha } from '../../utils/fecha';
 import { TabLoadingGate } from './TabLoadingGate';
 
 interface LoteOpcion {
@@ -176,14 +177,10 @@ export function PromediosTab() {
     }
   };
 
+  // Se pasa `new Date(fecha)` para conservar el parseo del ISO completo en hora local.
   const formatearFecha = (fecha: string) => {
-    const date = new Date(fecha);
-    if (Number.isNaN(date.getTime())) return 'N/A';
-    return date.toLocaleDateString('es-CO', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
+    const r = formatFecha(new Date(fecha), { year: 'numeric', month: 'short', day: 'numeric' });
+    return r === '—' ? 'N/A' : r;
   };
 
   /**

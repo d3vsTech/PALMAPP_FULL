@@ -38,6 +38,8 @@ import {
   PlanillaDiariaSecciones,
 } from '../../../api/nomina';
 import type { ApiError } from '../../../api/client';
+import { formatCOP } from '../../components/lib/format';
+import { formatFecha } from '../../utils/fecha';
 
 // ── Tipos locales para el render ─────────────────────────────────────────────
 type TipoLabor = 'Cosecha' | 'Plateo' | 'Poda' | 'Fertilización' | 'Sanidad' | 'Otros' | 'Auxiliares';
@@ -79,9 +81,9 @@ function toNumber(v: string | number | null | undefined): number {
   if (typeof v === 'number') return v;
   return parseFloat(v) || 0;
 }
+// Wrapper: aquí null se muestra como "$0", no como ''.
 function fmtMoney(v: string | number | null | undefined): string {
-  const n = toNumber(v);
-  return `$${n.toLocaleString('es-CO', { maximumFractionDigits: 0 })}`;
+  return formatCOP(toNumber(v));
 }
 function fmtNumero(v: string | number | null | undefined, decimals = 0): string {
   const n = toNumber(v);
@@ -91,12 +93,7 @@ function fmtNumero(v: string | number | null | undefined, decimals = 0): string 
   });
 }
 function fmtFecha(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!m) return iso;
-  return new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00`).toLocaleDateString('es-CO', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-  });
+  return formatFecha(iso, { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 /** Los 3 primeros nombres van a COL.1/2/3. El resto se muestra en CUADRILLA. */

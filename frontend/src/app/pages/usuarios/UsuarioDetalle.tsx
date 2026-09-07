@@ -7,15 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/ca
 import { Badge } from '../../components/ui/badge';
 import { ArrowLeft, Edit, Mail, Shield, Calendar, Building2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-
-// Helper defensivo para fechas (evita "Invalid Date")
-const formatFecha = (v?: any, opts: Intl.DateTimeFormatOptions = {}) => {
-  if (v === null || v === undefined || v === '') return '—';
-  const s = String(v);
-  const ymd = s.slice(0, 10);
-  const d = /^\d{4}-\d{2}-\d{2}$/.test(ymd) ? new Date(ymd + 'T12:00:00') : new Date(s);
-  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('es-CO', opts);
-};
+import { formatFecha } from '../../utils/fecha';
 
 interface Usuario {
   id: number; name: string; email: string;

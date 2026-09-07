@@ -20,6 +20,7 @@ import {
 import { toast } from 'sonner';
 import { useAuth } from '../../contexts/AuthContext';
 import { requestConToken } from '../../../api/request';
+import { formatFechaHora } from '../../utils/fecha';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 
 type RolTenant = 'ADMIN';
@@ -108,16 +109,6 @@ function normalizeTenantUser(raw: any): TenantUser {
   };
 }
 
-function formatDate(dateString?: string) {
-  if (!dateString) return '—';
-
-  const date = new Date(dateString);
-  if (Number.isNaN(date.getTime())) {
-    return dateString;
-  }
-
-  return date.toLocaleString('es-CO');
-}
 
 function getAssignmentStatusClasses(isActive: boolean) {
   return isActive
@@ -674,7 +665,7 @@ export default function UsuariosFinca() {
                     
                     <td className="px-6 py-4">
                       <span className="text-sm text-gray-300">
-                        {formatDate(user.asignado_at)}
+                        {formatFechaHora(user.asignado_at)}
                       </span>
                     </td>
 
@@ -774,7 +765,7 @@ export default function UsuariosFinca() {
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Asignado</p>
-                  <p className="text-sm text-gray-300">{formatDate(viewUser.asignado_at)}</p>
+                  <p className="text-sm text-gray-300">{formatFechaHora(viewUser.asignado_at)}</p>
                 </div>
               </div>
 

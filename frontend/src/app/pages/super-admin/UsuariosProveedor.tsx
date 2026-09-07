@@ -32,6 +32,7 @@ import {
   MarketProveedoresErrorCodes,
 } from '../../../api/marketProveedoresAdmin';
 import { requestConToken } from '../../../api/request';
+import { formatFechaHora } from '../../utils/fecha';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 
 const ROLES: RolProveedorUser[] = ['ADMIN', 'OPERADOR'];
@@ -60,11 +61,6 @@ interface GlobalUserOption {
   email: string;
 }
 
-function formatDate(d?: string) {
-  if (!d) return '—';
-  const dt = new Date(d);
-  return Number.isNaN(dt.getTime()) ? d : dt.toLocaleString('es-CO');
-}
 
 function getAssignmentStatusClasses(active: boolean) {
   return active
@@ -482,7 +478,7 @@ export default function UsuariosProveedor() {
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="text-sm text-gray-300">{formatDate(u.asignado_at)}</span>
+                      <span className="text-sm text-gray-300">{formatFechaHora(u.asignado_at)}</span>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-2">
@@ -577,7 +573,7 @@ export default function UsuariosProveedor() {
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Asignado</p>
-                  <p className="text-sm text-gray-300">{formatDate(viewUser.asignado_at)}</p>
+                  <p className="text-sm text-gray-300">{formatFechaHora(viewUser.asignado_at)}</p>
                 </div>
               </div>
 

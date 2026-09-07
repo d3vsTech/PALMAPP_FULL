@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { requestConToken } from '../../../api/request';
+import { formatFechaHora } from '../../utils/fecha';
 import {
   Building2,
   CheckCircle2,
@@ -56,17 +57,6 @@ interface DashboardResponse {
 function toNumber(value: unknown, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function formatDate(dateString?: string) {
-  if (!dateString) return '—';
-
-  const date = new Date(dateString);
-  if (Number.isNaN(date.getTime())) {
-    return dateString;
-  }
-
-  return date.toLocaleString('es-CO');
 }
 
 export default function SuperAdminDashboard() {
@@ -437,7 +427,7 @@ export default function SuperAdminDashboard() {
                     {tenant.estado || 'Sin estado'}
                   </span>
                   <span className="rounded-lg border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-gray-300">
-                    {formatDate(tenant.created_at)}
+                    {formatFechaHora(tenant.created_at)}
                   </span>
                 </div>
               </div>

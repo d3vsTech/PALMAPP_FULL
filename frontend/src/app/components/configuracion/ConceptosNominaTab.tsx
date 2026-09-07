@@ -23,6 +23,7 @@ import {
 import { TabLoadingGate } from './TabLoadingGate';
 import { cached } from '../../../api/cache';
 import { formatCOP } from '../lib/format';
+import { formatFecha } from '../../utils/fecha';
 
 const TIPO_LABEL: Record<TipoConcepto, string> = {
   APORTE_LEGAL: 'Aporte Legal',
@@ -146,11 +147,8 @@ export function ConceptosNominaTab() {
    * cuando no hay fecha de cierre. Si no hay `vigente_desde` devolvemos '-'.
    */
   const fmtFecha = (iso?: string | null): string | null => {
-    if (!iso) return null;
-    // Soporta `YYYY-MM-DD` y `YYYY-MM-DDTHH:mm:ss...`.
-    const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (!m) return null;
-    return `${m[3]}/${m[2]}/${m[1]}`;
+    const r = formatFecha(iso, { day: '2-digit', month: '2-digit', year: 'numeric' });
+    return r === '—' ? null : r;
   };
   const vigenciaDisplay = (concepto: NominaConcepto): string => {
     const desde = fmtFecha(concepto.vigente_desde);

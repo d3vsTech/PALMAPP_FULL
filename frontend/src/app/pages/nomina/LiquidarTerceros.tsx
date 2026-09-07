@@ -475,9 +475,10 @@ export default function LiquidarTerceros() {
                 <p className="text-3xl font-bold text-primary mt-1">
                   ${totalGeneral.toLocaleString('es-CO')}
                 </p>
+                {/* El resumen §7.1 no trae la lista de operarios; el conteo
+                    anterior siempre daba 0. Se muestra solo el de empresas. */}
                 <p className="text-xs text-muted-foreground mt-1">
-                  {actas.length} empresa{actas.length !== 1 ? 's' : ''} ·{' '}
-                  {actas.reduce((s, a) => s + (a.operarios?.length ?? 0), 0)} operario(s)
+                  {actas.length} empresa{actas.length !== 1 ? 's' : ''}
                 </p>
               </div>
               {todasPagadas && (

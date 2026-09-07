@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router';
-import { useAuth, UserRole } from '../../contexts/AuthContext';
+import { useAuth, esAdmin, UserRole } from '../../contexts/AuthContext';
 import { cn } from '../lib/utils';
 import { useState } from 'react';
 import { Button } from '../ui/AppButton';
@@ -18,12 +18,13 @@ import {
   UserCog,
   Sparkles,
   FileText,
+  type LucideIcon,
 } from 'lucide-react';
 
 interface NavItem {
   label: string;
   href: string;
-  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  icon: LucideIcon;
   roles: UserRole[];
   permiso?: string;
 }
@@ -112,11 +113,9 @@ export default function Sidebar() {
   const { user, hasPermiso } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const esAdmin = user?.is_super_admin || user?.rol === 'administrador';
-
   const filteredItems = navItems.filter(item => {
-    // Admins ven todo
-    if (esAdmin) return true;
+    // Admins ven todo — mismo criterio único (esAdmin) que rutas y permisos.
+    if (esAdmin(user)) return true;
     // Usuarios normales: mostrar si tiene el permiso del item
     if (item.permiso) return hasPermiso(item.permiso);
     // Items sin permiso (Agente IA): mostrar a todos los autenticados

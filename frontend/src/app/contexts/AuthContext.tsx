@@ -96,6 +96,16 @@ function normalizarRol(rol: string): string {
   return map[rol?.toUpperCase()] ?? rol?.toLowerCase() ?? 'USUARIO';
 }
 
+/**
+ * Criterio ÚNICO de administrador. `normalizarRol` convierte el 'ADMIN' del
+ * backend en 'administrador', así que esa es la única forma almacenada del
+ * rol. Antes convivían dos comparaciones distintas ('ADMIN' en hasPermiso,
+ * 'administrador' en ProtectedRoute) y una de las dos nunca aplicaba.
+ */
+export function esAdmin(user: User | null): boolean {
+  return !!user && (user.is_super_admin === true || user.rol === 'administrador');
+}
+
 // ─── Context ──────────────────────────────────────────────────────────────────
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -332,7 +342,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ─── Permisos ─────────────────────────────────────────────────────────────
 
   const hasPermiso = (permiso: string) => {
-    if (user?.is_super_admin || user?.rol === 'ADMIN') return true;
+    if (esAdmin(user)) return true;
     return user?.permisos?.includes(permiso) ?? false;
   };
 

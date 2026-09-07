@@ -1,7 +1,14 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  readonly VITE_API_URL: string;
+  /** Backend Laravel (termina en /api). */
+  readonly VITE_API_URL?: string;
+  /** URL del propio frontend (para enlaces en correos del backend). */
+  readonly VITE_APP_URL?: string;
+  /** Override de la URL del agente IA (FastAPI). */
+  readonly VITE_AGRO_AGENTE_URL?: string;
+  /** Target del proxy Vite para /agro-api y /agro-agente. */
+  readonly VITE_AGRO_AGENTE_TARGET?: string;
 }
 
 interface ImportMeta {

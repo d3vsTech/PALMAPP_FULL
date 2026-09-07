@@ -13,6 +13,7 @@ import {
   type EstadoPedidoProv,
 } from '../../../api/proveedor';
 import { proveedorAuthStorage } from '../../../api/proveedorAuth';
+import { formatFecha as formatFechaSafe } from '../../utils/fecha';
 
 const ESTADO_LABELS: Record<EstadoPedidoProv, { label: string; cls: string }> = {
   pendiente:   { label: 'Pendiente',    cls: 'bg-amber-500/10 text-amber-600 border-amber-500/20' },
@@ -28,11 +29,8 @@ function formatCOP(v: number | string): string {
   return `$${n.toLocaleString('es-CO')}`;
 }
 
-function formatFecha(iso: string): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  return isNaN(d.getTime()) ? iso : d.toLocaleDateString('es-CO');
-}
+// Wrapper: aquí el vacío se muestra como '' y no como '—'.
+const formatFecha = (iso: string): string => (iso ? formatFechaSafe(iso) : '');
 
 export default function ProveedorDashboard() {
   const proveedor = proveedorAuthStorage.getProveedor();

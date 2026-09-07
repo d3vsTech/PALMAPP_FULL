@@ -204,7 +204,7 @@ export default function InteresesDetalle() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Estado</p>
-                {interes.consignado ? (
+                {interes.pagado ? (
                   <Badge variant="outline" className="bg-success/10 text-success border-success/30">
                     <CheckCircle className="h-3 w-3 mr-1" />
                     Pagado

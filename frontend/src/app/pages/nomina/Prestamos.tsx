@@ -36,6 +36,7 @@ import {
   type IndicadoresPrestamos,
 } from '../../../api/prestamos';
 import type { ApiError } from '../../../api/client';
+import { formatFecha } from '../../utils/fecha';
 
 const estadoConfig: Record<EstadoPrestamo, { label: string; className: string }> = {
   VIGENTE:   { label: 'Vigente',   className: 'bg-primary/10 text-primary border-primary/20' },
@@ -54,13 +55,7 @@ function nombreDeEmpleado(p: Prestamo): string {
 }
 
 /** Formatea YYYY-MM-DD a dd/mm/yyyy sin desfase por zona horaria. */
-function fmtFecha(s: string | null | undefined): string {
-  if (!s) return '—';
-  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!m) return s;
-  const [, y, mes, d] = m;
-  return `${d}/${mes}/${y}`;
-}
+const fmtFecha = (s: string | null | undefined): string => formatFecha(s, { day: '2-digit', month: '2-digit', year: 'numeric' });
 
 export default function Prestamos() {
   const navigate = useNavigate();

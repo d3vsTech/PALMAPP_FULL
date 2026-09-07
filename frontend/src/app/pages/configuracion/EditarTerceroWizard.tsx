@@ -32,7 +32,7 @@ import {
   type PrecioCosecha,
   type RangoAbonada,
 } from './NuevoTerceroWizard';
-import type { EmpresaTercero, ColaboradorTercero } from '../../components/configuracion/TercerosTab';
+import type { EmpresaTercero, ColaboradorTercero } from './NuevoTerceroWizard';
 import {
   tercerosApi,
   operariosApi,

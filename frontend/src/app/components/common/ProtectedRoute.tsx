@@ -1,5 +1,5 @@
 import { Navigate } from 'react-router';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth, esAdmin } from '../../contexts/AuthContext';
 
 interface Props {
   children: React.ReactNode;
@@ -10,8 +10,8 @@ interface Props {
 export default function ProtectedRoute({ children, permiso, roles }: Props) {
   const { user, hasPermiso } = useAuth();
 
-  // Admins tienen todo
-  if (user?.is_super_admin || user?.rol === 'administrador') {
+  // Admins tienen todo — mismo criterio que hasPermiso (esAdmin).
+  if (esAdmin(user)) {
     return <>{children}</>;
   }
 

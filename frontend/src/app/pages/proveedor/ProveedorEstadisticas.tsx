@@ -21,14 +21,8 @@ import {
   type PeriodoEstadisticasProv, type EstadisticasProveedorResponse,
   type KpiEstadisticasProv,
 } from '../../../api/proveedor';
-
-// Helper defensivo para fechas (evita "Invalid Date").
-const formatFecha = (v?: string | null, opts: Intl.DateTimeFormatOptions = {}) => {
-  if (!v) return '—';
-  const ymd = v.slice(0, 10);
-  const d = /^\d{4}-\d{2}-\d{2}$/.test(ymd) ? new Date(ymd + 'T12:00:00') : new Date(v);
-  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('es-CO', opts);
-};
+import { formatCOP } from '../../components/lib/format';
+import { formatFecha } from '../../utils/fecha';
 
 /**
  * Días entre dos fechas YYYY-MM-DD, inclusivo en ambos extremos.
@@ -50,8 +44,6 @@ const formatRango = (desde: string, hasta: string) => {
   const dias = diasEntreFechas(desde, hasta);
   return `${formatFecha(desde, { day: 'numeric', month: 'short', year: 'numeric' })} – ${formatFecha(hasta, { day: 'numeric', month: 'short', year: 'numeric' })} · ${dias} días`;
 };
-
-const formatCOP = (n: number) => `$${n.toLocaleString('es-CO', { maximumFractionDigits: 0 })}`;
 
 const formatCompactCOP = (n: number) => {
   if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;

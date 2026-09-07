@@ -42,6 +42,7 @@ import {
 } from '../../../api/prestamos';
 import type { ApiError } from '../../../api/client';
 import { formatThousands, parseCOP } from '../../components/lib/format';
+import { formatFecha } from '../../utils/fecha';
 
 const MEDIOS_PAGO: Array<{ value: MedioPagoAbono; label: string }> = [
   { value: 'TRANSFERENCIA',    label: 'Transferencia' },
@@ -56,13 +57,7 @@ function toNumber(v: string | number | null | undefined): number {
   return parseFloat(v) || 0;
 }
 
-function fmtFecha(s: string): string {
-  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!m) return s;
-  return new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00`).toLocaleDateString('es-CO', {
-    day: '2-digit', month: 'short', year: 'numeric',
-  });
-}
+const fmtFecha = (s: string): string => formatFecha(s, { day: '2-digit', month: 'short', year: 'numeric' });
 
 export default function AbonosPrestamo() {
   const { prestamoId } = useParams();

@@ -341,7 +341,7 @@ export default function DesprendiblePago() {
             <div className="grid grid-cols-3 gap-2 text-xs">
               <InfoMini label="Nombre" value={empleado.nombre_completo} />
               <InfoMini label="Cédula" value={empleado.documento} />
-              <InfoMini label="Base" value={empleado.salario_tipo} />
+              <InfoMini label="Base" value={empleado.salario_tipo ?? '—'} />
               <InfoMini label="Fecha" value={fechaActual} />
               <InfoMini label="Período" value={nomina.periodo_label} />
               <InfoMini label="Días Cancelados" value={String(liquidacion.dias_trabajados)} />

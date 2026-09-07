@@ -29,7 +29,35 @@ import {
   ArrowLeft, ArrowRight, Building2, User, Check, Plus, Trash2,
   HardHat, ShieldCheck, DollarSign, Users, UserPlus, Save,
 } from 'lucide-react';
-import type { EmpresaTercero, ColaboradorTercero } from '../../components/configuracion/TercerosTab';
+// ─── Tipos del formulario del wizard ─────────────────────────────────────────
+// Vivían en TercerosTab cuando era mock; al conectarla se borraron de allá.
+// Son la forma LOCAL del formulario (labels en español), no el contrato del
+// API — el payload real se arma en guardar() con los tipos de api/terceros.
+
+export type EmpresaTercero = {
+  id: string;
+  razonSocial: string;
+  nombreComercial?: string;
+  nit: string;
+  tipoPersona: 'Jurídica' | 'Natural';
+  contacto?: string;
+  telefono?: string;
+  email?: string;
+  estado: 'Activa' | 'Inactiva';
+};
+
+export type ColaboradorTercero = {
+  id: string;
+  empresaId: string;
+  nombres: string;
+  apellidos: string;
+  documento: string;
+  cargo: string;
+  eps: string;
+  arl: string;
+  tarifaDiaria: number;
+  estado: 'Activo' | 'Inactivo';
+};
 import {
   tercerosApi,
   TercerosErrorCodes,

@@ -35,6 +35,7 @@ import {
   type EstadoPrestamo,
 } from '../../../api/prestamos';
 import type { ApiError } from '../../../api/client';
+import { formatFecha } from '../../utils/fecha';
 
 function toNumber(v: string | number | null | undefined): number {
   if (v == null) return 0;
@@ -51,12 +52,7 @@ function periodoCuota(anio: number, mes: number, quincena: number | null): strin
 }
 
 /** Formatea ISO datetime a dd/mm/yyyy sin desfase. */
-function fmtFecha(s: string | null | undefined): string {
-  if (!s) return '—';
-  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!m) return s;
-  return `${m[3]}/${m[2]}/${m[1]}`;
-}
+const fmtFecha = (s: string | null | undefined): string => formatFecha(s, { day: '2-digit', month: '2-digit', year: 'numeric' });
 
 const estadoConfig: Record<EstadoPrestamo, { label: string; className: string }> = {
   VIGENTE:   { label: 'Vigente',   className: 'bg-primary/10 text-primary border-primary/20' },

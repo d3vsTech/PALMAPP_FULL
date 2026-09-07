@@ -15,7 +15,6 @@
  *   Panel: §1.6 GET /predios/{id}/resumen — se refresca tras cada operación
  */
 import React, { useState, useEffect, useRef } from 'react';
-// @ts-expect-error react-dom no expone tipos a través del export "react-dom" en este setup
 import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Button } from '../../components/ui/button';

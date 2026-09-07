@@ -18,17 +18,17 @@ import {
   type CategoriaRefProv, type UnidadMedidaProv,
   type ProductoUpdatePayload, type ProductoProv,
 } from '../../../api/proveedor';
+import { formatThousands } from '../../components/lib/format';
 
 interface PrecioVolumenLocal {
   cantidad_minima: number;
   precio_unidad: number;
 }
 
-// ── Formato moneda COP (puntos como separadores de miles) ───────────────────
+// ── Formato moneda COP para inputs: sin símbolo y '' cuando es 0 ────────────
 const formatCOP = (n: number | string): string => {
   const num = typeof n === 'number' ? n : parseFloat(String(n));
-  if (!Number.isFinite(num) || num === 0) return '';
-  return Math.trunc(num).toLocaleString('es-CO');
+  return Number.isFinite(num) && num !== 0 ? formatThousands(Math.trunc(num)) : '';
 };
 const parseCOP = (s: string): number => {
   const cleaned = String(s).replace(/[^\d]/g, '');

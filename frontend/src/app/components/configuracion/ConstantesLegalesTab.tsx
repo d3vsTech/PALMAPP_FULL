@@ -66,11 +66,6 @@ function formToPayload(f: FormState): ConstantesLegalesPayload {
   };
 }
 
-// Usa `formatThousands` de lib/format que distingue "1750905.00" (decimal API)
-// de "1.750.905" (separadores de miles CO). El helper local anterior hacía
-// strip de todo punto, multiplicando por 100 el valor mostrado.
-const formatNumber = (value: string) => formatThousands(value);
-
 export function ConstantesLegalesTab() {
   const [constantes, setConstantes] = useState<FormState>(FORM_VACIO);
   const [loading, setLoading] = useState(true);
@@ -153,7 +148,7 @@ export function ConstantesLegalesTab() {
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-lg">$</span>
                 <Input
                   id="smmlv"
-                  value={formatNumber(constantes.smmlv)}
+                  value={formatThousands(constantes.smmlv)}
                   onChange={(e) => handleChange('smmlv', parseCOP(e.target.value))}
                   placeholder="1.750.905"
                   className="pl-7 text-lg font-semibold"
@@ -167,7 +162,7 @@ export function ConstantesLegalesTab() {
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-lg">$</span>
                 <Input
                   id="auxilioTransporte"
-                  value={formatNumber(constantes.auxilioTransporte)}
+                  value={formatThousands(constantes.auxilioTransporte)}
                   onChange={(e) => handleChange('auxilioTransporte', parseCOP(e.target.value))}
                   placeholder="249.095"
                   className="pl-7 text-lg font-semibold"

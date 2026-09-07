@@ -24,19 +24,9 @@ import {
   Check,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { nominaApi, DesprendibleData, CategoriaResumenTrabajo } from '../../../api/nomina';
+import { nominaApi, type DesprendibleData } from '../../../api/nomina';
 import { generarDesprendiblePdf } from './DesprendiblePago';
 import type { ApiError } from '../../../api/client';
-
-const CATEGORIAS: { key: keyof Omit<NonNullable<DesprendibleData['resumen_trabajo']>, 'total_general'>; titulo: string }[] = [
-  { key: 'cosecha', titulo: 'Cosecha' },
-  { key: 'plateo', titulo: 'Plateo' },
-  { key: 'poda', titulo: 'Poda' },
-  { key: 'fertilizacion', titulo: 'Fertilización' },
-  { key: 'sanidad', titulo: 'Sanidad' },
-  { key: 'otros', titulo: 'Otros' },
-  { key: 'finca', titulo: 'Finca' },
-];
 
 function getIniciales(nombre: string): string {
   const partes = nombre.trim().split(' ').filter(Boolean);
@@ -146,8 +136,7 @@ export default function VerLiquidacion() {
     );
   }
 
-  const { empleado, nomina, liquidacion, resumen_trabajo } = data;
-  const esVariable = empleado.salario_tipo === 'VARIABLE';
+  const { empleado, nomina, liquidacion } = data;
 
   return (
     <div className="space-y-6">
@@ -233,107 +222,6 @@ export default function VerLiquidacion() {
           </div>
         </CardContent>
       </Card>
-
-      {false && esVariable && resumen_trabajo && (
-        <Card className="border-border">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-xl">
-              <CalendarIcon className="h-6 w-6 text-primary" />
-              Resumen de trabajo
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {CATEGORIAS.map(({ key, titulo }) => {
-              const cat = resumen_trabajo[key] as CategoriaResumenTrabajo;
-              if (!cat || cat.filas.length === 0) return null;
-              // Cosecha se paga por `total_cosecha` (no por jornal). El resto
-              // de categorías usa `subtotal_jornal` / `f.jornal`.
-              const esCosecha = key === 'cosecha';
-              // Fallbacks para cuando el backend no calcula `peso_kg` /
-              // `total_cosecha` (ocurre con operarios de tercero): se
-              // reconstruyen aquí como racimos × promedio_kg y peso × precio_kg.
-              const pesoDe = (f: any) => {
-                const p = Number(f.peso_kg ?? 0);
-                if (p > 0) return p;
-                return Number(f.racimos ?? 0) * Number(f.promedio_kg ?? 0);
-              };
-              const totalCosechaDe = (f: any) => {
-                const t = Number(f.total_cosecha ?? 0);
-                if (t > 0) return t;
-                return pesoDe(f) * Number(f.precio_kg ?? 0);
-              };
-              const subtotal = esCosecha
-                ? (cat.subtotal_valor && cat.subtotal_valor > 0
-                    ? cat.subtotal_valor
-                    : cat.filas.reduce((s, f) => s + totalCosechaDe(f), 0))
-                : cat.subtotal_jornal;
-              return (
-                <div key={key} className="border border-border rounded-lg overflow-hidden">
-                  <div className="bg-primary/10 px-3 py-2 border-b border-border flex justify-between items-center">
-                    <h4 className="font-semibold text-sm text-primary">{titulo}</h4>
-                    <span className="font-semibold text-sm text-success">
-                      ${(subtotal ?? 0).toLocaleString('es-CO')}
-                    </span>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b border-border bg-muted/30">
-                          <th className="text-left p-2">Fecha</th>
-                          <th className="text-left p-2">Lote</th>
-                          <th className="text-left p-2">Sublote</th>
-                          {esCosecha && <th className="text-right p-2">Racimos</th>}
-                          {esCosecha && <th className="text-right p-2">Peso (kg)</th>}
-                          <th className="text-right p-2">
-                            {esCosecha ? 'Total' : 'Jornal'}
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {cat.filas.map((f, i) => {
-                          const peso = esCosecha ? pesoDe(f) : 0;
-                          const valor = esCosecha ? totalCosechaDe(f) : f.jornal;
-                          return (
-                            <tr
-                              key={i}
-                              className={`border-b border-border last:border-0 ${
-                                i % 2 === 0 ? 'bg-background' : 'bg-muted/5'
-                              }`}
-                            >
-                              <td className="p-2">{f.fecha}</td>
-                              <td className="p-2">{f.lote ?? '-'}</td>
-                              <td className="p-2">{f.sublote ?? '-'}</td>
-                              {esCosecha && (
-                                <td className="p-2 text-right">{(f.racimos ?? 0).toLocaleString('es-CO')}</td>
-                              )}
-                              {esCosecha && (
-                                <td className="p-2 text-right">
-                                  {peso.toLocaleString('es-CO', { maximumFractionDigits: 1 })}
-                                </td>
-                              )}
-                              <td className="p-2 text-right font-semibold text-success">
-                                ${Math.round(valor).toLocaleString('es-CO')}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              );
-            })}
-            <div className="flex justify-end pt-2 border-t-2 border-primary">
-              <div className="flex items-center gap-3">
-                <span className="font-bold">Total General:</span>
-                <span className="text-2xl font-bold text-success">
-                  ${(resumen_trabajo.total_general ?? 0).toLocaleString('es-CO')}
-                </span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       <Card className="border-border">
         <CardHeader className="pb-3">

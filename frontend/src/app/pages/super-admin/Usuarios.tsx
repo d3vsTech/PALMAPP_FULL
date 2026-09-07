@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { useAuth } from '../../contexts/AuthContext';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import { requestConToken } from '../../../api/request';
+import { formatFechaHora } from '../../utils/fecha';
 
 interface TenantAssignment {
   tenant_id?: number;
@@ -120,16 +121,6 @@ function buildUserFormData(user?: UsuarioGlobal | null): UsuarioFormData {
   };
 }
 
-function formatDate(dateString?: string) {
-  if (!dateString) return '—';
-
-  const date = new Date(dateString);
-  if (Number.isNaN(date.getTime())) {
-    return dateString;
-  }
-
-  return date.toLocaleString('es-CO');
-}
 
 function getUserTypeClasses(isSuperAdmin: boolean) {
   return isSuperAdmin
@@ -643,7 +634,7 @@ export default function Usuarios() {
 
                     <td className="px-6 py-4">
                       <span className="text-sm text-gray-300">
-                        {formatDate(usuario.created_at)}
+                        {formatFechaHora(usuario.created_at)}
                       </span>
                     </td>
 

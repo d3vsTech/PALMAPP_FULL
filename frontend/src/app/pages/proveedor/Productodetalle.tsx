@@ -20,11 +20,11 @@ import {
   ProveedorErrorCodes,
   type ProductoProv,
 } from '../../../api/proveedor';
+import { formatThousands } from '../../components/lib/format';
 
-const formatCOP = (v: number | string): string => {
-  const n = typeof v === 'number' ? v : parseFloat(String(v)) || 0;
-  return `$${Math.trunc(n).toLocaleString('es-CO')}`;
-};
+// Trunca decimales (no redondea) antes de formatear con miles.
+const formatCOP = (v: number | string): string =>
+  `$${formatThousands(Math.trunc(typeof v === 'number' ? v : parseFloat(String(v)) || 0))}`;
 
 export default function ProductoDetalle() {
   const { id } = useParams();

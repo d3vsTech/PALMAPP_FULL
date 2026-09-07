@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState, type Dispatch, type SetStateAction, type ReactNode } from 'react';
 
 // Tipos compartidos
 export interface CesantiaColaborador {
@@ -105,17 +105,20 @@ export interface LiquidacionFinal {
 }
 
 // Contexto
+// Los setters son los dispatchers de useState tal cual: aceptan tanto el
+// array nuevo como una función updater `(prev) => next`, que es como los
+// usan las pantallas de detalle.
 interface LiquidacionesContextType {
   cesantias: CesantiaColaborador[];
-  setCesantias: (cesantias: CesantiaColaborador[]) => void;
+  setCesantias: Dispatch<SetStateAction<CesantiaColaborador[]>>;
   intereses: InteresesColaborador[];
-  setIntereses: (intereses: InteresesColaborador[]) => void;
+  setIntereses: Dispatch<SetStateAction<InteresesColaborador[]>>;
   primas: PrimaColaborador[];
-  setPrimas: (primas: PrimaColaborador[]) => void;
+  setPrimas: Dispatch<SetStateAction<PrimaColaborador[]>>;
   vacaciones: VacacionesColaborador[];
-  setVacaciones: (vacaciones: VacacionesColaborador[]) => void;
+  setVacaciones: Dispatch<SetStateAction<VacacionesColaborador[]>>;
   liquidacionesFinales: LiquidacionFinal[];
-  setLiquidacionesFinales: (liquidaciones: LiquidacionFinal[]) => void;
+  setLiquidacionesFinales: Dispatch<SetStateAction<LiquidacionFinal[]>>;
 }
 
 const LiquidacionesContext = createContext<LiquidacionesContextType | undefined>(undefined);

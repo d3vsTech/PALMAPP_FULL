@@ -10,7 +10,8 @@
 
 import { apiClient, PaginatedResponse } from './client';
 
-function toQuery(params?: Record<string, unknown>): string {
+// `object` (no Record) para aceptar interfaces sin index signature.
+function toQuery(params?: object): string {
   if (!params) return '';
   const q = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => {

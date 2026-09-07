@@ -25,6 +25,8 @@ import {
   type Planilla, type Indicadores, type Periodo as PeriodoIndicadores, type EstadoPlanilla,
   type CoberturaPlanilla,
 } from '../../../api/operaciones';
+import { formatCOP } from '../../components/lib/format';
+import { formatFecha } from '../../utils/fecha';
 
 const PER_PAGE = 50;
 
@@ -189,22 +191,13 @@ export default function Operaciones() {
   };
 
   // ── Helpers ────────────────────────────────────────────────────────────────
-  const formatearFecha = (iso: string): string => {
-    if (!iso || typeof iso !== 'string') return '—';
-    const ymd = iso.slice(0, 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return iso;
-    const d = new Date(ymd + 'T12:00:00');
-    if (isNaN(d.getTime())) return iso;
-    return d.toLocaleDateString('es-CO', {
-      weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
-    });
-  };
+  const formatearFecha = (iso: string): string =>
+    formatFecha(iso, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
 
+  // Wrapper: aquí null y 0 se muestran como '—'.
   const formatearMoneda = (n: number | string | null | undefined): string => {
-    if (n === null || n === undefined) return '—';
     const num = typeof n === 'string' ? parseFloat(n) : n;
-    if (Number.isNaN(num) || num === 0) return '—';
-    return `$${num.toLocaleString('es-CO', { maximumFractionDigits: 0 })}`;
+    return num == null || Number.isNaN(num) || num === 0 ? '—' : formatCOP(num);
   };
 
   const mapEstadoUI = (e: EstadoPlanilla): 'BORRADOR' | 'APROBADO' =>

@@ -875,7 +875,7 @@ export default function LiquidarColaborador() {
                   <span className="font-semibold">${preview.total_cosecha.toLocaleString('es-CO')}</span>
                 </div>
               )}
-              {preview.total_horas_extra > 0 && (
+              {(preview.total_horas_extra ?? 0) > 0 && (
                 <div className="flex justify-between px-4 py-3 border-b border-success/10">
                   <span className="text-xs uppercase tracking-wide text-muted-foreground">
                     Horas extra
@@ -889,13 +889,13 @@ export default function LiquidarColaborador() {
                       </span>
                     )}
                   </span>
-                  <span className="font-semibold">${preview.total_horas_extra.toLocaleString('es-CO')}</span>
+                  <span className="font-semibold">${(preview.total_horas_extra ?? 0).toLocaleString('es-CO')}</span>
                 </div>
               )}
-              {preview.total_recargos > 0 && (
+              {(preview.total_recargos ?? 0) > 0 && (
                 <div className="flex justify-between px-4 py-3 border-b border-success/10">
                   <span className="text-xs uppercase tracking-wide text-muted-foreground">Recargos</span>
-                  <span className="font-semibold">${preview.total_recargos.toLocaleString('es-CO')}</span>
+                  <span className="font-semibold">${(preview.total_recargos ?? 0).toLocaleString('es-CO')}</span>
                 </div>
               )}
               {/* §9.9 — Descansos. `total_*` puede venir 0 cuando no hubo
@@ -940,7 +940,7 @@ export default function LiquidarColaborador() {
                   </span>
                 </div>
               )}
-              {preview.total_incapacidades > 0 && (
+              {(preview.total_incapacidades ?? 0) > 0 && (
                 <div className="flex justify-between px-4 py-3 border-b border-success/10">
                   <span className="text-xs uppercase tracking-wide text-muted-foreground">
                     Incapacidades
@@ -979,7 +979,7 @@ export default function LiquidarColaborador() {
                       );
                     })()}
                   </span>
-                  <span className="font-semibold">${preview.total_incapacidades.toLocaleString('es-CO')}</span>
+                  <span className="font-semibold">${(preview.total_incapacidades ?? 0).toLocaleString('es-CO')}</span>
                 </div>
               )}
               <div className="flex justify-between px-4 py-3 border-b border-success/10 bg-success/10">
