@@ -412,8 +412,6 @@ export default function NuevaNominaWizard() {
   // persistida en el backend (paso 1 hace POST /nominas). Sin este diálogo,
   // el usuario que entra al wizard, revisa cosecha y no vuelve a terminar
   // deja una nómina huérfana en borrador.
-  const [confirmarSalirWizard, setConfirmarSalirWizard] = useState(false);
-  const [descartandoBorrador, setDescartandoBorrador] = useState(false);
   const [confirmarAjustePromedios, setConfirmarAjustePromedios] = useState<
     | null
     | Array<{
@@ -1226,14 +1224,17 @@ export default function NuevaNominaWizard() {
           variant="ghost"
           size="sm"
           onClick={() => {
-            // Si estamos creando y ya hay nómina persistida (paso 1 la crea
-            // en el backend), preguntar si descartar el borrador o dejarlo.
-            // Si es edición o aún no se persistió nada, volver directo.
+            // Salir deja el borrador guardado tal cual — se continúa o se
+            // elimina desde el listado de Pagos. Se limpia la marca de
+            // "flujo de creación" para que al reentrar el título diga
+            // "Editar" y no "Nuevo".
             if (esFlujoCreacion && nominaId) {
-              setConfirmarSalirWizard(true);
-            } else {
-              navigate('/nomina');
+              try {
+                sessionStorage.removeItem('wizard_flujo_creacion');
+                localStorage.removeItem(STORAGE_KEY_NOMINA_WIZARD);
+              } catch { /* noop */ }
             }
+            navigate('/nomina');
           }}
           className="mb-4 gap-2"
         >
@@ -3267,74 +3268,6 @@ export default function NuevaNominaWizard() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Confirmar al salir del wizard con borrador persistido.
-          Sin este diálogo, entrar al wizard → revisar cosecha → salirse
-          dejaba una nómina huérfana en la lista de Pagos. */}
-      <AlertDialog
-        open={confirmarSalirWizard}
-        onOpenChange={(open) => !open && !descartandoBorrador && setConfirmarSalirWizard(false)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Descartar la nómina en borrador?</AlertDialogTitle>
-            <AlertDialogDescription>
-              La nómina ya se guardó en el backend como borrador desde el paso 1. Si sales sin terminar puedes descartarla, o dejarla guardada para continuarla después desde el listado.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2">
-            <AlertDialogCancel disabled={descartandoBorrador}>
-              Seguir editando
-            </AlertDialogCancel>
-            <Button
-              variant="outline"
-              onClick={() => {
-                // Dejar el borrador tal cual y salir. Limpiamos la marca
-                // de "flujo de creación" para que la próxima vez que entre
-                // el título diga "Editar" y no "Nuevo".
-                try {
-                  sessionStorage.removeItem('wizard_flujo_creacion');
-                  localStorage.removeItem(STORAGE_KEY_NOMINA_WIZARD);
-                } catch { /* noop */ }
-                setConfirmarSalirWizard(false);
-                navigate('/nomina');
-              }}
-              disabled={descartandoBorrador}
-            >
-              Dejar borrador
-            </Button>
-            <AlertDialogAction
-              onClick={async () => {
-                if (!nominaId) {
-                  setConfirmarSalirWizard(false);
-                  navigate('/nomina');
-                  return;
-                }
-                setDescartandoBorrador(true);
-                try {
-                  await nominaApi.eliminar(nominaId);
-                  toast.success('Borrador descartado');
-                  try {
-                    sessionStorage.removeItem('wizard_flujo_creacion');
-                    localStorage.removeItem(STORAGE_KEY_NOMINA_WIZARD);
-                  } catch { /* noop */ }
-                  setConfirmarSalirWizard(false);
-                  navigate('/nomina');
-                } catch (err) {
-                  const e = err as ApiError;
-                  toast.error(e.message ?? 'No se pudo descartar el borrador');
-                } finally {
-                  setDescartandoBorrador(false);
-                }
-              }}
-              disabled={descartandoBorrador}
-              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
-            >
-              {descartandoBorrador && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-              Descartar borrador
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

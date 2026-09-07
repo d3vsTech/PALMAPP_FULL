@@ -45,6 +45,7 @@ import {
   CategoriaResumenTrabajo,
   NominaErrorCodes,
   PrestamoCuotaPendiente,
+  type ValidacionCosechaDetalleColaborador,
 } from '../../../api/nomina';
 import type { ApiError } from '../../../api/client';
 
@@ -135,6 +136,12 @@ export default function LiquidarColaborador() {
 
   const [preview, setPreview] = useState<PreviewLiquidacion | null>(null);
   const [resumen, setResumen] = useState<ResumenTrabajo | null>(null);
+  /**
+   * Detalle de cosechas del colaborador según el bundle de Validar Cosecha
+   * (§4.1) — la misma tabla del paso 3 del wizard, filtrada a esta persona.
+   * `null` = sin datos (sin cosechas, o el bundle falló; la tabla no se pinta).
+   */
+  const [detalleCosechas, setDetalleCosechas] = useState<ValidacionCosechaDetalleColaborador | null>(null);
   const [conceptos, setConceptos] = useState<NominaConcepto[]>([]);
   const [cargando, setCargando] = useState(true);
 
@@ -216,6 +223,29 @@ export default function LiquidarColaborador() {
       .finally(() => setCargando(false));
   }, [nominaEmpleadoId]);
 
+  // Detalle de cosechas de esta persona desde el bundle de Validar Cosecha
+  // (§4.1). Silencioso: si el bundle falla (permiso, backend viejo) o la
+  // persona no tiene cosechas, la tabla simplemente no se pinta.
+  useEffect(() => {
+    const nid = nominaId ? parseInt(nominaId) : null;
+    if (!nid || !preview) return;
+    const esOperario = preview.empleado.tercero != null;
+    let vigente = true;
+    nominaApi
+      .validarCosecha(nid)
+      .then((res) => {
+        if (!vigente) return;
+        const match = (res.data.detalle_por_colaborador ?? []).find(
+          (d) =>
+            d.colaborador_id === preview.empleado.id
+            && d.tipo === (esOperario ? 'OPERARIO' : 'EMPLEADO'),
+        );
+        setDetalleCosechas(match && (match.cosechas?.length ?? 0) > 0 ? match : null);
+      })
+      .catch(() => { /* sin tabla — no bloquear la liquidación */ });
+    return () => { vigente = false; };
+  }, [nominaId, preview]);
+
   // Re-fetch preview cuando cambian días trabajados
   const refetchPreview = async () => {
     if (!nominaEmpleadoId) return;
@@ -227,6 +257,36 @@ export default function LiquidarColaborador() {
       toast.error(e.message ?? 'Error al recalcular');
     }
   };
+
+  /**
+   * Promedio kg/gajo del LOTE por cosecha, desde el bundle de Validar
+   * Cosecha (§4.1), indexado por fecha|lote|sublote para cruzarlo con las
+   * filas del Resumen de Trabajo. Es el promedio con el que se calcula el
+   * jornal (racimos empleado × promedio × precio).
+   */
+  const promsCosecha = useMemo(() => {
+    const map = new Map<string, { efectivo: number | null }>();
+    for (const c of detalleCosechas?.cosechas ?? []) {
+      const key = `${(c.fecha ?? '').slice(0, 10)}|${c.lote ?? ''}|${c.sublote ?? ''}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          efectivo: c.promedio_efectivo != null ? Number(c.promedio_efectivo) : null,
+        });
+      }
+    }
+    return map;
+  }, [detalleCosechas]);
+
+  /** Normaliza la fecha de una fila del resumen (dd/mm/yyyy o ISO) a YYYY-MM-DD. */
+  const normFecha = (raw?: string): string => {
+    if (!raw) return '';
+    const m = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+    return raw.slice(0, 10);
+  };
+
+  const promDeFila = (f: { fecha?: string; lote?: string | null; sublote?: string | null }) =>
+    promsCosecha.get(`${normFecha(f.fecha)}|${f.lote ?? ''}|${f.sublote ?? ''}`);
 
   // Cálculo en vivo del neto incluyendo bonificaciones/deducciones locales
   const totales = useMemo(() => {
@@ -576,7 +636,31 @@ export default function LiquidarColaborador() {
                               Racimos empleado
                             </th>
                           )}
-                          {cat.filas.some((f) => f.peso_kg !== undefined) && (
+                          {/* Promedio del bundle Validar Cosecha (§4.1) —
+                              solo en la categoría cosecha y si el bundle
+                              cargó. Es el kg/gajo del lote con el que se
+                              calcula el jornal. */}
+                          {key === 'cosecha' && promsCosecha.size > 0 && (
+                            <th
+                              className="text-right p-2 font-semibold text-muted-foreground"
+                              title="Promedio kg/gajo del lote para toda la quincena (con este se calcula el jornal)"
+                            >
+                              Prom. lote
+                            </th>
+                          )}
+                          {/* Precio/kg del lote (el tercer factor del jornal:
+                              racimos × promedio × precio). Reemplaza al peso
+                              estimado, que confundía porque usa el promedio
+                              del viaje y la cuadrilla completa. Fallback a
+                              Peso si el backend no manda precio_kg. */}
+                          {cat.filas.some((f) => f.precio_kg != null) ? (
+                            <th
+                              className="text-right p-2 font-semibold text-muted-foreground"
+                              title="Precio pactado por kg para el lote — con este se calcula el jornal"
+                            >
+                              Precio/kg
+                            </th>
+                          ) : cat.filas.some((f) => f.peso_kg !== undefined) && (
                             <th className="text-right p-2 font-semibold text-muted-foreground">Peso (kg)</th>
                           )}
                           {cat.filas.some((f) => f.palmas !== undefined) && (
@@ -656,7 +740,20 @@ export default function LiquidarColaborador() {
                                   : '-'}
                               </td>
                             )}
-                            {cat.filas.some((x) => x.peso_kg !== undefined) && (
+                            {key === 'cosecha' && promsCosecha.size > 0 && (
+                              <td className="p-2 text-right text-muted-foreground">
+                                {promDeFila(f)?.efectivo != null
+                                  ? promDeFila(f)!.efectivo!.toFixed(4)
+                                  : '—'}
+                              </td>
+                            )}
+                            {cat.filas.some((x) => x.precio_kg != null) ? (
+                              <td className="p-2 text-right">
+                                {f.precio_kg != null
+                                  ? `$${Number(f.precio_kg).toLocaleString('es-CO')}`
+                                  : '-'}
+                              </td>
+                            ) : cat.filas.some((x) => x.peso_kg !== undefined) && (
                               <td className="p-2 text-right">{f.peso_kg ?? '-'}</td>
                             )}
                             {cat.filas.some((x) => x.palmas !== undefined) && (
