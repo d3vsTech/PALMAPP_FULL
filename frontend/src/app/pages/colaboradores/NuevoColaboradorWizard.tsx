@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router';
 
@@ -237,6 +237,12 @@ export default function NuevoColaboradorWizard() {
 
   // Documentos (solo edición)
   const [documentos, setDocumentos] = useState<any[]>([]);
+  // Fecha de retiro que llegó del backend al hidratar (edición). Distingue
+  // una finalización NUEVA (motivo + soporte obligatorios) de re-guardar un
+  // colaborador que ya tenía la finalización registrada con su soporte en el
+  // expediente (no se exige re-adjuntar el PDF).
+  const fechaRetiroOriginalRef = useRef<string>('');
+  const motivoRetiroOriginalRef = useRef<string>('');
   // Soporte documental de finalización de contrato (§4). Se guarda el File
   // y al guardar viaja como `soporte_finalizacion` en multipart POST+_method=PUT.
   const [soporteFinalizacion, setSoporteFinalizacion] = useState<{
@@ -365,6 +371,8 @@ export default function NuevoColaboradorWizard() {
             otro: 'Otro',
           };
           const motivoGuardado = d.motivo_retiro ?? '';
+          fechaRetiroOriginalRef.current = toDateInput(d.fecha_retiro);
+          motivoRetiroOriginalRef.current = MOTIVOS_LEGACY[motivoGuardado] ?? motivoGuardado;
           const modalidadPagoForm =
             d.modalidad_pago === 'PRODUCCION' ? 'VARIABLE' :
             (d.modalidad_pago ?? 'FIJO');
@@ -735,11 +743,22 @@ export default function NuevoColaboradorWizard() {
       if (!formData.fechaContratacion)      { toast.error('La fecha de ingreso es obligatoria'); setEtapaActual(4); return; }
     }
 
-    // Finalización de contrato (§4 API_COLABORADORES): si hay fecha de
-    // finalización, el motivo es obligatorio. El backend igual responde 422,
-    // pero validamos acá para ubicar al usuario en la etapa correcta.
+    // Finalización de contrato (§4 API_COLABORADORES): con fecha de
+    // finalización, el motivo es obligatorio siempre, y el soporte PDF es
+    // obligatorio cuando la finalización es NUEVA o cambió de fecha. Si la
+    // finalización ya estaba guardada con su soporte en el expediente, no se
+    // exige re-adjuntar al re-guardar.
     if (formData.fechaFinalizacion && !formData.motivoFinalizacion) {
       toast.error('Registra el motivo de la finalización de contrato');
+      setEtapaActual(3);
+      return;
+    }
+    const finalizacionCambio = !!formData.fechaFinalizacion && (
+      formData.fechaFinalizacion !== fechaRetiroOriginalRef.current
+      || formData.motivoFinalizacion !== motivoRetiroOriginalRef.current
+    );
+    if (finalizacionCambio && !soporteFinalizacion) {
+      toast.error('Adjunta el soporte documental (PDF) de la finalización');
       setEtapaActual(3);
       return;
     }
@@ -785,11 +804,14 @@ export default function NuevoColaboradorWizard() {
     if (formData.segundoApellido.trim())           body.segundo_apellido             = formData.segundoApellido.trim();
     if (formData.lugarExpedicion.trim())           body.lugar_expedicion             = formData.lugarExpedicion.trim();
     if (formData.predioAsignado)                   body.predio_id                    = Number(formData.predioAsignado);
-    if (formData.fechaFinalizacion)                body.fecha_retiro                 = formData.fechaFinalizacion;
-    // Motivo de la finalización — solo si hay fecha. Backend lo ignora si aún
-    // no lo soporta; cuando lo soporte, el UI ya lo está mandando.
-    if (formData.fechaFinalizacion && formData.motivoFinalizacion) {
-      body.motivo_retiro = formData.motivoFinalizacion;
+    if (formData.fechaFinalizacion) {
+      body.fecha_retiro = formData.fechaFinalizacion;
+      if (formData.motivoFinalizacion) body.motivo_retiro = formData.motivoFinalizacion;
+    } else if (isEditMode && fechaRetiroOriginalRef.current) {
+      // §4 — El colaborador TENÍA fecha guardada y el usuario la borró:
+      // hay que enviar `null` explícito para limpiarla (reingreso). Omitir
+      // el campo hacía que el backend conservara la fecha vieja en silencio.
+      body.fecha_retiro = null;
     }
     if (formData.eps.trim())                       body.eps                          = formData.eps.trim();
     if (formData.arl.trim())                       body.arl                          = formData.arl.trim();
@@ -835,6 +857,11 @@ export default function NuevoColaboradorWizard() {
           const res = await colaboradoresApi.editar(Number(id), body);
           toast.success(res.message ?? 'Colaborador actualizado correctamente');
         }
+        // Sincronizar la referencia con lo que quedó guardado: si el usuario
+        // sigue en el wizard y vuelve a guardar sin tocar la finalización,
+        // no se le exige re-adjuntar el soporte.
+        fechaRetiroOriginalRef.current = formData.fechaFinalizacion;
+        motivoRetiroOriginalRef.current = formData.fechaFinalizacion ? formData.motivoFinalizacion : '';
         colaboradorId = Number(id);
       } else {
         const res = await colaboradoresApi.crear(body as unknown as CrearColaboradorPayload);
@@ -855,7 +882,18 @@ export default function NuevoColaboradorWizard() {
       }
       navigate('/colaboradores');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error al guardar');
+      const e = err as { status?: number; message?: string };
+      // 413 / PostTooLargeException: el límite de PHP en el servidor
+      // (post_max_size) es menor al archivo enviado. El tope real lo
+      // define el servidor, no este formulario.
+      if (e?.status === 413 || (e?.message ?? '').includes('POST data is too large')) {
+        toast.error(
+          'El archivo supera el límite del servidor. Intenta con un PDF más liviano o pide al administrador ampliar el límite de subida.',
+          { duration: 8000 },
+        );
+      } else {
+        toast.error(err instanceof Error ? err.message : 'Error al guardar');
+      }
     } finally {
       setGuardando(false);
     }
@@ -1368,7 +1406,7 @@ export default function NuevoColaboradorWizard() {
                           <span className="text-destructive text-xs font-bold">!</span>
                         </div>
                         <p className="text-xs text-destructive font-medium">
-                          Para guardar con esta fecha de finalización debes registrar el motivo. El soporte documental (PDF) es opcional pero recomendado.
+                          Para guardar con esta fecha de finalización debes registrar el motivo y adjuntar el soporte documental (PDF).
                         </p>
                       </div>
 
