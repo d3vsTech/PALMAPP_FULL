@@ -44,11 +44,18 @@ export const tenantStorage = {
 
 // ─── Request builder ──────────────────────────────────────────────────────────
 
-function buildHeaders(requiresTenant = false): Record<string, string> {
+/**
+ * Con FormData NO se fija Content-Type: el navegador lo pone solo con el
+ * boundary multipart. Forzarlo a application/json (bug histórico de
+ * postForm/putForm) hacía que el backend no pudiera parsear el archivo.
+ */
+function buildHeaders(requiresTenant = false, isFormData = false): Record<string, string> {
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
     Accept: 'application/json',
   };
+  if (!isFormData) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   const token = tokenStorage.get();
   if (token) {
@@ -63,6 +70,19 @@ function buildHeaders(requiresTenant = false): Record<string, string> {
   }
 
   return headers;
+}
+
+/**
+ * Limpieza COMPLETA de la sesión local. Debe borrar las mismas claves que
+ * `auth.clearSession()` — si solo se borra el token, la UI sigue leyendo
+ * permisos y módulos viejos de localStorage para decidir qué renderizar.
+ */
+function clearLocalSession(): void {
+  tokenStorage.remove();
+  tenantStorage.remove();
+  localStorage.removeItem('palmapp_user');
+  localStorage.removeItem('palmapp_permisos');
+  localStorage.removeItem('palmapp_modulos');
 }
 
 async function parseError(response: Response): Promise<ApiError> {
@@ -81,19 +101,28 @@ async function parseError(response: Response): Promise<ApiError> {
 
 // ─── Core request ─────────────────────────────────────────────────────────────
 
-async function request<T>(
+/**
+ * Núcleo compartido: hace el fetch con headers de auth, y ante un 401 por
+ * token vencido intenta refresh + un reintento. TODAS las variantes (json,
+ * blob, form) pasan por acá para tener el mismo manejo de sesión.
+ */
+async function rawRequest(
   path: string,
   options: RequestInit & { requiresTenant?: boolean } = {}
-): Promise<T> {
+): Promise<Response> {
   const { requiresTenant = false, ...fetchOptions } = options;
+  const isFormData = fetchOptions.body instanceof FormData;
 
-  const response = await fetch(`${BASE_URL}${path}`, {
-    ...fetchOptions,
-    headers: {
-      ...buildHeaders(requiresTenant),
-      ...(fetchOptions.headers ?? {}),
-    },
-  });
+  const doFetch = () =>
+    fetch(`${BASE_URL}${path}`, {
+      ...fetchOptions,
+      headers: {
+        ...buildHeaders(requiresTenant, isFormData),
+        ...(fetchOptions.headers ?? {}),
+      },
+    });
+
+  const response = await doFetch();
 
   // Token expirado → intentar refresh automático
   if (response.status === 401) {
@@ -102,36 +131,37 @@ async function request<T>(
       try {
         await refreshToken();
         // Reintentar con nuevo token
-        const retryResponse = await fetch(`${BASE_URL}${path}`, {
-          ...fetchOptions,
-          headers: {
-            ...buildHeaders(requiresTenant),
-            ...(fetchOptions.headers ?? {}),
-          },
-        });
+        const retryResponse = await doFetch();
         if (!retryResponse.ok) throw await parseError(retryResponse);
-        return retryResponse.json() as Promise<T>;
+        return retryResponse;
       } catch {
         // Refresh falló: limpia sesión y avisa al árbol React que navegue al
         // login. NO usamos `window.location.href` (causa full page reload, pierde
         // estado de React Router). El AuthContext escucha este evento y llama
         // a `navigate('/login', { replace: true })`.
-        tokenStorage.remove();
-        tenantStorage.remove();
+        clearLocalSession();
         window.dispatchEvent(new CustomEvent('palmapp:auth:logout', {
           detail: { reason: 'refresh_failed' },
         }));
         throw err;
       }
     }
-    tokenStorage.remove();
-    tenantStorage.remove();
+    clearLocalSession();
     throw err;
   }
 
   if (!response.ok) {
     throw await parseError(response);
   }
+
+  return response;
+}
+
+async function request<T>(
+  path: string,
+  options: RequestInit & { requiresTenant?: boolean } = {}
+): Promise<T> {
+  const response = await rawRequest(path, options);
 
   // 204 No Content
   if (response.status === 204) return undefined as unknown as T;
@@ -184,45 +214,18 @@ export const apiClient = {
   delete: <T>(path: string, requiresTenant = false) =>
     request<T>(path, { method: 'DELETE', requiresTenant }),
 
+  // Pasa por rawRequest para tener el mismo refresh de token que el resto —
+  // las descargas de PDF son flujos largos donde el token vence más seguido.
   getBlob: async (path: string, requiresTenant = false): Promise<Blob> => {
-    const response = await fetch(`${BASE_URL}${path}`, {
-      method: 'GET',
-      headers: buildHeaders(requiresTenant),
-    });
-    if (!response.ok) throw await parseError(response);
+    const response = await rawRequest(path, { method: 'GET', requiresTenant });
     return response.blob();
   },
 
-  /** Multipart/form-data (ej: subir logo) */
-  postForm: <T>(path: string, formData: FormData, requiresTenant = false) => {
-    const headers: Record<string, string> = { Accept: 'application/json' };
-    const token = tokenStorage.get();
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    if (requiresTenant) {
-      const tenantId = tenantStorage.get();
-      if (tenantId) headers['X-Tenant-Id'] = String(tenantId);
-    }
-    return request<T>(path, {
-      method: 'POST',
-      headers,
-      body: formData,
-      requiresTenant,
-    });
-  },
+  /** Multipart/form-data (ej: subir logo). El Content-Type con boundary lo
+   *  pone el navegador — rawRequest lo omite al detectar FormData. */
+  postForm: <T>(path: string, formData: FormData, requiresTenant = false) =>
+    request<T>(path, { method: 'POST', body: formData, requiresTenant }),
 
-  putForm: <T>(path: string, formData: FormData, requiresTenant = false) => {
-    const headers: Record<string, string> = { Accept: 'application/json' };
-    const token = tokenStorage.get();
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    if (requiresTenant) {
-      const tenantId = tenantStorage.get();
-      if (tenantId) headers['X-Tenant-Id'] = String(tenantId);
-    }
-    return request<T>(path, {
-      method: 'PUT',
-      headers,
-      body: formData,
-      requiresTenant,
-    });
-  },
+  putForm: <T>(path: string, formData: FormData, requiresTenant = false) =>
+    request<T>(path, { method: 'PUT', body: formData, requiresTenant }),
 };

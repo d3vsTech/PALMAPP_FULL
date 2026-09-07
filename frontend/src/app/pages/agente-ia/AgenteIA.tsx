@@ -166,7 +166,6 @@ export default function AgenteIA() {
                 }
                 return acc;
               }, []);
-              console.log(`[AgenteIA] Historial cargado (${lista.length} mensajes) sesión ${s.id}`);
               setMessages(lista);
               return;
             } catch (e) {

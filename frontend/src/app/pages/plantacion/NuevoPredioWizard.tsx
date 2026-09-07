@@ -2724,7 +2724,7 @@ function FormLote({
         <div className="space-y-2">
           <Label>Hectáreas Sembradas *</Label>
           <Input
-            type="number" step="0.001"
+            type="number"
             placeholder="0"
             min={0}
             max={haDisponibles}

@@ -519,11 +519,11 @@ export default function NuevoEditarViaje() {
                     disabled
                     className="bg-muted"
                   />
-                  <p className="text-xs text-muted-foreground">
-                    {esEdicion
-                      ? 'Remisión ya emitida para este viaje.'
-                      : 'Lo asigna el sistema al guardar. Vista previa según el prefijo elegido.'}
-                  </p>
+                  {esEdicion && (
+                    <p className="text-xs text-muted-foreground">
+                      Remisión ya emitida para este viaje.
+                    </p>
+                  )}
                 </div>
               </div>
 

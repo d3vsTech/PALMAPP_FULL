@@ -371,7 +371,7 @@ export default function NuevoConceptoNomina() {
                   <div className="relative">
                     <Input
                       id="porcEmpleado"
-                      type="number" step="0.001"
+                      type="number"
                       step="0.01"
                       placeholder="4.0"
                       value={formData.porcentajeEmpleado}
@@ -392,7 +392,7 @@ export default function NuevoConceptoNomina() {
                   <div className="relative">
                     <Input
                       id="porcEmpresa"
-                      type="number" step="0.001"
+                      type="number"
                       step="0.01"
                       placeholder="8.5"
                       value={formData.porcentajeEmpresa}

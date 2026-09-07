@@ -764,14 +764,6 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           : '';
         if (fechaNorm) setFecha(fechaNorm);
         if (p.hora_inicio) setInicioLabores(String(p.hora_inicio).slice(0, 5));
-        // DEBUG: qué llega del backend para la lluvia. Si el usuario
-        // reporta "aparece No aunque puse Sí", este log revela si el
-        // problema es de hidratación o de persistencia (backend).
-        console.log(
-          '[wizard-init][lluvia] hubo_lluvia:', p.hubo_lluvia,
-          '(typeof:', typeof p.hubo_lluvia + ')',
-          '· cantidad_lluvia:', p.cantidad_lluvia,
-        );
         // Hidratación defensiva: solo actualizamos el estado si el backend
         // envía un valor reconocible. Si `hubo_lluvia` viene undefined/null,
         // preservamos el estado local (evita falsos "No" cuando el bundle
@@ -1132,13 +1124,11 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         // (Si el filtro fecha_desde/fecha_hasta del API no es estricto, igual funciona.)
         const dup = await operacionesApi.listar({ per_page: 100 });
         const lista: any[] = (dup as any).data ?? [];
-        console.log('[planilla-dup] total planillas:', lista.length, 'fecha buscada:', fecha);
         const yaExiste = lista.some((p: any) => {
           const f = String(p.fecha ?? p.fecha_planilla ?? '').slice(0, 10);
           return f === fecha;
         });
         if (yaExiste) {
-          console.log('[planilla-dup] DUPLICADA — abriendo alerta');
           setAlertaDuplicada(true);
           return;
         }
@@ -1235,12 +1225,8 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         // en `planillaBundle` para que el useEffect de hidratación no la
         // sobrescriba con un valor viejo del backend.
         const fechaEnviada = fecha;
-        // DEBUG: logs de diagnóstico para el bug de "la fecha no se guarda".
-        // Abre la consola (F12) para ver qué se envía y qué responde el backend.
-        console.log('[PUT /operaciones/' + pid + '] body enviado:', headerBody);
         const resEditar = await operacionesApi.editar(pid, headerBody);
         const p: any = (resEditar as any)?.data ?? null;
-        console.log('[PUT /operaciones/' + pid + '] response.data.fecha:', p?.fecha, '(esperada:', fechaEnviada + ')');
         if (p) {
           setPlanillaBundle((prev) => ({ ...(prev ?? {}), ...p, fecha: fechaEnviada }));
         }

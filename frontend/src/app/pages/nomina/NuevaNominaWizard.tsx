@@ -2389,7 +2389,7 @@ export default function NuevaNominaWizard() {
                                             .map((c, idx) => {
                                             const { kgTrab, kgExtr, difKg } = ajustarKgCosecha(c);
                                             const gajosPend = c.gajos_pendientes_enviar ?? 0;
-                                            const hayCol = d.cosechas.some((x) => (x.gajos_pendientes_enviar ?? 0) > 0);
+                                            const hayCol = (d.cosechas ?? []).some((x) => (x.gajos_pendientes_enviar ?? 0) > 0);
                                             const tooltipAjuste = c.ajuste_gajos
                                               ? `${c.ajuste_gajos.accion} · ${c.ajuste_gajos.ajustado_por ?? 'sistema'}${c.ajuste_gajos.motivo ? ' — ' + c.ajuste_gajos.motivo : ''}`
                                               : undefined;
@@ -2440,7 +2440,7 @@ export default function NuevaNominaWizard() {
                                                 <td className={`p-2 text-right font-semibold ${c.diferencia_gajos === 0 ? 'text-muted-foreground' : c.diferencia_gajos > 0 ? 'text-amber-600' : 'text-primary'}`}>
                                                   {Math.abs(c.diferencia_gajos)}
                                                 </td>
-                                                {d.cosechas.some((x) => x.gajos_persona != null) && (
+                                                {(d.cosechas ?? []).some((x) => x.gajos_persona != null) && (
                                                   <td
                                                     className="p-2 text-right"
                                                     title={c.n_cuadrilla != null && c.n_cuadrilla > 1
@@ -2456,7 +2456,7 @@ export default function NuevaNominaWizard() {
                                                     icono según origen. Solo se renderiza cuando
                                                     la fila los trae; garantiza consistencia con
                                                     la cabecera de la tabla. */}
-                                                {d.cosechas.some((x) => x.promedio_efectivo != null || x.promedio_aplicado != null) && (
+                                                {(d.cosechas ?? []).some((x) => x.promedio_efectivo != null || x.promedio_aplicado != null) && (
                                                   <>
                                                     <td className="p-2 text-right text-muted-foreground">
                                                       {/* §9 API_NOMINA — promedios kg/gajo con 4 decimales

@@ -344,7 +344,7 @@ export function PromediosTab() {
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
                           <Input
-                            type="number" step="0.001"
+                            type="number"
                             step="0.1"
                             className="w-32 text-right"
                             value={valor || ''}

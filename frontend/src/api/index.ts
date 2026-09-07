@@ -22,7 +22,7 @@ export { usuariosApi } from './usuarios';
 export type { UsuarioTenant, CreateUsuarioPayload, UpdateUsuarioPayload } from './usuarios';
 
 export { colaboradoresApi } from './colaboradores';
-export type { Colaborador, ColaboradorPayload, Contrato } from './colaboradores';
+export type { Colaborador, CrearColaboradorPayload, ContratoVigenteColaborador } from './colaboradores';
 
 export { nominaApi, NominaErrorCodes } from './nomina';
 export type {

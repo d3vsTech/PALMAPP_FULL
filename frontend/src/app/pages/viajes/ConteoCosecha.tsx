@@ -371,9 +371,6 @@ export default function ConteoCosecha() {
     setCargandoOps(true);
     try {
       const r = await viajesApi.operacionesDisponibles();
-      // DEBUG: log de operaciones disponibles con conteo de cosechas.
-      // eslint-disable-next-line no-console
-      console.log('[DEBUG] Operaciones disponibles:', r.data);
       setOperaciones(r.data ?? []);
     } catch { /* ignore */ }
     finally { setCargandoOps(false); }
@@ -389,16 +386,6 @@ export default function ConteoCosecha() {
     setCargandoCosechas(true);
     viajesApi.cosechasLibresDeOperacion(Number(cosechaEnEdicion.planillaId))
       .then(r => {
-        // DEBUG: log del backend para verificar `gajos_pendientes_enviar`.
-        // Si el backend está colapsando el pending a 0, aparecerá aquí.
-        // eslint-disable-next-line no-console
-        console.log('[DEBUG] Cosechas de la planilla:', r.data?.map(c => ({
-          id: c.id,
-          lote: c.lote?.nombre,
-          gajos_reportados: c.gajos_reportados,
-          gajos_reconteo: c.gajos_reconteo,
-          gajos_pendientes_enviar: c.gajos_pendientes_enviar,
-        })));
         setCosechasLibres(r.data ?? []);
       })
       .catch(() => setCosechasLibres([]))

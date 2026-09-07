@@ -246,8 +246,6 @@ export default function DetalleViaje() {
       setErrorOCR(final.error_mensaje ?? null);
 
       const dx: Record<string, any> = final.datos_extraidos ?? {};
-      // Debug visible en consola para diagnosticar campos faltantes
-      console.log('[OCR] datos_extraidos:', dx);
 
       // Helpers: si el API devuelve algo válido lo usa; si no, conserva el valor previo.
       const pickStr = (apiVal: any, prev: string): string => {

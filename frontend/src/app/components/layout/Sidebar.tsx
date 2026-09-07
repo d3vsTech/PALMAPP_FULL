@@ -23,7 +23,7 @@ import {
 interface NavItem {
   label: string;
   href: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   roles: UserRole[];
   permiso?: string;
 }

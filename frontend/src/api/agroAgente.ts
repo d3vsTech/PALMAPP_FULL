@@ -173,7 +173,6 @@ export const agroAgenteApi = {
     const r = await agroFetch<any>('/chat/sessions');
     // Puede venir como array directo o envuelto en {data: [...]}
     const lista = Array.isArray(r) ? r : (r?.data ?? []);
-    console.log('[AgroAgente] listarSesiones:', lista);
     return lista;
   },
 
@@ -185,7 +184,6 @@ export const agroAgenteApi = {
     });
     // Puede venir como objeto directo o envuelto en {data: {...}}
     const sesion = r?.data ?? r;
-    console.log('[AgroAgente] crearSesion respuesta:', r, '→ extraída:', sesion);
     if (!sesion || typeof sesion.id !== 'number') {
       throw new Error('El backend devolvió una conversación con formato inesperado');
     }
@@ -196,19 +194,16 @@ export const agroAgenteApi = {
   cargarMensajes: async (sessionId: number): Promise<ChatMessage[]> => {
     const r = await agroFetch<any>(`/chat/sessions/${sessionId}/messages`);
     const lista = Array.isArray(r) ? r : (r?.data ?? []);
-    console.log(`[AgroAgente] cargarMensajes(${sessionId}):`, lista);
     return lista;
   },
 
   /** POST /chat/sessions/{id}/messages — envía un mensaje; devuelve user + assistant. */
   enviarMensaje: async (sessionId: number, content: string): Promise<SendMessageResponse> => {
-    console.log(`[AgroAgente] enviarMensaje → sesión ${sessionId}:`, content);
     const r = await agroFetch<any>(`/chat/sessions/${sessionId}/messages`, {
       method: 'POST',
       body: JSON.stringify({ content }),
     });
     const resp: SendMessageResponse = r?.data ?? r;
-    console.log('[AgroAgente] enviarMensaje respuesta:', resp);
     return resp;
   },
 
@@ -221,7 +216,6 @@ export const agroAgenteApi = {
    * pero con attachment_url + mime poblados en user_message.
    */
   enviarAdjunto: async (sessionId: number, file: File, caption?: string): Promise<SendMessageResponse> => {
-    console.log(`[AgroAgente] enviarAdjunto → sesión ${sessionId}:`, file.name, file.type, caption);
     const fd = new FormData();
     fd.append('file', file);
     if (caption && caption.trim()) fd.append('content', caption.trim());
@@ -231,7 +225,6 @@ export const agroAgenteApi = {
       body: fd,
     });
     const resp: SendMessageResponse = r?.data ?? r;
-    console.log('[AgroAgente] enviarAdjunto respuesta:', resp);
     return resp;
   },
 
