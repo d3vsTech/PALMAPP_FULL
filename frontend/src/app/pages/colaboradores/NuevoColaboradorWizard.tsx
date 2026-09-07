@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-// @ts-expect-error react-dom no expone tipos a través del export "react-dom" en este setup
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router';
 
@@ -58,7 +57,7 @@ import {
   Eye,
 } from 'lucide-react';
 import { Switch } from '../../components/ui/switch';
-import { colaboradoresApi, buildAvatarUrl } from '../../../api/colaboradores';
+import { colaboradoresApi, buildAvatarUrl, type CrearColaboradorPayload } from '../../../api/colaboradores';
 import { fetchConToken } from '../../../api/request';
 import { configuracionApi } from '../../../api/configuracion';
 import { toast } from 'sonner';
@@ -245,13 +244,13 @@ export default function NuevoColaboradorWizard() {
 
   // Documentos (solo edición)
   const [documentos, setDocumentos] = useState<any[]>([]);
-  // Soporte documental de finalización de contrato — solo-cliente por ahora.
+  // Soporte documental de finalización de contrato (§4). Se guarda el File
+  // y al guardar viaja como `soporte_finalizacion` en multipart POST+_method=PUT.
   const [soporteFinalizacion, setSoporteFinalizacion] = useState<{
+    file: File;
     nombre: string;
-    tipo: string;
     fecha: string;
     tamaño: string;
-    url: string;
   } | null>(null);
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState(false);
@@ -360,7 +359,19 @@ export default function NuevoColaboradorWizard() {
             setAvatarUrlRemoto(fullUrl);
             setImagePreview(fullUrl);
           }
-          const predioId = d.predio?.id ?? d.predio_id ?? null;
+          const predioId = d.predio?.id ?? null;
+          // Motivos guardados por versiones viejas del wizard como clave
+          // interna → texto legible actual, para que el Select los muestre.
+          const MOTIVOS_LEGACY: Record<string, string> = {
+            renuncia: 'Renuncia voluntaria',
+            despido_justa: 'Despido con justa causa',
+            despido_sin_justa: 'Despido sin justa causa',
+            mutuo_acuerdo: 'Mutuo acuerdo',
+            vencimiento: 'Vencimiento de contrato',
+            abandono: 'Abandono de cargo',
+            otro: 'Otro',
+          };
+          const motivoGuardado = d.motivo_retiro ?? '';
           const modalidadPagoForm =
             d.modalidad_pago === 'PRODUCCION' ? 'VARIABLE' :
             (d.modalidad_pago ?? 'FIJO');
@@ -380,18 +391,13 @@ export default function NuevoColaboradorWizard() {
             predioAsignado: predioId ? String(predioId) : '',
             modalidadPago: modalidadPagoForm,
             salarioBase: toNumber(d.salario_base),
-            // Subsidio de transporte: el doc API_COLABORADORES dice que el
-            // campo se llama `subsidio_transporte` (boolean, default true).
-            // Aceptamos también el legacy `aplica_subsidio_transporte` por si
-            // algún backend viejo sigue mandándolo con ese nombre.
+            // §3 API_COLABORADORES — `subsidio_transporte` boolean, default true.
             aplicaSubsidioTransporte: d.subsidio_transporte != null
               ? !!d.subsidio_transporte
-              : (d.aplica_subsidio_transporte != null
-                ? !!d.aplica_subsidio_transporte
-                : false),
+              : true,
             fechaContratacion: toDateInput(d.fecha_ingreso),
             fechaFinalizacion: toDateInput(d.fecha_retiro),
-            motivoFinalizacion: (d as any).motivo_retiro ?? '',
+            motivoFinalizacion: MOTIVOS_LEGACY[motivoGuardado] ?? motivoGuardado,
             eps: d.eps ?? '',
             arl: d.arl ?? '',
             fondoPension: d.fondo_pension ?? '',
@@ -736,6 +742,15 @@ export default function NuevoColaboradorWizard() {
       if (!formData.fechaContratacion)      { toast.error('La fecha de ingreso es obligatoria'); setEtapaActual(4); return; }
     }
 
+    // Finalización de contrato (§4 API_COLABORADORES): si hay fecha de
+    // finalización, el motivo es obligatorio. El backend igual responde 422,
+    // pero validamos acá para ubicar al usuario en la etapa correcta.
+    if (formData.fechaFinalizacion && !formData.motivoFinalizacion) {
+      toast.error('Registra el motivo de la finalización de contrato');
+      setEtapaActual(3);
+      return;
+    }
+
     // Para CREAR: body con campos obligatorios fijos
     // Para EDITAR: body con solo los campos que tienen valor (todos opcionales según API)
     const body: Record<string, unknown> = {};
@@ -755,11 +770,7 @@ export default function NuevoColaboradorWizard() {
       body.salario_base               = formData.salarioBase > 0 ? formData.salarioBase : 0;
       body.modalidad_pago             = formData.modalidadPago === 'VARIABLE' ? 'PRODUCCION' : formData.modalidadPago;
       body.fecha_ingreso              = formData.fechaContratacion;
-      // Subsidio de transporte: enviamos el campo nombre actual del doc
-      // (`subsidio_transporte`) y también el legacy por si el backend aún no
-      // está actualizado. El que no exista, lo ignora silenciosamente.
       body.subsidio_transporte        = formData.aplicaSubsidioTransporte;
-      body.aplica_subsidio_transporte = formData.aplicaSubsidioTransporte;
     } else {
       // En edición enviar solo los que tienen valor
       if (formData.primerNombre.trim())    body.primer_nombre              = formData.primerNombre.trim();
@@ -773,9 +784,7 @@ export default function NuevoColaboradorWizard() {
       if (formData.modalidadPago)          body.modalidad_pago             = formData.modalidadPago === 'VARIABLE' ? 'PRODUCCION' : formData.modalidadPago;
       if (formData.fechaContratacion)      body.fecha_ingreso              = formData.fechaContratacion;
       // Subsidio: en edición lo mandamos siempre (es booleano, no string vacío).
-      // Doble nombre por compat con backends que aún no migraron.
       body.subsidio_transporte             = formData.aplicaSubsidioTransporte;
-      body.aplica_subsidio_transporte      = formData.aplicaSubsidioTransporte;
       body.estado = formData.estado;
     }
 
@@ -812,11 +821,30 @@ export default function NuevoColaboradorWizard() {
     try {
       let colaboradorId: number | null = null;
       if (isEditMode && id) {
-        const res = await colaboradoresApi.editar(Number(id), body);
-        toast.success(res.message ?? 'Colaborador actualizado correctamente');
+        // §4 — Con soporte de finalización adjunto, PHP solo procesa archivos
+        // en POST: se envía multipart con `_method=PUT` y Laravel lo enruta
+        // al mismo endpoint de edición. Sin archivo, PUT JSON de siempre.
+        if (soporteFinalizacion?.file && formData.fechaFinalizacion) {
+          const fd = new FormData();
+          fd.append('_method', 'PUT');
+          for (const [k, v] of Object.entries(body)) {
+            if (v === undefined || v === null) continue;
+            // Booleanos como "1"/"0" (contrato multipart del doc §4).
+            fd.append(k, typeof v === 'boolean' ? (v ? '1' : '0') : String(v));
+          }
+          fd.append('soporte_finalizacion', soporteFinalizacion.file);
+          const res = await colaboradoresApi.editarConSoporte(Number(id), fd);
+          toast.success(res.message ?? 'Colaborador actualizado correctamente');
+          if (res.documento_finalizacion) {
+            toast.success('Soporte de finalización guardado en el expediente');
+          }
+        } else {
+          const res = await colaboradoresApi.editar(Number(id), body);
+          toast.success(res.message ?? 'Colaborador actualizado correctamente');
+        }
         colaboradorId = Number(id);
       } else {
-        const res = await colaboradoresApi.crear(body);
+        const res = await colaboradoresApi.crear(body as unknown as CrearColaboradorPayload);
         toast.success(res.message ?? 'Colaborador creado correctamente');
         colaboradorId = res.data?.id ?? null;
         // Colaborador creado: ya no necesitamos el borrador local
@@ -1347,7 +1375,7 @@ export default function NuevoColaboradorWizard() {
                           <span className="text-destructive text-xs font-bold">!</span>
                         </div>
                         <p className="text-xs text-destructive font-medium">
-                          Para guardar con esta fecha de finalización debes registrar el motivo y adjuntar el soporte documental.
+                          Para guardar con esta fecha de finalización debes registrar el motivo. El soporte documental (PDF) es opcional pero recomendado.
                         </p>
                       </div>
 
@@ -1362,14 +1390,18 @@ export default function NuevoColaboradorWizard() {
                           <SelectTrigger id="motivoFinalizacion">
                             <SelectValue placeholder="Selecciona el motivo..." />
                           </SelectTrigger>
+                          {/* §4 — El backend guarda el motivo tal cual (texto
+                              libre) y lo reutiliza como observación del soporte
+                              en el expediente. Por eso el value es el texto
+                              legible, no una clave interna. */}
                           <SelectContent>
-                            <SelectItem value="renuncia">Renuncia voluntaria</SelectItem>
-                            <SelectItem value="despido_justa">Despido con justa causa</SelectItem>
-                            <SelectItem value="despido_sin_justa">Despido sin justa causa</SelectItem>
-                            <SelectItem value="mutuo_acuerdo">Mutuo acuerdo</SelectItem>
-                            <SelectItem value="vencimiento">Vencimiento de contrato</SelectItem>
-                            <SelectItem value="abandono">Abandono de cargo</SelectItem>
-                            <SelectItem value="otro">Otro</SelectItem>
+                            <SelectItem value="Renuncia voluntaria">Renuncia voluntaria</SelectItem>
+                            <SelectItem value="Despido con justa causa">Despido con justa causa</SelectItem>
+                            <SelectItem value="Despido sin justa causa">Despido sin justa causa</SelectItem>
+                            <SelectItem value="Mutuo acuerdo">Mutuo acuerdo</SelectItem>
+                            <SelectItem value="Vencimiento de contrato">Vencimiento de contrato</SelectItem>
+                            <SelectItem value="Abandono de cargo">Abandono de cargo</SelectItem>
+                            <SelectItem value="Otro">Otro</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -1404,24 +1436,24 @@ export default function NuevoColaboradorWizard() {
                               type="file"
                               id="upload-soporte-finalizacion"
                               className="hidden"
-                              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                              accept=".pdf,application/pdf"
                               onChange={(e) => {
                                 const file = e.target.files?.[0];
                                 if (!file) return;
+                                // §4 — el backend solo acepta PDF, máx 10 MB.
+                                if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+                                  toast.error('El soporte debe ser un archivo PDF');
+                                  return;
+                                }
                                 if (file.size > 10 * 1024 * 1024) {
                                   toast.error('El archivo supera los 10 MB');
                                   return;
                                 }
                                 setSoporteFinalizacion({
+                                  file,
                                   nombre: file.name,
-                                  tipo: file.type.includes('pdf')
-                                    ? 'PDF'
-                                    : file.type.includes('image')
-                                      ? 'IMG'
-                                      : 'DOC',
                                   fecha: new Date().toISOString().split('T')[0],
                                   tamaño: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
-                                  url: URL.createObjectURL(file),
                                 });
                               }}
                             />
@@ -1433,7 +1465,7 @@ export default function NuevoColaboradorWizard() {
                               <Upload className="h-6 w-6 text-muted-foreground" />
                               <div className="text-center">
                                 <p className="text-sm font-medium text-foreground">Adjuntar soporte</p>
-                                <p className="text-xs text-muted-foreground">PDF, DOC o imagen (máx. 10 MB)</p>
+                                <p className="text-xs text-muted-foreground">Solo PDF (máx. 10 MB)</p>
                               </div>
                             </button>
                           </div>

@@ -53,6 +53,8 @@ export interface ContratoVigenteColaborador {
   empleado_id: number;
   fecha_inicio: string;
   fecha_terminacion: string | null;
+  /** Motivo con el que se terminó el contrato (copia de `motivo_retiro`). */
+  motivo_terminacion?: string | null;
   salario: string | number;
   estado_contrato: 'VIGENTE' | 'TERMINADO' | string;
   adjunto_path: string | null;
@@ -83,6 +85,12 @@ export interface Colaborador {
   modalidad_pago: ModalidadPago;
   fecha_ingreso: string;
   fecha_retiro: string | null;
+  /**
+   * Motivo de la finalización de contrato (§4). Obligatorio en el PUT cuando
+   * se registra una `fecha_retiro` nueva; el backend lo limpia si la fecha
+   * se envía `null`.
+   */
+  motivo_retiro?: string | null;
   predio?: PredioRefColaborador | null;
   // Contacto
   correo_electronico: string | null;
@@ -135,6 +143,8 @@ export interface CrearColaboradorPayload {
   predio_id?: number | null;
   fecha_ingreso: string;
   fecha_retiro?: string | null;
+  /** Obligatorio si `fecha_retiro` es nueva o cambió (§4). */
+  motivo_retiro?: string | null;
   eps?: string;
   fondo_pension?: string;
   fondo_cesantias?: string;
@@ -313,6 +323,31 @@ export const colaboradoresApi = {
   /** Edita un colaborador. Todos los campos opcionales + `estado`. */
   editar: (id: number, b: EditarColaboradorPayload) =>
     put<{ message: string; data: Colaborador }>(`/${id}`, b as unknown as Record<string, unknown>),
+
+  /**
+   * Edición con archivo adjunto (§4 — finalización de contrato con soporte).
+   * PHP solo procesa archivos en POST, así que se envía
+   * `POST /colaboradores/{id}` multipart con `_method=PUT` y Laravel lo
+   * enruta al mismo endpoint de edición.
+   *
+   * El FormData debe traer `_method=PUT`, los campos del formulario
+   * (booleanos como "1"/"0") y `soporte_finalizacion` (PDF, máx 10 MB),
+   * que solo se acepta junto con `fecha_retiro`.
+   *
+   * `documento_finalizacion` viene `null` cuando no se adjuntó soporte; si
+   * viene, ya quedó en el expediente como CONTRATACION_LABORAL /
+   * TERMINACION_DE_CONTRATO.
+   */
+  editarConSoporte: (id: number, formData: FormData) =>
+    requestConToken<{
+      message: string;
+      data: Colaborador;
+      documento_finalizacion?: DocumentoColaborador | null;
+    }>(
+      `/api/v1/tenant/colaboradores/${id}`,
+      { method: 'POST', body: formData },
+      tkn()
+    ),
 
   /**
    * Soft delete del colaborador. Mantiene historial (jornales, nómina, contratos, docs).
