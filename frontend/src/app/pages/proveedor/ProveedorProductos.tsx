@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
@@ -37,7 +37,12 @@ export default function ProveedorProductos() {
   const [productoAEliminar, setProductoAEliminar] = useState<ProductoProv | null>(null);
   const [eliminando, setEliminando] = useState(false);
 
+  /** Stale-guard: si cambian filtros/página con una petición en vuelo,
+   *  la respuesta vieja no debe pisar a la nueva. */
+  const reqIdRef = useRef(0);
+
   const cargar = () => {
+    const reqId = ++reqIdRef.current;
     setCargando(true);
     const params: ListarProductosParams = { page };
     if (busqueda.trim()) params.buscar = busqueda.trim();
@@ -45,12 +50,16 @@ export default function ProveedorProductos() {
     if (estadoFiltro !== 'todos') params.estado = estadoFiltro;
     proveedorApi.productos(params)
       .then((res) => {
+        if (reqId !== reqIdRef.current) return;
         setProductos(res.data);
         setMeta(res.meta);
         if (res.stats) setStats(res.stats);
       })
-      .catch((e: any) => toast.error(e?.message ?? 'Error al cargar productos'))
-      .finally(() => setCargando(false));
+      .catch((e: any) => {
+        if (reqId !== reqIdRef.current) return;
+        toast.error(e?.message ?? 'Error al cargar productos');
+      })
+      .finally(() => { if (reqId === reqIdRef.current) setCargando(false); });
   };
 
   useEffect(() => {

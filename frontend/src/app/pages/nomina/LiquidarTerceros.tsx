@@ -16,7 +16,7 @@
  * El pago se puede registrar aunque la nómina esté CERRADA — excepción
  * documentada al patrón "CERRADA = inmutable".
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import { sortByFirstName } from '../../utils/personas';
 import { Button } from '../../components/ui/button';
@@ -86,11 +86,17 @@ export default function LiquidarTerceros() {
   });
   const [registrandoPago, setRegistrandoPago] = useState(false);
 
+  // Guard contra respuestas fuera de orden si cambia la nómina rápido:
+  // solo la carga más reciente puede setear estado.
+  const reqIdRef = useRef(0);
+
   const cargar = async () => {
     if (!nominaId) return;
+    const reqId = ++reqIdRef.current;
     setCargando(true);
     try {
       const listRes = await nominaApi.terceros.listar(nominaId);
+      if (reqId !== reqIdRef.current) return;
       const actasResumen = listRes.data ?? [];
       setActas(actasResumen);
 
@@ -104,6 +110,7 @@ export default function LiquidarTerceros() {
             .catch(() => null),
         ),
       );
+      if (reqId !== reqIdRef.current) return;
       const map = new Map<number, NominaTerceroActaDetalle>();
       for (const par of detallesPares) {
         if (!par) continue;
@@ -111,12 +118,13 @@ export default function LiquidarTerceros() {
       }
       setDetalles(map);
     } catch (err) {
+      if (reqId !== reqIdRef.current) return;
       const e = err as ApiError;
       if (e.status !== 404) {
         toast.error(e.message ?? 'Error al cargar terceros');
       }
     } finally {
-      setCargando(false);
+      if (reqId === reqIdRef.current) setCargando(false);
     }
   };
 

@@ -11,7 +11,7 @@
  *  - PAGADO:  `cuotas_pagadas == num_cuotas` (motor lo marca al aplicar cuota)
  *  - CANCELADO: soft-delete manual
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { comparePersonaByFirstName } from '../../utils/personas';
 import { Button } from '../../components/ui/button';
@@ -67,7 +67,12 @@ export default function Prestamos() {
   const [prestamoAEliminar, setPrestamoAEliminar] = useState<Prestamo | null>(null);
   const [eliminando, setEliminando] = useState(false);
 
+  // Guard contra respuestas fuera de orden al cambiar el filtro rápido:
+  // solo la carga más reciente puede setear estado.
+  const reqIdRef = useRef(0);
+
   const cargar = () => {
+    const reqId = ++reqIdRef.current;
     setCargando(true);
     const estadoParam = filtroEstado !== 'todos' ? (filtroEstado as EstadoPrestamo) : undefined;
     Promise.all([
@@ -75,13 +80,17 @@ export default function Prestamos() {
       prestamosApi.indicadores().catch(() => null),
     ])
       .then(([listRes, indRes]) => {
+        if (reqId !== reqIdRef.current) return;
         setPrestamos(listRes.data ?? []);
         if (indRes) setIndicadores(indRes.data);
       })
       .catch((err: ApiError) => {
+        if (reqId !== reqIdRef.current) return;
         toast.error(err.message ?? 'Error al cargar préstamos');
       })
-      .finally(() => setCargando(false));
+      .finally(() => {
+        if (reqId === reqIdRef.current) setCargando(false);
+      });
   };
 
   useEffect(() => {

@@ -56,6 +56,24 @@ import { useAuth } from '../../contexts/AuthContext';
 import { operacionesApi, cosechasApi, jornalesApi, jornalGruposApi, horasExtraApi, ausenciasApi, selectsApi, OperacionesErrorCodes } from '../../../api/operaciones';
 import { configuracionApi, ConfiguracionErrorCodes } from '../../../api/configuracion';
 import { toast } from 'sonner';
+// Tipos y piezas del wizard — extraídos a la carpeta `planilla/` para partir
+// este archivo monolítico. Misma semántica, otro archivo.
+import {
+  ETAPAS,
+  type TrabajoCosecha,
+  type TrabajoPlateo,
+  type TrabajoPoda,
+  type TrabajoFertilizacion,
+  type TrabajoSanidad,
+  type TrabajoOtros,
+  type TrabajoAuxiliar,
+  type AusenteRegistro,
+  type HoraExtra,
+} from './planilla/tipos';
+import { ColaboradorChip } from './planilla/ColaboradorChip';
+import { EtapaLaboresFinca } from './planilla/EtapaLaboresFinca';
+import { EtapaHorasExtras } from './planilla/EtapaHorasExtras';
+import { EtapaFinalizacion } from './planilla/EtapaFinalizacion';
 
 // Los fertilizantes se cargan desde Configuración → Insumos vía el bundle
 // `selectsApi.wizardInit` (campo `parametricas.insumos`). Se persisten en
@@ -70,204 +88,8 @@ import { toast } from 'sonner';
 // `parametricas.motivos_ausencia` (se cargan en `motivosLista` al montar).
 // La opción "Otro" se añade en el Select para permitir texto libre.
 
-// Tipos de horas extras
-const tiposHoraExtra = [
-  'Hora Extra Diurna',
-  'Hora Extra Nocturna',
-  'Hora Extra Dominical',
-  'Hora Extra Festiva',
-  'Recargo Nocturno',
-  'Recargo Dominical',
-];
-
-interface TrabajoCosecha {
-  id: string;
-  colaboradores: string[];
-  lote: string;
-  sublote: string;
-  gajosRecogidos: number;
-  kilos: number;
-}
-
-/**
- * Campo común opcional para los 5 tipos de labores de palma con N miembros.
- *
- * Cuando la tarjeta representa un GRUPO persistido en el backend (`jornal_grupos`),
- * este campo lleva el id numérico del grupo (como string). Cuando la tarjeta
- * es un jornal INDIVIDUAL (1 colaborador), este campo es `undefined` y el `id`
- * apunta al `jornales.id` clásico.
- *
- * El wizard usa esta bandera para decidir qué endpoint llamar al persistir:
- *   - N === 1 sin grupoId  → jornalesApi (bulk POST / PUT individual)
- *   - N >= 2 sin grupoId   → jornalGruposApi.crear (nuevo grupo)
- *   - grupoId presente     → jornalGruposApi.editar (grupo existente)
- */
-interface TrabajoPlateo {
-  id: string;
-  grupoId?: string;
-  colaboradores: string[];
-  lote: string;
-  sublote: string;
-  numeroPalmas: number;
-}
-
-interface TrabajoPoda {
-  id: string;
-  grupoId?: string;
-  colaboradores: string[];
-  lote: string;
-  sublote: string;
-  numeroPalmas: number;
-}
-
-interface TrabajoFertilizacion {
-  id: string;
-  grupoId?: string;
-  colaboradores: string[];
-  lote: string;
-  sublote: string;
-  palmas: number;
-  tipoFertilizante: string;
-  otroFertilizante?: string;
-  cantidadGramos: number;
-}
-
-interface TrabajoSanidad {
-  id: string;
-  grupoId?: string;
-  colaboradores: string[];
-  lote: string;
-  sublote: string;
-  /** Nombre visible del trabajo. Snapshot para render. */
-  trabajoRealizado: string;
-  /**
-   * §4.7 LABORES_JORNALES — FK a `labor_actividades`. Se envía al backend
-   * cuando existe. `null` significa "texto libre" (histórico o el usuario
-   * escribió a mano) — el backend acepta ambos casos en SANIDAD.
-   */
-  laborActividadId?: number | null;
-}
-
-interface TrabajoOtros {
-  id: string;
-  grupoId?: string;
-  colaboradores: string[];
-  /**
-   * Referencia al catálogo unificado de Labores (categoria=PALMA, custom, tipo=null).
-   * El wizard envía `labor_id = laborOtrosRawId` al endpoint unificado.
-   */
-  laborOtrosKey?: string;          // ej. "palma-3"
-  laborOtrosRawId?: number;
-  /** Snapshot del `tipo_pago` de la labor — define qué campos pinta el form
-   *  (POR_PALMA → cantidad_palmas; JORNAL_FIJO → nombre_trabajo). */
-  laborOtrosTipoPago?: 'POR_PALMA' | 'JORNAL_FIJO';
-  nombre: string;
-  laborRealizada: string;
-  /**
-   * §4.7 LABORES_JORNALES — FK a `labor_actividades`. Ver nota en
-   * `TrabajoSanidad.laborActividadId`.
-   */
-  laborActividadId?: number | null;
-  /** Solo POR_PALMA — autofill desde sublote.cantidad_palmas, editable. */
-  numeroPalmas?: number;
-  /** Solo JORNAL_FIJO — opcional, texto libre para detallar el trabajo. */
-  nombreTrabajo?: string;
-  lote: string;
-  sublote: string;
-}
-
-interface TrabajoAuxiliar {
-  id: string;
-  nombre: string;
-  labor: string;
-  otraLabor?: string;
-  lugar: string;
-}
-
-interface AusenteRegistro {
-  id: string;
-  colaboradorId: string;
-  motivo: string;
-  otroMotivo?: string;
-  /**
-   * ID del motivo del catálogo (`motivos_ausencia.id`) — se guarda al cargar
-   * la planilla desde el backend para que el render pueda resolver el nombre
-   * contra `motivosMap` incluso si al momento del prefill ese mapa no estaba
-   * listo (evita mostrar texto libre viejo en lugar del nombre correcto).
-   */
-  motivoAusenciaId?: number;
-}
-
-interface HoraExtra {
-  id: string;
-  colaboradorId: string;
-  tipoHora: string;
-  numeroHoras: number;
-  observacion: string;
-}
-
-const ETAPAS = [
-  { numero: 1, nombre: 'Info. General' },
-  { numero: 2, nombre: 'Labores de Palma' },
-  { numero: 3, nombre: 'Labores de Finca' },
-  { numero: 4, nombre: 'Horas Extras' },
-  { numero: 5, nombre: 'Finalización' },
-];
-
 interface NuevaPlanillaWizardProps {
   modoLectura?: boolean;
-}
-
-/**
- * Chip con el nombre de un colaborador/operario para las tarjetas de palma.
- *
- * Estados visuales (§3.2 y §3.2.1):
- *  - Operario de tercero → fondo naranja, badge del nombre del tercero.
- *  - Empleado propio con `modalidad_pago = 'FIJO'` → badge extra gris
- *    "FIJO · $0" para dejar claro que su jornal cierra en cero (la nómina
- *    lo paga por salario_base).
- *  - Empleado propio con `modalidad_pago = 'PRODUCCION'` → chip neutro.
- */
-function ColaboradorChip({
-  col,
-}: {
-  col: {
-    id: string;
-    nombres: string;
-    apellidos: string;
-    terceroNombre?: string;
-    modalidad_pago?: 'FIJO' | 'PRODUCCION' | string;
-  };
-}) {
-  const esFijo = !col.terceroNombre && col.modalidad_pago === 'FIJO';
-  const primerApellido = (col.apellidos || '').split(' ')[0] ?? '';
-  const nombreCorto = `${col.nombres} ${primerApellido}`.trim();
-  return (
-    <Badge
-      variant="outline"
-      className={`text-xs ${
-        col.terceroNombre
-          ? 'bg-orange-50 text-orange-800 border-orange-300'
-          : esFijo
-            ? 'bg-muted/60 text-muted-foreground border-border'
-            : ''
-      }`}
-      title={
-        col.terceroNombre
-          ? `Tercero · ${col.terceroNombre}`
-          : esFijo
-            ? 'Empleado con salario fijo — su jornal diario queda en $0. La nómina lo paga por salario_base.'
-            : 'Colaborador interno · pago por producción'
-      }
-    >
-      {nombreCorto}
-      {col.terceroNombre && (
-        <span className="ml-1.5 text-[9px] font-semibold uppercase tracking-wide bg-orange-200/70 text-orange-900 rounded px-1 py-[1px]">
-          {col.terceroNombre}
-        </span>
-      )}
-    </Badge>
-  );
 }
 
 export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanillaWizardProps = {}) {
@@ -4230,552 +4052,58 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
               </Card>
             )}
 
-            {/* ETAPA 3: LABORES DE FINCA (AUXILIARES) */}
+            {/* ETAPA 3: LABORES DE FINCA (AUXILIARES) — extraída a planilla/EtapaLaboresFinca */}
             {etapaActual === 3 && (
-              <Card className="border-border">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle>Labores de Finca</CardTitle>
-                      <p className="text-sm text-muted-foreground">
-                        Reparaciones, mantenimiento y trabajos complementarios
-                      </p>
-                    </div>
-                    <Button
-                      onClick={agregarAuxiliar}
-                      className="gap-2"
-                      disabled={auxiliarEnEdicion !== null}
-                    >
-                      <Plus className="h-4 w-4" />
-                      Agregar Labor
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Formulario de edición */}
-                  {auxiliarEnEdicion && (
-                    <div ref={setFormRef('auxiliar')} className="scroll-mt-24">
-                    <Card className="border-border border-2 border-primary/50">
-                      <CardContent className="pt-6 space-y-4">
-                        <div className="grid gap-4 md:grid-cols-2">
-                          <div className="space-y-2">
-                            <Label>Colaborador</Label>
-                            <Select
-                              value={auxiliarEnEdicion.nombre}
-                              onValueChange={(value) =>
-                                setAuxiliarEnEdicion({ ...auxiliarEnEdicion, nombre: value })
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Seleccionar colaborador" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {/* Labores de Finca §3.3 — sí soporta operarios
-                                    (mismo endpoint /jornales que palma). El
-                                    `value` es el id local (`10` o `'O_5'`)
-                                    para distinguir colaborador vs operario
-                                    al guardar. Visualmente muestra el nombre
-                                    con badge "Tercero" si aplica. */}
-                                {colaboradores.map((col) => {
-                                  const fullName = `${col.nombres} ${col.apellidos}`.trim();
-                                  return (
-                                    <SelectItem key={col.id} value={col.id}>
-                                      {fullName}
-                                      {col.terceroNombre ? (
-                                        <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">
-                                          Tercero · {col.terceroNombre}
-                                        </span>
-                                      ) : null}
-                                    </SelectItem>
-                                  );
-                                })}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Labor</Label>
-                            <Select
-                              value={auxiliarEnEdicion.labor}
-                              onValueChange={(value) =>
-                                setAuxiliarEnEdicion({
-                                  ...auxiliarEnEdicion,
-                                  labor: value,
-                                  otraLabor: value !== 'Otro' ? '' : auxiliarEnEdicion.otraLabor,
-                                })
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Seleccionar labor" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {laboresLista.length === 0 ? (
-                                  <SelectItem value="__sin_labores__" disabled>
-                                    No hay labores configuradas
-                                  </SelectItem>
-                                ) : (
-                                  laboresLista.map((labor) => (
-                                    <SelectItem key={labor} value={labor}>
-                                      {labor}
-                                    </SelectItem>
-                                  ))
-                                )}
-                                <SelectItem value="Otro">Otro</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          {auxiliarEnEdicion.labor === 'Otro' && (
-                            <div className="space-y-2 md:col-span-2">
-                              <Label>Especificar otra labor</Label>
-                              <Input
-                                placeholder="Ingrese el tipo de labor"
-                                value={auxiliarEnEdicion.otraLabor || ''}
-                                onChange={(e) =>
-                                  setAuxiliarEnEdicion({ ...auxiliarEnEdicion, otraLabor: e.target.value })
-                                }
-                              />
-                            </div>
-                          )}
-                          <div className="space-y-2 md:col-span-2">
-                            <Label>Lugar</Label>
-                            <Input
-                              placeholder="Ubicación"
-                              value={auxiliarEnEdicion.lugar}
-                              onChange={(e) =>
-                                setAuxiliarEnEdicion({ ...auxiliarEnEdicion, lugar: e.target.value })
-                              }
-                            />
-                          </div>
-                        </div>
-                        <div className="flex justify-end gap-2 pt-2 border-t">
-                          <Button variant="outline" onClick={cancelarAuxiliar} className="gap-2">
-                            <X className="h-4 w-4" />
-                            Cancelar
-                          </Button>
-                          <Button onClick={guardarAuxiliar} className="gap-2 bg-success hover:bg-success/90">
-                            <Save className="h-4 w-4" />
-                            Guardar Labor
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                    </div>
-                  )}
-
-                  {/* Cards de labores guardadas */}
-                  {trabajosAuxiliares.map((trabajo) => {
-                    const labelLabor =
-                      trabajo.labor === 'Otro' && trabajo.otraLabor ? trabajo.otraLabor : trabajo.labor;
-                    // `trabajo.nombre` ahora es el id local — resolvemos al
-                    // nombre vía lookup en `colaboradores`. Si la persona
-                    // es operario, mostramos el badge del tercero.
-                    const personaSel = colaboradores.find((c) => c.id === trabajo.nombre);
-                    const personaTexto = personaSel
-                      ? `${personaSel.nombres} ${personaSel.apellidos}`.trim()
-                      : trabajo.nombre || 'Sin colaborador';
-                    return (
-                      <Card key={trabajo.id} className="border-border hover:border-primary/30 transition-colors">
-                        <CardContent className="p-4">
-                          <div className="flex items-center justify-between gap-4">
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs text-muted-foreground mb-1">Colaborador</p>
-                              <p className="font-semibold text-sm">
-                                {personaTexto}
-                                {personaSel?.terceroNombre ? (
-                                  <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">
-                                    Tercero · {personaSel.terceroNombre}
-                                  </span>
-                                ) : null}
-                              </p>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs text-muted-foreground mb-1">Labor</p>
-                              <p className="text-sm font-medium">{labelLabor || 'Sin labor'}</p>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs text-muted-foreground mb-1">Lugar</p>
-                              <p className="text-sm">{trabajo.lugar || '—'}</p>
-                            </div>
-                            <div className="flex items-center gap-1 shrink-0">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => editarAuxiliar(trabajo.id)}
-                                disabled={auxiliarEnEdicion !== null}
-                                title="Editar"
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => eliminarAuxiliar(trabajo.id)}
-                                className="text-destructive hover:text-destructive"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-
-                  {trabajosAuxiliares.length === 0 && !auxiliarEnEdicion && (
-                    <div className="text-center py-12 text-muted-foreground">
-                      <p>No hay registros de labores de finca</p>
-                      <p className="text-sm">Haz clic en "Agregar Labor" para crear uno</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+              <EtapaLaboresFinca
+                trabajosAuxiliares={trabajosAuxiliares}
+                auxiliarEnEdicion={auxiliarEnEdicion}
+                setAuxiliarEnEdicion={setAuxiliarEnEdicion}
+                colaboradores={colaboradores}
+                laboresLista={laboresLista}
+                agregarAuxiliar={agregarAuxiliar}
+                cancelarAuxiliar={cancelarAuxiliar}
+                guardarAuxiliar={guardarAuxiliar}
+                editarAuxiliar={editarAuxiliar}
+                eliminarAuxiliar={eliminarAuxiliar}
+                setFormRef={setFormRef}
+              />
             )}
 
-            {/* ETAPA 4: HORAS EXTRAS */}
+            {/* ETAPA 4: HORAS EXTRAS — extraída a planilla/EtapaHorasExtras */}
             {etapaActual === 4 && (
-              <div className="space-y-4">
-                <div className="flex justify-end">
-                  <Button onClick={agregarHoraExtra} className="gap-2">
-                    <Plus className="h-4 w-4" />
-                    Agregar Hora Extra
-                  </Button>
-                </div>
-
-                {/* Formulario de edición */}
-                {horaExtraEnEdicion && (
-                  <div ref={setFormRef('horaExtra')} className="scroll-mt-24">
-                  <Card className="border-primary/50 shadow-lg">
-                    <CardHeader>
-                      <div className="flex items-center gap-3">
-                        <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                          <Clock className="h-6 w-6 text-primary" />
-                        </div>
-                        <div>
-                          <CardTitle>Horas Extras</CardTitle>
-                          <p className="text-sm text-muted-foreground">
-                            Registra las horas extras de los colaboradores
-                          </p>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="grid gap-4 md:grid-cols-2">
-                        {/* Colaborador (siempre primero) */}
-                        <div className="space-y-2 md:col-span-2">
-                          <Label>Colaborador</Label>
-                          <Select
-                            value={horaExtraEnEdicion.colaboradorId}
-                            onValueChange={(value) => {
-                              setHoraExtraEnEdicion({ ...horaExtraEnEdicion, colaboradorId: value });
-                            }}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Seleccionar colaborador" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {/* Otro selector sin XOR de operario (paso 4/5). */}
-                              {colaboradores.filter(c => !c.terceroNombre).map((col) => (
-                                <SelectItem key={col.id} value={col.id}>
-                                  {col.nombres} {col.apellidos}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label>Tipo de Hora</Label>
-                          <Select
-                            value={horaExtraEnEdicion.tipoHora}
-                            onValueChange={(value) => {
-                              setHoraExtraEnEdicion({ ...horaExtraEnEdicion, tipoHora: value });
-                            }}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder={
-                                tiposHoraExtraLista.length === 0
-                                  ? 'No hay tipos configurados'
-                                  : 'Seleccionar tipo de hora'
-                              } />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {/* Usa los nombres reales del tenant traídos por
-                                  `wizard-init`; el hardcoded viejo `tiposHoraExtra`
-                                  no matcheaba con `tiposHoraExtraMap` al guardar. */}
-                              {tiposHoraExtraLista.map((tipo) => (
-                                <SelectItem key={tipo} value={tipo}>
-                                  {tipo}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label>Número de Horas</Label>
-                          <Input
-                            type="number" step="0.001"
-                            placeholder="0"
-                            value={horaExtraEnEdicion.numeroHoras || ''}
-                            onChange={(e) => {
-                              setHoraExtraEnEdicion({
-                                ...horaExtraEnEdicion,
-                                numeroHoras: parseFloat(e.target.value) || 0
-                              });
-                            }}
-                          />
-                        </div>
-
-                        <div className="space-y-2 md:col-span-2">
-                          <Label>Observación</Label>
-                          <Textarea
-                            placeholder="Observaciones sobre la hora extra..."
-                            value={horaExtraEnEdicion.observacion}
-                            onChange={(e) => {
-                              setHoraExtraEnEdicion({ ...horaExtraEnEdicion, observacion: e.target.value });
-                            }}
-                            rows={3}
-                          />
-                        </div>
-                      </div>
-                      <div className="flex justify-end gap-2 pt-4">
-                        <Button variant="outline" onClick={cancelarHoraExtra}>
-                          Cancelar
-                        </Button>
-                        <Button onClick={guardarHoraExtra} className="gap-2">
-                          <Check className="h-4 w-4" />
-                          Guardar
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                  </div>
-                )}
-
-                {/* Lista de horas extras guardadas */}
-                {horasExtras.map((hora) => {
-                  const colaborador = colaboradores.find(c => c.id === hora.colaboradorId);
-
-                  return (
-                    <Card key={hora.id} className="border-border hover:border-primary/30 transition-colors">
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between gap-4">
-                          {/* Icon + Colaborador */}
-                          <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-lg bg-warning/10 flex items-center justify-center shrink-0">
-                              <Clock className="h-5 w-5 text-warning" />
-                            </div>
-                            <div>
-                              <h4 className="font-semibold text-sm">
-                                {colaborador ? `${colaborador.nombres} ${colaborador.apellidos}` : 'Sin colaborador'}
-                              </h4>
-                              <p className="text-xs text-muted-foreground">{hora.tipoHora}</p>
-                            </div>
-                          </div>
-
-                          {/* Horas */}
-                          <div className="text-center shrink-0">
-                            <p className="text-xs text-muted-foreground">Horas</p>
-                            <p className="font-bold text-lg">{hora.numeroHoras}</p>
-                          </div>
-
-                          {/* Observación */}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs text-muted-foreground">Observación</p>
-                            <p className="text-sm truncate">{hora.observacion || 'Sin observación'}</p>
-                          </div>
-
-                          {/* Botón eliminar */}
-                          <div className="flex items-center gap-1 shrink-0">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => editarHoraExtra(hora.id)}
-                              disabled={horaExtraEnEdicion !== null}
-                              title="Editar"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => eliminarHoraExtra(hora.id)}
-                              className="text-destructive hover:text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-
-                {horasExtras.length === 0 && !horaExtraEnEdicion && (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <Clock className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                    <p>No hay horas extras registradas</p>
-                    <p className="text-sm">Haz clic en "Agregar Hora Extra" para crear una</p>
-                  </div>
-                )}
-              </div>
+              <EtapaHorasExtras
+                horasExtras={horasExtras}
+                horaExtraEnEdicion={horaExtraEnEdicion}
+                setHoraExtraEnEdicion={setHoraExtraEnEdicion}
+                colaboradores={colaboradores}
+                tiposHoraExtraLista={tiposHoraExtraLista}
+                agregarHoraExtra={agregarHoraExtra}
+                cancelarHoraExtra={cancelarHoraExtra}
+                guardarHoraExtra={guardarHoraExtra}
+                editarHoraExtra={editarHoraExtra}
+                eliminarHoraExtra={eliminarHoraExtra}
+                setFormRef={setFormRef}
+              />
             )}
 
-            {/* ETAPA 5: FINALIZACIÓN (OBSERVACIONES Y AUSENTES) */}
+            {/* ETAPA 5: FINALIZACIÓN — extraída a planilla/EtapaFinalizacion */}
             {etapaActual === 5 && (
-              <Card className="border-border">
-                <CardHeader>
-                  <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                      <ClipboardList className="h-6 w-6 text-primary" />
-                    </div>
-                    <div>
-                      <CardTitle>Finalización</CardTitle>
-                      <p className="text-sm text-muted-foreground">
-                        Observaciones y ausentes
-                      </p>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="observaciones">Observaciones</Label>
-                    <Textarea
-                      id="observaciones"
-                      placeholder="Notas o comentarios sobre la jornada..."
-                      value={observaciones}
-                      onChange={(e) => setObservaciones(e.target.value)}
-                      rows={4}
-                    />
-                  </div>
-
-                  <div className="space-y-4">
-                    <Label>Novedades</Label>
-                    {!modoLectura && (
-                      <>
-                        <div className="grid gap-4 md:grid-cols-3">
-                          <div className="space-y-2">
-                            <Label htmlFor="colaboradorAusente">Colaborador</Label>
-                            <Select
-                              value={colaboradorAusenteSeleccionado}
-                              onValueChange={setColaboradorAusenteSeleccionado}
-                            >
-                              <SelectTrigger id="colaboradorAusente">
-                                <SelectValue placeholder="Seleccionar colaborador" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {/* Ausencias: solo empleados propios.
-                                    §5 del doc no contempla operario_id. */}
-                                {colaboradores
-                                  .filter(col => !col.terceroNombre)
-                                  .filter(col => !ausentes.some(a => a.colaboradorId === col.id))
-                                  .map((col) => (
-                                    <SelectItem key={col.id} value={col.id}>
-                                      {col.nombres} {col.apellidos}
-                                    </SelectItem>
-                                  ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="motivoAusente">Motivo</Label>
-                            <Select
-                              value={motivoAusenteSeleccionado}
-                              onValueChange={(value) => {
-                                setMotivoAusenteSeleccionado(value);
-                                if (value !== 'Otro') {
-                                  setOtroMotivoAusente('');
-                                }
-                              }}
-                            >
-                              <SelectTrigger id="motivoAusente">
-                                <SelectValue placeholder="Seleccionar motivo" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {motivosLista.map((motivo) => (
-                                  <SelectItem key={motivo} value={motivo}>
-                                    {motivo}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label>&nbsp;</Label>
-                            <Button
-                              type="button"
-                              onClick={agregarAusente}
-                              disabled={!colaboradorAusenteSeleccionado || !motivoAusenteSeleccionado}
-                              className="w-full gap-2"
-                            >
-                              <Plus className="h-4 w-4" />
-                              Agregar
-                            </Button>
-                          </div>
-                        </div>
-                      </>
-                    )}
-
-                    {ausentes.length > 0 && (
-                      <div className="border border-border rounded-lg overflow-hidden">
-                        <table className="w-full">
-                          <thead className="bg-muted/50">
-                            <tr>
-                              <th className="text-left p-3 text-sm font-semibold">Colaborador</th>
-                              <th className="text-left p-3 text-sm font-semibold">Motivo</th>
-                              <th className="text-right p-3 text-sm font-semibold">Acciones</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {ausentes.map((ausente) => {
-                              const col = colaboradores.find(c => c.id === ausente.colaboradorId);
-                              // El campo `motivo` (texto libre) del backend
-                              // es la fuente de verdad — es lo que el usuario
-                              // escribió/eligió al crear la ausencia. Se
-                              // carga en `otroMotivo` desde el prefill.
-                              // Prioridad de display:
-                              // 1) texto libre del backend (`otroMotivo`).
-                              // 2) nombre del catálogo (fallback).
-                              // 3) lookup por ID contra `motivosMap`.
-                              // 4) '—' si nada.
-                              let motivoMostrar = ausente.otroMotivo || ausente.motivo;
-                              if (!motivoMostrar && ausente.motivoAusenciaId != null) {
-                                for (const [n, id] of motivosMap.entries()) {
-                                  if (id === ausente.motivoAusenciaId) { motivoMostrar = n; break; }
-                                }
-                              }
-                              motivoMostrar = motivoMostrar || '—';
-                              return (
-                                <tr key={ausente.id} className="border-t border-border">
-                                  <td className="p-3 text-sm">
-                                    {col ? `${col.nombres} ${col.apellidos}` : '-'}
-                                  </td>
-                                  <td className="p-3 text-sm">{motivoMostrar}</td>
-                                  <td className="p-3 text-right">
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => eliminarAusente(ausente.id)}
-                                      className="text-destructive hover:text-destructive"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-
-                    {ausentes.length === 0 && (
-                      <div className="text-center py-8 text-muted-foreground border border-dashed border-border rounded-lg">
-                        <p className="text-sm">No hay ausentes registrados</p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+              <EtapaFinalizacion
+                modoLectura={modoLectura}
+                observaciones={observaciones}
+                setObservaciones={setObservaciones}
+                colaboradores={colaboradores}
+                ausentes={ausentes}
+                colaboradorAusenteSeleccionado={colaboradorAusenteSeleccionado}
+                setColaboradorAusenteSeleccionado={setColaboradorAusenteSeleccionado}
+                motivoAusenteSeleccionado={motivoAusenteSeleccionado}
+                setMotivoAusenteSeleccionado={setMotivoAusenteSeleccionado}
+                setOtroMotivoAusente={setOtroMotivoAusente}
+                motivosLista={motivosLista}
+                motivosMap={motivosMap}
+                agregarAusente={agregarAusente}
+                eliminarAusente={eliminarAusente}
+              />
             )}
           </fieldset>
 

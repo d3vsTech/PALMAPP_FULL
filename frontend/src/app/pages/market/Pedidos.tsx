@@ -68,18 +68,24 @@ export default function Pedidos() {
   const [motivoCancelacion, setMotivoCancelacion] = useState('');
   const [cancelando, setCancelando] = useState(false);
 
+  /** Stale-guard: si cambian filtro/página mientras hay una petición en
+   *  vuelo, la respuesta vieja no debe pisar a la nueva. */
+  const reqIdRef = useRef(0);
+
   /**
    * Carga la página actual. Aceptamos `silent=true` para los refrescos en
    * segundo plano (polling / focus): no mostramos el spinner, así la lista
    * no parpadea cuando el proveedor cambia un estado del otro lado.
    */
   const cargar = (silent = false) => {
+    const reqId = ++reqIdRef.current;
     if (!silent) setCargando(true);
     marketApi.pedidos({
       estado: filtroEstado === 'todos' ? undefined : filtroEstado,
       page,
     })
       .then(async (res) => {
+        if (reqId !== reqIdRef.current) return;
         setPedidos(res.data);
         setStats(res.stats);
         setMeta(res.meta);
@@ -104,16 +110,20 @@ export default function Pedidos() {
             }
           }),
         );
-        const nuevos = new Map(cache);
+        // Si la lista cambió mientras consultábamos pagos, estos estados
+        // corresponden a pedidos viejos: no aplicarlos.
+        if (reqId !== reqIdRef.current) return;
+        const nuevos = new Map(estadosPagoRef.current);
         (entries.filter(Boolean) as Array<readonly [string, EstadoPago]>).forEach(([codigo, estado]) => {
           nuevos.set(codigo, estado);
         });
         setEstadosPago(nuevos);
       })
       .catch((e: any) => {
+        if (reqId !== reqIdRef.current) return;
         if (!silent) toast.error(e?.message ?? 'Error al cargar pedidos');
       })
-      .finally(() => { if (!silent) setCargando(false); });
+      .finally(() => { if (!silent && reqId === reqIdRef.current) setCargando(false); });
   };
 
   useEffect(() => {

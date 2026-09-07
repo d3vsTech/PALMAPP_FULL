@@ -11,7 +11,7 @@
  * (Nager.Date). El bloque `verificacion` refleja el estado de la última.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { ArrowLeft, Plus, Pencil, Trash2, AlertCircle, Check, Loader2 } from 'lucide-react';
@@ -74,19 +74,26 @@ export default function CalendarioFestivos({ standalone = true }: CalendarioFest
   const [aEliminar, setAEliminar] = useState<Festivo | null>(null);
   const [eliminando, setEliminando] = useState(false);
 
+  // Guard contra respuestas fuera de orden al cambiar el año rápido:
+  // solo la carga más reciente puede setear estado.
+  const reqIdRef = useRef(0);
+
   const cargar = async (anioObjetivo: number) => {
+    const reqId = ++reqIdRef.current;
     setCargando(true);
     try {
       const res = await festivosApi.listar(anioObjetivo);
+      if (reqId !== reqIdRef.current) return;
       setFestivos(res.data.festivos ?? []);
       setVerificacion(res.data.verificacion);
     } catch (err) {
+      if (reqId !== reqIdRef.current) return;
       const e = err as ApiError;
       toast.error(e.message ?? 'No se pudo cargar el calendario');
       setFestivos([]);
       setVerificacion(undefined);
     } finally {
-      setCargando(false);
+      if (reqId === reqIdRef.current) setCargando(false);
     }
   };
 

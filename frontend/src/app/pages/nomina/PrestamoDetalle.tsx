@@ -8,7 +8,7 @@
  *  - Edición inline de `concepto` y `observaciones` (siempre permitido).
  *  - Cancelar (solo si VIGENTE — doc §6, PAGADO/CANCELADO devuelven 422).
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
@@ -75,18 +75,29 @@ export default function PrestamoDetalle() {
   const [confirmarCancelar, setConfirmarCancelar] = useState(false);
   const [cancelando, setCancelando] = useState(false);
 
+  // Guard contra respuestas fuera de orden si cambia el id rápido:
+  // solo la carga más reciente puede setear estado.
+  const reqIdRef = useRef(0);
+
   const cargar = () => {
     if (!prestamoId) return;
+    const reqId = ++reqIdRef.current;
     setCargando(true);
     prestamosApi
       .ver(prestamoId)
       .then((res) => {
+        if (reqId !== reqIdRef.current) return;
         setPrestamo(res.data);
         setEditConcepto(res.data.concepto ?? '');
         setEditObservaciones(res.data.observaciones ?? '');
       })
-      .catch((err: ApiError) => toast.error(err.message ?? 'Error al cargar préstamo'))
-      .finally(() => setCargando(false));
+      .catch((err: ApiError) => {
+        if (reqId !== reqIdRef.current) return;
+        toast.error(err.message ?? 'Error al cargar préstamo');
+      })
+      .finally(() => {
+        if (reqId === reqIdRef.current) setCargando(false);
+      });
   };
 
   useEffect(() => {

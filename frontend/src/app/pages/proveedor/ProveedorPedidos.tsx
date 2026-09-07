@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -78,12 +78,17 @@ export default function ProveedorPedidos() {
   const [fechaEntrega, setFechaEntrega] = useState('');
   const [enviandoAccion, setEnviandoAccion] = useState(false);
 
+  /** Stale-guard: si cambian tab/filtro/búsqueda/página con una petición en
+   *  vuelo, la respuesta vieja no debe pisar a la nueva. */
+  const reqIdRef = useRef(0);
+
   /**
    * `silent=true` para refrescos en background (polling/focus): no toca el
    * spinner ni muestra toasts de error, así la lista no parpadea cuando la
    * finca crea un nuevo pedido mientras el proveedor está mirando.
    */
   const cargar = (silent = false) => {
+    const reqId = ++reqIdRef.current;
     if (!silent) setCargando(true);
     proveedorApi.pedidos({
       tab,
@@ -91,9 +96,15 @@ export default function ProveedorPedidos() {
       buscar: busqueda.trim() || undefined,
       page,
     })
-      .then((res) => { setPedidos(res.data); setMeta(res.meta); setStats(res.stats); })
-      .catch((e: any) => { if (!silent) toast.error(e?.message ?? 'Error al cargar pedidos'); })
-      .finally(() => { if (!silent) setCargando(false); });
+      .then((res) => {
+        if (reqId !== reqIdRef.current) return;
+        setPedidos(res.data); setMeta(res.meta); setStats(res.stats);
+      })
+      .catch((e: any) => {
+        if (reqId !== reqIdRef.current) return;
+        if (!silent) toast.error(e?.message ?? 'Error al cargar pedidos');
+      })
+      .finally(() => { if (!silent && reqId === reqIdRef.current) setCargando(false); });
   };
 
   useEffect(() => {

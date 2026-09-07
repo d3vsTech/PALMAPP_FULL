@@ -15,7 +15,7 @@
  * historial cuando el liquidador aplica una cuota en la liquidación
  * (§7.2 de API_PRESTAMOS).
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router';
 import { toast } from 'sonner';
 import { Button } from '../../components/ui/button';
@@ -82,17 +82,28 @@ export default function AbonosPrestamo() {
     nota: '',
   });
 
+  // Guard contra respuestas fuera de orden si cambia el prestamoId rápido:
+  // solo la carga más reciente puede setear estado.
+  const reqIdRef = useRef(0);
+
   // Cargar historial + resumen desde el backend.
   const cargar = () => {
     if (!prestamoId) return;
+    const reqId = ++reqIdRef.current;
     setCargando(true);
     prestamosApi
       .historialAbonos(parseInt(prestamoId))
-      .then((res) => setHistorial(res.data))
+      .then((res) => {
+        if (reqId !== reqIdRef.current) return;
+        setHistorial(res.data);
+      })
       .catch((err: ApiError) => {
+        if (reqId !== reqIdRef.current) return;
         toast.error(err.message ?? 'No se pudo cargar el historial de abonos');
       })
-      .finally(() => setCargando(false));
+      .finally(() => {
+        if (reqId === reqIdRef.current) setCargando(false);
+      });
   };
 
   useEffect(() => {

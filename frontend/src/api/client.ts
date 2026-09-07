@@ -171,14 +171,25 @@ async function request<T>(
 
 // ─── Refresh token ────────────────────────────────────────────────────────────
 
-async function refreshToken(): Promise<void> {
-  const response = await fetch(`${BASE_URL}/v1/tenant-auth/refresh`, {
-    method: 'POST',
-    headers: buildHeaders(),
-  });
-  if (!response.ok) throw new Error('Refresh failed');
-  const data = await response.json();
-  tokenStorage.set(data.token);
+/**
+ * Single-flight: si varias peticiones paralelas expiran a la vez, solo se
+ * dispara UN refresh y todas esperan el mismo resultado.
+ */
+let refreshEnCurso: Promise<void> | null = null;
+
+function refreshToken(): Promise<void> {
+  if (!refreshEnCurso) {
+    refreshEnCurso = (async () => {
+      const response = await fetch(`${BASE_URL}/v1/tenant-auth/refresh`, {
+        method: 'POST',
+        headers: buildHeaders(),
+      });
+      if (!response.ok) throw new Error('Refresh failed');
+      const data = await response.json();
+      tokenStorage.set(data.token);
+    })().finally(() => { refreshEnCurso = null; });
+  }
+  return refreshEnCurso;
 }
 
 // ─── HTTP methods ─────────────────────────────────────────────────────────────

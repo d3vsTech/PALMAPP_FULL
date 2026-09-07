@@ -17,7 +17,7 @@
  * tiene terceros pagados desde nómina, así que ese KPI muestra "—". El resto
  * se calcula con los datos de las nóminas listadas.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
@@ -133,7 +133,13 @@ export default function Nomina() {
   // en modo edición (paso 1 pre-poblado, paso 2 con colaboradores ya agregados,
   // paso 3 validar cosecha, paso 4 confirmar).
 
+  // Guard contra respuestas fuera de orden: si el usuario cambia el filtro
+  // dos veces rápido, la respuesta vieja puede llegar de última y pisar la
+  // nueva. Cada carga incrementa el contador; solo la última puede setear.
+  const reqIdRef = useRef(0);
+
   const cargarNominas = () => {
+    const reqId = ++reqIdRef.current;
     setCargando(true);
     return Promise.all([
       nominaApi.listar({
@@ -144,15 +150,17 @@ export default function Nomina() {
       nominaApi.indicadores(),
     ])
       .then(([listRes, indRes]) => {
+        if (reqId !== reqIdRef.current) return;
         setNominas(listRes.data);
         setIndicadores(indRes.data);
         setCargando(false);
         // Dispara la proyección de lo que se va a liquidar solo para las
         // nóminas en BORRADOR (las CERRADAS ya tienen total_general definitivo).
         const borradores = listRes.data.filter((n) => n.estado === 'BORRADOR');
-        if (borradores.length > 0) refrescarProyecciones(borradores.map((n) => n.id));
+        if (borradores.length > 0) refrescarProyecciones(borradores.map((n) => n.id), reqId);
       })
       .catch((err: ApiError) => {
+        if (reqId !== reqIdRef.current) return;
         toast.error(err.message ?? 'Error al cargar nóminas');
         setCargando(false);
       });
@@ -162,13 +170,15 @@ export default function Nomina() {
   // proyección con `salario_base` de los PENDIENTES + `total_devengado` de
   // los ya LIQUIDADOS + total de actas de tercero. Es incremental — cada
   // fila se actualiza en cuanto llega su request.
-  const refrescarProyecciones = async (ids: number[]) => {
+  const refrescarProyecciones = async (ids: number[], reqId: number) => {
+    if (reqId !== reqIdRef.current) return;
     setProyeccionesPorNomina(new Map());
     await Promise.all(
       ids.map((id) =>
         nominaApi
           .ver(id)
           .then((r) => {
+            if (reqId !== reqIdRef.current) return;
             const emps = r.data.empleados ?? [];
             let devengadoInternos = 0;
             let devengadoTercerosOperarios = 0;
