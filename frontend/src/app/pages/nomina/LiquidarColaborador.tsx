@@ -742,8 +742,13 @@ export default function LiquidarColaborador() {
                             )}
                             {key === 'cosecha' && promsCosecha.size > 0 && (
                               <td className="p-2 text-right text-muted-foreground">
+                                {/* Coma decimal (es-CO): "10,6000". Con punto
+                                    parecía separador de miles. */}
                                 {promDeFila(f)?.efectivo != null
-                                  ? promDeFila(f)!.efectivo!.toFixed(4)
+                                  ? promDeFila(f)!.efectivo!.toLocaleString('es-CO', {
+                                      minimumFractionDigits: 4,
+                                      maximumFractionDigits: 4,
+                                    })
                                   : '—'}
                               </td>
                             )}
