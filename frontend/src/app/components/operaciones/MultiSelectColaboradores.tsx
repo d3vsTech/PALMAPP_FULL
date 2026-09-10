@@ -19,7 +19,7 @@ import { sortByFirstName } from '../../utils/personas';
 import { Button } from '../ui/button';
 import { Checkbox } from '../ui/checkbox';
 import { Input } from '../ui/input';
-import { Users, Search, ChevronDown, X } from 'lucide-react';
+import { Users, Search, ChevronDown, X, Check } from 'lucide-react';
 
 export interface ColaboradorOption {
   id: string;
@@ -47,6 +47,24 @@ export function MultiSelectColaboradores({
 }: Props) {
   const [open, setOpen] = useState(false);
   const [busqueda, setBusqueda] = useState('');
+  /**
+   * Borrador local de la selección mientras el popover está abierto.
+   * Solo "Aceptar" hace commit vía onChange; cerrar por fuera descarta.
+   */
+  const [draft, setDraft] = useState<string[]>([]);
+
+  const abrirCerrar = (siguiente: boolean) => {
+    if (siguiente) {
+      setDraft(seleccionados);
+      setBusqueda('');
+    }
+    setOpen(siguiente);
+  };
+
+  const aceptar = () => {
+    onChange(draft);
+    setOpen(false);
+  };
 
   const opciones = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -58,24 +76,24 @@ export function MultiSelectColaboradores({
     });
   }, [colaboradores, busqueda]);
 
-  const seleccionadosSet = useMemo(() => new Set(seleccionados), [seleccionados]);
+  const seleccionadosSet = useMemo(() => new Set(draft), [draft]);
 
   const toggle = (id: string) => {
     if (seleccionadosSet.has(id)) {
-      onChange(seleccionados.filter((x) => x !== id));
+      setDraft(draft.filter((x) => x !== id));
     } else {
-      onChange([...seleccionados, id]);
+      setDraft([...draft, id]);
     }
   };
 
   const seleccionarTodos = () => {
-    onChange(Array.from(new Set([...seleccionados, ...opciones.map((o) => o.id)])));
+    setDraft(Array.from(new Set([...draft, ...opciones.map((o) => o.id)])));
   };
 
-  const limpiarSeleccion = () => onChange([]);
+  const limpiarSeleccion = () => setDraft([]);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={abrirCerrar}>
       <PopoverTrigger asChild>
         <Button
           type="button"
@@ -160,18 +178,29 @@ export function MultiSelectColaboradores({
           >
             Seleccionar todos
           </Button>
-          {seleccionados.length > 0 && (
+          <div className="flex items-center gap-2">
+            {draft.length > 0 && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs text-destructive hover:bg-destructive/10 gap-1"
+                onClick={limpiarSeleccion}
+              >
+                <X className="h-3 w-3" />
+                Limpiar
+              </Button>
+            )}
             <Button
               type="button"
-              variant="ghost"
               size="sm"
-              className="h-7 text-xs text-destructive hover:bg-destructive/10 gap-1"
-              onClick={limpiarSeleccion}
+              className="h-7 text-xs gap-1"
+              onClick={aceptar}
             >
-              <X className="h-3 w-3" />
-              Limpiar
+              <Check className="h-3 w-3" />
+              Aceptar
             </Button>
-          )}
+          </div>
         </div>
       </PopoverContent>
     </Popover>
