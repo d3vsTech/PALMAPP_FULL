@@ -315,7 +315,7 @@ export const router = createBrowserRouter([
 
       {
         path: 'liquidaciones',
-        element: <ProtectedRoute permiso="nomina.ver">{L(<LiquidacionesLayout />)}</ProtectedRoute>,
+        element: <ProtectedRoute permiso="liquidaciones.ver">{L(<LiquidacionesLayout />)}</ProtectedRoute>,
         children: [
           { index: true,                       element: L(<Liquidaciones />) },
           { path: 'cesantias/nueva',           element: L(<NuevaCesantia />) },

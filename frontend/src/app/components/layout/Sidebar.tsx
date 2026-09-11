@@ -78,7 +78,7 @@ const navItems: NavItem[] = [
     href: '/liquidaciones',
     icon: FileText,
     roles: ['dueño', 'administrador', 'jefe_campo'],
-    permiso: 'nomina.ver',
+    permiso: 'liquidaciones.ver',
   },
   {
     label: 'Agente IA',

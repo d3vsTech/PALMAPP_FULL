@@ -1,4 +1,9 @@
-import { useState } from 'react';
+/**
+ * Cesantías — listado de períodos anuales, conectado a
+ * GET /liquidaciones/periodos + /resumen (API_LIQUIDACIONES §2).
+ * Diseño V.24; datos reales desde PR-L3.
+ */
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
@@ -8,82 +13,115 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
 import {
-  Plus, FileText, Calculator, Eye, Search, Filter,
-  Users, AlertTriangle, PiggyBank, CheckCircle, Clock,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '../../components/ui/alert-dialog';
+import {
+  Plus, FileText, Calculator, Eye, Search, Filter, Trash2,
+  Users, AlertTriangle, PiggyBank, CheckCircle, Clock, Loader2,
 } from 'lucide-react';
 import StatusBadge from '../../components/common/StatusBadge';
+import { toast } from 'sonner';
+import {
+  liquidacionesApi,
+  LiquidacionesErrorCodes,
+  type LiquidacionPeriodoItem,
+  type ResumenLiquidaciones,
+} from '../../../api/liquidaciones';
+import type { ApiError } from '../../../api/client';
+import { formatFecha } from '../../utils/fecha';
 
-interface PeriodoCesantias {
-  id: string;
-  anio: number;
-  descripcion: string;
-  estado: 'BORRADOR' | 'CERRADA';
-  colaboradores: number;
-  totalCesantias: number;
-  totalConsignado: number;
-  fechaLimite: string;
-  fondos: string[];
-}
+/** Cesantías se pagan con centavos (2.168.589,72). */
+const fmtCOP = (n: number) =>
+  `$${Number(n ?? 0).toLocaleString('es-CO', { maximumFractionDigits: 2 })}`;
 
-const periodosCesantiasMock: PeriodoCesantias[] = [
-  {
-    id: 'ces-2026',
-    anio: 2026,
-    descripcion: 'Cesantías año 2026',
-    estado: 'BORRADOR',
-    colaboradores: 0,
-    totalCesantias: 0,
-    totalConsignado: 0,
-    fechaLimite: '2027-02-14',
-    fondos: ['Porvenir', 'Protección', 'Colfondos'],
-  },
-  {
-    id: 'ces-2025',
-    anio: 2025,
-    descripcion: 'Cesantías año 2025',
-    estado: 'CERRADA',
-    colaboradores: 6,
-    totalCesantias: 10820000,
-    totalConsignado: 10820000,
-    fechaLimite: '2026-02-14',
-    fondos: ['Porvenir', 'Protección'],
-  },
-  {
-    id: 'ces-2024',
-    anio: 2024,
-    descripcion: 'Cesantías año 2024',
-    estado: 'CERRADA',
-    colaboradores: 5,
-    totalCesantias: 9340000,
-    totalConsignado: 9340000,
-    fechaLimite: '2025-02-14',
-    fondos: ['Porvenir'],
-  },
-];
-
-const hoy = new Date();
-const proximoFeb14 = new Date(hoy.getFullYear(), 1, 14);
-if (proximoFeb14 < hoy) proximoFeb14.setFullYear(hoy.getFullYear() + 1);
-const diasRestantes = Math.ceil((proximoFeb14.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24));
+const fmtMillones = (n: number) => `$${(Number(n ?? 0) / 1_000_000).toFixed(2)}M`;
 
 export default function CesantiasTab() {
   const navigate = useNavigate();
   const [filtroEstado, setFiltroEstado] = useState('todos');
   const [filtroBusqueda, setFiltroBusqueda] = useState('');
 
-  const periodosFiltrados = periodosCesantiasMock.filter((p) => {
-    const cumpleEstado = filtroEstado === 'todos' || p.estado === filtroEstado;
-    const cumpleBusqueda =
-      filtroBusqueda === '' ||
-      p.descripcion.toLowerCase().includes(filtroBusqueda.toLowerCase()) ||
-      p.anio.toString().includes(filtroBusqueda);
-    return cumpleEstado && cumpleBusqueda;
-  });
+  const [periodos, setPeriodos] = useState<LiquidacionPeriodoItem[]>([]);
+  const [resumen, setResumen] = useState<ResumenLiquidaciones | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [aEliminar, setAEliminar] = useState<LiquidacionPeriodoItem | null>(null);
+  const [eliminando, setEliminando] = useState(false);
+  const reqIdRef = useRef(0);
 
-  const totalCesantias = periodosCesantiasMock.reduce((s, p) => s + p.totalCesantias, 0);
-  const totalConsignado = periodosCesantiasMock.reduce((s, p) => s + p.totalConsignado, 0);
-  const pendientes = periodosCesantiasMock.filter((p) => p.estado === 'BORRADOR').length;
-  const montoPendiente = periodosCesantiasMock.filter((p) => p.estado === 'BORRADOR').reduce((s, p) => s + p.totalCesantias, 0);
+  const cargar = () => {
+    const reqId = ++reqIdRef.current;
+    setCargando(true);
+    Promise.all([
+      liquidacionesApi.listar({
+        tipo: 'CESANTIAS',
+        estado: filtroEstado !== 'todos' ? (filtroEstado as 'BORRADOR' | 'CERRADA') : undefined,
+        per_page: 50,
+      }),
+      liquidacionesApi.resumen({ tipo: 'CESANTIAS' }),
+    ])
+      .then(([listRes, resRes]) => {
+        if (reqId !== reqIdRef.current) return;
+        setPeriodos(listRes.data);
+        setResumen(resRes.data);
+      })
+      .catch((err) => {
+        if (reqId !== reqIdRef.current) return;
+        const e = err as ApiError;
+        toast.error(e.message ?? 'Error al cargar períodos de cesantías');
+      })
+      .finally(() => {
+        if (reqId === reqIdRef.current) setCargando(false);
+      });
+  };
+
+  useEffect(() => {
+    cargar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtroEstado]);
+
+  const periodosFiltrados = useMemo(() => {
+    if (!filtroBusqueda) return periodos;
+    const q = filtroBusqueda.toLowerCase();
+    return periodos.filter(
+      (p) => p.descripcion.toLowerCase().includes(q) || String(p.anio).includes(q),
+    );
+  }, [periodos, filtroBusqueda]);
+
+  // Alerta de vencimiento: el período con consignación pendiente más próximo
+  // a su fecha límite operativa (o ya vencido).
+  const alertaLimite = useMemo(() => {
+    const pendientes = periodos.filter(
+      (p) => p.estado === 'BORRADOR' || p.monto_pendiente > 0,
+    );
+    if (pendientes.length === 0) return null;
+    const proximo = [...pendientes].sort((a, b) => a.dias_para_limite - b.dias_para_limite)[0];
+    if (proximo.vencida) return { vencida: true, periodo: proximo };
+    if (proximo.dias_para_limite <= 30) return { vencida: false, periodo: proximo };
+    return null;
+  }, [periodos]);
+
+  const confirmarEliminar = async () => {
+    if (!aEliminar) return;
+    setEliminando(true);
+    try {
+      await liquidacionesApi.eliminar(aEliminar.id);
+      toast.success('Borrador eliminado');
+      setAEliminar(null);
+      cargar();
+    } catch (err) {
+      const e = err as ApiError;
+      if (e.code === LiquidacionesErrorCodes.LIQUIDACION_PERIODO_CERRADO) {
+        toast.error('No se puede eliminar un período cerrado');
+      } else if (e.code === LiquidacionesErrorCodes.LIQUIDACION_PERIODO_REFERENCIADO) {
+        toast.error('Un período de intereses usa este período como base');
+      } else {
+        toast.error(e.message ?? 'No se pudo eliminar el período');
+      }
+    } finally {
+      setEliminando(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -100,11 +138,15 @@ export default function CesantiasTab() {
       </div>
 
       {/* Alerta vencimiento */}
-      {diasRestantes <= 30 && (
+      {alertaLimite && (
         <div className="flex items-center gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
           <AlertTriangle className="h-4 w-4 shrink-0 text-orange-500" />
           <span>
-            Faltan <strong>{diasRestantes} días</strong> para el vencimiento de cesantías (14 de febrero). Riesgo de sanción moratoria.
+            {alertaLimite.vencida ? (
+              <>La fecha límite de <strong>{alertaLimite.periodo.descripcion}</strong> ya venció ({formatFecha(alertaLimite.periodo.fecha_limite_legal)}). Riesgo de sanción moratoria.</>
+            ) : (
+              <>Faltan <strong>{alertaLimite.periodo.dias_para_limite} días</strong> para la fecha límite de <strong>{alertaLimite.periodo.descripcion}</strong> ({formatFecha(alertaLimite.periodo.fecha_limite_operativa)}). Riesgo de sanción moratoria.</>
+            )}
           </span>
         </div>
       )}
@@ -117,8 +159,8 @@ export default function CesantiasTab() {
             <div className="flex items-center justify-between p-4 rounded-xl bg-primary/5 border border-primary/20">
               <div>
                 <p className="text-xs font-medium text-muted-foreground mb-1">Total Cesantías</p>
-                <p className="text-2xl font-bold text-primary">${(totalCesantias / 1000000).toFixed(2)}M</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Todos los períodos</p>
+                <p className="text-2xl font-bold text-primary">{fmtMillones(resumen?.total_liquidado ?? 0)}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Períodos cerrados</p>
               </div>
               <div className="h-11 w-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                 <PiggyBank className="h-5 w-5 text-primary" />
@@ -128,8 +170,8 @@ export default function CesantiasTab() {
             <div className="flex items-center justify-between p-4 rounded-xl bg-success/5 border border-success/20">
               <div>
                 <p className="text-xs font-medium text-muted-foreground mb-1">Consignadas</p>
-                <p className="text-2xl font-bold text-success">${(totalConsignado / 1000000).toFixed(2)}M</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Períodos cerrados</p>
+                <p className="text-2xl font-bold text-success">{fmtMillones(resumen?.total_consignado ?? 0)}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Giradas al fondo</p>
               </div>
               <div className="h-11 w-11 rounded-xl bg-success/10 flex items-center justify-center shrink-0">
                 <CheckCircle className="h-5 w-5 text-success" />
@@ -139,24 +181,24 @@ export default function CesantiasTab() {
             <div className="flex items-center justify-between p-4 rounded-xl bg-orange-50 border border-orange-200">
               <div>
                 <p className="text-xs font-medium text-muted-foreground mb-1">Períodos Pendientes</p>
-                <p className="text-2xl font-bold text-orange-600">{pendientes}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Por liquidar</p>
+                <p className="text-2xl font-bold text-orange-600">{resumen?.periodos_pendientes ?? 0}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Por liquidar o consignar</p>
               </div>
               <div className="h-11 w-11 rounded-xl bg-orange-100 flex items-center justify-center shrink-0">
                 <Clock className="h-5 w-5 text-orange-500" />
               </div>
             </div>
 
-            <div className={`flex items-center justify-between p-4 rounded-xl border ${montoPendiente > 0 ? 'bg-destructive/5 border-destructive/20' : 'bg-muted/30 border-border'}`}>
+            <div className={`flex items-center justify-between p-4 rounded-xl border ${(resumen?.monto_pendiente ?? 0) > 0 ? 'bg-destructive/5 border-destructive/20' : 'bg-muted/30 border-border'}`}>
               <div>
                 <p className="text-xs font-medium text-muted-foreground mb-1">Monto Pendiente</p>
-                <p className={`text-2xl font-bold ${pendientes > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
-                  {pendientes > 0 ? 'Pendiente' : 'Al día'}
+                <p className={`text-2xl font-bold ${(resumen?.monto_pendiente ?? 0) > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                  {fmtMillones(resumen?.monto_pendiente ?? 0)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">Sin consignar</p>
               </div>
-              <div className={`h-11 w-11 rounded-xl flex items-center justify-center shrink-0 ${pendientes > 0 ? 'bg-destructive/10' : 'bg-muted'}`}>
-                <Users className={`h-5 w-5 ${pendientes > 0 ? 'text-destructive' : 'text-muted-foreground'}`} />
+              <div className={`h-11 w-11 rounded-xl flex items-center justify-center shrink-0 ${(resumen?.monto_pendiente ?? 0) > 0 ? 'bg-destructive/10' : 'bg-muted'}`}>
+                <Users className={`h-5 w-5 ${(resumen?.monto_pendiente ?? 0) > 0 ? 'text-destructive' : 'text-muted-foreground'}`} />
               </div>
             </div>
           </div>
@@ -213,7 +255,14 @@ export default function CesantiasTab() {
           <p className="text-muted-foreground">Historial de liquidaciones anuales de cesantías</p>
         </div>
 
-        {periodosFiltrados.length > 0 ? (
+        {cargando ? (
+          <Card className="border-border">
+            <CardContent className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Cargando períodos...
+            </CardContent>
+          </Card>
+        ) : periodosFiltrados.length > 0 ? (
           <Card className="border-border">
             <CardContent className="p-0">
               <div className="overflow-x-auto">
@@ -242,44 +291,63 @@ export default function CesantiasTab() {
                             </div>
                             <div>
                               <p className="font-semibold text-sm">{periodo.descripcion}</p>
-                              <p className="text-xs text-muted-foreground">Fondos: {periodo.fondos.join(', ')}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {formatFecha(periodo.fecha_inicio)} — {formatFecha(periodo.fecha_fin)}
+                              </p>
                             </div>
                           </div>
                         </td>
                         <td className="p-4">
-                          <StatusBadge status={periodo.estado as any} />
+                          <StatusBadge status={periodo.estado} />
                         </td>
                         <td className="p-4 text-right">
                           <span className="text-sm font-semibold">
-                            {periodo.estado === 'BORRADOR' ? <span className="text-muted-foreground">—</span> : periodo.colaboradores}
+                            {periodo.total_colaboradores > 0
+                              ? periodo.total_colaboradores
+                              : <span className="text-muted-foreground">—</span>}
                           </span>
                         </td>
                         <td className="p-4 text-right">
                           {periodo.estado === 'BORRADOR'
                             ? <span className="text-sm text-muted-foreground">—</span>
-                            : <span className="text-sm font-bold text-primary">${periodo.totalCesantias.toLocaleString('es-CO')}</span>}
+                            : <span className="text-sm font-bold text-primary">{fmtCOP(periodo.total_liquidado)}</span>}
                         </td>
                         <td className="p-4 text-right">
-                          <span className={`text-sm font-semibold ${periodo.totalConsignado > 0 ? 'text-success' : 'text-muted-foreground'}`}>
-                            {periodo.estado === 'BORRADOR' || periodo.totalConsignado === 0 ? '—' : `$${periodo.totalConsignado.toLocaleString('es-CO')}`}
+                          <span className={`text-sm font-semibold ${periodo.total_consignado > 0 ? 'text-success' : 'text-muted-foreground'}`}>
+                            {periodo.total_consignado > 0 ? fmtCOP(periodo.total_consignado) : '—'}
                           </span>
                         </td>
                         <td className="p-4 text-right">
-                          <span className="text-sm text-muted-foreground">
-                            {new Date(periodo.fechaLimite).toLocaleDateString('es-CO')}
+                          {/* Operativa (último día hábil); la legal va en el tooltip. */}
+                          <span
+                            className={`text-sm ${periodo.vencida && periodo.monto_pendiente > 0 ? 'text-destructive font-semibold' : 'text-muted-foreground'}`}
+                            title={`Fecha legal: ${formatFecha(periodo.fecha_limite_legal)} (Ley 50/1990). Operativa: último día hábil.`}
+                          >
+                            {formatFecha(periodo.fecha_limite_operativa)}
                           </span>
                         </td>
                         <td className="p-4">
                           <div className="flex gap-2 justify-end">
                             {periodo.estado === 'BORRADOR' ? (
-                              <Button
-                                size="sm"
-                                onClick={() => navigate(`/liquidaciones/cesantias/${periodo.id}`)}
-                                className="gap-1 bg-primary hover:bg-primary/90"
-                              >
-                                <Calculator className="h-4 w-4" />
-                                Liquidar
-                              </Button>
+                              <>
+                                <Button
+                                  size="sm"
+                                  onClick={() => navigate(`/liquidaciones/cesantias/${periodo.id}`)}
+                                  className="gap-1 bg-primary hover:bg-primary/90"
+                                >
+                                  <Calculator className="h-4 w-4" />
+                                  Liquidar
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setAEliminar(periodo)}
+                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  title="Eliminar borrador"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </>
                             ) : (
                               <Button
                                 size="sm"
@@ -300,7 +368,7 @@ export default function CesantiasTab() {
               </div>
             </CardContent>
           </Card>
-        ) : periodosCesantiasMock.length === 0 ? (
+        ) : periodos.length === 0 ? (
           <Card className="border-dashed border-2">
             <CardContent className="flex flex-col items-center justify-center py-12">
               <PiggyBank className="h-16 w-16 text-muted-foreground mb-4" />
@@ -325,6 +393,29 @@ export default function CesantiasTab() {
           </Card>
         )}
       </div>
+
+      {/* Confirmar eliminación de borrador */}
+      <AlertDialog open={aEliminar != null} onOpenChange={(open) => !open && !eliminando && setAEliminar(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar el período "{aEliminar?.descripcion}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se borra el borrador con sus colaboradores agregados. Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={eliminando}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmarEliminar}
+              disabled={eliminando}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+            >
+              {eliminando && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
