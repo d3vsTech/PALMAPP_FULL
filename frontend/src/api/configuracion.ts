@@ -614,6 +614,17 @@ export interface ConstantesLegales {
   dias_vacaciones_anuales: number;
   dias_anio_comercial: number;
   dias_mes_comercial: number;
+  // ── Módulo Liquidaciones (§14 API_PARAMETRICAS) ─────────────────────────
+  // Se congelan en `parametros_snapshot` al confirmar cada período; cambiar
+  // acá NO altera liquidaciones ya cerradas.
+  /** Cómo entra el auxilio de transporte en la base de cesantías/intereses/prima. */
+  liq_auxilio_modo?: 'DEVENGADO_REAL' | 'MENSUAL_COMPLETO';
+  /** Días de la fórmula de intereses de cesantías. */
+  liq_intereses_dias_modo?: 'DIAS_VINCULACION' | 'DIAS_COMPUTADOS';
+  /** Si permisos no remunerados y suspensiones descuentan días de cesantías (CST 53). */
+  liq_descontar_suspensiones?: boolean;
+  /** Si los días de incapacidad se excluyen del divisor del promedio salarial. */
+  liq_promedio_excluye_incapacidad?: boolean;
 }
 
 export type ConstantesLegalesPayload = Partial<ConstantesLegales>;

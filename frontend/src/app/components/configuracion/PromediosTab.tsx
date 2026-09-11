@@ -147,10 +147,14 @@ export function PromediosTab() {
             anio: anioSeleccionado,
           });
         } else {
+          // §5 API_PARAMETRICAS — sin `fecha` el baseline queda como fallback
+          // y NO entra al cálculo de nómina por período. Se envía la fecha
+          // de hoy para que el registro participe desde ya.
           await configuracionApi.promediosLote.crear({
             lote_id: loteId,
             promedio: valor,
             anio: anioSeleccionado,
+            fecha: new Date().toISOString().slice(0, 10),
           });
         }
       } catch (e: any) {

@@ -6,6 +6,14 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Save } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select';
+import { Switch } from '../ui/switch';
 import { formatThousands, parseCOP } from '../lib/format';
 import {
   configuracionApi,
@@ -27,6 +35,11 @@ const FORM_VACIO = {
   fechaLimiteInteresesCesantias: '',
   fechaLimitePrimaPrimerSemestre: '',
   fechaLimitePrimaSegundoSemestre: '',
+  // Política de Liquidaciones (§14 API_PARAMETRICAS) — defaults del backend.
+  liqAuxilioModo: 'DEVENGADO_REAL',
+  liqInteresesDiasModo: 'DIAS_VINCULACION',
+  liqDescontarSuspensiones: true,
+  liqPromedioExcluyeIncapacidad: true,
 };
 
 type FormState = typeof FORM_VACIO;
@@ -47,6 +60,10 @@ function apiToForm(data: ConstantesLegales): FormState {
     fechaLimiteInteresesCesantias:   aTexto(data.fecha_limite_pago_intereses_cesantias),
     fechaLimitePrimaPrimerSemestre:  aTexto(data.fecha_limite_prima_primer_semestre),
     fechaLimitePrimaSegundoSemestre: aTexto(data.fecha_limite_prima_segundo_semestre),
+    liqAuxilioModo:                  data.liq_auxilio_modo ?? 'DEVENGADO_REAL',
+    liqInteresesDiasModo:            data.liq_intereses_dias_modo ?? 'DIAS_VINCULACION',
+    liqDescontarSuspensiones:        data.liq_descontar_suspensiones ?? true,
+    liqPromedioExcluyeIncapacidad:   data.liq_promedio_excluye_incapacidad ?? true,
   };
 }
 
@@ -63,6 +80,10 @@ function formToPayload(f: FormState): ConstantesLegalesPayload {
     fecha_limite_pago_intereses_cesantias: f.fechaLimiteInteresesCesantias,
     fecha_limite_prima_primer_semestre:    f.fechaLimitePrimaPrimerSemestre,
     fecha_limite_prima_segundo_semestre:   f.fechaLimitePrimaSegundoSemestre,
+    liq_auxilio_modo:                      f.liqAuxilioModo as 'DEVENGADO_REAL' | 'MENSUAL_COMPLETO',
+    liq_intereses_dias_modo:               f.liqInteresesDiasModo as 'DIAS_VINCULACION' | 'DIAS_COMPUTADOS',
+    liq_descontar_suspensiones:            f.liqDescontarSuspensiones,
+    liq_promedio_excluye_incapacidad:      f.liqPromedioExcluyeIncapacidad,
   };
 }
 
@@ -85,8 +106,8 @@ export function ConstantesLegalesTab() {
     };
   }, []);
 
-  const handleChange = (field: keyof FormState, value: string) => {
-    setConstantes((prev) => ({ ...prev, [field]: value }));
+  const handleChange = (field: keyof FormState, value: string | boolean) => {
+    setConstantes((prev) => ({ ...prev, [field]: value } as FormState));
   };
 
   const handleSave = async () => {
@@ -303,6 +324,85 @@ export function ConstantesLegalesTab() {
                 onChange={(e) => handleChange('diasMesComercial', e.target.value)}
                 placeholder="30"
                 className="text-lg font-semibold"
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Política de Liquidaciones (cesantías, intereses, prima) */}
+      <Card className="border-border">
+        <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
+          <CardTitle>Política de Liquidaciones</CardTitle>
+          <p className="text-sm text-muted-foreground mt-1">
+            Cómo se calculan cesantías e intereses. Cada período congela estos valores al confirmarse: cambiarlos no altera liquidaciones ya cerradas.
+          </p>
+        </CardHeader>
+        <CardContent className="p-6 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <Label htmlFor="liqAuxilioModo">Auxilio de transporte en la base</Label>
+              <Select
+                value={constantes.liqAuxilioModo}
+                onValueChange={(v) => handleChange('liqAuxilioModo', v)}
+              >
+                <SelectTrigger id="liqAuxilioModo">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="DEVENGADO_REAL">Devengado real (lo pagado en nómina)</SelectItem>
+                  <SelectItem value="MENSUAL_COMPLETO">Mensual completo (si tiene derecho)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Devengado real suma lo pagado en las nóminas cerradas del período. Mensual completo usa el valor vigente y es de mayor costo.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="liqInteresesDiasModo">Días de la fórmula de intereses</Label>
+              <Select
+                value={constantes.liqInteresesDiasModo}
+                onValueChange={(v) => handleChange('liqInteresesDiasModo', v)}
+              >
+                <SelectTrigger id="liqInteresesDiasModo">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="DIAS_VINCULACION">Días de vinculación (recomendado)</SelectItem>
+                  <SelectItem value="DIAS_COMPUTADOS">Días computados de la cesantía</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Con días de vinculación las suspensiones no se descuentan dos veces. Días computados paga menos y no tiene respaldo en el CST art. 53.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-4">
+              <div>
+                <p className="text-sm font-medium">Suspensiones descuentan días de cesantías</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Permisos no remunerados y suspensiones disciplinarias restan días. Es una facultad del CST art. 53 y se aplica igual todos los años.
+                </p>
+              </div>
+              <Switch
+                checked={constantes.liqDescontarSuspensiones}
+                onCheckedChange={(v) => handleChange('liqDescontarSuspensiones', v)}
+              />
+            </div>
+
+            <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-4">
+              <div>
+                <p className="text-sm font-medium">Incapacidades fuera del divisor del promedio</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  El promedio salarial se calcula como si el incapacitado hubiera trabajado. Apagado, el promedio incluye esos días y puede diluirse.
+                </p>
+              </div>
+              <Switch
+                checked={constantes.liqPromedioExcluyeIncapacidad}
+                onCheckedChange={(v) => handleChange('liqPromedioExcluyeIncapacidad', v)}
               />
             </div>
           </div>

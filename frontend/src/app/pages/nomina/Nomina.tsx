@@ -251,6 +251,37 @@ export default function Nomina() {
     ];
   }, [nominas]);
 
+  // ── Indicadores del backend filtrados al mes del período elegido ────────
+  // §2.3 API_NOMINA — /indicadores acepta ?anio&mes. Con un período
+  // seleccionado, las cards "Pagado a Colaboradores/Terceros" reflejan lo
+  // pagado en ESE mes (nóminas CERRADAS + actas PAGADAS) en vez de quedarse
+  // con el acumulado global. La granularidad del filtro es el mes: con dos
+  // nóminas en el mismo mes, ambas suman.
+  const [indicadoresPeriodo, setIndicadoresPeriodo] = useState<typeof indicadores>(null);
+  const indPeriodoReqRef = useRef(0);
+  useEffect(() => {
+    const reqId = ++indPeriodoReqRef.current;
+    if (periodoKpi === 'todos') {
+      setIndicadoresPeriodo(null);
+      return;
+    }
+    const n = nominas.find((x) => String(x.id) === periodoKpi);
+    if (!n) {
+      setIndicadoresPeriodo(null);
+      return;
+    }
+    nominaApi
+      .indicadores({ anio: n.anio, mes: n.mes })
+      .then((r) => {
+        if (reqId !== indPeriodoReqRef.current) return;
+        setIndicadoresPeriodo(r.data);
+      })
+      .catch(() => {
+        if (reqId !== indPeriodoReqRef.current) return;
+        setIndicadoresPeriodo(null); // fallback al cálculo local
+      });
+  }, [periodoKpi, nominas]);
+
   // ── Cálculo de los 4 mini-KPIs sobre el período seleccionado ─────────────
   // "todos" → usa los indicadores agregados del backend (más precisos: incluyen
   //   total_terceros pagados / pendientes que vienen de `nomina_tercero`).
@@ -296,8 +327,11 @@ export default function Nomina() {
     const cerradas = filtradas.filter((n) => n.estado === 'CERRADA');
     const borradores = filtradas.filter((n) => n.estado === 'BORRADOR');
 
-    const totalColaboradores = cerradas.reduce((s, n) => s + toNumber(n.total_general), 0);
-    const totalTerceros = 0; // requiere /nominas/{id}/terceros — se carga al ver el detalle
+    // "Pagado" del mes del período, desde el backend cuando ya cargó;
+    // fallback a la suma local de cerradas mientras tanto.
+    const totalColaboradores = indicadoresPeriodo?.total_colaboradores
+      ?? cerradas.reduce((s, n) => s + toNumber(n.total_general), 0);
+    const totalTerceros = indicadoresPeriodo?.total_terceros ?? 0;
     const netoAPagar = borradores.reduce((s, n) => s + netoDeNomina(n), 0);
     const totalPendiente = netoAPagar;
 
@@ -306,7 +340,7 @@ export default function Nomina() {
       : `${borradores.length} períodos abiertos`;
 
     return { totalColaboradores, totalTerceros, netoAPagar, totalPendiente, labelBorrador, borradoresLen: borradores.length };
-  }, [nominas, periodoKpi, indicadores, proyeccionesPorNomina]);
+  }, [nominas, periodoKpi, indicadores, indicadoresPeriodo, proyeccionesPorNomina]);
 
   return (
     <div className="space-y-6">
