@@ -164,7 +164,7 @@ export default function LiquidacionFinalTab() {
         );
       case 'APROBADA':
         return (
-          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-900/30">
+          <Badge variant="outline" className="bg-primary/5 text-primary border-blue-200 dark:bg-primary/10 dark:text-primary dark:border-blue-900/30">
             <CheckCircle className="h-3 w-3 mr-1" />
             Aprobada
           </Badge>
@@ -199,27 +199,6 @@ export default function LiquidacionFinalTab() {
 
   return (
     <div className="space-y-6">
-      {/* Alerta liquidaciones pendientes */}
-      {totalAprobadas > 0 && (
-        <Card className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-3">
-              <div className="mt-0.5">
-                <AlertTriangle className="h-5 w-5 text-amber-600" />
-              </div>
-              <div className="flex-1">
-                <p className="font-semibold text-amber-900 dark:text-amber-300">
-                  Liquidaciones Pendientes de Pago
-                </p>
-                <p className="text-sm text-amber-800 dark:text-amber-400 mt-1">
-                  Tienes {totalAprobadas} liquidaciones aprobadas pendientes de pago por un total de {formatearMoneda(montoTotalPagar)}.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* KPIs específicos de liquidaciones finales */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="glass-subtle border-border">
@@ -233,7 +212,7 @@ export default function LiquidacionFinalTab() {
         <Card className="glass-subtle border-border">
           <CardContent className="p-5">
             <p className="text-sm font-medium text-muted-foreground mb-1">Aprobadas</p>
-            <p className="text-2xl font-bold text-blue-600">{totalAprobadas}</p>
+            <p className="text-2xl font-bold text-primary">{totalAprobadas}</p>
             <p className="text-xs text-muted-foreground mt-1">pendientes de pago</p>
           </CardContent>
         </Card>
@@ -252,6 +231,18 @@ export default function LiquidacionFinalTab() {
             <p className="text-2xl font-bold text-foreground">{formatearMoneda(montoTotalPagar)}</p>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Botón principal de acción */}
+      <div className="flex justify-end">
+        <Button
+          size="lg"
+          onClick={() => navigate('/liquidaciones/liquidacion-final/nueva')}
+          className="gap-2"
+        >
+          <Plus className="h-5 w-5" />
+          Nueva Liquidación
+        </Button>
       </div>
 
       {/* Acciones y filtros */}
@@ -279,11 +270,6 @@ export default function LiquidacionFinalTab() {
             <option value="ANULADA">Anulada</option>
           </select>
         </div>
-
-        <Button onClick={() => setWizardAbierto(true)} className="gap-2 bg-primary hover:bg-primary/90">
-          <Plus className="h-4 w-4" />
-          Nueva Liquidación
-        </Button>
       </div>
 
       {/* Tabla de liquidaciones */}
@@ -390,11 +376,11 @@ export default function LiquidacionFinalTab() {
           </DialogHeader>
 
           <div className="space-y-4 mt-4">
-            <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900">
+            <Card className="bg-primary/5 dark:bg-primary/10 border-blue-200 dark:border-blue-900">
               <CardContent className="p-4">
                 <div className="flex items-start gap-2">
-                  <Clock className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                  <div className="text-sm text-blue-900 dark:text-blue-300">
+                  <Clock className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-primary dark:text-primary">
                     <p className="font-semibold mb-1">Wizard en Desarrollo</p>
                     <p>
                       El asistente completo para crear liquidaciones finales se implementará en esta sección.

@@ -110,6 +110,11 @@ const InteresesDetalle = lazyWithRetry(() => import('./pages/liquidaciones/Inter
 const PrimaDetalle = lazyWithRetry(() => import('./pages/liquidaciones/PrimaDetalle'));
 const VacacionesDetalle = lazyWithRetry(() => import('./pages/liquidaciones/VacacionesDetalle'));
 const LiquidacionFinalDetalle = lazyWithRetry(() => import('./pages/liquidaciones/LiquidacionFinalDetalle'));
+const NuevaCesantia = lazyWithRetry(() => import('./pages/liquidaciones/NuevaCesantia'));
+const NuevaIntereses = lazyWithRetry(() => import('./pages/liquidaciones/NuevaIntereses'));
+const NuevaPrima = lazyWithRetry(() => import('./pages/liquidaciones/NuevaPrima'));
+const NuevaVacaciones = lazyWithRetry(() => import('./pages/liquidaciones/NuevaVacaciones'));
+const NuevaLiquidacionFinal = lazyWithRetry(() => import('./pages/liquidaciones/NuevaLiquidacionFinal'));
 
 // Operaciones
 const Operaciones = lazyWithRetry(() => import('./pages/operaciones/Operaciones'));
@@ -313,10 +318,15 @@ export const router = createBrowserRouter([
         element: <ProtectedRoute permiso="nomina.ver">{L(<LiquidacionesLayout />)}</ProtectedRoute>,
         children: [
           { index: true,                       element: L(<Liquidaciones />) },
+          { path: 'cesantias/nueva',           element: L(<NuevaCesantia />) },
           { path: 'cesantias/:id',             element: L(<CesantiasDetalle />) },
+          { path: 'intereses/nueva',           element: L(<NuevaIntereses />) },
           { path: 'intereses/:id',             element: L(<InteresesDetalle />) },
+          { path: 'prima/nueva',               element: L(<NuevaPrima />) },
           { path: 'prima/:id',                 element: L(<PrimaDetalle />) },
+          { path: 'vacaciones/nueva',          element: L(<NuevaVacaciones />) },
           { path: 'vacaciones/:id',            element: L(<VacacionesDetalle />) },
+          { path: 'liquidacion-final/nueva',   element: L(<NuevaLiquidacionFinal />) },
           { path: 'liquidacion-final/:id',     element: L(<LiquidacionFinalDetalle />) },
         ],
       },

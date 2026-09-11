@@ -67,6 +67,16 @@ export interface VacacionesColaborador {
   diasHabilesLaborados: number;
   valorCompensacion?: number;
   estado: 'DISPONIBLE' | 'PARCIAL' | 'COMPENSADO' | 'ACTUALIZADO';
+  // Campos opcionales de liquidaciones generadas desde NuevaVacaciones
+  cedula?: string;
+  salarioPromedio?: number;
+  auxilioTransporte?: number;
+  vacacionesCalculada?: number;
+  periodoInicio?: string;
+  periodoFin?: string;
+  tipoVacaciones?: string;
+  pagado?: boolean;
+  fechaPago?: string;
 }
 
 export type EstadoLiquidacion = 'BORRADOR' | 'APROBADA' | 'PAGADA' | 'ANULADA';
@@ -102,6 +112,9 @@ export interface LiquidacionFinal {
   fechaAprobacion?: string;
   fechaPago?: string;
   observaciones?: string;
+  // Campos opcionales de liquidaciones generadas desde NuevaLiquidacionFinal
+  tipoLiquidacion?: 'normal' | 'final' | '';
+  motivoRetiro?: string;
 }
 
 // Contexto

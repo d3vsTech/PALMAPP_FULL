@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { Card, CardContent } from '../../components/ui/card';
 import { Info, DollarSign, TrendingUp, Calendar, FileText, Briefcase } from 'lucide-react';
+import { InfoTooltip } from '../../components/common/InfoTooltip';
 import {
   Tooltip,
   TooltipContent,
@@ -28,7 +29,7 @@ function LiquidacionesContent() {
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-4xl font-bold text-foreground">Liquidaciones</h1>
+            <h1 className="text-3xl font-bold text-primary">Liquidaciones</h1>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -68,6 +69,7 @@ function LiquidacionesContent() {
               >
                 <DollarSign className="h-4 w-4" />
                 <span>Cesantías</span>
+                <InfoTooltip text="Ahorro obligatorio que la finca debe guardar por cada trabajador, equivalente a un mes de salario por año trabajado" />
               </TabsTrigger>
               <TabsTrigger
                 value="intereses"

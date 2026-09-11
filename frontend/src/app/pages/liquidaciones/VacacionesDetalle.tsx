@@ -1,18 +1,23 @@
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { Label } from '../../components/ui/label';
 import { Badge } from '../../components/ui/badge';
-import { ArrowLeft, Download, CheckCircle, DollarSign, Calendar, User, Briefcase, FileText, Info, Plane } from 'lucide-react';
+import { ArrowLeft, User, Calendar, DollarSign, CheckCircle, MessageCircle, Printer, Download, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLiquidaciones } from '../../contexts/LiquidacionesContext';
 import { formatearMoneda } from '../../lib/liquidaciones/calculoUtils';
+import ResumenLiquidacion from '../../components/liquidaciones/ResumenLiquidacion';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 export default function VacacionesDetalle() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { vacaciones } = useLiquidaciones();
+  const { vacaciones, setVacaciones } = useLiquidaciones();
+  const [mostrarResumen, setMostrarResumen] = useState(true);
 
   const vacacion = vacaciones.find(v => v.id === id);
 
@@ -32,7 +37,14 @@ export default function VacacionesDetalle() {
     );
   }
 
-  const generarLiquidacion = () => {
+  // Calcular valores usando los datos disponibles
+  const diasLaborados = vacacion.diasHabilesLaborados || vacacion.diasCausados || 0;
+  const salarioBase = vacacion.salarioBasico || vacacion.salarioPromedio || 0;
+  const auxilioTransporte = vacacion.auxilioTransporte || 0;
+  const basePrestacional = salarioBase + auxilioTransporte;
+  const montoVacaciones = vacacion.vacacionesCalculada || (basePrestacional * diasLaborados) / 360;
+
+  const generarPDF = () => {
     const doc = new jsPDF();
 
     doc.setFontSize(20);
@@ -55,9 +67,11 @@ export default function VacacionesDetalle() {
       head: [['Campo', 'Información']],
       body: [
         ['Nombre Completo', vacacion.nombreCompleto],
+        ['Cédula', vacacion.cedula || 'N/A'],
         ['Cargo', vacacion.cargo],
-        ['Fecha de Ingreso', new Date(vacacion.fechaIngreso).toLocaleDateString('es-CO')],
-        ['Salario Básico', formatearMoneda(vacacion.salarioBasico)],
+        ['Tipo', vacacion.tipoVacaciones === 'servicio' ? 'Vacaciones Laborales' : 'Vacaciones Compensatorias'],
+        ['Período', vacacion.periodoInicio && vacacion.periodoFin ? `${new Date(vacacion.periodoInicio).toLocaleDateString('es-CO')} - ${new Date(vacacion.periodoFin).toLocaleDateString('es-CO')}` : 'N/A'],
+        ['Días Causados', `${vacacion.diasCausados || 0} días`],
       ],
       headStyles: { fillColor: [30, 86, 49], fontSize: 10 },
       bodyStyles: { fontSize: 10 },
@@ -73,10 +87,12 @@ export default function VacacionesDetalle() {
       startY: finalY + 14,
       head: [['Concepto', 'Valor']],
       body: [
-        ['Días Causados', `${vacacion.diasCausados} días`],
-        ['Días Disfrutados', `${vacacion.diasDisfrutados} días`],
-        ['Días Compensados', `${vacacion.diasCompensados} días`],
-        ['Días Pendientes', `${vacacion.diasPendientes} días`],
+        ['Días Causados', `${vacacion.diasCausados || 0} días`],
+        ['Días Disfrutados', `${vacacion.diasDisfrutados || 0} días`],
+        ['Días Compensados', `${vacacion.diasCompensados || 0} días`],
+        ['Días Pendientes', `${vacacion.diasPendientes || 0} días`],
+        ['Salario Promedio', formatearMoneda(salarioBase)],
+        ['Auxilio de Transporte', formatearMoneda(auxilioTransporte)],
       ],
       headStyles: { fillColor: [30, 86, 49], fontSize: 10 },
       bodyStyles: { fontSize: 10 },
@@ -93,7 +109,8 @@ export default function VacacionesDetalle() {
     doc.setFillColor(30, 86, 49);
     doc.rect(14, finalY2 + 14, 182, 14, 'F');
     doc.setTextColor(255, 255, 255);
-    doc.text(`ESTADO: ${vacacion.estado}`, 105, finalY2 + 23, { align: 'center' });
+    doc.text('VALOR TOTAL:', 18, finalY2 + 22);
+    doc.text(formatearMoneda(montoVacaciones), 192, finalY2 + 22, { align: 'right' });
 
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(9);
@@ -103,210 +120,469 @@ export default function VacacionesDetalle() {
     doc.setFontSize(10);
     doc.line(14, finalY2 + 58, 90, finalY2 + 58);
     doc.line(120, finalY2 + 58, 196, finalY2 + 58);
-    doc.text('Firma del Empleador', 14, finalY2 + 64);
-    doc.text('Firma del Colaborador', 120, finalY2 + 64);
+    doc.text('Firma del Empleador', 52, finalY2 + 64, { align: 'center' });
+    doc.text('Firma del Colaborador', 158, finalY2 + 64, { align: 'center' });
 
-    doc.save(`vacaciones_${vacacion.nombreCompleto.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
-    toast.success('PDF generado exitosamente');
+    doc.save(`Vacaciones_${vacacion.nombreCompleto.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
+  const compartirWhatsApp = () => {
+    const mensaje = `*LIQUIDACIÓN DE VACACIONES*\n\n` +
+      `👤 *Colaborador:* ${vacacion.nombreCompleto}\n` +
+      `💼 *Cargo:* ${vacacion.cargo}\n` +
+      `📅 *Días Causados:* ${vacacion.diasCausados || 0} días\n` +
+      `✈️ *Días Disfrutados:* ${vacacion.diasDisfrutados || 0} días\n` +
+      `💰 *Días Compensados:* ${vacacion.diasCompensados || 0} días\n` +
+      `⏳ *Días Pendientes:* ${vacacion.diasPendientes || 0} días\n\n` +
+      `💵 *VALOR TOTAL:* ${formatearMoneda(montoVacaciones)}`;
+
+    const url = `https://wa.me/?text=${encodeURIComponent(mensaje)}`;
+    window.open(url, '_blank');
+  };
+
+  const marcarComoPagado = () => {
+    setVacaciones(prev => prev.map(v => {
+      if (v.id === id) {
+        return {
+          ...v,
+          pagado: true,
+          fechaPago: new Date().toISOString().split('T')[0],
+        };
+      }
+      return v;
+    }));
+
+    toast.success('Vacaciones marcadas como pagadas');
     navigate('/liquidaciones');
   };
 
-  const valorDiario = vacacion.salarioBasico / 30;
-  const valorCompensacionPendiente = valorDiario * vacacion.diasPendientes;
+  if (mostrarResumen) {
+    return (
+      <ResumenLiquidacion
+        onVolver={() => setMostrarResumen(false)}
+        onAceptar={marcarComoPagado}
+        onDescargarPDF={generarPDF}
+        onCompartirWhatsApp={compartirWhatsApp}
+      >
+        <div className="space-y-6">
+          <div className="space-y-4">
+            <Button variant="ghost" size="sm" onClick={() => navigate('/liquidaciones')} className="gap-2">
+              <ArrowLeft className="h-4 w-4" />
+              Volver a Liquidaciones
+            </Button>
+
+            <div>
+              <h1 className="text-3xl font-bold text-primary">Liquidación de Vacaciones</h1>
+              <p className="text-muted-foreground mt-1">
+                Detalle de liquidación de vacaciones
+              </p>
+            </div>
+          </div>
+
+          <Card>
+            <CardHeader className="border-b">
+              <CardTitle className="flex items-center gap-2">
+                <User className="h-5 w-5" />
+                Información del Colaborador
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              <div className="p-4 rounded-lg bg-muted/30 border border-border space-y-2">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Nombre Completo</p>
+                    <p className="font-medium">{vacacion.nombreCompleto}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Cargo</p>
+                    <p className="font-medium">{vacacion.cargo}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Fecha de Ingreso</p>
+                    <p className="font-medium">{new Date(vacacion.fechaIngreso).toLocaleDateString('es-CO')}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Estado</p>
+                    {vacacion.pagado ? (
+                      <Badge variant="outline" className="bg-success/10 text-success border-success/30">
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        Pagada
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="bg-primary/5 text-primary border-blue-200">
+                        {vacacion.estado || 'Pendiente'}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">Tipo</p>
+                <Badge variant="outline" className="bg-primary/10 text-primary dark:text-primary border-blue-500/30">
+                  {vacacion.tipoVacaciones === 'servicio' ? 'Vacaciones Laborales' : 'Vacaciones Compensatorias'}
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="border-b">
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5" />
+                Resumen de Vacaciones
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 rounded-lg bg-muted/30 border border-border">
+                  <p className="text-xs text-muted-foreground mb-2">Días Causados</p>
+                  <p className="text-2xl font-bold text-primary">{vacacion.diasCausados || 0} días</p>
+                </div>
+                <div className="p-4 rounded-lg bg-muted/30 border border-border">
+                  <p className="text-xs text-muted-foreground mb-2">Días Disfrutados</p>
+                  <p className="text-2xl font-bold text-primary">{vacacion.diasDisfrutados || 0} días</p>
+                </div>
+                <div className="p-4 rounded-lg bg-muted/30 border border-border">
+                  <p className="text-xs text-muted-foreground mb-2">Días Compensados</p>
+                  <p className="text-2xl font-bold text-primary">{vacacion.diasCompensados || 0} días</p>
+                </div>
+                <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                  <p className="text-xs text-muted-foreground mb-2">Días Pendientes</p>
+                  <p className="text-2xl font-bold text-amber-600">{vacacion.diasPendientes || 0} días</p>
+                </div>
+              </div>
+
+              {vacacion.periodoInicio && vacacion.periodoFin && (
+                <div className="mt-4 p-4 rounded-lg bg-muted/30 border border-border">
+                  <p className="text-xs text-muted-foreground mb-2">Período</p>
+                  <p className="font-medium">
+                    {new Date(vacacion.periodoInicio).toLocaleDateString('es-CO')} - {new Date(vacacion.periodoFin).toLocaleDateString('es-CO')}
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="border-b">
+              <CardTitle className="flex items-center gap-2">
+                <DollarSign className="h-5 w-5" />
+                Cálculo de Compensación
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-6">
+              <div className="space-y-4">
+                <div className="flex justify-between items-center py-2 border-b border-border">
+                  <span className="text-sm text-muted-foreground">Salario Base</span>
+                  <span className="font-medium">{formatearMoneda(salarioBase)}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-border">
+                  <span className="text-sm text-muted-foreground">Auxilio de Transporte</span>
+                  <span className="font-medium">{formatearMoneda(auxilioTransporte)}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-border">
+                  <span className="text-sm font-medium">Base Prestacional</span>
+                  <span className="font-bold text-lg">{formatearMoneda(basePrestacional)}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-border">
+                  <span className="text-sm text-muted-foreground">Valor Diario</span>
+                  <span className="font-medium">{formatearMoneda(basePrestacional / 30)}</span>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-lg bg-primary/10 border border-primary/30">
+                <div className="flex justify-between items-center">
+                  <span className="font-semibold">Valor Total Compensación</span>
+                  <span className="font-bold text-2xl text-primary">{formatearMoneda(montoVacaciones)}</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Calculado según días pendientes y valor diario
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </ResumenLiquidacion>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/liquidaciones')} className="gap-2">
-          <ArrowLeft className="h-4 w-4" />
-          Volver a Liquidaciones
-        </Button>
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Columna principal - Formulario */}
+      <div className="lg:col-span-2 space-y-6">
+        <div className="space-y-4">
+          <Button variant="ghost" size="sm" onClick={() => navigate('/liquidaciones')} className="gap-2">
+            <ArrowLeft className="h-4 w-4" />
+            Volver a Liquidaciones
+          </Button>
 
-        <div className="flex items-center gap-4">
-          <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-blue-500/20 to-blue-500/10 flex items-center justify-center border border-blue-500/30 shadow-lg">
-            <Plane className="h-8 w-8 text-blue-600" />
-          </div>
           <div>
-            <h1 className="text-4xl font-bold">Vacaciones</h1>
-            <p className="text-muted-foreground mt-1">{vacacion.nombreCompleto}</p>
+            <h1 className="text-3xl font-bold text-primary">Liquidación de Vacaciones</h1>
+            <p className="text-muted-foreground mt-1">
+              Detalle de liquidación de vacaciones
+            </p>
           </div>
         </div>
-      </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card className="glass-subtle border-border">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                <User className="h-5 w-5 text-primary" />
+        <Card>
+          <CardHeader className="border-b">
+            <CardTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              Información del Colaborador y Período
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-6 space-y-6">
+            <div className="space-y-2 relative">
+              <Label htmlFor="busqueda-colaborador">
+                Buscar Colaborador <span className="text-destructive">*</span>
+              </Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="busqueda-colaborador"
+                  type="text"
+                  value={vacacion.nombreCompleto}
+                  disabled
+                  className="pl-9"
+                />
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Colaborador</p>
-                <p className="font-semibold text-sm">{vacacion.nombreCompleto}</p>
+            </div>
+
+            <div className="p-4 rounded-lg bg-muted/30 border border-border space-y-2">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-muted-foreground">Cédula</p>
+                  <p className="font-medium">{vacacion.cedula || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Cargo</p>
+                  <p className="font-medium">{vacacion.cargo}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Fecha de Ingreso</p>
+                  <p className="font-medium">{new Date(vacacion.fechaIngreso).toLocaleDateString('es-CO')}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Estado</p>
+                  <Badge variant="outline" className="bg-success/10 text-success border-success/30">
+                    Activo
+                  </Badge>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="tipoVacaciones">
+                Tipo <span className="text-destructive">*</span>
+              </Label>
+              <select
+                id="tipoVacaciones"
+                value={vacacion.tipoVacaciones || 'servicio'}
+                disabled
+                className="flex h-10 w-full rounded-md border border-input bg-muted px-3 py-2 text-sm cursor-not-allowed"
+              >
+                <option value="servicio">Vacaciones Laborales</option>
+                <option value="navidad">Vacaciones Compensatorias</option>
+              </select>
+            </div>
+
+            {vacacion.periodoInicio && vacacion.periodoFin && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="periodoInicio">
+                    Fecha Inicio del Período <span className="text-destructive">*</span>
+                  </Label>
+                  <div className="relative">
+                    <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="periodoInicio"
+                      type="date"
+                      value={vacacion.periodoInicio}
+                      disabled
+                      className="pl-9"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="periodoFin">
+                    Fecha Fin del Período <span className="text-destructive">*</span>
+                  </Label>
+                  <div className="relative">
+                    <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="periodoFin"
+                      type="date"
+                      value={vacacion.periodoFin}
+                      disabled
+                      className="pl-9"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-3 rounded-lg bg-primary/10 border border-primary/30">
+                <p className="text-sm text-muted-foreground">Días Causados</p>
+                <p className="text-2xl font-bold text-primary">{vacacion.diasCausados || 0} días</p>
+              </div>
+              <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                <p className="text-sm text-muted-foreground">Días Pendientes</p>
+                <p className="text-2xl font-bold text-amber-600">{vacacion.diasPendientes || 0} días</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="glass-subtle border-border">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center">
-                <Briefcase className="h-5 w-5 text-blue-600" />
+        <Card>
+          <CardHeader className="border-b">
+            <CardTitle className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5" />
+              Componentes Salariales
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-6 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label htmlFor="salarioPromedio">
+                  Salario Promedio <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="salarioPromedio"
+                  type="number"
+                  value={salarioBase}
+                  disabled
+                />
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Cargo</p>
-                <p className="font-semibold text-sm">{vacacion.cargo}</p>
+
+              <div className="space-y-2">
+                <Label htmlFor="auxilioTransporte">
+                  Auxilio de Transporte
+                </Label>
+                <Input
+                  id="auxilioTransporte"
+                  type="number"
+                  value={auxilioTransporte}
+                  disabled
+                />
               </div>
             </div>
-          </CardContent>
-        </Card>
 
-        <Card className="glass-subtle border-border">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-purple-500/10 flex items-center justify-center">
-                <Calendar className="h-5 w-5 text-purple-600" />
+            <div className="p-4 rounded-lg bg-muted/30 border border-border space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Base Prestacional</span>
+                <span className="font-bold text-lg">{formatearMoneda(basePrestacional)}</span>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Ingreso</p>
-                <p className="font-semibold text-sm">
-                  {new Date(vacacion.fechaIngreso).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })}
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Valor Diario</span>
+                <span className="font-bold text-lg">{formatearMoneda(basePrestacional / 30)}</span>
+              </div>
+              <div className="pt-3 border-t border-border">
+                <div className="flex justify-between items-center">
+                  <span className="font-semibold">Total Compensación</span>
+                  <span className="font-bold text-2xl text-primary">{formatearMoneda(montoVacaciones)}</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Basado en días pendientes y valor diario
                 </p>
               </div>
             </div>
           </CardContent>
         </Card>
+      </div>
 
-        <Card className="glass-subtle border-border">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-amber-500/10 flex items-center justify-center">
-                <FileText className="h-5 w-5 text-amber-600" />
-              </div>
+      {/* Columna lateral - Resumen */}
+      <div className="space-y-6">
+        <Card className="sticky top-6">
+          <CardHeader className="border-b">
+            <CardTitle className="text-base">Resumen de Vacaciones</CardTitle>
+          </CardHeader>
+          <CardContent className="p-6 space-y-4">
+            <div className="space-y-3">
               <div>
-                <p className="text-xs text-muted-foreground">Estado</p>
-                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                  {vacacion.estado}
-                </Badge>
+                <p className="text-xs text-muted-foreground mb-1">Colaborador</p>
+                <p className="font-semibold text-sm">{vacacion.nombreCompleto}</p>
               </div>
+
+              <div className="space-y-2">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Días Causados</p>
+                  <p className="text-sm font-medium">{vacacion.diasCausados || 0} días</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Días Disfrutados</p>
+                  <p className="text-sm font-medium text-primary">{vacacion.diasDisfrutados || 0} días</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Días Compensados</p>
+                  <p className="text-sm font-medium text-primary">{vacacion.diasCompensados || 0} días</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Días Pendientes</p>
+                  <p className="text-sm font-medium text-amber-600">{vacacion.diasPendientes || 0} días</p>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-border">
+                <p className="text-xs text-muted-foreground mb-1">Valor Compensación</p>
+                <p className="text-2xl font-bold text-primary">{formatearMoneda(montoVacaciones)}</p>
+              </div>
+
+              <div>
+                <p className="text-xs text-muted-foreground mb-2">Estado</p>
+                {vacacion.pagado ? (
+                  <Badge variant="outline" className="bg-success/10 text-success border-success/30">
+                    <CheckCircle className="h-3 w-3 mr-1" />
+                    Pagada
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="bg-primary/5 text-primary border-blue-200">
+                    {vacacion.estado || 'Pendiente'}
+                  </Badge>
+                )}
+              </div>
+            </div>
+
+            <div className="pt-4 space-y-2">
+              <Button
+                onClick={() => setMostrarResumen(true)}
+                className="w-full gap-2"
+                size="lg"
+              >
+                <CheckCircle className="h-5 w-5" />
+                Ver Resumen
+              </Button>
+              <Button
+                onClick={generarPDF}
+                variant="outline"
+                className="w-full gap-2"
+                size="sm"
+              >
+                <Download className="h-4 w-4" />
+                Descargar PDF
+              </Button>
+              <Button
+                onClick={() => window.print()}
+                variant="outline"
+                className="w-full gap-2"
+                size="sm"
+              >
+                <Printer className="h-4 w-4" />
+                Imprimir
+              </Button>
+              <Button
+                onClick={compartirWhatsApp}
+                variant="outline"
+                className="w-full gap-2 text-primary border-green-600 hover:bg-primary/5"
+                size="sm"
+              >
+                <MessageCircle className="h-4 w-4" />
+                Compartir
+              </Button>
             </div>
           </CardContent>
         </Card>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="glass-subtle border-border">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                <span className="text-sm font-bold text-primary">1</span>
-              </div>
-              <CardTitle className="text-base">Días Causados</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="space-y-2 text-sm">
-              <p className="text-muted-foreground">
-                Días de vacaciones acumulados según tiempo de servicio
-              </p>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Días laborados:</span>
-                <span className="font-medium">{vacacion.diasHabilesLaborados} días</span>
-              </div>
-            </div>
-            <div className="pt-3 border-t border-border">
-              <p className="text-xs text-muted-foreground mb-1">Total Causados:</p>
-              <p className="text-xl font-bold text-primary">{vacacion.diasCausados} días</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="glass-subtle border-border">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                <span className="text-sm font-bold text-primary">2</span>
-              </div>
-              <CardTitle className="text-base">Días Utilizados</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Disfrutados:</span>
-                <span className="font-medium text-blue-600">{vacacion.diasDisfrutados} días</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Compensados:</span>
-                <span className="font-medium text-green-600">{vacacion.diasCompensados} días</span>
-              </div>
-            </div>
-            <div className="pt-3 border-t border-border">
-              <p className="text-xs text-muted-foreground mb-1">Total:</p>
-              <p className="text-xl font-bold text-primary">{vacacion.diasDisfrutados + vacacion.diasCompensados} días</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="glass-subtle border-border">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                <span className="text-sm font-bold text-primary">3</span>
-              </div>
-              <CardTitle className="text-base">Días Pendientes</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="bg-muted/50 p-3 rounded-md">
-              <p className="text-xs font-mono text-muted-foreground mb-2">
-                Pendientes = Causados - Utilizados
-              </p>
-              <p className="text-xs font-mono">
-                {vacacion.diasCausados} - {vacacion.diasDisfrutados + vacacion.diasCompensados}
-              </p>
-            </div>
-            <div className="pt-3 border-t border-border">
-              <p className="text-xs text-muted-foreground mb-1">Disponible:</p>
-              <p className="text-xl font-bold text-amber-600">{vacacion.diasPendientes} días</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="glass-subtle border-amber-500/50 bg-gradient-to-br from-amber-500/5 to-amber-500/10">
-          <CardContent className="p-8 text-center">
-            <div className="inline-flex items-center justify-center h-16 w-16 rounded-full bg-amber-500/10 mb-4">
-              <Plane className="h-8 w-8 text-amber-600" />
-            </div>
-            <p className="text-sm text-muted-foreground mb-2">Días de Vacaciones Pendientes</p>
-            <p className="text-5xl font-bold text-amber-600 mb-4">{vacacion.diasPendientes}</p>
-            <p className="text-xs text-muted-foreground">días hábiles disponibles</p>
-          </CardContent>
-        </Card>
-
-        <Card className="glass-subtle border-primary bg-gradient-to-br from-primary/5 to-primary/10">
-          <CardContent className="p-8 text-center">
-            <div className="inline-flex items-center justify-center h-16 w-16 rounded-full bg-primary/10 mb-4">
-              <DollarSign className="h-8 w-8 text-primary" />
-            </div>
-            <p className="text-sm text-muted-foreground mb-2">Valor de Compensación (si aplica)</p>
-            <p className="text-5xl font-bold text-primary mb-4">{formatearMoneda(valorCompensacionPendiente)}</p>
-            <p className="text-xs text-muted-foreground">
-              {vacacion.diasPendientes} días × {formatearMoneda(valorDiario)} por día
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Botón de acción */}
-      <div className="flex justify-end">
-        <Button onClick={generarLiquidacion} size="lg" className="gap-2 shadow-lg shadow-primary/20">
-          <Download className="h-5 w-5" />
-          Generar PDF
-        </Button>
       </div>
     </div>
   );

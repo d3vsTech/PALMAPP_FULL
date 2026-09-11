@@ -1,11 +1,15 @@
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { Label } from '../../components/ui/label';
 import { Badge } from '../../components/ui/badge';
-import { ArrowLeft, Download, CheckCircle, DollarSign, Calendar, User, Briefcase, FileText, Info, XCircle, AlertCircle } from 'lucide-react';
+import { ArrowLeft, User, Calendar, DollarSign, CheckCircle, MessageCircle, Printer, Download, Search, AlertCircle, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLiquidaciones, EstadoLiquidacion, CausaTerminacion } from '../../contexts/LiquidacionesContext';
 import { formatearMoneda } from '../../lib/liquidaciones/calculoUtils';
+import ResumenLiquidacion from '../../components/liquidaciones/ResumenLiquidacion';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -13,6 +17,7 @@ export default function LiquidacionFinalDetalle() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { liquidacionesFinales, setLiquidacionesFinales } = useLiquidaciones();
+  const [mostrarResumen, setMostrarResumen] = useState(true);
 
   const liquidacion = liquidacionesFinales.find(l => l.id === id);
 
@@ -32,7 +37,23 @@ export default function LiquidacionFinalDetalle() {
     );
   }
 
-  const generarYPagar = () => {
+  const getCausaTerminacionTexto = (causa: CausaTerminacion): string => {
+    const textos: Record<CausaTerminacion, string> = {
+      'RENUNCIA': 'Renuncia voluntaria',
+      'DESPIDO_JUSTA_CAUSA': 'Despido con justa causa',
+      'DESPIDO_SIN_JUSTA_CAUSA': 'Despido sin justa causa',
+      'MUTUO_ACUERDO': 'Mutuo acuerdo',
+      'VENCIMIENTO_CONTRATO': 'Vencimiento de contrato',
+    };
+    return textos[causa];
+  };
+
+  const diasTrabajados = Math.floor(
+    (new Date(liquidacion.fechaRetiro).getTime() - new Date(liquidacion.fechaIngreso).getTime()) / (1000 * 60 * 60 * 24)
+  );
+  const anosTrabajados = (diasTrabajados / 365).toFixed(1);
+
+  const generarPDF = () => {
     const doc = new jsPDF();
 
     // Encabezado
@@ -170,8 +191,23 @@ export default function LiquidacionFinalDetalle() {
     doc.text('Elaborado conforme al Código Sustantivo del Trabajo de Colombia', 105, 285, { align: 'center' });
 
     doc.save(`liquidacion_final_${liquidacion.nombreCompleto.replace(/\s+/g, '_')}_${liquidacion.id}.pdf`);
+  };
 
-    // Marcar como pagada
+  const compartirWhatsApp = () => {
+    const mensaje = `*LIQUIDACIÓN FINAL DE CONTRATO*\n\n` +
+      `👤 *Colaborador:* ${liquidacion.nombreCompleto}\n` +
+      `💼 *Cargo:* ${liquidacion.cargo}\n` +
+      `📅 *Fecha de Retiro:* ${new Date(liquidacion.fechaRetiro).toLocaleDateString('es-CO')}\n` +
+      `📋 *Causa:* ${getCausaTerminacionTexto(liquidacion.causaTerminacion)}\n\n` +
+      `💰 *TOTAL DEVENGADO:* ${formatearMoneda(liquidacion.totalDevengado)}\n` +
+      `💳 *TOTAL DEDUCCIONES:* ${formatearMoneda(liquidacion.totalDeducciones)}\n\n` +
+      `💵 *NETO A PAGAR:* ${formatearMoneda(liquidacion.netoAPagar)}`;
+
+    const url = `https://wa.me/?text=${encodeURIComponent(mensaje)}`;
+    window.open(url, '_blank');
+  };
+
+  const marcarComoPagado = () => {
     setLiquidacionesFinales(prev => prev.map(l => {
       if (l.id === id) {
         return {
@@ -183,19 +219,8 @@ export default function LiquidacionFinalDetalle() {
       return l;
     }));
 
-    toast.success('Liquidación final generada y marcada como pagada');
+    toast.success('Liquidación final marcada como pagada');
     navigate('/liquidaciones');
-  };
-
-  const getCausaTerminacionTexto = (causa: CausaTerminacion): string => {
-    const textos: Record<CausaTerminacion, string> = {
-      'RENUNCIA': 'Renuncia voluntaria',
-      'DESPIDO_JUSTA_CAUSA': 'Despido con justa causa',
-      'DESPIDO_SIN_JUSTA_CAUSA': 'Despido sin justa causa',
-      'MUTUO_ACUERDO': 'Mutuo acuerdo',
-      'VENCIMIENTO_CONTRATO': 'Vencimiento de contrato',
-    };
-    return textos[causa];
   };
 
   const getEstadoBadge = (estado: EstadoLiquidacion) => {
@@ -208,7 +233,7 @@ export default function LiquidacionFinalDetalle() {
         );
       case 'APROBADA':
         return (
-          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-900/30">
+          <Badge variant="outline" className="bg-primary/5 text-primary border-blue-200 dark:bg-primary/10 dark:text-primary dark:border-blue-900/30">
             <CheckCircle className="h-3 w-3 mr-1" />
             Aprobada
           </Badge>
@@ -230,278 +255,527 @@ export default function LiquidacionFinalDetalle() {
     }
   };
 
-  const diasTrabajados = Math.floor(
-    (new Date(liquidacion.fechaRetiro).getTime() - new Date(liquidacion.fechaIngreso).getTime()) / (1000 * 60 * 60 * 24)
-  );
-  const anosTrabajados = (diasTrabajados / 365).toFixed(1);
+  if (mostrarResumen) {
+    return (
+      <ResumenLiquidacion
+        onVolver={() => setMostrarResumen(false)}
+        onAceptar={marcarComoPagado}
+        onDescargarPDF={generarPDF}
+        onCompartirWhatsApp={compartirWhatsApp}
+      >
+        <div className="space-y-6">
+          <div className="space-y-4">
+            <Button variant="ghost" size="sm" onClick={() => navigate('/liquidaciones')} className="gap-2">
+              <ArrowLeft className="h-4 w-4" />
+              Volver a Liquidaciones
+            </Button>
+
+            <div>
+              <h1 className="text-3xl font-bold text-primary">Liquidación Final de Contrato</h1>
+              <p className="text-muted-foreground mt-1">
+                Detalle de liquidación final
+              </p>
+            </div>
+          </div>
+
+          <Card>
+            <CardHeader className="border-b">
+              <CardTitle className="flex items-center gap-2">
+                <User className="h-5 w-5" />
+                Información del Colaborador
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              <div className="p-4 rounded-lg bg-muted/30 border border-border space-y-2">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Nombre Completo</p>
+                    <p className="font-medium">{liquidacion.nombreCompleto}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Cargo</p>
+                    <p className="font-medium">{liquidacion.cargo}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Tipo de Contrato</p>
+                    <p className="font-medium">{liquidacion.tipoContrato}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Estado</p>
+                    {getEstadoBadge(liquidacion.estado)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Fecha de Ingreso</p>
+                  <p className="text-sm font-medium">
+                    {new Date(liquidacion.fechaIngreso).toLocaleDateString('es-CO')}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Fecha de Retiro</p>
+                  <p className="text-sm font-medium">
+                    {new Date(liquidacion.fechaRetiro).toLocaleDateString('es-CO')}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Tiempo de Servicio</p>
+                  <p className="text-sm font-medium">{anosTrabajados} años</p>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs text-muted-foreground mb-2">Causa de Terminación</p>
+                <Badge variant="outline" className="bg-destructive/10 text-destructive dark:text-destructive border-red-500/30">
+                  {getCausaTerminacionTexto(liquidacion.causaTerminacion)}
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="border-b">
+              <CardTitle className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-success" />
+                Conceptos Devengados
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              {liquidacion.salarioPendiente > 0 && (
+                <div className="flex justify-between items-center py-2 border-b border-border">
+                  <div>
+                    <p className="font-medium">Salario Pendiente</p>
+                    <p className="text-xs text-muted-foreground">{liquidacion.diasSalarioPendiente} días</p>
+                  </div>
+                  <p className="font-bold">{formatearMoneda(liquidacion.salarioPendiente)}</p>
+                </div>
+              )}
+              {liquidacion.cesantias > 0 && (
+                <div className="flex justify-between items-center py-2 border-b border-border">
+                  <p className="font-medium">Cesantías</p>
+                  <p className="font-bold">{formatearMoneda(liquidacion.cesantias)}</p>
+                </div>
+              )}
+              {liquidacion.interesesCesantias > 0 && (
+                <div className="flex justify-between items-center py-2 border-b border-border">
+                  <div>
+                    <p className="font-medium">Intereses sobre Cesantías</p>
+                    <p className="text-xs text-muted-foreground">12% anual</p>
+                  </div>
+                  <p className="font-bold">{formatearMoneda(liquidacion.interesesCesantias)}</p>
+                </div>
+              )}
+              {liquidacion.prima > 0 && (
+                <div className="flex justify-between items-center py-2 border-b border-border">
+                  <p className="font-medium">Prima de Servicios</p>
+                  <p className="font-bold">{formatearMoneda(liquidacion.prima)}</p>
+                </div>
+              )}
+              {liquidacion.vacaciones > 0 && (
+                <div className="flex justify-between items-center py-2 border-b border-border">
+                  <p className="font-medium">Vacaciones</p>
+                  <p className="font-bold">{formatearMoneda(liquidacion.vacaciones)}</p>
+                </div>
+              )}
+              {liquidacion.indemnizacion > 0 && (
+                <div className="flex justify-between items-center py-2 border-b border-border">
+                  <p className="font-medium">Indemnización</p>
+                  <p className="font-bold text-amber-600">{formatearMoneda(liquidacion.indemnizacion)}</p>
+                </div>
+              )}
+
+              <div className="p-4 rounded-lg bg-success/10 border border-success/30">
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-lg">TOTAL DEVENGADO</span>
+                  <span className="font-bold text-2xl text-success">{formatearMoneda(liquidacion.totalDevengado)}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="border-b">
+              <CardTitle className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-destructive" />
+                Conceptos Deducidos
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              {liquidacion.deduccionSeguridadSocial > 0 && (
+                <div className="flex justify-between items-center py-2 border-b border-border">
+                  <p className="font-medium">Seguridad Social</p>
+                  <p className="font-bold text-destructive">-{formatearMoneda(liquidacion.deduccionSeguridadSocial)}</p>
+                </div>
+              )}
+              {liquidacion.deduccionPrestamos > 0 && (
+                <div className="flex justify-between items-center py-2 border-b border-border">
+                  <p className="font-medium">Préstamos</p>
+                  <p className="font-bold text-destructive">-{formatearMoneda(liquidacion.deduccionPrestamos)}</p>
+                </div>
+              )}
+              {liquidacion.otrosDeducciones > 0 && (
+                <div className="flex justify-between items-center py-2 border-b border-border">
+                  <p className="font-medium">Otras Deducciones</p>
+                  <p className="font-bold text-destructive">-{formatearMoneda(liquidacion.otrosDeducciones)}</p>
+                </div>
+              )}
+
+              <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/30">
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-lg">TOTAL DEDUCCIONES</span>
+                  <span className="font-bold text-2xl text-destructive">-{formatearMoneda(liquidacion.totalDeducciones)}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-primary bg-gradient-to-br from-primary/5 to-primary/10">
+            <CardContent className="p-8 text-center">
+              <div className="inline-flex items-center justify-center h-16 w-16 rounded-full bg-primary/10 mb-4">
+                <DollarSign className="h-8 w-8 text-primary" />
+              </div>
+              <p className="text-sm text-muted-foreground mb-2">Neto a Pagar</p>
+              <p className="text-6xl font-bold text-primary mb-4">{formatearMoneda(liquidacion.netoAPagar)}</p>
+              <p className="text-xs text-muted-foreground">
+                {formatearMoneda(liquidacion.totalDevengado)} devengado - {formatearMoneda(liquidacion.totalDeducciones)} deducciones
+              </p>
+            </CardContent>
+          </Card>
+
+          {liquidacion.observaciones && (
+            <Card>
+              <CardHeader className="border-b">
+                <CardTitle>Observaciones</CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <p className="text-sm text-muted-foreground">{liquidacion.observaciones}</p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </ResumenLiquidacion>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="space-y-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/liquidaciones')} className="gap-2">
-          <ArrowLeft className="h-4 w-4" />
-          Volver a Liquidaciones
-        </Button>
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Columna principal - Formulario */}
+      <div className="lg:col-span-2 space-y-6">
+        <div className="space-y-4">
+          <Button variant="ghost" size="sm" onClick={() => navigate('/liquidaciones')} className="gap-2">
+            <ArrowLeft className="h-4 w-4" />
+            Volver a Liquidaciones
+          </Button>
 
-        <div className="flex items-center gap-4">
-          <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-red-500/20 to-red-500/10 flex items-center justify-center border border-red-500/30 shadow-lg">
-            <XCircle className="h-8 w-8 text-red-600" />
-          </div>
           <div>
-            <h1 className="text-4xl font-bold">Liquidación Final de Contrato</h1>
-            <p className="text-muted-foreground mt-1">{liquidacion.nombreCompleto}</p>
+            <h1 className="text-3xl font-bold text-primary">Liquidación Final de Contrato</h1>
+            <p className="text-muted-foreground mt-1">
+              Detalle de liquidación final
+            </p>
           </div>
         </div>
+
+        <Card>
+          <CardHeader className="border-b">
+            <CardTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              Información del Colaborador
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-6 space-y-6">
+            <div className="space-y-2 relative">
+              <Label htmlFor="busqueda-colaborador">
+                Colaborador <span className="text-destructive">*</span>
+              </Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="busqueda-colaborador"
+                  type="text"
+                  value={liquidacion.nombreCompleto}
+                  disabled
+                  className="pl-9"
+                />
+              </div>
+            </div>
+
+            <div className="p-4 rounded-lg bg-muted/30 border border-border space-y-2">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-muted-foreground">Cargo</p>
+                  <p className="font-medium">{liquidacion.cargo}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Tipo de Contrato</p>
+                  <p className="font-medium">{liquidacion.tipoContrato}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Fecha de Ingreso</p>
+                  <p className="font-medium">{new Date(liquidacion.fechaIngreso).toLocaleDateString('es-CO')}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Tiempo de Servicio</p>
+                  <p className="font-medium">{anosTrabajados} años</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="fechaRetiro">
+                  Fecha de Retiro <span className="text-destructive">*</span>
+                </Label>
+                <div className="relative">
+                  <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="fechaRetiro"
+                    type="date"
+                    value={liquidacion.fechaRetiro}
+                    disabled
+                    className="pl-9"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="causaTerminacion">
+                  Causa de Terminación <span className="text-destructive">*</span>
+                </Label>
+                <select
+                  id="causaTerminacion"
+                  value={liquidacion.causaTerminacion}
+                  disabled
+                  className="flex h-10 w-full rounded-md border border-input bg-muted px-3 py-2 text-sm cursor-not-allowed"
+                >
+                  <option value="RENUNCIA">Renuncia voluntaria</option>
+                  <option value="DESPIDO_JUSTA_CAUSA">Despido con justa causa</option>
+                  <option value="DESPIDO_SIN_JUSTA_CAUSA">Despido sin justa causa</option>
+                  <option value="MUTUO_ACUERDO">Mutuo acuerdo</option>
+                  <option value="VENCIMIENTO_CONTRATO">Vencimiento de contrato</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="salarioBasico">Salario Básico</Label>
+                <Input
+                  id="salarioBasico"
+                  type="number"
+                  value={liquidacion.salarioBasico}
+                  disabled
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="auxilioTransporte">Auxilio de Transporte</Label>
+                <Input
+                  id="auxilioTransporte"
+                  type="number"
+                  value={liquidacion.auxilioTransporte}
+                  disabled
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="border-b">
+            <CardTitle className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5" />
+              Detalle de Liquidación
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-6 space-y-6">
+            <div>
+              <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-success" />
+                Conceptos Devengados
+              </h3>
+              <div className="space-y-2 text-sm">
+                {liquidacion.salarioPendiente > 0 && (
+                  <div className="flex justify-between items-center py-2 border-b">
+                    <span className="text-muted-foreground">Salario Pendiente ({liquidacion.diasSalarioPendiente} días)</span>
+                    <span className="font-medium">{formatearMoneda(liquidacion.salarioPendiente)}</span>
+                  </div>
+                )}
+                {liquidacion.cesantias > 0 && (
+                  <div className="flex justify-between items-center py-2 border-b">
+                    <span className="text-muted-foreground">Cesantías</span>
+                    <span className="font-medium">{formatearMoneda(liquidacion.cesantias)}</span>
+                  </div>
+                )}
+                {liquidacion.interesesCesantias > 0 && (
+                  <div className="flex justify-between items-center py-2 border-b">
+                    <span className="text-muted-foreground">Intereses sobre Cesantías</span>
+                    <span className="font-medium">{formatearMoneda(liquidacion.interesesCesantias)}</span>
+                  </div>
+                )}
+                {liquidacion.prima > 0 && (
+                  <div className="flex justify-between items-center py-2 border-b">
+                    <span className="text-muted-foreground">Prima de Servicios</span>
+                    <span className="font-medium">{formatearMoneda(liquidacion.prima)}</span>
+                  </div>
+                )}
+                {liquidacion.vacaciones > 0 && (
+                  <div className="flex justify-between items-center py-2 border-b">
+                    <span className="text-muted-foreground">Vacaciones</span>
+                    <span className="font-medium">{formatearMoneda(liquidacion.vacaciones)}</span>
+                  </div>
+                )}
+                {liquidacion.indemnizacion > 0 && (
+                  <div className="flex justify-between items-center py-2 border-b">
+                    <span className="text-muted-foreground">Indemnización</span>
+                    <span className="font-medium text-amber-600">{formatearMoneda(liquidacion.indemnizacion)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center py-2 font-bold">
+                  <span>TOTAL DEVENGADO</span>
+                  <span className="text-success">{formatearMoneda(liquidacion.totalDevengado)}</span>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-destructive" />
+                Conceptos Deducidos
+              </h3>
+              <div className="space-y-2 text-sm">
+                {liquidacion.deduccionSeguridadSocial > 0 && (
+                  <div className="flex justify-between items-center py-2 border-b">
+                    <span className="text-muted-foreground">Seguridad Social</span>
+                    <span className="font-medium text-destructive">-{formatearMoneda(liquidacion.deduccionSeguridadSocial)}</span>
+                  </div>
+                )}
+                {liquidacion.deduccionPrestamos > 0 && (
+                  <div className="flex justify-between items-center py-2 border-b">
+                    <span className="text-muted-foreground">Préstamos</span>
+                    <span className="font-medium text-destructive">-{formatearMoneda(liquidacion.deduccionPrestamos)}</span>
+                  </div>
+                )}
+                {liquidacion.otrosDeducciones > 0 && (
+                  <div className="flex justify-between items-center py-2 border-b">
+                    <span className="text-muted-foreground">Otras Deducciones</span>
+                    <span className="font-medium text-destructive">-{formatearMoneda(liquidacion.otrosDeducciones)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center py-2 font-bold">
+                  <span>TOTAL DEDUCCIONES</span>
+                  <span className="text-destructive">-{formatearMoneda(liquidacion.totalDeducciones)}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-lg bg-primary/10 border border-primary/30">
+              <div className="flex justify-between items-center">
+                <span className="font-bold text-lg">NETO A PAGAR</span>
+                <span className="font-bold text-3xl text-primary">{formatearMoneda(liquidacion.netoAPagar)}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {liquidacion.observaciones && (
+          <Card>
+            <CardHeader className="border-b">
+              <CardTitle>Observaciones</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6">
+              <p className="text-sm text-muted-foreground">{liquidacion.observaciones}</p>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
-      {/* Info Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card className="glass-subtle border-border">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                <User className="h-5 w-5 text-primary" />
-              </div>
+      {/* Columna lateral - Resumen */}
+      <div className="space-y-6">
+        <Card className="sticky top-6">
+          <CardHeader className="border-b">
+            <CardTitle className="text-base">Resumen de Liquidación</CardTitle>
+          </CardHeader>
+          <CardContent className="p-6 space-y-4">
+            <div className="space-y-3">
               <div>
-                <p className="text-xs text-muted-foreground">Colaborador</p>
+                <p className="text-xs text-muted-foreground mb-1">Colaborador</p>
                 <p className="font-semibold text-sm">{liquidacion.nombreCompleto}</p>
               </div>
-            </div>
-          </CardContent>
-        </Card>
 
-        <Card className="glass-subtle border-border">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center">
-                <Briefcase className="h-5 w-5 text-blue-600" />
-              </div>
               <div>
-                <p className="text-xs text-muted-foreground">Cargo</p>
-                <p className="font-semibold text-sm">{liquidacion.cargo}</p>
+                <p className="text-xs text-muted-foreground mb-1">Fecha de Retiro</p>
+                <p className="text-sm">{new Date(liquidacion.fechaRetiro).toLocaleDateString('es-CO')}</p>
               </div>
-            </div>
-          </CardContent>
-        </Card>
 
-        <Card className="glass-subtle border-border">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-purple-500/10 flex items-center justify-center">
-                <Calendar className="h-5 w-5 text-purple-600" />
-              </div>
               <div>
-                <p className="text-xs text-muted-foreground">Retiro</p>
-                <p className="font-semibold text-sm">
-                  {new Date(liquidacion.fechaRetiro).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })}
-                </p>
+                <p className="text-xs text-muted-foreground mb-1">Causa de Terminación</p>
+                <Badge variant="outline" className="bg-destructive/10 text-destructive dark:text-destructive border-red-500/30">
+                  {getCausaTerminacionTexto(liquidacion.causaTerminacion)}
+                </Badge>
               </div>
-            </div>
-          </CardContent>
-        </Card>
 
-        <Card className="glass-subtle border-border">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-amber-500/10 flex items-center justify-center">
-                <FileText className="h-5 w-5 text-amber-600" />
+              <div className="pt-3 border-t border-border space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Total Devengado:</span>
+                  <span className="font-medium text-success">{formatearMoneda(liquidacion.totalDevengado)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Total Deducciones:</span>
+                  <span className="font-medium text-destructive">-{formatearMoneda(liquidacion.totalDeducciones)}</span>
+                </div>
               </div>
+
+              <div className="pt-3 border-t border-border">
+                <p className="text-xs text-muted-foreground mb-1">Neto a Pagar</p>
+                <p className="text-2xl font-bold text-primary">{formatearMoneda(liquidacion.netoAPagar)}</p>
+              </div>
+
               <div>
-                <p className="text-xs text-muted-foreground">Estado</p>
+                <p className="text-xs text-muted-foreground mb-2">Estado</p>
                 {getEstadoBadge(liquidacion.estado)}
               </div>
             </div>
+
+            <div className="pt-4 space-y-2">
+              <Button
+                onClick={() => setMostrarResumen(true)}
+                className="w-full gap-2"
+                size="lg"
+              >
+                <CheckCircle className="h-5 w-5" />
+                Ver Resumen
+              </Button>
+              <Button
+                onClick={generarPDF}
+                variant="outline"
+                className="w-full gap-2"
+                size="sm"
+              >
+                <Download className="h-4 w-4" />
+                Descargar PDF
+              </Button>
+              <Button
+                onClick={() => window.print()}
+                variant="outline"
+                className="w-full gap-2"
+                size="sm"
+              >
+                <Printer className="h-4 w-4" />
+                Imprimir
+              </Button>
+              <Button
+                onClick={compartirWhatsApp}
+                variant="outline"
+                className="w-full gap-2 text-primary border-green-600 hover:bg-primary/5"
+                size="sm"
+              >
+                <MessageCircle className="h-4 w-4" />
+                Compartir
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
-
-      {/* Información General */}
-      <Card className="glass-subtle border-border">
-        <CardHeader>
-          <CardTitle>Información del Contrato</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Tipo de Contrato</p>
-            <p className="font-medium">{liquidacion.tipoContrato}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Fecha de Ingreso</p>
-            <p className="font-medium">
-              {new Date(liquidacion.fechaIngreso).toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' })}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Fecha de Retiro</p>
-            <p className="font-medium">
-              {new Date(liquidacion.fechaRetiro).toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' })}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Tiempo de Servicio</p>
-            <p className="font-medium">{anosTrabajados} años ({diasTrabajados} días)</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Causa de Terminación</p>
-            <p className="font-medium">{getCausaTerminacionTexto(liquidacion.causaTerminacion)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Salario Básico</p>
-            <p className="font-medium">{formatearMoneda(liquidacion.salarioBasico)}</p>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Conceptos Devengados */}
-      <Card className="glass-subtle border-border">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-full bg-success/10 flex items-center justify-center">
-              <CheckCircle className="h-4 w-4 text-success" />
-            </div>
-            Conceptos Devengados
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {liquidacion.salarioPendiente > 0 && (
-              <div className="flex justify-between items-center p-3 rounded-lg bg-muted/30">
-                <div>
-                  <p className="font-medium">Salario Pendiente</p>
-                  <p className="text-xs text-muted-foreground">{liquidacion.diasSalarioPendiente} días</p>
-                </div>
-                <p className="font-bold text-lg">{formatearMoneda(liquidacion.salarioPendiente)}</p>
-              </div>
-            )}
-            {liquidacion.cesantias > 0 && (
-              <div className="flex justify-between items-center p-3 rounded-lg bg-muted/30">
-                <div>
-                  <p className="font-medium">Cesantías</p>
-                  <p className="text-xs text-muted-foreground">Acumuladas al retiro</p>
-                </div>
-                <p className="font-bold text-lg">{formatearMoneda(liquidacion.cesantias)}</p>
-              </div>
-            )}
-            {liquidacion.interesesCesantias > 0 && (
-              <div className="flex justify-between items-center p-3 rounded-lg bg-muted/30">
-                <div>
-                  <p className="font-medium">Intereses sobre Cesantías</p>
-                  <p className="text-xs text-muted-foreground">12% anual</p>
-                </div>
-                <p className="font-bold text-lg">{formatearMoneda(liquidacion.interesesCesantias)}</p>
-              </div>
-            )}
-            {liquidacion.prima > 0 && (
-              <div className="flex justify-between items-center p-3 rounded-lg bg-muted/30">
-                <div>
-                  <p className="font-medium">Prima de Servicios</p>
-                  <p className="text-xs text-muted-foreground">Proporcional</p>
-                </div>
-                <p className="font-bold text-lg">{formatearMoneda(liquidacion.prima)}</p>
-              </div>
-            )}
-            {liquidacion.vacaciones > 0 && (
-              <div className="flex justify-between items-center p-3 rounded-lg bg-muted/30">
-                <div>
-                  <p className="font-medium">Vacaciones</p>
-                  <p className="text-xs text-muted-foreground">No disfrutadas</p>
-                </div>
-                <p className="font-bold text-lg">{formatearMoneda(liquidacion.vacaciones)}</p>
-              </div>
-            )}
-            {liquidacion.indemnizacion > 0 && (
-              <div className="flex justify-between items-center p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900">
-                <div>
-                  <p className="font-medium text-amber-900 dark:text-amber-300">Indemnización</p>
-                  <p className="text-xs text-amber-700 dark:text-amber-400">
-                    {liquidacion.causaTerminacion === 'DESPIDO_SIN_JUSTA_CAUSA' ? 'Despido sin justa causa' : 'Según causa'}
-                  </p>
-                </div>
-                <p className="font-bold text-lg text-amber-900 dark:text-amber-300">{formatearMoneda(liquidacion.indemnizacion)}</p>
-              </div>
-            )}
-            <div className="flex justify-between items-center p-4 rounded-lg bg-success/10 border-2 border-success/30 mt-4">
-              <p className="font-bold text-lg">TOTAL DEVENGADO</p>
-              <p className="font-bold text-2xl text-success">{formatearMoneda(liquidacion.totalDevengado)}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Conceptos Deducidos */}
-      <Card className="glass-subtle border-border">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-full bg-destructive/10 flex items-center justify-center">
-              <AlertCircle className="h-4 w-4 text-destructive" />
-            </div>
-            Conceptos Deducidos
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {liquidacion.deduccionSeguridadSocial > 0 && (
-              <div className="flex justify-between items-center p-3 rounded-lg bg-muted/30">
-                <p className="font-medium">Seguridad Social</p>
-                <p className="font-bold text-lg text-destructive">-{formatearMoneda(liquidacion.deduccionSeguridadSocial)}</p>
-              </div>
-            )}
-            {liquidacion.deduccionPrestamos > 0 && (
-              <div className="flex justify-between items-center p-3 rounded-lg bg-muted/30">
-                <p className="font-medium">Préstamos</p>
-                <p className="font-bold text-lg text-destructive">-{formatearMoneda(liquidacion.deduccionPrestamos)}</p>
-              </div>
-            )}
-            {liquidacion.otrosDeducciones > 0 && (
-              <div className="flex justify-between items-center p-3 rounded-lg bg-muted/30">
-                <p className="font-medium">Otras Deducciones</p>
-                <p className="font-bold text-lg text-destructive">-{formatearMoneda(liquidacion.otrosDeducciones)}</p>
-              </div>
-            )}
-            <div className="flex justify-between items-center p-4 rounded-lg bg-destructive/10 border-2 border-destructive/30 mt-4">
-              <p className="font-bold text-lg">TOTAL DEDUCCIONES</p>
-              <p className="font-bold text-2xl text-destructive">-{formatearMoneda(liquidacion.totalDeducciones)}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Neto a Pagar */}
-      <Card className="glass-subtle border-primary bg-gradient-to-br from-primary/5 to-primary/10">
-        <CardContent className="p-8 text-center">
-          <div className="inline-flex items-center justify-center h-16 w-16 rounded-full bg-primary/10 mb-4">
-            <DollarSign className="h-8 w-8 text-primary" />
-          </div>
-          <p className="text-sm text-muted-foreground mb-2">Neto a Pagar</p>
-          <p className="text-6xl font-bold text-primary mb-4">{formatearMoneda(liquidacion.netoAPagar)}</p>
-          <p className="text-xs text-muted-foreground">
-            {formatearMoneda(liquidacion.totalDevengado)} devengado - {formatearMoneda(liquidacion.totalDeducciones)} deducciones
-          </p>
-        </CardContent>
-      </Card>
-
-      {/* Observaciones */}
-      {liquidacion.observaciones && (
-        <Card className="glass-subtle border-border">
-          <CardHeader>
-            <CardTitle>Observaciones</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">{liquidacion.observaciones}</p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Botón de acción */}
-      {liquidacion.estado !== 'PAGADA' && liquidacion.estado !== 'ANULADA' && (
-        <div className="flex justify-end">
-          <Button onClick={generarYPagar} size="lg" className="gap-2 shadow-lg shadow-primary/20">
-            <Download className="h-5 w-5" />
-            Generar y Pagar
-          </Button>
-        </div>
-      )}
     </div>
   );
 }

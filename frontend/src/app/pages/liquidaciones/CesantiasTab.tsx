@@ -1,433 +1,330 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
-import { Badge } from '../../components/ui/badge';
+import { Card, CardContent } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
+import { Badge } from '../../components/ui/badge';
 import {
-  Download,
-  FileText,
-  CheckCircle,
-  AlertTriangle,
-  Search,
-  Eye,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '../../components/ui/select';
+import {
+  Plus, FileText, Calculator, Eye, Search, Filter,
+  Users, AlertTriangle, PiggyBank, CheckCircle, Clock,
 } from 'lucide-react';
-import { toast } from 'sonner';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import {
-  formatearMoneda,
-  SMMLV_2026,
-} from '../../lib/liquidaciones/calculoUtils';
-import { useLiquidaciones, CesantiaColaborador } from '../../contexts/LiquidacionesContext';
+import StatusBadge from '../../components/common/StatusBadge';
 
-// Mock data
-const cesantiasData: CesantiaColaborador[] = [
+interface PeriodoCesantias {
+  id: string;
+  anio: number;
+  descripcion: string;
+  estado: 'BORRADOR' | 'CERRADA';
+  colaboradores: number;
+  totalCesantias: number;
+  totalConsignado: number;
+  fechaLimite: string;
+  fondos: string[];
+}
+
+const periodosCesantiasMock: PeriodoCesantias[] = [
   {
-    id: 'ces1',
-    colaboradorId: 'col1',
-    nombreCompleto: 'Juan Pérez García',
-    cargo: 'Cosechero',
-    fechaIngreso: '2024-01-15',
-    salarioBasico: 1750905,
-    auxilioTransporte: 249095,
-    promedioPrestacional: 1850000,
-    cesantiasAcumuladas: 1545833,
-    periodoInicio: '2025-01-01',
-    periodoFin: '2025-12-31',
-    consignada: false,
-    fondoCesantias: 'Porvenir',
+    id: 'ces-2026',
+    anio: 2026,
+    descripcion: 'Cesantías año 2026',
+    estado: 'BORRADOR',
+    colaboradores: 0,
+    totalCesantias: 0,
+    totalConsignado: 0,
+    fechaLimite: '2027-02-14',
+    fondos: ['Porvenir', 'Protección', 'Colfondos'],
   },
   {
-    id: 'ces2',
-    colaboradorId: 'col2',
-    nombreCompleto: 'María Rodríguez López',
-    cargo: 'Podador',
-    fechaIngreso: '2023-06-10',
-    salarioBasico: 1750905,
-    auxilioTransporte: 249095,
-    promedioPrestacional: 1820000,
-    cesantiasAcumuladas: 1518333,
-    periodoInicio: '2025-01-01',
-    periodoFin: '2025-12-31',
-    consignada: true,
-    fechaConsignacion: '2026-02-10',
-    fondoCesantias: 'Protección',
+    id: 'ces-2025',
+    anio: 2025,
+    descripcion: 'Cesantías año 2025',
+    estado: 'CERRADA',
+    colaboradores: 6,
+    totalCesantias: 10820000,
+    totalConsignado: 10820000,
+    fechaLimite: '2026-02-14',
+    fondos: ['Porvenir', 'Protección'],
   },
   {
-    id: 'ces3',
-    colaboradorId: 'col3',
-    nombreCompleto: 'Carlos Sánchez Mejía',
-    cargo: 'Operario Plateo',
-    fechaIngreso: '2022-03-20',
-    salarioBasico: 1850000,
-    auxilioTransporte: 249095,
-    promedioPrestacional: 1950000,
-    cesantiasAcumuladas: 1625000,
-    periodoInicio: '2025-01-01',
-    periodoFin: '2025-12-31',
-    consignada: false,
-    fondoCesantias: 'Colfondos',
-  },
-  {
-    id: 'ces4',
-    colaboradorId: 'col4',
-    nombreCompleto: 'Ana Martínez Torres',
-    cargo: 'Supervisor',
-    fechaIngreso: '2021-08-01',
-    salarioBasico: 2500000,
-    auxilioTransporte: 0,
-    promedioPrestacional: 2650000,
-    cesantiasAcumuladas: 2208333,
-    periodoInicio: '2025-01-01',
-    periodoFin: '2025-12-31',
-    consignada: true,
-    fechaConsignacion: '2026-02-12',
-    fondoCesantias: 'Porvenir',
-  },
-  {
-    id: 'ces5',
-    colaboradorId: 'col5',
-    nombreCompleto: 'Luis González Ramírez',
-    cargo: 'Cosechero',
-    fechaIngreso: '2024-09-15',
-    salarioBasico: 1750905,
-    auxilioTransporte: 249095,
-    promedioPrestacional: 1800000,
-    cesantiasAcumuladas: 600000,
-    periodoInicio: '2025-09-15',
-    periodoFin: '2025-12-31',
-    consignada: false,
-    fondoCesantias: 'Skandia',
+    id: 'ces-2024',
+    anio: 2024,
+    descripcion: 'Cesantías año 2024',
+    estado: 'CERRADA',
+    colaboradores: 5,
+    totalCesantias: 9340000,
+    totalConsignado: 9340000,
+    fechaLimite: '2025-02-14',
+    fondos: ['Porvenir'],
   },
 ];
 
+const hoy = new Date();
+const proximoFeb14 = new Date(hoy.getFullYear(), 1, 14);
+if (proximoFeb14 < hoy) proximoFeb14.setFullYear(hoy.getFullYear() + 1);
+const diasRestantes = Math.ceil((proximoFeb14.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24));
+
 export default function CesantiasTab() {
   const navigate = useNavigate();
-  const { cesantias, setCesantias } = useLiquidaciones();
-  const [filtros, setFiltros] = useState({
-    nombre: '',
-    cargo: '',
-    estado: '',
+  const [filtroEstado, setFiltroEstado] = useState('todos');
+  const [filtroBusqueda, setFiltroBusqueda] = useState('');
+
+  const periodosFiltrados = periodosCesantiasMock.filter((p) => {
+    const cumpleEstado = filtroEstado === 'todos' || p.estado === filtroEstado;
+    const cumpleBusqueda =
+      filtroBusqueda === '' ||
+      p.descripcion.toLowerCase().includes(filtroBusqueda.toLowerCase()) ||
+      p.anio.toString().includes(filtroBusqueda);
+    return cumpleEstado && cumpleBusqueda;
   });
 
-  // Cargar datos iniciales solo una vez
-  useEffect(() => {
-    if (cesantias.length === 0) {
-      setCesantias(cesantiasData);
-    }
-  }, []);
-
-  // Verificar si estamos cerca de la fecha límite (14 de febrero)
-  const hoy = new Date();
-  const fechaLimite = new Date(hoy.getFullYear(), 1, 14); // 14 de febrero
-  const diasParaLimite = Math.ceil((fechaLimite.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24));
-  const mostrarAlerta = diasParaLimite <= 30 && diasParaLimite >= 0;
-
-  const handleFiltroChange = (campo: string, valor: string) => {
-    setFiltros(prev => ({ ...prev, [campo]: valor }));
-  };
-
-  const cesantiasFiltradas = cesantias.filter((cesantia) => {
-    const cumpleFiltros =
-      cesantia.nombreCompleto.toLowerCase().includes(filtros.nombre.toLowerCase()) &&
-      cesantia.cargo.toLowerCase().includes(filtros.cargo.toLowerCase()) &&
-      (filtros.estado === '' ||
-        (filtros.estado === 'consignada' && cesantia.consignada) ||
-        (filtros.estado === 'pendiente' && !cesantia.consignada));
-
-    return cumpleFiltros;
-  });
-
-  const totalCesantias = cesantias.reduce((sum, c) => sum + c.cesantiasAcumuladas, 0);
-  const totalConsignadas = cesantias.filter(c => c.consignada).length;
-  const totalPendientes = cesantias.filter(c => !c.consignada).length;
-  const montoPendiente = cesantias.filter(c => !c.consignada).reduce((sum, c) => sum + c.cesantiasAcumuladas, 0);
-
-  const verDetalle = (cesantiaId: string) => {
-    navigate(`/liquidaciones/cesantias/${cesantiaId}`);
-  };
-
-  const exportarPDF = () => {
-    const doc = new jsPDF();
-
-    // Título
-    doc.setFontSize(16);
-    doc.text('Reporte de Cesantías', 14, 20);
-
-    // Fecha
-    doc.setFontSize(10);
-    doc.text(`Fecha de generación: ${new Date().toLocaleDateString('es-CO')}`, 14, 28);
-
-    // Resumen
-    doc.setFontSize(12);
-    doc.text('Resumen General', 14, 38);
-    doc.setFontSize(10);
-    doc.text(`Total cesantías: ${formatearMoneda(totalCesantias)}`, 14, 45);
-    doc.text(`Consignadas: ${totalConsignadas} colaboradores`, 14, 51);
-    doc.text(`Pendientes: ${totalPendientes} colaboradores - ${formatearMoneda(montoPendiente)}`, 14, 57);
-
-    // Tabla
-    autoTable(doc, {
-      startY: 65,
-      head: [['Colaborador', 'Cargo', 'Monto', 'Estado', 'Fondo']],
-      body: cesantiasFiltradas.map(c => [
-        c.nombreCompleto,
-        c.cargo,
-        formatearMoneda(c.cesantiasAcumuladas),
-        c.consignada ? 'Consignada' : 'Pendiente',
-        c.fondoCesantias,
-      ]),
-      headStyles: { fillColor: [30, 86, 49] },
-    });
-
-    doc.save(`cesantias_${new Date().toISOString().split('T')[0]}.pdf`);
-    toast.success('PDF generado exitosamente');
-  };
-
-  const exportarExcel = () => {
-    // Generar CSV (simple para este ejemplo)
-    const headers = ['Colaborador', 'Cargo', 'Fecha Ingreso', 'Salario Básico', 'Aux. Transporte', 'Promedio Prestacional', 'Cesantías', 'Estado', 'Fondo'];
-    const rows = cesantiasFiltradas.map(c => [
-      c.nombreCompleto,
-      c.cargo,
-      c.fechaIngreso,
-      c.salarioBasico,
-      c.auxilioTransporte,
-      c.promedioPrestacional,
-      c.cesantiasAcumuladas,
-      c.consignada ? 'Consignada' : 'Pendiente',
-      c.fondoCesantias,
-    ]);
-
-    const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `cesantias_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    toast.success('Excel generado exitosamente');
-  };
+  const totalCesantias = periodosCesantiasMock.reduce((s, p) => s + p.totalCesantias, 0);
+  const totalConsignado = periodosCesantiasMock.reduce((s, p) => s + p.totalConsignado, 0);
+  const pendientes = periodosCesantiasMock.filter((p) => p.estado === 'BORRADOR').length;
+  const montoPendiente = periodosCesantiasMock.filter((p) => p.estado === 'BORRADOR').reduce((s, p) => s + p.totalCesantias, 0);
 
   return (
     <div className="space-y-6">
-      {/* Alerta sanción moratoria */}
-      {mostrarAlerta && totalPendientes > 0 && (
-        <Card className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-3">
-              <div className="mt-0.5">
-                <AlertTriangle className="h-5 w-5 text-amber-600" />
-              </div>
-              <div className="flex-1">
-                <p className="font-semibold text-amber-900 dark:text-amber-300">
-                  Alerta: Sanción Moratoria
-                </p>
-                <p className="text-sm text-amber-800 dark:text-amber-400 mt-1">
-                  Quedan {diasParaLimite} días para el 14 de febrero. Las cesantías deben consignarse antes de esta fecha
-                  para evitar la sanción moratoria de un día de salario por cada día de retraso (Art. 99 CST).
-                  Tienes {totalPendientes} cesantías pendientes por {formatearMoneda(montoPendiente)}.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2>Cesantías</h2>
+          <p className="text-muted-foreground mt-1">Gestión de períodos anuales de cesantías</p>
+        </div>
+        <Button onClick={() => navigate('/liquidaciones/cesantias/nueva')} size="lg" className="gap-2">
+          <Plus className="h-5 w-5" />
+          Nuevo Período de Cesantías
+        </Button>
+      </div>
+
+      {/* Alerta vencimiento */}
+      {diasRestantes <= 30 && (
+        <div className="flex items-center gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-orange-500" />
+          <span>
+            Faltan <strong>{diasRestantes} días</strong> para el vencimiento de cesantías (14 de febrero). Riesgo de sanción moratoria.
+          </span>
+        </div>
       )}
 
-      {/* KPIs específicos de cesantías */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="glass-subtle border-border">
-          <CardContent className="p-5">
-            <p className="text-sm font-medium text-muted-foreground mb-1">Total Cesantías</p>
-            <p className="text-2xl font-bold text-foreground">{formatearMoneda(totalCesantias)}</p>
-          </CardContent>
-        </Card>
+      {/* KPIs */}
+      <Card className="border-border">
+        <CardContent className="p-5">
+          <p className="text-sm font-semibold text-foreground mb-4">Resumen de cesantías</p>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="flex items-center justify-between p-4 rounded-xl bg-primary/5 border border-primary/20">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1">Total Cesantías</p>
+                <p className="text-2xl font-bold text-primary">${(totalCesantias / 1000000).toFixed(2)}M</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Todos los períodos</p>
+              </div>
+              <div className="h-11 w-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                <PiggyBank className="h-5 w-5 text-primary" />
+              </div>
+            </div>
 
-        <Card className="glass-subtle border-border">
-          <CardContent className="p-5">
-            <p className="text-sm font-medium text-muted-foreground mb-1">Consignadas</p>
-            <p className="text-2xl font-bold text-success">{totalConsignadas}</p>
-            <p className="text-xs text-muted-foreground mt-1">colaboradores</p>
-          </CardContent>
-        </Card>
+            <div className="flex items-center justify-between p-4 rounded-xl bg-success/5 border border-success/20">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1">Consignadas</p>
+                <p className="text-2xl font-bold text-success">${(totalConsignado / 1000000).toFixed(2)}M</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Períodos cerrados</p>
+              </div>
+              <div className="h-11 w-11 rounded-xl bg-success/10 flex items-center justify-center shrink-0">
+                <CheckCircle className="h-5 w-5 text-success" />
+              </div>
+            </div>
 
-        <Card className="glass-subtle border-border">
-          <CardContent className="p-5">
-            <p className="text-sm font-medium text-muted-foreground mb-1">Pendientes</p>
-            <p className="text-2xl font-bold text-amber-600">{totalPendientes}</p>
-            <p className="text-xs text-muted-foreground mt-1">colaboradores</p>
-          </CardContent>
-        </Card>
+            <div className="flex items-center justify-between p-4 rounded-xl bg-orange-50 border border-orange-200">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1">Períodos Pendientes</p>
+                <p className="text-2xl font-bold text-orange-600">{pendientes}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Por liquidar</p>
+              </div>
+              <div className="h-11 w-11 rounded-xl bg-orange-100 flex items-center justify-center shrink-0">
+                <Clock className="h-5 w-5 text-orange-500" />
+              </div>
+            </div>
 
-        <Card className="glass-subtle border-border">
-          <CardContent className="p-5">
-            <p className="text-sm font-medium text-muted-foreground mb-1">Monto Pendiente</p>
-            <p className="text-2xl font-bold text-foreground">{formatearMoneda(montoPendiente)}</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Acciones y filtros */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="grid gap-3 grid-cols-1 sm:grid-cols-3 w-full sm:w-auto">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar colaborador..."
-              value={filtros.nombre}
-              onChange={(e) => handleFiltroChange('nombre', e.target.value)}
-              className="pl-8 h-9"
-            />
+            <div className={`flex items-center justify-between p-4 rounded-xl border ${montoPendiente > 0 ? 'bg-destructive/5 border-destructive/20' : 'bg-muted/30 border-border'}`}>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1">Monto Pendiente</p>
+                <p className={`text-2xl font-bold ${pendientes > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                  {pendientes > 0 ? 'Pendiente' : 'Al día'}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">Sin consignar</p>
+              </div>
+              <div className={`h-11 w-11 rounded-xl flex items-center justify-center shrink-0 ${pendientes > 0 ? 'bg-destructive/10' : 'bg-muted'}`}>
+                <Users className={`h-5 w-5 ${pendientes > 0 ? 'text-destructive' : 'text-muted-foreground'}`} />
+              </div>
+            </div>
           </div>
+        </CardContent>
+      </Card>
 
-          <Input
-            placeholder="Filtrar por cargo..."
-            value={filtros.cargo}
-            onChange={(e) => handleFiltroChange('cargo', e.target.value)}
-            className="h-9"
-          />
-
-          <select
-            value={filtros.estado}
-            onChange={(e) => handleFiltroChange('estado', e.target.value)}
-            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <option value="">Todos los estados</option>
-            <option value="pendiente">Pendientes</option>
-            <option value="consignada">Consignadas</option>
-          </select>
-        </div>
-
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={exportarExcel} className="gap-2">
-            <Download className="h-4 w-4" />
-            Excel
-          </Button>
-          <Button variant="outline" onClick={exportarPDF} className="gap-2">
-            <FileText className="h-4 w-4" />
-            PDF
-          </Button>
-        </div>
-      </div>
-
-      {/* Tabla de cesantías */}
-      <Card className="glass-subtle border-border">
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border bg-muted/30">
-                  <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Colaborador</th>
-                  <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Cargo</th>
-                  <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Fecha Ingreso</th>
-                  <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Salario Base</th>
-                  <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Promedio Prest.</th>
-                  <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Cesantías</th>
-                  <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Estado</th>
-                  <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {cesantiasFiltradas.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="text-center py-12">
-                      <div className="flex flex-col items-center gap-2">
-                        <Search className="h-8 w-8 text-muted-foreground" />
-                        <p className="text-sm text-muted-foreground">
-                          No se encontraron cesantías con los filtros aplicados
-                        </p>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  cesantiasFiltradas.map((cesantia, index) => (
-                    <tr
-                      key={cesantia.id}
-                      className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors ${
-                        index % 2 === 0 ? 'bg-background' : 'bg-muted/5'
-                      }`}
-                    >
-                      <td className="p-4">
-                        <div className="flex flex-col">
-                          <span className="text-sm font-medium text-foreground">{cesantia.nombreCompleto}</span>
-                          <span className="text-xs text-muted-foreground">{cesantia.fondoCesantias}</span>
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <span className="text-sm text-foreground">{cesantia.cargo}</span>
-                      </td>
-                      <td className="p-4">
-                        <span className="text-sm text-foreground">
-                          {new Date(cesantia.fechaIngreso).toLocaleDateString('es-CO')}
-                        </span>
-                      </td>
-                      <td className="p-4 text-right">
-                        <span className="text-sm font-medium text-foreground">
-                          {formatearMoneda(cesantia.salarioBasico)}
-                        </span>
-                      </td>
-                      <td className="p-4 text-right">
-                        <span className="text-sm font-medium text-foreground">
-                          {formatearMoneda(cesantia.promedioPrestacional)}
-                        </span>
-                      </td>
-                      <td className="p-4 text-right">
-                        <span className="text-sm font-bold text-primary">
-                          {formatearMoneda(cesantia.cesantiasAcumuladas)}
-                        </span>
-                      </td>
-                      <td className="p-4">
-                        {cesantia.consignada ? (
-                          <div className="flex flex-col">
-                            <Badge variant="outline" className="bg-success/10 text-success border-success/30 w-fit">
-                              <CheckCircle className="h-3 w-3 mr-1" />
-                              Consignada
-                            </Badge>
-                            {cesantia.fechaConsignacion && (
-                              <span className="text-xs text-muted-foreground mt-1">
-                                {new Date(cesantia.fechaConsignacion).toLocaleDateString('es-CO')}
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30">
-                            Pendiente
-                          </Badge>
-                        )}
-                      </td>
-                      <td className="p-4">
-                        <div className="flex gap-2 justify-end">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => verDetalle(cesantia.id)}
-                            className="hover:bg-primary/10 hover:text-primary hover:border-primary"
-                            title="Ver detalle y liquidar"
-                          >
-                            <Eye className="h-4 w-4 mr-1" />
-                            Ver detalle
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+      {/* Filtros */}
+      <Card className="border-border">
+        <CardContent className="p-5">
+          <div className="flex items-center gap-3 mb-4">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <h3 className="font-semibold text-base">Filtros</h3>
           </div>
-
-          {/* Contador de resultados */}
-          {cesantiasFiltradas.length > 0 && (
-            <div className="flex items-center justify-between text-sm text-muted-foreground px-4 py-3 border-t border-border">
-              <p>
-                Mostrando <span className="font-medium text-foreground">{cesantiasFiltradas.length}</span> de{' '}
-                <span className="font-medium text-foreground">{cesantias.length}</span> cesantías
-              </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Buscar</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por año o descripción..."
+                  value={filtroBusqueda}
+                  onChange={(e) => setFiltroBusqueda(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Estado</label>
+              <Select value={filtroEstado} onValueChange={setFiltroEstado}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  <SelectItem value="BORRADOR">Borrador</SelectItem>
+                  <SelectItem value="CERRADA">Cerrada</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          {(filtroEstado !== 'todos' || filtroBusqueda !== '') && (
+            <div className="mt-4 flex items-center gap-2">
+              <Badge variant="outline">{periodosFiltrados.length} resultado{periodosFiltrados.length !== 1 ? 's' : ''}</Badge>
+              <Button variant="ghost" size="sm" onClick={() => { setFiltroEstado('todos'); setFiltroBusqueda(''); }}>
+                Limpiar filtros
+              </Button>
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Lista de períodos */}
+      <div className="space-y-3">
+        <div>
+          <h2 className="mb-1">Períodos de Cesantías</h2>
+          <p className="text-muted-foreground">Historial de liquidaciones anuales de cesantías</p>
+        </div>
+
+        {periodosFiltrados.length > 0 ? (
+          <Card className="border-border">
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30">
+                      <th className="text-left p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Período</th>
+                      <th className="text-left p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Estado</th>
+                      <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Colaboradores</th>
+                      <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Total Cesantías</th>
+                      <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Consignado</th>
+                      <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Fecha Límite</th>
+                      <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {periodosFiltrados.map((periodo, index) => (
+                      <tr
+                        key={periodo.id}
+                        className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors ${index % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}
+                      >
+                        <td className="p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20">
+                              <FileText className="h-5 w-5" />
+                            </div>
+                            <div>
+                              <p className="font-semibold text-sm">{periodo.descripcion}</p>
+                              <p className="text-xs text-muted-foreground">Fondos: {periodo.fondos.join(', ')}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <StatusBadge status={periodo.estado as any} />
+                        </td>
+                        <td className="p-4 text-right">
+                          <span className="text-sm font-semibold">
+                            {periodo.estado === 'BORRADOR' ? <span className="text-muted-foreground">—</span> : periodo.colaboradores}
+                          </span>
+                        </td>
+                        <td className="p-4 text-right">
+                          {periodo.estado === 'BORRADOR'
+                            ? <span className="text-sm text-muted-foreground">—</span>
+                            : <span className="text-sm font-bold text-primary">${periodo.totalCesantias.toLocaleString('es-CO')}</span>}
+                        </td>
+                        <td className="p-4 text-right">
+                          <span className={`text-sm font-semibold ${periodo.totalConsignado > 0 ? 'text-success' : 'text-muted-foreground'}`}>
+                            {periodo.estado === 'BORRADOR' || periodo.totalConsignado === 0 ? '—' : `$${periodo.totalConsignado.toLocaleString('es-CO')}`}
+                          </span>
+                        </td>
+                        <td className="p-4 text-right">
+                          <span className="text-sm text-muted-foreground">
+                            {new Date(periodo.fechaLimite).toLocaleDateString('es-CO')}
+                          </span>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex gap-2 justify-end">
+                            {periodo.estado === 'BORRADOR' ? (
+                              <Button
+                                size="sm"
+                                onClick={() => navigate(`/liquidaciones/cesantias/${periodo.id}`)}
+                                className="gap-1 bg-primary hover:bg-primary/90"
+                              >
+                                <Calculator className="h-4 w-4" />
+                                Liquidar
+                              </Button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => navigate(`/liquidaciones/cesantias/${periodo.id}`)}
+                                className="gap-1 hover:bg-primary/10 hover:text-primary hover:border-primary"
+                              >
+                                <Eye className="h-4 w-4" />
+                                Ver
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        ) : periodosCesantiasMock.length === 0 ? (
+          <Card className="border-dashed border-2">
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <PiggyBank className="h-16 w-16 text-muted-foreground mb-4" />
+              <p className="text-lg font-semibold mb-2">No hay períodos de cesantías</p>
+              <p className="text-sm text-muted-foreground mb-4">Crea el primer período para comenzar</p>
+              <Button onClick={() => navigate('/liquidaciones/cesantias/nueva')} className="gap-2">
+                <Plus className="h-4 w-4" />
+                Nuevo Período de Cesantías
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="border-dashed border-2">
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <Search className="h-16 w-16 text-muted-foreground mb-4" />
+              <p className="text-lg font-semibold mb-2">No se encontraron resultados</p>
+              <p className="text-sm text-muted-foreground mb-4">Intenta ajustar los filtros</p>
+              <Button variant="outline" onClick={() => { setFiltroEstado('todos'); setFiltroBusqueda(''); }}>
+                Limpiar filtros
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }

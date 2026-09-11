@@ -10,6 +10,7 @@ import {
   CheckCircle,
   AlertTriangle,
   Search,
+  Plus,
   Eye,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -212,11 +213,11 @@ export default function VacacionesTab() {
   const getEstadoBadge = (estado: VacacionesColaborador['estado']) => {
     switch (estado) {
       case 'DISPONIBLE':
-        return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-900/30">Disponible</Badge>;
+        return <Badge variant="outline" className="bg-primary/5 text-primary border-blue-200 dark:bg-primary/10 dark:text-primary dark:border-blue-900/30">Disponible</Badge>;
       case 'PARCIAL':
         return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-900/30">Parcial</Badge>;
       case 'COMPENSADO':
-        return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-950/30 dark:text-green-400 dark:border-green-900/30">Compensado</Badge>;
+        return <Badge variant="outline" className="bg-primary/5 text-primary border-green-200 dark:bg-primary/10 dark:text-success dark:border-green-900/30">Compensado</Badge>;
       case 'ACTUALIZADO':
         return <Badge variant="outline" className="bg-success/10 text-success border-success/30">Al día</Badge>;
     }
@@ -279,6 +280,18 @@ export default function VacacionesTab() {
             <p className="text-xs text-muted-foreground mt-1">en dinero</p>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Botón principal de acción */}
+      <div className="flex justify-end">
+        <Button
+          size="lg"
+          onClick={() => navigate('/liquidaciones/vacaciones/nueva')}
+          className="gap-2"
+        >
+          <Plus className="h-5 w-5" />
+          Nueva Liquidación de Vacaciones
+        </Button>
       </div>
 
       {/* Acciones y filtros */}
@@ -378,10 +391,10 @@ export default function VacacionesTab() {
                         <span className="text-sm font-medium text-foreground">{vac.diasCausados}</span>
                       </td>
                       <td className="p-4 text-center">
-                        <span className="text-sm text-blue-600">{vac.diasDisfrutados}</span>
+                        <span className="text-sm text-primary">{vac.diasDisfrutados}</span>
                       </td>
                       <td className="p-4 text-center">
-                        <span className="text-sm text-green-600">{vac.diasCompensados}</span>
+                        <span className="text-sm text-primary">{vac.diasCompensados}</span>
                       </td>
                       <td className="p-4 text-center">
                         <span className="text-sm font-bold text-amber-600">{vac.diasPendientes}</span>
@@ -393,9 +406,9 @@ export default function VacacionesTab() {
                             vac.estado === 'DISPONIBLE'
                               ? 'bg-success/10 text-success border-success/30'
                               : vac.estado === 'PARCIAL'
-                              ? 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30'
+                              ? 'bg-primary/10 text-primary dark:text-primary border-blue-500/30'
                               : vac.estado === 'COMPENSADO'
-                              ? 'bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/30'
+                              ? 'bg-primary/10 text-primary dark:text-muted-foreground border-purple-500/30'
                               : 'bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-500/30'
                           }
                         >

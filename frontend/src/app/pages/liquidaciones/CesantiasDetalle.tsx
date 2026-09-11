@@ -1,353 +1,377 @@
-import { useParams, useNavigate } from 'react-router';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import { useState } from 'react';
+import { useParams, Link, useNavigate } from 'react-router';
+import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { Label } from '../../components/ui/label';
 import { Badge } from '../../components/ui/badge';
-import { ArrowLeft, Download, CheckCircle, DollarSign, Calendar, User, Briefcase, FileText, Info } from 'lucide-react';
+import { Checkbox } from '../../components/ui/checkbox';
+import {
+  ArrowLeft, ArrowRight, Check, Users, Calendar,
+  PiggyBank, CheckCircle, TrendingUp,
+} from 'lucide-react';
 import { toast } from 'sonner';
-import { useLiquidaciones } from '../../contexts/LiquidacionesContext';
 import { formatearMoneda } from '../../lib/liquidaciones/calculoUtils';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 
+// ── Mock ──────────────────────────────────────────────────────────────────────
+const periodosMock: Record<string, { id: string; descripcion: string; anio: number; fondos: string; fechaInicio: string; fechaFin: string; fechaLimite: string }> = {
+  'ces-2026': { id: 'ces-2026', descripcion: 'Cesantías año 2026', anio: 2026, fondos: 'Porvenir, Protección', fechaInicio: '2026-01-01', fechaFin: '2026-12-31', fechaLimite: '2027-02-14' },
+  'ces-2025': { id: 'ces-2025', descripcion: 'Cesantías año 2025', anio: 2025, fondos: 'Porvenir', fechaInicio: '2025-01-01', fechaFin: '2025-12-31', fechaLimite: '2026-02-14' },
+};
+
+const colaboradoresMock = [
+  { id: 'c1', nombre: 'Carlos Martínez', cedula: '1.012.345.678', cargo: 'Operario de Cosecha', salarioBasico: 1750905, auxilioTransporte: 249095, promedioExtras: 0,     diasLaborados: 360, fondo: 'Porvenir' },
+  { id: 'c2', nombre: 'Ana Gómez',       cedula: '52.341.567.890', cargo: 'Supervisora',         salarioBasico: 2500000, auxilioTransporte: 0,      promedioExtras: 0,     diasLaborados: 360, fondo: 'Protección' },
+  { id: 'c3', nombre: 'Luis Pérez',       cedula: '1.098.765.432', cargo: 'Podador',             salarioBasico: 1750905, auxilioTransporte: 249095, promedioExtras: 80000, diasLaborados: 300, fondo: 'Porvenir' },
+  { id: 'c4', nombre: 'María Torres',     cedula: '43.765.432.100', cargo: 'Almacenista',         salarioBasico: 1900000, auxilioTransporte: 249095, promedioExtras: 0,     diasLaborados: 360, fondo: 'Colfondos' },
+  { id: 'c5', nombre: 'Jorge Ramírez',    cedula: '1.123.456.789', cargo: 'Operario de Poda',    salarioBasico: 1750905, auxilioTransporte: 249095, promedioExtras: 0,     diasLaborados: 330, fondo: 'Porvenir' },
+];
+
+const calcMonto = (s: number, a: number, e: number, d: number) =>
+  Math.round(((s + a + e) * d) / 360);
+
+const getIniciales = (nombre: string) =>
+  nombre.split(' ').slice(0, 2).map(p => p[0]).join('').toUpperCase();
+
+// ── Step indicator ─────────────────────────────────────────────────────────────
+const pasos = [
+  { numero: 1, titulo: 'Información del Período', icono: Calendar },
+  { numero: 2, titulo: 'Seleccionar Colaboradores', icono: Users },
+  { numero: 3, titulo: 'Confirmación', icono: Check },
+];
+
+function StepBar({ actual }: { actual: number }) {
+  return (
+    <div className="flex items-center gap-0">
+      {pasos.map((paso, idx) => {
+        const completado = actual > paso.numero;
+        const activo = actual === paso.numero;
+        const Icono = paso.icono;
+        return (
+          <div key={paso.numero} className="flex items-center flex-1 last:flex-none">
+            <div className="flex flex-col items-center gap-1.5 min-w-0">
+              <div className={`h-10 w-10 rounded-full border-2 flex items-center justify-center transition-colors ${
+                completado ? 'bg-primary border-primary' : activo ? 'border-primary bg-primary/10' : 'border-border bg-background'
+              }`}>
+                {completado
+                  ? <Check className="h-5 w-5 text-white" />
+                  : <Icono className={`h-5 w-5 ${activo ? 'text-primary' : 'text-muted-foreground'}`} />}
+              </div>
+              <div className="text-center">
+                <p className={`text-xs font-semibold ${activo ? 'text-primary' : completado ? 'text-primary' : 'text-muted-foreground'}`}>
+                  Paso {paso.numero}
+                </p>
+                <p className={`text-xs ${activo ? 'text-foreground' : 'text-muted-foreground'} hidden sm:block`}>
+                  {paso.titulo}
+                </p>
+              </div>
+            </div>
+            {idx < pasos.length - 1 && (
+              <div className={`flex-1 h-0.5 mx-3 mb-5 transition-colors ${actual > paso.numero ? 'bg-primary' : 'bg-border'}`} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Componente principal ───────────────────────────────────────────────────────
 export default function CesantiasDetalle() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { cesantias, setCesantias } = useLiquidaciones();
 
-  const cesantia = cesantias.find(c => c.id === id);
+  const periodo = periodosMock[id ?? 'ces-2026'] ?? periodosMock['ces-2026'];
+  const [paso, setPaso] = useState(1);
+  const [seleccionados, setSeleccionados] = useState<string[]>([]);
 
-  if (!cesantia) {
-    return (
-      <div className="space-y-6">
-        <Button variant="outline" onClick={() => navigate('/liquidaciones')}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Volver
-        </Button>
-        <Card>
-          <CardContent className="p-12 text-center">
-            <p className="text-muted-foreground">No se encontró la información de cesantías</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  const toggleCol = (cid: string) =>
+    setSeleccionados(prev => prev.includes(cid) ? prev.filter(x => x !== cid) : [...prev, cid]);
 
-  const generarLiquidacion = () => {
-    // Generar PDF profesional
-    const doc = new jsPDF();
+  const toggleTodos = () =>
+    setSeleccionados(seleccionados.length === colaboradoresMock.length ? [] : colaboradoresMock.map(c => c.id));
 
-    // Encabezado
-    doc.setFontSize(20);
-    doc.setFont('helvetica', 'bold');
-    doc.text('LIQUIDACIÓN DE CESANTÍAS', 105, 20, { align: 'center' });
+  const getMonto = (cid: string) => {
+    const col = colaboradoresMock.find(c => c.id === cid)!;
+    return calcMonto(col.salarioBasico, col.auxilioTransporte, col.promedioExtras, col.diasLaborados);
+  };
 
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Fecha de generación: ${new Date().toLocaleDateString('es-CO')}`, 105, 28, { align: 'center' });
+  const totalGeneral = seleccionados.reduce((s, cid) => s + getMonto(cid), 0);
 
-    // Línea separadora
-    doc.setLineWidth(0.5);
-    doc.line(14, 32, 196, 32);
+  const avanzar = () => {
+    if (paso === 2 && seleccionados.length === 0) { toast.error('Selecciona al menos un colaborador'); return; }
+    setPaso(p => p + 1);
+  };
+  const retroceder = () => setPaso(p => p - 1);
 
-    // Información del colaborador
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('DATOS DEL COLABORADOR', 14, 42);
-
-    autoTable(doc, {
-      startY: 46,
-      head: [['Campo', 'Información']],
-      body: [
-        ['Nombre Completo', cesantia.nombreCompleto],
-        ['Cargo', cesantia.cargo],
-        ['Fecha de Ingreso', new Date(cesantia.fechaIngreso).toLocaleDateString('es-CO')],
-        ['Fondo de Cesantías', cesantia.fondoCesantias],
-        ['Período', `${new Date(cesantia.periodoInicio).toLocaleDateString('es-CO')} - ${new Date(cesantia.periodoFin).toLocaleDateString('es-CO')}`],
-      ],
-      headStyles: { fillColor: [30, 86, 49], fontSize: 10 },
-      bodyStyles: { fontSize: 10 },
-      alternateRowStyles: { fillColor: [245, 245, 245] },
-    });
-
-    // Cálculo detallado
-    const finalY = (doc as any).lastAutoTable.finalY || 90;
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('CÁLCULO DE CESANTÍAS', 14, finalY + 10);
-
-    autoTable(doc, {
-      startY: finalY + 14,
-      head: [['Concepto', 'Valor']],
-      body: [
-        ['Salario Básico', formatearMoneda(cesantia.salarioBasico)],
-        ['Auxilio de Transporte', formatearMoneda(cesantia.auxilioTransporte)],
-        ['Promedio Prestacional', formatearMoneda(cesantia.promedioPrestacional)],
-        ['Días Laborados', '360 días'],
-      ],
-      headStyles: { fillColor: [30, 86, 49], fontSize: 10 },
-      bodyStyles: { fontSize: 10 },
-      alternateRowStyles: { fillColor: [245, 245, 245] },
-    });
-
-    // Fórmula
-    const finalY2 = (doc as any).lastAutoTable.finalY || 140;
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'italic');
-    doc.text('Fórmula: Cesantías = (Promedio Prestacional × Días Laborados) / 360', 14, finalY2 + 8);
-
-    // Total
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.setFillColor(30, 86, 49);
-    doc.rect(14, finalY2 + 14, 182, 14, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.text('TOTAL CESANTÍAS A CONSIGNAR:', 18, finalY2 + 22);
-    doc.text(formatearMoneda(cesantia.cesantiasAcumuladas), 192, finalY2 + 22, { align: 'right' });
-
-    // Nota legal
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'italic');
-    const noteY = finalY2 + 34;
-    doc.text('Marco Legal: Artículo 249 del Código Sustantivo del Trabajo - Ley 50 de 1990', 14, noteY);
-    doc.text('Las cesantías deben consignarse a más tardar el 14 de febrero del año siguiente.', 14, noteY + 4);
-
-    // Pie de página
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Documento generado automáticamente por el sistema de liquidaciones', 105, 280, { align: 'center' });
-
-    // Guardar
-    doc.save(`Cesantias_${cesantia.nombreCompleto.replace(/ /g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
-
-    // Marcar como pagado
-    setCesantias(prev => prev.map(c => {
-      if (c.id === id) {
-        return {
-          ...c,
-          consignada: true,
-          fechaConsignacion: new Date().toISOString().split('T')[0],
-        };
-      }
-      return c;
-    }));
-
-    toast.success('Liquidación generada y marcada como pagada');
+  const confirmar = () => {
+    toast.success('Liquidación de cesantías confirmada exitosamente');
     navigate('/liquidaciones');
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="space-y-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/liquidaciones')} className="gap-2">
-          <ArrowLeft className="h-4 w-4" />
-          Volver a Liquidaciones
-        </Button>
+      {/* Back */}
+      <Button variant="ghost" size="sm" asChild className="gap-2">
+        <Link to="/liquidaciones"><ArrowLeft className="h-4 w-4" />Volver a Liquidaciones</Link>
+      </Button>
 
-        <div className="flex items-center gap-4">
-          <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center border border-primary/30 shadow-lg">
-            <DollarSign className="h-8 w-8 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-4xl font-bold text-foreground">Liquidación de Cesantías</h1>
-            <p className="text-muted-foreground mt-1">{cesantia.nombreCompleto}</p>
-          </div>
-        </div>
+      <div>
+        <h1 className="text-3xl font-bold text-primary">{periodo.descripcion}</h1>
+        <p className="text-muted-foreground mt-1">Liquidación de cesantías · Fecha límite: {new Date(periodo.fechaLimite).toLocaleDateString('es-CO')}</p>
       </div>
 
-      {/* Datos del colaborador */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="border-border">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground mb-2">Colaborador</p>
-                <p className="text-xl font-bold text-foreground">{cesantia.nombreCompleto.split(' ').slice(0, 2).join(' ')}</p>
-                <p className="text-sm text-muted-foreground mt-1">{cesantia.cargo}</p>
-              </div>
-              <div className="h-14 w-14 rounded-xl bg-primary/10 flex items-center justify-center">
-                <User className="h-7 w-7 text-primary" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground mb-2">Fondo Cesantías</p>
-                <p className="text-xl font-bold text-foreground">{cesantia.fondoCesantias}</p>
-              </div>
-              <div className="h-14 w-14 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                <FileText className="h-7 w-7 text-blue-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground mb-2">Período</p>
-                <p className="text-base font-bold text-foreground">
-                  {new Date(cesantia.periodoInicio).toLocaleDateString('es-CO', { month: 'short', year: '2-digit' })} - {new Date(cesantia.periodoFin).toLocaleDateString('es-CO', { month: 'short', year: 'numeric' })}
-                </p>
-              </div>
-              <div className="h-14 w-14 rounded-xl bg-purple-500/10 flex items-center justify-center">
-                <Calendar className="h-7 w-7 text-purple-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground mb-2">Estado</p>
-                {cesantia.consignada ? (
-                  <>
-                    <p className="text-xl font-bold text-success">Consignada</p>
-                    {cesantia.fechaConsignacion && (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {new Date(cesantia.fechaConsignacion).toLocaleDateString('es-CO')}
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <p className="text-xl font-bold text-amber-600">Pendiente</p>
-                )}
-              </div>
-              <div className={`h-14 w-14 rounded-xl flex items-center justify-center ${cesantia.consignada ? 'bg-success/10' : 'bg-amber-500/10'}`}>
-                <CheckCircle className={`h-7 w-7 ${cesantia.consignada ? 'text-success' : 'text-amber-600'}`} />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Cálculo detallado */}
-      <Card className="border-border glass-subtle">
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-              <DollarSign className="h-6 w-6 text-primary" />
-            </div>
-            <div>
-              <CardTitle>Cálculo de Cesantías</CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">Desglose detallado paso a paso</p>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Base salarial */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                <span className="text-sm font-bold text-primary">1</span>
-              </div>
-              <h3 className="font-semibold text-lg">Base Salarial</h3>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="p-5 bg-muted/50 rounded-lg border border-border hover:border-primary/50 transition-colors">
-                <p className="text-xs text-muted-foreground mb-2">Salario Básico</p>
-                <p className="text-2xl font-bold">{formatearMoneda(cesantia.salarioBasico)}</p>
-              </div>
-              <div className="p-5 bg-muted/50 rounded-lg border border-border hover:border-primary/50 transition-colors">
-                <p className="text-xs text-muted-foreground mb-2">Auxilio de Transporte</p>
-                <p className="text-2xl font-bold">{formatearMoneda(cesantia.auxilioTransporte)}</p>
-              </div>
-              <div className="p-5 bg-primary/10 rounded-lg border-2 border-primary">
-                <p className="text-xs text-primary mb-2 font-semibold">= Promedio Prestacional</p>
-                <p className="text-2xl font-bold text-primary">{formatearMoneda(cesantia.promedioPrestacional)}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="border-t border-border"></div>
-
-          {/* Período */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                <span className="text-sm font-bold text-primary">2</span>
-              </div>
-              <h3 className="font-semibold text-lg">Período Laborado</h3>
-            </div>
-            <div className="p-5 bg-muted/50 rounded-lg border border-border">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Desde - Hasta</p>
-                  <p className="font-semibold">
-                    {new Date(cesantia.periodoInicio).toLocaleDateString('es-CO')} - {new Date(cesantia.periodoFin).toLocaleDateString('es-CO')}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm text-muted-foreground mb-1">Total Días</p>
-                  <p className="text-3xl font-bold text-primary">360</p>
-                  <p className="text-xs text-muted-foreground">(año comercial)</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="border-t border-border"></div>
-
-          {/* Fórmula */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                <span className="text-sm font-bold text-primary">3</span>
-              </div>
-              <h3 className="font-semibold text-lg">Aplicación de Fórmula Legal</h3>
-            </div>
-            <div className="space-y-3">
-              <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-900">
-                <p className="font-mono text-sm text-blue-900 dark:text-blue-300 text-center">
-                  Cesantías = (Promedio Prestacional × Días Laborados) / 360
-                </p>
-              </div>
-              <div className="p-4 bg-muted/50 rounded-lg border border-border">
-                <p className="font-mono text-sm text-center">
-                  Cesantías = ({formatearMoneda(cesantia.promedioPrestacional)} × 360) / 360
-                </p>
-              </div>
-              <div className="p-4 bg-muted/50 rounded-lg border border-border">
-                <p className="font-mono text-sm text-center">
-                  Cesantías = {formatearMoneda(cesantia.promedioPrestacional)}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="border-t-2 border-primary"></div>
-
-          {/* Resultado */}
-          <div className="p-8 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent rounded-xl border-2 border-primary shadow-lg">
-            <div className="text-center">
-              <div className="flex items-center justify-center gap-2 mb-3">
-                <CheckCircle className="h-5 w-5 text-primary" />
-                <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Total Cesantías a Consignar</p>
-              </div>
-              <p className="text-5xl font-bold text-primary">{formatearMoneda(cesantia.cesantiasAcumuladas)}</p>
-            </div>
-          </div>
+      {/* Step bar */}
+      <Card className="border-border">
+        <CardContent className="p-6">
+          <StepBar actual={paso} />
         </CardContent>
       </Card>
 
-      {/* Botón de acción */}
-      {!cesantia.consignada && (
-        <div className="flex justify-end">
-          <Button onClick={generarLiquidacion} size="lg" className="gap-2 shadow-lg shadow-primary/20">
-            <Download className="h-5 w-5" />
-            Generar y Pagar
-          </Button>
+      {/* ── PASO 1: Info del período ── */}
+      {paso === 1 && (
+        <Card className="border-border">
+          <CardContent className="p-6 space-y-6">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                <PiggyBank className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h2 className="font-semibold text-lg">Información del Período</h2>
+                <p className="text-sm text-muted-foreground">Revisa los datos antes de continuar</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-6">
+              <div className="space-y-1.5">
+                <Label>Año</Label>
+                <Input value={periodo.anio} disabled className="bg-muted/30" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Descripción</Label>
+                <Input value={periodo.descripcion} disabled className="bg-muted/30" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Fecha inicio</Label>
+                <Input type="date" value={periodo.fechaInicio} disabled className="bg-muted/30" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Fecha fin</Label>
+                <Input type="date" value={periodo.fechaFin} disabled className="bg-muted/30" />
+              </div>
+              <div className="space-y-1.5 col-span-2">
+                <Label>Fondos de cesantías</Label>
+                <Input value={periodo.fondos} disabled className="bg-muted/30" />
+              </div>
+            </div>
+            <div className="p-4 rounded-xl border border-orange-200 bg-orange-50 text-sm text-orange-800">
+              Fecha límite de consignación: <strong>{new Date(periodo.fechaLimite).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>. Las cesantías no consignadas a tiempo generan sanción moratoria.
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── PASO 2: Seleccionar colaboradores ── */}
+      {paso === 2 && (
+        <Card className="border-border">
+          <CardContent className="p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <Users className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <h2 className="font-semibold text-lg">Seleccionar Personal</h2>
+                  <p className="text-sm text-muted-foreground">Agrega los colaboradores a este período de cesantías</p>
+                </div>
+              </div>
+              <Button variant="outline" size="sm" onClick={toggleTodos} className="gap-2">
+                <Users className="h-4 w-4" />
+                {seleccionados.length === colaboradoresMock.length ? 'Quitar Todos' : 'Agregar Todos'}
+              </Button>
+            </div>
+
+            {seleccionados.length > 0 && (
+              <div className="text-sm text-primary font-medium">
+                {seleccionados.length} colaborador{seleccionados.length !== 1 ? 'es' : ''} seleccionado{seleccionados.length !== 1 ? 's' : ''}
+              </div>
+            )}
+
+            <div className="rounded-xl border border-border overflow-hidden">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border bg-muted/30">
+                    <th className="w-12 p-4">
+                      <Checkbox checked={seleccionados.length === colaboradoresMock.length} onCheckedChange={toggleTodos} />
+                    </th>
+                    <th className="text-left p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Nombre</th>
+                    <th className="text-left p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Cargo</th>
+                    <th className="text-left p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Fondo</th>
+                    <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Salario Base</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {colaboradoresMock.map((col, i) => {
+                    const sel = seleccionados.includes(col.id);
+                    return (
+                      <tr key={col.id} onClick={() => toggleCol(col.id)}
+                        className={`border-b border-border last:border-0 cursor-pointer transition-colors ${sel ? 'bg-primary/5' : i % 2 === 0 ? 'bg-background hover:bg-muted/20' : 'bg-muted/5 hover:bg-muted/20'}`}>
+                        <td className="p-4">
+                          <Checkbox checked={sel} onCheckedChange={() => toggleCol(col.id)} onClick={e => e.stopPropagation()} />
+                        </td>
+                        <td className="p-4">
+                          <div className="flex items-center gap-3">
+                            <div className={`h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold border ${sel ? 'bg-primary text-white border-primary' : 'bg-primary/10 text-primary border-primary/20'}`}>
+                              {getIniciales(col.nombre)}
+                            </div>
+                            <span className="font-medium text-sm">{col.nombre}</span>
+                          </div>
+                        </td>
+                        <td className="p-4 text-sm text-muted-foreground">{col.cargo}</td>
+                        <td className="p-4 text-sm text-muted-foreground">{col.fondo}</td>
+                        <td className="p-4 text-right font-semibold text-sm">{formatearMoneda(col.salarioBasico)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── PASO 3: Confirmación ── */}
+      {paso === 3 && (
+        <div className="space-y-4">
+          {/* Header */}
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-success/10 flex items-center justify-center">
+              <CheckCircle className="h-5 w-5 text-success" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-lg">Confirmación</h2>
+              <p className="text-sm text-muted-foreground">Desprendibles de liquidación de cesantías — {seleccionados.length} colaborador{seleccionados.length !== 1 ? 'es' : ''}</p>
+            </div>
+          </div>
+
+          {/* Per-collaborator desprendibles */}
+          {seleccionados.map((cid) => {
+            const col = colaboradoresMock.find(c => c.id === cid)!;
+            const promedio = col.salarioBasico + col.auxilioTransporte + col.promedioExtras;
+            const monto = getMonto(cid);
+            return (
+              <Card key={cid} className="border-border overflow-hidden">
+                {/* Desprendible header */}
+                <div className="flex items-center gap-3 px-5 py-3 border-b border-border bg-background">
+                  <div className="h-9 w-9 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center justify-center text-xs font-bold shrink-0">
+                    {getIniciales(col.nombre)}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm">{col.nombre}</p>
+                    <p className="text-xs text-muted-foreground">{col.cargo}</p>
+                  </div>
+                  <div className="ml-auto text-right">
+                    <p className="text-xs text-muted-foreground">Fondo</p>
+                    <p className="text-sm font-medium">{col.fondo}</p>
+                  </div>
+                </div>
+
+                {/* Info bar */}
+                <div className="grid grid-cols-3 divide-x divide-border bg-muted/20 border-b border-border">
+                  <div className="px-5 py-3">
+                    <p className="text-xs text-muted-foreground mb-0.5">Cédula</p>
+                    <p className="text-sm font-medium">{col.cedula}</p>
+                  </div>
+                  <div className="px-5 py-3">
+                    <p className="text-xs text-muted-foreground mb-0.5">Días Laborados</p>
+                    <p className="text-sm font-medium">{col.diasLaborados}</p>
+                  </div>
+                  <div className="px-5 py-3">
+                    <p className="text-xs text-muted-foreground mb-0.5">Período</p>
+                    <p className="text-sm font-medium">{periodo.anio}</p>
+                  </div>
+                </div>
+
+                <CardContent className="p-0">
+                  {/* Base de Cálculo */}
+                  <div className="bg-primary/5 border-b border-primary/10">
+                    <div className="flex items-center gap-2 px-5 pt-4 pb-2">
+                      <TrendingUp className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-semibold text-primary">Base de Cálculo</span>
+                    </div>
+                    <div className="px-5 pb-1 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Salario Básico</span>
+                        <span className="text-sm font-medium">{formatearMoneda(col.salarioBasico)}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Auxilio de Transporte</span>
+                        <span className="text-sm font-medium">{col.auxilioTransporte > 0 ? formatearMoneda(col.auxilioTransporte) : <span className="text-muted-foreground">$0</span>}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Promedio Extras</span>
+                        <span className="text-sm font-medium">{col.promedioExtras > 0 ? formatearMoneda(col.promedioExtras) : <span className="text-muted-foreground">$0</span>}</span>
+                      </div>
+                    </div>
+                    <div className="mx-5 my-3 border-t border-primary/20" />
+                    <div className="flex justify-between items-center px-5 pb-4">
+                      <span className="text-xs uppercase tracking-wide font-bold text-primary">Promedio Prestacional</span>
+                      <span className="text-sm font-bold text-primary">{formatearMoneda(promedio)}</span>
+                    </div>
+                  </div>
+
+                  {/* Resultado */}
+                  <div className="px-5 pt-4 pb-2 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Días Laborados</span>
+                      <span className="text-sm font-medium">{col.diasLaborados}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Fórmula</span>
+                      <span className="text-xs text-muted-foreground">(Base × Días) ÷ 360</span>
+                    </div>
+                  </div>
+                  <div className="mx-5 border-t-2 border-primary/20" />
+                  <div className="flex justify-between items-center px-5 py-4">
+                    <span className="text-sm uppercase tracking-wide font-bold">Total Cesantías</span>
+                    <span className="text-xl font-bold text-primary">{formatearMoneda(monto)}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+
+          {/* Total resumen */}
+          <div className="p-5 rounded-xl border border-primary/20 bg-primary/5 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">Colaboradores liquidados</p>
+              <p className="font-bold text-lg">{seleccionados.length}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-muted-foreground">Total cesantías a consignar</p>
+              <p className="font-bold text-2xl text-primary">{formatearMoneda(totalGeneral)}</p>
+            </div>
+          </div>
         </div>
       )}
+
+      {/* Navegación */}
+      <div className="flex justify-between">
+        <Button variant="outline" onClick={paso === 1 ? () => navigate('/liquidaciones') : retroceder} className="gap-2">
+          <ArrowLeft className="h-4 w-4" />
+          {paso === 1 ? 'Cancelar' : 'Anterior'}
+        </Button>
+        {paso < 3 ? (
+          <Button onClick={avanzar} className="gap-2">
+            Siguiente
+            <ArrowRight className="h-4 w-4" />
+          </Button>
+        ) : (
+          <Button onClick={confirmar} className="gap-2 bg-success hover:bg-success/90">
+            <Check className="h-4 w-4" />
+            Confirmar Liquidación
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
-
