@@ -1,12 +1,13 @@
 /**
- * API — Liquidaciones (Cesantías · Intereses · Prima)
+ * API — Liquidaciones (Cesantías · Intereses de cesantías)
  * Base: /api/v1/tenant/liquidaciones
  *
- * Contrato: docs/API_LIQUIDACIONES.md (PR-L3, 2026-09-11).
- * Alcance actual del backend: pestaña CESANTIAS hasta "Confirmar" y
- * "Reabrir". Consignación y desprendible llegan con PR-L4; el tipo
- * INTERESES_CESANTIAS con PR-L5 (hoy responde 422
- * LIQUIDACION_TIPO_NO_SOPORTADO); PRIMA en fase 3.
+ * Contrato: docs/API_LIQUIDACIONES.md (v1.0, PR-L6, 2026-09-14).
+ * Cubre las pestañas CESANTIAS e INTERESES_CESANTIAS completas: períodos,
+ * wizard de 3 pasos, confirmar, reabrir, consignación al fondo / pago al
+ * trabajador con anulación, y desprendibles JSON/PDF. La pestaña Intereses
+ * usa exactamente los mismos endpoints con tipo = INTERESES_CESANTIAS
+ * (§2.7). PRIMA responde 422 LIQUIDACION_TIPO_NO_SOPORTADO hasta fase 3.
  *
  * Permisos: liquidaciones.ver / .crear / .editar / .eliminar / .liquidar
  * / .pagar (instalaciones existentes: AddLiquidacionesPermissionsSeeder).
@@ -32,12 +33,25 @@ export type EstadoLiquidacionPeriodo = 'BORRADOR' | 'CERRADA';
 /** Derivado del período: NA en borrador; según filas consignadas después. */
 export type EstadoPagoPeriodo = 'NA' | 'PENDIENTE' | 'PARCIAL' | 'COMPLETO';
 export type EstadoPagoFila = 'PENDIENTE' | 'CONSIGNADO' | 'PAGADO';
+export type MetodoPago = 'TRANSFERENCIA' | 'EFECTIVO' | 'CHEQUE' | 'PILA';
 
 /** Advertencia genérica del módulo: `{ code, mensaje, ...extra }`. */
 export interface AdvertenciaLiquidacion {
   code: string;
   mensaje?: string;
   [k: string]: unknown;
+}
+
+/** Descriptor corto de período (§0.2): duplicados, padre de intereses, etc. */
+export interface DescriptorPeriodo {
+  id: number;
+  tipo: TipoLiquidacion;
+  anio: number;
+  descripcion: string;
+  fecha_inicio: string;
+  fecha_fin: string;
+  estado: EstadoLiquidacionPeriodo;
+  total_colaboradores: number;
 }
 
 /** Ítem del listado (§2.3). */
@@ -91,10 +105,21 @@ export interface LiquidacionFila {
   valor_calculado: number;
   valor_final: number;
   cobertura_nominas_pct: number | null;
+  /** Solo con valor en filas de intereses (§2.7). */
+  saldo_cesantias: number | null;
+  tasa_aplicada: number | null;
+  dias_base_intereses: number | null;
+  periodo_empleado_base_id: number | null;
   estado: 'PENDIENTE' | 'LIQUIDADO';
   estado_pago: EstadoPagoFila;
   fecha_pago: string | null;
   valor_pagado: number | null;
+  metodo_pago: MetodoPago | null;
+  referencia_pago: string | null;
+  fondo_consignacion: string | null;
+  /** Informativo (corte 3 años); nunca hay sanción en pesos. */
+  dias_mora: number | null;
+  observacion_pago: string | null;
   ajuste_manual: Record<string, unknown> | null;
   advertencias_count: number;
   advertencias: AdvertenciaLiquidacion[];
@@ -108,6 +133,8 @@ export interface LiquidacionPeriodoDetalle extends LiquidacionPeriodoItem {
   creado_por: { id: number; name: string } | null;
   cerrado_por: { id: number; name: string } | null;
   filas: LiquidacionFila[];
+  /** Solo intereses: período de cesantías padre. */
+  periodo_base: DescriptorPeriodo | null;
   totales: { liquidado: number; consignado: number; pendiente: number };
   advertencias_globales: AdvertenciaLiquidacion[];
 }
@@ -142,11 +169,16 @@ export interface CrearPeriodoPayload {
   fecha_fin?: string;
   notas?: string;
   fecha_limite_legal?: string;
+  /** Solo intereses: período de cesantías CERRADA del año (§2.7). */
+  periodo_base_id?: number;
   /** true para crear un segundo período del mismo tipo y año (tras el 409). */
   permitir_multiple?: boolean;
 }
 
-/** Colaborador elegible del paso 2 (§3.1). */
+/**
+ * Colaborador elegible del paso 2 (§3.1). Los campos de intereses (§2.7)
+ * solo vienen cuando el período es INTERESES_CESANTIAS.
+ */
 export interface EmpleadoDisponibleLiquidacion {
   id: number;
   nombre_completo: string;
@@ -161,13 +193,20 @@ export interface EmpleadoDisponibleLiquidacion {
    * (`salario_base_es_contractual = false`): la columna "Salario base"
    * debe pintar `promedio_mensual_devengado` en ese caso.
    */
-  salario_base: number;
-  salario_base_es_contractual: boolean;
-  promedio_mensual_devengado: number;
-  base_prestacional_estimada: number;
-  cobertura_nominas_pct: number;
-  dias_vinculacion: number;
-  dias_computados: number;
+  salario_base?: number;
+  salario_base_es_contractual?: boolean;
+  promedio_mensual_devengado?: number;
+  base_prestacional_estimada?: number;
+  cobertura_nominas_pct?: number;
+  dias_vinculacion?: number;
+  dias_computados?: number;
+  // Solo intereses (§2.7):
+  saldo_cesantias?: number;
+  dias_base_intereses?: number;
+  tasa?: number;
+  intereses_estimados?: number;
+  periodo_empleado_base_id?: number;
+  cesantias_estado_pago?: EstadoPagoFila;
   advertencias: string[];
 }
 
@@ -183,20 +222,49 @@ export interface EmpleadoExcluidoLiquidacion {
     | 'ELIMINADO'
     | 'YA_EN_PERIODO'
     | 'EN_LIQUIDACION_SOLAPADA'
+    | 'SIN_CESANTIAS_LIQUIDADAS'
     | string;
   fecha_retiro?: string;
   fila_id?: number;
-  liquidacion?: Partial<LiquidacionPeriodoItem> | null;
+  periodo_base_id?: number;
+  liquidacion?: DescriptorPeriodo | null;
 }
 
 export interface OmitidoLiquidacion {
   id: number;
   nombre_completo: string;
   code: string;
-  liquidacion?: Partial<LiquidacionPeriodoItem> | null;
+  liquidacion?: DescriptorPeriodo | null;
 }
 
 // ─── Preview (§4.1) ───────────────────────────────────────────────────────────
+
+/** Datos del giro de una fila. En el preview siempre PENDIENTE. */
+export interface PagoFilaLiquidacion {
+  estado_pago: EstadoPagoFila;
+  fecha_pago: string | null;
+  metodo_pago: MetodoPago | null;
+  referencia_pago: string | null;
+  fondo_consignacion: string | null;
+  valor_pagado: number | null;
+  dias_mora: number | null;
+  pagado_por: string | null;
+  observacion: string | null;
+}
+
+/** Solo intereses (§2.7): de dónde sale el saldo. */
+export interface OrigenIntereses {
+  periodo_empleado_base_id: number;
+  periodo_base_id: number;
+  saldo_cesantias: number;
+  cesantias_valor_final?: number;
+  cesantias_liquidado_at?: string | null;
+  cesantias_estado_pago?: EstadoPagoFila;
+  dias_vinculacion: number;
+  dias_computados: number;
+  dias_base_intereses: number;
+  modo_dias?: 'DIAS_VINCULACION' | 'DIAS_COMPUTADOS';
+}
 
 export interface PreviewFilaLiquidacion {
   fila_id: number;
@@ -221,7 +289,8 @@ export interface PreviewFilaLiquidacion {
     contrato_id: number | null;
   };
   base: {
-    metodo_base: 'ULTIMO_SALARIO' | 'PROMEDIO' | 'MANUAL';
+    /** null solo en intereses sin ajuste (§2.7). */
+    metodo_base: 'ULTIMO_SALARIO' | 'PROMEDIO' | 'MANUAL' | null;
     salario_basico: number;
     auxilio_transporte: number;
     promedio_variables: number;
@@ -247,10 +316,18 @@ export interface PreviewFilaLiquidacion {
     valor_final: number;
     ajuste_manual: Record<string, unknown> | null;
   };
+  /** Solo intereses. */
+  origen?: OrigenIntereses;
   fuentes: Array<Record<string, unknown>>;
+  metodo_liquidacion?: {
+    texto: string;
+    normas: string[];
+    parametros: Record<string, unknown>;
+  };
   advertencias: AdvertenciaLiquidacion[];
-  /** SIN_DIAS_COMPUTADOS | SIN_DEVENGADO — nunca forzables. */
+  /** Nunca forzables (§4.1). */
   bloqueantes: string[];
+  pago: PagoFilaLiquidacion;
 }
 
 export interface PreviewLiquidacionPeriodo {
@@ -263,7 +340,8 @@ export interface PreviewLiquidacionPeriodo {
   /**
    * Huella de los insumos del cálculo. Enviarla SIEMPRE en confirmar: si
    * algo cambió entre el preview y el clic, el backend responde 409
-   * LIQUIDACION_DESACTUALIZADA y hay que recargar el paso 3.
+   * LIQUIDACION_DESACTUALIZADA (con `hash_actual`) y hay que recargar el
+   * paso 3.
    */
   calculo_hash: string;
 }
@@ -293,9 +371,69 @@ export interface ConfirmarLiquidacionPayload {
   motivo_forzado?: string | null;
 }
 
+// ─── Consignación / pago (§5) ────────────────────────────────────────────────
+
+export interface RegistrarPagosPayload {
+  /** Uno de los dos. `empleado_ids` son ids de EMPLEADO, no de fila. */
+  todos?: boolean;
+  empleado_ids?: number[];
+  /** Obligatoria, ≤ hoy (422 si es futura). */
+  fecha_pago: string;
+  metodo_pago?: MetodoPago;
+  referencia_pago?: string;
+  /** Solo cesantías; default = fondo elegido por cada colaborador. */
+  fondo_consignacion?: string;
+  observacion?: string;
+}
+
+export interface OmitidaPago {
+  id: number;
+  fila_id?: number;
+  nombre_completo: string | null;
+  code: string;
+}
+
+export interface RegistrarPagosResponse {
+  message: string;
+  data: {
+    pagadas: LiquidacionFila[];
+    omitidas: OmitidaPago[];
+    periodo: LiquidacionPeriodoItem;
+  };
+  advertencias?: AdvertenciaLiquidacion[];
+}
+
+// ─── Desprendible (§6) ───────────────────────────────────────────────────────
+
+/** Comprobante legal por fila. Nunca recalcula: lee lo persistido. */
+export interface DesprendibleLiquidacion {
+  tipo: TipoLiquidacion;
+  titulo: string;
+  finca: string;
+  nit: string | null;
+  numero_comprobante: string;
+  periodo: DescriptorPeriodo & { fecha_limite_legal: string; fecha_limite_operativa: string };
+  empleado: EmpleadoLiquidacionRef & { salario_contractual?: number };
+  dias: PreviewFilaLiquidacion['dias'];
+  base: PreviewFilaLiquidacion['base'];
+  resultado: PreviewFilaLiquidacion['resultado'];
+  origen?: OrigenIntereses;
+  metodo_liquidacion: { texto: string; normas: string[]; parametros: Record<string, unknown> };
+  fuentes: Array<Record<string, unknown>>;
+  advertencias: AdvertenciaLiquidacion[];
+  pago: PagoFilaLiquidacion;
+  liquidacion: {
+    fecha: string;
+    fecha_humana: string;
+    liquidado_por: string;
+    estado_fila: 'PENDIENTE' | 'LIQUIDADO';
+  };
+}
+
 // ─── API ──────────────────────────────────────────────────────────────────────
 
 const BASE = '/v1/tenant/liquidaciones/periodos';
+const FILAS = '/v1/tenant/liquidaciones/periodo-empleados';
 
 export const liquidacionesApi = {
   /** §2.1 — Cards del listado. `tipo` default CESANTIAS. */
@@ -329,7 +467,9 @@ export const liquidacionesApi = {
   /**
    * §2.4 — Crear período (BORRADOR). 409 LIQUIDACION_PERIODO_DUPLICADO con
    * `periodos_existentes[]` si ya hay uno del mismo tipo y año y no viene
-   * `permitir_multiple: true`.
+   * `permitir_multiple: true`. Intereses: 422 PERIODO_CESANTIAS_REQUERIDO
+   * sin cesantías CERRADA del año (con `periodos_cesantias[]` si hay
+   * varias tandas: reenviar con `periodo_base_id`).
    */
   crear: (payload: CrearPeriodoPayload) =>
     apiClient.post<{
@@ -403,6 +543,33 @@ export const liquidacionesApi = {
       { motivo },
       T,
     ),
+
+  /**
+   * §5.1 — Registrar consignación (cesantías) o pago (intereses) sobre un
+   * período CERRADA. Éxito parcial: leer `omitidas[]` y `advertencias[]`.
+   * `valor_pagado = valor_final` siempre: no hay pagos parciales por fila.
+   */
+  registrarPagos: (id: number, payload: RegistrarPagosPayload) =>
+    apiClient.post<RegistrarPagosResponse>(`${BASE}/${id}/pagos`, payload, T),
+
+  /** §5.2 — Anula el giro de una fila: vuelve a PENDIENTE. */
+  anularPago: (filaId: number) =>
+    apiClient.delete<{
+      message: string;
+      data: { fila: LiquidacionFila; periodo: LiquidacionPeriodoItem };
+    }>(`${FILAS}/${filaId}/pago`, T),
+
+  /** §6.1 — Comprobante JSON de una fila LIQUIDADO. Nunca recalcula. */
+  desprendible: (filaId: number) =>
+    apiClient.get<{ data: DesprendibleLiquidacion }>(`${FILAS}/${filaId}/desprendible`, T),
+
+  /** §6.2 — PDF del comprobante de una fila. */
+  desprendiblePdf: (filaId: number) =>
+    apiClient.getBlob(`${FILAS}/${filaId}/desprendible/pdf`, T),
+
+  /** §6.3 — PDF del período CERRADA: una página por colaborador. */
+  desprendiblesPeriodoPdf: (id: number) =>
+    apiClient.getBlob(`${BASE}/${id}/desprendibles/pdf`, T),
 };
 
 // ─── Códigos de error del módulo (§0.1) ──────────────────────────────────────
@@ -411,11 +578,16 @@ export const LiquidacionesErrorCodes = {
   LIQUIDACION_PERIODO_DUPLICADO: 'LIQUIDACION_PERIODO_DUPLICADO',
   LIQUIDACION_PERIODO_CERRADO: 'LIQUIDACION_PERIODO_CERRADO',
   LIQUIDACION_PERIODO_NO_CERRADO: 'LIQUIDACION_PERIODO_NO_CERRADO',
+  LIQUIDACION_PAGO_YA_REGISTRADO: 'LIQUIDACION_PAGO_YA_REGISTRADO',
+  SIN_FONDO_CESANTIAS: 'SIN_FONDO_CESANTIAS',
+  LIQUIDACION_PAGO_NO_REGISTRADO: 'LIQUIDACION_PAGO_NO_REGISTRADO',
+  LIQUIDACION_FILA_NO_LIQUIDADA: 'LIQUIDACION_FILA_NO_LIQUIDADA',
   LIQUIDACION_DESACTUALIZADA: 'LIQUIDACION_DESACTUALIZADA',
   LIQUIDACION_ADVERTENCIAS_BLOQUEANTES: 'LIQUIDACION_ADVERTENCIAS_BLOQUEANTES',
   LIQUIDACION_COBERTURA_INCOMPLETA: 'LIQUIDACION_COBERTURA_INCOMPLETA',
   LIQUIDACION_CON_PAGOS: 'LIQUIDACION_CON_PAGOS',
   LIQUIDACION_PERIODO_REFERENCIADO: 'LIQUIDACION_PERIODO_REFERENCIADO',
+  PERIODO_CESANTIAS_REQUERIDO: 'PERIODO_CESANTIAS_REQUERIDO',
   COLABORADOR_EN_LIQUIDACION_SOLAPADA: 'COLABORADOR_EN_LIQUIDACION_SOLAPADA',
   LIQUIDACION_FILA_NO_ENCONTRADA: 'LIQUIDACION_FILA_NO_ENCONTRADA',
   LIQUIDACION_PERIODO_NO_ENCONTRADO: 'LIQUIDACION_PERIODO_NO_ENCONTRADO',
@@ -431,7 +603,7 @@ export const LiquidacionesErrorCodes = {
 export type LiquidacionesErrorCode =
   typeof LiquidacionesErrorCodes[keyof typeof LiquidacionesErrorCodes];
 
-/** Etiquetas legibles para los motivos de exclusión del paso 2. */
+/** Etiquetas legibles para los motivos de exclusión y omisión (Anexo A.4). */
 export const MOTIVO_EXCLUSION_LABEL: Record<string, string> = {
   RETIRADO_EN_EL_ANIO: 'Retirado en el año (va por liquidación final)',
   SIN_CONTRATO_EN_RANGO: 'Sin contrato en el rango',
@@ -439,4 +611,15 @@ export const MOTIVO_EXCLUSION_LABEL: Record<string, string> = {
   ELIMINADO: 'Eliminado',
   YA_EN_PERIODO: 'Ya está en este período',
   EN_LIQUIDACION_SOLAPADA: 'En otra liquidación con días cruzados',
+  COLABORADOR_EN_LIQUIDACION_SOLAPADA: 'En otra liquidación con días cruzados',
+  SIN_CESANTIAS_LIQUIDADAS: 'Sin cesantías liquidadas en el período base',
+  EMPLEADO_NO_ENCONTRADO: 'No es un colaborador del tenant',
+};
+
+/** Etiquetas de los bloqueantes del preview (Anexo A.1). */
+export const BLOQUEANTE_LABEL: Record<string, string> = {
+  SIN_DIAS_COMPUTADOS: 'Sin días computados: no se puede liquidar',
+  SIN_DEVENGADO: 'Sin devengado en nóminas cerradas: no se puede liquidar',
+  SIN_CESANTIAS_LIQUIDADAS: 'Sin cesantías liquidadas en el período base: no se puede liquidar',
+  SIN_SALDO_CESANTIAS: 'El saldo de cesantías quedó en cero: no se puede liquidar',
 };

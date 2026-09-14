@@ -4,18 +4,26 @@ import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
+import { Badge } from '../../components/ui/badge';
 import { Checkbox } from '../../components/ui/checkbox';
 import {
   ArrowLeft, ArrowRight, Check, Users, Calendar,
-  Gift, CheckCircle, TrendingUp,
+  Gift, CheckCircle, TrendingUp, Download, Printer,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatearMoneda } from '../../lib/liquidaciones/calculoUtils';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // ── Mock ──────────────────────────────────────────────────────────────────────
-const periodosMock: Record<string, { id: string; descripcion: string; anio: number; semestre: string; fechaInicio: string; fechaFin: string; fechaLimite: string }> = {
-  'pri-2026-1': { id: 'pri-2026-1', descripcion: 'Prima 1° semestre 2026', anio: 2026, semestre: '1°', fechaInicio: '2026-01-01', fechaFin: '2026-06-30', fechaLimite: '2026-06-30' },
-  'pri-2025-2': { id: 'pri-2025-2', descripcion: 'Prima 2° semestre 2025', anio: 2025, semestre: '2°', fechaInicio: '2025-07-01', fechaFin: '2025-12-31', fechaLimite: '2025-12-20' },
+const periodosMock: Record<string, { id: string; descripcion: string; anio: number; semestre: string; fechaInicio: string; fechaFin: string; fechaLimite: string; estado: 'BORRADOR' | 'CERRADA'; fechaPago?: string }> = {
+  'prima-2026-2': { id: 'prima-2026-2', descripcion: 'Prima 2° Semestre 2026', anio: 2026, semestre: '2°', fechaInicio: '2026-07-01', fechaFin: '2026-12-31', fechaLimite: '2026-12-20', estado: 'BORRADOR' },
+  'prima-2026-1': { id: 'prima-2026-1', descripcion: 'Prima 1° Semestre 2026', anio: 2026, semestre: '1°', fechaInicio: '2026-01-01', fechaFin: '2026-06-30', fechaLimite: '2026-06-30', estado: 'CERRADA', fechaPago: '2026-06-28' },
+  'prima-2025-2': { id: 'prima-2025-2', descripcion: 'Prima 2° Semestre 2025', anio: 2025, semestre: '2°', fechaInicio: '2025-07-01', fechaFin: '2025-12-31', fechaLimite: '2025-12-20', estado: 'CERRADA', fechaPago: '2025-12-18' },
+  'prima-2025-1': { id: 'prima-2025-1', descripcion: 'Prima 1° Semestre 2025', anio: 2025, semestre: '1°', fechaInicio: '2025-01-01', fechaFin: '2025-06-30', fechaLimite: '2025-06-30', estado: 'CERRADA', fechaPago: '2025-06-27' },
+  // aliases for backward compat
+  'pri-2026-1': { id: 'pri-2026-1', descripcion: 'Prima 1° semestre 2026', anio: 2026, semestre: '1°', fechaInicio: '2026-01-01', fechaFin: '2026-06-30', fechaLimite: '2026-06-30', estado: 'BORRADOR' },
+  'pri-2025-2': { id: 'pri-2025-2', descripcion: 'Prima 2° semestre 2025', anio: 2025, semestre: '2°', fechaInicio: '2025-07-01', fechaFin: '2025-12-31', fechaLimite: '2025-12-20', estado: 'CERRADA', fechaPago: '2025-12-18' },
 };
 
 const colaboradoresMock = [
@@ -37,6 +45,224 @@ const pasos = [
   { numero: 2, titulo: 'Seleccionar Colaboradores', icono: Users },
   { numero: 3, titulo: 'Confirmación', icono: Check },
 ];
+
+// ── Vista de período CERRADO ──────────────────────────────────────────────────
+function VistaCerrada({ periodo }: { periodo: typeof periodosMock[string] }) {
+
+  const total = colaboradoresMock.reduce((s, col) =>
+    s + calcPrima(col.salarioPromedio, col.auxilioTransporte, col.diasLaborados), 0);
+
+  const descargarPDF = () => {
+    const doc = new jsPDF();
+    const verde: [number, number, number] = [30, 86, 49];
+
+    doc.setFillColor(...verde);
+    doc.rect(0, 0, 210, 28, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('SOPORTE DE LIQUIDACIÓN DE PRIMA DE SERVICIOS', 105, 12, { align: 'center' });
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Generado el ${new Date().toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })}`, 105, 20, { align: 'center' });
+
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text('INFORMACIÓN DEL PERÍODO', 14, 36);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    const infoY = 42;
+    doc.text(`Descripción: ${periodo.descripcion}`, 14, infoY);
+    doc.text(`Semestre: ${periodo.semestre} semestre ${periodo.anio}`, 14, infoY + 6);
+    doc.text(`Período: ${new Date(periodo.fechaInicio).toLocaleDateString('es-CO')} al ${new Date(periodo.fechaFin).toLocaleDateString('es-CO')}`, 14, infoY + 12);
+    doc.text(`Fecha límite de pago: ${new Date(periodo.fechaLimite).toLocaleDateString('es-CO')}`, 14, infoY + 18);
+    if (periodo.fechaPago) doc.text(`Fecha de pago: ${new Date(periodo.fechaPago).toLocaleDateString('es-CO')}`, 14, infoY + 24);
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text('DETALLE POR COLABORADOR', 14, infoY + 34);
+
+    autoTable(doc, {
+      startY: infoY + 38,
+      head: [['Colaborador', 'Cédula', 'Cargo', 'Sal. Promedio', 'Aux. Transp.', 'Días', 'Prima']],
+      body: colaboradoresMock.map(col => {
+        const monto = calcPrima(col.salarioPromedio, col.auxilioTransporte, col.diasLaborados);
+        return [
+          col.nombre, col.cedula, col.cargo,
+          formatearMoneda(col.salarioPromedio),
+          col.auxilioTransporte > 0 ? formatearMoneda(col.auxilioTransporte) : '$0',
+          col.diasLaborados,
+          formatearMoneda(monto),
+        ];
+      }),
+      foot: [['', '', '', '', '', 'TOTAL PRIMA', formatearMoneda(total)]],
+      headStyles: { fillColor: verde, fontSize: 8 },
+      bodyStyles: { fontSize: 8 },
+      footStyles: { fillColor: verde, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
+      alternateRowStyles: { fillColor: [245, 250, 247] },
+    });
+
+    const finalY = (doc as any).lastAutoTable.finalY + 20;
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'italic');
+    doc.text('Marco Legal: Art. 306 CST — La prima se paga el 30 de junio y el 20 de diciembre de cada año.', 14, finalY);
+    const firmaY = finalY + 20;
+    doc.setFont('helvetica', 'normal');
+    doc.line(14, firmaY, 90, firmaY);
+    doc.line(120, firmaY, 196, firmaY);
+    doc.setFontSize(9);
+    doc.text('Firma del Empleador', 52, firmaY + 5, { align: 'center' });
+    doc.text('Firma del Contador / Revisor', 158, firmaY + 5, { align: 'center' });
+
+    doc.save(`Soporte_Prima_${periodo.semestre.replace('°', '')}_Sem_${periodo.anio}.pdf`);
+    toast.success('Soporte descargado correctamente');
+  };
+
+  return (
+    <div className="space-y-6">
+      <Button variant="ghost" size="sm" asChild className="gap-2">
+        <Link to="/liquidaciones"><ArrowLeft className="h-4 w-4" />Volver a Liquidaciones</Link>
+      </Button>
+
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-primary">{periodo.descripcion}</h1>
+          <p className="text-muted-foreground mt-1">{periodo.semestre} semestre · Prima de servicios (Art. 306 CST)</p>
+        </div>
+        <Badge className="bg-success/10 text-success border border-success/30 text-sm px-3 py-1 shrink-0">
+          <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
+          Liquidado
+        </Badge>
+      </div>
+
+      <Card className="border-border">
+        <CardContent className="p-5">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-5">
+            <div>
+              <p className="text-xs text-muted-foreground mb-0.5">Período</p>
+              <p className="text-sm font-medium">{new Date(periodo.fechaInicio).toLocaleDateString('es-CO')} – {new Date(periodo.fechaFin).toLocaleDateString('es-CO')}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-0.5">Semestre</p>
+              <p className="text-sm font-medium">{periodo.semestre} semestre {periodo.anio}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-0.5">Fecha límite</p>
+              <p className="text-sm font-medium">{new Date(periodo.fechaLimite).toLocaleDateString('es-CO')}</p>
+            </div>
+            {periodo.fechaPago && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">Pagado el</p>
+                <p className="text-sm font-semibold text-success">{new Date(periodo.fechaPago).toLocaleDateString('es-CO')}</p>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex gap-3 justify-end">
+        <Button variant="outline" onClick={() => window.print()} className="gap-2">
+          <Printer className="h-4 w-4" />Imprimir
+        </Button>
+        <Button onClick={descargarPDF} className="gap-2">
+          <Download className="h-4 w-4" />Descargar Soporte PDF
+        </Button>
+      </div>
+
+      <div className="space-y-4">
+        <div>
+          <h2 className="font-semibold text-lg">Detalle por Colaborador</h2>
+          <p className="text-sm text-muted-foreground">{colaboradoresMock.length} colaboradores liquidados</p>
+        </div>
+        {colaboradoresMock.map((col) => {
+          const baseTotal = col.salarioPromedio + col.auxilioTransporte;
+          const monto = calcPrima(col.salarioPromedio, col.auxilioTransporte, col.diasLaborados);
+          return (
+            <Card key={col.id} className="border-border overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-3 border-b border-border bg-background">
+                <div className="h-9 w-9 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center justify-center text-xs font-bold shrink-0">
+                  {getIniciales(col.nombre)}
+                </div>
+                <div>
+                  <p className="font-semibold text-sm">{col.nombre}</p>
+                  <p className="text-xs text-muted-foreground">{col.cargo}</p>
+                </div>
+                <div className="ml-auto text-right">
+                  <p className="text-xs text-muted-foreground">Semestre</p>
+                  <p className="text-sm font-medium">{periodo.semestre} · {periodo.anio}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 divide-x divide-border bg-muted/20 border-b border-border">
+                <div className="px-5 py-3">
+                  <p className="text-xs text-muted-foreground mb-0.5">Cédula</p>
+                  <p className="text-sm font-medium">{col.cedula}</p>
+                </div>
+                <div className="px-5 py-3">
+                  <p className="text-xs text-muted-foreground mb-0.5">Días Laborados</p>
+                  <p className="text-sm font-medium">{col.diasLaborados}</p>
+                </div>
+                <div className="px-5 py-3">
+                  <p className="text-xs text-muted-foreground mb-0.5">Período</p>
+                  <p className="text-sm font-medium">{new Date(periodo.fechaInicio).toLocaleDateString('es-CO', {month:'short'})} – {new Date(periodo.fechaFin).toLocaleDateString('es-CO', {month:'short', year:'numeric'})}</p>
+                </div>
+              </div>
+              <CardContent className="p-0">
+                <div className="bg-primary/5 border-b border-primary/10">
+                  <div className="flex items-center gap-2 px-5 pt-4 pb-2">
+                    <TrendingUp className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-semibold text-primary">Base de Cálculo</span>
+                  </div>
+                  <div className="px-5 pb-1 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Salario Promedio</span>
+                      <span className="text-sm font-medium">{formatearMoneda(col.salarioPromedio)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Auxilio de Transporte</span>
+                      <span className="text-sm font-medium">{col.auxilioTransporte > 0 ? formatearMoneda(col.auxilioTransporte) : <span className="text-muted-foreground">$0</span>}</span>
+                    </div>
+                  </div>
+                  <div className="mx-5 my-3 border-t border-primary/20" />
+                  <div className="flex justify-between items-center px-5 pb-4">
+                    <span className="text-xs uppercase tracking-wide font-bold text-primary">Total Base</span>
+                    <span className="text-sm font-bold text-primary">{formatearMoneda(baseTotal)}</span>
+                  </div>
+                </div>
+                <div className="px-5 pt-4 pb-2 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Días Laborados</span>
+                    <span className="text-sm font-medium">{col.diasLaborados}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Fórmula</span>
+                    <span className="text-xs text-muted-foreground">(Base × Días) ÷ 360</span>
+                  </div>
+                </div>
+                <div className="mx-5 border-t-2 border-primary/20" />
+                <div className="flex justify-between items-center px-5 py-4">
+                  <span className="text-sm uppercase tracking-wide font-bold">Total Prima</span>
+                  <span className="text-xl font-bold text-primary">{formatearMoneda(monto)}</span>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      <div className="p-5 rounded-xl border border-success/20 bg-success/5 flex items-center justify-between">
+        <div>
+          <p className="text-sm text-muted-foreground">Total colaboradores</p>
+          <p className="font-bold text-lg">{colaboradoresMock.length}</p>
+        </div>
+        <div className="text-right">
+          <p className="text-sm text-muted-foreground">Total prima pagada</p>
+          <p className="font-bold text-2xl text-success">{formatearMoneda(total)}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function StepBar({ actual }: { actual: number }) {
   return (
@@ -68,7 +294,10 @@ export default function PrimaDetalle() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const periodo = periodosMock[id ?? 'pri-2026-1'] ?? periodosMock['pri-2026-1'];
+  const periodo = periodosMock[id ?? 'prima-2026-2'] ?? periodosMock['prima-2026-2'];
+
+  // Los hooks van antes de cualquier return: al navegar entre un período
+  // cerrado y uno en borrador el orden debe mantenerse.
   const [paso, setPaso] = useState(1);
   const [seleccionados, setSeleccionados] = useState<string[]>([]);
 
@@ -94,6 +323,8 @@ export default function PrimaDetalle() {
     toast.success('Liquidación de prima confirmada exitosamente');
     navigate('/liquidaciones');
   };
+
+  if (periodo.estado === 'CERRADA') return <VistaCerrada periodo={periodo} />;
 
   return (
     <div className="space-y-6">
