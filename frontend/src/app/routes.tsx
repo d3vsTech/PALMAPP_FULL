@@ -109,6 +109,7 @@ const CesantiasDetalle = lazyWithRetry(() => import('./pages/liquidaciones/Cesan
 const InteresesDetalle = lazyWithRetry(() => import('./pages/liquidaciones/InteresesDetalle'));
 const PrimaDetalle = lazyWithRetry(() => import('./pages/liquidaciones/PrimaDetalle'));
 const VacacionesDetalle = lazyWithRetry(() => import('./pages/liquidaciones/VacacionesDetalle'));
+const VacacionesHistorico = lazyWithRetry(() => import('./pages/liquidaciones/VacacionesHistorico'));
 const LiquidacionFinalDetalle = lazyWithRetry(() => import('./pages/liquidaciones/LiquidacionFinalDetalle'));
 const NuevaCesantia = lazyWithRetry(() => import('./pages/liquidaciones/NuevaCesantia'));
 const NuevaIntereses = lazyWithRetry(() => import('./pages/liquidaciones/NuevaIntereses'));
@@ -325,6 +326,7 @@ export const router = createBrowserRouter([
           { path: 'prima/nueva',               element: L(<NuevaPrima />) },
           { path: 'prima/:id',                 element: L(<PrimaDetalle />) },
           { path: 'vacaciones/nueva',          element: L(<NuevaVacaciones />) },
+          { path: 'vacaciones/historico',      element: L(<VacacionesHistorico />) },
           { path: 'vacaciones/:id',            element: L(<VacacionesDetalle />) },
           { path: 'liquidacion-final/nueva',   element: L(<NuevaLiquidacionFinal />) },
           { path: 'liquidacion-final/:id',     element: L(<LiquidacionFinalDetalle />) },

@@ -1,462 +1,730 @@
-import { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import { useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router';
+import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { Badge } from '../../components/ui/badge';
+import { Checkbox } from '../../components/ui/checkbox';
 import {
-  ArrowLeft,
-  Calculator,
-  User,
-  Calendar,
-  DollarSign,
-  Plane,
-  CheckCircle,
-  Search,
+  ArrowLeft, ArrowRight, Check, Users, Calendar,
+  Plane, CheckCircle, TrendingUp, AlertCircle, Info,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useLiquidaciones, VacacionesColaborador } from '../../contexts/LiquidacionesContext';
 import { formatearMoneda } from '../../lib/liquidaciones/calculoUtils';
-import { colaboradores } from '../../lib/mockData';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 
-export default function NuevaVacaciones() {
+// ── Mock ──────────────────────────────────────────────────────────────────────
+const colaboradoresMock = [
+  { id: 'c1', nombre: 'Carlos Martínez', cedula: '1.012.345.678', cargo: 'Operario de Cosecha', salarioPromedio: 1750905, auxilioTransporte: 249095, diasDisponibles: 15 },
+  { id: 'c2', nombre: 'Ana Gómez',       cedula: '52.341.567.890', cargo: 'Supervisora',          salarioPromedio: 2500000, auxilioTransporte: 0,      diasDisponibles: 22 },
+  { id: 'c3', nombre: 'Luis Pérez',       cedula: '1.098.765.432', cargo: 'Podador',              salarioPromedio: 1750905, auxilioTransporte: 249095, diasDisponibles: 12 },
+  { id: 'c4', nombre: 'María Torres',     cedula: '43.765.432.100', cargo: 'Almacenista',          salarioPromedio: 1900000, auxilioTransporte: 249095, diasDisponibles: 30 },
+  { id: 'c5', nombre: 'Jorge Ramírez',    cedula: '1.123.456.789', cargo: 'Operario de Poda',     salarioPromedio: 1750905, auxilioTransporte: 249095, diasDisponibles: 8  },
+];
+
+type DatosVac = { diasDisfrute: number; diasDinero: number };
+
+const getIniciales = (nombre: string) =>
+  nombre.split(' ').slice(0, 2).map(p => p[0]).join('').toUpperCase();
+
+const calcValorDia = (salario: number) => Math.round(salario / 30);
+
+const validarDatos = (col: typeof colaboradoresMock[0], d: DatosVac) => {
+  if (d.diasDisfrute < 1) return 'sinDisfrute';
+  if (d.diasDinero > d.diasDisfrute) return 'dineroSuperior';
+  if (d.diasDisfrute + d.diasDinero > col.diasDisponibles) return 'superaDisponibles';
+  return 'ok';
+};
+
+// ── Stepper (modo batch) ───────────────────────────────────────────────────────
+const pasos = [
+  { numero: 1, titulo: 'Información del Período', icono: Calendar },
+  { numero: 2, titulo: 'Seleccionar Colaboradores', icono: Users },
+  { numero: 3, titulo: 'Confirmación', icono: Check },
+];
+
+function StepBar({ actual }: { actual: number }) {
+  return (
+    <div className="flex items-center gap-0">
+      {pasos.map((paso, idx) => {
+        const completado = actual > paso.numero;
+        const activo = actual === paso.numero;
+        const Icono = paso.icono;
+        return (
+          <div key={paso.numero} className="flex items-center flex-1 last:flex-none">
+            <div className="flex flex-col items-center gap-1.5 min-w-0">
+              <div className={`h-10 w-10 rounded-full border-2 flex items-center justify-center transition-colors ${completado ? 'bg-primary border-primary' : activo ? 'border-primary bg-primary/10' : 'border-border bg-background'}`}>
+                {completado ? <Check className="h-5 w-5 text-white" /> : <Icono className={`h-5 w-5 ${activo ? 'text-primary' : 'text-muted-foreground'}`} />}
+              </div>
+              <div className="text-center">
+                <p className={`text-xs font-semibold ${activo || completado ? 'text-primary' : 'text-muted-foreground'}`}>Paso {paso.numero}</p>
+                <p className={`text-xs hidden sm:block ${activo ? 'text-foreground' : 'text-muted-foreground'}`}>{paso.titulo}</p>
+              </div>
+            </div>
+            {idx < pasos.length - 1 && <div className={`flex-1 h-0.5 mx-3 mb-5 transition-colors ${actual > paso.numero ? 'bg-primary' : 'bg-border'}`} />}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Modo individual (viene de "Liquidar" en VacacionesTab) ────────────────────
+function LiquidacionIndividual({ col }: { col: typeof colaboradoresMock[0] }) {
   const navigate = useNavigate();
-  const { vacaciones, setVacaciones } = useLiquidaciones();
+  const [fechaInicio, setFechaInicio] = useState('');
+  const [diasDisfrute, setDiasDisfrute] = useState(0);
+  const [diasDinero, setDiasDinero] = useState(0);
 
-  const [formData, setFormData] = useState({
-    colaboradorId: '',
-    periodoInicio: '',
-    periodoFin: '',
-    salarioPromedio: '0',
-    auxilioTransporte: '0',
-    tipoVacaciones: 'servicio',
-  });
+  const estado = validarDatos(col, { diasDisfrute, diasDinero });
+  const valorDia = calcValorDia(col.salarioPromedio);
+  const valorDisfrute = valorDia * diasDisfrute;
+  const valorDinero = valorDia * diasDinero;
+  const total = valorDisfrute + valorDinero;
 
-  const [diasLaborados, setDiasLaborados] = useState(0);
-  const [busquedaColaborador, setBusquedaColaborador] = useState('');
-  const [mostrarResultados, setMostrarResultados] = useState(false);
-
-  const colaboradoresDisponibles = colaboradores.filter(c => c.estado === 'Activo');
-  const colaboradorSeleccionado = colaboradores.find(c => c.id === formData.colaboradorId);
-  const nombreCompletoDe = (c: { nombres: string; apellidos: string }) => `${c.nombres} ${c.apellidos}`;
-
-  const colaboradoresFiltrados = colaboradoresDisponibles.filter(col => {
-    if (!busquedaColaborador) return false;
-    const busqueda = busquedaColaborador.toLowerCase();
-    return (
-      nombreCompletoDe(col).toLowerCase().includes(busqueda) ||
-      (col.cedula || '').includes(busqueda) ||
-      (col.cargo?.toLowerCase() || '').includes(busqueda)
-    );
-  });
-
-  useEffect(() => {
-    if (formData.periodoInicio && formData.periodoFin) {
-      const inicio = new Date(formData.periodoInicio);
-      const fin = new Date(formData.periodoFin);
-      const diffTime = Math.abs(fin.getTime() - inicio.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      setDiasLaborados(diffDays + 1);
-    } else {
-      setDiasLaborados(0);
-    }
-  }, [formData.periodoInicio, formData.periodoFin]);
-
-  const montoVacaciones = useMemo(() => {
-    const salario = parseFloat(formData.salarioPromedio) || 0;
-    const auxilio = parseFloat(formData.auxilioTransporte) || 0;
-    const base = salario + auxilio;
-    if (diasLaborados === 0 || base === 0) return 0;
-    return (base * diasLaborados) / 360;
-  }, [formData.salarioPromedio, formData.auxilioTransporte, diasLaborados]);
-
-  const handleInputChange = (campo: string, valor: string) => {
-    setFormData(prev => ({ ...prev, [campo]: valor }));
-  };
-
-  const seleccionarColaborador = (colaborador: (typeof colaboradores)[number]) => {
-    setFormData(prev => ({ ...prev, colaboradorId: colaborador.id }));
-    setBusquedaColaborador(nombreCompletoDe(colaborador));
-    setMostrarResultados(false);
-  };
-
-  const handleBusquedaChange = (valor: string) => {
-    setBusquedaColaborador(valor);
-    setMostrarResultados(true);
-    if (!valor) {
-      setFormData(prev => ({ ...prev, colaboradorId: '' }));
-    }
-  };
-
-  const validarFormulario = () => {
-    if (!formData.colaboradorId) {
-      toast.error('Selecciona un colaborador');
-      return false;
-    }
-    if (!formData.periodoInicio || !formData.periodoFin) {
-      toast.error('Define el período de liquidación');
-      return false;
-    }
-    if (!formData.salarioPromedio || parseFloat(formData.salarioPromedio) <= 0) {
-      toast.error('Ingresa un salario promedio válido');
-      return false;
-    }
-    if (new Date(formData.periodoInicio) > new Date(formData.periodoFin)) {
-      toast.error('La fecha de inicio no puede ser posterior a la fecha de fin');
-      return false;
-    }
-    return true;
-  };
-
-  const generarLiquidacion = () => {
-    if (!validarFormulario()) return;
-
-    const doc = new jsPDF();
-
-    doc.setFontSize(20);
-    doc.setFont('helvetica', 'bold');
-    doc.text('LIQUIDACIÓN DE VACACIONES', 105, 20, { align: 'center' });
-
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Fecha de generación: ${new Date().toLocaleDateString('es-CO')}`, 105, 28, { align: 'center' });
-
-    doc.setLineWidth(0.5);
-    doc.line(14, 32, 196, 32);
-
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('DATOS DEL COLABORADOR', 14, 42);
-
-    autoTable(doc, {
-      startY: 46,
-      head: [['Campo', 'Información']],
-      body: [
-        ['Nombre Completo', colaboradorSeleccionado ? nombreCompletoDe(colaboradorSeleccionado) : ''],
-        ['Cédula', colaboradorSeleccionado?.cedula || ''],
-        ['Cargo', colaboradorSeleccionado?.cargo || ''],
-        ['Tipo', formData.tipoVacaciones === 'servicio' ? 'Vacaciones Laborales' : 'Vacaciones Compensatorias'],
-        ['Período', `${new Date(formData.periodoInicio).toLocaleDateString('es-CO')} - ${new Date(formData.periodoFin).toLocaleDateString('es-CO')}`],
-        ['Días Laborados', `${diasLaborados} días`],
-      ],
-      headStyles: { fillColor: [30, 86, 49], fontSize: 10 },
-      bodyStyles: { fontSize: 10 },
-      alternateRowStyles: { fillColor: [245, 245, 245] },
-    });
-
-    const finalY = (doc as any).lastAutoTable.finalY || 100;
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('CÁLCULO DE VACACIONES', 14, finalY + 10);
-
-    autoTable(doc, {
-      startY: finalY + 14,
-      head: [['Concepto', 'Valor']],
-      body: [
-        ['Salario Promedio', formatearMoneda(parseFloat(formData.salarioPromedio))],
-        ['Auxilio de Transporte', formatearMoneda(parseFloat(formData.auxilioTransporte) || 0)],
-        ['Base Prestacional', formatearMoneda(parseFloat(formData.salarioPromedio) + (parseFloat(formData.auxilioTransporte) || 0))],
-        ['Días Laborados', `${diasLaborados} días`],
-      ],
-      headStyles: { fillColor: [30, 86, 49], fontSize: 10 },
-      bodyStyles: { fontSize: 10 },
-      alternateRowStyles: { fillColor: [245, 245, 245] },
-    });
-
-    const finalY2 = (doc as any).lastAutoTable.finalY || 150;
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'italic');
-    doc.text(`Fórmula: Vacaciones = (Base Prestacional × Días Laborados) / 360`, 14, finalY2 + 8);
-
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.setFillColor(30, 86, 49);
-    doc.rect(14, finalY2 + 14, 182, 14, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.text('TOTAL VACACIONES A PAGAR:', 18, finalY2 + 22);
-    doc.text(formatearMoneda(montoVacaciones), 192, finalY2 + 22, { align: 'right' });
-
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'italic');
-    const noteY = finalY2 + 34;
-    doc.text('Marco Legal: Artículo 306 del Código Sustantivo del Trabajo - Ley 1788 de 2016', 14, noteY);
-    doc.text('Se paga en dos períodos: 30 de junio (primer semestre) y 20 de diciembre (segundo semestre)', 14, noteY + 4);
-
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    const firmaY = noteY + 20;
-    doc.line(14, firmaY, 90, firmaY);
-    doc.line(120, firmaY, 196, firmaY);
-    doc.text('Firma del Empleador', 52, firmaY + 5, { align: 'center' });
-    doc.text('Firma del Colaborador', 158, firmaY + 5, { align: 'center' });
-
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Documento generado automáticamente por el sistema de liquidaciones', 105, 280, { align: 'center' });
-
-    doc.save(`Vacaciones_${(colaboradorSeleccionado ? nombreCompletoDe(colaboradorSeleccionado) : '').replace(/ /g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
-
-    const nuevaVacaciones: VacacionesColaborador = {
-      id: `vac-${Date.now()}`,
-      colaboradorId: formData.colaboradorId,
-      nombreCompleto: colaboradorSeleccionado ? nombreCompletoDe(colaboradorSeleccionado) : '',
-      cargo: colaboradorSeleccionado?.cargo || '',
-      fechaIngreso: colaboradorSeleccionado?.fechaIngreso || '',
-      cedula: colaboradorSeleccionado?.cedula || '',
-      salarioBasico: parseFloat(formData.salarioPromedio) || 0,
-      diasCausados: 0,
-      diasDisfrutados: 0,
-      diasPendientes: 0,
-      diasCompensados: 0,
-      ultimoPeriodoInicio: formData.periodoInicio,
-      ultimoPeriodoFin: formData.periodoFin,
-      diasHabilesLaborados: diasLaborados,
-      estado: 'ACTUALIZADO',
-      salarioPromedio: parseFloat(formData.salarioPromedio),
-      auxilioTransporte: parseFloat(formData.auxilioTransporte) || 0,
-      vacacionesCalculada: montoVacaciones,
-      periodoInicio: formData.periodoInicio,
-      periodoFin: formData.periodoFin,
-      tipoVacaciones: formData.tipoVacaciones,
-      pagado: true,
-      fechaPago: new Date().toISOString().split('T')[0],
-    };
-
-    setVacaciones(prev => [...prev, nuevaVacaciones]);
-
-    toast.success('Liquidación de vacaciones generada exitosamente');
+  const confirmar = () => {
+    if (!fechaInicio) { toast.error('Ingresa la fecha de inicio de vacaciones'); return; }
+    if (estado !== 'ok') { toast.error('Corrige los errores antes de confirmar'); return; }
+    toast.success('Liquidación de vacaciones confirmada exitosamente');
     navigate('/liquidaciones');
   };
 
   return (
     <div className="space-y-6">
-      <div className="space-y-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/liquidaciones')} className="gap-2">
-          <ArrowLeft className="h-4 w-4" />
-          Volver a Liquidaciones
-        </Button>
+      <Button variant="ghost" size="sm" asChild className="gap-2">
+        <Link to="/liquidaciones"><ArrowLeft className="h-4 w-4" />Volver a Liquidaciones</Link>
+      </Button>
 
-        <div>
-          <h1 className="text-3xl font-bold text-primary">Nueva Liquidación de Vacaciones</h1>
-          <p className="text-muted-foreground mt-1">
-            Calcula y genera la liquidación de vacaciones de servicios
-          </p>
-        </div>
+      <div>
+        <h1 className="text-3xl font-bold text-primary">Liquidación de Vacaciones</h1>
+        <p className="text-muted-foreground mt-1">Registra los días de disfrute y compensación en dinero</p>
       </div>
 
-      <Card>
-        <CardHeader className="border-b">
-          <CardTitle className="flex items-center gap-2">
-            <User className="h-5 w-5" />
-            Información del Colaborador y Período
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-6 space-y-6">
-          <div className="space-y-2 relative">
-            <Label htmlFor="busqueda-colaborador">
-              Buscar Colaborador <span className="text-destructive">*</span>
-            </Label>
-            <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="busqueda-colaborador"
-                type="text"
-                placeholder="Buscar por nombre, cédula o cargo..."
-                value={busquedaColaborador}
-                onChange={(e) => handleBusquedaChange(e.target.value)}
-                onFocus={() => setMostrarResultados(true)}
-                className="pl-9"
-              />
+      {/* Tarjeta colaborador */}
+      <Card className="border-border">
+        <CardContent className="p-5">
+          <div className="flex items-center gap-4">
+            <div className="h-12 w-12 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center justify-center text-sm font-bold shrink-0">
+              {getIniciales(col.nombre)}
             </div>
-
-            {mostrarResultados && busquedaColaborador && colaboradoresFiltrados.length > 0 && (
-              <Card className="absolute z-50 w-full mt-1 max-h-64 overflow-y-auto shadow-lg">
-                <CardContent className="p-0">
-                  {colaboradoresFiltrados.map((col) => (
-                    <button
-                      key={col.id}
-                      type="button"
-                      onClick={() => seleccionarColaborador(col)}
-                      className="w-full text-left p-3 hover:bg-muted/50 border-b border-border last:border-0 transition-colors"
-                    >
-                      <span className="font-medium text-sm">{nombreCompletoDe(col)}</span>
-                    </button>
-                  ))}
-                </CardContent>
-              </Card>
-            )}
-
-            {mostrarResultados && busquedaColaborador && colaboradoresFiltrados.length === 0 && (
-              <Card className="absolute z-50 w-full mt-1 shadow-lg">
-                <CardContent className="p-4 text-center">
-                  <p className="text-sm text-muted-foreground">No se encontraron colaboradores</p>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          {colaboradorSeleccionado && (
-            <div className="p-4 rounded-lg bg-muted/30 border border-border space-y-2">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs text-muted-foreground">Cédula</p>
-                  <p className="font-medium">{colaboradorSeleccionado.cedula}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Cargo</p>
-                  <p className="font-medium">{colaboradorSeleccionado.cargo}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Fecha de Ingreso</p>
-                  <p className="font-medium">{new Date(colaboradorSeleccionado.fechaIngreso).toLocaleDateString('es-CO')}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Estado</p>
-                  <Badge variant="outline" className="bg-success/10 text-success border-success/30">
-                    {colaboradorSeleccionado.estado}
-                  </Badge>
-                </div>
-              </div>
+            <div className="flex-1">
+              <p className="font-semibold text-foreground text-base">{col.nombre}</p>
+              <p className="text-sm text-muted-foreground">{col.cargo} · CC {col.cedula}</p>
             </div>
-          )}
-
-          <div className="space-y-2">
-            <Label htmlFor="tipoVacaciones">
-              Tipo <span className="text-destructive">*</span>
-            </Label>
-            <select
-              id="tipoVacaciones"
-              value={formData.tipoVacaciones}
-              onChange={(e) => handleInputChange('tipoVacaciones', e.target.value)}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <option value="servicio">Vacaciones Laborales</option>
-              <option value="navidad">Vacaciones Compensatorias</option>
-            </select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="periodoInicio">
-                Fecha Inicio del Período <span className="text-destructive">*</span>
-              </Label>
-              <div className="relative">
-                <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="periodoInicio"
-                  type="date"
-                  value={formData.periodoInicio}
-                  onChange={(e) => handleInputChange('periodoInicio', e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="periodoFin">
-                Fecha Fin del Período <span className="text-destructive">*</span>
-              </Label>
-              <div className="relative">
-                <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="periodoFin"
-                  type="date"
-                  value={formData.periodoFin}
-                  onChange={(e) => handleInputChange('periodoFin', e.target.value)}
-                  className="pl-9"
-                />
-              </div>
+            <div className="text-right shrink-0">
+              <p className="text-xs text-muted-foreground">Días disponibles</p>
+              <p className="text-2xl font-bold text-primary">{col.diasDisponibles}</p>
             </div>
           </div>
-
-          {diasLaborados > 0 && (
-            <div className="p-3 rounded-lg bg-primary/10 border border-primary/30">
-              <p className="text-sm text-muted-foreground">Días laborados en el período</p>
-              <p className="text-2xl font-bold text-primary">{diasLaborados} días</p>
+          <div className="grid grid-cols-2 divide-x divide-border border-t border-border mt-4 pt-4">
+            <div className="pr-4">
+              <p className="text-xs text-muted-foreground">Salario promedio</p>
+              <p className="font-semibold text-foreground">{formatearMoneda(col.salarioPromedio)}</p>
             </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="border-b">
-          <CardTitle className="flex items-center gap-2">
-            <DollarSign className="h-5 w-5" />
-            Componentes Salariales
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <Label htmlFor="salarioPromedio">
-                Salario Promedio del Semestre <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="salarioPromedio"
-                type="number"
-                placeholder="1750905"
-                value={formData.salarioPromedio}
-                onChange={(e) => handleInputChange('salarioPromedio', e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="auxilioTransporte">
-                Auxilio de Transporte Promedio
-              </Label>
-              <Input
-                id="auxilioTransporte"
-                type="number"
-                placeholder="249095"
-                value={formData.auxilioTransporte}
-                onChange={(e) => handleInputChange('auxilioTransporte', e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="p-4 rounded-lg bg-muted/30 border border-border space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Base Prestacional</span>
-              <span className="font-bold text-lg">{formatearMoneda((parseFloat(formData.salarioPromedio) || 0) + (parseFloat(formData.auxilioTransporte) || 0))}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Días Laborados</span>
-              <span className="font-bold text-lg">{diasLaborados} días</span>
-            </div>
-            <div className="pt-3 border-t border-border">
-              <div className="flex justify-between items-center">
-                <span className="font-semibold">Total Vacaciones</span>
-                <span className="font-bold text-2xl text-primary">{formatearMoneda(montoVacaciones)}</span>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Fórmula: (Base Prestacional × {diasLaborados}) / 360
-              </p>
+            <div className="pl-4">
+              <p className="text-xs text-muted-foreground">Valor día</p>
+              <p className="font-semibold text-foreground">{formatearMoneda(valorDia)}</p>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      <div className="flex justify-end gap-3">
-        <Button
-          variant="outline"
-          size="lg"
-          onClick={() => navigate('/liquidaciones')}
-        >
-          Cancelar
+      {/* Formulario */}
+      <Card className="border-border">
+        <CardContent className="p-6 space-y-6">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+              <Plane className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-lg">Días de Vacaciones</h2>
+              <p className="text-sm text-muted-foreground">Ingresa la fecha de inicio y los días a liquidar</p>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Fecha inicio de vacaciones</Label>
+            <Input
+              type="date"
+              value={fechaInicio}
+              onChange={e => setFechaInicio(e.target.value)}
+              className="max-w-xs"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-6">
+            <div className="space-y-1.5">
+              <Label>
+                <span className="text-success font-semibold">Días de disfrute</span>
+                <span className="text-xs text-muted-foreground ml-2">(descanso efectivo)</span>
+              </Label>
+              <Input
+                type="number"
+                min={0}
+                max={col.diasDisponibles}
+                value={diasDisfrute || ''}
+                onChange={e => setDiasDisfrute(Math.max(0, Math.min(parseInt(e.target.value) || 0, col.diasDisponibles)))}
+                placeholder="0"
+                className={estado === 'sinDisfrute' ? 'border-amber-400 focus-visible:ring-amber-400' : ''}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>
+                <span className="text-amber-600 font-semibold">Días en dinero</span>
+                <span className="text-xs text-muted-foreground ml-2">(compensación — opcional)</span>
+              </Label>
+              <Input
+                type="number"
+                min={0}
+                max={diasDisfrute}
+                value={diasDinero || ''}
+                onChange={e => setDiasDinero(Math.max(0, Math.min(parseInt(e.target.value) || 0, col.diasDisponibles)))}
+                placeholder="0"
+                className={estado === 'dineroSuperior' ? 'border-destructive focus-visible:ring-destructive' : ''}
+              />
+            </div>
+          </div>
+
+          {/* Barra de uso */}
+          {diasDisfrute > 0 && (
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Días a usar: {diasDisfrute + diasDinero} de {col.diasDisponibles}</span>
+                <span className={diasDisfrute + diasDinero > col.diasDisponibles ? 'text-destructive font-semibold' : ''}>
+                  {Math.round(((diasDisfrute + diasDinero) / col.diasDisponibles) * 100)}%
+                </span>
+              </div>
+              <div className="h-2 rounded-full bg-border overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${(diasDisfrute + diasDinero) > col.diasDisponibles ? 'bg-destructive' : (diasDisfrute + diasDinero) / col.diasDisponibles > 0.75 ? 'bg-amber-500' : 'bg-success'}`}
+                  style={{ width: `${Math.min(((diasDisfrute + diasDinero) / col.diasDisponibles) * 100, 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Mensajes de error */}
+          {estado !== 'ok' && diasDisfrute > 0 && (
+            <div className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm border ${estado === 'dineroSuperior' || estado === 'superaDisponibles' ? 'bg-destructive/5 text-destructive border-destructive/20' : 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-800/30'}`}>
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              {estado === 'dineroSuperior' && `Los días en dinero (${diasDinero}) no pueden superar los días de disfrute (${diasDisfrute}).`}
+              {estado === 'superaDisponibles' && `El total (${diasDisfrute + diasDinero} días) supera los días disponibles (${col.diasDisponibles}).`}
+            </div>
+          )}
+
+          {/* Info legal */}
+          <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 flex gap-3 text-sm">
+            <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+            <p className="text-muted-foreground">
+              <strong className="text-foreground">Art. 189 CST:</strong> Los días compensados en dinero no pueden superar los días de disfrute efectivo.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Liquidación calculada */}
+      {diasDisfrute > 0 && estado === 'ok' && (
+        <Card className="border-border overflow-hidden">
+          <div className="px-5 py-3 border-b border-border bg-muted/20">
+            <p className="font-semibold text-sm">Resumen de liquidación</p>
+          </div>
+          <CardContent className="p-0">
+            {/* Disfrute */}
+            <div className="bg-success/5 border-b border-success/10">
+              <div className="flex justify-between items-center px-5 py-3">
+                <div>
+                  <p className="text-sm font-semibold text-success">Días de disfrute</p>
+                  <p className="text-xs text-muted-foreground">{diasDisfrute} días × {formatearMoneda(valorDia)}</p>
+                </div>
+                <p className="font-bold text-success">{formatearMoneda(valorDisfrute)}</p>
+              </div>
+            </div>
+
+            {/* Dinero (si aplica) */}
+            {diasDinero > 0 && (
+              <div className="bg-amber-50/60 border-b border-amber-100 dark:bg-amber-950/10 dark:border-amber-900/20">
+                <div className="flex justify-between items-center px-5 py-3">
+                  <div>
+                    <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">Días en dinero</p>
+                    <p className="text-xs text-muted-foreground">{diasDinero} días × {formatearMoneda(valorDia)}</p>
+                  </div>
+                  <p className="font-bold text-amber-700 dark:text-amber-400">{formatearMoneda(valorDinero)}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Total */}
+            <div className="flex justify-between items-center px-5 py-4">
+              <div>
+                <p className="font-bold text-base">Total a pagar</p>
+                <p className="text-xs text-muted-foreground">{diasDisfrute + diasDinero} días totales</p>
+              </div>
+              <p className="text-2xl font-bold text-primary">{formatearMoneda(total)}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Acciones */}
+      <div className="flex justify-between">
+        <Button variant="outline" asChild className="gap-2">
+          <Link to="/liquidaciones"><ArrowLeft className="h-4 w-4" />Cancelar</Link>
         </Button>
         <Button
-          size="lg"
-          onClick={generarLiquidacion}
-          className="gap-2"
-          disabled={montoVacaciones === 0}
+          onClick={confirmar}
+          disabled={estado !== 'ok' || !fechaInicio}
+          className="gap-2 bg-success hover:bg-success/90"
         >
-          <CheckCircle className="h-5 w-5" />
-          Generar Liquidación
+          <Check className="h-4 w-4" />Confirmar Liquidación
         </Button>
       </div>
     </div>
   );
+}
+
+// ── Modo batch: wizard 3 pasos (componente independiente) ────────────────────
+function BatchWizard() {
+  const navigate = useNavigate();
+
+  const [paso, setPaso] = useState(1);
+
+  // Paso 1: datos del período
+  const [periodoNombre, setPeriodoNombre] = useState('');
+  const [periodoInicio, setPeriodoInicio] = useState('');
+  const [periodoFin, setPeriodoFin] = useState('');
+
+  // Paso 2: colaboradores y sus días
+  const [seleccionados, setSeleccionados] = useState<string[]>([]);
+  const [datosVac, setDatosVac] = useState<Record<string, DatosVac>>({});
+
+  const toggleCol = (cid: string) => {
+    setSeleccionados(prev =>
+      prev.includes(cid) ? prev.filter(x => x !== cid) : [...prev, cid]
+    );
+    if (!datosVac[cid]) {
+      setDatosVac(prev => ({ ...prev, [cid]: { diasDisfrute: 0, diasDinero: 0 } }));
+    }
+  };
+
+  const toggleTodos = () => {
+    if (seleccionados.length === colaboradoresMock.length) {
+      setSeleccionados([]);
+    } else {
+      const todos = colaboradoresMock.map(c => c.id);
+      setSeleccionados(todos);
+      const init: Record<string, DatosVac> = {};
+      todos.forEach(id => { if (!datosVac[id]) init[id] = { diasDisfrute: 0, diasDinero: 0 }; });
+      setDatosVac(prev => ({ ...prev, ...init }));
+    }
+  };
+
+  const setDias = (cid: string, campo: keyof DatosVac, valor: number) => {
+    const col = colaboradoresMock.find(c => c.id === cid)!;
+    const prev = datosVac[cid] || { diasDisfrute: 0, diasDinero: 0 };
+    const next = { ...prev, [campo]: Math.max(0, Math.min(valor, col.diasDisponibles)) };
+    setDatosVac(p => ({ ...p, [cid]: next }));
+  };
+
+  const getDatos = (cid: string): DatosVac =>
+    datosVac[cid] || { diasDisfrute: 0, diasDinero: 0 };
+
+  const todosValidos = seleccionados.length > 0 &&
+    seleccionados.every(cid => {
+      const col = colaboradoresMock.find(c => c.id === cid)!;
+      return validarDatos(col, getDatos(cid)) === 'ok';
+    });
+
+  const avanzar = () => {
+    if (paso === 1) {
+      if (!periodoNombre.trim()) { toast.error('Ingresa un nombre para el período'); return; }
+      if (!periodoInicio || !periodoFin) { toast.error('Define las fechas del período'); return; }
+      if (periodoFin < periodoInicio) { toast.error('La fecha fin debe ser posterior a la fecha inicio'); return; }
+    }
+    if (paso === 2) {
+      if (seleccionados.length === 0) { toast.error('Selecciona al menos un colaborador'); return; }
+      if (!todosValidos) { toast.error('Corrige los errores en los días antes de continuar'); return; }
+    }
+    setPaso(p => p + 1);
+  };
+
+  const confirmar = () => {
+    toast.success('Liquidación de vacaciones confirmada exitosamente');
+    navigate('/liquidaciones');
+  };
+
+  const totalGeneral = seleccionados.reduce((sum, cid) => {
+    const col = colaboradoresMock.find(c => c.id === cid)!;
+    const d = getDatos(cid);
+    const vd = calcValorDia(col.salarioPromedio);
+    return sum + vd * (d.diasDisfrute + d.diasDinero);
+  }, 0);
+
+  return (
+    <div className="space-y-6">
+      <Button variant="ghost" size="sm" asChild className="gap-2">
+        <Link to="/liquidaciones"><ArrowLeft className="h-4 w-4" />Volver a Liquidaciones</Link>
+      </Button>
+
+      <div>
+        <h1 className="text-3xl font-bold text-primary">Nueva Liquidación de Vacaciones</h1>
+        <p className="text-muted-foreground mt-1">Registra disfrute de vacaciones y días compensados en dinero</p>
+      </div>
+
+      <Card className="border-border">
+        <CardContent className="p-6"><StepBar actual={paso} /></CardContent>
+      </Card>
+
+      {/* ── PASO 1 ── */}
+      {paso === 1 && (
+        <Card className="border-border">
+          <CardContent className="p-6 space-y-6">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                <Plane className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h2 className="font-semibold text-lg">Información del Período</h2>
+                <p className="text-sm text-muted-foreground">Define el período de vacaciones a liquidar</p>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Nombre del período</Label>
+              <Input
+                placeholder="Ej: Vacaciones 1er semestre 2026"
+                value={periodoNombre}
+                onChange={e => setPeriodoNombre(e.target.value)}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-6">
+              <div className="space-y-1.5">
+                <Label>Fecha inicio</Label>
+                <Input type="date" value={periodoInicio} onChange={e => setPeriodoInicio(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Fecha fin</Label>
+                <Input type="date" value={periodoFin} onChange={e => setPeriodoFin(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 flex gap-3 text-sm">
+              <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+              <div className="text-foreground space-y-1">
+                <p className="font-semibold">Art. 186 & 189 CST — Dos tipos de vacaciones</p>
+                <p className="text-muted-foreground"><strong className="text-foreground">Días de disfrute:</strong> el trabajador descansa físicamente (obligatorio).</p>
+                <p className="text-muted-foreground"><strong className="text-foreground">Días en dinero:</strong> se compensan en efectivo, pero no pueden superar los días de disfrute.</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── PASO 2 ── */}
+      {paso === 2 && (
+        <Card className="border-border">
+          <CardContent className="p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <Users className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <h2 className="font-semibold text-lg">Seleccionar Personal</h2>
+                  <p className="text-sm text-muted-foreground">Registra los días de disfrute y días en dinero por colaborador</p>
+                </div>
+              </div>
+              <Button variant="outline" size="sm" onClick={toggleTodos} className="gap-2">
+                <Users className="h-4 w-4" />
+                {seleccionados.length === colaboradoresMock.length ? 'Quitar Todos' : 'Agregar Todos'}
+              </Button>
+            </div>
+
+            <div className="flex flex-wrap gap-4 text-xs text-muted-foreground bg-muted/20 rounded-lg px-4 py-3 border border-border">
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-primary/60 inline-block" />Días disponibles: causados y no usados</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-success inline-block" />Disfrute: días de descanso efectivo</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-amber-500 inline-block" />Dinero: compensación en efectivo (≤ disfrute)</span>
+            </div>
+
+            <div className="rounded-xl border border-border overflow-hidden">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border bg-muted/30">
+                    <th className="w-12 p-4">
+                      <Checkbox checked={seleccionados.length === colaboradoresMock.length} onCheckedChange={toggleTodos} />
+                    </th>
+                    <th className="text-left p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Colaborador</th>
+                    <th className="text-center p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Días Disponibles</th>
+                    <th className="text-center p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      <span className="text-success">Días Disfrute</span>
+                    </th>
+                    <th className="text-center p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      <span className="text-amber-600">Días Dinero</span>
+                    </th>
+                    <th className="text-center p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Usados</th>
+                    <th className="w-8 p-4" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {colaboradoresMock.map((col, i) => {
+                    const sel = seleccionados.includes(col.id);
+                    const d = getDatos(col.id);
+                    const estado = sel ? validarDatos(col, d) : 'idle';
+                    const totalUsados = d.diasDisfrute + d.diasDinero;
+                    const pctUsado = col.diasDisponibles > 0 ? (totalUsados / col.diasDisponibles) * 100 : 0;
+
+                    return (
+                      <tr
+                        key={col.id}
+                        className={`border-b border-border last:border-0 transition-colors ${sel ? 'bg-primary/5' : i % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}
+                      >
+                        <td className="p-4">
+                          <Checkbox checked={sel} onCheckedChange={() => toggleCol(col.id)} />
+                        </td>
+                        <td className="p-4">
+                          <div className="flex items-center gap-3">
+                            <div className={`h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold border shrink-0 ${sel ? 'bg-primary text-white border-primary' : 'bg-primary/10 text-primary border-primary/20'}`}>
+                              {getIniciales(col.nombre)}
+                            </div>
+                            <div>
+                              <p className="font-medium text-sm">{col.nombre}</p>
+                              <p className="text-xs text-muted-foreground">{col.cargo}</p>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="p-4 text-center">
+                          <span className={`inline-flex items-center justify-center h-8 w-12 rounded-lg text-sm font-bold ${col.diasDisponibles >= 15 ? 'bg-primary/10 text-primary' : col.diasDisponibles >= 8 ? 'bg-amber-50 text-amber-700' : 'bg-destructive/10 text-destructive'}`}>
+                            {col.diasDisponibles}
+                          </span>
+                        </td>
+
+                        <td className="p-4 text-center">
+                          <Input
+                            type="number" min={0} max={col.diasDisponibles} disabled={!sel}
+                            value={sel ? d.diasDisfrute : ''}
+                            onChange={e => setDias(col.id, 'diasDisfrute', parseInt(e.target.value) || 0)}
+                            className={`w-20 mx-auto text-center h-8 text-sm ${!sel ? 'opacity-40' : estado === 'sinDisfrute' ? 'border-amber-400 focus-visible:ring-amber-400' : 'border-success/50 focus-visible:ring-success/50'}`}
+                            placeholder="0"
+                          />
+                        </td>
+
+                        <td className="p-4 text-center">
+                          <Input
+                            type="number" min={0} max={col.diasDisponibles} disabled={!sel}
+                            value={sel ? d.diasDinero : ''}
+                            onChange={e => setDias(col.id, 'diasDinero', parseInt(e.target.value) || 0)}
+                            className={`w-20 mx-auto text-center h-8 text-sm ${!sel ? 'opacity-40' : estado === 'dineroSuperior' ? 'border-destructive focus-visible:ring-destructive' : 'border-amber-400/50 focus-visible:ring-amber-400/50'}`}
+                            placeholder="0"
+                          />
+                        </td>
+
+                        <td className="p-4 text-center">
+                          {sel ? (
+                            <div className="flex flex-col items-center gap-1">
+                              <span className={`text-sm font-semibold ${estado === 'superaDisponibles' ? 'text-destructive' : 'text-foreground'}`}>
+                                {totalUsados}/{col.diasDisponibles}
+                              </span>
+                              <div className="w-16 h-1.5 rounded-full bg-border overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-all ${pctUsado > 100 ? 'bg-destructive' : pctUsado > 75 ? 'bg-amber-500' : 'bg-success'}`}
+                                  style={{ width: `${Math.min(pctUsado, 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </td>
+
+                        <td className="pr-4 text-center">
+                          {sel && estado === 'ok' && <CheckCircle className="h-4 w-4 text-success" />}
+                          {sel && estado !== 'ok' && estado !== 'idle' && (
+                            <AlertCircle className={`h-4 w-4 ${estado === 'sinDisfrute' ? 'text-amber-500' : 'text-destructive'}`} />
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {seleccionados.some(cid => {
+              const col = colaboradoresMock.find(c => c.id === cid)!;
+              return validarDatos(col, getDatos(cid)) !== 'ok';
+            }) && (
+              <div className="space-y-2">
+                {seleccionados.map(cid => {
+                  const col = colaboradoresMock.find(c => c.id === cid)!;
+                  const estado = validarDatos(col, getDatos(cid));
+                  if (estado === 'ok') return null;
+                  return (
+                    <div key={cid} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm ${estado === 'sinDisfrute' ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-destructive/5 text-destructive border border-destructive/20'}`}>
+                      <AlertCircle className="h-4 w-4 shrink-0" />
+                      <span>
+                        <strong>{col.nombre}:</strong>{' '}
+                        {estado === 'sinDisfrute' && 'Debe registrar al menos 1 día de disfrute.'}
+                        {estado === 'dineroSuperior' && `Los días en dinero (${getDatos(cid).diasDinero}) no pueden superar los días de disfrute (${getDatos(cid).diasDisfrute}).`}
+                        {estado === 'superaDisponibles' && `El total de días (${getDatos(cid).diasDisfrute + getDatos(cid).diasDinero}) supera los días disponibles (${col.diasDisponibles}).`}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── PASO 3 ── */}
+      {paso === 3 && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-success/10 flex items-center justify-center">
+              <CheckCircle className="h-5 w-5 text-success" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-lg">Confirmación</h2>
+              <p className="text-sm text-muted-foreground">{periodoNombre} — {seleccionados.length} colaborador{seleccionados.length !== 1 ? 'es' : ''}</p>
+            </div>
+          </div>
+
+          {seleccionados.map(cid => {
+            const col = colaboradoresMock.find(c => c.id === cid)!;
+            const d = getDatos(cid);
+            const valorDia = calcValorDia(col.salarioPromedio);
+            const valorDisfrute = valorDia * d.diasDisfrute;
+            const valorDinero = valorDia * d.diasDinero;
+            const total = valorDisfrute + valorDinero;
+
+            return (
+              <Card key={cid} className="border-border overflow-hidden">
+                <div className="flex items-center gap-3 px-5 py-3 border-b border-border bg-background">
+                  <div className="h-9 w-9 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center justify-center text-xs font-bold shrink-0">
+                    {getIniciales(col.nombre)}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm">{col.nombre}</p>
+                    <p className="text-xs text-muted-foreground">{col.cargo}</p>
+                  </div>
+                  <div className="ml-auto text-right">
+                    <p className="text-xs text-muted-foreground">Días disponibles</p>
+                    <p className="text-sm font-bold text-primary">{col.diasDisponibles} días</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 divide-x divide-border bg-muted/20 border-b border-border">
+                  <div className="px-5 py-3">
+                    <p className="text-xs text-muted-foreground mb-0.5">Cédula</p>
+                    <p className="text-sm font-medium">{col.cedula}</p>
+                  </div>
+                  <div className="px-5 py-3">
+                    <p className="text-xs text-muted-foreground mb-0.5">Valor día</p>
+                    <p className="text-sm font-medium">{formatearMoneda(valorDia)}</p>
+                  </div>
+                  <div className="px-5 py-3">
+                    <p className="text-xs text-muted-foreground mb-0.5">Período</p>
+                    <p className="text-sm font-medium">{periodoNombre}</p>
+                  </div>
+                </div>
+
+                <CardContent className="p-0">
+                  <div className="bg-success/5 border-b border-success/10">
+                    <div className="flex items-center gap-2 px-5 pt-4 pb-2">
+                      <TrendingUp className="h-4 w-4 text-success" />
+                      <span className="text-sm font-semibold text-success">Días de Disfrute</span>
+                    </div>
+                    <div className="px-5 pb-1 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Días</span>
+                        <span className="text-sm font-medium">{d.diasDisfrute} días</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Salario promedio</span>
+                        <span className="text-sm font-medium">{formatearMoneda(col.salarioPromedio)}</span>
+                      </div>
+                    </div>
+                    <div className="mx-5 my-3 border-t border-success/20" />
+                    <div className="flex justify-between items-center px-5 pb-4">
+                      <span className="text-xs uppercase tracking-wide font-bold text-success">Valor disfrute</span>
+                      <span className="text-sm font-bold text-success">{formatearMoneda(valorDisfrute)}</span>
+                    </div>
+                  </div>
+
+                  {d.diasDinero > 0 && (
+                    <div className="bg-amber-50/60 border-b border-amber-100">
+                      <div className="flex items-center gap-2 px-5 pt-4 pb-2">
+                        <TrendingUp className="h-4 w-4 text-amber-600" />
+                        <span className="text-sm font-semibold text-amber-700">Días en Dinero</span>
+                      </div>
+                      <div className="px-5 pb-1 space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Días</span>
+                          <span className="text-sm font-medium">{d.diasDinero} días</span>
+                        </div>
+                      </div>
+                      <div className="mx-5 my-3 border-t border-amber-200" />
+                      <div className="flex justify-between items-center px-5 pb-4">
+                        <span className="text-xs uppercase tracking-wide font-bold text-amber-700">Valor en dinero</span>
+                        <span className="text-sm font-bold text-amber-700">{formatearMoneda(valorDinero)}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between items-center px-5 py-4">
+                    <div>
+                      <span className="text-sm uppercase tracking-wide font-bold">Total Vacaciones</span>
+                      <p className="text-xs text-muted-foreground mt-0.5">{d.diasDisfrute + d.diasDinero} días totales</p>
+                    </div>
+                    <span className="text-xl font-bold text-primary">{formatearMoneda(total)}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+
+          <div className="p-5 rounded-xl border border-primary/20 bg-primary/5 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">Colaboradores liquidados</p>
+              <p className="font-bold text-lg">{seleccionados.length}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-muted-foreground">Total vacaciones a pagar</p>
+              <p className="font-bold text-2xl text-primary">{formatearMoneda(totalGeneral)}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Navegación */}
+      <div className="flex justify-between">
+        <Button variant="outline" onClick={paso === 1 ? () => navigate('/liquidaciones') : () => setPaso(p => p - 1)} className="gap-2">
+          <ArrowLeft className="h-4 w-4" />{paso === 1 ? 'Cancelar' : 'Anterior'}
+        </Button>
+        {paso < 3 ? (
+          <Button onClick={avanzar} className="gap-2">
+            Siguiente<ArrowRight className="h-4 w-4" />
+          </Button>
+        ) : (
+          <Button onClick={confirmar} className="gap-2 bg-success hover:bg-success/90">
+            <Check className="h-4 w-4" />Confirmar Liquidación
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Componente raíz: decide el modo según ?col= ────────────────────────────────
+// Tiene exactamente los mismos hooks en cada render, sin condiciones.
+export default function NuevaVacaciones() {
+  const [searchParams] = useSearchParams();
+  const preselect = searchParams.get('col');
+  const colIndividual = preselect ? colaboradoresMock.find(c => c.id === preselect) : null;
+
+  if (colIndividual) {
+    return <LiquidacionIndividual col={colIndividual} />;
+  }
+  return <BatchWizard />;
 }
