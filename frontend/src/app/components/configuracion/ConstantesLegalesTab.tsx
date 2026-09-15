@@ -40,6 +40,7 @@ const FORM_VACIO = {
   liqInteresesDiasModo: 'DIAS_VINCULACION',
   liqDescontarSuspensiones: true,
   liqPromedioExcluyeIncapacidad: true,
+  liqPrimaDescontarSuspensiones: false,
 };
 
 type FormState = typeof FORM_VACIO;
@@ -64,6 +65,7 @@ function apiToForm(data: ConstantesLegales): FormState {
     liqInteresesDiasModo:            data.liq_intereses_dias_modo ?? 'DIAS_VINCULACION',
     liqDescontarSuspensiones:        data.liq_descontar_suspensiones ?? true,
     liqPromedioExcluyeIncapacidad:   data.liq_promedio_excluye_incapacidad ?? true,
+    liqPrimaDescontarSuspensiones:   data.liq_prima_descontar_suspensiones ?? false,
   };
 }
 
@@ -84,6 +86,7 @@ function formToPayload(f: FormState): ConstantesLegalesPayload {
     liq_intereses_dias_modo:               f.liqInteresesDiasModo as 'DIAS_VINCULACION' | 'DIAS_COMPUTADOS',
     liq_descontar_suspensiones:            f.liqDescontarSuspensiones,
     liq_promedio_excluye_incapacidad:      f.liqPromedioExcluyeIncapacidad,
+    liq_prima_descontar_suspensiones:      f.liqPrimaDescontarSuspensiones,
   };
 }
 
@@ -403,6 +406,19 @@ export function ConstantesLegalesTab() {
               <Switch
                 checked={constantes.liqPromedioExcluyeIncapacidad}
                 onCheckedChange={(v) => handleChange('liqPromedioExcluyeIncapacidad', v)}
+              />
+            </div>
+
+            <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-4">
+              <div>
+                <p className="text-sm font-medium">Suspensiones descuentan días de prima</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Parámetro aparte del de cesantías. Apagado por defecto porque la Corte Suprema sostiene que el CST art. 53 no cubre la prima. Encendido paga menos a los de salario fijo.
+                </p>
+              </div>
+              <Switch
+                checked={constantes.liqPrimaDescontarSuspensiones}
+                onCheckedChange={(v) => handleChange('liqPrimaDescontarSuspensiones', v)}
               />
             </div>
           </div>

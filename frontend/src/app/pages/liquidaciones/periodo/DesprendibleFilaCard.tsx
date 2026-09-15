@@ -49,6 +49,9 @@ export default function DesprendibleFilaCard({
 }: Props) {
   const txt = TEXTOS_PERIODO[tipo];
   const esCesantias = tipo === 'CESANTIAS';
+  const esIntereses = tipo === 'INTERESES_CESANTIAS';
+  // Prima comparte con cesantías la base salarial; intereses es el distinto.
+  const conBaseSalarial = !esIntereses;
   const col = fila.empleado;
   const girada = fila.estado_pago !== 'PENDIENTE';
 
@@ -71,10 +74,12 @@ export default function DesprendibleFilaCard({
           <p className="font-semibold text-sm truncate">{col.nombre_completo}</p>
           <p className="text-xs text-muted-foreground truncate">{col.cargo ?? '—'}</p>
         </div>
-        <div className="ml-auto text-right shrink-0">
-          <p className="text-xs text-muted-foreground">Fondo</p>
-          <p className="text-sm font-medium">{col.fondo_cesantias ?? '—'}</p>
-        </div>
+        {esCesantias && (
+          <div className="ml-auto text-right shrink-0">
+            <p className="text-xs text-muted-foreground">Fondo</p>
+            <p className="text-sm font-medium">{col.fondo_cesantias ?? '—'}</p>
+          </div>
+        )}
       </div>
 
       {/* Barra de datos */}
@@ -84,15 +89,15 @@ export default function DesprendibleFilaCard({
           <p className="text-sm font-medium">{col.documento}</p>
         </div>
         <div className="px-5 py-3">
-          <p className="text-xs text-muted-foreground mb-0.5">{esCesantias ? 'Días Computados' : 'Días Base'}</p>
+          <p className="text-xs text-muted-foreground mb-0.5">{conBaseSalarial ? 'Días Computados' : 'Días Base'}</p>
           <p className="text-sm font-medium">
-            {esCesantias ? fila.dias_computados : (fila.dias_base_intereses ?? fila.dias_computados)}
+            {conBaseSalarial ? fila.dias_computados : (fila.dias_base_intereses ?? fila.dias_computados)}
           </p>
         </div>
         <div className="px-5 py-3">
-          <p className="text-xs text-muted-foreground mb-0.5">{esCesantias ? 'Período' : 'Tasa'}</p>
+          <p className="text-xs text-muted-foreground mb-0.5">{conBaseSalarial ? 'Período' : 'Tasa'}</p>
           <p className="text-sm font-medium">
-            {esCesantias ? anio : `${fila.tasa_aplicada ?? 12}% anual`}
+            {conBaseSalarial ? anio : `${fila.tasa_aplicada ?? 12}% anual`}
           </p>
         </div>
       </div>
@@ -108,7 +113,7 @@ export default function DesprendibleFilaCard({
             )}
           </div>
 
-          {esCesantias ? (
+          {conBaseSalarial ? (
             <>
               {/* El desglose viene del comprobante legal; sin él se muestra
                   la base prestacional que ya trae el período. */}
@@ -156,7 +161,7 @@ export default function DesprendibleFilaCard({
         </div>
 
         {/* Resultado */}
-        {esCesantias && (
+        {conBaseSalarial && (
           <div className="px-5 pt-4 pb-2 space-y-2">
             <Linea label="Días" valor={fila.dias_computados} />
             <div className="flex justify-between items-center">
@@ -167,7 +172,7 @@ export default function DesprendibleFilaCard({
             </div>
           </div>
         )}
-        <div className={`mx-5 border-t-2 border-primary/20 ${esCesantias ? '' : 'mt-4'}`} />
+        <div className={`mx-5 border-t-2 border-primary/20 ${conBaseSalarial ? '' : 'mt-4'}`} />
         <div className="flex justify-between items-center px-5 py-4">
           <span className="text-sm uppercase tracking-wide font-bold">{txt.totalCardLabel}</span>
           <span className="text-xl font-bold text-primary">{fmtCOP(fila.valor_final)}</span>
@@ -195,7 +200,7 @@ export default function DesprendibleFilaCard({
             </div>
           ) : (
             <p className="text-xs uppercase tracking-wide font-semibold text-orange-700">
-              Pendiente por {esCesantias ? 'consignar' : 'pagar'}
+              {txt.pendienteGiroLabel}
             </p>
           )}
         </div>
@@ -235,7 +240,7 @@ export default function DesprendibleFilaCard({
                   )}
                 </div>
 
-                {esCesantias && (
+                {conBaseSalarial && (
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
                       Componentes del período
@@ -249,6 +254,9 @@ export default function DesprendibleFilaCard({
                       )}
                       <Linea label="Meses base" valor={detalle.base.meses_base} />
                       <Linea label="Cobertura de nóminas" valor={`${detalle.base.cobertura_nominas_pct}%`} />
+                      {(detalle.base.dias_proyectados ?? 0) > 0 && (
+                        <Linea label="Tramo final proyectado" valor={`${detalle.base.dias_proyectados} día(s)`} />
+                      )}
                     </div>
                   </div>
                 )}

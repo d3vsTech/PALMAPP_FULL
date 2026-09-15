@@ -5,10 +5,10 @@
  * al trabajador.
  */
 
-export type TipoPeriodoDetalle = 'CESANTIAS' | 'INTERESES_CESANTIAS';
+export type TipoPeriodoDetalle = 'CESANTIAS' | 'INTERESES_CESANTIAS' | 'PRIMA';
 
 export interface TextosPeriodo {
-  /** "cesantías" / "intereses de cesantías". */
+  /** "cesantías" / "intereses de cesantías" / "prima de servicios". */
   nombre: string;
   rutaTab: string;
   subtituloWizard: string;
@@ -70,7 +70,29 @@ export const TEXTOS_PERIODO: Record<TipoPeriodoDetalle, TextosPeriodo> = {
     giradoEnLabel: 'Pagado el',
     formulaGenerica: '(Saldo × 12% × Días) ÷ 360',
   },
+  PRIMA: {
+    nombre: 'prima de servicios',
+    rutaTab: '/liquidaciones',
+    subtituloWizard: 'Liquidación de prima de servicios',
+    girarTodos: 'Pagar todos',
+    girarFila: 'Registrar pago',
+    giroSustantivo: 'pago',
+    giradoLabel: 'Pagado',
+    pendienteGiroLabel: 'Pendiente por pagar',
+    colValor: 'Prima',
+    totalPreviewLabel: 'Total prima a pagar',
+    totalCardLabel: 'Total Prima',
+    avisoLimite: 'La prima no pagada a tiempo puede acarrear multas y, al terminar el contrato, indemnización moratoria.',
+    pdfPrefijo: 'prima',
+    badgeCompleto: 'Liquidado y pagado',
+    giradoEnLabel: 'Pagado el',
+    formulaGenerica: '(Base × Días) ÷ 360',
+  },
 };
+
+/** Etiqueta del semestre para títulos y filtros de prima. */
+export const semestreLabel = (semestre: number) =>
+  semestre === 1 ? '1° semestre' : semestre === 2 ? '2° semestre' : '';
 
 /** Las liquidaciones se presentan con centavos cuando los hay. */
 export const fmtCOP = (n: number) =>
@@ -78,6 +100,23 @@ export const fmtCOP = (n: number) =>
 
 export const getIniciales = (nombre: string) =>
   nombre.split(' ').slice(0, 2).map(p => p[0]).join('').toUpperCase();
+
+/**
+ * Nombre del PDF según §6.2 y §6.3. La prima lleva sufijo de semestre;
+ * cesantías e intereses no.
+ */
+export function nombrePdf(
+  tipo: TipoPeriodoDetalle,
+  parte: { documento: string } | { periodoId: number },
+  anio: number,
+  semestre: number,
+): string {
+  const prefijo = TEXTOS_PERIODO[tipo].pdfPrefijo;
+  const sufijo = semestre > 0 ? `_S${semestre}` : '';
+  return 'documento' in parte
+    ? `${prefijo}_${parte.documento}_${anio}${sufijo}.pdf`
+    : `${prefijo}_periodo_${parte.periodoId}_${anio}${sufijo}.pdf`;
+}
 
 /** Dispara la descarga de un blob con el nombre dado. */
 export function descargarBlob(blob: Blob, nombre: string) {

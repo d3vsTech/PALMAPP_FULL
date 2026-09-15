@@ -31,7 +31,7 @@ import {
 } from '../../../../api/liquidaciones';
 import type { ApiError } from '../../../../api/client';
 import { formatFecha } from '../../../utils/fecha';
-import { fmtCOP, descargarBlob, TEXTOS_PERIODO, type TipoPeriodoDetalle } from './textos';
+import { fmtCOP, descargarBlob, nombrePdf, semestreLabel, TEXTOS_PERIODO, type TipoPeriodoDetalle } from './textos';
 import RegistrarPagoDialog, { type ObjetivoPago } from './RegistrarPagoDialog';
 import DesprendibleFilaCard from './DesprendibleFilaCard';
 
@@ -45,6 +45,7 @@ interface Props {
 export default function VistaPeriodoCerrado({ periodo, tipo, onReload }: Props) {
   const txt = TEXTOS_PERIODO[tipo];
   const esCesantias = tipo === 'CESANTIAS';
+  const esPrima = tipo === 'PRIMA';
   const filas = periodo.filas ?? [];
   const pendientes = filas.filter(f => f.estado_pago === 'PENDIENTE');
 
@@ -122,7 +123,7 @@ export default function VistaPeriodoCerrado({ periodo, tipo, onReload }: Props) 
     setDescargandoFila(fila.id);
     try {
       const blob = await liquidacionesApi.desprendiblePdf(fila.id);
-      descargarBlob(blob, `${txt.pdfPrefijo}_${fila.empleado.documento}_${periodo.anio}.pdf`);
+      descargarBlob(blob, nombrePdf(tipo, { documento: fila.empleado.documento }, periodo.anio, periodo.semestre));
     } catch (err) {
       const e = err as ApiError;
       toast.error(e.message ?? 'No se pudo descargar el desprendible');
@@ -135,7 +136,7 @@ export default function VistaPeriodoCerrado({ periodo, tipo, onReload }: Props) 
     setDescargandoPeriodo(true);
     try {
       const blob = await liquidacionesApi.desprendiblesPeriodoPdf(periodo.id);
-      descargarBlob(blob, `${txt.pdfPrefijo}_periodo_${periodo.id}_${periodo.anio}.pdf`);
+      descargarBlob(blob, nombrePdf(tipo, { periodoId: periodo.id }, periodo.anio, periodo.semestre));
       toast.success('Soporte descargado correctamente');
     } catch (err) {
       const e = err as ApiError;
@@ -222,9 +223,15 @@ export default function VistaPeriodoCerrado({ periodo, tipo, onReload }: Props) 
               </p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground mb-0.5">{esCesantias ? 'Fondos' : 'Tasa'}</p>
+              <p className="text-xs text-muted-foreground mb-0.5">
+                {esCesantias ? 'Fondos' : esPrima ? 'Semestre' : 'Tasa'}
+              </p>
               <p className="text-sm font-medium">
-                {esCesantias ? (fondos || '—') : `${tasa}% anual (fija por ley)`}
+                {esCesantias
+                  ? (fondos || '—')
+                  : esPrima
+                    ? (semestreLabel(periodo.semestre) || '—')
+                    : `${tasa}% anual (fija por ley)`}
               </p>
             </div>
             <div>

@@ -1,8 +1,8 @@
 /**
  * Wizard "Liquidar" de un período BORRADOR — 3 pasos (información →
  * colaboradores → confirmación con desprendibles), compartido por
- * cesantías e intereses (API_LIQUIDACIONES §1.2 y §2.7). Cuando el
- * período está CERRADA delega en VistaPeriodoCerrado.
+ * cesantías, intereses y prima (API_LIQUIDACIONES §1.2, §2.7 y §2.8).
+ * Cuando el período está CERRADA delega en VistaPeriodoCerrado.
  *
  * Flujo real: el paso 2 persiste filas con POST /colaboradores (éxito
  * parcial con omitidos); el paso 3 pinta GET /preview y confirma con el
@@ -22,7 +22,7 @@ import {
 } from '../../../components/ui/alert-dialog';
 import {
   ArrowLeft, ArrowRight, Check, Users, Calendar, X,
-  PiggyBank, Percent, CheckCircle, TrendingUp, Loader2, AlertTriangle,
+  PiggyBank, Percent, Gift, CheckCircle, TrendingUp, Loader2, AlertTriangle, Clock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -88,9 +88,13 @@ function StepBar({ actual }: { actual: number }) {
 
 function DesprendiblePreview({ fila, tipo }: { fila: PreviewFilaLiquidacion; tipo: TipoPeriodoDetalle }) {
   const txt = TEXTOS_PERIODO[tipo];
-  const esCesantias = tipo === 'CESANTIAS';
+  // Prima comparte con cesantías la base salarial de tres componentes
+  // (§2.8); el caso distinto es intereses, que parte de un saldo y una tasa.
+  const esIntereses = tipo === 'INTERESES_CESANTIAS';
+  const conBaseSalarial = !esIntereses;
   const col = fila.empleado;
   const bloqueada = fila.bloqueantes.length > 0;
+  const diasProyectados = fila.base.dias_proyectados ?? 0;
 
   const metodoLabel = fila.base.metodo_base === 'ULTIMO_SALARIO'
     ? 'Último salario'
@@ -98,7 +102,7 @@ function DesprendiblePreview({ fila, tipo }: { fila: PreviewFilaLiquidacion; tip
       ? 'Promedio devengado'
       : fila.base.metodo_base === 'MANUAL'
         ? 'Ajuste manual'
-        : 'Saldo de cesantías';
+        : esIntereses ? 'Saldo de cesantías' : '';
 
   return (
     <Card className={`border-border overflow-hidden ${bloqueada ? 'border-destructive/50' : ''}`}>
@@ -124,10 +128,10 @@ function DesprendiblePreview({ fila, tipo }: { fila: PreviewFilaLiquidacion; tip
           <p className="text-sm font-medium">{col.documento}</p>
         </div>
         <div className="px-5 py-3">
-          <p className="text-xs text-muted-foreground mb-0.5">{esCesantias ? 'Días Computados' : 'Días Base'}</p>
+          <p className="text-xs text-muted-foreground mb-0.5">{conBaseSalarial ? 'Días Computados' : 'Días Base'}</p>
           <p className="text-sm font-medium">
-            {esCesantias ? fila.dias.dias_computados : fila.resultado.dias}
-            {esCesantias && fila.dias.dias_descontados > 0 && (
+            {conBaseSalarial ? fila.dias.dias_computados : fila.resultado.dias}
+            {conBaseSalarial && fila.dias.dias_descontados > 0 && (
               <span className="text-xs text-muted-foreground ml-1" title="Días descontados por suspensiones o ausencias injustificadas">
                 ({fila.dias.dias_vinculacion} − {fila.dias.dias_descontados})
               </span>
@@ -152,7 +156,7 @@ function DesprendiblePreview({ fila, tipo }: { fila: PreviewFilaLiquidacion; tip
               {metodoLabel}
             </span>
           </div>
-          {esCesantias ? (
+          {conBaseSalarial ? (
             <>
               <div className="px-5 pb-1 space-y-2">
                 <div className="flex justify-between items-center">
@@ -202,7 +206,7 @@ function DesprendiblePreview({ fila, tipo }: { fila: PreviewFilaLiquidacion; tip
         </div>
 
         {/* Resultado */}
-        {esCesantias && (
+        {conBaseSalarial && (
           <div className="px-5 pt-4 pb-2 space-y-2">
             <div className="flex justify-between items-center">
               <span className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Días</span>
@@ -214,14 +218,29 @@ function DesprendiblePreview({ fila, tipo }: { fila: PreviewFilaLiquidacion; tip
             </div>
           </div>
         )}
-        <div className={`mx-5 border-t-2 border-primary/20 ${esCesantias ? '' : 'mt-4'}`} />
+        <div className={`mx-5 border-t-2 border-primary/20 ${conBaseSalarial ? '' : 'mt-4'}`} />
         <div className="flex justify-between items-center px-5 py-4">
           <span className="text-sm uppercase tracking-wide font-bold">{txt.totalCardLabel}</span>
           <span className="text-xl font-bold text-primary">{fmtCOP(fila.resultado.valor_final)}</span>
         </div>
 
+        {/* §2.8 — El último tramo del semestre aún no tiene nómina cerrada:
+            el promedio se proyecta sobre lo ya liquidado. El valor es
+            provisional, así que se avisa aparte de las advertencias. */}
+        {diasProyectados > 0 && (
+          <div className="mx-5 mb-4 rounded-lg border border-orange-200 bg-orange-50 px-4 py-3">
+            <p className="text-xs font-semibold text-orange-800 flex items-center gap-1.5">
+              <Clock className="h-3.5 w-3.5 shrink-0" />
+              Valor provisional: {diasProyectados} día(s) proyectados
+            </p>
+            <p className="text-xs text-orange-800 mt-1">
+              Los últimos {diasProyectados} día(s) del semestre todavía no tienen nómina cerrada. Se calculan con el promedio de lo ya liquidado para poder pagar a tiempo. Al cerrar esa nómina puedes reabrir el período y recalcular para dejar el valor definitivo.
+            </p>
+          </div>
+        )}
+
         {/* Bloqueantes y advertencias de la fila */}
-        {(bloqueada || fila.advertencias.length > 0) && (
+        {(bloqueada || fila.advertencias.some((a) => a.code !== 'PRIMA_TRAMO_PROYECTADO')) && (
           <div className="px-5 pb-4 space-y-1.5">
             {fila.bloqueantes.map((b) => (
               <p key={b} className="text-xs font-semibold text-destructive flex items-center gap-1.5">
@@ -229,12 +248,14 @@ function DesprendiblePreview({ fila, tipo }: { fila: PreviewFilaLiquidacion; tip
                 {BLOQUEANTE_LABEL[b] ?? b}
               </p>
             ))}
-            {fila.advertencias.map((a, i) => (
-              <p key={i} className="text-xs text-orange-700 flex items-center gap-1.5">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                {a.mensaje ?? a.code}
-              </p>
-            ))}
+            {fila.advertencias
+              .filter((a) => a.code !== 'PRIMA_TRAMO_PROYECTADO')
+              .map((a, i) => (
+                <p key={i} className="text-xs text-orange-700 flex items-center gap-1.5">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                  {a.mensaje ?? a.code}
+                </p>
+              ))}
           </div>
         )}
       </CardContent>
@@ -250,7 +271,9 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
   const periodoId = idParam ? parseInt(idParam) : null;
   const txt = TEXTOS_PERIODO[tipo];
   const esCesantias = tipo === 'CESANTIAS';
-  const IconoTipo = esCesantias ? PiggyBank : Percent;
+  const esIntereses = tipo === 'INTERESES_CESANTIAS';
+  const esPrima = tipo === 'PRIMA';
+  const IconoTipo = esCesantias ? PiggyBank : esPrima ? Gift : Percent;
 
   const [periodo, setPeriodo] = useState<LiquidacionPeriodoDetalle | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -529,6 +552,16 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
                 <Label>Descripción</Label>
                 <Input value={periodo.descripcion} disabled className="bg-muted/30" />
               </div>
+              {esPrima && (
+                <div className="space-y-1.5">
+                  <Label>Semestre</Label>
+                  <Input
+                    value={periodo.semestre === 1 ? '1° Semestre (ene – jun)' : '2° Semestre (jul – dic)'}
+                    disabled
+                    className="bg-muted/30"
+                  />
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label>Fecha inicio</Label>
                 <Input type="date" value={periodo.fecha_inicio} disabled className="bg-muted/30" />
@@ -537,13 +570,13 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
                 <Label>Fecha fin</Label>
                 <Input type="date" value={periodo.fecha_fin} disabled className="bg-muted/30" />
               </div>
-              {!esCesantias && (
+              {esIntereses && (
                 <div className="space-y-1.5">
                   <Label>Tasa de interés</Label>
                   <Input value="12% anual (Ley 52 de 1975, fija por ley)" disabled className="bg-muted/30" />
                 </div>
               )}
-              {!esCesantias && periodo.periodo_base && (
+              {esIntereses && periodo.periodo_base && (
                 <div className="space-y-1.5">
                   <Label>Cesantías base</Label>
                   <Input value={`${periodo.periodo_base.descripcion} (${periodo.periodo_base.total_colaboradores} colaboradores)`} disabled className="bg-muted/30" />
@@ -632,16 +665,21 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
                       </th>
                       <th className="text-left p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Nombre</th>
                       <th className="text-left p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Cargo</th>
-                      {esCesantias ? (
-                        <>
-                          <th className="text-left p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Fondo</th>
-                          <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Salario / Promedio</th>
-                        </>
-                      ) : (
+                      {esIntereses ? (
                         <>
                           <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Saldo Cesantías</th>
                           <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Días Base</th>
                           <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Intereses Estimados</th>
+                        </>
+                      ) : (
+                        <>
+                          {esCesantias && (
+                            <th className="text-left p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Fondo</th>
+                          )}
+                          <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Salario / Promedio</th>
+                          {esPrima && (
+                            <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Días</th>
+                          )}
                         </>
                       )}
                     </tr>
@@ -672,17 +710,7 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
                             </div>
                           </td>
                           <td className="p-4 text-sm text-muted-foreground">{col.cargo ?? '—'}</td>
-                          {esCesantias ? (
-                            <>
-                              <td className="p-4 text-sm text-muted-foreground">{col.fondo_cesantias ?? '—'}</td>
-                              <td className="p-4 text-right">
-                                <span className="font-semibold text-sm">{fmtCOP(monto ?? 0)}</span>
-                                <p className="text-[10px] text-muted-foreground uppercase">
-                                  {col.salario_base_es_contractual ? 'Salario contractual' : 'Promedio mensual'}
-                                </p>
-                              </td>
-                            </>
-                          ) : (
+                          {esIntereses ? (
                             <>
                               <td className="p-4 text-right text-sm font-medium">{fmtCOP(col.saldo_cesantias ?? 0)}</td>
                               <td className="p-4 text-right text-sm font-medium">{col.dias_base_intereses ?? '—'}</td>
@@ -690,6 +718,28 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
                                 <span className="font-semibold text-sm text-primary">{fmtCOP(col.intereses_estimados ?? 0)}</span>
                                 <p className="text-[10px] text-muted-foreground uppercase">Tasa {col.tasa ?? 12}%</p>
                               </td>
+                            </>
+                          ) : (
+                            <>
+                              {esCesantias && (
+                                <td className="p-4 text-sm text-muted-foreground">{col.fondo_cesantias ?? '—'}</td>
+                              )}
+                              <td className="p-4 text-right">
+                                <span className="font-semibold text-sm">{fmtCOP(monto ?? 0)}</span>
+                                <p className="text-[10px] text-muted-foreground uppercase">
+                                  {col.salario_base_es_contractual ? 'Salario contractual' : 'Promedio mensual'}
+                                </p>
+                              </td>
+                              {esPrima && (
+                                <td className="p-4 text-right">
+                                  <span className="font-semibold text-sm">{col.dias_computados ?? '—'}</span>
+                                  {(col.dias_proyectados ?? 0) > 0 && (
+                                    <p className="text-[10px] text-orange-600 uppercase">
+                                      {col.dias_proyectados} proyectados
+                                    </p>
+                                  )}
+                                </td>
+                              )}
                             </>
                           )}
                         </tr>

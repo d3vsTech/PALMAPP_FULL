@@ -1,13 +1,14 @@
 /**
- * API — Liquidaciones (Cesantías · Intereses de cesantías)
+ * API — Liquidaciones (Cesantías · Intereses de cesantías · Prima)
  * Base: /api/v1/tenant/liquidaciones
  *
- * Contrato: docs/API_LIQUIDACIONES.md (v1.0, PR-L6, 2026-09-14).
- * Cubre las pestañas CESANTIAS e INTERESES_CESANTIAS completas: períodos,
- * wizard de 3 pasos, confirmar, reabrir, consignación al fondo / pago al
- * trabajador con anulación, y desprendibles JSON/PDF. La pestaña Intereses
- * usa exactamente los mismos endpoints con tipo = INTERESES_CESANTIAS
- * (§2.7). PRIMA responde 422 LIQUIDACION_TIPO_NO_SOPORTADO hasta fase 3.
+ * Contrato: docs/API_LIQUIDACIONES.md (v1.1, PR-L7, 2026-09-14).
+ * Las tres pestañas usan exactamente los mismos 18 endpoints cambiando el
+ * `tipo`: períodos, wizard de 3 pasos, confirmar, reabrir, consignación al
+ * fondo o pago al trabajador con anulación, y desprendibles JSON/PDF.
+ * Diferencias por tipo en §2.7 (intereses) y §2.8 (prima). La prima es
+ * semestral: `semestre` 1 o 2 es obligatorio al crearla y al pedir su
+ * fecha límite.
  *
  * Permisos: liquidaciones.ver / .crear / .editar / .eliminar / .liquidar
  * / .pagar (instalaciones existentes: AddLiquidacionesPermissionsSeeder).
@@ -47,6 +48,8 @@ export interface DescriptorPeriodo {
   id: number;
   tipo: TipoLiquidacion;
   anio: number;
+  /** 0 en cesantías e intereses; 1 o 2 en prima. */
+  semestre: number;
   descripcion: string;
   fecha_inicio: string;
   fecha_fin: string;
@@ -59,7 +62,7 @@ export interface LiquidacionPeriodoItem {
   id: number;
   tipo: TipoLiquidacion;
   anio: number;
-  /** 0 anual; 1|2 solo PRIMA. */
+  /** 0 en cesantías e intereses; 1 (ene-jun) o 2 (jul-dic) en prima. */
   semestre: number;
   descripcion: string;
   fecha_inicio: string;
@@ -71,6 +74,8 @@ export interface LiquidacionPeriodoItem {
   estado: EstadoLiquidacionPeriodo;
   estado_pago: EstadoPagoPeriodo;
   total_colaboradores: number;
+  /** Promedio de dias_computados de las filas; null en BORRADOR. */
+  dias_promedio: number | null;
   total_liquidado: number;
   total_consignado: number;
   monto_pendiente: number;
@@ -153,6 +158,8 @@ export interface ResumenLiquidaciones {
 export interface FechaLimiteLiquidacion {
   tipo: TipoLiquidacion;
   anio: number;
+  /** null en cesantías e intereses; 1 o 2 en prima. */
+  semestre: number | null;
   fecha_limite_legal: string;
   fecha_limite_operativa: string;
   es_dia_habil: boolean;
@@ -164,6 +171,8 @@ export interface FechaLimiteLiquidacion {
 export interface CrearPeriodoPayload {
   tipo: TipoLiquidacion;
   anio: number;
+  /** Obligatorio (1 o 2) si tipo = PRIMA; se ignora en los demás tipos. */
+  semestre?: 1 | 2;
   descripcion?: string;
   fecha_inicio?: string;
   fecha_fin?: string;
@@ -200,6 +209,8 @@ export interface EmpleadoDisponibleLiquidacion {
   cobertura_nominas_pct?: number;
   dias_vinculacion?: number;
   dias_computados?: number;
+  /** Prima: tramo final sin nómina cerrada que se proyecta. 0 en el resto. */
+  dias_proyectados?: number;
   // Solo intereses (§2.7):
   saldo_cesantias?: number;
   dias_base_intereses?: number;
@@ -298,6 +309,8 @@ export interface PreviewFilaLiquidacion {
     meses_base: number;
     fuente_base: 'NOMINAS' | 'MIXTA' | 'MANUAL';
     cobertura_nominas_pct: number;
+    /** Prima: días del tramo final proyectado. 0 en cesantías e intereses. */
+    dias_proyectados?: number;
     componentes: {
       ordinario: number;
       variables: number;
@@ -437,16 +450,20 @@ const FILAS = '/v1/tenant/liquidaciones/periodo-empleados';
 
 export const liquidacionesApi = {
   /** §2.1 — Cards del listado. `tipo` default CESANTIAS. */
-  resumen: (params?: { tipo?: TipoLiquidacion; anio?: number }) =>
+  resumen: (params?: { tipo?: TipoLiquidacion; anio?: number; semestre?: 1 | 2 }) =>
     apiClient.get<{ data: ResumenLiquidaciones; meta?: { filtros: Record<string, unknown> } }>(
       `${BASE}/resumen${toQuery(params)}`,
       T,
     ),
 
-  /** §2.2 — Fechas límite legal y operativa para precargar el formulario. */
-  fechaLimite: (tipo: TipoLiquidacion, anio: number) =>
+  /**
+   * §2.2 — Fechas límite legal y operativa para precargar el formulario.
+   * `semestre` es obligatorio para PRIMA: sin él responde 422
+   * LIQUIDACION_SEMESTRE_REQUERIDO.
+   */
+  fechaLimite: (tipo: TipoLiquidacion, anio: number, semestre?: 1 | 2) =>
     apiClient.get<{ data: FechaLimiteLiquidacion }>(
-      `${BASE}/fecha-limite${toQuery({ tipo, anio })}`,
+      `${BASE}/fecha-limite${toQuery({ tipo, anio, semestre })}`,
       T,
     ),
 
@@ -454,6 +471,8 @@ export const liquidacionesApi = {
   listar: (params?: {
     tipo?: TipoLiquidacion;
     anio?: number;
+    /** Filtra las primas por semestre. */
+    semestre?: 1 | 2;
     estado?: EstadoLiquidacionPeriodo;
     q?: string;
     per_page?: number;
@@ -576,6 +595,8 @@ export const liquidacionesApi = {
 
 export const LiquidacionesErrorCodes = {
   LIQUIDACION_PERIODO_DUPLICADO: 'LIQUIDACION_PERIODO_DUPLICADO',
+  LIQUIDACION_SEMESTRE_REQUERIDO: 'LIQUIDACION_SEMESTRE_REQUERIDO',
+  LIQUIDACION_RANGO_FUERA_DE_SEMESTRE: 'LIQUIDACION_RANGO_FUERA_DE_SEMESTRE',
   LIQUIDACION_PERIODO_CERRADO: 'LIQUIDACION_PERIODO_CERRADO',
   LIQUIDACION_PERIODO_NO_CERRADO: 'LIQUIDACION_PERIODO_NO_CERRADO',
   LIQUIDACION_PAGO_YA_REGISTRADO: 'LIQUIDACION_PAGO_YA_REGISTRADO',

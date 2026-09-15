@@ -625,6 +625,13 @@ export interface ConstantesLegales {
   liq_descontar_suspensiones?: boolean;
   /** Si los días de incapacidad se excluyen del divisor del promedio salarial. */
   liq_promedio_excluye_incapacidad?: boolean;
+  /**
+   * Prima de servicios: si permisos no remunerados y suspensiones descuentan
+   * días de la prima. Parámetro aparte del de cesantías porque la doctrina
+   * está dividida (CSJ 1980 y 1990 frente al concepto Mintrabajo 55765/2021).
+   * Default false.
+   */
+  liq_prima_descontar_suspensiones?: boolean;
 }
 
 export type ConstantesLegalesPayload = Partial<ConstantesLegales>;

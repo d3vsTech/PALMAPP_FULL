@@ -1,7 +1,8 @@
 /**
  * Listado de períodos de liquidación, compartido por las pestañas
- * Cesantías e Intereses (API_LIQUIDACIONES §2, mismos endpoints con
- * distinto `tipo`). Cards desde /resumen, tabla desde /periodos.
+ * Cesantías, Intereses y Prima (API_LIQUIDACIONES §2, mismos endpoints con
+ * distinto `tipo`). Cards desde /resumen, tabla desde /periodos. La prima
+ * añade el filtro por semestre y la columna de días promedio (§2.8).
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
@@ -18,7 +19,7 @@ import {
 } from '../ui/alert-dialog';
 import {
   Plus, FileText, Calculator, Eye, Search, Filter, Trash2,
-  Users, AlertTriangle, PiggyBank, Percent, CheckCircle, Clock, Loader2,
+  Users, AlertTriangle, PiggyBank, Percent, Gift, CheckCircle, Clock, Loader2,
 } from 'lucide-react';
 import StatusBadge from '../common/StatusBadge';
 import { toast } from 'sonner';
@@ -37,7 +38,7 @@ const fmtCOP = (n: number) =>
 
 const fmtMillones = (n: number) => `$${(Number(n ?? 0) / 1_000_000).toFixed(2)}M`;
 
-type TipoTab = 'CESANTIAS' | 'INTERESES_CESANTIAS';
+type TipoTab = 'CESANTIAS' | 'INTERESES_CESANTIAS' | 'PRIMA';
 
 const TEXTOS: Record<TipoTab, {
   titulo: string;
@@ -90,15 +91,37 @@ const TEXTOS: Record<TipoTab, {
     emptyTitulo: 'No hay períodos de intereses',
     tooltipLegal: 'Ley 52/1975',
   },
+  PRIMA: {
+    titulo: 'Prima de Servicios',
+    // La Ley 1/1963 solo incorpora el auxilio de transporte a la base; la
+    // prima es el art. 306 del CST (Anexo B del contrato).
+    subtitulo: 'Liquidación semestral de prima de servicios (CST art. 306, Ley 1788 de 2016)',
+    botonNuevo: 'Nuevo Período de Prima',
+    ruta: '/liquidaciones/prima',
+    cardTotal: 'Total Prima',
+    cardTotalSub: 'Períodos cerrados',
+    cardPagado: 'Pagadas',
+    cardPagadoSub: 'Pagadas al trabajador',
+    cardPendienteSub: 'Sin pagar',
+    colTotal: 'Total Prima',
+    colPagado: 'Pagado',
+    listaTitulo: 'Períodos de Prima',
+    listaSub: 'Historial de liquidaciones semestrales de prima de servicios',
+    emptyTitulo: 'No hay períodos de prima',
+    tooltipLegal: 'CST art. 306',
+  },
 };
 
 export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
   const navigate = useNavigate();
   const txt = TEXTOS[tipo];
-  const IconoTab = tipo === 'CESANTIAS' ? PiggyBank : Percent;
+  const esPrima = tipo === 'PRIMA';
+  const IconoTab = tipo === 'CESANTIAS' ? PiggyBank : esPrima ? Gift : Percent;
 
   const [filtroEstado, setFiltroEstado] = useState('todos');
   const [filtroBusqueda, setFiltroBusqueda] = useState('');
+  /** Solo prima: 'todos' | '1' | '2' (§2.3). */
+  const [filtroSemestre, setFiltroSemestre] = useState('todos');
 
   const [periodos, setPeriodos] = useState<LiquidacionPeriodoItem[]>([]);
   const [resumen, setResumen] = useState<ResumenLiquidaciones | null>(null);
@@ -113,10 +136,14 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
     Promise.all([
       liquidacionesApi.listar({
         tipo,
+        semestre: esPrima && filtroSemestre !== 'todos' ? (Number(filtroSemestre) as 1 | 2) : undefined,
         estado: filtroEstado !== 'todos' ? (filtroEstado as 'BORRADOR' | 'CERRADA') : undefined,
         per_page: 50,
       }),
-      liquidacionesApi.resumen({ tipo }),
+      liquidacionesApi.resumen({
+        tipo,
+        semestre: esPrima && filtroSemestre !== 'todos' ? (Number(filtroSemestre) as 1 | 2) : undefined,
+      }),
     ])
       .then(([listRes, resRes]) => {
         if (reqId !== reqIdRef.current) return;
@@ -136,7 +163,13 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
   useEffect(() => {
     cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tipo, filtroEstado]);
+  }, [tipo, filtroEstado, filtroSemestre]);
+
+  const limpiarFiltros = () => {
+    setFiltroEstado('todos');
+    setFiltroBusqueda('');
+    setFiltroSemestre('todos');
+  };
 
   const periodosFiltrados = useMemo(() => {
     if (!filtroBusqueda) return periodos;
@@ -270,7 +303,7 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
             <Filter className="h-4 w-4 text-muted-foreground" />
             <h3 className="font-semibold text-base">Filtros</h3>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className={`grid gap-4 sm:grid-cols-2 ${esPrima ? 'lg:grid-cols-3' : ''}`}>
             <div className="space-y-2">
               <label className="text-sm font-medium">Buscar</label>
               <div className="relative">
@@ -294,11 +327,24 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
                 </SelectContent>
               </Select>
             </div>
+            {esPrima && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Semestre</label>
+                <Select value={filtroSemestre} onValueChange={setFiltroSemestre}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos</SelectItem>
+                    <SelectItem value="1">1° Semestre (ene – jun)</SelectItem>
+                    <SelectItem value="2">2° Semestre (jul – dic)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
-          {(filtroEstado !== 'todos' || filtroBusqueda !== '') && (
+          {(filtroEstado !== 'todos' || filtroBusqueda !== '' || filtroSemestre !== 'todos') && (
             <div className="mt-4 flex items-center gap-2">
               <Badge variant="outline">{periodosFiltrados.length} resultado{periodosFiltrados.length !== 1 ? 's' : ''}</Badge>
-              <Button variant="ghost" size="sm" onClick={() => { setFiltroEstado('todos'); setFiltroBusqueda(''); }}>
+              <Button variant="ghost" size="sm" onClick={limpiarFiltros}>
                 Limpiar filtros
               </Button>
             </div>
@@ -329,7 +375,13 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
                     <tr className="border-b border-border bg-muted/30">
                       <th className="text-left p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Período</th>
                       <th className="text-left p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Estado</th>
+                      {esPrima && (
+                        <th className="text-left p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Semestre</th>
+                      )}
                       <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Colaboradores</th>
+                      {esPrima && (
+                        <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Días prom.</th>
+                      )}
                       <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">{txt.colTotal}</th>
                       <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">{txt.colPagado}</th>
                       <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Fecha Límite</th>
@@ -363,6 +415,13 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
                             )}
                           </div>
                         </td>
+                        {esPrima && (
+                          <td className="p-4">
+                            <span className="text-sm">
+                              {periodo.semestre === 1 ? '1° Semestre' : periodo.semestre === 2 ? '2° Semestre' : '—'}
+                            </span>
+                          </td>
+                        )}
                         <td className="p-4 text-right">
                           <span className="text-sm font-semibold">
                             {periodo.total_colaboradores > 0
@@ -370,6 +429,15 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
                               : <span className="text-muted-foreground">—</span>}
                           </span>
                         </td>
+                        {esPrima && (
+                          <td className="p-4 text-right">
+                            <span className="text-sm">
+                              {periodo.dias_promedio != null
+                                ? periodo.dias_promedio.toLocaleString('es-CO', { maximumFractionDigits: 1 })
+                                : <span className="text-muted-foreground">—</span>}
+                            </span>
+                          </td>
+                        )}
                         <td className="p-4 text-right">
                           {periodo.estado === 'BORRADOR'
                             ? <span className="text-sm text-muted-foreground">—</span>
@@ -449,7 +517,7 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
               <Search className="h-16 w-16 text-muted-foreground mb-4" />
               <p className="text-lg font-semibold mb-2">No se encontraron resultados</p>
               <p className="text-sm text-muted-foreground mb-4">Intenta ajustar los filtros</p>
-              <Button variant="outline" onClick={() => { setFiltroEstado('todos'); setFiltroBusqueda(''); }}>
+              <Button variant="outline" onClick={limpiarFiltros}>
                 Limpiar filtros
               </Button>
             </CardContent>
