@@ -9,6 +9,7 @@ import { Label } from '../../components/ui/label';
 import { Textarea } from '../../components/ui/textarea';
 import { Badge } from '../../components/ui/badge';
 import { MultiSelectColaboradores } from '../../components/operaciones/MultiSelectColaboradores';
+import type { ColaboradorEnVacaciones } from '../../../api/operaciones';
 import { SelectActividadLabor } from '../../components/operaciones/SelectActividadLabor';
 import {
   DialogoFaltantesPostAprobar,
@@ -249,6 +250,12 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
     terceroNombre?: string;
     _raw?: any;
   }>>([]);
+  /**
+   * PR-L8 — Vacaciones liquidadas vigentes (`data.en_vacaciones` del
+   * wizard-init). Viven fuera de `parametricas` porque esas se cachean 15
+   * minutos y esto cambia cada vez que alguien liquida vacaciones.
+   */
+  const [enVacaciones, setEnVacaciones] = useState<ColaboradorEnVacaciones[]>([]);
   const [lotesData, setLotesData] = useState<Array<{id: string; nombre: string}>>([]);
   const [sublotes, setSublotes] = useState<Array<{id: string; nombre: string; loteId: string; cantidadPalmas: number}>>([]);
 
@@ -360,6 +367,10 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         if (cancelled) return;
 
         const { parametricas, planilla, resumen: resumenData } = bundle.data;
+
+        // PR-L8: quien esté de vacaciones no debería aparecer en la planilla.
+        // No se filtra de la lista: se marca y el operador decide.
+        setEnVacaciones(bundle.data.en_vacaciones ?? []);
 
         // ── Catálogos ─────────────────────────────────────────────────────
         // Labores PALMA: separar fijas (es_sistema=true, tipo!=null) de las
@@ -501,6 +512,28 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
   // Información General
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
+
+  /**
+   * PR-L8 — Misma lista de personas, con el comprobante VAC-n de quien
+   * tenga vacaciones que cubran la fecha de esta planilla. Las fechas del
+   * backend son YYYY-MM-DD, así que comparar strings basta y evita líos de
+   * zona horaria. Solo aplica a colaboradores propios: los operarios de
+   * tercero no tienen vacaciones en el sistema.
+   */
+  const colaboradoresMarcados = useMemo(() => {
+    if (enVacaciones.length === 0) return colaboradores;
+    const porEmpleado = new Map<string, string>();
+    enVacaciones.forEach((v) => {
+      if (fecha >= v.fecha_inicio && fecha <= v.fecha_fin) {
+        porEmpleado.set(String(v.empleado_id), v.numero_comprobante);
+      }
+    });
+    if (porEmpleado.size === 0) return colaboradores;
+    return colaboradores.map((c) => {
+      const comprobante = porEmpleado.get(c.id);
+      return comprobante ? { ...c, enVacaciones: comprobante } : c;
+    });
+  }, [colaboradores, enVacaciones, fecha]);
   const [elaboradoPor, setElaboradoPor] = useState(user?.nombre ?? '');
 
   // Sincroniza el nombre del usuario logueado al campo "Elaborado por" en cuanto
@@ -2678,7 +2711,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         trabajosCosecha={trabajosCosecha}
                         cosechaEnEdicion={cosechaEnEdicion}
                         setCosechaEnEdicion={setCosechaEnEdicion}
-                        colaboradores={colaboradores}
+                        colaboradores={colaboradoresMarcados}
                         lotesData={lotesData}
                         sublotes={sublotes}
                         agregarCosecha={agregarCosecha}
@@ -2697,7 +2730,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         trabajosPlateo={trabajosPlateo}
                         plateoEnEdicion={plateoEnEdicion}
                         setPlateoEnEdicion={setPlateoEnEdicion}
-                        colaboradores={colaboradores}
+                        colaboradores={colaboradoresMarcados}
                         lotesData={lotesData}
                         sublotes={sublotes}
                         agregarPlateo={agregarPlateo}
@@ -2718,7 +2751,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         trabajosPoda={trabajosPoda}
                         podaEnEdicion={podaEnEdicion}
                         setPodaEnEdicion={setPodaEnEdicion}
-                        colaboradores={colaboradores}
+                        colaboradores={colaboradoresMarcados}
                         lotesData={lotesData}
                         sublotes={sublotes}
                         agregarPoda={agregarPoda}
@@ -2737,7 +2770,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         trabajosFertilizacion={trabajosFertilizacion}
                         fertilizacionEnEdicion={fertilizacionEnEdicion}
                         setFertilizacionEnEdicion={setFertilizacionEnEdicion}
-                        colaboradores={colaboradores}
+                        colaboradores={colaboradoresMarcados}
                         lotesData={lotesData}
                         sublotes={sublotes}
                         insumosLista={insumosLista}
@@ -2757,7 +2790,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         trabajosSanidad={trabajosSanidad}
                         sanidadEnEdicion={sanidadEnEdicion}
                         setSanidadEnEdicion={setSanidadEnEdicion}
-                        colaboradores={colaboradores}
+                        colaboradores={colaboradoresMarcados}
                         lotesData={lotesData}
                         sublotes={sublotes}
                         palmaTipoToId={palmaTipoToId}
@@ -2777,7 +2810,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         trabajosOtros={trabajosOtros}
                         otrosEnEdicion={otrosEnEdicion}
                         setOtrosEnEdicion={setOtrosEnEdicion}
-                        colaboradores={colaboradores}
+                        colaboradores={colaboradoresMarcados}
                         lotesData={lotesData}
                         sublotes={sublotes}
                         actividadesPorLabor={actividadesPorLabor}
@@ -2800,7 +2833,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                 trabajosAuxiliares={trabajosAuxiliares}
                 auxiliarEnEdicion={auxiliarEnEdicion}
                 setAuxiliarEnEdicion={setAuxiliarEnEdicion}
-                colaboradores={colaboradores}
+                colaboradores={colaboradoresMarcados}
                 laboresLista={laboresLista}
                 agregarAuxiliar={agregarAuxiliar}
                 cancelarAuxiliar={cancelarAuxiliar}
@@ -2817,7 +2850,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                 horasExtras={horasExtras}
                 horaExtraEnEdicion={horaExtraEnEdicion}
                 setHoraExtraEnEdicion={setHoraExtraEnEdicion}
-                colaboradores={colaboradores}
+                colaboradores={colaboradoresMarcados}
                 tiposHoraExtraLista={tiposHoraExtraLista}
                 agregarHoraExtra={agregarHoraExtra}
                 cancelarHoraExtra={cancelarHoraExtra}
@@ -2834,7 +2867,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                 modoLectura={modoLectura}
                 observaciones={observaciones}
                 setObservaciones={setObservaciones}
-                colaboradores={colaboradores}
+                colaboradores={colaboradoresMarcados}
                 ausentes={ausentes}
                 colaboradorAusenteSeleccionado={colaboradorAusenteSeleccionado}
                 setColaboradorAusenteSeleccionado={setColaboradorAusenteSeleccionado}

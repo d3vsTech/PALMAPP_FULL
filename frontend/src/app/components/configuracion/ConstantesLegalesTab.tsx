@@ -41,6 +41,8 @@ const FORM_VACIO = {
   liqDescontarSuspensiones: true,
   liqPromedioExcluyeIncapacidad: true,
   liqPrimaDescontarSuspensiones: false,
+  liqVacacionesSabadoHabil: true,
+  liqVacacionesAnticipadas: false,
 };
 
 type FormState = typeof FORM_VACIO;
@@ -66,6 +68,8 @@ function apiToForm(data: ConstantesLegales): FormState {
     liqDescontarSuspensiones:        data.liq_descontar_suspensiones ?? true,
     liqPromedioExcluyeIncapacidad:   data.liq_promedio_excluye_incapacidad ?? true,
     liqPrimaDescontarSuspensiones:   data.liq_prima_descontar_suspensiones ?? false,
+    liqVacacionesSabadoHabil:        data.liq_vacaciones_sabado_habil ?? true,
+    liqVacacionesAnticipadas:        data.liq_vacaciones_anticipadas ?? false,
   };
 }
 
@@ -87,6 +91,8 @@ function formToPayload(f: FormState): ConstantesLegalesPayload {
     liq_descontar_suspensiones:            f.liqDescontarSuspensiones,
     liq_promedio_excluye_incapacidad:      f.liqPromedioExcluyeIncapacidad,
     liq_prima_descontar_suspensiones:      f.liqPrimaDescontarSuspensiones,
+    liq_vacaciones_sabado_habil:           f.liqVacacionesSabadoHabil,
+    liq_vacaciones_anticipadas:            f.liqVacacionesAnticipadas,
   };
 }
 
@@ -419,6 +425,32 @@ export function ConstantesLegalesTab() {
               <Switch
                 checked={constantes.liqPrimaDescontarSuspensiones}
                 onCheckedChange={(v) => handleChange('liqPrimaDescontarSuspensiones', v)}
+              />
+            </div>
+
+            <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-4">
+              <div>
+                <p className="text-sm font-medium">El sábado cuenta como día hábil</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Define cómo se cuentan los 15 días de vacaciones. Encendido por defecto porque la finca trabaja de lunes a sábado. Apagado, las mismas vacaciones terminan cuatro días después y se pagan más días.
+                </p>
+              </div>
+              <Switch
+                checked={constantes.liqVacacionesSabadoHabil}
+                onCheckedChange={(v) => handleChange('liqVacacionesSabadoHabil', v)}
+              />
+            </div>
+
+            <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-4">
+              <div>
+                <p className="text-sm font-medium">Permitir vacaciones anticipadas</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Deja liquidar días del año en curso, antes de cumplirlo. Apagado por defecto: si el trabajador se retira después, no se le puede exigir que devuelva esos días.
+                </p>
+              </div>
+              <Switch
+                checked={constantes.liqVacacionesAnticipadas}
+                onCheckedChange={(v) => handleChange('liqVacacionesAnticipadas', v)}
               />
             </div>
           </div>

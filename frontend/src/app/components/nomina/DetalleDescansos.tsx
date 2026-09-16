@@ -25,6 +25,18 @@ export interface DescansoItem {
   trabajado?: boolean;
 }
 
+/**
+ * Rótulos de `resultado` (§9.9). `SUSPENDIDO_VACACIONES` llega con PR-L8:
+ * el día cae dentro de unas vacaciones que ya pagó Liquidaciones, así que
+ * no vale, pero tampoco se perdió.
+ */
+const RESULTADO_LABEL: Record<string, string> = {
+  PAGADO: 'Pagado',
+  PERDIDO_INASISTENCIA: 'Perdido por inasistencia',
+  SUSPENDIDO_INCAPACIDAD: 'Suspendido por incapacidad',
+  SUSPENDIDO_VACACIONES: 'En vacaciones',
+};
+
 interface Props {
   items?: DescansoItem[];
   diasPerdidos?: number;
@@ -94,6 +106,11 @@ export function DetalleDescansos({
           // y no siempre incluye el flag `pagado`. Derivamos localmente para no
           // pintar "—" cuando el día sí fue pagado.
           const esPagado = d.pagado ?? d.resultado === 'PAGADO';
+          // Un día suspendido no es una pérdida: el trabajador no dejó de
+          // ganarlo por faltar. Solo se pinta en rojo lo que sí se perdió.
+          const esSuspendido = d.resultado === 'SUSPENDIDO_VACACIONES'
+            || d.resultado === 'SUSPENDIDO_INCAPACIDAD';
+          const alerta = !esPagado && !esSuspendido;
           const valorDescanso = Number(d.valor_descanso ?? 0);
           const valorRecargo = Number(d.valor_recargo ?? 0);
           return (
@@ -102,15 +119,15 @@ export function DetalleDescansos({
               className={`grid ${gridCols} ${rowText} ${
                 isCompact
                   ? 'py-0.5'
-                  : `px-4 py-2 border-b last:border-b-0 ${esPagado ? '' : 'bg-destructive/5'}`
+                  : `px-4 py-2 border-b last:border-b-0 ${alerta ? 'bg-destructive/5' : ''}`
               }`}
             >
               <span className="font-mono">{d.fecha}</span>
               <span>{d.tipo === 'DOMINICAL' ? 'Dominical' : 'Festivo'}</span>
-              <span className={esPagado ? '' : 'text-destructive'}>
+              <span className={alerta ? 'text-destructive' : ''}>
                 {esPagado
                   ? (d.nombre ?? d.nombre_festivo ?? 'Pagado')
-                  : (d.motivo ?? d.resultado ?? 'No pagado')}
+                  : (d.motivo ?? RESULTADO_LABEL[d.resultado ?? ''] ?? d.resultado ?? 'No pagado')}
               </span>
               {/* Descanso: pintamos el valor cuando exista, aunque el día no
                   esté PAGADO (para SUSPENDIDO_INCAPACIDAD suele venir 0 y sale

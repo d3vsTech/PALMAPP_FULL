@@ -37,6 +37,7 @@ import { toast } from 'sonner';
 import { AdvertenciasBanner } from '../../components/nomina/AdvertenciasBanner';
 import { DetalleDescansos } from '../../components/nomina/DetalleDescansos';
 import { FaltasInjustificadas } from '../../components/nomina/FaltasInjustificadas';
+import { DiasVacaciones } from '../../components/nomina/DiasVacaciones';
 import {
   nominaApi,
   PreviewLiquidacion,
@@ -1117,6 +1118,15 @@ export default function LiquidarColaborador() {
             total={preview.dias_injustificados}
             formatMoney={(n) => `$${n.toLocaleString('es-CO')}`}
             titulo="Faltas sin novedad registrada"
+          />
+
+          {/* PR-L8 — Vacaciones que Liquidaciones ya pagó. Informativas:
+              explican por qué el período trae menos días trabajados. */}
+          <DiasVacaciones
+            items={preview.detalle_vacaciones}
+            total={preview.dias_vacaciones}
+            formatMoney={(n) => `$${n.toLocaleString('es-CO')}`}
+            titulo="Vacaciones del período"
           />
 
           {/* ── DEDUCCIONES ───────────────────────────────────────────── */}

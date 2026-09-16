@@ -27,6 +27,8 @@ export interface ColaboradorOption {
   apellidos: string;
   terceroNombre?: string;
   modalidad_pago?: 'FIJO' | 'PRODUCCION' | string;
+  /** PR-L8 — Comprobante VAC-n si ese día está de vacaciones. */
+  enVacaciones?: string;
 }
 
 interface Props {
@@ -160,6 +162,14 @@ export function MultiSelectColaboradores({
                     <span className="truncate">
                       {col.nombres} {col.apellidos}
                     </span>
+                    {col.enVacaciones && (
+                      <span
+                        className="ml-1.5 rounded bg-amber-100 px-1 py-[1px] text-[10px] font-semibold text-amber-800"
+                        title={`Está en vacaciones este día · ${col.enVacaciones}`}
+                      >
+                        vacaciones
+                      </span>
+                    )}
                   </span>
                   {renderExtra && <span className="shrink-0">{renderExtra(col)}</span>}
                 </button>

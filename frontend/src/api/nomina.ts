@@ -202,6 +202,26 @@ export interface EmpleadosDisponiblesResponse {
   operarios: OperarioDisponible[];
 }
 
+/**
+ * PR-L8 — Un tramo de vacaciones recortado al período de la nómina.
+ * Una vacación que cruza dos quincenas aparece en las dos, cada una con su
+ * tramo. Las de `origen = HISTORICO` no llegan aquí: no tienen valor que
+ * neutralizar, aunque sus fechas sí cuenten como novedad.
+ */
+export interface DetalleVacacionNomina {
+  vacacion_id: number;
+  /** VAC-n, el comprobante con el que Liquidaciones ya pago estos dias. */
+  numero_comprobante: string;
+  origen: 'SISTEMA' | string;
+  estado: 'APROBADA' | 'PAGADA' | 'CANCELADA' | string;
+  fecha_desde: string;
+  fecha_hasta: string;
+  /** Días comerciales, base 360: el día 31 vale 0. */
+  dias: number;
+  dias_calendario: number;
+  valor_dia: number;
+}
+
 export interface NominaEmpleadoConcepto {
   id: number;
   concepto_id: number;
@@ -281,6 +301,20 @@ export interface NominaEmpleado {
     impacto: string;
     consecuencia_dominical?: string | null;
   }> | null;
+  /**
+   * PR-L8 — Días del período que el módulo de Liquidaciones ya pagó con su
+   * comprobante VAC-n. La nómina solo los neutraliza: no hay devengado ni
+   * deducción, ya salieron de `dias_trabajados`. Conteo comercial (base 360).
+   */
+  dias_vacaciones?: number | null;
+  /** `null` = fila liquidada antes de PR-L8. `[]` = no hubo vacaciones. */
+  detalle_vacaciones?: DetalleVacacionNomina[] | null;
+  /**
+   * PR-L8 — Recargo nocturno de jornada ordinaria (RN) que ya viene dentro
+   * de `total_recargos`, separado porque la base de vacaciones del art. 192
+   * lo incluye y las horas extra no. `null` = fila anterior a PR-L8.
+   */
+  total_recargo_nocturno?: string | null;
   empleado?: {
     id: number;
     nombre_completo?: string;
@@ -572,7 +606,13 @@ export interface PreviewLiquidacion {
     /** Faltas dentro de la ventana (art. 173 num. 1). */
     dias_falta_injustificada?: number;
     /** PAGADO | PERDIDO_INASISTENCIA | SUSPENDIDO_INCAPACIDAD */
-    resultado?: 'PAGADO' | 'PERDIDO_INASISTENCIA' | 'SUSPENDIDO_INCAPACIDAD' | string;
+    resultado?:
+      | 'PAGADO'
+      | 'PERDIDO_INASISTENCIA'
+      | 'SUSPENDIDO_INCAPACIDAD'
+      /** PR-L8: el día cae dentro de vacaciones. Sin valor y sin pérdida. */
+      | 'SUSPENDIDO_VACACIONES'
+      | string;
     /** Base del cálculo del recargo (art. 179). */
     base_recargo?: number;
     /** AUTOMATICO | HORA_EXTRA_MANUAL (cuando HRD/RND ya cubren). */
@@ -591,6 +631,13 @@ export interface PreviewLiquidacion {
       | 'DESCANSO_DOMINICAL_PERDIDO'
       | 'FALTAS_NO_REGISTRADAS_EN_PLANILLA'
       | 'PLANILLAS_SIN_APROBAR_EN_EL_RANGO'
+      /**
+       * PR-L8 — Hay jornal o cosecha registrados en días que Liquidaciones
+       * ya pagó como vacaciones. El jornal se liquida igual: o la planilla
+       * está mal, o las vacaciones se interrumpieron. Trae `fechas[]` y
+       * `comprobantes[]` en `detalle`.
+       */
+      | 'VACACIONES_CON_TRABAJO_REGISTRADO'
       | string;
     mensaje: string;
     detalle?: unknown;
@@ -602,6 +649,22 @@ export interface PreviewLiquidacion {
    * inasistencia injustificada: descuenta día al FIJO y hace perder el
    * dominical de la semana.
    */
+  /**
+   * PR-L8 — Bloque de vacaciones. Informativo: no hay devengado ni deducción.
+   * Son los días del período que Liquidaciones ya pagó con su comprobante
+   * VAC-n y que esta nómina neutraliza. Solo colaboradores internos.
+   * `dias_vacaciones` es el conteo comercial (base 360), que es lo que hay
+   * que restarle a un `salario × días/30`; puede diferir en un día de los
+   * días calendario que pagó el comprobante en meses de 31.
+   */
+  dias_vacaciones?: number;
+  detalle_vacaciones?: DetalleVacacionNomina[] | null;
+  /**
+   * PR-L8 — Recargo nocturno ordinario (RN) incluido en `total_recargos`.
+   * Se expone aparte porque la base de vacaciones del art. 192 lo suma.
+   */
+  total_recargo_nocturno?: number;
+
   dias_injustificados?: number;
   detalle_faltas_injustificadas?: Array<{
     fecha: string;
@@ -844,6 +907,15 @@ export interface DesprendibleData {
       impacto: string;
       consecuencia_dominical?: string | null;
     }>;
+    /**
+     * PR-L8 — Linea informativa sin valor del desprendible:
+     * "VACACIONES (n DÍA(S)) — VAC-n · pagadas por liquidaciones".
+     * No es un devengado. Sin ella el trabajador no puede explicarse por
+     * qué su quincena trae menos días.
+     */
+    dias_vacaciones?: number;
+    detalle_vacaciones?: DetalleVacacionNomina[] | null;
+    total_recargo_nocturno?: number;
   };
   resumen_trabajo: ResumenTrabajo | null;
 }

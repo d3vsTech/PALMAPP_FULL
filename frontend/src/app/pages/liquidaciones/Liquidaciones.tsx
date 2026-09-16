@@ -9,8 +9,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '../../components/ui/tooltip';
-import { useKPIsLiquidaciones } from '../../contexts/LiquidacionesContext';
-import { formatearMoneda } from '../../lib/liquidaciones/calculoUtils';
 
 // Componentes de cada pestaña
 import CesantiasTab from './CesantiasTab';
@@ -21,7 +19,6 @@ import LiquidacionFinalTab from './LiquidacionFinalTab';
 
 function LiquidacionesContent() {
   const [activeTab, setActiveTab] = useState('cesantias');
-  const kpis = useKPIsLiquidaciones();
 
   return (
     <div className="space-y-6">

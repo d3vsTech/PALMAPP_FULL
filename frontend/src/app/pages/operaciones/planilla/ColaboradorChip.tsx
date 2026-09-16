@@ -10,6 +10,8 @@ import type { ColaboradorWizard } from './tipos';
  *    "FIJO · $0" para dejar claro que su jornal cierra en cero (la nómina
  *    lo paga por salario_base).
  *  - Empleado propio con `modalidad_pago = 'PRODUCCION'` → chip neutro.
+ *  - Cualquiera con vacaciones liquidadas ese día → badge ámbar con el
+ *    comprobante. No bloquea: avisa antes de que la nómina lo advierta.
  */
 export function ColaboradorChip({ col }: { col: ColaboradorWizard }) {
   const esFijo = !col.terceroNombre && col.modalidad_pago === 'FIJO';
@@ -26,7 +28,9 @@ export function ColaboradorChip({ col }: { col: ColaboradorWizard }) {
             : ''
       }`}
       title={
-        col.terceroNombre
+        col.enVacaciones
+          ? `Está en vacaciones este día · ${col.enVacaciones}`
+          : col.terceroNombre
           ? `Tercero · ${col.terceroNombre}`
           : esFijo
             ? 'Empleado con salario fijo — su jornal diario queda en $0. La nómina lo paga por salario_base.'
@@ -34,6 +38,11 @@ export function ColaboradorChip({ col }: { col: ColaboradorWizard }) {
       }
     >
       {nombreCorto}
+      {col.enVacaciones && (
+        <span className="ml-1.5 rounded bg-amber-200/70 px-1 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-amber-900">
+          Vacaciones
+        </span>
+      )}
       {col.terceroNombre && (
         <span className="ml-1.5 text-[9px] font-semibold uppercase tracking-wide bg-orange-200/70 text-orange-900 rounded px-1 py-[1px]">
           {col.terceroNombre}

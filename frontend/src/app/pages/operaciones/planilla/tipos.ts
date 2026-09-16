@@ -146,4 +146,10 @@ export interface ColaboradorWizard {
   apellidos: string;
   terceroNombre?: string;
   modalidad_pago?: 'FIJO' | 'PRODUCCION' | string;
+  /**
+   * PR-L8 — Número de comprobante VAC-n cuando la fecha de la planilla cae
+   * dentro de unas vacaciones liquidadas. No bloquea: registrar el jornal
+   * sigue siendo posible, pero la nómina lo advertirá.
+   */
+  enVacaciones?: string;
 }

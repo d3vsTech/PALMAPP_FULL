@@ -83,6 +83,15 @@ export function DialogoFaltantesPostAprobar({
       const creadas = res.data.creadas.length;
       const omitidas = res.data.omitidas.length;
       toast.success(res.message ?? `${creadas} novedad(es) registrada(s)`);
+      // Desde PR-L8 unas vacaciones liquidadas cuentan como novedad. Sin este
+      // aviso, ver "3 de 5" sin explicación parece un error del sistema.
+      if (omitidas > 0) {
+        toast.info(
+          `${omitidas} colaborador(es) ya tenían novedad ese día y se omitieron. ` +
+          'Unas vacaciones liquidadas también cuentan como novedad.',
+          { duration: 8000 },
+        );
+      }
       onCerrado({ creadas, omitidas });
       onOpenChange(false);
     } catch (err) {

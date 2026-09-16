@@ -632,6 +632,19 @@ export interface ConstantesLegales {
    * Default false.
    */
   liq_prima_descontar_suspensiones?: boolean;
+  /**
+   * Vacaciones: si el sábado cuenta como día hábil al contar los 15 días
+   * (CST art. 186). Default true, porque las fincas operan de lunes a sábado.
+   * Con false, los mismos 15 días hábiles terminan 4 días calendario después
+   * y se pagan más días.
+   */
+  liq_vacaciones_sabado_habil?: boolean;
+  /**
+   * Vacaciones: si se pueden liquidar días del período de causación en curso.
+   * Default false. Con true el trabajador puede salir antes de cumplir el año,
+   * y si se retira no se le puede exigir reintegro.
+   */
+  liq_vacaciones_anticipadas?: boolean;
 }
 
 export type ConstantesLegalesPayload = Partial<ConstantesLegales>;

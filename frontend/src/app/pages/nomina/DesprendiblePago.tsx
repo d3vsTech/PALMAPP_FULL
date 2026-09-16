@@ -25,6 +25,7 @@ import { nominaApi, DesprendibleData } from '../../../api/nomina';
 import type { ApiError } from '../../../api/client';
 import { DetalleDescansos } from '../../components/nomina/DetalleDescansos';
 import { FaltasInjustificadas } from '../../components/nomina/FaltasInjustificadas';
+import { DiasVacaciones } from '../../components/nomina/DiasVacaciones';
 
 function fmt(n: number): string {
   return `$${n.toLocaleString('es-CO')}`;
@@ -470,6 +471,18 @@ export default function DesprendiblePago() {
                 formatMoney={fmt}
                 variant="compact"
                 titulo="Días no laborados sin novedad registrada"
+              />
+            </div>
+
+            {/* PR-L8 — Línea informativa sin valor: estos días los pagó
+                Liquidaciones con su comprobante VAC-n, no esta nómina. */}
+            <div className="mt-4">
+              <DiasVacaciones
+                items={liquidacion.detalle_vacaciones}
+                total={liquidacion.dias_vacaciones}
+                formatMoney={fmt}
+                variant="compact"
+                titulo="Vacaciones pagadas por liquidaciones"
               />
             </div>
           </div>

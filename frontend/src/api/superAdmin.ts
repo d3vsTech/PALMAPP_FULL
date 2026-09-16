@@ -63,7 +63,9 @@ export interface CreateTenantPayload {
   metodo_cosecha_default?: string;
   salario_minimo_vigente?: number;
   auxilio_transporte?: number;
-  modulo_vacaciones?: boolean;
+  // `modulo_vacaciones` se eliminó de `tenant_config` con la migración
+  // 2026_03_19_000002. Las vacaciones no tienen toggle propio: cuelgan
+  // de Nómina, dentro de Liquidaciones (API_LIQUIDACIONES §10).
   modulo_liquidacion?: boolean;
   modulo_insumos?: boolean;
   sync_habilitado?: boolean;

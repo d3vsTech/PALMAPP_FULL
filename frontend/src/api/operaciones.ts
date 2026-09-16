@@ -478,12 +478,33 @@ export interface TerceroLaborOverride {
 }
 
 /**
+ * PR-L8 — Vacaciones vigentes con disfrute, para marcar en el selector de
+ * personas quién no debería aparecer en la planilla de ese día.
+ * El backend trae las que terminan hace 45 días o menos, más las futuras.
+ */
+export interface ColaboradorEnVacaciones {
+  vacacion_id: number;
+  numero_comprobante: string;
+  empleado_id: number;
+  origen: 'SISTEMA' | 'HISTORICO' | string;
+  fecha_inicio: string;
+  fecha_fin: string;
+  dias_habiles: number;
+}
+
+/**
  * Bundle único del wizard. Modo creación: `planilla` y `resumen` son `null`.
  * Modo edición: ambos vienen con la planilla y el resumen calculado.
  */
 export interface WizardInitBundle {
   planilla: PlanillaDetalle | null;
   resumen: Resumen | null;
+  /**
+   * PR-L8 — Vive en `data`, nunca dentro de `parametricas`: las paramétricas
+   * se cachean 15 minutos y esto cambia cada vez que alguien liquida
+   * vacaciones. Ausente en backends anteriores a PR-L8.
+   */
+  en_vacaciones?: ColaboradorEnVacaciones[];
   parametricas: {
     colaboradores: ColaboradorWizardItem[];
     /** Nuevo en §1.1: operarios de terceros. Se unifican con colaboradores en el dropdown. */
@@ -1241,7 +1262,9 @@ export const ausenciasApi = {
    *  - Un solo `motivo_ausencia_id` para todos los `empleado_ids`.
    *  - Funciona con la planilla APROBADA (post-cierre).
    *  - Deduplica: si un colaborador ya tenía novedad ese día, va a `omitidas[]`
-   *    con `motivo: 'YA_TIENE_NOVEDAD_ESE_DIA'`.
+   *    con `motivo: 'YA_TIENE_NOVEDAD_ESE_DIA'`. Desde PR-L8 unas vacaciones
+   *    liquidadas cuentan como novedad, así que quien esté de vacaciones sale
+   *    por ahí en vez de recibir una ausencia que no le corresponde.
    *
    * Requiere permiso `operaciones.crear`.
    */
