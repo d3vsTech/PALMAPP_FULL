@@ -16,6 +16,7 @@ import {
 } from '../../../components/ui/select';
 import { Plus, Trash2, ClipboardList } from 'lucide-react';
 import type { AusenteRegistro, ColaboradorWizard } from './tipos';
+import { etiquetaVacaciones } from './vacacionesPlanilla';
 
 interface Props {
   modoLectura: boolean;
@@ -98,8 +99,16 @@ export function EtapaFinalizacion({
                         .filter(col => !col.terceroNombre)
                         .filter(col => !ausentes.some(a => a.colaboradorId === col.id))
                         .map((col) => (
-                          <SelectItem key={col.id} value={col.id}>
+                          /* PR-L8: unas vacaciones ya son la novedad del día.
+                             Aquí no hay salida: no existe caso válido para
+                             registrarle falta a alguien de vacaciones. */
+                          <SelectItem key={col.id} value={col.id} disabled={!!col.enVacaciones}>
                             {col.nombres} {col.apellidos}
+                            {col.enVacaciones && (
+                              <span className="ml-2 text-xs text-amber-700 dark:text-amber-500">
+                                {etiquetaVacaciones(col.enVacaciones)}
+                              </span>
+                            )}
                           </SelectItem>
                         ))}
                     </SelectContent>

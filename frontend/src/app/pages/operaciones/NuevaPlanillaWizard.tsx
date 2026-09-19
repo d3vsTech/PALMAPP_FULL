@@ -10,6 +10,7 @@ import { Textarea } from '../../components/ui/textarea';
 import { Badge } from '../../components/ui/badge';
 import { MultiSelectColaboradores } from '../../components/operaciones/MultiSelectColaboradores';
 import type { ColaboradorEnVacaciones } from '../../../api/operaciones';
+import { marcarVacaciones } from './planilla/vacacionesPlanilla';
 import { SelectActividadLabor } from '../../components/operaciones/SelectActividadLabor';
 import {
   DialogoFaltantesPostAprobar,
@@ -256,6 +257,8 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
    * minutos y esto cambia cada vez que alguien liquida vacaciones.
    */
   const [enVacaciones, setEnVacaciones] = useState<ColaboradorEnVacaciones[]>([]);
+  /** Descarta respuestas de fechas que el usuario ya cambió. */
+  const vacacionesReqRef = useRef(0);
   const [lotesData, setLotesData] = useState<Array<{id: string; nombre: string}>>([]);
   const [sublotes, setSublotes] = useState<Array<{id: string; nombre: string; loteId: string; cantidadPalmas: number}>>([]);
 
@@ -368,9 +371,10 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
         const { parametricas, planilla, resumen: resumenData } = bundle.data;
 
-        // PR-L8: quien esté de vacaciones no debería aparecer en la planilla.
-        // No se filtra de la lista: se marca y el operador decide.
-        setEnVacaciones(bundle.data.en_vacaciones ?? []);
+        // PR-L8: en edición la fecha sale de la operación, así que el bundle
+        // ya trae las vacaciones correctas. En creación las pide el efecto de
+        // abajo cada vez que cambia la fecha del paso 1.
+        if (isEditMode) setEnVacaciones(bundle.data.en_vacaciones ?? []);
 
         // ── Catálogos ─────────────────────────────────────────────────────
         // Labores PALMA: separar fijas (es_sistema=true, tipo!=null) de las
@@ -514,26 +518,38 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
 
   /**
-   * PR-L8 — Misma lista de personas, con el comprobante VAC-n de quien
-   * tenga vacaciones que cubran la fecha de esta planilla. Las fechas del
-   * backend son YYYY-MM-DD, así que comparar strings basta y evita líos de
-   * zona horaria. Solo aplica a colaboradores propios: los operarios de
-   * tercero no tienen vacaciones en el sistema.
+   * PR-L8 — Misma lista de personas, marcando a quien tenga vacaciones que
+   * cubran la fecha de esta planilla. Los selectores lo usan para bloquear.
    */
-  const colaboradoresMarcados = useMemo(() => {
-    if (enVacaciones.length === 0) return colaboradores;
-    const porEmpleado = new Map<string, string>();
-    enVacaciones.forEach((v) => {
-      if (fecha >= v.fecha_inicio && fecha <= v.fecha_fin) {
-        porEmpleado.set(String(v.empleado_id), v.numero_comprobante);
-      }
-    });
-    if (porEmpleado.size === 0) return colaboradores;
-    return colaboradores.map((c) => {
-      const comprobante = porEmpleado.get(c.id);
-      return comprobante ? { ...c, enVacaciones: comprobante } : c;
-    });
-  }, [colaboradores, enVacaciones, fecha]);
+  const colaboradoresMarcados = useMemo(
+    () => marcarVacaciones(colaboradores, enVacaciones, fecha),
+    [colaboradores, enVacaciones, fecha],
+  );
+  /**
+   * PR-L8 — Modo creación: cada fecha nueva necesita su propia lista de
+   * vacaciones. Sin `?fecha=` el backend solo devuelve las de los últimos 45
+   * días y las futuras, y una planilla vieja se quedaría sin la información.
+   *
+   * Solo toma `en_vacaciones` del bundle: recargar el resto pisaría los
+   * catálogos y el trabajo que el usuario ya lleve hecho.
+   */
+  useEffect(() => {
+    if (isEditMode || !fecha) return;
+    const reqId = ++vacacionesReqRef.current;
+    operacionesApi
+      .wizardInit(undefined, fecha)
+      .then((bundle) => {
+        if (reqId !== vacacionesReqRef.current) return;
+        setEnVacaciones(bundle.data.en_vacaciones ?? []);
+      })
+      .catch(() => {
+        // Un fallo aquí no puede tumbar el wizard: sin la lista simplemente
+        // nadie sale marcado, que es como se comportaba antes de PR-L8.
+        if (reqId === vacacionesReqRef.current) setEnVacaciones([]);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fecha, isEditMode]);
+
   const [elaboradoPor, setElaboradoPor] = useState(user?.nombre ?? '');
 
   // Sincroniza el nombre del usuario logueado al campo "Elaborado por" en cuanto

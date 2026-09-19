@@ -9,6 +9,10 @@
  *  - Popover con búsqueda + lista con checkboxes.
  *  - Click sobre una fila hace toggle sin cerrar el popover.
  *  - Chips visuales debajo con los seleccionados (usa `ColaboradorChip`).
+ *  - Quien esté de vacaciones ese día sale deshabilitado, con el rango y el
+ *    comprobante. Se puede forzar uno por uno: las vacaciones se interrumpen
+ *    legalmente y el trabajador pudo haber ido. El backend acepta el
+ *    registro y la nómina lo advierte después.
  *
  * Los ids conservan el mismo formato que el estado del wizard: `String(empleado.id)`
  * para colaboradores propios y `'O_' + operario.id` para operarios de tercero.
@@ -19,7 +23,9 @@ import { sortByFirstName } from '../../utils/personas';
 import { Button } from '../ui/button';
 import { Checkbox } from '../ui/checkbox';
 import { Input } from '../ui/input';
-import { Users, Search, ChevronDown, X, Check } from 'lucide-react';
+import { Users, Search, ChevronDown, X, Check, Plane, AlertTriangle } from 'lucide-react';
+import type { VacacionEnPlanilla } from '../../pages/operaciones/planilla/tipos';
+import { etiquetaVacaciones } from '../../pages/operaciones/planilla/vacacionesPlanilla';
 
 export interface ColaboradorOption {
   id: string;
@@ -27,8 +33,8 @@ export interface ColaboradorOption {
   apellidos: string;
   terceroNombre?: string;
   modalidad_pago?: 'FIJO' | 'PRODUCCION' | string;
-  /** PR-L8 — Comprobante VAC-n si ese día está de vacaciones. */
-  enVacaciones?: string;
+  /** PR-L8 — Vacaciones que cubren la fecha de la planilla. */
+  enVacaciones?: VacacionEnPlanilla;
 }
 
 interface Props {
@@ -54,12 +60,22 @@ export function MultiSelectColaboradores({
    * Solo "Aceptar" hace commit vía onChange; cerrar por fuera descarta.
    */
   const [draft, setDraft] = useState<string[]>([]);
+  /**
+   * Ids de vacacionistas que el usuario destrabó a propósito en esta apertura
+   * del popover. Se limpia al cerrar: forzar es una decisión puntual, no un
+   * permiso permanente.
+   */
+  const [forzados, setForzados] = useState<string[]>([]);
+  /** Fila que está pidiendo confirmación para forzarse. */
+  const [porForzar, setPorForzar] = useState<string | null>(null);
 
   const abrirCerrar = (siguiente: boolean) => {
     if (siguiente) {
       setDraft(seleccionados);
       setBusqueda('');
     }
+    setForzados([]);
+    setPorForzar(null);
     setOpen(siguiente);
   };
 
@@ -89,7 +105,9 @@ export function MultiSelectColaboradores({
   };
 
   const seleccionarTodos = () => {
-    setDraft(Array.from(new Set([...draft, ...opciones.map((o) => o.id)])));
+    // Deja fuera a los de vacaciones: forzarlos es uno por uno y a conciencia.
+    const elegibles = opciones.filter((o) => !o.enVacaciones || forzados.includes(o.id));
+    setDraft(Array.from(new Set([...draft, ...elegibles.map((o) => o.id)])));
   };
 
   const limpiarSeleccion = () => setDraft([]);
@@ -148,31 +166,81 @@ export function MultiSelectColaboradores({
           <div className="max-h-72 overflow-y-auto py-1">
             {sortByFirstName(opciones).map((col) => {
               const checked = seleccionadosSet.has(col.id);
+              // Ya seleccionado cuenta como destrabado: si viene de una
+              // planilla guardada no se le puede quitar el check de golpe.
+              const bloqueado = !!col.enVacaciones && !forzados.includes(col.id) && !checked;
+              const confirmando = porForzar === col.id;
+
               return (
-                <button
-                  key={col.id}
-                  type="button"
-                  onClick={() => toggle(col.id)}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/60 transition-colors ${
-                    checked ? 'bg-primary/5' : ''
-                  }`}
-                >
-                  <Checkbox checked={checked} className="shrink-0" />
-                  <span className="flex-1 text-left min-w-0">
-                    <span className="truncate">
-                      {col.nombres} {col.apellidos}
-                    </span>
-                    {col.enVacaciones && (
-                      <span
-                        className="ml-1.5 rounded bg-amber-100 px-1 py-[1px] text-[10px] font-semibold text-amber-800"
-                        title={`Está en vacaciones este día · ${col.enVacaciones}`}
-                      >
-                        vacaciones
+                <div key={col.id} className={checked ? 'bg-primary/5' : ''}>
+                  <button
+                    type="button"
+                    onClick={() => { if (!bloqueado) toggle(col.id); }}
+                    disabled={bloqueado}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors ${
+                      bloqueado ? 'cursor-not-allowed opacity-60' : 'hover:bg-muted/60'
+                    }`}
+                  >
+                    <Checkbox checked={checked} disabled={bloqueado} className="shrink-0" />
+                    <span className="flex-1 text-left min-w-0">
+                      <span className="block truncate">
+                        {col.nombres} {col.apellidos}
                       </span>
-                    )}
-                  </span>
-                  {renderExtra && <span className="shrink-0">{renderExtra(col)}</span>}
-                </button>
+                      {col.enVacaciones && (
+                        <span className="mt-0.5 flex items-center gap-1 text-[11px] font-medium text-amber-700 dark:text-amber-500">
+                          <Plane className="h-3 w-3 shrink-0" />
+                          {etiquetaVacaciones(col.enVacaciones)}
+                        </span>
+                      )}
+                    </span>
+                    {renderExtra && <span className="shrink-0">{renderExtra(col)}</span>}
+                  </button>
+
+                  {bloqueado && !confirmando && (
+                    <div className="px-3 pb-2 pl-10">
+                      <button
+                        type="button"
+                        onClick={() => setPorForzar(col.id)}
+                        className="text-[11px] font-medium text-primary underline underline-offset-2"
+                      >
+                        Registrar de todas formas
+                      </button>
+                    </div>
+                  )}
+
+                  {confirmando && (
+                    <div className="mx-3 mb-2 ml-10 rounded-md border border-amber-300 bg-amber-50 p-2 dark:border-amber-800/40 dark:bg-amber-950/20">
+                      <p className="flex gap-1.5 text-[11px] text-amber-900 dark:text-amber-200">
+                        <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
+                        Está de vacaciones. Regístralo solo si de verdad trabajó ese día;
+                        la nómina lo va a advertir.
+                      </p>
+                      <div className="mt-2 flex gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="h-6 text-[11px]"
+                          onClick={() => {
+                            setForzados((prev) => [...prev, col.id]);
+                            setPorForzar(null);
+                            toggle(col.id);
+                          }}
+                        >
+                          Sí, registrar
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 text-[11px]"
+                          onClick={() => setPorForzar(null)}
+                        >
+                          Cancelar
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>

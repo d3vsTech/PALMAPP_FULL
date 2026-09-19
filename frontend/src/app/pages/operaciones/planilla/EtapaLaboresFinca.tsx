@@ -16,6 +16,7 @@ import {
 } from '../../../components/ui/select';
 import { Plus, Trash2, Pencil, X, Save } from 'lucide-react';
 import type { TrabajoAuxiliar, ColaboradorWizard } from './tipos';
+import { etiquetaVacaciones } from './vacacionesPlanilla';
 
 interface Props {
   trabajosAuxiliares: TrabajoAuxiliar[];
@@ -43,8 +44,7 @@ export function EtapaLaboresFinca({
   editarAuxiliar,
   eliminarAuxiliar,
   setFormRef,
-}: Props) {
-  return (
+}: Props) {  return (
     <Card className="border-border">
       <CardHeader>
         <div className="flex items-center justify-between">
@@ -91,12 +91,19 @@ export function EtapaLaboresFinca({
                           con badge "Tercero" si aplica. */}
                       {colaboradores.map((col) => {
                         const fullName = `${col.nombres} ${col.apellidos}`.trim();
+                        // PR-L8: de vacaciones no se elige, salvo que se fuerce.
+                        const bloqueado = !!col.enVacaciones;
                         return (
-                          <SelectItem key={col.id} value={col.id}>
+                          <SelectItem key={col.id} value={col.id} disabled={bloqueado}>
                             {fullName}
                             {col.terceroNombre ? (
                               <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">
                                 Tercero · {col.terceroNombre}
+                              </span>
+                            ) : null}
+                            {col.enVacaciones ? (
+                              <span className="ml-2 inline-block align-middle text-[10px] px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-200 font-medium">
+                                {etiquetaVacaciones(col.enVacaciones)}
                               </span>
                             ) : null}
                           </SelectItem>
@@ -196,6 +203,13 @@ export function EtapaLaboresFinca({
                       {personaSel?.terceroNombre ? (
                         <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">
                           Tercero · {personaSel.terceroNombre}
+                        </span>
+                      ) : null}
+                      {/* PR-L8: una fila ya guardada también avisa, porque es
+                          la que hay que revisar o quitar. */}
+                      {personaSel?.enVacaciones ? (
+                        <span className="ml-2 inline-block align-middle text-[10px] px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-200 font-medium">
+                          {etiquetaVacaciones(personaSel.enVacaciones)}
                         </span>
                       ) : null}
                     </p>

@@ -140,6 +140,17 @@ export const ETAPAS = [
 ];
 
 /** Forma mínima de un colaborador para chips y selects del wizard. */
+/**
+ * PR-L8 — Vacaciones liquidadas que cubren la fecha de la planilla.
+ * Se guarda el rango completo, no solo el comprobante, porque el selector
+ * muestra "De vacaciones del 05-ene al 22-ene (VAC-1)".
+ */
+export interface VacacionEnPlanilla {
+  comprobante: string;
+  fechaInicio: string;
+  fechaFin: string;
+}
+
 export interface ColaboradorWizard {
   id: string;
   nombres: string;
@@ -147,9 +158,10 @@ export interface ColaboradorWizard {
   terceroNombre?: string;
   modalidad_pago?: 'FIJO' | 'PRODUCCION' | string;
   /**
-   * PR-L8 — Número de comprobante VAC-n cuando la fecha de la planilla cae
-   * dentro de unas vacaciones liquidadas. No bloquea: registrar el jornal
-   * sigue siendo posible, pero la nómina lo advertirá.
+   * PR-L8 — Presente cuando la fecha de la planilla cae dentro de unas
+   * vacaciones liquidadas. Bloquea la seleccion; en jornales, cosecha y
+   * horas extra el usuario puede forzarla, porque las vacaciones se pueden
+   * interrumpir y el trabajador pudo haber ido de verdad.
    */
-  enVacaciones?: string;
+  enVacaciones?: VacacionEnPlanilla;
 }

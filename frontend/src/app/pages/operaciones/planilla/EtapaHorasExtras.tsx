@@ -17,6 +17,7 @@ import {
 } from '../../../components/ui/select';
 import { Plus, Trash2, Pencil, Check, Clock } from 'lucide-react';
 import type { HoraExtra, ColaboradorWizard } from './tipos';
+import { etiquetaVacaciones } from './vacacionesPlanilla';
 
 interface Props {
   horasExtras: HoraExtra[];
@@ -45,8 +46,7 @@ export function EtapaHorasExtras({
   editarHoraExtra,
   eliminarHoraExtra,
   setFormRef,
-}: Props) {
-  return (
+}: Props) {  return (
     <div className="space-y-4">
       <div className="flex justify-end">
         <Button onClick={agregarHoraExtra} className="gap-2">
@@ -88,11 +88,19 @@ export function EtapaHorasExtras({
                   </SelectTrigger>
                   <SelectContent>
                     {/* Otro selector sin XOR de operario (paso 4/5). */}
-                    {colaboradores.filter(c => !c.terceroNombre).map((col) => (
-                      <SelectItem key={col.id} value={col.id}>
-                        {col.nombres} {col.apellidos}
-                      </SelectItem>
-                    ))}
+                    {colaboradores.filter(c => !c.terceroNombre).map((col) => {
+                      const bloqueado = !!col.enVacaciones;
+                      return (
+                        <SelectItem key={col.id} value={col.id} disabled={bloqueado}>
+                          {col.nombres} {col.apellidos}
+                          {col.enVacaciones && (
+                            <span className="ml-2 text-xs text-amber-700 dark:text-amber-500">
+                              {etiquetaVacaciones(col.enVacaciones)}
+                            </span>
+                          )}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               </div>
@@ -232,6 +240,7 @@ export function EtapaHorasExtras({
           <p className="text-sm">Haz clic en "Agregar Hora Extra" para crear una</p>
         </div>
       )}
+
     </div>
   );
 }

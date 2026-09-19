@@ -1,5 +1,6 @@
 import { Badge } from '../../../components/ui/badge';
 import type { ColaboradorWizard } from './tipos';
+import { etiquetaVacaciones } from './vacacionesPlanilla';
 
 /**
  * Chip con el nombre de un colaborador/operario para las tarjetas de palma.
@@ -29,7 +30,7 @@ export function ColaboradorChip({ col }: { col: ColaboradorWizard }) {
       }`}
       title={
         col.enVacaciones
-          ? `Está en vacaciones este día · ${col.enVacaciones}`
+          ? etiquetaVacaciones(col.enVacaciones)
           : col.terceroNombre
           ? `Tercero · ${col.terceroNombre}`
           : esFijo

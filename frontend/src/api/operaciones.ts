@@ -798,11 +798,17 @@ export const operacionesApi = {
    * - Con id → modo lectura/edición: además trae la planilla con sus
    *   relaciones y el resumen calculado.
    */
-  wizardInit: (id?: number) =>
+  /**
+   * `fecha` (YYYY-MM-DD) solo aplica en modo creacion: sin ella el backend
+   * devuelve unicamente las vacaciones de los ultimos 45 dias y las futuras,
+   * y una planilla vieja se quedaria sin esa informacion. En modo edicion la
+   * fecha sale de la operacion.
+   */
+  wizardInit: (id?: number, fecha?: string) =>
     requestConToken<{ data: WizardInitBundle }>(
       id != null
         ? `${BASE}/operaciones/${id}/wizard-init`
-        : `${BASE}/operaciones/wizard-init`
+        : `${BASE}/operaciones/wizard-init${fecha ? `?fecha=${encodeURIComponent(fecha)}` : ''}`
     ),
 
   indicadores: (params: { periodo?: Periodo; fecha_desde?: string; fecha_hasta?: string } = {}) =>
