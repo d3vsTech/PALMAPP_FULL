@@ -461,7 +461,12 @@ export const vacacionesApi = {
    * saldos de los colaboradores antiguos salen inflados.
    */
   crearHistorico: (payload: CrearHistoricoPayload) =>
-    apiClient.post<{ message: string; data: VacacionItem }>(`${BASE}/historico`, payload, T),
+    apiClient.post<{
+      message: string;
+      data: VacacionItem;
+      /** §10.6.1: `VACACIONES_CONSUMO_SIN_SALDO` cuando lo cargado supera lo causado. */
+      advertencias?: AdvertenciaLiquidacion[];
+    }>(`${BASE}/historico`, payload, T),
 
   /** §10.7 — Histórico paginado con totales del filtro completo. */
   listar: (params?: {

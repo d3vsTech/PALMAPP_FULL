@@ -5,7 +5,7 @@
  * `estado_vencimiento` / `dias_para_vencimiento`. Aquí no se recalcula:
  * el corte de los 30 y 90 días es regla de negocio, no de pantalla.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -29,7 +29,6 @@ import {
 import type { ApiError } from '../../../api/client';
 import { formatFecha } from '../../utils/fecha';
 import { SEMAFORO, fmtDias } from './vacaciones/comunes';
-import RegistrarHistoricoDialog from './vacaciones/RegistrarHistoricoDialog';
 
 const ESTADOS_FILTRO: Array<{ valor: string; label: string }> = [
   { valor: 'todos', label: 'Todos los estados' },
@@ -48,7 +47,6 @@ export default function VacacionesTab() {
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('todos');
-  const [historicoAbierto, setHistoricoAbierto] = useState(false);
   const reqIdRef = useRef(0);
 
   const cargar = () => {
@@ -81,15 +79,6 @@ export default function VacacionesTab() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busqueda, filtroEstado]);
-
-  const colaboradoresHistorico = useMemo(
-    () => filas.map((f) => ({
-      id: f.empleado.id,
-      nombre: f.empleado.nombre_completo,
-      documento: f.empleado.documento,
-    })),
-    [filas],
-  );
 
   const porEstado = meta?.totales.por_estado;
   const urgentes = (porEstado?.VENCIDA ?? 0) + (porEstado?.URGENTE ?? 0);
@@ -369,9 +358,13 @@ export default function VacacionesTab() {
 
       {/* ── Acciones de pie ───────────────────────────────────────────────── */}
       <div className="flex flex-wrap justify-end gap-3">
-        <Button variant="outline" onClick={() => setHistoricoAbierto(true)} className="gap-2">
+        <Button
+          variant="outline"
+          onClick={() => navigate('/liquidaciones/vacaciones/carga-historico')}
+          className="gap-2"
+        >
           <CalendarClock className="h-4 w-4" />
-          Registrar vacaciones pasadas
+          Cargar vacaciones anteriores
         </Button>
         <Button
           variant="outline"
@@ -382,13 +375,6 @@ export default function VacacionesTab() {
           Histórico de liquidaciones
         </Button>
       </div>
-
-      <RegistrarHistoricoDialog
-        abierto={historicoAbierto}
-        onCerrar={() => setHistoricoAbierto(false)}
-        colaboradores={colaboradoresHistorico}
-        onRegistrado={cargar}
-      />
     </div>
   );
 }
