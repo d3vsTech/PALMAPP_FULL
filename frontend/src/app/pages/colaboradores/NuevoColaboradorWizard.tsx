@@ -50,7 +50,13 @@ import {
   Eye,
 } from 'lucide-react';
 import { Switch } from '../../components/ui/switch';
-import { colaboradoresApi, buildAvatarUrl, type CrearColaboradorPayload } from '../../../api/colaboradores';
+import {
+  colaboradoresApi,
+  buildAvatarUrl,
+  TIPO_CONTRATO_COLABORADOR_LABEL,
+  type CrearColaboradorPayload,
+  type TipoContratoColaborador,
+} from '../../../api/colaboradores';
 import { fetchConToken } from '../../../api/request';
 import { configuracionApi } from '../../../api/configuracion';
 import { toast } from 'sonner';
@@ -76,6 +82,9 @@ interface FormData {
   salarioBase: number;
   aplicaSubsidioTransporte: boolean;
   fechaContratacion: string;
+  /** PR-L9: va al contrato, no a la ficha. Lo exige la indemnización del art. 64. */
+  tipoContrato: string;
+  fechaFinPactada: string;
   fechaFinalizacion: string;
   // Detalle de finalización — se despliega cuando hay fechaFinalizacion.
   motivoFinalizacion: string;
@@ -138,7 +147,7 @@ const FORM_INICIAL: FormData = {
   estado: true,
   primerApellido: '', segundoApellido: '', primerNombre: '', segundoNombre: '',
   tipoDocumento: 'CC', numeroDocumento: '', fechaExpedicion: '', fechaNacimiento: '', lugarExpedicion: '',
-  cargo: '', predioAsignado: '', modalidadPago: 'FIJO', salarioBase: 0, aplicaSubsidioTransporte: false, fechaContratacion: '', fechaFinalizacion: '', motivoFinalizacion: '',
+  cargo: '', predioAsignado: '', modalidadPago: 'FIJO', salarioBase: 0, aplicaSubsidioTransporte: false, fechaContratacion: '', tipoContrato: 'INDEFINIDO', fechaFinPactada: '', fechaFinalizacion: '', motivoFinalizacion: '',
   eps: '', arl: '', fondoPension: '', fondoCesantias: '', cajaCompensacion: '',
   tallaCamisa: '', tallaPantalon: '', tallaCalzado: '',
   banco: '', tipoCuenta: 'AHORROS', numeroCuenta: '',
@@ -397,6 +406,8 @@ export default function NuevoColaboradorWizard() {
               ? !!d.subsidio_transporte
               : true,
             fechaContratacion: toDateInput(d.fecha_ingreso),
+            tipoContrato: d.contrato_vigente?.tipo_contrato ?? 'INDEFINIDO',
+            fechaFinPactada: toDateInput(d.contrato_vigente?.fecha_fin_pactada ?? null),
             fechaFinalizacion: toDateInput(d.fecha_retiro),
             motivoFinalizacion: MOTIVOS_LEGACY[motivoGuardado] ?? motivoGuardado,
             eps: d.eps ?? '',
@@ -798,6 +809,14 @@ export default function NuevoColaboradorWizard() {
       // Subsidio: en edición lo mandamos siempre (es booleano, no string vacío).
       body.subsidio_transporte             = formData.aplicaSubsidioTransporte;
       body.estado = formData.estado;
+    }
+
+    if (formData.tipoContrato) {
+      body.tipo_contrato = formData.tipoContrato as TipoContratoColaborador;
+      // Solo el término fijo lleva fecha pactada; el backend la limpia en los demás.
+      if (formData.tipoContrato === 'TERMINO_FIJO' && formData.fechaFinPactada) {
+        body.fecha_fin_pactada = formData.fechaFinPactada;
+      }
     }
 
     if (formData.segundoNombre.trim())             body.segundo_nombre               = formData.segundoNombre.trim();
@@ -1370,6 +1389,48 @@ export default function NuevoColaboradorWizard() {
                       onChange={(e) => handleInputChange('fechaContratacion', e.target.value)}
                     />
                   </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="tipoContrato">Tipo de Contrato</Label>
+                    <Select
+                      value={formData.tipoContrato}
+                      onValueChange={(v) => {
+                        handleInputChange('tipoContrato', v);
+                        if (v !== 'TERMINO_FIJO') handleInputChange('fechaFinPactada', '');
+                      }}
+                    >
+                      <SelectTrigger id="tipoContrato">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(Object.keys(TIPO_CONTRATO_COLABORADOR_LABEL) as TipoContratoColaborador[]).map((t) => (
+                          <SelectItem key={t} value={t}>
+                            {TIPO_CONTRATO_COLABORADOR_LABEL[t]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Define cuántos días de indemnización se pagan si el retiro es sin justa causa.
+                    </p>
+                  </div>
+
+                  {formData.tipoContrato === 'TERMINO_FIJO' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="fechaFinPactada">
+                        Fecha de Fin Pactada *
+                      </Label>
+                      <Input
+                        id="fechaFinPactada"
+                        type="date"
+                        value={formData.fechaFinPactada}
+                        onChange={(e) => handleInputChange('fechaFinPactada', e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Sin ella no se puede calcular la indemnización de un contrato a término fijo.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Sección "Finalización de Contrato" — visible siempre (crear

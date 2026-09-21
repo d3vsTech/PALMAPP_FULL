@@ -172,13 +172,26 @@ export type MedioPagoAbono =
   | 'TRANSFERENCIA'
   | 'EFECTIVO'
   | 'CHEQUE'
+  /**
+   * PR-L9. Solo lo escribe el módulo de liquidaciones al pagar una
+   * liquidación final: salda TODAS las cuotas pendientes de una vez con
+   * referencia `LIQ-{id}`. El formulario de abono directo no lo acepta.
+   */
+  | 'LIQUIDACION_FINAL'
   | 'OTRO';
 
 /**
  * Tipo del abono: NOMINA si fue aplicado vía liquidación de nómina,
  * DIRECTO si fue registrado con `POST /prestamos/{id}/abonos`.
  */
-export type TipoAbono = 'NOMINA' | 'DIRECTO';
+export type TipoAbono =
+  | 'NOMINA'
+  | 'DIRECTO'
+  /**
+   * PR-L9: el préstamo se saldó al pagar una liquidación final. Todas las
+   * cuotas pendientes pasaron a APLICADA de una vez, con referencia LIQ-{id}.
+   */
+  | 'LIQUIDACION_FINAL';
 
 /** Fila del historial unificado de abonos (doc §8.1). */
 export interface AbonoPrestamo {

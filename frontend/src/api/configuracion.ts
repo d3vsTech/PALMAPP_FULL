@@ -645,6 +645,24 @@ export interface ConstantesLegales {
    * y si se retira no se le puede exigir reintegro.
    */
   liq_vacaciones_anticipadas?: boolean;
+  /**
+   * Valor de la UVT del año (52.374 en 2026, Res. DIAN 000238/2025).
+   * El módulo no calcula retención: la usa para avisar cuando una
+   * indemnización supera las 204 UVT y podría estar sujeta a retención.
+   */
+  uvt_vigente?: number;
+  /**
+   * Liquidación final: si se descuentan salud y pensión. Solo gravan lo
+   * salarial, así que en la práctica aplican al salario pendiente; las
+   * prestaciones y la indemnización no cotizan. Default true.
+   */
+  liq_final_deducir_seguridad_social?: boolean;
+  /**
+   * Liquidación final: si se propone descontar el saldo de los préstamos
+   * vigentes. Default true. El descuento exige autorización escrita del
+   * trabajador (CST arts. 149 y 150).
+   */
+  liq_final_descontar_prestamos?: boolean;
 }
 
 export type ConstantesLegalesPayload = Partial<ConstantesLegales>;

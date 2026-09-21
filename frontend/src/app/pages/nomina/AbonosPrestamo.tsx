@@ -44,6 +44,8 @@ import type { ApiError } from '../../../api/client';
 import { formatThousands, parseCOP } from '../../components/lib/format';
 import { formatFecha } from '../../utils/fecha';
 
+// Sin LIQUIDACION_FINAL a propósito: ese medio solo lo escribe el módulo de
+// liquidaciones al pagar una liquidación final, y el backend lo rechaza aquí.
 const MEDIOS_PAGO: Array<{ value: MedioPagoAbono; label: string }> = [
   { value: 'TRANSFERENCIA',    label: 'Transferencia' },
   { value: 'EFECTIVO',         label: 'Efectivo' },
@@ -352,6 +354,14 @@ export default function AbonosPrestamo() {
                             title={`Registrado por ${a.registrado_por}`}
                           >
                             Nómina
+                          </span>
+                        )}
+                        {a.tipo === 'LIQUIDACION_FINAL' && (
+                          <span
+                            className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200 font-medium align-middle dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800/30"
+                            title="Saldado al pagar la liquidación final de contrato"
+                          >
+                            Liquidación final
                           </span>
                         )}
                       </td>

@@ -40,8 +40,15 @@ function toQuery(params?: Record<string, unknown>): string {
 
 /** Ciclo propio, sin período. PENDIENTE está reservado y hoy no se produce. */
 export type EstadoVacacion = 'APROBADA' | 'PAGADA' | 'CANCELADA' | 'PENDIENTE';
-/** HISTORICO = disfrutada antes del sistema; consume saldo, sin valores. */
-export type OrigenVacacion = 'SISTEMA' | 'HISTORICO';
+/**
+ * SISTEMA = liquidada por el módulo, con valores.
+ * HISTORICO = disfrutada antes del sistema; consume saldo, sin valores.
+ * LIQUIDACION_FINAL (PR-L9) = compensación total al retiro creada al aprobar
+ * una liquidación final: solo dinero, sin acuerdo escrito y sin el tope de
+ * la mitad del art. 189, porque el art. 189-2 obliga a compensar el saldo
+ * completo. No se crea ni se anula desde esta pestaña.
+ */
+export type OrigenVacacion = 'SISTEMA' | 'HISTORICO' | 'LIQUIDACION_FINAL';
 export type EstadoVencimiento = 'VENCIDA' | 'URGENTE' | 'PROXIMA' | 'CON_TIEMPO' | 'AL_DIA';
 /** Sin PILA: las vacaciones se pagan a la persona, no a un fondo. */
 export type MetodoPagoVacacion = 'TRANSFERENCIA' | 'EFECTIVO' | 'CHEQUE';

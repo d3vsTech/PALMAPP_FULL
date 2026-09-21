@@ -13,7 +13,12 @@ import {
   ArrowLeft, Edit, User, Briefcase, Shield, FileText,
   Download, IdCard, Package, Building2, Loader2, Phone, Eye,
 } from 'lucide-react';
-import { colaboradoresApi, buildAvatarUrl } from '../../../api/colaboradores';
+import {
+  colaboradoresApi,
+  buildAvatarUrl,
+  TIPO_CONTRATO_COLABORADOR_LABEL,
+  type TipoContratoColaborador,
+} from '../../../api/colaboradores';
 import { toast } from 'sonner';
 
 const TIPOS_DOC: Record<string, string> = {
@@ -222,6 +227,22 @@ export default function ColaboradorDetail() {
             <div className="space-y-1"><p className="text-sm text-muted-foreground">Predio Asignado</p><p className="font-medium">{colaborador.predio?.nombre || 'Sin asignar'}</p></div>
             <div className="space-y-1"><p className="text-sm text-muted-foreground">Modalidad de Pago</p><p className="font-medium">{colaborador.modalidad_pago === 'FIJO' ? 'Fijo' : 'Variable'}</p></div>
             <div className="space-y-1"><p className="text-sm text-muted-foreground">Fecha de Ingreso</p><p className="font-medium">{fmt(colaborador.fecha_ingreso)}</p></div>
+            {colaborador.contrato_vigente && (
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">Tipo de Contrato</p>
+                <p className="font-medium">
+                  {TIPO_CONTRATO_COLABORADOR_LABEL[
+                    (colaborador.contrato_vigente.tipo_contrato ??
+                      'INDEFINIDO') as TipoContratoColaborador
+                  ]}
+                  {colaborador.contrato_vigente.fecha_fin_pactada && (
+                    <span className="text-muted-foreground">
+                      {' '}hasta {fmt(colaborador.contrato_vigente.fecha_fin_pactada)}
+                    </span>
+                  )}
+                </p>
+              </div>
+            )}
             {colaborador.fecha_retiro && (
               <div className="space-y-1"><p className="text-sm text-muted-foreground">Fecha de Retiro</p><p className="font-medium">{fmt(colaborador.fecha_retiro)}</p></div>
             )}

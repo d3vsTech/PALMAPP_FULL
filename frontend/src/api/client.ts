@@ -232,6 +232,18 @@ export const apiClient = {
     return response.blob();
   },
 
+  /** Igual que getBlob pero con cuerpo JSON: PDFs que se piden con POST
+   *  porque el cálculo viaja en el body (ej: la simulación de liquidación
+   *  final, que no persiste nada y por eso no tiene id que consultar). */
+  postBlob: async (path: string, body: unknown, requiresTenant = false): Promise<Blob> => {
+    const response = await rawRequest(path, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      requiresTenant,
+    });
+    return response.blob();
+  },
+
   /** Multipart/form-data (ej: subir logo). El Content-Type con boundary lo
    *  pone el navegador — rawRequest lo omite al detectar FormData. */
   postForm: <T>(path: string, formData: FormData, requiresTenant = false) =>

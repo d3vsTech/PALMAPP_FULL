@@ -59,6 +59,7 @@ export const ESTADO_VACACION_LABEL: Record<EstadoVacacion, string> = {
 export const ORIGEN_LABEL: Record<OrigenVacacion, string> = {
   SISTEMA: 'Liquidada aquí',
   HISTORICO: 'Registro histórico',
+  LIQUIDACION_FINAL: 'Compensada al retiro',
 };
 
 /** Días enteros o con media unidad: 7,5 se escribe con coma. */

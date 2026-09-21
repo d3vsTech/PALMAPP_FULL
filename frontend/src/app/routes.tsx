@@ -331,6 +331,7 @@ export const router = createBrowserRouter([
           { path: 'vacaciones/carga-historico', element: L(<CargaHistoricoVacaciones />) },
           { path: 'vacaciones/:id',            element: L(<VacacionesDetalle />) },
           { path: 'liquidacion-final/nueva',   element: L(<NuevaLiquidacionFinal />) },
+          { path: 'liquidacion-final/:id/editar', element: L(<NuevaLiquidacionFinal />) },
           { path: 'liquidacion-final/:id',     element: L(<LiquidacionFinalDetalle />) },
         ],
       },

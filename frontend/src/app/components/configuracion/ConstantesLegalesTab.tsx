@@ -43,6 +43,9 @@ const FORM_VACIO = {
   liqPrimaDescontarSuspensiones: false,
   liqVacacionesSabadoHabil: true,
   liqVacacionesAnticipadas: false,
+  uvtVigente: '52374',
+  liqFinalDeducirSeguridadSocial: true,
+  liqFinalDescontarPrestamos: true,
 };
 
 type FormState = typeof FORM_VACIO;
@@ -110,6 +113,9 @@ function apiToForm(data: ConstantesLegales): FormState {
     liqPrimaDescontarSuspensiones:   data.liq_prima_descontar_suspensiones ?? false,
     liqVacacionesSabadoHabil:        data.liq_vacaciones_sabado_habil ?? true,
     liqVacacionesAnticipadas:        data.liq_vacaciones_anticipadas ?? false,
+    uvtVigente:                      String(data.uvt_vigente ?? 52374),
+    liqFinalDeducirSeguridadSocial:  data.liq_final_deducir_seguridad_social ?? true,
+    liqFinalDescontarPrestamos:      data.liq_final_descontar_prestamos ?? true,
   };
 }
 
@@ -133,6 +139,9 @@ function formToPayload(f: FormState): ConstantesLegalesPayload {
     liq_prima_descontar_suspensiones:      f.liqPrimaDescontarSuspensiones,
     liq_vacaciones_sabado_habil:           f.liqVacacionesSabadoHabil,
     liq_vacaciones_anticipadas:            f.liqVacacionesAnticipadas,
+    uvt_vigente:                           Number(f.uvtVigente) || 0,
+    liq_final_deducir_seguridad_social:    f.liqFinalDeducirSeguridadSocial,
+    liq_final_descontar_prestamos:         f.liqFinalDescontarPrestamos,
   };
 }
 
@@ -258,6 +267,24 @@ export function ConstantesLegalesTab() {
                 placeholder="30"
                 className="text-lg font-semibold"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="uvtVigente">Valor de la UVT</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg text-muted-foreground">$</span>
+                <Input
+                  id="uvtVigente"
+                  value={formatThousands(constantes.uvtVigente)}
+                  onChange={(e) => handleChange('uvtVigente', parseCOP(e.target.value))}
+                  placeholder="52.374"
+                  className="pl-7 text-lg font-semibold"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Unidad de Valor Tributario del año. Solo sirve para avisar cuando una
+                indemnización podría tener retención; el sistema no la calcula.
+              </p>
             </div>
           </div>
 
@@ -468,6 +495,33 @@ export function ConstantesLegalesTab() {
               En vacaciones las suspensiones siempre descuentan días, por el CST art. 53.
               No hay parámetro para eso.
             </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Liquidación final de contrato ──────────────────────── */}
+      <Card className="border-border">
+        <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
+          <CardTitle>Liquidación Final</CardTitle>
+          <p className="text-sm text-muted-foreground mt-1">Qué se descuenta cuando alguien se retira</p>
+        </CardHeader>
+        <CardContent className="p-6">
+          <div className="space-y-4">
+            <SubtituloPolitica titulo="Política de cálculo" />
+
+            <FilaPolitica
+              titulo="Descontar salud y pensión"
+              descripcion="Solo se descuentan sobre lo salarial, es decir, sobre el salario pendiente si se paga aquí. Las cesantías, los intereses, la prima, las vacaciones compensadas y la indemnización no cotizan."
+              checked={constantes.liqFinalDeducirSeguridadSocial}
+              onCheckedChange={(v) => handleChange('liqFinalDeducirSeguridadSocial', v)}
+            />
+
+            <FilaPolitica
+              titulo="Proponer el descuento de préstamos"
+              descripcion="Trae los préstamos vigentes con su saldo para descontarlos de la liquidación. Descontar exige la autorización escrita del trabajador, CST arts. 149 y 150; el sistema la pide antes de guardar."
+              checked={constantes.liqFinalDescontarPrestamos}
+              onCheckedChange={(v) => handleChange('liqFinalDescontarPrestamos', v)}
+            />
           </div>
         </CardContent>
       </Card>

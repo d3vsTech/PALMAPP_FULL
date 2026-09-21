@@ -47,12 +47,29 @@ export interface PredioRefColaborador {
   nombre: string;
 }
 
+/**
+ * Tipo de contrato (PR-L9). Vive en el contrato, no en la ficha. Lo exige la
+ * indemnización del CST art. 64: sin él la liquidación final no sabe cuántos
+ * días debe pagar por un despido sin justa causa.
+ */
+export type TipoContratoColaborador = 'INDEFINIDO' | 'TERMINO_FIJO' | 'OBRA_LABOR';
+
+export const TIPO_CONTRATO_COLABORADOR_LABEL: Record<TipoContratoColaborador, string> = {
+  INDEFINIDO: 'Término indefinido',
+  TERMINO_FIJO: 'Término fijo',
+  OBRA_LABOR: 'Obra o labor',
+};
+
 /** Contrato vigente que viene anidado en el detalle del colaborador. */
 export interface ContratoVigenteColaborador {
   id: number;
   empleado_id: number;
   fecha_inicio: string;
   fecha_terminacion: string | null;
+  /** Default `INDEFINIDO` en los contratos anteriores a PR-L9. */
+  tipo_contrato?: TipoContratoColaborador;
+  /** Obligatoria cuando el tipo es `TERMINO_FIJO`. */
+  fecha_fin_pactada?: string | null;
   /** Motivo con el que se terminó el contrato (copia de `motivo_retiro`). */
   motivo_terminacion?: string | null;
   salario: string | number;
@@ -145,6 +162,13 @@ export interface CrearColaboradorPayload {
   fecha_retiro?: string | null;
   /** Obligatorio si `fecha_retiro` es nueva o cambió (§4). */
   motivo_retiro?: string | null;
+  /**
+   * PR-L9. No es columna de la ficha: va al contrato que se crea o al
+   * contrato vigente si ya existe. Default `INDEFINIDO`.
+   */
+  tipo_contrato?: TipoContratoColaborador;
+  /** Obligatoria si `tipo_contrato = TERMINO_FIJO`; se limpia con los demás. */
+  fecha_fin_pactada?: string | null;
   eps?: string;
   fondo_pension?: string;
   fondo_cesantias?: string;

@@ -230,8 +230,8 @@ export default function VacacionesHistorico() {
                       <td className="p-4">
                         <div className="flex flex-col">
                           <span className="text-sm text-foreground">{h.numero_comprobante}</span>
-                          {h.origen === 'HISTORICO' && (
-                            <span className="text-xs text-muted-foreground">{ORIGEN_LABEL.HISTORICO}</span>
+                          {h.origen !== 'SISTEMA' && (
+                            <span className="text-xs text-muted-foreground">{ORIGEN_LABEL[h.origen]}</span>
                           )}
                         </div>
                       </td>
@@ -295,7 +295,7 @@ export default function VacacionesHistorico() {
                           </Button>
                           {/* Las dos anulaciones van en menú: son destructivas
                               y no deben quedar al lado de "Ver" (§10.9, §10.10). */}
-                          {h.estado !== 'CANCELADA' && (
+                          {h.estado !== 'CANCELADA' && h.origen !== 'LIQUIDACION_FINAL' && (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button size="sm" variant="outline" className="px-2">
