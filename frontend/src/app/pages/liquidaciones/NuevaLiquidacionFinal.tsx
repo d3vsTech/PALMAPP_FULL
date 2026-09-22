@@ -47,7 +47,12 @@ import { TablaColaboradores } from './final/TablaColaboradores';
 import { useFormularioLiquidacion } from './final/useFormularioLiquidacion';
 
 /** Orden y textos de los cinco conceptos ajustables. */
-const CONCEPTOS: Array<{ codigo: CodigoAjustable; titulo: string; descripcion: string }> = [
+const CONCEPTOS: Array<{
+  codigo: CodigoAjustable;
+  titulo: string;
+  descripcion: string;
+  unidadDias?: string;
+}> = [
   {
     codigo: 'CESANTIAS',
     titulo: 'Cesantías',
@@ -62,11 +67,14 @@ const CONCEPTOS: Array<{ codigo: CodigoAjustable; titulo: string; descripcion: s
     codigo: 'PRIMA',
     titulo: 'Prima de servicios',
     descripcion: 'Proporcional al semestre en curso, sea cual sea el motivo del retiro.',
+    unidadDias: 'días del semestre',
   },
   {
     codigo: 'VACACIONES',
     titulo: 'Vacaciones compensadas',
-    descripcion: 'Todo el saldo, incluida la fracción del año en curso.',
+    descripcion:
+      'Días acumulados que se pagan en dinero, no días de descanso. Por eso llevan decimales.',
+    unidadDias: 'días acumulados',
   },
   {
     codigo: 'INDEMNIZACION',
@@ -593,7 +601,7 @@ export default function NuevaLiquidacionFinal() {
             )}
 
             {preview &&
-              CONCEPTOS.map(({ codigo, titulo, descripcion }) => {
+              CONCEPTOS.map(({ codigo, titulo, descripcion, unidadDias }) => {
                 const concepto = preview.conceptos.devengados.find((c) => c.codigo === codigo);
                 // La indemnización solo existe con los motivos que la generan.
                 const oculto = codigo === 'INDEMNIZACION' && !concepto;
@@ -603,6 +611,7 @@ export default function NuevaLiquidacionFinal() {
                     codigo={codigo}
                     titulo={titulo}
                     descripcion={descripcion}
+                    unidadDias={unidadDias}
                     campos={CAMPOS_AJUSTE[codigo]}
                     concepto={concepto}
                     ajuste={f.ajustes[codigo]}
@@ -664,14 +673,10 @@ export default function NuevaLiquidacionFinal() {
       {preview && totales && (
         <Card className="border-primary/30">
           <CardContent className="space-y-4 p-6">
-            {preview.marca && (
-              <p className="flex items-center gap-2 rounded-lg bg-amber-50 p-3 text-sm font-medium text-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
-                <Info className="h-4 w-4" />
-                {preview.marca}
-              </p>
-            )}
-
-            {preview.bloqueantes.map((b, i) => (
+            {/* Bloqueantes y avisos solo en la liquidación real: son las
+                barandas de aprobar. El estado de cuenta no aprueba nada. */}
+            {!esSimulacion &&
+              preview.bloqueantes.map((b, i) => (
               <p
                 key={`${b.code}-${i}`}
                 className={`flex items-start gap-2 rounded-lg border p-3 text-sm ${
@@ -683,20 +688,21 @@ export default function NuevaLiquidacionFinal() {
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>
                   {b.mensaje}
-                  {esBloqueanteForzable(b) && ' Se puede continuar al aprobar, con un motivo.'}
-                </span>
-              </p>
-            ))}
+                    {esBloqueanteForzable(b) && ' Se puede continuar al aprobar, con un motivo.'}
+                  </span>
+                </p>
+              ))}
 
-            {preview.advertencias.map((a, i) => (
-              <p
-                key={`${a.code}-${i}`}
-                className="flex items-start gap-2 text-sm text-muted-foreground"
-              >
-                <Info className="mt-0.5 h-4 w-4 shrink-0" />
-                {a.mensaje}
-              </p>
-            ))}
+            {!esSimulacion &&
+              preview.advertencias.map((a, i) => (
+                <p
+                  key={`${a.code}-${i}`}
+                  className="flex items-start gap-2 text-sm text-muted-foreground"
+                >
+                  <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                  {a.mensaje}
+                </p>
+              ))}
 
             <div className="space-y-2 border-t border-border pt-4">
               <div className="flex justify-between text-sm">

@@ -5,6 +5,11 @@
  * El buscador de liquidación final (§11.4) devuelve máximo 30 sin paginación,
  * así que con una finca de 200 personas dejaba fuera a la mayoría.
  *
+ * Ese listado NO devuelve `contrato_vigente` (solo lo trae el detalle,
+ * `GET /colaboradores/{id}`), así que aquí no se puede mostrar el tipo de
+ * contrato: pedirlo daba "Sin contrato" en todas las filas. En su lugar va la
+ * modalidad de pago, que el listado sí envía.
+ *
  * El precio de ese cambio: el listado paginado no trae `liquidacion_activa`,
  * o sea que aquí no se sabe de antemano quién ya está liquidado. Ese filtro no
  * se pierde, se corre: al elegir a alguien la pantalla pide su ficha
@@ -26,7 +31,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { colaboradoresApi, type Colaborador } from '../../../../api/colaboradores';
-import { TIPO_CONTRATO_LABEL, type ColaboradorLiquidable } from '../../../../api/liquidacionFinal';
+import type { ColaboradorLiquidable } from '../../../../api/liquidacionFinal';
 import { fmtFecha, getIniciales, mensajeErrorLiquidacion } from './comunes';
 
 const POR_PAGINA = 10;
@@ -37,7 +42,7 @@ interface FilaColaborador {
   nombre_completo: string;
   documento: string;
   cargo: string | null;
-  tipo_contrato: string | null;
+  modalidad_pago: string | null;
   fecha_ingreso: string | null;
   /** Retirado en la ficha: se puede liquidar, pero conviene avisarlo. */
   fecha_retiro: string | null;
@@ -55,7 +60,7 @@ function aFila(c: Colaborador): FilaColaborador {
     nombre_completo: nombreDe(c),
     documento: c.documento,
     cargo: c.cargo ?? null,
-    tipo_contrato: c.contrato_vigente?.tipo_contrato ?? null,
+    modalidad_pago: c.modalidad_pago ?? null,
     fecha_ingreso: c.fecha_ingreso ?? null,
     fecha_retiro: c.fecha_retiro ?? null,
   };
@@ -180,7 +185,7 @@ export function TablaColaboradores({
               </th>
               <th className="p-3 text-left text-xs font-semibold text-muted-foreground">Cédula</th>
               <th className="hidden p-3 text-left text-xs font-semibold text-muted-foreground sm:table-cell">
-                Contrato
+                Modalidad
               </th>
               <th className="hidden p-3 text-left text-xs font-semibold text-muted-foreground md:table-cell">
                 Ingreso
@@ -229,11 +234,11 @@ export function TablaColaboradores({
                   <td className="p-3 text-sm text-muted-foreground">{c.documento}</td>
 
                   <td className="hidden p-3 text-sm text-muted-foreground sm:table-cell">
-                    {c.tipo_contrato
-                      ? (TIPO_CONTRATO_LABEL[
-                          c.tipo_contrato as keyof typeof TIPO_CONTRATO_LABEL
-                        ] ?? c.tipo_contrato)
-                      : 'Sin contrato'}
+                    {c.modalidad_pago === 'FIJO'
+                      ? 'Fijo'
+                      : c.modalidad_pago === 'PRODUCCION'
+                        ? 'Producción'
+                        : '—'}
                   </td>
 
                   <td className="hidden p-3 text-sm text-muted-foreground md:table-cell">

@@ -12,7 +12,7 @@ import { Label } from '../../../components/ui/label';
 import { Badge } from '../../../components/ui/badge';
 import { AlertTriangle, ChevronDown, ChevronUp, Pencil, RotateCcw } from 'lucide-react';
 import type { AjusteConcepto, CodigoAjustable, ConceptoLiquidacion } from '../../../../api/liquidacionFinal';
-import { fmtCOP } from './comunes';
+import { fmtCOP, fmtDias } from './comunes';
 import { ajusteFaltaMotivo, ajusteTieneValor, type AjusteTexto } from './useFormularioLiquidacion';
 
 /** Qué campos admite cada concepto, según el §11.6. */
@@ -32,6 +32,8 @@ interface Props {
   ajuste: AjusteTexto | undefined;
   onAjuste: (campo: keyof AjusteConcepto, valor: string) => void;
   onLimpiar: () => void;
+  /** Cómo se llaman los días de este concepto: "acumulados", "del semestre". */
+  unidadDias?: string;
   /** Se oculta el bloque completo cuando el concepto no aplica. */
   oculto?: boolean;
   soloLectura?: boolean;
@@ -46,6 +48,7 @@ export function BloqueConcepto({
   ajuste,
   onAjuste,
   onLimpiar,
+  unidadDias = 'días',
   oculto = false,
   soloLectura = false,
 }: Props) {
@@ -55,6 +58,7 @@ export function BloqueConcepto({
   const ajustado = ajusteTieneValor(ajuste);
   const faltaMotivo = ajusteFaltaMotivo(ajuste);
   const valor = concepto?.valor ?? 0;
+  const subtitulo = subtituloDe(concepto, unidadDias);
 
   return (
     <div className="space-y-3 rounded-lg border border-border p-4">
@@ -74,25 +78,23 @@ export function BloqueConcepto({
 
         <div className="text-right">
           <p className="text-lg font-bold text-primary">{fmtCOP(valor)}</p>
-          {concepto?.detalle_texto && (
-            <p className="text-xs text-muted-foreground">{concepto.detalle_texto}</p>
-          )}
+          {subtitulo && <p className="text-xs text-muted-foreground">{subtitulo}</p>}
         </div>
       </div>
 
-      {concepto?.formula_aplicada && (
-        <p className="font-mono text-xs text-muted-foreground">{concepto.formula_aplicada}</p>
-      )}
-
-      {concepto?.advertencias?.map((a, i) => (
-        <p
-          key={`${a.code}-${i}`}
-          className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400"
-        >
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          {a.mensaje}
-        </p>
-      ))}
+      {/* En el estado de cuenta no se pintan avisos: es una consulta, no hay
+          nada que corregir ni que aprobar. En la liquidación real sí, porque
+          ahí son la señal de que un concepto quedó mal calculado. */}
+      {!soloLectura &&
+        concepto?.advertencias?.map((a, i) => (
+          <p
+            key={`${a.code}-${i}`}
+            className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400"
+          >
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            {a.mensaje}
+          </p>
+        ))}
 
       {!soloLectura && (
         <>
@@ -170,6 +172,22 @@ export function BloqueConcepto({
       )}
     </div>
   );
+}
+
+/**
+ * Línea bajo el valor. Se arma con los campos estructurados y no con
+ * `detalle_texto`, porque ese viene del backend con la multiplicación dentro
+ * ("20,75 días × 0") y eso es la fórmula, que no va en el formulario.
+ */
+function subtituloDe(
+  c: ConceptoLiquidacion | undefined,
+  unidadDias: string,
+): string | null {
+  if (!c) return null;
+  const partes: string[] = [];
+  if (c.porcentaje != null) partes.push(`${fmtDias(c.porcentaje)} % anual`);
+  if (c.dias != null) partes.push(`${fmtDias(c.dias)} ${unidadDias}`);
+  return partes.length ? partes.join(' · ') : null;
 }
 
 /** Campos que admite cada concepto ajustable (§11.6). */
