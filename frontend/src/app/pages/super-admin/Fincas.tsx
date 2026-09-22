@@ -429,7 +429,7 @@ export default function Fincas() {
     if (!token) return;
 
     if (finca.estado === 'INACTIVO') {
-      toast.error('Un tenant inactivo no se puede activar/suspender desde aquí');
+      toast.error('Una finca inactiva no se puede activar ni suspender desde aquí');
       return;
     }
 

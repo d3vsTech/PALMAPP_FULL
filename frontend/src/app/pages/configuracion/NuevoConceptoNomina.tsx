@@ -220,7 +220,7 @@ export default function NuevoConceptoNomina() {
     } catch (e: any) {
       const errCodigo = e?.errors?.codigo?.[0] as string | undefined;
       if (errCodigo && /already been taken|has already|ya/i.test(errCodigo)) {
-        toast.error(`El código "${formData.codigo}" ya está registrado en este tenant.`);
+        toast.error(`El código "${formData.codigo}" ya está registrado en su finca.`);
       } else if (e?.errors) {
         const primero = Object.values(e.errors).flat()[0];
         toast.error(typeof primero === 'string' ? primero : 'Error de validación');

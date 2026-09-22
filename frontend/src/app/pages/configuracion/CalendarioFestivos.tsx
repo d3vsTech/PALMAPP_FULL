@@ -111,7 +111,7 @@ export default function CalendarioFestivos({ standalone = true }: CalendarioFest
 
   const abrirEditar = (f: Festivo) => {
     if (f.origen === 'NACIONAL') {
-      toast.error('Los festivos nacionales no se pueden editar. Crea uno propio del tenant para esa fecha.');
+      toast.error('Los festivos nacionales no se pueden editar. Cree uno propio de su finca para esa fecha.');
       return;
     }
     setModo('editar');
@@ -144,9 +144,9 @@ export default function CalendarioFestivos({ standalone = true }: CalendarioFest
     } catch (err) {
       const e = err as ApiError;
       if (e.code === NominaErrorCodes.FESTIVO_NACIONAL_INMUTABLE) {
-        toast.error('No se puede modificar un festivo nacional. Crea uno propio del tenant.');
+        toast.error('No se puede modificar un festivo nacional. Cree uno propio de su finca.');
       } else if (e.code === NominaErrorCodes.FESTIVO_DUPLICADO) {
-        toast.error('Ya existe un festivo del tenant para esa fecha');
+        toast.error('Su finca ya tiene un festivo registrado para esa fecha');
       } else if (e.code === NominaErrorCodes.FESTIVO_FUERA_DE_RANGO) {
         toast.error('Año fuera del rango permitido (1984 a año actual + 5)');
       } else {
@@ -311,7 +311,7 @@ export default function CalendarioFestivos({ standalone = true }: CalendarioFest
                       <Badge variant="secondary" className="text-xs">Nacional</Badge>
                     ) : (
                       <Badge className="text-xs bg-primary/15 text-primary hover:bg-primary/20">
-                        Del tenant
+                        De su finca
                       </Badge>
                     )}
                   </span>
@@ -368,9 +368,9 @@ export default function CalendarioFestivos({ standalone = true }: CalendarioFest
               {modo === 'crear' ? 'Agregar festivo' : 'Editar festivo'}
             </DialogTitle>
             <DialogDescription>
-              Solo puedes crear festivos <strong>del tenant</strong>. Los nacionales
-              son inmutables. Para suprimir uno nacional, crea el tuyo con
-              <em> Activo</em> apagado.
+              Solo puede crear festivos <strong>propios de su finca</strong>. Los
+              nacionales no se pueden cambiar. Para que su finca opere en un festivo
+              nacional, cree el suyo en esa fecha con <em>Activo</em> apagado.
             </DialogDescription>
           </DialogHeader>
 

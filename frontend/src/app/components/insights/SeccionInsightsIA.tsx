@@ -90,7 +90,7 @@ export function SeccionInsightsIA() {
         setError(
           code === InsightErrorCodes.RATE_LIMIT_USUARIO
             ? `Estás generando insights muy rápido. Reintenta en ${sec}s.`
-            : `El tenant alcanzó el límite de la hora. Espera unos minutos.`,
+            : `Se alcanzó el límite de análisis de esta hora. Espere unos minutos.`,
         );
       } else if (code === InsightErrorCodes.ANTHROPIC_SIN_CONFIGURAR) {
         setError('El servicio de IA no está configurado. Contacta al soporte.');
@@ -162,6 +162,19 @@ export function SeccionInsightsIA() {
   const recomendaciones = (insight?.recomendaciones ?? []).filter(
     (r) => r.estado === 'PENDIENTE',
   );
+
+  /**
+   * El análisis no encontró nada de qué hablar: ni alertas, ni
+   * recomendaciones, ni hallazgos. Pasa con una finca recién creada, y en ese
+   * caso el resumen del modelo describe el problema en sus propios términos
+   * ("el snapshot del tenant 6 está vacío"), que no es lenguaje para quien
+   * administra una finca. Se decide por la estructura y no por el texto:
+   * buscar palabras dentro del resumen se rompe al primer cambio del prompt.
+   */
+  const sinHallazgos =
+    (insight?.alertas?.length ?? 0) === 0 &&
+    (insight?.recomendaciones?.length ?? 0) === 0 &&
+    (insight?.hallazgos?.length ?? 0) === 0;
 
   return (
     <div className="space-y-4">
@@ -253,7 +266,25 @@ export function SeccionInsightsIA() {
         </Card>
       )}
 
-      {estadoUi === 'listo' && insight && (
+      {estadoUi === 'listo' && insight && sinHallazgos && (
+        <Card className="border-border">
+          <CardContent className="p-6">
+            <div className="flex items-start gap-3">
+              <Info className="mt-0.5 h-5 w-5 flex-shrink-0 text-muted-foreground" />
+              <div>
+                <p className="font-medium">Todavía no hay nada que reportar</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  No encontramos novedades en el último mes. A medida que registre predios,
+                  lotes, cosecha y viajes, aquí van a aparecer las alertas y las
+                  recomendaciones para su finca.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {estadoUi === 'listo' && insight && !sinHallazgos && (
         <>
           {/* Resumen ejecutivo */}
           {insight.resumen_ejecutivo && (

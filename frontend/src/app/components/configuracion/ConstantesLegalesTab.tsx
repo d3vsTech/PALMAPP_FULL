@@ -211,7 +211,7 @@ export function ConstantesLegalesTab() {
                 className="text-lg font-semibold"
               />
               <p className="text-xs text-muted-foreground">
-                Año fiscal activo del tenant (2020 – 2100).
+                Año fiscal con el que trabaja la finca (2020 – 2100).
               </p>
             </div>
 

@@ -817,7 +817,7 @@ export default function UsuariosFinca() {
                 <p className="text-sm text-gray-400 mt-1">
                   {modalMode === 'create'
                     ? 'Asignar un usuario existente o crear uno nuevo'
-                    : 'Cambiar rol o estado dentro del tenant'}
+                    : 'Cambiar rol o estado dentro de la finca'}
                 </p>
               </div>
 

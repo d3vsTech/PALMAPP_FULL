@@ -232,7 +232,7 @@ export default function Usuarios() {
                             </Button>
                             <Button size="sm" variant="outline" onClick={() => navigate(`/usuarios/permisos/${u.id}`)}
                               className="hover:bg-blue-500/10 hover:text-blue-600 hover:border-blue-500"
-                              title={u.is_admin ? 'Permisos (Admin del tenant)' : 'Permisos'}>
+                              title={u.is_admin ? 'Permisos (Administrador de la finca)' : 'Permisos'}>
                               <Shield className="h-4 w-4" />
                             </Button>
                             <Button size="sm" variant="outline" onClick={() => handleToggleEstado(u)}

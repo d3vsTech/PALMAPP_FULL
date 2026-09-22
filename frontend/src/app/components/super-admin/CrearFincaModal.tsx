@@ -185,7 +185,7 @@ export default function CrearFincaModal({
               </h2>
               <p className="text-sm text-gray-400">
                 {isEdit
-                  ? 'Actualiza la configuración del tenant'
+                  ? 'Actualiza la configuración de la finca'
                   : 'Registra una nueva finca en el sistema'}
               </p>
             </div>
