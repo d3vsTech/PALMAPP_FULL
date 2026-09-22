@@ -466,7 +466,10 @@ export default function NuevoEditarViaje() {
                       id="prefijo"
                       className={errors.prefijo ? 'border-destructive' : ''}
                     >
-                      <SelectValue placeholder="Automático (REM-AAAA-NNN)" />
+                      {/* El campo arranca vacío y el rango es opcional (§18).
+                          El marcador decía "Automático", y eso se leía como si
+                          ya hubiera una opción escogida. */}
+                      <SelectValue placeholder="Seleccionar rango..." />
                     </SelectTrigger>
                     <SelectContent>
                       {/* El rango es opcional (§18): esta opción permite
@@ -498,7 +501,13 @@ export default function NuevoEditarViaje() {
                       )}
                     </SelectContent>
                   </Select>
-                  {errors.prefijo && <p className="text-xs text-destructive">{errors.prefijo}</p>}
+                  {errors.prefijo ? (
+                    <p className="text-xs text-destructive">{errors.prefijo}</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Opcional. Sin rango, el número lo asigna el sistema.
+                    </p>
+                  )}
                 </div>
 
                 {/* Número de Remisión — solo lectura. Lo asigna el backend:
