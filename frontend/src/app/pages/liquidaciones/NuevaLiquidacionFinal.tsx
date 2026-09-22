@@ -8,13 +8,12 @@
  *
  * Todos los valores salen del preview del backend. Aquí no se multiplica nada.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { Badge } from '../../components/ui/badge';
 import { Textarea } from '../../components/ui/textarea';
 import {
   AlertTriangle,
@@ -26,7 +25,6 @@ import {
   Info,
   Loader2,
   Save,
-  Search,
   User,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -45,6 +43,7 @@ import {
 import { descargarBlob, fmtCOP, fmtDias, fmtFecha, mensajeErrorLiquidacion } from './final/comunes';
 import { BloqueConcepto, CAMPOS_AJUSTE } from './final/BloqueConcepto';
 import { PanelDeducciones, PanelDevengadosManuales } from './final/PanelesCaptura';
+import { TablaColaboradores } from './final/TablaColaboradores';
 import { useFormularioLiquidacion } from './final/useFormularioLiquidacion';
 
 /** Orden y textos de los cinco conceptos ajustables. */
@@ -91,15 +90,9 @@ export default function NuevaLiquidacionFinal() {
   const [colaborador, setColaborador] = useState<ColaboradorLiquidable | null>(null);
   const [ficha, setFicha] = useState<FichaColaboradorLiquidacion | null>(null);
   const [cargandoFicha, setCargandoFicha] = useState(false);
+  const [idCargando, setIdCargando] = useState<number | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [descargando, setDescargando] = useState(false);
-
-  // Buscador de colaboradores.
-  const [busqueda, setBusqueda] = useState('');
-  const [resultados, setResultados] = useState<ColaboradorLiquidable[]>([]);
-  const [buscando, setBuscando] = useState(false);
-  const [mostrarResultados, setMostrarResultados] = useState(false);
-  const buscarReqRef = useRef(0);
 
   const f = useFormularioLiquidacion(
     (tipo || 'FINAL') as TipoLiquidacionFinal,
@@ -108,39 +101,37 @@ export default function NuevaLiquidacionFinal() {
   const { preview, cargandoPreview, errorPreview } = f;
   const esSimulacion = tipo === 'SIMULACION';
 
-  // Buscador con respiro: el backend limita a 30 resultados.
-  useEffect(() => {
-    const termino = busqueda.trim();
-    if (termino.length < 2) {
-      setResultados([]);
-      return;
-    }
-    const t = setTimeout(async () => {
-      const reqId = ++buscarReqRef.current;
-      setBuscando(true);
-      try {
-        const data = await liquidacionFinalApi.colaboradores(termino);
-        if (reqId !== buscarReqRef.current) return;
-        setResultados(data);
-      } catch (e) {
-        if (reqId !== buscarReqRef.current) return;
-        toast.error(mensajeErrorLiquidacion(e, 'No se pudo buscar colaboradores'));
-        setResultados([]);
-      } finally {
-        if (reqId === buscarReqRef.current) setBuscando(false);
-      }
-    }, 350);
-    return () => clearTimeout(t);
-  }, [busqueda]);
-
   const seleccionar = useCallback(
-    async (c: ColaboradorLiquidable) => {
-      setColaborador(c);
-      setBusqueda(c.nombre_completo);
-      setMostrarResultados(false);
+    async (empleadoId: number) => {
+      setIdCargando(empleadoId);
       setCargandoFicha(true);
       try {
-        const data = await liquidacionFinalApi.ficha(c.id);
+        const data = await liquidacionFinalApi.ficha(empleadoId);
+
+        // El estado de cuenta sí se puede consultar con una liquidación activa
+        // (§11.9); la liquidación real no, porque es una por contrato.
+        if (!esSimulacion && data.liquidacion_activa) {
+          toast.error(
+            `Este colaborador ya tiene la liquidación ${data.liquidacion_activa.numero_comprobante}. ` +
+              'Anúlela si necesita rehacerla.',
+          );
+          return;
+        }
+
+        setColaborador({
+          id: data.empleado.id,
+          nombre_completo: data.empleado.nombre_completo,
+          documento: data.empleado.documento,
+          cargo: data.empleado.cargo,
+          modalidad_pago: data.empleado.modalidad_pago,
+          salario_base: data.empleado.salario_contractual ?? null,
+          fecha_ingreso: data.empleado.fecha_ingreso ?? null,
+          fecha_retiro: data.empleado.fecha_retiro,
+          estado: true,
+          contrato_vigente: null,
+          liquidacion_activa: data.liquidacion_activa,
+          elegible: true,
+        });
         setFicha(data);
         f.precargarDesdeFicha(data);
       } catch (e) {
@@ -148,9 +139,10 @@ export default function NuevaLiquidacionFinal() {
         setFicha(null);
       } finally {
         setCargandoFicha(false);
+        setIdCargando(null);
       }
     },
-    [f],
+    [f, esSimulacion],
   );
 
   // Modo edición: se carga el borrador, luego su ficha (préstamos y motivos)
@@ -187,7 +179,6 @@ export default function NuevaLiquidacionFinal() {
           liquidacion_activa: null,
           elegible: true,
         });
-        setBusqueda(guardada.empleado.nombre_completo);
         setFicha(fichaGuardada);
         precargar(fichaGuardada);
         hidratar(guardada);
@@ -370,69 +361,13 @@ export default function NuevaLiquidacionFinal() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6 p-6">
-          <div className="relative space-y-2">
-            <Label htmlFor="buscar-colaborador">
-              Buscar <span className="text-destructive">*</span>
-            </Label>
-            <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="buscar-colaborador"
-                value={busqueda}
-                disabled={modoEdicion}
-                onChange={(e) => {
-                  setBusqueda(e.target.value);
-                  setMostrarResultados(true);
-                }}
-                onFocus={() => setMostrarResultados(true)}
-                placeholder="Nombre, cédula o cargo..."
-                className="pl-9"
-              />
-              {buscando && (
-                <Loader2 className="absolute right-3 top-3 h-4 w-4 animate-spin text-muted-foreground" />
-              )}
-            </div>
-
-            {!modoEdicion && mostrarResultados && busqueda.trim().length >= 2 && (
-              <Card className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto shadow-lg">
-                <CardContent className="p-0">
-                  {resultados.length === 0 && !buscando ? (
-                    <p className="p-4 text-center text-sm text-muted-foreground">
-                      Ningún colaborador coincide
-                    </p>
-                  ) : (
-                    resultados.map((c) => {
-                      const bloqueado = !c.elegible || Boolean(c.liquidacion_activa);
-                      return (
-                        <button
-                          key={c.id}
-                          type="button"
-                          disabled={bloqueado}
-                          onClick={() => void seleccionar(c)}
-                          className="w-full border-b border-border p-3 text-left transition-colors last:border-0 hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <div>
-                              <span className="text-sm font-medium">{c.nombre_completo}</span>
-                              <p className="text-xs text-muted-foreground">
-                                CC {c.documento}
-                                {c.cargo ? ` · ${c.cargo}` : ''}
-                              </p>
-                            </div>
-                            {c.liquidacion_activa && (
-                              <Badge variant="outline" className="shrink-0 text-xs">
-                                Ya liquidado ({c.liquidacion_activa.numero_comprobante})
-                              </Badge>
-                            )}
-                          </div>
-                        </button>
-                      );
-                    })
-                  )}
-                </CardContent>
-              </Card>
-            )}
-          </div>
+          <TablaColaboradores
+            seleccionado={colaborador}
+            onSeleccionar={(empleadoId) => void seleccionar(empleadoId)}
+            deshabilitado={modoEdicion}
+            etiquetaAccion={esSimulacion ? 'Consultar' : 'Liquidar'}
+            cargandoId={idCargando}
+          />
 
           {cargandoFicha && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
