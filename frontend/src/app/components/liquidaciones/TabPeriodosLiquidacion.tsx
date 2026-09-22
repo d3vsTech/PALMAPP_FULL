@@ -18,7 +18,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../ui/alert-dialog';
 import {
-  Plus, FileText, Calculator, Eye, Search, Filter, Trash2,
+  Plus, FileText, Calculator, Eye, Search, Filter, Trash2, FileSpreadsheet,
   Users, AlertTriangle, PiggyBank, Percent, Gift, CheckCircle, Clock, Loader2,
 } from 'lucide-react';
 import StatusBadge from '../common/StatusBadge';
@@ -222,10 +222,25 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
           <h2>{txt.titulo}</h2>
           <p className="text-muted-foreground mt-1">{txt.subtitulo}</p>
         </div>
-        <Button onClick={() => navigate(`${txt.ruta}/nueva`)} size="lg" className="gap-2">
-          <Plus className="h-5 w-5" />
-          {txt.botonNuevo}
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          {/* El cargue del histórico (§12) entra por cesantías: el mismo archivo
+              crea el período de intereses del año. */}
+          {tipo === 'CESANTIAS' && (
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={() => navigate('/liquidaciones/cesantias/carga-historico')}
+              className="gap-2"
+            >
+              <FileSpreadsheet className="h-5 w-5" />
+              Cargar años anteriores
+            </Button>
+          )}
+          <Button onClick={() => navigate(`${txt.ruta}/nueva`)} size="lg" className="gap-2">
+            <Plus className="h-5 w-5" />
+            {txt.botonNuevo}
+          </Button>
+        </div>
       </div>
 
       {/* Alerta vencimiento */}
@@ -410,6 +425,15 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
                         <td className="p-4">
                           <div className="flex items-center gap-2">
                             <StatusBadge status={periodo.estado} />
+                            {periodo.origen === 'HISTORICO' && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] bg-muted/50 text-muted-foreground border-border"
+                                title="Cargado desde un archivo de Excel: no se liquida ni se reabre"
+                              >
+                                Histórico
+                              </Badge>
+                            )}
                             {periodo.vencida && (
                               <Badge variant="destructive" className="text-[10px]">Vencida</Badge>
                             )}
@@ -459,7 +483,30 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
                         </td>
                         <td className="p-4">
                           <div className="flex gap-2 justify-end">
-                            {periodo.estado === 'BORRADOR' ? (
+                            {periodo.origen === 'HISTORICO' ? (
+                              /* Un histórico solo se ve y se elimina; liquidar,
+                                 reabrir o pagar responden 409 PERIODO_HISTORICO. */
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => navigate(`${txt.ruta}/${periodo.id}`)}
+                                  className="gap-1 hover:bg-primary/10 hover:text-primary hover:border-primary"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                  Ver
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setAEliminar(periodo)}
+                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  title="Eliminar el histórico de este año"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </>
+                            ) : periodo.estado === 'BORRADOR' ? (
                               <>
                                 <Button
                                   size="sm"
@@ -531,7 +578,9 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
           <AlertDialogHeader>
             <AlertDialogTitle>¿Eliminar el período "{aEliminar?.descripcion}"?</AlertDialogTitle>
             <AlertDialogDescription>
-              Se borra el borrador con sus colaboradores agregados. Esta acción no se puede deshacer.
+              {aEliminar?.origen === 'HISTORICO'
+                ? 'Se borra todo lo que se cargó de ese año, incluidos los intereses del mismo archivo. Para corregirlo hay que volver a subir el Excel. Esta acción no se puede deshacer.'
+                : 'Se borra el borrador con sus colaboradores agregados. Esta acción no se puede deshacer.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -1,5 +1,8 @@
 /**
- * Diálogo de importación masiva de colaboradores.
+ * Importación masiva de colaboradores. Es una pantalla y no un diálogo:
+ * el paso de revisión muestra una tabla con una fila por colaborador y eso
+ * no cabe en una ventana flotante.
+ *
  * Flujo:
  *   1. PREVIEW   → parseamos el Excel y mostramos lo que se va a subir
  *                  para que el usuario confirme.
@@ -8,16 +11,15 @@
  *   3. RESULTADO → stats y filas con error con descarga CSV.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router';
 import * as XLSX from 'xlsx';
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
-} from '../ui/dialog';
-import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
-import { Progress } from '../ui/progress';
+import { Card, CardContent } from '../../components/ui/card';
+import { Button } from '../../components/ui/button';
+import { Badge } from '../../components/ui/badge';
+import { Progress } from '../../components/ui/progress';
 import {
   Loader2, CheckCircle2, AlertTriangle, XCircle, Upload, Download,
-  FileSpreadsheet, X, FileText,
+  FileSpreadsheet, X, FileText, ArrowLeft,
 } from 'lucide-react';
 import {
   colaboradoresApi,
@@ -30,12 +32,6 @@ import { toast } from 'sonner';
 const POLL_INTERVAL_MS = 4000;
 const MAX_IMPORT_SIZE_MB = 5;
 
-interface Props {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  /** Callback al cerrar si hubo al menos un colaborador creado. */
-  onFinalizado?: () => void;
-}
 
 type Fase = 'intro' | 'preview' | 'uploading' | 'resultado';
 
@@ -79,9 +75,8 @@ interface FilaPreview {
   contacto_emergencia_telefono: string;
 }
 
-export default function ImportarColaboradoresDialog({
-  open, onOpenChange, onFinalizado,
-}: Props) {
+export default function ImportarColaboradores() {
+  const navigate = useNavigate();
   const pollingRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -92,21 +87,17 @@ export default function ImportarColaboradoresDialog({
   const [enviando, setEnviando] = useState(false);
   const [estado, setEstado] = useState<ImportacionColaboradores | null>(null);
 
-  const huboExitos = !!estado && estado.filas_exitosas > 0;
 
-  // ── Reset al cerrar ────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!open) {
+  // ── Limpieza al salir ────────────────────────────────────────────────────────
+  // Una pantalla nace limpia; lo único que hay que soltar al salir es el
+  // polling, que si no sigue preguntando por una importación que ya nadie ve.
+  useEffect(
+    () => () => {
       if (pollingRef.current) window.clearInterval(pollingRef.current);
       pollingRef.current = null;
-      setFase('intro');
-      setFile(null);
-      setFilas([]);
-      setErrorParse(null);
-      setEnviando(false);
-      setEstado(null);
-    }
-  }, [open]);
+    },
+    [],
+  );
 
   // ── Picker de archivo (botón "Seleccionar archivo" en la fase intro) ───────
   const onArchivoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -218,7 +209,7 @@ export default function ImportarColaboradoresDialog({
         setErrorParse(err instanceof Error ? err.message : 'No se pudo leer el Excel');
       }
     }).catch(() => setErrorParse('No se pudo leer el archivo'));
-  }, [open, file]);
+  }, [file]);
 
   // ── Subida + polling ──────────────────────────────────────────────────────
   const confirmar = async () => {
@@ -275,8 +266,8 @@ export default function ImportarColaboradoresDialog({
   };
 
   const cerrar = () => {
-    onOpenChange(false);
-    if (huboExitos) onFinalizado?.();
+    if (pollingRef.current) window.clearInterval(pollingRef.current);
+    navigate('/colaboradores');
   };
 
   const descargarErrores = () => {
@@ -297,29 +288,38 @@ export default function ImportarColaboradoresDialog({
   const enProgreso = fase === 'uploading';
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!enProgreso || !next) onOpenChange(next); }}>
-      <DialogContent
-        className={
-          fase === 'intro'
-            ? 'max-w-md p-0 gap-0 flex flex-col overflow-hidden'
-            : 'max-w-5xl w-[95vw] max-h-[85vh] p-0 gap-0 flex flex-col overflow-hidden'
-        }
+    <div className="space-y-6">
+      {/* Mientras sube no se puede salir: cortar a mitad dejaría parte de los
+          colaboradores creados y parte no, sin forma de saber cuáles. */}
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={enProgreso}
+        onClick={cerrar}
+        className="gap-2"
       >
-        <DialogHeader className="p-6 pb-3 border-b border-border shrink-0">
-          <DialogTitle className="flex items-center gap-2">
-            <FileSpreadsheet className="h-5 w-5 text-primary" />
+        <ArrowLeft className="h-4 w-4" />
+        Volver a Colaboradores
+      </Button>
+
+      <div className="flex items-center gap-3">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+          <FileSpreadsheet className="h-6 w-6 text-primary" />
+        </div>
+        <div>
+          <h1 className="text-3xl font-bold text-primary">Importar colaboradores</h1>
+          <p className="mt-0.5 text-muted-foreground">
             {fase === 'intro'
-              ? 'Importar Colaboradores desde Excel'
-              : 'Importación masiva de colaboradores'}
-          </DialogTitle>
-          <DialogDescription>
-            {fase === 'intro'
-              ? 'Carga un archivo Excel con la información de los colaboradores'
+              ? 'Cargue un archivo de Excel con la información de los colaboradores'
               : file
-              ? <>Archivo: <strong>{file.name}</strong></>
-              : 'Selecciona un archivo Excel para empezar.'}
-          </DialogDescription>
-        </DialogHeader>
+                ? <>Archivo: <strong>{file.name}</strong></>
+                : 'Seleccione un archivo de Excel para empezar'}
+          </p>
+        </div>
+      </div>
+
+      <Card className="border-border">
+        <CardContent className="flex flex-col p-0">
 
         {/* input file oculto, lo dispara el botón "Seleccionar archivo" */}
         <input
@@ -356,8 +356,9 @@ export default function ImportarColaboradoresDialog({
             onCerrar={cerrar}
           />
         )}
-      </DialogContent>
-    </Dialog>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
@@ -373,45 +374,49 @@ function VistaIntro({
 }) {
   return (
     <>
-      <div className="p-6 space-y-5">
-        {/* Card de descargar plantilla */}
-        <div className="rounded-xl border border-border bg-muted/30 p-4 flex items-start justify-between gap-4">
+      {/* Dos pasos en paralelo: la plantilla a la izquierda, el archivo a la
+          derecha. En pantalla angosta se apilan. */}
+      <div className="grid gap-4 p-6 md:grid-cols-2">
+        {/* Paso 1: descargar la plantilla */}
+        <div className="flex flex-col justify-between gap-4 rounded-xl border border-border bg-muted/30 p-4">
           <div className="flex items-start gap-3">
-            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
               <FileText className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <p className="font-semibold text-sm">¿No tienes una plantilla?</p>
+              <p className="text-sm font-semibold">¿No tienes una plantilla?</p>
               <p className="text-sm text-muted-foreground">
-                Descarga nuestra plantilla con el formato correcto
+                Descárgala con el formato correcto y llena una fila por colaborador.
               </p>
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={onDescargarPlantilla} className="gap-2 shrink-0">
-            <Download className="h-4 w-4" /> Descargar Plantilla
+          <Button variant="outline" onClick={onDescargarPlantilla} className="w-full gap-2">
+            <Download className="h-4 w-4" /> Descargar plantilla
           </Button>
         </div>
 
-        {/* Selector de archivo */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Archivo Excel (.xlsx, .xls)</label>
-          <Button
-            variant="outline"
-            onClick={onSeleccionarArchivo}
-            className="w-full gap-2 h-12 border-dashed"
-          >
-            <Upload className="h-4 w-4" />
-            Seleccionar archivo
+        {/* Paso 2: elegir el archivo */}
+        <div className="flex flex-col justify-between gap-4 rounded-xl border border-dashed border-border p-4">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+              <Upload className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold">Ya tienes el archivo</p>
+              <p className="text-sm text-muted-foreground">
+                Formatos .xlsx o .xls. Antes de guardar nada podrá revisar la lista.
+              </p>
+            </div>
+          </div>
+          <Button onClick={onSeleccionarArchivo} className="w-full gap-2">
+            <Upload className="h-4 w-4" /> Seleccionar archivo
           </Button>
         </div>
       </div>
 
-      <div className="shrink-0 border-t border-border p-4 flex justify-end gap-2 bg-background">
+      <div className="flex shrink-0 justify-end border-t border-border bg-background p-4">
         <Button variant="outline" onClick={onCancelar} className="gap-2">
           <X className="h-4 w-4" /> Cancelar
-        </Button>
-        <Button onClick={onSeleccionarArchivo} className="gap-2">
-          <Upload className="h-4 w-4" /> Importar
         </Button>
       </div>
     </>

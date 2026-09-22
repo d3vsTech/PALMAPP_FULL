@@ -51,7 +51,10 @@ export default function DesprendibleFilaCard({
   const esCesantias = tipo === 'CESANTIAS';
   const esIntereses = tipo === 'INTERESES_CESANTIAS';
   // Prima comparte con cesantías la base salarial; intereses es el distinto.
-  const conBaseSalarial = !esIntereses;
+  // Un registro histórico (§12) tampoco tiene base: el valor se consignó fuera
+  // del sistema y la base de la época no quedó registrada.
+  const esHistorico = detalle?.historico === true;
+  const conBaseSalarial = !esIntereses && !esHistorico;
   const col = fila.empleado;
   const girada = fila.estado_pago !== 'PENDIENTE';
 
@@ -113,7 +116,14 @@ export default function DesprendibleFilaCard({
             )}
           </div>
 
-          {conBaseSalarial ? (
+          {esHistorico ? (
+            <div className="px-5 pb-4">
+              <p className="text-sm text-muted-foreground">
+                Valor consignado fuera del sistema y registrado desde un archivo. La base
+                salarial de ese año no quedó registrada; del sistema solo salen los días.
+              </p>
+            </div>
+          ) : conBaseSalarial ? (
             <>
               {/* El desglose viene del comprobante legal; sin él se muestra
                   la base prestacional que ya trae el período. */}

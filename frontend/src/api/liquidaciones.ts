@@ -31,6 +31,13 @@ function toQuery(params?: Record<string, unknown>): string {
 
 export type TipoLiquidacion = 'CESANTIAS' | 'INTERESES_CESANTIAS' | 'PRIMA';
 export type EstadoLiquidacionPeriodo = 'BORRADOR' | 'CERRADA';
+/**
+ * PR-L11. `SISTEMA` = liquidado por el wizard. `HISTORICO` = cargado desde
+ * Excel (§12): nace CERRADA, ya consignado, sin base salarial ni hash, y solo
+ * admite ver, desprendibles, eliminar y quitar filas. Todo lo demás responde
+ * 409 PERIODO_HISTORICO, así que esos botones no se deben mostrar.
+ */
+export type OrigenPeriodo = 'SISTEMA' | 'HISTORICO';
 /** Derivado del período: NA en borrador; según filas consignadas después. */
 export type EstadoPagoPeriodo = 'NA' | 'PENDIENTE' | 'PARCIAL' | 'COMPLETO';
 export type EstadoPagoFila = 'PENDIENTE' | 'CONSIGNADO' | 'PAGADO';
@@ -54,6 +61,8 @@ export interface DescriptorPeriodo {
   fecha_inicio: string;
   fecha_fin: string;
   estado: EstadoLiquidacionPeriodo;
+  /** Desde v1.4. */
+  origen?: OrigenPeriodo;
   total_colaboradores: number;
 }
 
@@ -72,6 +81,8 @@ export interface LiquidacionPeriodoItem {
   /** Último día hábil anterior o igual a la legal. La que se pinta. */
   fecha_limite_operativa: string;
   estado: EstadoLiquidacionPeriodo;
+  /** PR-L11. Un HISTORICO llega CERRADA, COMPLETO y sin vencer. */
+  origen: OrigenPeriodo;
   estado_pago: EstadoPagoPeriodo;
   total_colaboradores: number;
   /** Promedio de dias_computados de las filas; null en BORRADOR. */
@@ -431,7 +442,12 @@ export interface DesprendibleLiquidacion {
   base: PreviewFilaLiquidacion['base'];
   resultado: PreviewFilaLiquidacion['resultado'];
   origen?: OrigenIntereses;
-  metodo_liquidacion: { texto: string; normas: string[]; parametros: Record<string, unknown> };
+  /**
+   * PR-L11. Fila cargada desde Excel: la base viene en 0 porque la de la
+   * época no se registró, así que la vista NO debe pintarla.
+   */
+  historico?: boolean;
+  metodo_liquidacion: { texto: string; normas: string[]; parametros: Record<string, unknown> | null };
   fuentes: Array<Record<string, unknown>>;
   advertencias: AdvertenciaLiquidacion[];
   pago: PagoFilaLiquidacion;
@@ -474,6 +490,8 @@ export const liquidacionesApi = {
     /** Filtra las primas por semestre. */
     semestre?: 1 | 2;
     estado?: EstadoLiquidacionPeriodo;
+    /** Separa los del wizard de los cargados desde Excel (§12). */
+    origen?: OrigenPeriodo;
     q?: string;
     per_page?: number;
     page?: number;
@@ -508,9 +526,16 @@ export const liquidacionesApi = {
   ) =>
     apiClient.put<{ message: string; data: LiquidacionPeriodoDetalle }>(`${BASE}/${id}`, payload, T),
 
-  /** §2.6 — Borra el borrador con sus filas. */
+  /**
+   * §2.6 — Borra el borrador con sus filas. En un período HISTORICO se
+   * admite aunque esté CERRADA y arrastra su período de intereses histórico:
+   * `eliminados[]` los trae a los dos, el hijo primero.
+   */
   eliminar: (id: number) =>
-    apiClient.delete<{ message: string }>(`${BASE}/${id}`, T),
+    apiClient.delete<{
+      message: string;
+      data?: { eliminados: DescriptorPeriodo[] };
+    }>(`${BASE}/${id}`, T),
 
   /** §3.1 — Elegibles + excluidos con motivo. */
   colaboradoresDisponibles: (
@@ -539,9 +564,15 @@ export const liquidacionesApi = {
       omitidos: OmitidoLiquidacion[];
     }>(`${BASE}/${id}/colaboradores`, body, T),
 
-  /** §3.3 — Quitar una fila del borrador. */
+  /**
+   * §3.3 — Quitar una fila del borrador. En un HISTORICO borra también la
+   * fila de intereses histórica del mismo cargue, y por eso devuelve la lista.
+   */
   quitarColaborador: (id: number, filaId: number) =>
-    apiClient.delete<{ message: string }>(`${BASE}/${id}/colaboradores/${filaId}`, T),
+    apiClient.delete<{
+      message: string;
+      data?: { filas_eliminadas: Array<{ id: number; tipo: TipoLiquidacion; periodo_id: number }> };
+    }>(`${BASE}/${id}/colaboradores/${filaId}`, T),
 
   /** §4.1 — Calcula todas las filas sin persistir. Devuelve `calculo_hash`. */
   preview: (id: number) =>
@@ -608,6 +639,8 @@ export const LiquidacionesErrorCodes = {
   LIQUIDACION_COBERTURA_INCOMPLETA: 'LIQUIDACION_COBERTURA_INCOMPLETA',
   LIQUIDACION_CON_PAGOS: 'LIQUIDACION_CON_PAGOS',
   LIQUIDACION_PERIODO_REFERENCIADO: 'LIQUIDACION_PERIODO_REFERENCIADO',
+  /** PR-L11: se intentó editar, liquidar, reabrir o pagar un período histórico. */
+  PERIODO_HISTORICO: 'PERIODO_HISTORICO',
   PERIODO_CESANTIAS_REQUERIDO: 'PERIODO_CESANTIAS_REQUERIDO',
   COLABORADOR_EN_LIQUIDACION_SOLAPADA: 'COLABORADOR_EN_LIQUIDACION_SOLAPADA',
   LIQUIDACION_FILA_NO_ENCONTRADA: 'LIQUIDACION_FILA_NO_ENCONTRADA',

@@ -15,7 +15,6 @@ import {
 import { colaboradoresApi, buildAvatarUrl } from '../../../api/colaboradores';
 import { sortByFirstName } from '../../utils/personas';
 import { toast } from 'sonner';
-import ImportarColaboradoresDialog from '../../components/colaboradores/ImportarColaboradoresDialog';
 
 export default function Colaboradores() {
   const navigate = useNavigate();
@@ -29,7 +28,6 @@ export default function Colaboradores() {
 
   // Importación masiva — el dialog ahora maneja el picker de archivo
   // internamente (incluye botón de "Descargar Plantilla").
-  const [importOpen, setImportOpen] = useState(false);
   const searchMounted = useRef(false);
 
   const cargar = useCallback(async (search?: string) => {
@@ -98,13 +96,6 @@ export default function Colaboradores() {
 
   return (
     <div className="space-y-8">
-      {/* Importación masiva */}
-      <ImportarColaboradoresDialog
-        open={importOpen}
-        onOpenChange={setImportOpen}
-        onFinalizado={() => cargar(searchTerm)}
-      />
-
       {/* Alert Dialog eliminar */}
       <AlertDialog open={alertDialog} onOpenChange={setAlertDialog}>
         <AlertDialogContent>
@@ -186,8 +177,8 @@ export default function Colaboradores() {
               className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20">
               <Plus className="h-5 w-5" /> Nuevo Colaborador
             </Button>
-            <Button onClick={() => setImportOpen(true)}
-              className="gap-2 bg-accent hover:bg-accent/90 shadow-lg shadow-accent/20">
+            <Button onClick={() => navigate('/colaboradores/importar')}
+              className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20">
               <FileSpreadsheet className="h-5 w-5" /> Importar Colaboradores
             </Button>
           </div>
