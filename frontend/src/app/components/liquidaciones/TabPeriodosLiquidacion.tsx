@@ -223,17 +223,25 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
           <p className="text-muted-foreground mt-1">{txt.subtitulo}</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          {/* El cargue del histórico (§12) entra por cesantías: el mismo archivo
-              crea el período de intereses del año. */}
-          {tipo === 'CESANTIAS' && (
+          {/* Cargue del histórico. Por cesantías (§12) entra el año completo,
+              porque el mismo archivo crea el período de intereses; por prima
+              (§13) entra un semestre, que es su unidad. La pestaña de intereses
+              no lo ofrece: sus datos llegan con el archivo de cesantías. */}
+          {(tipo === 'CESANTIAS' || esPrima) && (
             <Button
               variant="outline"
               size="lg"
-              onClick={() => navigate('/liquidaciones/cesantias/carga-historico')}
+              onClick={() =>
+                navigate(
+                  esPrima
+                    ? '/liquidaciones/prima/carga-historico'
+                    : '/liquidaciones/cesantias/carga-historico',
+                )
+              }
               className="gap-2"
             >
               <FileSpreadsheet className="h-5 w-5" />
-              Cargar años anteriores
+              {esPrima ? 'Cargar semestres anteriores' : 'Cargar años anteriores'}
             </Button>
           )}
           <Button onClick={() => navigate(`${txt.ruta}/nueva`)} size="lg" className="gap-2">
