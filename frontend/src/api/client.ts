@@ -116,6 +116,10 @@ async function rawRequest(
   const doFetch = () =>
     fetch(`${BASE_URL}${path}`, {
       ...fetchOptions,
+      // Ninguna respuesta del API se guarda en la caché del navegador: los
+      // datos cambian a cada rato y servir una copia vieja hace ver una
+      // pantalla desactualizada sin que nada lo indique.
+      cache: 'no-store',
       headers: {
         ...buildHeaders(requiresTenant, isFormData),
         ...(fetchOptions.headers ?? {}),

@@ -68,7 +68,7 @@ export default function CrearEditarLote() {
         const res = await lotesApi.crear(body);
         toast.success(res.message ?? 'Lote creado');
       }
-      navigate('/plantacion');
+      navigate('/plantacion', { state: { recargar: true } });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al guardar');
     } finally { setLoading(false); }

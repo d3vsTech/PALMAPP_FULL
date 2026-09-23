@@ -116,7 +116,12 @@ async function doFetch(
   const authToken = token ?? getToken();
   const h = buildHeaders(opciones.body ?? null);
   if (authToken) h['Authorization'] = `Bearer ${authToken}`;
-  return fetch(buildUrl(endpoint), { ...opciones, headers: h });
+  // `no-store`: ninguna respuesta del API se guarda en la caché del navegador.
+  // Sin esto, un GET al mismo path puede servirse de la caché del dispositivo
+  // y la pantalla muestra lo que había antes de guardar. Es lo que hacía que
+  // un predio o un lote recién creado no apareciera en unos equipos y sí en
+  // otros: depende de qué tenga cada navegador guardado.
+  return fetch(buildUrl(endpoint), { ...opciones, cache: 'no-store', headers: h });
 }
 
 export async function fetchConToken(

@@ -37,6 +37,21 @@ function toQuery(p?: Record<string, unknown>): string {
 function get<T>(path: string, params?: Record<string, unknown>): Promise<T> {
   return requestConToken<T>(`/api/v1/tenant${path}${toQuery(params)}`, { method: 'GET' }, tkn());
 }
+
+/**
+ * Sello anti-caché para la relectura que sigue a un guardado.
+ *
+ * El backend cachea 60 s el listado de predios y sus totales, indexados por la
+ * query. Justo después de crear un predio o un lote esa copia todavía no
+ * incluye lo nuevo, y la pantalla lo muestra como si no se hubiera guardado.
+ * Un parámetro distinto es una clave de caché distinta: obliga a leer la base.
+ *
+ * Se usa SOLO al volver de guardar. En la navegación normal la caché hace su
+ * trabajo y no hay nada que saltarse.
+ */
+function sello(fresco?: boolean): Record<string, number> | undefined {
+  return fresco ? { _r: Date.now() } : undefined;
+}
 function post<T>(path: string, body: unknown): Promise<T> {
   return requestConToken<T>(`/api/v1/tenant${path}`, { method: 'POST', body: JSON.stringify(body) }, tkn());
 }
@@ -121,13 +136,13 @@ export interface PredioWizardInitResponse {
 }
 
 export const prediosApi = {
-  listar: (p?: { search?: string; estado?: boolean; per_page?: number; page?: number }) =>
-    get<{ data: any[]; meta: any }>('/predios', p as any),
+  listar: (p?: { search?: string; estado?: boolean; per_page?: number; page?: number }, fresco?: boolean) =>
+    get<{ data: any[]; meta: any }>('/predios', { ...(p ?? {}), ...sello(fresco) } as any),
 
   /** §1.1.1 Totales globales del tenant. Endpoint liviano para las tarjetas
    *  de resumen del index. Usar **junto** a `listar` (no lo reemplaza). */
-  totales: () =>
-    get<{ data: PrediosTotales }>('/predios/totales'),
+  totales: (fresco?: boolean) =>
+    get<{ data: PrediosTotales }>('/predios/totales', sello(fresco)),
 
   ver: (id: number) =>
     get<{ data: any }>(`/predios/${id}`),
@@ -188,8 +203,8 @@ export const lotesApi = {
   listar: (p?: { search?: string; predio_id?: number; estado?: boolean; per_page?: number; page?: number }) =>
     get<{ data: any[]; meta: any }>('/lotes', p as any),
 
-  ver: (id: number) =>
-    get<{ data: any }>(`/lotes/${id}`),
+  ver: (id: number, fresco?: boolean) =>
+    get<{ data: any }>(`/lotes/${id}`, sello(fresco)),
 
   crear: (b: { predio_id: number; nombre: string; fecha_siembra?: string; hectareas_sembradas?: number; semillas_ids?: number[] }) =>
     post<{ message: string; data: any }>('/lotes', b),
@@ -327,8 +342,8 @@ export const palmasApi = {
     estado?: boolean;
     per_page?: number;
     page?: number;
-  }) => {
-    const params: Record<string, unknown> = { ...p };
+  }, fresco?: boolean) => {
+    const params: Record<string, unknown> = { ...p, ...sello(fresco) };
     if (p?.sin_linea) params.sin_linea = '1';
     else delete params.sin_linea;
     return get<{ data: any[]; meta: any }>('/palmas', params);
@@ -380,8 +395,8 @@ export const palmasApi = {
  *  - §5.5 DELETE: palmas quedan con linea_id=null, NO se eliminan
  */
 export const lineasApi = {
-  listar: (p?: { sublote_id?: number; search?: string; estado?: boolean; per_page?: number; page?: number }) =>
-    get<{ data: any[]; meta?: any }>('/lineas', p as any),
+  listar: (p?: { sublote_id?: number; search?: string; estado?: boolean; per_page?: number; page?: number }, fresco?: boolean) =>
+    get<{ data: any[]; meta?: any }>('/lineas', { ...(p ?? {}), ...sello(fresco) } as any),
 
   ver: (id: number) =>
     get<{ data: any }>(`/lineas/${id}`),

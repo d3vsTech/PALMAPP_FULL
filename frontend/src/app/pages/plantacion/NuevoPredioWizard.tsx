@@ -1105,7 +1105,7 @@ export default function NuevoPredioWizard() {
 
         // Si vino del botón "Finalizar" y todo salió bien, salimos al listado.
         if (redirigir && fallosBatch === 0) {
-          navigate('/plantacion');
+          navigate('/plantacion', { state: { recargar: true } });
         }
         return;
       }
@@ -1181,7 +1181,7 @@ export default function NuevoPredioWizard() {
       }
 
       toast.success(`Plantación creada: ${lotes.length} lote(s), ${sublotes.length} sublote(s), ${lineas.length} línea(s)`);
-      navigate('/plantacion');
+      navigate('/plantacion', { state: { recargar: true } });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al guardar');
     } finally { setGuardando(false); }

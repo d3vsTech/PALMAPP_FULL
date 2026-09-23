@@ -7,7 +7,7 @@
  * §5.1 GET /lineas?sublote_id=X
  * §5.5 DELETE /lineas/{id}
  */
-import { useState, useEffect, useCallback, memo } from 'react';
+import { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { lotesApi, sublotesApi, palmasApi, lineasApi } from '../../../api/plantacion';
 import { toast } from 'sonner';
+import { useRefrescoAlVolver, useVengoDeGuardar, type EstadoNavegacion } from './refresco';
 
 const PER_PAGE = 50;
 
@@ -216,48 +217,72 @@ export default function LoteDetalle() {
   const [elimItem, setElimItem] = useState<any>(null);
   const [elimOpen, setElimOpen] = useState(false);
 
-  const cargar = useCallback(async () => {
+  const vengoDeGuardar = useVengoDeGuardar(location);
+  const reqRef = useRef(0);
+
+  /**
+   * `fresco` se salta las cachés; se usa al volver de crear un sublote, una
+   * línea o palmas. `silencioso` no toca el spinner, para que refrescar en
+   * segundo plano no borre de la pantalla lo que ya está abierto.
+   */
+  const cargar = useCallback(async (opts?: { fresco?: boolean; silencioso?: boolean }) => {
     if (!id) return;
-    setLoading(true);
+    // Igual que en el índice: la respuesta que llegue tarde no pisa a la
+    // más nueva. Aquí importa más, porque cada carga dispara una petición
+    // por sublote y en un equipo lento se cruzan con facilidad.
+    const reqId = ++reqRef.current;
+    if (!opts?.silencioso) setLoading(true);
     try {
-      const res = await lotesApi.ver(Number(id));
+      const res = await lotesApi.ver(Number(id), opts?.fresco);
       const d   = res.data;
-      setLote(d);
       const subs: any[] = d.sublotes ?? [];
-      setSublotes(subs);
 
       const lmap: Record<string, any[]> = {};
       await Promise.all(subs.map(async (s: any) => {
         try {
-          const lr = await lineasApi.listar({ sublote_id: Number(s.id), per_page: 100 });
+          const lr = await lineasApi.listar({ sublote_id: Number(s.id), per_page: 100 }, opts?.fresco);
           lmap[String(s.id)] = lr.data ?? [];
         } catch {
           lmap[String(s.id)] = [];
         }
       }));
+
+      if (reqId !== reqRef.current) return;
+      setLote(d);
+      setSublotes(subs);
       setLineasMap(lmap);
       setPalmasPag({});
     } catch (err) {
+      if (reqId !== reqRef.current) return;
       toast.error(err instanceof Error ? err.message : 'Error al cargar lote');
     } finally {
-      setLoading(false);
+      if (reqId === reqRef.current) setLoading(false);
     }
   }, [id]);
 
-  useEffect(() => { cargar(); }, [cargar]);
+  useEffect(() => { cargar({ fresco: vengoDeGuardar }); }, [cargar, vengoDeGuardar]);
+
+  const refrescar = useCallback(
+    // Sin `fresco`, igual que en el índice: volver a la pestaña usa la caché.
+    // Aquí pesa más, porque cada carga dispara una petición por sublote.
+    () => { cargar({ silencioso: true }); },
+    [cargar],
+  );
+  useRefrescoAlVolver(refrescar);
 
   useEffect(() => {
     if (loading) return;
-    const autoOpen = location.state?.openSubloteId;
+    const autoOpen = (location.state as EstadoNavegacion | null)?.openSubloteId;
     if (!autoOpen) return;
     const subId = String(autoOpen);
     setSubloteOpen(subId);
     const lineas      = lineasMap[subId] ?? [];
     const tieneLineas = lineas.length > 0;
+    // Se viene de crear algo en este sublote: las palmas se leen sin caché.
     if (!tieneLineas) {
-      cargarPalmas(`sub_${subId}`, { sublote_id: Number(subId) });
+      cargarPalmas(`sub_${subId}`, { sublote_id: Number(subId) }, 1, vengoDeGuardar);
     } else {
-      cargarPalmas(`sinlinea_${subId}`, { sublote_id: Number(subId), sin_linea: true });
+      cargarPalmas(`sinlinea_${subId}`, { sublote_id: Number(subId), sin_linea: true }, 1, vengoDeGuardar);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, lineasMap]);
@@ -265,14 +290,15 @@ export default function LoteDetalle() {
   const cargarPalmas = useCallback(async (
     key: string,
     params: { sublote_id?: number; linea_id?: number; sin_linea?: boolean },
-    page = 1
+    page = 1,
+    fresco = false,
   ) => {
     setPalmasPag(prev => ({
       ...prev,
       [key]: { ...(prev[key] ?? { data: [], total: 0, page: 1, lastPage: 1 }), loading: true },
     }));
     try {
-      const res = await palmasApi.listar({ ...params, per_page: PER_PAGE, page });
+      const res = await palmasApi.listar({ ...params, per_page: PER_PAGE, page }, fresco);
       setPalmasPag(prev => ({
         ...prev,
         [key]: {
@@ -294,7 +320,7 @@ export default function LoteDetalle() {
   const recargarConteos = useCallback(async () => {
     if (!id) return;
     try {
-      const res = await lotesApi.ver(Number(id));
+      const res = await lotesApi.ver(Number(id), true);
       setSublotes(res.data?.sublotes ?? []);
     } catch { /* silent */ }
   }, [id]);

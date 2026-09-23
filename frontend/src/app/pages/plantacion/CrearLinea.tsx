@@ -66,7 +66,7 @@ export default function CrearLinea() {
       if (cant != null && cant > 0) body.cantidad_palmas = cant;
       const res = await lineasApi.crear(body);
       toast.success(res.message ?? 'Línea creada correctamente');
-      navigate(`/plantacion/lote/${loteId}`, { state: { openSubloteId: subloteId } });
+      navigate(`/plantacion/lote/${loteId}`, { state: { openSubloteId: subloteId, recargar: true } });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al crear línea');
     } finally { setLoading(false); }

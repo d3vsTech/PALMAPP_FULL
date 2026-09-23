@@ -39,7 +39,7 @@ export default function CrearSublote() {
             toast.success('Sublote y palmas creados correctamente');
           }
           setLoading(false);
-          navigate(`/plantacion/lote/${loteId}`);
+          navigate(`/plantacion/lote/${loteId}`, { state: { recargar: true } });
           return;
         }
       } catch { break; }
@@ -68,7 +68,7 @@ export default function CrearSublote() {
       } else {
         toast.success(res.message ?? 'Sublote creado correctamente');
         setLoading(false);
-        navigate(`/plantacion/lote/${loteId}`);
+        navigate(`/plantacion/lote/${loteId}`, { state: { recargar: true } });
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al crear sublote');

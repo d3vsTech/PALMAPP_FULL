@@ -5,7 +5,7 @@
  * §1.5   DELETE /predios/{id}    → recursivo
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -22,6 +22,7 @@ import {
 import { Plus, MapPin, Edit, Trash2, Search, Loader2 } from 'lucide-react';
 import { prediosApi, type PrediosTotales } from '../../../api/plantacion';
 import { toast } from 'sonner';
+import { useRefrescoAlVolver, useVengoDeGuardar } from './refresco';
 
 export default function MiPlantacion() {
   const navigate = useNavigate();
@@ -33,31 +34,62 @@ export default function MiPlantacion() {
   const [elimOpen, setElimOpen] = useState(false);
   const [eliminando, setEliminando] = useState(false);
   const searchMounted = useRef(false);
+  const reqRef = useRef(0);
 
-  const cargar = useCallback(async (q?: string) => {
-    setLoading(true);
+  const location = useLocation();
+  const vengoDeGuardar = useVengoDeGuardar(location);
+
+  /**
+   * `fresco` se salta las cachés; se usa al volver de guardar y al recuperar
+   * el foco. `silencioso` no toca el spinner: refrescar en segundo plano no
+   * puede vaciar la pantalla que el usuario está mirando.
+   */
+  const cargar = useCallback(async (
+    q?: string,
+    opts?: { fresco?: boolean; silencioso?: boolean },
+  ) => {
+    // Contador de petición: si mientras esta viaja se dispara otra (buscar,
+    // recuperar el foco), la que llegue tarde no puede pisar a la más nueva.
+    // En un equipo lento esa respuesta vieja es justo la que borraba de la
+    // pantalla el predio recién creado.
+    const reqId = ++reqRef.current;
+    if (!opts?.silencioso) setLoading(true);
     try {
       // §1.1 + §1.1.1 en paralelo. El bundle anterior hacía 1 + N requests
       // (uno por predio vía `/resumen`); ahora son 2 fijos. El backend cachea
       // ambos 60s e invalida con cualquier mutación de la jerarquía.
       const [resLista, resTot] = await Promise.all([
-        prediosApi.listar({ search: q?.trim() || undefined, per_page: 50 }),
-        prediosApi.totales().catch(() => null), // totales no es crítico para el listado
+        prediosApi.listar({ search: q?.trim() || undefined, per_page: 50 }, opts?.fresco),
+        prediosApi.totales(opts?.fresco).catch(() => null), // totales no es crítico para el listado
       ]);
+      if (reqId !== reqRef.current) return;
       setPredios(resLista.data ?? []);
       if (resTot?.data) setTotales(resTot.data);
     } catch (err) {
+      if (reqId !== reqRef.current) return;
       toast.error(err instanceof Error ? err.message : 'Error al cargar predios');
-    } finally { setLoading(false); }
+    } finally {
+      if (reqId === reqRef.current) setLoading(false);
+    }
   }, []);
 
-  useEffect(() => { cargar(); }, [cargar]);
+  useEffect(() => { cargar(undefined, { fresco: vengoDeGuardar }); }, [cargar, vengoDeGuardar]);
 
   useEffect(() => {
     if (!searchMounted.current) { searchMounted.current = true; return; }
     const t = setTimeout(() => cargar(search), 350);
     return () => clearTimeout(t);
   }, [search, cargar]);
+
+  const refrescar = useCallback(
+    // Sin `fresco`: volver a la pestaña no se salta la caché de 60s del
+    // backend. Esa caché existe porque los totales son caros de calcular y
+    // quien vuelve casi siempre estuvo fuera más de un minuto. Saltársela en
+    // cada foco sería pagar la consulta completa sin ganar nada.
+    () => { cargar(search, { silencioso: true }); },
+    [cargar, search],
+  );
+  useRefrescoAlVolver(refrescar);
 
   const confirmarEliminar = async () => {
     if (!elimId) return;
@@ -67,7 +99,7 @@ export default function MiPlantacion() {
       toast.success(res.message ?? 'Predio eliminado');
       setElimOpen(false);
       setElimId(null);
-      await cargar(search);
+      await cargar(search, { fresco: true });
     } catch (err: any) {
       console.error('[predios.eliminar]', {
         status: err?.status,

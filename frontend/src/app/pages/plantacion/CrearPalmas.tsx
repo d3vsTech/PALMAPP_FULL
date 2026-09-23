@@ -43,7 +43,7 @@ export default function CrearPalmas() {
             toast.success('Palmas creadas correctamente');
           }
           setLoading(false);
-          navigate(`/plantacion/lote/${loteId}`, { state: { openSubloteId: subloteId } });
+          navigate(`/plantacion/lote/${loteId}`, { state: { openSubloteId: subloteId, recargar: true } });
           return;
         }
       } catch { break; }
@@ -71,7 +71,7 @@ export default function CrearPalmas() {
       } else {
         toast.success(res.message ?? `${res.cantidad_creada} palmas creadas correctamente`);
         setLoading(false);
-        navigate(`/plantacion/lote/${loteId}`, { state: { openSubloteId: subloteId } });
+        navigate(`/plantacion/lote/${loteId}`, { state: { openSubloteId: subloteId, recargar: true } });
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al crear palmas');
