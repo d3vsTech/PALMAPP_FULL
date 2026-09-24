@@ -17,6 +17,7 @@ import {
 } from '../../../components/ui/select';
 import { Plus, Trash2, Pencil, Check, Clock } from 'lucide-react';
 import type { HoraExtra, ColaboradorWizard } from './tipos';
+import { opcionesSeleccionables } from './vinculacionPlanilla';
 import { etiquetaVacaciones } from './vacacionesPlanilla';
 
 interface Props {
@@ -88,7 +89,8 @@ export function EtapaHorasExtras({
                   </SelectTrigger>
                   <SelectContent>
                     {/* Otro selector sin XOR de operario (paso 4/5). */}
-                    {colaboradores.filter(c => !c.terceroNombre).map((col) => {
+                    {opcionesSeleccionables(colaboradores, [horaExtraEnEdicion.colaboradorId])
+                      .filter(c => !c.terceroNombre).map((col) => {
                       const bloqueado = !!col.enVacaciones;
                       return (
                         <SelectItem key={col.id} value={col.id} disabled={bloqueado}>

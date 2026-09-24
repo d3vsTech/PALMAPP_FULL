@@ -374,12 +374,40 @@ export interface EmpleadoRef {
   [k: string]: unknown;
 }
 
+/**
+ * Una ventana de contrato del colaborador (§1.1, 2026-09-23).
+ * `hasta: null` es contrato indefinido: cubre hasta el infinito.
+ */
+export interface VentanaVinculacion {
+  desde: string;
+  hasta: string | null;
+}
+
 /** Item de `parametricas.colaboradores` del bundle del wizard. */
 export interface ColaboradorWizardItem {
   id: number;
   nombre_completo: string;
   documento: string;
   modalidad_pago: 'FIJO' | 'PRODUCCION' | string;
+  /**
+   * Contratos activos del colaborador, ordenados por `desde` (§1.1).
+   *
+   * El wizard NO filtra en el servidor: el catálogo se cachea 15 minutos sin
+   * fecha y en modo creación se pide antes de que el usuario elija el día.
+   * El filtro lo aplica el front con la fecha de la planilla, igual que con
+   * `en_vacaciones[]`. Ver `disponibleEn()` en `planilla/vinculacionPlanilla`.
+   *
+   * Opcional a propósito: tras el deploy, un catálogo cacheado antes del
+   * cambio puede llegar sin el campo hasta 15 minutos. `undefined` se trata
+   * como `[]`, que significa "sin contratos registrados: no se filtra".
+   */
+  vinculacion?: VentanaVinculacion[];
+  /**
+   * Fecha de retiro de la ficha, o `null`. El catálogo trae también a los
+   * retirados en los últimos 45 días, con la ficha ya inactiva, para que una
+   * planilla registrada con retraso los encuentre.
+   */
+  fecha_retiro?: string | null;
 }
 
 /**
@@ -1335,7 +1363,13 @@ export const ausenciasApi = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const selectsApi = {
-  colaboradores: (params: { modalidad_pago?: string; predio_id?: number } = {}) =>
+  /**
+   * `fecha` (YYYY-MM-DD, 2026-09-23) devuelve la lista ya filtrada por
+   * contrato vigente ese día (§8). El wizard no la usa: filtra en memoria con
+   * `vinculacion[]` del bundle, porque el catálogo se pide antes de que el
+   * usuario elija la fecha. Queda para los consumidores que sí la tienen.
+   */
+  colaboradores: (params: { modalidad_pago?: string; predio_id?: number; fecha?: string } = {}) =>
     requestConToken<{ data: any[] }>(`${BASE}/colaboradores/select${qs(params)}`),
 
   /** Endpoint dedicado del wizard. Solo requiere operaciones.crear|editar. */
@@ -1504,6 +1538,20 @@ export const OperacionesErrorCodes = {
    * y no crea duplicado.
    */
   LABOR_FINCA_DUPLICADA: 'LABOR_FINCA_DUPLICADA',
+  /**
+   * 422 (2026-09-23) — un `empleado_id` enviado no estaba vinculado en la
+   * fecha de la planilla: sin contrato que cubra ese día, o ficha inactiva
+   * sin retiro que lo explique.
+   *
+   * `errors` señala el campo exacto: `empleado_id`, `cuadrilla.{i}.empleado_id`,
+   * `miembros.{i}.empleado_id`, `items.{i}.empleado_id`,
+   * `items.{i}.cuadrilla.{j}.empleado_id` o `empleado_ids.{i}`. Nada se guarda.
+   *
+   * Es la misma regla que el front aplica en el selector con `vinculacion[]`:
+   * si el filtro funciona, este 422 no debería llegar nunca. Cuando llega, es
+   * que el catálogo estaba cacheado con datos viejos o alguien forzó el envío.
+   */
+  COLABORADOR_SIN_CONTRATO_VIGENTE: 'COLABORADOR_SIN_CONTRATO_VIGENTE',
   /** Usuario sin permiso para la acción. */
   PERMISSION_DENIED: 'PERMISSION_DENIED',
 } as const;

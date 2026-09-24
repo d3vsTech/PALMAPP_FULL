@@ -34,7 +34,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { AdvertenciasBanner } from '../../components/nomina/AdvertenciasBanner';
+import { AdvertenciasBanner, NotaAntesDeConfirmar } from '../../components/nomina/AdvertenciasBanner';
 import { DetalleDescansos } from '../../components/nomina/DetalleDescansos';
 import { FaltasInjustificadas } from '../../components/nomina/FaltasInjustificadas';
 import { DiasVacaciones } from '../../components/nomina/DiasVacaciones';
@@ -1481,7 +1481,14 @@ export default function LiquidarColaborador() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-4">
+          {/* El backend no bloquea por advertencias, así que el freno es este
+              recordatorio junto al botón: entre el banner de arriba y el clic
+              hay toda la pantalla de por medio. */}
+          <div className="pt-4">
+            <NotaAntesDeConfirmar items={preview.advertencias} />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
             <Button
               variant="outline"
               onClick={() => navigate(`/nomina/${nominaId}`)}

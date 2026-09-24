@@ -51,3 +51,35 @@ export function mostrarAdvertenciasBulk(
   }
   mostrarAdvertencias(Array.from(porCodigo.values()));
 }
+
+// ─── Errores de vinculación (§0, 2026-09-23) ─────────────────────────────────
+
+/**
+ * Traduce un 422 `COLABORADOR_SIN_CONTRATO_VIGENTE` a un solo texto legible.
+ *
+ * El backend manda un `errors` indexado por el campo exacto que falló:
+ * `empleado_id`, `cuadrilla.{i}.empleado_id`, `miembros.{i}.empleado_id`,
+ * `items.{i}.empleado_id`, `items.{i}.cuadrilla.{j}.empleado_id` o
+ * `empleado_ids.{i}`. Las claves no le dicen nada a quien llena la planilla;
+ * los mensajes sí, porque ya vienen con el nombre y la fecha dentro.
+ *
+ * Devuelve `null` cuando el error es de otro tipo, para que el llamador siga
+ * con su manejo de siempre.
+ */
+export function mensajeSinContratoVigente(err: unknown): string | null {
+  if (typeof err !== 'object' || err === null) return null;
+  const e = err as { code?: string; errors?: Record<string, string[] | string> };
+  if (e.code !== 'COLABORADOR_SIN_CONTRATO_VIGENTE') return null;
+
+  const motivos: string[] = [];
+  Object.values(e.errors ?? {}).forEach((v) => {
+    const texto = Array.isArray(v) ? v[0] : v;
+    // El mismo colaborador puede fallar en varias filas del bulk.
+    if (texto && !motivos.includes(texto)) motivos.push(texto);
+  });
+
+  if (motivos.length === 0) {
+    return 'Hay colaboradores sin contrato vigente en la fecha de la planilla. No se guardó nada.';
+  }
+  return `${motivos.join(' ')} No se guardó nada.`;
+}

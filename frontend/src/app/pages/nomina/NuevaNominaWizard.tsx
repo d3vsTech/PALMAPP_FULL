@@ -1719,6 +1719,17 @@ export default function NuevaNominaWizard() {
                                             <span className="font-semibold text-sm">
                                               {nombres} {apellidos}
                                             </span>
+                                            {/* §3.1 — Desde el 2026-09-23 la lista
+                                                incluye a los retirados dentro del rango,
+                                                con la ficha ya inactiva: hay que poder
+                                                liquidarles sus últimos días. Sin esta
+                                                marca el usuario no distingue a un
+                                                retirado de alguien que sigue activo. */}
+                                            {empleado.fecha_retiro && (
+                                              <p className="text-xs text-amber-700 dark:text-amber-400">
+                                                Retirado el {empleado.fecha_retiro}
+                                              </p>
+                                            )}
                                           </div>
                                         </div>
                                       );

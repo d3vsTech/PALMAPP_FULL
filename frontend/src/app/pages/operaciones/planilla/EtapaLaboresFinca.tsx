@@ -16,6 +16,7 @@ import {
 } from '../../../components/ui/select';
 import { Plus, Trash2, Pencil, X, Save } from 'lucide-react';
 import type { TrabajoAuxiliar, ColaboradorWizard } from './tipos';
+import { opcionesSeleccionables } from './vinculacionPlanilla';
 import { etiquetaVacaciones } from './vacacionesPlanilla';
 
 interface Props {
@@ -89,7 +90,7 @@ export function EtapaLaboresFinca({
                           para distinguir colaborador vs operario
                           al guardar. Visualmente muestra el nombre
                           con badge "Tercero" si aplica. */}
-                      {colaboradores.map((col) => {
+                      {opcionesSeleccionables(colaboradores, [auxiliarEnEdicion.nombre]).map((col) => {
                         const fullName = `${col.nombres} ${col.apellidos}`.trim();
                         // PR-L8: de vacaciones no se elige, salvo que se fuerce.
                         const bloqueado = !!col.enVacaciones;

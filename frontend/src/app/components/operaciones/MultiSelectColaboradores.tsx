@@ -26,6 +26,7 @@ import { Input } from '../ui/input';
 import { Users, Search, ChevronDown, X, Check, Plane, AlertTriangle } from 'lucide-react';
 import type { VacacionEnPlanilla } from '../../pages/operaciones/planilla/tipos';
 import { etiquetaVacaciones } from '../../pages/operaciones/planilla/vacacionesPlanilla';
+import { opcionesSeleccionables } from '../../pages/operaciones/planilla/vinculacionPlanilla';
 
 export interface ColaboradorOption {
   id: string;
@@ -85,14 +86,18 @@ export function MultiSelectColaboradores({
   };
 
   const opciones = useMemo(() => {
+    // §1.1 — Fuera los que no tenían contrato ese día, salvo los que ya están
+    // escogidos en una tarjeta guardada: esos tienen que seguir a la vista
+    // para poder quitarlos.
+    const elegibles = opcionesSeleccionables(colaboradores, draft);
     const q = busqueda.trim().toLowerCase();
-    if (!q) return colaboradores;
-    return colaboradores.filter((c) => {
+    if (!q) return elegibles;
+    return elegibles.filter((c) => {
       const nombreCompleto = `${c.nombres} ${c.apellidos}`.toLowerCase();
       const tercero = (c.terceroNombre ?? '').toLowerCase();
       return nombreCompleto.includes(q) || tercero.includes(q);
     });
-  }, [colaboradores, busqueda]);
+  }, [colaboradores, busqueda, draft]);
 
   const seleccionadosSet = useMemo(() => new Set(draft), [draft]);
 

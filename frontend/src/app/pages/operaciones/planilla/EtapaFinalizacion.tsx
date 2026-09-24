@@ -16,6 +16,7 @@ import {
 } from '../../../components/ui/select';
 import { Plus, Trash2, ClipboardList } from 'lucide-react';
 import type { AusenteRegistro, ColaboradorWizard } from './tipos';
+import { opcionesSeleccionables } from './vinculacionPlanilla';
 import { etiquetaVacaciones } from './vacacionesPlanilla';
 
 interface Props {
@@ -95,7 +96,7 @@ export function EtapaFinalizacion({
                     <SelectContent>
                       {/* Ausencias: solo empleados propios.
                           §5 del doc no contempla operario_id. */}
-                      {colaboradores
+                      {opcionesSeleccionables(colaboradores)
                         .filter(col => !col.terceroNombre)
                         .filter(col => !ausentes.some(a => a.colaboradorId === col.id))
                         .map((col) => (

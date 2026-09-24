@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { sortByFirstName } from '../../utils/personas';
-import { mostrarAdvertenciasBulk } from '../../utils/advertenciasOperaciones';
+import { mostrarAdvertenciasBulk, mensajeSinContratoVigente } from '../../utils/advertenciasOperaciones';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -11,6 +11,8 @@ import { Badge } from '../../components/ui/badge';
 import { MultiSelectColaboradores } from '../../components/operaciones/MultiSelectColaboradores';
 import type { ColaboradorEnVacaciones } from '../../../api/operaciones';
 import { marcarVacaciones } from './planilla/vacacionesPlanilla';
+import { marcarVinculacion } from './planilla/vinculacionPlanilla';
+import { NotaColaboradoresExcluidos } from './planilla/NotaColaboradoresExcluidos';
 import { SelectActividadLabor } from '../../components/operaciones/SelectActividadLabor';
 import {
   DialogoFaltantesPostAprobar,
@@ -445,6 +447,11 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
             // La UI pinta un badge cuando `modalidad_pago === 'FIJO'`
             // para explicar por qué el jornal cerrará en $0 (§3.2).
             modalidad_pago: c.modalidad_pago as ('FIJO' | 'PRODUCCION' | string | undefined),
+            // §1.1 — Ventanas de contrato. Un catálogo cacheado antes del
+            // cambio del 2026-09-23 llega sin el campo: `[]` significa "sin
+            // contratos registrados" y el filtro deja pasar a la persona.
+            vinculacion: Array.isArray(c.vinculacion) ? c.vinculacion : [],
+            fechaRetiro: c.fecha_retiro ?? null,
             _raw: c,
           };
         });
@@ -524,6 +531,18 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   const colaboradoresMarcados = useMemo(
     () => marcarVacaciones(colaboradores, enVacaciones, fecha),
     [colaboradores, enVacaciones, fecha],
+  );
+
+  /**
+   * §1.1 (2026-09-23) — Misma lista, marcando a quien no tenía contrato el día
+   * de la planilla. Los selectores los esconden (el backend los rechaza con
+   * 422, así que ofrecerlos sería ofrecer algo que no se puede guardar), pero
+   * siguen en la lista para que las tarjetas ya guardadas resuelvan su nombre.
+   * `excluidos` alimenta la nota que explica por qué no aparecen.
+   */
+  const { colaboradores: colaboradoresDisponibles, excluidos: colaboradoresExcluidos } = useMemo(
+    () => marcarVinculacion(colaboradoresMarcados, fecha),
+    [colaboradoresMarcados, fecha],
   );
   /**
    * PR-L8 — Modo creación: cada fecha nueva necesita su propia lista de
@@ -1828,7 +1847,16 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         if (!opts.stayHere && !mostrandoCobertura) navigate('/operaciones');
       }
     } catch (err: any) {
-      if (!silent) toast.error(err?.message ?? 'Error al guardar la planilla');
+      // §0 — El backend rechaza a quien no estaba vinculado ese día. El
+      // selector ya lo filtra, así que llegar aquí significa que el catálogo
+      // venía cacheado con datos viejos: el mensaje tiene que decir quién es,
+      // porque el nombre ya no está en la lista para buscarlo.
+      const sinContrato = mensajeSinContratoVigente(err);
+      if (sinContrato) {
+        if (!silent) toast.error(sinContrato, { duration: 10000 });
+      } else if (!silent) {
+        toast.error(err?.message ?? 'Error al guardar la planilla');
+      }
     } finally {
       if (!silent) setGuardando(false);
     }
@@ -2710,7 +2738,8 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                     </p>
                   </div>
                 </CardHeader>
-                <CardContent className="pt-6">
+                <CardContent className="space-y-4 pt-6">
+                  <NotaColaboradoresExcluidos excluidos={colaboradoresExcluidos} fecha={fecha} />
                   <Tabs defaultValue="cosecha" className="space-y-4">
                     <TabsList className="grid w-full grid-cols-6">
                       <TabsTrigger value="cosecha">Cosecha</TabsTrigger>
@@ -2727,7 +2756,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         trabajosCosecha={trabajosCosecha}
                         cosechaEnEdicion={cosechaEnEdicion}
                         setCosechaEnEdicion={setCosechaEnEdicion}
-                        colaboradores={colaboradoresMarcados}
+                        colaboradores={colaboradoresDisponibles}
                         lotesData={lotesData}
                         sublotes={sublotes}
                         agregarCosecha={agregarCosecha}
@@ -2746,7 +2775,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         trabajosPlateo={trabajosPlateo}
                         plateoEnEdicion={plateoEnEdicion}
                         setPlateoEnEdicion={setPlateoEnEdicion}
-                        colaboradores={colaboradoresMarcados}
+                        colaboradores={colaboradoresDisponibles}
                         lotesData={lotesData}
                         sublotes={sublotes}
                         agregarPlateo={agregarPlateo}
@@ -2767,7 +2796,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         trabajosPoda={trabajosPoda}
                         podaEnEdicion={podaEnEdicion}
                         setPodaEnEdicion={setPodaEnEdicion}
-                        colaboradores={colaboradoresMarcados}
+                        colaboradores={colaboradoresDisponibles}
                         lotesData={lotesData}
                         sublotes={sublotes}
                         agregarPoda={agregarPoda}
@@ -2786,7 +2815,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         trabajosFertilizacion={trabajosFertilizacion}
                         fertilizacionEnEdicion={fertilizacionEnEdicion}
                         setFertilizacionEnEdicion={setFertilizacionEnEdicion}
-                        colaboradores={colaboradoresMarcados}
+                        colaboradores={colaboradoresDisponibles}
                         lotesData={lotesData}
                         sublotes={sublotes}
                         insumosLista={insumosLista}
@@ -2806,7 +2835,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         trabajosSanidad={trabajosSanidad}
                         sanidadEnEdicion={sanidadEnEdicion}
                         setSanidadEnEdicion={setSanidadEnEdicion}
-                        colaboradores={colaboradoresMarcados}
+                        colaboradores={colaboradoresDisponibles}
                         lotesData={lotesData}
                         sublotes={sublotes}
                         palmaTipoToId={palmaTipoToId}
@@ -2826,7 +2855,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         trabajosOtros={trabajosOtros}
                         otrosEnEdicion={otrosEnEdicion}
                         setOtrosEnEdicion={setOtrosEnEdicion}
-                        colaboradores={colaboradoresMarcados}
+                        colaboradores={colaboradoresDisponibles}
                         lotesData={lotesData}
                         sublotes={sublotes}
                         actividadesPorLabor={actividadesPorLabor}
@@ -2845,11 +2874,13 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
             {/* ETAPA 3: LABORES DE FINCA (AUXILIARES) — extraída a planilla/EtapaLaboresFinca */}
             {etapaActual === 3 && (
+              <div className="space-y-4">
+              <NotaColaboradoresExcluidos excluidos={colaboradoresExcluidos} fecha={fecha} />
               <EtapaLaboresFinca
                 trabajosAuxiliares={trabajosAuxiliares}
                 auxiliarEnEdicion={auxiliarEnEdicion}
                 setAuxiliarEnEdicion={setAuxiliarEnEdicion}
-                colaboradores={colaboradoresMarcados}
+                colaboradores={colaboradoresDisponibles}
                 laboresLista={laboresLista}
                 agregarAuxiliar={agregarAuxiliar}
                 cancelarAuxiliar={cancelarAuxiliar}
@@ -2858,15 +2889,18 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                 eliminarAuxiliar={eliminarAuxiliar}
                 setFormRef={setFormRef}
               />
+              </div>
             )}
 
             {/* ETAPA 4: HORAS EXTRAS — extraída a planilla/EtapaHorasExtras */}
             {etapaActual === 4 && (
+              <div className="space-y-4">
+              <NotaColaboradoresExcluidos excluidos={colaboradoresExcluidos} fecha={fecha} />
               <EtapaHorasExtras
                 horasExtras={horasExtras}
                 horaExtraEnEdicion={horaExtraEnEdicion}
                 setHoraExtraEnEdicion={setHoraExtraEnEdicion}
-                colaboradores={colaboradoresMarcados}
+                colaboradores={colaboradoresDisponibles}
                 tiposHoraExtraLista={tiposHoraExtraLista}
                 agregarHoraExtra={agregarHoraExtra}
                 cancelarHoraExtra={cancelarHoraExtra}
@@ -2875,15 +2909,18 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                 eliminarHoraExtra={eliminarHoraExtra}
                 setFormRef={setFormRef}
               />
+              </div>
             )}
 
             {/* ETAPA 5: FINALIZACIÓN — extraída a planilla/EtapaFinalizacion */}
             {etapaActual === 5 && (
+              <div className="space-y-4">
+              <NotaColaboradoresExcluidos excluidos={colaboradoresExcluidos} fecha={fecha} />
               <EtapaFinalizacion
                 modoLectura={modoLectura}
                 observaciones={observaciones}
                 setObservaciones={setObservaciones}
-                colaboradores={colaboradoresMarcados}
+                colaboradores={colaboradoresDisponibles}
                 ausentes={ausentes}
                 colaboradorAusenteSeleccionado={colaboradorAusenteSeleccionado}
                 setColaboradorAusenteSeleccionado={setColaboradorAusenteSeleccionado}
@@ -2895,6 +2932,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                 agregarAusente={agregarAusente}
                 eliminarAusente={eliminarAusente}
               />
+              </div>
             )}
           </fieldset>
 

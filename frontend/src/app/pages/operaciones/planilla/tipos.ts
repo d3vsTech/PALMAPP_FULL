@@ -145,6 +145,9 @@ export const ETAPAS = [
  * Se guarda el rango completo, no solo el comprobante, porque el selector
  * muestra "De vacaciones del 05-ene al 22-ene (VAC-1)".
  */
+/** Ventana de contrato del colaborador, tal como llega del bundle. */
+export type VentanaVinculacion = import('../../../../api/operaciones').VentanaVinculacion;
+
 export interface VacacionEnPlanilla {
   comprobante: string;
   fechaInicio: string;
@@ -157,6 +160,19 @@ export interface ColaboradorWizard {
   apellidos: string;
   terceroNombre?: string;
   modalidad_pago?: 'FIJO' | 'PRODUCCION' | string;
+  /**
+   * Ventanas de contrato (API_OPERACIONES §1.1). Deciden si la persona puede
+   * aparecer en la planilla de una fecha. Vacío o ausente = sin contratos
+   * registrados, y entonces no se filtra. Ver `vinculacionPlanilla`.
+   */
+  vinculacion?: VentanaVinculacion[];
+  /** Fecha de retiro de la ficha, para explicar por qué no aparece. */
+  fechaRetiro?: string | null;
+  /**
+   * Presente cuando no tenía contrato el día de la planilla. Los selectores
+   * lo esconden; las tarjetas ya guardadas lo siguen mostrando.
+   */
+  noVinculado?: { motivo: string };
   /**
    * PR-L8 — Presente cuando la fecha de la planilla cae dentro de unas
    * vacaciones liquidadas. Bloquea la seleccion; en jornales, cosecha y

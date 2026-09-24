@@ -29,7 +29,9 @@ export function ColaboradorChip({ col }: { col: ColaboradorWizard }) {
             : ''
       }`}
       title={
-        col.enVacaciones
+        col.noVinculado
+          ? col.noVinculado.motivo
+          : col.enVacaciones
           ? etiquetaVacaciones(col.enVacaciones)
           : col.terceroNombre
           ? `Tercero · ${col.terceroNombre}`
@@ -39,6 +41,14 @@ export function ColaboradorChip({ col }: { col: ColaboradorWizard }) {
       }
     >
       {nombreCorto}
+      {/* §1.1 — Quedó en la tarjeta pero ese día no tenía contrato. Pasa al
+          reabrir una planilla vieja después de capturar un retiro. Se marca
+          en vez de esconderse: la tarjeta tiene que decir quién trabajó. */}
+      {col.noVinculado && (
+        <span className="ml-1.5 rounded bg-destructive/15 px-1 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-destructive">
+          Sin contrato
+        </span>
+      )}
       {col.enVacaciones && (
         <span className="ml-1.5 rounded bg-amber-200/70 px-1 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-amber-900">
           Vacaciones

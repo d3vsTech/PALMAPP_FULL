@@ -209,9 +209,26 @@ export interface ColaboradorListadoParams {
 }
 
 export interface ColaboradorSelectParams {
+  /**
+   * Default `true` (solo activos). Ojo con la interacción con `fecha`: sin
+   * `estado` explícito, además de los activos entran los **retirados en esa
+   * fecha o después**, aunque su ficha ya esté inactiva. El retiro la apaga,
+   * pero el retirado el 20 sí estaba el 19. Con `estado` explícito manda
+   * `estado`, así que mandarlo de más pierde a esos retirados.
+   */
   estado?: boolean;
   modalidad_pago?: ModalidadPago;
   predio_id?: number;
+  /**
+   * `YYYY-MM-DD` (2026-09-23). Devuelve solo a quienes tienen un contrato que
+   * cubre ese día: `estado = true`, `fecha_inicio <= fecha` y
+   * `fecha_terminacion` nula o `>= fecha`. Quien no tiene contratos
+   * registrados pasa el filtro.
+   *
+   * Es la lista ya filtrada, alternativa a aplicar `vinculacion[]` en memoria
+   * como hace el wizard de planilla. Formato inválido → 422.
+   */
+  fecha?: string;
 }
 
 /** Item del listado /select (§0 dropdowns). */

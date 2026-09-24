@@ -105,6 +105,7 @@ export interface Nomina {
       | 'RECARGO_DOMINICAL_DESACTUALIZADO'
       | 'FALTAS_NO_REGISTRADAS_EN_PLANILLA'
       | 'PLANILLAS_SIN_APROBAR_EN_EL_RANGO'
+      | 'COLABORADOR_SIN_REGISTRO_EN_EL_PERIODO'
       | string;
     mensaje: string;
     detalle?: unknown;
@@ -177,6 +178,15 @@ export interface EmpleadoDisponible {
   modalidad_pago: ModalidadPago;
   salario_base: number;
   predio: { id: number; nombre: string } | null;
+  /**
+   * §3.1 (2026-09-23) — Quién aparece ya no depende de `estado` sino del
+   * contrato dentro del rango de la nómina. Entran también los **inactivos
+   * por un retiro dentro del rango**: el retirado el 20 hay que liquidarlo en
+   * la nómina del 16 al 31. `fecha_retiro` no nula es justo ese caso, y el
+   * wizard debería marcarlo para que el usuario sepa que está agregando a
+   * alguien que ya no trabaja allí.
+   */
+  fecha_retiro?: string | null;
 }
 
 /** Operario de empresa contratista disponible para agregar a una nómina (doc §3.1). */
@@ -631,6 +641,17 @@ export interface PreviewLiquidacion {
       | 'DESCANSO_DOMINICAL_PERDIDO'
       | 'FALTAS_NO_REGISTRADAS_EN_PLANILLA'
       | 'PLANILLAS_SIN_APROBAR_EN_EL_RANGO'
+      /**
+       * 2026-09-23 — Ni un jornal, ni una cuadrilla, ni una novedad en todo
+       * el período. Es el caso extremo de `FALTAS_NO_REGISTRADAS_EN_PLANILLA`
+       * y **liquida en cero**: al FIJO le quedan solo los festivos. Antes ese
+       * mismo FIJO cobraba la quincena completa en silencio, porque un día
+       * sin planilla se leía como "la finca no operó".
+       *
+       * Si el colaborador sí trabajó, hay que registrar las planillas (o la
+       * novedad) antes de liquidar. Trae las fechas en `detalle`.
+       */
+      | 'COLABORADOR_SIN_REGISTRO_EN_EL_PERIODO'
       /**
        * PR-L8 — Hay jornal o cosecha registrados en días que Liquidaciones
        * ya pagó como vacaciones. El jornal se liquida igual: o la planilla

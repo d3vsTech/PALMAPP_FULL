@@ -120,6 +120,18 @@ export default function Colaboradores() {
             <AlertDialogDescription>
               ¿Estás seguro que deseas {colaboradorToToggle?.estado ? 'desactivar' : 'activar'} a <strong>{colaboradorToToggle ? getNombre(colaboradorToToggle) : ''}</strong>?
             </AlertDialogDescription>
+            {/* API_COLABORADORES — Desde el 2026-09-23 el retiro apaga la
+                ficha solo, y una verificación periódica la vuelve a apagar.
+                Activar aquí a un retirado se deshace sin que nadie avise:
+                el camino real es quitarle la fecha de retiro. */}
+            {!colaboradorToToggle?.estado && colaboradorToToggle?.fecha_retiro && (
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800/30 dark:bg-amber-950/30 dark:text-amber-400">
+                Está inactivo porque se registró su retiro el{' '}
+                <strong>{colaboradorToToggle.fecha_retiro}</strong>. Activarlo desde aquí no dura:
+                el sistema lo vuelve a apagar. Para un reingreso, edite el colaborador y quítele
+                la fecha de retiro.
+              </div>
+            )}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setColaboradorToToggle(null)}>Cancelar</AlertDialogCancel>

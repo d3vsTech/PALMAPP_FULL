@@ -15,6 +15,7 @@
 
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { mensajeSinContratoVigente } from '../../utils/advertenciasOperaciones';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -95,8 +96,18 @@ export function DialogoFaltantesPostAprobar({
       onCerrado({ creadas, omitidas });
       onOpenChange(false);
     } catch (err) {
-      const e = err as { message?: string };
-      toast.error(e.message ?? 'No se pudieron registrar las novedades');
+      // API_AUSENCIAS §0 — `/ausencias/faltantes` también valida la vinculación
+      // y señala al culpable en `errors["empleado_ids.{i}"]`. La lista de
+      // faltantes viene del backend, así que esto solo pasa si alguien se
+      // retiró entre la aprobación y este clic; el mensaje tiene que decir
+      // quién, porque nada se guardó.
+      const sinContrato = mensajeSinContratoVigente(err);
+      if (sinContrato) {
+        toast.error(sinContrato, { duration: 10000 });
+      } else {
+        const e = err as { message?: string };
+        toast.error(e.message ?? 'No se pudieron registrar las novedades');
+      }
     } finally {
       setGuardando(false);
     }
