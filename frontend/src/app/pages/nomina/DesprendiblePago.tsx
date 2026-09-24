@@ -24,6 +24,7 @@ import jsPDF from 'jspdf';
 import { nominaApi, DesprendibleData } from '../../../api/nomina';
 import type { ApiError } from '../../../api/client';
 import { DetalleDescansos } from '../../components/nomina/DetalleDescansos';
+import { DetalleAusencias } from '../../components/nomina/DetalleAusencias';
 import { FaltasInjustificadas } from '../../components/nomina/FaltasInjustificadas';
 import { DiasVacaciones } from '../../components/nomina/DiasVacaciones';
 
@@ -449,6 +450,15 @@ export default function DesprendiblePago() {
             {/* §9.9 — Detalle día por día de descansos. Componente compartido
                 con `LiquidarColaborador` (mismo shape, variante compacta para
                 el desprendible impreso). */}
+            <div className="mt-4">
+              <DetalleAusencias
+                items={liquidacion.detalle_ausencias}
+                formatMoney={fmt}
+                variant="compact"
+                titulo="Detalle de ausencias"
+              />
+            </div>
+
             <div className="mt-4">
               <DetalleDescansos
                 items={liquidacion.detalle_descansos}

@@ -755,21 +755,12 @@ export default function NuevoColaboradorWizard() {
     }
 
     // Finalización de contrato (§4 API_COLABORADORES): con fecha de
-    // finalización, el motivo es obligatorio siempre, y el soporte PDF es
-    // obligatorio cuando la finalización es NUEVA o cambió de fecha. Si la
-    // finalización ya estaba guardada con su soporte en el expediente, no se
-    // exige re-adjuntar al re-guardar.
+    // finalización el motivo es obligatorio. El soporte PDF NO lo es, ni para
+    // el backend ni aquí: la carta de renuncia o el acta suelen llegar días
+    // después, y exigirla impedía registrar el retiro el día que ocurre. Se
+    // puede adjuntar luego desde el expediente del colaborador.
     if (formData.fechaFinalizacion && !formData.motivoFinalizacion) {
       toast.error('Registra el motivo de la finalización de contrato');
-      setEtapaActual(3);
-      return;
-    }
-    const finalizacionCambio = !!formData.fechaFinalizacion && (
-      formData.fechaFinalizacion !== fechaRetiroOriginalRef.current
-      || formData.motivoFinalizacion !== motivoRetiroOriginalRef.current
-    );
-    if (finalizacionCambio && !soporteFinalizacion) {
-      toast.error('Adjunta el soporte documental (PDF) de la finalización');
       setEtapaActual(3);
       return;
     }
@@ -1462,14 +1453,19 @@ export default function NuevoColaboradorWizard() {
 
                   {formData.fechaFinalizacion && (
                     <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 space-y-4">
-                      <div className="flex items-start gap-2">
-                        <div className="h-5 w-5 rounded-full bg-destructive/15 flex items-center justify-center shrink-0 mt-0.5">
-                          <span className="text-destructive text-xs font-bold">!</span>
+                      {/* Desaparece al elegir el motivo: dejarlo fijo hacía
+                          que el bloque siguiera pareciendo un error ya
+                          resuelto. */}
+                      {!formData.motivoFinalizacion && (
+                        <div className="flex items-start gap-2">
+                          <div className="h-5 w-5 rounded-full bg-destructive/15 flex items-center justify-center shrink-0 mt-0.5">
+                            <span className="text-destructive text-xs font-bold">!</span>
+                          </div>
+                          <p className="text-xs text-destructive font-medium">
+                            Para guardar con esta fecha de finalización debes registrar el motivo.
+                          </p>
                         </div>
-                        <p className="text-xs text-destructive font-medium">
-                          Para guardar con esta fecha de finalización debes registrar el motivo y adjuntar el soporte documental (PDF).
-                        </p>
-                      </div>
+                      )}
 
                       <div className="space-y-2">
                         <Label htmlFor="motivoFinalizacion">
@@ -1499,8 +1495,11 @@ export default function NuevoColaboradorWizard() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label>
-                          Soporte documental *
+                        <Label className="flex items-baseline gap-2">
+                          Soporte documental
+                          <span className="text-xs font-normal text-muted-foreground">
+                            opcional, se puede adjuntar después
+                          </span>
                         </Label>
                         {soporteFinalizacion ? (
                           <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-background">

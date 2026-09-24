@@ -36,6 +36,7 @@ import {
 import { toast } from 'sonner';
 import { AdvertenciasBanner, NotaAntesDeConfirmar } from '../../components/nomina/AdvertenciasBanner';
 import { DetalleDescansos } from '../../components/nomina/DetalleDescansos';
+import { DetalleAusencias } from '../../components/nomina/DetalleAusencias';
 import { FaltasInjustificadas } from '../../components/nomina/FaltasInjustificadas';
 import { DiasVacaciones } from '../../components/nomina/DiasVacaciones';
 import {
@@ -146,8 +147,8 @@ export default function LiquidarColaborador() {
   const [conceptos, setConceptos] = useState<NominaConcepto[]>([]);
   const [cargando, setCargando] = useState(true);
 
-  // Inputs editables
-  const [diasTrabajados, setDiasTrabajados] = useState<number | ''>('');
+  // Inputs editables. Los días trabajados no están: los calcula el backend
+  // desde las planillas (§9.1) y aquí solo se muestran.
   const [bonificaciones, setBonificaciones] = useState<BonificacionLocal[]>([]);
   const [deducciones, setDeducciones] = useState<DeduccionLocal[]>([]);
 
@@ -162,7 +163,6 @@ export default function LiquidarColaborador() {
       .preview(nominaEmpleadoId)
       .then(async (prev) => {
         setPreview(prev.data);
-        setDiasTrabajados(prev.data.dias_trabajados);
         // Persistimos el NETO propuesto recalculado en sessionStorage — es
         // lo que efectivamente cobra el colaborador (bruto + subsidio − ded.).
         // El listado del detalle de nómina lo lee para pintar el mismo valor
@@ -246,18 +246,6 @@ export default function LiquidarColaborador() {
       .catch(() => { /* sin tabla — no bloquear la liquidación */ });
     return () => { vigente = false; };
   }, [nominaId, preview]);
-
-  // Re-fetch preview cuando cambian días trabajados
-  const refetchPreview = async () => {
-    if (!nominaEmpleadoId) return;
-    try {
-      const prev = await nominaApi.preview(nominaEmpleadoId);
-      setPreview(prev.data);
-    } catch (err) {
-      const e = err as ApiError;
-      toast.error(e.message ?? 'Error al recalcular');
-    }
-  };
 
   /**
    * Promedio kg/gajo del LOTE por cosecha, desde el bundle de Validar
@@ -432,21 +420,13 @@ export default function LiquidarColaborador() {
     setEnviando(true);
     try {
       // §9.9 — Para VARIABLE los días se derivan del sistema (asistencia +
-      // ausencias). No se puede sobrescribir el valor calculado; el backend
-      // responde 422 si viene `dias_trabajados`. Para FIJO / operario sí se
-      // permite el override.
-      const esVariable = empleado.salario_tipo === 'VARIABLE';
-      const diasTrabajadosPayload = esVariable
-        ? undefined
-        : (diasTrabajados === '' ? undefined : Number(diasTrabajados));
-      // Para operarios solo se manda `dias_trabajados`. El backend rechaza
-      // con 422 si vienen `bonificaciones` o `deducciones_voluntarias`.
+      // ausencias). `dias_trabajados` es opcional en el body: omitirlo deja
+      // que el backend use el suyo, que es el del preview que el usuario está
+      // viendo. No se manda nunca, ni siquiera en FIJO, porque ya no hay forma
+      // de capturarlo a mano.
       const payload = esOperario
-        ? {
-            dias_trabajados: diasTrabajadosPayload,
-          }
+        ? {}
         : {
-            dias_trabajados: diasTrabajadosPayload,
             bonificaciones: bonificacionesEfectivas.map((b) => ({
               nombre: b.nombre,
               valor: Number(b.valor),
@@ -821,26 +801,20 @@ export default function LiquidarColaborador() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Días Trabajados</p>
-              {/* §9.9 — Para VARIABLE los días trabajados se derivan de la
-                  asistencia + ausencias; el override manual queda deshabilitado
-                  para evitar que la UI y el backend queden desalineados
-                  (backend responde 422 si se sobrescribe en VARIABLE). */}
-              {empleado.salario_tipo === 'VARIABLE' ? (
-                <p className="h-9 text-lg font-semibold flex items-center">
-                  {preview.dias_trabajados}
-                </p>
-              ) : (
-                <Input
-                  type="number" step="0.001"
-                  value={diasTrabajados}
-                  onChange={(e) =>
-                    setDiasTrabajados(e.target.value === '' ? '' : Number(e.target.value))
-                  }
-                  onBlur={refetchPreview}
-                  max={preview.dias_periodo}
-                  className="h-9 text-lg font-semibold border-0 bg-transparent px-0 focus-visible:ring-0"
-                />
-              )}
+              {/* Dato calculado, no capturado: el backend lo deriva de las
+                  planillas aprobadas, las novedades, los descansos perdidos y
+                  las vacaciones (§9.1). Desde la regla de presencia del
+                  2026-09-23 la planilla es la única prueba de asistencia, así
+                  que un número escrito a mano aquí contradiría justo eso.
+                  Además arrastra el piso del IBC, el prorrateo del auxilio y
+                  la coherencia con el devengado. Si el número no cuadra, se
+                  corrige la planilla, no esta casilla. */}
+              <p className="h-9 text-lg font-semibold flex items-center">
+                {preview.dias_trabajados}
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  de {preview.dias_periodo}
+                </span>
+              </p>
             </div>
           </div>
 
@@ -1099,6 +1073,15 @@ export default function LiquidarColaborador() {
               )}
             </div>
           </div>
+
+          {/* §5.1 — Ausencias del período, día por día. La línea
+              "INCAPACIDADES" del devengado dice cuánto, pero no qué día ni
+              por qué; sin esta tabla esa cifra no se puede verificar. */}
+          <DetalleAusencias
+            items={preview.detalle_ausencias}
+            formatMoney={(n) => `$${n.toLocaleString('es-CO')}`}
+            titulo="Ausencias y novedades del período"
+          />
 
           {/* §9.9 — Descansos por día. Componente compartido con el
               desprendible (mismo shape, distinta variante visual). */}
