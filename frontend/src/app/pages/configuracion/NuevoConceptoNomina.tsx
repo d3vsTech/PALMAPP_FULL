@@ -259,10 +259,6 @@ export default function NuevoConceptoNomina() {
             </p>
           </div>
         </div>
-        <Button onClick={handleSave} size="lg" className="gap-2" disabled={guardando}>
-          <Save className="h-5 w-5" />
-          {guardando ? 'Guardando…' : 'Guardar'}
-        </Button>
       </div>
 
       <div className="max-w-4xl space-y-6">
@@ -595,6 +591,14 @@ export default function NuevoConceptoNomina() {
             </div>
           </CardContent>
         </Card>
+
+        {/* El botón va al pie del formulario, alineado a su mismo ancho. */}
+        <div className="flex justify-end">
+          <Button onClick={handleSave} size="lg" className="gap-2" disabled={guardando}>
+            <Save className="h-5 w-5" />
+            {guardando ? 'Guardando…' : 'Guardar'}
+          </Button>
+        </div>
       </div>
     </div>
   );

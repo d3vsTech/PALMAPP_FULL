@@ -2,17 +2,20 @@
  * MultiSelectColaboradores — dropdown con checkboxes para seleccionar N
  * colaboradores/operarios de una vez, sin cerrar entre selecciones.
  *
- * Reemplaza el patrón anterior de `<Select>` con `value=""` que solo permitía
- * añadir uno a la vez (cerraba el dropdown en cada click). Este componente:
+ * Sigue el diseño V.26: cada click confirma de inmediato y el dropdown se
+ * cierra haciendo click por fuera. No hay botón de aceptar; no hace falta,
+ * porque los chips de abajo van mostrando la selección a medida que se arma y
+ * quitar a alguien es un click en la misma lista.
  *
- *  - Trigger tipo botón que muestra "X seleccionados" o placeholder.
- *  - Popover con búsqueda + lista con checkboxes.
- *  - Click sobre una fila hace toggle sin cerrar el popover.
- *  - Chips visuales debajo con los seleccionados (usa `ColaboradorChip`).
+ *  - Trigger tipo botón: "N colaboradores seleccionados" o el placeholder.
+ *  - Primera fila de la lista alterna todos los visibles.
+ *  - Búsqueda por nombre o por empresa del tercero.
  *  - Quien esté de vacaciones ese día sale deshabilitado, con el rango y el
  *    comprobante. Se puede forzar uno por uno: las vacaciones se interrumpen
  *    legalmente y el trabajador pudo haber ido. El backend acepta el
  *    registro y la nómina lo advierte después.
+ *  - Quien no tenía contrato ese día no se ofrece (§1.1), salvo que ya esté
+ *    escogido en una tarjeta guardada: ahí sigue visible para poder quitarlo.
  *
  * Los ids conservan el mismo formato que el estado del wizard: `String(empleado.id)`
  * para colaboradores propios y `'O_' + operario.id` para operarios de tercero.
@@ -23,7 +26,7 @@ import { sortByFirstName } from '../../utils/personas';
 import { Button } from '../ui/button';
 import { Checkbox } from '../ui/checkbox';
 import { Input } from '../ui/input';
-import { Users, Search, ChevronDown, X, Check, Plane, AlertTriangle } from 'lucide-react';
+import { Users, Search, ChevronDown, Plane, AlertTriangle } from 'lucide-react';
 import type { VacacionEnPlanilla } from '../../pages/operaciones/planilla/tipos';
 import { etiquetaVacaciones } from '../../pages/operaciones/planilla/vacacionesPlanilla';
 import { opcionesSeleccionables } from '../../pages/operaciones/planilla/vinculacionPlanilla';
@@ -57,13 +60,8 @@ export function MultiSelectColaboradores({
   const [open, setOpen] = useState(false);
   const [busqueda, setBusqueda] = useState('');
   /**
-   * Borrador local de la selección mientras el popover está abierto.
-   * Solo "Aceptar" hace commit vía onChange; cerrar por fuera descarta.
-   */
-  const [draft, setDraft] = useState<string[]>([]);
-  /**
    * Ids de vacacionistas que el usuario destrabó a propósito en esta apertura
-   * del popover. Se limpia al cerrar: forzar es una decisión puntual, no un
+   * del dropdown. Se limpia al cerrar: forzar es una decisión puntual, no un
    * permiso permanente.
    */
   const [forzados, setForzados] = useState<string[]>([]);
@@ -71,25 +69,17 @@ export function MultiSelectColaboradores({
   const [porForzar, setPorForzar] = useState<string | null>(null);
 
   const abrirCerrar = (siguiente: boolean) => {
-    if (siguiente) {
-      setDraft(seleccionados);
-      setBusqueda('');
-    }
+    if (siguiente) setBusqueda('');
     setForzados([]);
     setPorForzar(null);
     setOpen(siguiente);
-  };
-
-  const aceptar = () => {
-    onChange(draft);
-    setOpen(false);
   };
 
   const opciones = useMemo(() => {
     // §1.1 — Fuera los que no tenían contrato ese día, salvo los que ya están
     // escogidos en una tarjeta guardada: esos tienen que seguir a la vista
     // para poder quitarlos.
-    const elegibles = opcionesSeleccionables(colaboradores, draft);
+    const elegibles = opcionesSeleccionables(colaboradores, seleccionados);
     const q = busqueda.trim().toLowerCase();
     if (!q) return elegibles;
     return elegibles.filter((c) => {
@@ -97,25 +87,37 @@ export function MultiSelectColaboradores({
       const tercero = (c.terceroNombre ?? '').toLowerCase();
       return nombreCompleto.includes(q) || tercero.includes(q);
     });
-  }, [colaboradores, busqueda, draft]);
+  }, [colaboradores, busqueda, seleccionados]);
 
-  const seleccionadosSet = useMemo(() => new Set(draft), [draft]);
+  const seleccionadosSet = useMemo(() => new Set(seleccionados), [seleccionados]);
 
   const toggle = (id: string) => {
-    if (seleccionadosSet.has(id)) {
-      setDraft(draft.filter((x) => x !== id));
+    onChange(
+      seleccionadosSet.has(id)
+        ? seleccionados.filter((x) => x !== id)
+        : [...seleccionados, id],
+    );
+  };
+
+  /**
+   * Alterna todos los visibles. Deja fuera a los de vacaciones: forzarlos es
+   * uno por uno y a conciencia.
+   */
+  const elegiblesVisibles = useMemo(
+    () => opciones.filter((o) => !o.enVacaciones || forzados.includes(o.id)),
+    [opciones, forzados],
+  );
+  const todosVisiblesMarcados =
+    elegiblesVisibles.length > 0 && elegiblesVisibles.every((o) => seleccionadosSet.has(o.id));
+
+  const alternarTodos = () => {
+    if (todosVisiblesMarcados) {
+      const ids = new Set(elegiblesVisibles.map((o) => o.id));
+      onChange(seleccionados.filter((id) => !ids.has(id)));
     } else {
-      setDraft([...draft, id]);
+      onChange(Array.from(new Set([...seleccionados, ...elegiblesVisibles.map((o) => o.id)])));
     }
   };
-
-  const seleccionarTodos = () => {
-    // Deja fuera a los de vacaciones: forzarlos es uno por uno y a conciencia.
-    const elegibles = opciones.filter((o) => !o.enVacaciones || forzados.includes(o.id));
-    setDraft(Array.from(new Set([...draft, ...elegibles.map((o) => o.id)])));
-  };
-
-  const limpiarSeleccion = () => setDraft([]);
 
   return (
     <Popover open={open} onOpenChange={abrirCerrar}>
@@ -126,41 +128,65 @@ export function MultiSelectColaboradores({
           className="w-full justify-between font-normal"
         >
           <span className="flex items-center gap-2 text-sm">
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
             {seleccionados.length === 0 ? (
               <span className="text-muted-foreground">{placeholder}</span>
             ) : (
-              <span>
-                {seleccionados.length}{' '}
-                {seleccionados.length === 1 ? 'seleccionado' : 'seleccionados'}
+              <span className="font-medium text-foreground">
+                {seleccionados.length} colaborador{seleccionados.length !== 1 ? 'es' : ''}{' '}
+                seleccionado{seleccionados.length !== 1 ? 's' : ''}
               </span>
             )}
           </span>
-          <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+          <ChevronDown
+            className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
+          />
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="p-0"
+        className="flex max-h-[var(--radix-popover-content-available-height)] flex-col p-0"
         align="start"
-        // side="bottom" y avoidCollisions=false ya son defaults globales en
-        // src/app/components/ui/popover.tsx — todo popover abre hacia abajo.
+        /*
+         * Abre hacia abajo siempre, como el resto de la app (el default global
+         * `side="bottom"` + `avoidCollisions={false}` de ui/popover.tsx).
+         *
+         * Lo que sí hacía falta era acotar la altura: la lista es larga y el
+         * formulario vive a mitad del wizard, así que abierta cerca del borde
+         * inferior se salía de la pantalla y no había forma de llegar al pie.
+         * El `--radix-popover-content-available-height` de abajo lo resuelve
+         * sin voltear nada: Radix calcula el espacio disponible aunque las
+         * colisiones estén desactivadas, porque el middleware `size` corre
+         * siempre, fuera de la guarda de `avoidCollisions`.
+         */
         style={{
           width: 'var(--radix-popover-trigger-width)',
           minWidth: '320px',
         }}
       >
-        <div className="p-2 border-b border-border">
+        <div className="shrink-0 border-b border-border p-2">
           <div className="relative">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               autoFocus
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
-              placeholder="Buscar…"
+              placeholder="Buscar colaborador..."
               className="h-8 pl-7 text-sm"
             />
           </div>
         </div>
+
+        {opciones.length > 0 && (
+          <button
+            type="button"
+            onClick={alternarTodos}
+            className="flex w-full shrink-0 items-center gap-3 border-b border-border px-3 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted/40"
+          >
+            <Checkbox checked={todosVisiblesMarcados} className="shrink-0" />
+            {todosVisiblesMarcados ? 'Deseleccionar todos' : 'Seleccionar todos'}
+          </button>
+        )}
+
         {opciones.length === 0 ? (
           <p className="p-6 text-center text-xs text-muted-foreground">
             {colaboradores.length === 0
@@ -168,7 +194,7 @@ export function MultiSelectColaboradores({
               : 'Sin coincidencias'}
           </p>
         ) : (
-          <div className="max-h-72 overflow-y-auto py-1">
+          <div className="min-h-0 flex-1 overflow-y-auto py-1">
             {sortByFirstName(opciones).map((col) => {
               const checked = seleccionadosSet.has(col.id);
               // Ya seleccionado cuenta como destrabado: si viene de una
@@ -182,13 +208,13 @@ export function MultiSelectColaboradores({
                     type="button"
                     onClick={() => { if (!bloqueado) toggle(col.id); }}
                     disabled={bloqueado}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors ${
+                    className={`flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors ${
                       bloqueado ? 'cursor-not-allowed opacity-60' : 'hover:bg-muted/60'
                     }`}
                   >
                     <Checkbox checked={checked} disabled={bloqueado} className="shrink-0" />
-                    <span className="flex-1 text-left min-w-0">
-                      <span className="block truncate">
+                    <span className="min-w-0 flex-1 text-left">
+                      <span className={`block truncate ${checked ? 'font-medium text-primary' : ''}`}>
                         {col.nombres} {col.apellidos}
                       </span>
                       {col.enVacaciones && (
@@ -198,6 +224,11 @@ export function MultiSelectColaboradores({
                         </span>
                       )}
                     </span>
+                    {col.terceroNombre && (
+                      <span className="shrink-0 rounded-full border border-amber-200/50 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-700">
+                        Tercero · {col.terceroNombre}
+                      </span>
+                    )}
                     {renderExtra && <span className="shrink-0">{renderExtra(col)}</span>}
                   </button>
 
@@ -250,41 +281,21 @@ export function MultiSelectColaboradores({
             })}
           </div>
         )}
-        <div className="flex items-center justify-between gap-2 p-2 border-t border-border bg-muted/30">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs"
-            onClick={seleccionarTodos}
-            disabled={opciones.length === 0}
-          >
-            Seleccionar todos
-          </Button>
-          <div className="flex items-center gap-2">
-            {draft.length > 0 && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-7 text-xs text-destructive hover:bg-destructive/10 gap-1"
-                onClick={limpiarSeleccion}
-              >
-                <X className="h-3 w-3" />
-                Limpiar
-              </Button>
-            )}
-            <Button
+
+        {seleccionados.length > 0 && (
+          <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border bg-muted/20 px-3 py-2">
+            <span className="text-xs text-muted-foreground">
+              {seleccionados.length} seleccionado{seleccionados.length !== 1 ? 's' : ''}
+            </span>
+            <button
               type="button"
-              size="sm"
-              className="h-7 text-xs gap-1"
-              onClick={aceptar}
+              onClick={() => onChange([])}
+              className="text-xs text-destructive hover:underline"
             >
-              <Check className="h-3 w-3" />
-              Aceptar
-            </Button>
+              Quitar todos
+            </button>
           </div>
-        </div>
+        )}
       </PopoverContent>
     </Popover>
   );

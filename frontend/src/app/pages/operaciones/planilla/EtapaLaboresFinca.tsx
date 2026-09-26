@@ -16,8 +16,8 @@ import {
 } from '../../../components/ui/select';
 import { Plus, Trash2, Pencil, X, Save } from 'lucide-react';
 import type { TrabajoAuxiliar, ColaboradorWizard } from './tipos';
-import { opcionesSeleccionables } from './vinculacionPlanilla';
 import { etiquetaVacaciones } from './vacacionesPlanilla';
+import { MultiSelectColaboradores } from '../../../components/operaciones/MultiSelectColaboradores';
 
 interface Props {
   trabajosAuxiliares: TrabajoAuxiliar[];
@@ -73,45 +73,17 @@ export function EtapaLaboresFinca({
             <CardContent className="pt-6 space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Colaborador</Label>
-                  <Select
-                    value={auxiliarEnEdicion.nombre}
-                    onValueChange={(value) =>
-                      setAuxiliarEnEdicion({ ...auxiliarEnEdicion, nombre: value })
+                  <Label>Colaboradores</Label>
+                  {/* §3.3 — Labores de finca admite varios a la vez: al
+                      guardar se crea una tarjeta (un jornal) por cada uno.
+                      Mismo multiselect que las labores de palma. */}
+                  <MultiSelectColaboradores
+                    colaboradores={colaboradores}
+                    seleccionados={auxiliarEnEdicion.colaboradores ?? []}
+                    onChange={(nuevos) =>
+                      setAuxiliarEnEdicion({ ...auxiliarEnEdicion, colaboradores: nuevos })
                     }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar colaborador" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {/* Labores de Finca §3.3 — sí soporta operarios
-                          (mismo endpoint /jornales que palma). El
-                          `value` es el id local (`10` o `'O_5'`)
-                          para distinguir colaborador vs operario
-                          al guardar. Visualmente muestra el nombre
-                          con badge "Tercero" si aplica. */}
-                      {opcionesSeleccionables(colaboradores, [auxiliarEnEdicion.nombre]).map((col) => {
-                        const fullName = `${col.nombres} ${col.apellidos}`.trim();
-                        // PR-L8: de vacaciones no se elige, salvo que se fuerce.
-                        const bloqueado = !!col.enVacaciones;
-                        return (
-                          <SelectItem key={col.id} value={col.id} disabled={bloqueado}>
-                            {fullName}
-                            {col.terceroNombre ? (
-                              <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">
-                                Tercero · {col.terceroNombre}
-                              </span>
-                            ) : null}
-                            {col.enVacaciones ? (
-                              <span className="ml-2 inline-block align-middle text-[10px] px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-200 font-medium">
-                                {etiquetaVacaciones(col.enVacaciones)}
-                              </span>
-                            ) : null}
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Labor</Label>
@@ -172,7 +144,7 @@ export function EtapaLaboresFinca({
                   <X className="h-4 w-4" />
                   Cancelar
                 </Button>
-                <Button onClick={guardarAuxiliar} className="gap-2 bg-success hover:bg-success/90">
+                <Button onClick={guardarAuxiliar} className="gap-2">
                   <Save className="h-4 w-4" />
                   Guardar Labor
                 </Button>

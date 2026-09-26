@@ -3,7 +3,7 @@
  *
  * Reemplaza el modal "Nueva Extractora" del tab Configuración → Viajes. Sigue
  * el patrón de `NuevoConceptoNomina`: ruta dedicada, header con back arrow +
- * botón Guardar arriba a la derecha, contenido en dos cards (Información de
+ * botón Guardar al pie, contenido en dos cards (Información de
  * la Empresa + Información de Contacto).
  *
  * Rutas:
@@ -148,7 +148,7 @@ export default function NuevaExtractora() {
 
   return (
     <div className="space-y-6">
-      {/* Header: back arrow + título + botón Guardar */}
+      {/* Header: back arrow + título. El botón Guardar va al pie. */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           <Button
@@ -169,14 +169,6 @@ export default function NuevaExtractora() {
             </p>
           </div>
         </div>
-        <Button
-          onClick={handleSave}
-          disabled={saving || loading}
-          className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-full px-6"
-        >
-          <Save className="h-4 w-4" />
-          {saving ? 'Guardando…' : 'Guardar'}
-        </Button>
       </div>
 
       {/* Información de la Empresa */}
@@ -324,6 +316,18 @@ export default function NuevaExtractora() {
           </div>
         </CardContent>
       </Card>
+
+      {/* El botón va al pie del formulario, como en el resto de la app. */}
+      <div className="flex justify-end">
+        <Button
+          onClick={handleSave}
+          disabled={saving || loading}
+          className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-full px-6"
+        >
+          <Save className="h-4 w-4" />
+          {saving ? 'Guardando…' : 'Guardar'}
+        </Button>
+      </div>
     </div>
   );
 }

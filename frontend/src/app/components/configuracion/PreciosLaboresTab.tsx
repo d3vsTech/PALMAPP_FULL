@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Plus, Trash2, Loader2, ChevronUp, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, Loader2, ChevronUp, ChevronDown, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Accordion,
@@ -146,7 +146,7 @@ export function PreciosLaboresTab() {
   // Abonada — edición inline
   const [rangosAbono, setRangosAbono] = useState<PrecioAbono[]>(cached?.abono ?? []);
   /** Estado por rango guardado (keyed por id) — copia editable de los 3 campos.
-   *  Se hidrata cuando entra `rangosAbono`. Al `onBlur` se hace PUT si algo cambió. */
+   *  Se hidrata cuando entra `rangosAbono`. El PUT sale al presionar Guardar. */
   type RangoEditable = { gramos_min: string; gramos_max: string; precio_palma: string };
   const [abonoInputs, setAbonoInputs] = useState<Record<number, RangoEditable>>(
     Object.fromEntries(
@@ -163,7 +163,7 @@ export function PreciosLaboresTab() {
     ),
   );
   /** Filas nuevas sin guardar (creadas con "Agregar Rango").
-   *  Cuando el usuario llena los 3 campos + onBlur → POST y al éxito mueve el
+   *  Cuando el usuario llena los 3 campos, el POST sale al Guardar y mueve el
    *  registro a `rangosAbono` y quita el tempId de aquí. */
   type RangoNuevo = { tempId: string } & RangoEditable;
   const [nuevosRangos, setNuevosRangos] = useState<RangoNuevo[]>([]);
@@ -376,7 +376,7 @@ export function PreciosLaboresTab() {
    * ya existe registro para `(lote_id, anioActual)`. Si el input quedó vacío
    * y había un registro, lo elimina (UX: borrar el input = quitar el precio).
    */
-  const handleSaveCosechaInline = async (lote: LoteOption) => {
+  const handleSaveCosechaInline = async (lote: LoteOption, silencioso = false) => {
     const raw = cosechaInputs[String(lote.id)] ?? '';
     const limpio = parseDecimal(raw);
     const valor = limpio ? Number(limpio) : 0;
@@ -395,7 +395,7 @@ export function PreciosLaboresTab() {
           anio: anioActual,
         });
         setPreciosCosecha((prev) => prev.map((p) => (p.id === existente.id ? res.data : p)));
-        toast.success('Guardado');
+        if (!silencioso) toast.success('Guardado');
       } else if (!existente && valor > 0) {
         // POST crea el precio.
         const res = await configuracionApi.preciosCosecha.crear({
@@ -404,7 +404,7 @@ export function PreciosLaboresTab() {
           anio: anioActual,
         });
         setPreciosCosecha((prev) => [...prev, res.data]);
-        toast.success('Guardado');
+        if (!silencioso) toast.success('Guardado');
       } else if (existente && valor === 0) {
         // DELETE: el usuario vació el input → quita el precio del lote.
         await configuracionApi.preciosCosecha.eliminar(existente.id);
@@ -453,7 +453,7 @@ export function PreciosLaboresTab() {
    *  detectamos cambio respecto al valor original. `overridePrecioPalma` se
    *  pasa cuando el input es uncontrolled y necesitamos leer el valor tipeado
    *  directo del DOM antes de que setState llegue. */
-  const handleSaveAbonoInline = async (rango: PrecioAbono, overridePrecioPalma?: string) => {
+  const handleSaveAbonoInline = async (rango: PrecioAbono, overridePrecioPalma?: string, silencioso = false) => {
     const edit = abonoInputs[rango.id];
     if (!edit) return;
     const precioPalmaRaw = overridePrecioPalma ?? edit.precio_palma;
@@ -484,7 +484,7 @@ export function PreciosLaboresTab() {
           precio_palma: formatDecimal(res.data.precio_palma),
         },
       }));
-      toast.success('Guardado');
+      if (!silencioso) toast.success('Guardado');
     } catch (e: any) { reportarErrorRango(e); }
   };
 
@@ -526,7 +526,7 @@ export function PreciosLaboresTab() {
 
   /** POST: al perder foco, si los 3 campos están llenos creamos. Si éxito,
    *  movemos el item de `nuevosRangos` a `rangosAbono`. */
-  const handleSaveNuevoRango = async (tempId: string, overridePrecioPalma?: string) => {
+  const handleSaveNuevoRango = async (tempId: string, overridePrecioPalma?: string, silencioso = false) => {
     const nr = nuevosRangos.find((x) => x.tempId === tempId);
     if (!nr) return;
     // Parseamos los 3 campos quitando los puntos de miles del display.
@@ -553,7 +553,7 @@ export function PreciosLaboresTab() {
         },
       }));
       setNuevosRangos((prev) => prev.filter((x) => x.tempId !== tempId));
-      toast.success('Guardado');
+      if (!silencioso) toast.success('Guardado');
     } catch (e: any) { reportarErrorRango(e); }
   };
 
@@ -562,7 +562,7 @@ export function PreciosLaboresTab() {
     setNuevosRangos((prev) => prev.filter((x) => x.tempId !== tempId));
 
   // ── Labor Palma custom (precio_palma según tipo_pago) ────────────────────
-  const handleSaveLaborPalmaCustom = async (labor: Labor) => {
+  const handleSaveLaborPalmaCustom = async (labor: Labor, silencioso = false) => {
     const raw = palmaCustomInputs[labor.id] ?? '';
     const limpio = parseDecimal(raw);
     const valor = limpio ? Number(limpio) : 0;
@@ -571,7 +571,7 @@ export function PreciosLaboresTab() {
     try {
       const res = await configuracionApi.labores.editar(labor.id, { precio_palma: valor });
       setLaboresPalmaCustom((prev) => prev.map((l) => (l.id === labor.id ? res.data : l)));
-      toast.success('Guardado');
+      if (!silencioso) toast.success('Guardado');
     } catch (e: any) {
       if (e?.errors) {
         const primero = Object.values(e.errors).flat()[0];
@@ -584,8 +584,8 @@ export function PreciosLaboresTab() {
 
   // ── Labor Finca (precio_palma plano = "valor por jornal") ─────────────────
   // §4 unificado: las labores de finca tienen `tipo_pago='JORNAL_FIJO'` y
-  // `precio_palma` es el valor por jornal. Inline edit con onBlur.
-  const handleSaveLaborFinca = async (labor: Labor) => {
+  // `precio_palma` es el valor por jornal. Se edita inline y se guarda al presionar.
+  const handleSaveLaborFinca = async (labor: Labor, silencioso = false) => {
     const raw = laborInputs[labor.id] ?? '';
     const limpio = parseDecimal(raw);
     const valor = limpio ? Number(limpio) : 0;
@@ -594,7 +594,7 @@ export function PreciosLaboresTab() {
     try {
       const res = await configuracionApi.labores.editar(labor.id, { precio_palma: valor });
       setLaboresFinca((prev) => prev.map((l) => (l.id === labor.id ? res.data : l)));
-      toast.success('Guardado');
+      if (!silencioso) toast.success('Guardado');
     } catch (e: any) {
       if (e?.errors) {
         const primero = Object.values(e.errors).flat()[0];
@@ -608,14 +608,14 @@ export function PreciosLaboresTab() {
   // ── Palma (PLATEO/PODA/SANIDAD/COSECHA/FERTILIZACION fijas) ───────────────
   // PUT /labores/{id} con precio_palma. El wrapper preciosPalma.editar lo
   // redirige al endpoint unificado §4.
-  const handleSavePalma = async (palma: Labor) => {
+  const handleSavePalma = async (palma: Labor, silencioso = false) => {
     const raw = palmaInputs[palma.id];
     const limpio = parseDecimal(raw);
     const precio = !limpio ? null : Number(limpio);
     try {
       const res = await configuracionApi.labores.editar(palma.id, { precio_palma: precio });
       setPreciosPalma((prev) => prev.map((p) => (p.id === palma.id ? res.data : p)));
-      toast.success('Guardado');
+      if (!silencioso) toast.success('Guardado');
     } catch (e: any) {
       if (e?.errors) {
         const primero = Object.values(e.errors).flat()[0];
@@ -630,7 +630,7 @@ export function PreciosLaboresTab() {
   // §19: única pantalla donde `labor_actividades.precio` es editable. Se guarda
   // con `PUT /labor-actividades/{id}` (helper `.editar`). Valor vacío = null =
   // hereda el precio de la labor padre. La nomenclatura visible es "trabajo".
-  const handleSaveActividadInline = async (act: SublaborBundle) => {
+  const handleSaveActividadInline = async (act: SublaborBundle, silencioso = false) => {
     const raw = actividadInputs[act.id] ?? '';
     const limpio = parseDecimal(raw);
     const nuevoPrecio: number | null = !limpio ? null : Number(limpio);
@@ -649,7 +649,7 @@ export function PreciosLaboresTab() {
         ...prev,
         [act.id]: res.data.precio != null ? formatDecimal(res.data.precio) : '',
       }));
-      toast.success('Guardado');
+      if (!silencioso) toast.success('Guardado');
     } catch (e: any) {
       if (e?.errors) {
         const primero = Object.values(e.errors).flat()[0];
@@ -659,6 +659,48 @@ export function PreciosLaboresTab() {
       }
     }
   };
+
+  // ── Guardado explícito de toda la pestaña ─────────────────────────────────
+  /**
+   * Antes cada campo se guardaba solo al perder el foco. Eso hacía que el
+   * usuario nunca confirmara nada: bastaba pasar por encima de un precio para
+   * dispararle un PUT, y no había forma de arrepentirse.
+   *
+   * Ahora se guarda al presionar el botón de cada sección. Cada uno llama a
+   * los mismos handlers de antes, en modo silencioso para no lanzar un toast
+   * por fila; y como cada handler ya compara contra el valor cargado, guardar
+   * sin haber tocado nada no genera ni una petición.
+   */
+  const [guardandoTodo, setGuardandoTodo] = useState(false);
+
+  /** Guarda solo una sección. Es lo que espera quien pulsa el botón que está
+   *  dentro de esa tarjeta, y no toca el resto de la pestaña. */
+  const guardarSeccion = async (fn: () => Promise<void>) => {
+    setGuardandoTodo(true);
+    try {
+      await fn();
+      toast.success('Precios guardados');
+    } finally {
+      setGuardandoTodo(false);
+    }
+  };
+
+  const guardarCosecha = () =>
+    guardarSeccion(async () => {
+      for (const lote of lotes) await handleSaveCosechaInline(lote, true);
+    });
+
+  const guardarAbono = () =>
+    guardarSeccion(async () => {
+      for (const rango of rangosAbono) await handleSaveAbonoInline(rango, undefined, true);
+      for (const nr of nuevosRangos) await handleSaveNuevoRango(nr.tempId, undefined, true);
+    });
+
+  const guardarFinca = () =>
+    guardarSeccion(async () => {
+      for (const labor of laboresFinca) await handleSaveLaborFinca(labor, true);
+    });
+
 
   /**
    * Render de la tabla de sublabores (trabajos) dentro de la card de una labor.
@@ -707,7 +749,6 @@ export function PreciosLaboresTab() {
                             [act.id]: formatDecimalLive(e.target.value),
                           }))
                         }
-                        onBlur={() => handleSaveActividadInline(act)}
                         placeholder="Hereda de la labor"
                         className="w-44 text-right"
                       />
@@ -817,9 +858,6 @@ export function PreciosLaboresTab() {
                                           [String(sub.lote_id)]: formatDecimalLive(e.target.value),
                                         }))
                                       }
-                                      onBlur={() => {
-                                        if (lote) handleSaveCosechaInline(lote);
-                                      }}
                                       placeholder="0"
                                       className="w-32 text-right"
                                     />
@@ -833,6 +871,13 @@ export function PreciosLaboresTab() {
                       </tbody>
                     </table>
                   </div>
+                {/* El botón de cada sección guarda solo lo suyo (diseño V.26). */}
+                <div className="flex justify-end pt-2">
+                  <Button onClick={guardarCosecha} className="gap-2">
+                    <Save className="h-4 w-4" />
+                    Guardar
+                  </Button>
+                </div>
                 </CardContent>
               </AccordionContent>
             </Card>
@@ -862,8 +907,8 @@ export function PreciosLaboresTab() {
                       </Button>
                     </div>
 
-                    {/* Tabla inline. Filas guardadas → PUT onBlur. Filas nuevas
-                        (tempId) → POST onBlur cuando los 3 campos están llenos. */}
+                    {/* Tabla inline. Filas guardadas → PUT al guardar. Filas nuevas
+                        (tempId) → POST cuando los 3 campos están llenos. */}
                     <div className="rounded-lg border border-border overflow-hidden">
                       <table className="w-full table-fixed">
                         <thead className="bg-muted/50">
@@ -902,7 +947,6 @@ export function PreciosLaboresTab() {
                                               [rango.id]: { ...edit, gramos_min: formatDecimalLive(e.target.value) },
                                             }))
                                           }
-                                          onBlur={() => handleSaveAbonoInline(rango)}
                                           className="w-full pr-7"
                                         />
                                         {/* Spinners. `onMouseDown preventDefault` evita que el input pierda foco. */}
@@ -941,7 +985,6 @@ export function PreciosLaboresTab() {
                                               [rango.id]: { ...edit, gramos_max: formatDecimalLive(e.target.value) },
                                             }))
                                           }
-                                          onBlur={() => handleSaveAbonoInline(rango)}
                                           className="w-full pr-7"
                                         />
                                         <div className="absolute right-1 top-1 bottom-1 flex flex-col opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
@@ -984,7 +1027,6 @@ export function PreciosLaboresTab() {
                                               },
                                             }))
                                           }
-                                          onBlur={() => handleSaveAbonoInline(rango)}
                                           className="w-32"
                                         />
                                         <span className="text-muted-foreground text-sm">/palma</span>
@@ -1021,7 +1063,6 @@ export function PreciosLaboresTab() {
                                             ),
                                           )
                                         }
-                                        onBlur={() => handleSaveNuevoRango(nr.tempId)}
                                         className="w-full pr-7"
                                       />
                                       <div className="absolute right-1 top-1 bottom-1 flex flex-col opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
@@ -1069,7 +1110,6 @@ export function PreciosLaboresTab() {
                                             ),
                                           )
                                         }
-                                        onBlur={() => handleSaveNuevoRango(nr.tempId)}
                                         className="w-full pr-7"
                                       />
                                       <div className="absolute right-1 top-1 bottom-1 flex flex-col opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
@@ -1119,7 +1159,6 @@ export function PreciosLaboresTab() {
                                             ),
                                           )
                                         }
-                                        onBlur={() => handleSaveNuevoRango(nr.tempId)}
                                         className="w-32"
                                       />
                                       <span className="text-muted-foreground text-sm">/palma</span>
@@ -1143,6 +1182,13 @@ export function PreciosLaboresTab() {
                       </table>
                     </div>
                   </div>
+                {/* El botón de cada sección guarda solo lo suyo (diseño V.26). */}
+                <div className="flex justify-end pt-2">
+                  <Button onClick={guardarAbono} className="gap-2">
+                    <Save className="h-4 w-4" />
+                    Guardar
+                  </Button>
+                </div>
                 </CardContent>
               </AccordionContent>
             </Card>
@@ -1180,13 +1226,19 @@ export function PreciosLaboresTab() {
                           onChange={(e) =>
                             setPalmaInputs((prev) => ({ ...prev, [labor.id]: formatDecimalLive(e.target.value) }))
                           }
-                          onBlur={() => handleSavePalma(labor)}
                           className="text-lg font-semibold"
                           placeholder="0"
                         />
                         <span className="text-muted-foreground">/jornal</span>
                       </div>
                     </div>
+                  {/* El botón de cada sección guarda solo lo suyo (diseño V.26). */}
+                  <div className="flex justify-end pt-2">
+                    <Button onClick={() => handleSavePalma(labor)} className="gap-2">
+                      <Save className="h-4 w-4" />
+                      Guardar
+                    </Button>
+                  </div>
                   </CardContent>
                 </AccordionContent>
               </Card>
@@ -1230,7 +1282,6 @@ export function PreciosLaboresTab() {
                           onChange={(e) =>
                             setPalmaInputs((prev) => ({ ...prev, [palma.id]: formatDecimalLive(e.target.value) }))
                           }
-                          onBlur={() => handleSavePalma(palma)}
                           className="text-lg font-semibold"
                           placeholder="0"
                         />
@@ -1250,6 +1301,13 @@ export function PreciosLaboresTab() {
                         {renderSublaboresPanel(palma.id, palmaUnidad(palma))}
                       </div>
                     )}
+                  {/* El botón de cada sección guarda solo lo suyo (diseño V.26). */}
+                  <div className="flex justify-end pt-2">
+                    <Button onClick={() => handleSavePalma(palma)} className="gap-2">
+                      <Save className="h-4 w-4" />
+                      Guardar
+                    </Button>
+                  </div>
                   </CardContent>
                 </AccordionContent>
               </Card>
@@ -1288,7 +1346,6 @@ export function PreciosLaboresTab() {
                               [labor.id]: formatDecimalLive(e.target.value),
                             }))
                           }
-                          onBlur={() => handleSaveLaborPalmaCustom(labor)}
                           className="text-lg font-semibold"
                           placeholder="0"
                         />
@@ -1304,6 +1361,13 @@ export function PreciosLaboresTab() {
                         </p>
                       </div>
                       {renderSublaboresPanel(labor.id, palmaUnidad(labor))}
+                    </div>
+                    {/* El botón de cada sección guarda solo lo suyo (diseño V.26). */}
+                    <div className="flex justify-end pt-2">
+                      <Button onClick={() => handleSaveLaborPalmaCustom(labor)} className="gap-2">
+                        <Save className="h-4 w-4" />
+                        Guardar
+                      </Button>
                     </div>
                   </CardContent>
                 </AccordionContent>
@@ -1353,7 +1417,6 @@ export function PreciosLaboresTab() {
                                   [labor.id]: formatDecimalLive(e.target.value),
                                 }))
                               }
-                              onBlur={() => handleSaveLaborFinca(labor)}
                               placeholder="0"
                               className="w-32 text-right"
                             />
@@ -1365,10 +1428,18 @@ export function PreciosLaboresTab() {
                   </tbody>
                 </table>
               </div>
+            {/* El botón de cada sección guarda solo lo suyo (diseño V.26). */}
+            <div className="flex justify-end pt-2">
+              <Button onClick={guardarFinca} className="gap-2">
+                <Save className="h-4 w-4" />
+                Guardar
+              </Button>
+            </div>
             </CardContent>
           </Card>
         )}
       </div>
+
     </div>
   );
 }

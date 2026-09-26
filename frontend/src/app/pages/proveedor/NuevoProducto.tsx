@@ -384,28 +384,6 @@ export default function NuevoProducto() {
               </CardContent>
             </Card>
 
-            {/* Acciones */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Acciones</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Button type="submit" className="w-full gap-2" disabled={enviando}>
-                  {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                  {enviando ? 'Creando...' : 'Crear Producto'}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => navigate('/proveedor/productos')}
-                  disabled={enviando}
-                >
-                  Cancelar
-                </Button>
-              </CardContent>
-            </Card>
-
             {/* Información */}
             <Card className="bg-muted/50">
               <CardContent className="p-4">
@@ -416,6 +394,24 @@ export default function NuevoProducto() {
               </CardContent>
             </Card>
           </div>
+        </div>
+
+        {/* Acciones al pie del formulario. Antes vivían en una card lateral,
+            a media altura: quien llenaba el formulario hacia abajo terminaba
+            con el botón fuera de vista. */}
+        <div className="flex flex-wrap justify-end gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => navigate('/proveedor/productos')}
+            disabled={enviando}
+          >
+            Cancelar
+          </Button>
+          <Button type="submit" className="gap-2" disabled={enviando}>
+            {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            {enviando ? 'Creando...' : 'Crear Producto'}
+          </Button>
         </div>
       </form>
     </div>

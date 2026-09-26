@@ -2194,6 +2194,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
     setAuxiliarEnEdicion({
       id: `auxiliar-${Date.now()}`,
       nombre: '',
+      colaboradores: [],
       labor: '',
       otraLabor: '',
       lugar: '',
@@ -2202,7 +2203,8 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
   const guardarAuxiliar = async () => {
     if (!auxiliarEnEdicion) return;
-    if (!auxiliarEnEdicion.nombre || !auxiliarEnEdicion.labor) {
+    const elegidos = auxiliarEnEdicion.colaboradores ?? [];
+    if (elegidos.length === 0 || !auxiliarEnEdicion.labor) {
       toast.error('Selecciona colaborador y labor antes de guardar');
       return;
     }
@@ -2243,11 +2245,29 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         }
       }
     }
+    // Una tarjeta por colaborador: el backend crea un jornal por empleado.
     const existe = trabajosAuxiliares.some(t => t.id === auxFinal.id);
     if (existe) {
-      setTrabajosAuxiliares(trabajosAuxiliares.map(t => (t.id === auxFinal.id ? auxFinal : t)));
+      // Editando: la tarjeta conserva su id y se queda con el primero elegido.
+      const actualizada = { ...auxFinal, nombre: elegidos[0], colaboradores: undefined };
+      const extra = elegidos.slice(1).map((cid, i) => ({
+        ...auxFinal,
+        id: `auxiliar-${Date.now()}-${i}`,
+        nombre: cid,
+        colaboradores: undefined,
+      }));
+      setTrabajosAuxiliares([
+        ...extra,
+        ...trabajosAuxiliares.map(t => (t.id === auxFinal.id ? actualizada : t)),
+      ]);
     } else {
-      setTrabajosAuxiliares([auxFinal, ...trabajosAuxiliares]);
+      const nuevas = elegidos.map((cid, i) => ({
+        ...auxFinal,
+        id: i === 0 ? auxFinal.id : `auxiliar-${Date.now()}-${i}`,
+        nombre: cid,
+        colaboradores: undefined,
+      }));
+      setTrabajosAuxiliares([...nuevas, ...trabajosAuxiliares]);
     }
     setAuxiliarEnEdicion(null);
   };
@@ -2259,7 +2279,8 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   const editarAuxiliar = (id: string) => {
     const t = trabajosAuxiliares.find(x => x.id === id);
     if (!t) return;
-    setAuxiliarEnEdicion({ ...t });
+    // Al reabrir, la selección parte del colaborador que ya tenía la tarjeta.
+    setAuxiliarEnEdicion({ ...t, colaboradores: t.nombre ? [t.nombre] : [] });
   };
 
   // Funciones para eliminar trabajos
@@ -2987,14 +3008,14 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                 // superior o "Anterior", lo cual no es evidente.
                 <Button
                   onClick={() => navigate('/operaciones')}
-                  className="gap-2 bg-success hover:bg-success/90"
+                  className="gap-2"
                 >
                   <Check className="h-4 w-4" />
                   Finalizar
                 </Button>
               ) : (
                 <Button
-                  onClick={() => guardarTodo()} disabled={guardando} className="gap-2 bg-success hover:bg-success/90"
+                  onClick={() => guardarTodo()} disabled={guardando} className="gap-2"
                 >
                   {guardando ? (
                     <>
@@ -3681,7 +3702,6 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                     setCoberturaFaltantes(null);
                     navigate('/operaciones');
                   }}
-                  className="bg-success hover:bg-success/90"
                 >
                   Guardar
                 </AlertDialogAction>

@@ -103,10 +103,17 @@ export interface TrabajoOtros {
 
 export interface TrabajoAuxiliar {
   id: string;
+  /** Id del colaborador de ESTA tarjeta. Una tarjeta = un jornal. */
   nombre: string;
   labor: string;
   otraLabor?: string;
   lugar: string;
+  /**
+   * Selección del formulario mientras se edita. Solo vive ahí: al guardar se
+   * expande a una tarjeta por colaborador, porque el backend crea un jornal
+   * por empleado (§3.3). Las tarjetas ya guardadas no lo llevan.
+   */
+  colaboradores?: string[];
 }
 
 export interface AusenteRegistro {

@@ -302,29 +302,23 @@ export function PromediosTab() {
             <CardTitle>Promedios Anuales</CardTitle>
             <CardDescription>Kg promedio por gajo para cada lote</CardDescription>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Label className="text-sm">Año:</Label>
-              <Select
-                value={anioSeleccionado.toString()}
-                onValueChange={(value) => setAnioSeleccionado(parseInt(value))}
-              >
-                <SelectTrigger className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {aniosDisponibles.map((anio) => (
-                    <SelectItem key={anio} value={anio.toString()}>
-                      {anio}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <Button onClick={handleGuardar} disabled={!hayCambios}>
-              <Save className="mr-2 h-4 w-4" />
-              Guardar Cambios
-            </Button>
+          <div className="flex items-center gap-2">
+            <Label className="text-sm">Año:</Label>
+            <Select
+              value={anioSeleccionado.toString()}
+              onValueChange={(value) => setAnioSeleccionado(parseInt(value))}
+            >
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {aniosDisponibles.map((anio) => (
+                  <SelectItem key={anio} value={anio.toString()}>
+                    {anio}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </CardHeader>
@@ -617,6 +611,14 @@ export function PromediosTab() {
             </p>
           </div>
         )}
+
+        {/* El botón va al pie del formulario, como en el resto de la app. */}
+        <div className="flex justify-end">
+          <Button onClick={handleGuardar} disabled={!hayCambios}>
+            <Save className="mr-2 h-4 w-4" />
+            Guardar Cambios
+          </Button>
+        </div>
       </CardContent>
     </Card>
     </TabLoadingGate>
