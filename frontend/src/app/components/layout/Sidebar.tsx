@@ -108,6 +108,13 @@ const navItems: NavItem[] = [
   },
 ];
 
+/** Placeholder del logo: hasta dos iniciales del nombre de la finca. */
+function inicialesFinca(nombre?: string | null): string {
+  const partes = (nombre ?? '').trim().split(/\s+/).filter(Boolean);
+  if (partes.length === 0) return '—';
+  return partes.slice(0, 2).map((p) => p[0]!.toUpperCase()).join('');
+}
+
 export default function Sidebar() {
   const location = useLocation();
   const { user, hasPermiso } = useAuth();
@@ -169,16 +176,33 @@ export default function Sidebar() {
           del `<p>` funcione dentro del flex parent (sin esto, nombres largos
           se desbordan al hacer zoom del navegador o en anchos apretados). */}
       <div className="border-t border-border p-4 shrink-0 min-w-0">
-        <div className="rounded-xl bg-muted/50 p-4 min-w-0 overflow-hidden">
-          <p
-            className="font-bold text-foreground truncate"
-            title={user?.fincaActual?.nombre}
-          >
-            {user?.fincaActual?.nombre ?? 'Sin finca seleccionada'}
-          </p>
-          <p className="text-sm text-muted-foreground mt-1 truncate">
-            Sistema de gestión integral
-          </p>
+        <div className="rounded-xl bg-muted/50 p-4 min-w-0 overflow-hidden flex items-center gap-3">
+          {/* `logo_url` llega absoluto desde el login / select-tenant / me.
+              Si es null la finca no cargó logo: se muestran las iniciales. */}
+          <div className="h-10 w-10 shrink-0 rounded-lg bg-background border border-border overflow-hidden flex items-center justify-center">
+            {user?.fincaActual?.logo_url ? (
+              <img
+                src={user.fincaActual.logo_url}
+                alt={user.fincaActual.nombre}
+                className="h-full w-full object-contain"
+              />
+            ) : (
+              <span className="text-xs font-bold text-muted-foreground">
+                {inicialesFinca(user?.fincaActual?.nombre)}
+              </span>
+            )}
+          </div>
+          <div className="min-w-0">
+            <p
+              className="font-bold text-foreground truncate"
+              title={user?.fincaActual?.nombre}
+            >
+              {user?.fincaActual?.nombre ?? 'Sin finca seleccionada'}
+            </p>
+            <p className="text-sm text-muted-foreground mt-1 truncate">
+              Sistema de gestión integral
+            </p>
+          </div>
         </div>
       </div>
     </div>

@@ -14,6 +14,7 @@
  *  - CRUD completo de paramétricas (empresas_transportadoras, transportadores, extractoras).
  */
 import { requestConToken, fetchConToken } from './request';
+import { apiClient } from './client';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -275,6 +276,88 @@ export interface Viaje {
   extractora?: { id: number; razon_social: string; ubicacion?: string };
   detalles?: ViajeDetalle[];
   detalles_count?: number;
+  /**
+   * Documentos de báscula cargados, solo en `GET /viajes/{id}` (§14.1).
+   * Alimenta el punto "Soporte extractora" del timeline del detalle: el viaje
+   * llegó a ese hito cuando ya subieron al menos un documento.
+   */
+  documentos_bascula?: Array<{
+    id: number;
+    viaje_id: number;
+    estado_ocr: EstadoOcrDocumento;
+    created_at: string;
+  }>;
+}
+
+// ─── Desprendible "Remisión de fruta al transporte" (§14) ────────────────────
+
+/** Una fila del detalle de cosecha del desprendible. */
+export interface ViajeDesprendibleDetalle {
+  lote: string;
+  sublote: string | null;
+  /** Nombres completos de la cuadrilla activa (empleados u operarios); `[]` si no hay. */
+  colaboradores: string[];
+  /** `gajos_en_viaje ?? gajos_reconteo ?? gajos_reportados` (§6.1). */
+  gajos: number;
+  /** `gajos × promedio_aplicado`. `null` si el detalle quedó sin promedio. */
+  peso_kg: string | null;
+  /** Promedio kg/gajo congelado al finalizar el viaje (§6.1/§6.2), 4 decimales. */
+  promedio_aplicado: string | null;
+}
+
+export interface ViajeDesprendible {
+  id: number;
+  remision: string;
+  estado: EstadoViajeApi;
+  estado_label: string;
+  fecha_viaje: string;
+  hora_salida: string;
+  placa_vehiculo: string;
+  nombre_conductor: string;
+  transportador: string;
+  extractora: { razon_social: string; ubicacion: string | null };
+  observaciones: string | null;
+  es_homogeneo: boolean;
+  detalles: ViajeDesprendibleDetalle[];
+  /** `true` en viajes pagados por jornal, sin cosechas enlazadas. */
+  sin_detalles: boolean;
+  totales: {
+    gajos: number;
+    peso_kg: string | null;
+    /**
+     * `BASCULA` cuando el total sale de `peso_viaje`, `SUMA_LOTES` cuando sale
+     * de sumar los detalles, y `null` si el viaje no tiene ni peso ni detalles.
+     */
+    peso_origen: 'BASCULA' | 'SUMA_LOTES' | null;
+    /** Σ del peso de los lotes. Si difiere de `peso_kg` en más de 1 kg, el PDF lo anota. */
+    suma_lotes_kg: string | null;
+  };
+  /** Siempre presente; los campos que la extractora no reportó van en `null`. */
+  recepcion: {
+    numero_remision_extractora: string | null;
+    fecha_llegada: string | null;
+    hora_llegada: string | null;
+    peso_viaje: string | null;
+    calificacion: {
+      fruto_verde: string | null;
+      sobre_maduro: string | null;
+      podrido: string | null;
+      pedunculo_largo: string | null;
+      mal_formado: string | null;
+    };
+    observaciones_extractora: string | null;
+  };
+  finalizado_at: string | null;
+  generado_el: string;
+  filename: string;
+}
+
+/** Respuesta de los endpoints `/whatsapp`: solo la URL firmada (D7). */
+export interface EnlaceDesprendible {
+  /** Enlace firmado de 7 días a la ruta pública del PDF (abre sin sesión). */
+  url: string;
+  filename: string;
+  expires_at: string;
 }
 
 /**
@@ -751,6 +834,35 @@ export const viajesApi = {
   finalizar: (id: number) =>
     post<{ data: Viaje }>(`/viajes/${id}/finalizar`),
 
+  // ── Desprendible "Remisión de fruta al transporte" (§14) ────────────────
+  //
+  // Los tres endpoints exigen `viajes.ver` y el viaje en **FINALIZADO** (D4):
+  // en CREADO o EN_VALIDACION responden 409 VIAJE_ESTADO_INVALIDO. El PDF lo
+  // arma el backend con el membrete de la finca (logo incluido), así que el
+  // front ya no genera nada con jsPDF.
+
+  /** GET /viajes/{id}/desprendible — misma estructura que el PDF, en JSON. */
+  desprendible: (id: number) =>
+    get<{ data: ViajeDesprendible }>(`/viajes/${id}/desprendible`),
+
+  /**
+   * GET /viajes/{id}/desprendible/pdf — descarga el PDF.
+   * `inline` sirve para abrirlo en el visor en vez de forzar la descarga.
+   */
+  desprendiblePdf: (id: number, inline = false) =>
+    apiClient.getBlob(
+      `/v1/tenant/viajes/${id}/desprendible/pdf${inline ? '?inline=1' : ''}`,
+      true,
+    ),
+
+  /**
+   * POST /viajes/{id}/desprendible/whatsapp — devuelve **solo** la URL firmada
+   * (7 días) a la ruta pública del PDF. El backend no arma el mensaje ni
+   * conoce el teléfono: el front abre `wa.me/?text=` con la URL (D7).
+   */
+  desprendibleWhatsapp: (id: number) =>
+    post<{ data: EnlaceDesprendible }>(`/viajes/${id}/desprendible/whatsapp`),
+
   // ── OCR del formulario de extractora ────────────────────────────────────
 
   /**
@@ -906,6 +1018,16 @@ export const ViajesErrorCodes = {
   ANTHROPIC_SIN_CONFIGURAR: 'ANTHROPIC_SIN_CONFIGURAR',
   /** 403 — `tenant_config.modulo_viajes = false`. */
   MODULO_DESHABILITADO: 'MODULO_DESHABILITADO',
+  /**
+   * 403 — la ruta pública del desprendible: el enlace firmado venció o la
+   * firma no es válida.
+   */
+  ENLACE_INVALIDO_O_VENCIDO: 'ENLACE_INVALIDO_O_VENCIDO',
+  /**
+   * 403 — el enlace firmado sigue vigente pero el viaje ya no se puede
+   * compartir (se borró, o dejó de estar FINALIZADO).
+   */
+  DOCUMENTO_NO_DISPONIBLE: 'DOCUMENTO_NO_DISPONIBLE',
 } as const;
 
 export type ViajeErrorCode = typeof ViajesErrorCodes[keyof typeof ViajesErrorCodes];

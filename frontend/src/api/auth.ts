@@ -18,10 +18,28 @@ export interface LoginSuperAdminPayload {
   password: string;
 }
 
+/**
+ * Objeto `tenant` de API_AUTH_FINCA §1. Es el mismo en el login con una finca,
+ * en `select-tenant` y (más `rol`) en cada elemento de `tenants` del login con
+ * varias fincas y de `/me`.
+ */
 export interface TenantInfo {
   id: number;
   nombre: string;
-  nit: string;
+  nit: string | null;
+  razon_social?: string | null;
+  tipo_persona?: 'NATURAL' | 'JURIDICA';
+  correo_contacto?: string | null;
+  telefono?: string | null;
+  direccion?: string | null;
+  departamento?: string | null;
+  municipio?: string | null;
+  /**
+   * URL pública **absoluta** del logo de la empresa, o `null` si la finca no
+   * ha cargado logo (el backend nunca manda cadena vacía ni ruta relativa).
+   * Mismo valor que devuelve `GET /configuracion/info-empresa`.
+   */
+  logo_url?: string | null;
   plan: string;
   rol?: string;
 }
@@ -59,6 +77,8 @@ export interface SelectTenantResponse {
   expires_in: number;
   tenant_id: number;
   tenant_nombre: string;
+  /** Objeto completo de la finca elegida (incluye `logo_url`). */
+  tenant?: TenantInfo;
   rol: string;
   permisos: string[];
   modulos: Record<string, boolean>;

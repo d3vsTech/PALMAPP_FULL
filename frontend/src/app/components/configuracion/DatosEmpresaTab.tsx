@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Save } from 'lucide-react';
+import { Save, Upload, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Select,
@@ -142,6 +142,14 @@ export function DatosEmpresaTab() {
   const [municipios, setMunicipios] = useState<DaneItem[]>([]);
   const [deptoCodigo, setDeptoCodigo] = useState<string>('');
 
+  // Logo de la finca (§13). `logoUrl` es lo que ya tiene guardado el backend;
+  // `logoFile` + `logoPreview` son la selección pendiente de guardar.
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [guardando, setGuardando] = useState(false);
+
   useEffect(() => {
     cached('dane:departamentos', getDepartamentos, FOREVER)
       .then((res) => setDepartamentos(res.data ?? []))
@@ -154,6 +162,7 @@ export function DatosEmpresaTab() {
         const { tipoPersona: tp, form } = apiToForm(res.data);
         setTipoPersona(tp);
         setDatosEmpresa(form);
+        setLogoUrl(res.data.logo_url ?? null);
       })
       .catch((e: any) => {
         toast.error(e?.message ?? 'No se pudo cargar la información de la empresa');
@@ -192,11 +201,41 @@ export function DatosEmpresaTab() {
     setDatosEmpresa((prev) => ({ ...prev, municipio: nombre }));
   };
 
+  /** Formatos y tope que valida el backend: jpeg/jpg/png/webp, máx 2MB. */
+  const LOGO_TIPOS = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+  const LOGO_MAX_BYTES = 2 * 1024 * 1024;
+
+  const onLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // permite re-elegir el mismo archivo tras un error
+    if (!file) return;
+    if (!LOGO_TIPOS.includes(file.type)) {
+      toast.error('El logo debe ser JPG, PNG o WEBP');
+      return;
+    }
+    if (file.size > LOGO_MAX_BYTES) {
+      toast.error('El logo no puede superar 2MB');
+      return;
+    }
+    setLogoFile(file);
+    setLogoPreview(URL.createObjectURL(file));
+  };
+
+  const quitarLogoPendiente = () => {
+    if (logoPreview) URL.revokeObjectURL(logoPreview);
+    setLogoFile(null);
+    setLogoPreview(null);
+  };
+
   const handleSave = async () => {
+    setGuardando(true);
     try {
-      const res = await configuracionApi.infoEmpresa.actualizar(
-        formToPayload(tipoPersona, datosEmpresa)
-      );
+      const res = await configuracionApi.infoEmpresa.actualizar({
+        ...formToPayload(tipoPersona, datosEmpresa),
+        // Solo va cuando hay archivo nuevo: con `logo` el request cambia a
+        // POST + `_method=PUT` multipart.
+        ...(logoFile ? { logo: logoFile } : {}),
+      });
       // Invalidamos el caché antes de rehidratar. Sin esto, cuando el
       // usuario vuelve a abrir la pantalla el `cached('config:info-empresa')`
       // devuelve el valor viejo y no se ve el cambio de tipo_persona.
@@ -204,8 +243,13 @@ export function DatosEmpresaTab() {
       const { tipoPersona: tp, form } = apiToForm(res.data);
       setTipoPersona(tp);
       setDatosEmpresa(form);
+      // La respuesta ya trae la URL pública final del logo. Cada subida genera
+      // un nombre distinto y el anterior se borra, así que no hace falta
+      // cache-busting ni volver a llamar a `/me`.
+      setLogoUrl(res.data.logo_url ?? null);
+      quitarLogoPendiente();
 
-      // Refleja el nuevo nombre/NIT en la finca activa del usuario actual
+      // Refleja el nuevo nombre/NIT/logo en la finca activa del usuario actual
       // → sidebar (footer "finca la esperanza") y cualquier consumidor de
       // `user.fincaActual` se actualizan sin necesidad de re-loguear.
       if (user?.fincaActual) {
@@ -215,6 +259,7 @@ export function DatosEmpresaTab() {
             ...user.fincaActual,
             nombre: nuevoNombre,
             nit: res.data.nit ?? user.fincaActual.nit ?? '',
+            logo_url: res.data.logo_url ?? null,
           },
         });
       }
@@ -222,11 +267,18 @@ export function DatosEmpresaTab() {
       toast.success(res.message ?? 'Datos de la empresa guardados correctamente');
     } catch (e: any) {
       if (e?.errors) {
-        const primero = Object.values(e.errors).flat()[0];
+        // Los errores del archivo llegan en `errors.logo`.
+        const primero = e.errors.logo?.[0] ?? Object.values(e.errors).flat()[0];
         toast.error(typeof primero === 'string' ? primero : 'Error de validación');
+      } else if (e?.code === 'NIT_DUPLICATED') {
+        toast.error('Ya existe otra finca registrada con ese NIT');
+      } else if (e?.code === 'NO_DATA') {
+        toast.error('No se enviaron datos para actualizar');
       } else {
         toast.error(e?.message ?? 'No se pudieron guardar los cambios');
       }
+    } finally {
+      setGuardando(false);
     }
   };
 
@@ -237,6 +289,78 @@ export function DatosEmpresaTab() {
   return (
     <TabLoadingGate loading={loading} message="Cargando datos de empresa…">
     <div className="space-y-6">
+      {/* Logo de la finca */}
+      <Card className="border-border">
+        <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
+          <CardTitle>Logo de la Finca / Empresa</CardTitle>
+          <p className="text-sm text-muted-foreground mt-1">
+            Este logo aparecerá en todos los documentos descargables del sistema
+            (desprendibles, liquidaciones, novedades, etc.)
+          </p>
+        </CardHeader>
+        <CardContent className="p-6">
+          <div className="flex flex-wrap items-center gap-8">
+            {/* Recuadro de vista previa. Punteado y con la leyenda "Sin logo"
+                mientras la finca no tenga uno cargado. */}
+            <div className="h-28 w-40 shrink-0 rounded-xl border-2 border-dashed border-border bg-muted/20 overflow-hidden flex flex-col items-center justify-center gap-2">
+              {logoPreview || logoUrl ? (
+                <img
+                  src={logoPreview ?? logoUrl ?? ''}
+                  alt="Logo de la finca"
+                  className="h-full w-full object-contain p-2"
+                />
+              ) : (
+                <>
+                  <ImageIcon className="h-7 w-7 text-muted-foreground/40" />
+                  <span className="text-xs text-muted-foreground">Sin logo</span>
+                </>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              {/* El input real va oculto: el botón es el control visible. */}
+              <input
+                id="logo"
+                ref={logoInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={onLogoChange}
+                className="hidden"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => logoInputRef.current?.click()}
+                className="gap-2"
+              >
+                <Upload className="h-4 w-4" />
+                {logoUrl || logoPreview ? 'Cambiar logo' : 'Subir logo'}
+              </Button>
+
+              <div className="space-y-0.5">
+                <p className="text-sm text-muted-foreground">
+                  Formatos aceptados: PNG, JPG, WEBP · Máximo 2 MB
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Recomendado: fondo transparente, mínimo 200 × 80 px
+                </p>
+              </div>
+
+              {logoFile && (
+                <div className="flex items-center gap-3">
+                  <p className="text-xs text-muted-foreground">
+                    {logoFile.name} — se sube al guardar los cambios
+                  </p>
+                  <Button type="button" variant="ghost" size="sm" onClick={quitarLogoPendiente}>
+                    Descartar
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Información Legal */}
       <Card className="border-border">
         <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
@@ -474,9 +598,9 @@ export function DatosEmpresaTab() {
 
       {/* Botón Guardar */}
       <div className="flex justify-end">
-        <Button onClick={handleSave} size="lg" className="gap-2">
+        <Button onClick={handleSave} size="lg" disabled={guardando} className="gap-2">
           <Save className="h-5 w-5" />
-          Guardar Cambios
+          {guardando ? 'Guardando...' : 'Guardar Cambios'}
         </Button>
       </div>
     </div>

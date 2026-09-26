@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { requestConToken } from '../../../api/request';
+import { configuracionApi, ConfiguracionErrorCodes } from '../../../api/configuracion';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
@@ -11,7 +11,7 @@ import {
 import { toast } from 'sonner';
 
 export default function MiPerfil() {
-  const { user, token, updateUser } = useAuth();
+  const { user, updateUser } = useAuth();
 
   // ─── Datos personales ─────────────────────────────────────────────────────
   const [nombre, setNombre]       = useState('');
@@ -49,20 +49,23 @@ export default function MiPerfil() {
 
     setSavingPerfil(true);
     try {
-      const res = await requestConToken<{ message?: string; data?: any }>(
-        '/api/v1/tenant/perfil',
-        { method: 'PUT', body: JSON.stringify(cambios) },
-        token,
-      );
-      // Sincronizar AuthContext + localStorage. updateUser hace ambas cosas
-      // y dispara el re-render del Topbar para que el nombre cambie de una.
-      const patch: any = {};
-      if (cambios.name)  patch.nombre = cambios.name;
-      if (cambios.email) patch.email  = cambios.email;
-      if (Object.keys(patch).length > 0) updateUser(patch);
+      const res = await configuracionApi.editarPerfil(cambios);
+      // Sincronizar AuthContext + localStorage con lo que confirmó el backend
+      // (no con lo que escribió el usuario). updateUser hace ambas cosas y
+      // dispara el re-render del Topbar para que el nombre cambie de una.
+      updateUser({
+        nombre: res.data?.name ?? cambios.name ?? user?.nombre,
+        email: res.data?.email ?? cambios.email ?? user?.email,
+      });
       toast.success(res.message ?? 'Perfil actualizado correctamente');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error al actualizar el perfil');
+    } catch (err: any) {
+      if (err?.code === ConfiguracionErrorCodes.NO_DATA) {
+        toast.error('No se enviaron datos para actualizar');
+      } else if (err?.errors?.email) {
+        toast.error(err.errors.email[0] ?? 'Ese correo ya está en uso');
+      } else {
+        toast.error(err?.message ?? 'Error al actualizar el perfil');
+      }
     } finally {
       setSavingPerfil(false);
     }
@@ -83,24 +86,27 @@ export default function MiPerfil() {
 
     setSavingPass(true);
     try {
-      const res = await requestConToken<{ message?: string }>(
-        '/api/v1/tenant/perfil/password',
-        {
-          method: 'PUT',
-          body: JSON.stringify({
-            current_password:      passwordActual,
-            password:              passwordNueva,
-            password_confirmation: passwordConfirm,
-          }),
-        },
-        token,
-      );
+      const res = await configuracionApi.cambiarPassword({
+        current_password:      passwordActual,
+        password:              passwordNueva,
+        password_confirmation: passwordConfirm,
+      });
       toast.success(res.message ?? 'Contraseña actualizada correctamente');
       setPasswordActual('');
       setPasswordNueva('');
       setPasswordConfirm('');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error al cambiar la contraseña');
+    } catch (err: any) {
+      // §3 — los dos códigos apuntan a campos distintos del formulario.
+      if (err?.code === ConfiguracionErrorCodes.INVALID_CURRENT_PASSWORD) {
+        toast.error('La contraseña actual es incorrecta');
+      } else if (err?.code === ConfiguracionErrorCodes.SAME_PASSWORD) {
+        toast.error('La nueva contraseña debe ser diferente de la actual');
+      } else if (err?.errors) {
+        const primero = Object.values(err.errors).flat()[0];
+        toast.error(typeof primero === 'string' ? primero : 'Error de validación');
+      } else {
+        toast.error(err?.message ?? 'Error al cambiar la contraseña');
+      }
     } finally {
       setSavingPass(false);
     }

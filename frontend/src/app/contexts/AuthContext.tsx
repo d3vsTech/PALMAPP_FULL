@@ -8,7 +8,21 @@ export type UserRole = 'ADMIN' | 'USUARIO' | 'super_admin' | 'administrador' | '
 export interface TenantInfo {
   id: number;
   nombre: string;
-  nit?: string;
+  nit?: string | null;
+  razon_social?: string | null;
+  tipo_persona?: 'NATURAL' | 'JURIDICA';
+  correo_contacto?: string | null;
+  telefono?: string | null;
+  direccion?: string | null;
+  departamento?: string | null;
+  municipio?: string | null;
+  /**
+   * URL pública absoluta del logo de la finca, o `null` si no cargó ninguno
+   * (API_AUTH_FINCA §1). Se pinta en el header; si es `null`, placeholder.
+   * Se refresca sin llamar a `/me` con el `logo_url` que devuelve
+   * `PUT /configuracion/info-empresa`.
+   */
+  logo_url?: string | null;
   plan?: string;
   rol?: string;
 }
@@ -168,12 +182,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const res = await http<any>('/v1/tenant-auth/me');
           const saved = localStorage.getItem(USER_KEY);
           const savedUser = saved ? JSON.parse(saved) : {};
+          // Tras un F5 el store se reconstruye desde `/me`: la finca guardada
+          // se vuelve a tomar de `tenants[]` para que `logo_url` y el resto de
+          // datos lleguen frescos (el admin pudo cambiar el logo entre sesiones).
+          const idGuardado = Number(
+            localStorage.getItem(TENANT_KEY) ?? savedUser?.fincaId ?? 0,
+          );
+          const fincaFresca = (res.tenants ?? []).find(
+            (t: TenantInfo) => Number(t.id) === idGuardado,
+          );
           const u: User = {
             ...savedUser,
             id: res.user?.id,
             nombre: res.user?.name,
             email: res.user?.email,
             fincas: res.tenants,
+            ...(fincaFresca ? { fincaActual: fincaFresca, fincaId: fincaFresca.id } : {}),
           };
           setUser(u);
           setToken(storedToken);
@@ -300,13 +324,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setPendingTenantSelection(false);
     setAvailableTenants([]);
 
-    const fincaInfo = availableTenants.find(t => t.id === tenantId);
+    // `select-tenant` devuelve el objeto `tenant` completo (con `logo_url`),
+    // así que no hace falta buscarlo en la lista ni llamar a `/me`. La
+    // búsqueda en `availableTenants` queda como fallback.
+    const fincaInfo: TenantInfo | undefined =
+      res.tenant ?? availableTenants.find(t => t.id === tenantId);
     const newUser: User = {
       id: user?.id ?? 0,
       nombre: user?.nombre ?? '',
       email: user?.email ?? '',
       rol: normalizarRol(res.rol ?? 'USUARIO') as UserRole,
-      fincaActual: fincaInfo ?? { id: res.tenant_id, nombre: res.tenant_nombre ?? '', nit: '' },
+      fincaActual: fincaInfo ?? { id: res.tenant_id, nombre: res.tenant_nombre ?? '', nit: null },
       fincaId: res.tenant_id,
       fincas: availableTenants,
       permisos: res.permisos ?? [],

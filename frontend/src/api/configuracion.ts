@@ -599,6 +599,30 @@ export interface InfoEmpresaPayload {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
+// PERFIL DEL USUARIO (API_CONFIGURACION_PERFIL.md §2 y §3)
+// ═════════════════════════════════════════════════════════════════════════════
+
+export interface PerfilUsuario {
+  id: number;
+  name: string;
+  email: string;
+}
+
+/** Ambos opcionales: se manda solo lo que cambia (422 `NO_DATA` si va vacío). */
+export interface PerfilPayload {
+  name?: string;
+  email?: string;
+}
+
+export interface CambioPasswordPayload {
+  current_password: string;
+  /** min 8 caracteres. */
+  password: string;
+  /** Debe coincidir con `password` (regla `confirmed` de Laravel). */
+  password_confirmation: string;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
 // 14. CONSTANTES LEGALES
 // ═════════════════════════════════════════════════════════════════════════════
 
@@ -1002,12 +1026,18 @@ export const configuracionApi = {
   },
 
   // ── 13. Info Empresa ───────────────────────────────────────────────────────
-  // Si el payload incluye `logo` (File) → multipart. En cualquier otro caso
-  // mandamos JSON con PUT normal (el backend Laravel no parsea multipart en
-  // métodos PUT, así que solo lo usamos cuando es estrictamente necesario).
   infoEmpresa: {
     obtener: () =>
       apiClient.get<{ data: InfoEmpresa }>('/v1/tenant/configuracion/info-empresa', T),
+    /**
+     * Sin logo va como `PUT` + JSON.
+     *
+     * Con logo tiene que ir como **`POST` con `_method=PUT`** y
+     * `multipart/form-data`: PHP solo parsea cuerpos multipart en peticiones
+     * `POST`, así que un `PUT` real con FormData llega al backend sin campos
+     * ni archivo y responde 422 `NO_DATA`. Es el mismo patrón del avatar del
+     * colaborador y de los productos del proveedor.
+     */
     actualizar: (payload: InfoEmpresaPayload) => {
       const tieneLogo = payload.logo instanceof File;
       if (!tieneLogo) {
@@ -1016,11 +1046,12 @@ export const configuracionApi = {
           '/v1/tenant/configuracion/info-empresa', resto, T);
       }
       const form = new FormData();
+      form.append('_method', 'PUT');
       Object.entries(payload).forEach(([k, v]) => {
         if (v === undefined || v === null) return;
         form.append(k, v as string | Blob);
       });
-      return apiClient.putForm<{ message: string; data: InfoEmpresa }>(
+      return apiClient.postForm<{ message: string; data: InfoEmpresa }>(
         '/v1/tenant/configuracion/info-empresa', form, T);
     },
   },
@@ -1055,14 +1086,17 @@ export const configuracionApi = {
       apiClient.delete<{ message: string }>(`/v1/tenant/motivos-ausencia/${id}`, T),
   },
 
-  // ── Legacy: perfil y password (siguen en /tenant/perfil, no en este doc) ──
-  editarPerfil: (payload: { name?: string; email?: string }) =>
-    apiClient.put<{ message: string }>('/v1/tenant/perfil', payload, T),
-  cambiarPassword: (payload: {
-    current_password: string;
-    password: string;
-    password_confirmation: string;
-  }) =>
+  // ── Perfil del usuario (API_CONFIGURACION_PERFIL.md §2 y §3) ──────────────
+  // No exigen permiso: basta con el JWT válido. Se mandan solo los campos que
+  // cambian; si no llega ninguno el backend responde 422 `NO_DATA`.
+  editarPerfil: (payload: PerfilPayload) =>
+    apiClient.put<{ message: string; data: PerfilUsuario }>('/v1/tenant/perfil', payload, T),
+  /**
+   * Laravel usa `password_confirmation` (regla `confirmed`), no
+   * `confirm_password`. Errores: 422 `INVALID_CURRENT_PASSWORD` y
+   * 422 `SAME_PASSWORD`.
+   */
+  cambiarPassword: (payload: CambioPasswordPayload) =>
     apiClient.put<{ message: string }>('/v1/tenant/perfil/password', payload, T),
 };
 
@@ -1106,4 +1140,14 @@ export const ConfiguracionErrorCodes = {
   ACTIVIDAD_DUPLICADA: 'ACTIVIDAD_DUPLICADA',
   /** §19 — Actividad con jornales asociados — no se puede eliminar. */
   ACTIVIDAD_CON_JORNALES: 'ACTIVIDAD_CON_JORNALES',
+  /**
+   * No llegó ningún campo al backend. En Info Empresa la causa típica es un
+   * `PUT` real con FormData en vez de `POST` + `_method=PUT`; en el perfil,
+   * mandar el payload vacío.
+   */
+  NO_DATA: 'NO_DATA',
+  /** Perfil — la contraseña actual no coincide. */
+  INVALID_CURRENT_PASSWORD: 'INVALID_CURRENT_PASSWORD',
+  /** Perfil — la contraseña nueva es igual a la actual. */
+  SAME_PASSWORD: 'SAME_PASSWORD',
 } as const;

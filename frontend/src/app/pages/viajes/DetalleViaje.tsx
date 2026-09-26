@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -10,14 +10,18 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
 import {
-  ArrowLeft, ArrowRight, Check, Truck, Leaf, Trash2, Edit, Save, X,
+  ArrowLeft, ArrowRight, Check, Truck, Leaf, Trash2, Edit, X,
   CheckCircle, Clock, FileText, Sparkles, Image as ImageIcon, Upload, Loader2,
-  AlertTriangle,
+  AlertTriangle, Download, Settings, Calendar, MapPin, User, Package, Weight, Save,
 } from 'lucide-react';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '../../components/ui/select';
 import { toast } from 'sonner';
 import {
-  viajesApi, strField,
+  viajesApi, strField, empresasTransportadorasApi, extractorasApi, ViajesErrorCodes,
   type Viaje, type EstadoViajeApi, type EstadoOcrDocumento,
+  type TransportadorSelect, type ExtractoraSelect,
 } from '../../../api/viajes';
 import { formatFecha, formatFechaHora, formatHora } from '../../utils/fecha';
 
@@ -54,16 +58,55 @@ export default function DetalleViaje() {
   const { id } = useParams<{ id: string }>();
 
   const [viaje, setViaje] = useState<any>(null);
+  // La pantalla abre en el resumen del viaje (tarjetas de solo lectura +
+  // acciones). "Gestionar Viaje" cambia al wizard de etapas.
+  /**
+   * La vista vive en la URL y no en un estado local, para que el botón
+   * "atrás" del navegador funcione entre modos en vez de sacarte de la
+   * pantalla. Tres modos:
+   *
+   *  - sin `?vista`        → Detalle del Viaje (solo lectura, 2/3 + sidebar).
+   *  - `?vista=editar`     → Editar Viaje (formulario a ancho completo).
+   *  - `?vista=gestion`    → Carga Remisión (wizard del soporte de extractora).
+   */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const vista = searchParams.get('vista');
+  const vistaResumen = vista !== 'gestion';
+  const modoGestion = vista === 'editar';
+  const irAVista = useCallback(
+    (destino: null | 'editar' | 'gestion', opts?: { replace?: boolean }) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (destino) next.set('vista', destino);
+          else next.delete('vista');
+          return next;
+        },
+        { replace: opts?.replace ?? false },
+      );
+    },
+    [setSearchParams],
+  );
+  const primeraCarga = useRef(true);
   const [confirmEliminarOpen, setConfirmEliminarOpen] = useState(false);
+
+  // Edición en línea de la etapa 1 (solo en estado CREADO).
+  // Placa y conductor son snapshot del transportador: se rellenan solos al
+  // cambiar el transportador, igual que en el formulario de creación.
+  const [guardandoEdicion, setGuardandoEdicion] = useState(false);
+  const [descargandoPdf, setDescargandoPdf] = useState(false);
+  const [generandoEnlace, setGenerandoEnlace] = useState(false);
+  const [datosViaje, setDatosViaje] = useState({
+    fecha: '', horaSalida: '', transportadorId: '', extractoraId: '',
+    placaVehiculo: '', conductor: '',
+  });
+  const [transportadores, setTransportadores] = useState<
+    Array<TransportadorSelect & { empresaRazonSocial: string }>
+  >([]);
+  const [extractoras, setExtractoras] = useState<ExtractoraSelect[]>([]);
   const [loading, setLoading] = useState(true);
   const [procesando, setProcesando] = useState(false);
 
-  // Edición de datos del viaje
-  const [modoEdicion, setModoEdicion] = useState(false);
-  const [datosViaje, setDatosViaje] = useState({
-    fecha: '', placaVehiculo: '', conductor: '',
-    transportador: '', extractora: '', horaSalida: '',
-  });
 
   // Validación con IA — flujo real OCR (API_VIAJES_OCR_BASCULA.md)
   const [imagenFormulario, setImagenFormulario] = useState<File | null>(null);
@@ -93,9 +136,19 @@ export default function DetalleViaje() {
     try {
       const res = await viajesApi.ver(Number(id));
       setViaje(res.data);
+      // Un viaje EN_VALIDACION está esperando el formulario de la extractora:
+      // abrir en el resumen obligaba a pasar por "Gestionar Viaje" para llegar
+      // a la carga del soporte. En ese estado entramos directo al wizard.
+      // Solo en la primera carga, para no anular el toggle del usuario.
+      if (primeraCarga.current) {
+        primeraCarga.current = false;
+        // `replace` para no dejar una entrada extra en el historial: el
+        // "atrás" desde aquí debe llevar a la lista de viajes.
+        if (res.data.estado === 'EN_VALIDACION') irAVista('gestion', { replace: true });
+      }
     } catch { navigate('/viajes'); }
     finally { setLoading(false); }
-  }, [id, navigate]);
+  }, [id, navigate, irAVista]);
 
   useEffect(() => { cargar(); }, [cargar]);
 
@@ -119,49 +172,102 @@ export default function DetalleViaje() {
     else setEtapaActual(1);
   }, [estadoActual]);
 
-  // Sincronizar form de edición cuando cambia el viaje
-  useEffect(() => {
-    if (!viaje) return;
+  // ── handlers
+  /**
+   * Editar abre el formulario completo de `/viajes/editar/:id`, el mismo que
+   * crea el viaje. Antes esta pantalla tenía su propio modo edición en
+   * línea, pero solo servía para la fecha y la hora: transportador y
+   * extractora viajan por id y aquí no había de dónde sacarlos, así que los
+   * cuatro campos restantes se veían editables y no aceptaban nada.
+   */
+  /**
+   * Hidrata el formulario con el viaje cargado y trae los selects. Se llama
+   * tanto al pulsar "Gestionar Viaje" como al entrar directo por URL con
+   * `?vista=editar` desde el botón Editar de la lista.
+   *
+   * Los selects se piden solo aquí, no en cada visita de solo lectura.
+   */
+  const prepararEdicion = useCallback(async () => {
+    const v: any = viaje ?? {};
+    const horaRaw = String(v.hora_salida ?? '');
     setDatosViaje({
-      fecha:          String(viaje.fecha_viaje ?? ''),
-      placaVehiculo:  String(viaje.placa_vehiculo ?? ''),
-      conductor:      String(viaje.nombre_conductor ?? ''),
-      transportador:  strField(viaje.empresa ?? viaje.empresa_transportadora),
-      extractora:     strField(viaje.extractora),
-      horaSalida:     String(viaje.hora_salida ?? '').slice(0, 5),
+      fecha: String(v.fecha_viaje ?? '').slice(0, 10),
+      horaSalida: horaRaw.includes('T') ? horaRaw.slice(11, 16) : horaRaw.slice(0, 5),
+      transportadorId: String(v.transportador?.id ?? v.transportador_id ?? ''),
+      extractoraId: String(v.extractora?.id ?? v.extractora_id ?? ''),
+      placaVehiculo: String(v.placa_vehiculo ?? ''),
+      conductor: String(v.nombre_conductor ?? ''),
     });
+    try {
+      const [empR, extR] = await Promise.all([
+        empresasTransportadorasApi.select(),
+        extractorasApi.select(),
+      ]);
+      const emps = empR.data ?? [];
+      setExtractoras(extR.data ?? []);
+      const transResults = await Promise.all(
+        emps.map((e) =>
+          empresasTransportadorasApi
+            .transportadoresDe(Number(e.id))
+            .then((r) => (r.data ?? []).map((t) => ({ ...t, empresaRazonSocial: e.razon_social })))
+            .catch(() => [] as Array<TransportadorSelect & { empresaRazonSocial: string }>)
+        )
+      );
+      setTransportadores(transResults.flat());
+    } catch {
+      toast.error('No se pudieron cargar transportadores y extractoras');
+    }
   }, [viaje]);
 
-  // ── handlers
-  const habilitarEdicion = () => setModoEdicion(true);
-  const cancelarEdicion  = () => {
-    if (!viaje) return;
-    setDatosViaje({
-      fecha:         String(viaje.fecha_viaje ?? ''),
-      placaVehiculo: String(viaje.placa_vehiculo ?? ''),
-      conductor:     String(viaje.nombre_conductor ?? ''),
-      transportador: strField(viaje.empresa ?? viaje.empresa_transportadora),
-      extractora:    strField(viaje.extractora),
-      horaSalida:    String(viaje.hora_salida ?? '').slice(0, 5),
-    });
-    setModoEdicion(false);
+  const habilitarEdicion = () => {
+    void prepararEdicion();
+    irAVista('editar');
+  };
+
+  // Entrada directa por URL (`/viajes/:id?vista=editar`): sin esto el
+  // formulario saldría vacío y los dropdowns sin opciones.
+  const edicionPreparada = useRef(false);
+  useEffect(() => {
+    if (!modoGestion) { edicionPreparada.current = false; return; }
+    if (!viaje || edicionPreparada.current) return;
+    edicionPreparada.current = true;
+    void prepararEdicion();
+  }, [modoGestion, viaje, prepararEdicion]);
+
+  const cancelarEdicion = () => irAVista(null);
+
+  const cambiarTransportador = (transportadorId: string) => {
+    const t = transportadores.find((x) => String(x.id) === transportadorId);
+    setDatosViaje((prev) => ({
+      ...prev,
+      transportadorId,
+      conductor: t ? `${t.nombres ?? ''} ${t.apellidos ?? ''}`.trim() : prev.conductor,
+      placaVehiculo: t?.placa_vehiculo ?? prev.placaVehiculo,
+    }));
   };
 
   const guardarEdicion = async () => {
     if (!id) return;
-    setProcesando(true);
+    if (!datosViaje.fecha || !datosViaje.horaSalida || !datosViaje.transportadorId || !datosViaje.extractoraId) {
+      toast.error('Completa fecha, hora, transportador y extractora');
+      return;
+    }
+    setGuardandoEdicion(true);
     try {
       await viajesApi.editar(Number(id), {
         fecha_viaje: datosViaje.fecha,
         hora_salida: datosViaje.horaSalida,
+        transportador_id: Number(datosViaje.transportadorId),
+        extractora_id: Number(datosViaje.extractoraId),
+        observaciones: null,
       });
       toast.success('Viaje actualizado');
-      setModoEdicion(false);
+      irAVista(null);
       await cargar();
     } catch (e: any) {
-      toast.error(e?.message ?? 'Error al guardar cambios');
+      toast.error(e?.message ?? 'Error al guardar los cambios');
     } finally {
-      setProcesando(false);
+      setGuardandoEdicion(false);
     }
   };
 
@@ -417,13 +523,473 @@ export default function DetalleViaje() {
 
   const detalles = (viaje.detalles ?? []) as any[];
 
+  // §14.1 — el `show` devuelve los documentos de báscula cargados. El hito
+  // "Soporte Extractora" se cumple cuando ya subieron al menos uno, sin
+  // esperar a que el viaje cierre; la fecha es la del primero.
+  const documentosBascula = (viaje.documentos_bascula ?? []) as Array<{ created_at: string }>;
+  const fechaSoporte = documentosBascula.length > 0
+    ? documentosBascula
+        .map((d) => d.created_at)
+        .filter(Boolean)
+        .sort()[0] ?? null
+    : null;
+  const tieneSoporte = documentosBascula.length > 0 || estadoActual === 'Finalizado';
+
   // Pasos del Timeline
   const timelineSteps = [
-    { estado: 'Creado',         label: 'Creado',         icon: FileText,   fecha: fechaCreado,     completado: estadoActual !== 'Creado' },
-    { estado: 'En Validación',  label: 'En Validación',  icon: Clock,      fecha: fechaValidacion, completado: estadoActual === 'Finalizado' },
-    { estado: 'Finalizado',     label: 'Finalizado',     icon: CheckCircle, fecha: fechaFinalizado, completado: estadoActual === 'Finalizado' },
+    { estado: 'Creado',        label: 'Info. Viaje',        icon: FileText,    fecha: fechaCreado,                                                          completado: ['Creado', 'En Validación', 'Finalizado'].includes(estadoActual) },
+    { estado: 'En Validación', label: 'Cosecha',            icon: Clock,       fecha: ['En Validación', 'Finalizado'].includes(estadoActual) ? fechaValidacion : null, completado: ['En Validación', 'Finalizado'].includes(estadoActual) },
+    { estado: 'Finalizado',    label: 'Soporte Extractora', icon: CheckCircle, fecha: tieneSoporte ? (fechaSoporte ?? fechaFinalizado) : null,              completado: tieneSoporte },
   ];
 
+  const badgeClass =
+    estadoActual === 'Creado'        ? 'bg-muted text-muted-foreground border-muted' :
+    estadoActual === 'En Validación' ? 'bg-primary/10 text-primary dark:text-primary border-blue-500/30' :
+    'bg-success/10 text-success border-success/30';
+
+  // ── Filas y totales de cosecha para el resumen y el PDF ────────────────────
+  // `gajos_en_viaje` es el split de la cosecha en ESTE viaje (§5.5). Cuando
+  // viene null el viaje se lleva todo lo disponible de esa cosecha.
+  const filasCosecha = detalles.map((d) => ({
+    id: d.id,
+    lote: d.cosecha?.lote?.nombre ?? '—',
+    sublote: d.cosecha?.sublote?.nombre ?? '—',
+    gajos: Number(d.gajos_en_viaje ?? d.cosecha?.gajos_reconteo ?? d.cosecha?.gajos_reportados ?? 0),
+    pesoKg: Number(d.cosecha?.peso_confirmado ?? 0),
+  }));
+  const totalGajos = filasCosecha.reduce((s, f) => s + f.gajos, 0);
+  const totalKg    = filasCosecha.reduce((s, f) => s + f.pesoKg, 0);
+  const lotesSummary = [...new Set(filasCosecha.map((f) => f.lote))];
+
+  // Peso definitivo: el reportado por la extractora cuando ya existe; si no,
+  // el estimado de las cosechas.
+  const pesoExtractora = viaje.peso_viaje != null ? Number(viaje.peso_viaje) : 0;
+  const numFmt = (n: number, dec = 0) =>
+    n.toLocaleString('es-CO', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+
+  // ── Desprendible (lo genera el backend, con el membrete de la finca) ───────
+  //
+  // Solo se emite en FINALIZADO (D4). En los otros estados el backend
+  // responde 409 VIAJE_ESTADO_INVALIDO, por eso los botones se ocultan.
+  const puedeDesprendible = estadoActual === 'Finalizado';
+
+  const descargarDesprendible = async () => {
+    if (!id) return;
+    setDescargandoPdf(true);
+    try {
+      const blob = await viajesApi.desprendiblePdf(Number(id));
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `remision_${remisionId}_${fechaViaje}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Desprendible descargado');
+    } catch (e: any) {
+      if (e?.code === ViajesErrorCodes.VIAJE_ESTADO_INVALIDO) {
+        toast.error('La remisión solo se puede emitir con el viaje finalizado');
+      } else {
+        toast.error(e?.message ?? 'No se pudo generar el desprendible');
+      }
+    } finally {
+      setDescargandoPdf(false);
+    }
+  };
+
+  /**
+   * El backend devuelve solo la URL firmada (7 días) a la ruta pública del
+   * PDF; el mensaje lo arma el usuario en WhatsApp (D7).
+   */
+  const enviarPorWhatsApp = async () => {
+    if (!id) return;
+    setGenerandoEnlace(true);
+    try {
+      const res = await viajesApi.desprendibleWhatsapp(Number(id));
+      window.open(`https://wa.me/?text=${encodeURIComponent(res.data.url)}`, '_blank');
+    } catch (e: any) {
+      if (e?.code === ViajesErrorCodes.VIAJE_ESTADO_INVALIDO) {
+        toast.error('La remisión solo se puede compartir con el viaje finalizado');
+      } else {
+        toast.error(e?.message ?? 'No se pudo generar el enlace para compartir');
+      }
+    } finally {
+      setGenerandoEnlace(false);
+    }
+  };
+
+  // ── Vista Resumen (por defecto) ────────────────────────────────────────────
+  if (vistaResumen) {
+    return (
+      <div className="container mx-auto py-8 px-4 max-w-7xl">
+        {/* Header */}
+        <div className="mb-8">
+          <Button variant="ghost" size="sm" onClick={() => navigate('/viajes')} className="mb-4 gap-2">
+            <ArrowLeft className="h-4 w-4" />
+            Volver a Viajes
+          </Button>
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold text-primary">
+                {modoGestion ? 'Editar Viaje' : 'Detalle del Viaje'}
+              </h1>
+              <Badge variant="outline" className={badgeClass}>{estadoActual}</Badge>
+            </div>
+            <p className="text-muted-foreground mt-1 text-sm">{remisionId}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Columna principal — a ancho completo mientras se edita */}
+          <div className={modoGestion ? 'lg:col-span-3 space-y-6' : 'lg:col-span-2 space-y-6'}>
+            {/* Info del viaje */}
+            <Card className="border-border">
+              <CardHeader className="border-b border-border pb-4">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Truck className="h-4 w-4 text-primary" />
+                  Información del Viaje
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                {modoGestion ? (
+                  /* Formulario de edición. Solo fecha, hora, transportador y
+                     extractora viajan en el PUT; placa y conductor son
+                     snapshot del transportador y los rellena el select. */
+                  <div className="space-y-5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Fecha del Viaje</Label>
+                        <Input
+                          type="date"
+                          value={datosViaje.fecha}
+                          onChange={(e) => setDatosViaje({ ...datosViaje, fecha: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Hora de Salida</Label>
+                        <Input
+                          type="time"
+                          value={datosViaje.horaSalida}
+                          onChange={(e) => setDatosViaje({ ...datosViaje, horaSalida: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Transportador</Label>
+                        <Select value={datosViaje.transportadorId} onValueChange={cambiarTransportador}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar transportador..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {transportadores.map((t) => (
+                              <SelectItem key={t.id} value={String(t.id)}>
+                                {t.empresaRazonSocial}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Extractora Destino</Label>
+                        <Select
+                          value={datosViaje.extractoraId}
+                          onValueChange={(v) => setDatosViaje({ ...datosViaje, extractoraId: v })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar extractora..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {extractoras.map((ext) => (
+                              <SelectItem key={ext.id} value={String(ext.id)}>
+                                {ext.razon_social}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Placa del Vehículo</Label>
+                        <Input value={datosViaje.placaVehiculo} disabled className="bg-muted" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Conductor</Label>
+                        <Input value={datosViaje.conductor} disabled className="bg-muted" />
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 pt-2">
+                      <Button onClick={guardarEdicion} disabled={guardandoEdicion} className="gap-2">
+                        <Save className="h-4 w-4" />
+                        {guardandoEdicion ? 'Guardando...' : 'Guardar'}
+                      </Button>
+                      <Button variant="outline" onClick={cancelarEdicion} className="gap-2">
+                        <X className="h-4 w-4" />
+                        Cancelar
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground uppercase tracking-wide">
+                      <Calendar className="h-3.5 w-3.5" />
+                      Fecha del Viaje
+                    </div>
+                    <p className="font-semibold text-foreground">
+                      {formatFecha(fechaViaje, { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground uppercase tracking-wide">
+                      <Clock className="h-3.5 w-3.5" />
+                      Hora de Salida
+                    </div>
+                    <p className="font-semibold text-foreground">{horaSalida ? formatHora(horaSalida) : '—'}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground uppercase tracking-wide">
+                      <Truck className="h-3.5 w-3.5" />
+                      Placa del Vehículo
+                    </div>
+                    <p className="font-semibold text-foreground">{placa || '—'}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground uppercase tracking-wide">
+                      <User className="h-3.5 w-3.5" />
+                      Conductor
+                    </div>
+                    <p className="font-semibold text-foreground">{conductor || '—'}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground uppercase tracking-wide">
+                      <Package className="h-3.5 w-3.5" />
+                      Transportador
+                    </div>
+                    <p className="font-semibold text-foreground">{transporte || '—'}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground uppercase tracking-wide">
+                      <MapPin className="h-3.5 w-3.5" />
+                      Extractora Destino
+                    </div>
+                    <p className="font-semibold text-foreground">{extractora || '—'}</p>
+                  </div>
+                </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Resumen de cosecha — no aplica mientras se edita, ni con el
+                viaje en CREADO: ahí las cosechas todavía se están contando
+                y los totales no significan nada. */}
+            {!modoGestion && estadoActual !== 'Creado' && (
+            <Card className="border-border">
+              <CardHeader className="border-b border-border pb-4">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Leaf className="h-4 w-4 text-primary" />
+                  Resumen de Cosecha
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6 space-y-5">
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="rounded-xl bg-primary/5 p-4 text-center">
+                    <p className="text-3xl font-bold text-primary">{numFmt(totalGajos)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Gajos Totales</p>
+                  </div>
+                  <div className="rounded-xl bg-primary/5 p-4 text-center">
+                    <p className="text-3xl font-bold text-primary">{(totalKg / 1000).toFixed(1)}t</p>
+                    <p className="text-xs text-muted-foreground mt-1">Toneladas</p>
+                  </div>
+                  <div className="rounded-xl bg-primary/5 p-4 text-center">
+                    <p className="text-3xl font-bold text-primary">{lotesSummary.length}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Lotes</p>
+                  </div>
+                </div>
+
+                {filasCosecha.length > 0 ? (
+                  <div className="rounded-lg border border-border overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-primary/5 border-b border-border">
+                          <th className="text-left px-4 py-2.5 font-semibold text-foreground">Lote</th>
+                          <th className="text-left px-4 py-2.5 font-semibold text-foreground">Sublote</th>
+                          <th className="text-right px-4 py-2.5 font-semibold text-foreground">Gajos</th>
+                          <th className="text-right px-4 py-2.5 font-semibold text-foreground">Peso (kg)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filasCosecha.map((f, i) => (
+                          <tr key={f.id} className={`border-b border-border last:border-0 ${i % 2 === 1 ? 'bg-muted/30' : ''}`}>
+                            <td className="px-4 py-2.5 text-foreground">{f.lote}</td>
+                            <td className="px-4 py-2.5 text-muted-foreground">{f.sublote}</td>
+                            <td className="px-4 py-2.5 text-right tabular-nums">{numFmt(f.gajos)}</td>
+                            <td className="px-4 py-2.5 text-right tabular-nums">{numFmt(f.pesoKg, 2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-primary text-white">
+                          <td colSpan={2} className="px-4 py-2.5 font-bold">Total</td>
+                          <td className="px-4 py-2.5 text-right font-bold tabular-nums">{numFmt(totalGajos)}</td>
+                          <td className="px-4 py-2.5 text-right font-bold tabular-nums">{numFmt(totalKg, 2)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Leaf className="h-10 w-10 mx-auto mb-2 opacity-20" />
+                    <p className="text-sm">No hay cosechas asociadas a este viaje</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            )}
+
+            {/* Datos extractora (si finalizado) */}
+            {!modoGestion && estadoActual === 'Finalizado' && pesoExtractora > 0 && (
+              <Card className="border-border">
+                <CardHeader className="border-b border-border pb-4">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Weight className="h-4 w-4 text-primary" />
+                    Datos Recibidos en Extractora
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">N° Remisión Extractora</p>
+                      <p className="font-semibold">{viaje.numero_remision_extractora || '—'}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Fecha / Hora Llegada</p>
+                      <p className="font-semibold">
+                        {viaje.fecha_llegada ? formatFecha(String(viaje.fecha_llegada).slice(0, 10)) : '—'}
+                        {viaje.hora_llegada ? ` · ${formatHora(String(viaje.hora_llegada))}` : ''}
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Peso Recibido</p>
+                      <p className="font-semibold">{numFmt(pesoExtractora, 2)} kg</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Fruto Verde</p>
+                      <p className="font-semibold">{numFmt(Number(viaje.fruto_verde ?? 0), 2)} %</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Sobre Maduro</p>
+                      <p className="font-semibold">{numFmt(Number(viaje.sobre_maduro ?? 0), 2)} %</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Podrido</p>
+                      <p className="font-semibold">{numFmt(Number(viaje.podrido ?? 0), 2)} %</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Pedúnculo Largo</p>
+                      <p className="font-semibold">{numFmt(Number(viaje.pedunculo_largo ?? 0), 2)} %</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Mal Formado</p>
+                      <p className="font-semibold">{numFmt(Number(viaje.mal_formado ?? 0), 2)} %</p>
+                    </div>
+                    <div className="space-y-1 sm:col-span-2">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Observaciones</p>
+                      <p className="font-semibold">{viaje.observaciones_extractora || '—'}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          {/* Columna derecha: Acciones + Timeline */}
+          {!modoGestion && <div className="lg:col-span-1 space-y-6">
+            <Card className="border-border">
+              <CardContent className="p-4 space-y-2">
+                {/* La remisión solo existe con el viaje finalizado (D4). */}
+                {puedeDesprendible && (
+                <Button onClick={descargarDesprendible} disabled={descargandoPdf} className="w-full gap-2">
+                  <Download className="h-4 w-4" />
+                  {descargandoPdf ? 'Generando...' : 'Descargar Desprendible'}
+                </Button>
+                )}
+                {puedeDesprendible && (
+                <Button variant="outline" onClick={enviarPorWhatsApp} disabled={generandoEnlace} className="w-full gap-2">
+                  <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                  </svg>
+                  {generandoEnlace ? 'Generando enlace...' : 'Enviar por WhatsApp'}
+                </Button>
+                )}
+                {/* CREADO entra al formulario de edición; EN_VALIDACION al
+                    wizard de carga de la remisión de extractora. FINALIZADO
+                    no muestra ninguno: ya no admite cambios. */}
+                {estadoActual === 'Creado' && (
+                  <Button variant="outline" onClick={habilitarEdicion} className="w-full gap-2">
+                    <Settings className="h-4 w-4" />
+                    Gestionar Viaje
+                  </Button>
+                )}
+                {estadoActual === 'En Validación' && (
+                  <Button variant="outline" onClick={() => irAVista('gestion')} className="w-full gap-2">
+                    <Upload className="h-4 w-4" />
+                    Soporte de Extractora
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Timeline */}
+            <Card className="border-border">
+              <CardHeader className="border-b border-border">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Clock className="h-4 w-4 text-primary" />
+                  Timeline del Viaje
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="relative space-y-6">
+                  <div className="absolute left-4 top-4 bottom-4 w-0.5 bg-border" />
+                  {timelineSteps.map((step) => {
+                    const Icon = step.icon;
+                    const isCompleted = step.completado;
+                    const isActive = step.estado === estadoActual;
+                    return (
+                      <div key={step.estado} className="relative flex gap-3">
+                        <div className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 ${
+                          isCompleted ? 'bg-success border-success/20' : 'bg-muted border-border'
+                        } ${isActive ? 'ring-2 ring-primary/30' : ''}`}>
+                          {isCompleted ? <CheckCircle className="h-4 w-4 text-white" /> : <Icon className="h-4 w-4 text-muted-foreground" />}
+                        </div>
+                        <div className="flex-1 pb-2">
+                          <h4 className={`text-sm font-semibold ${
+                            isCompleted ? 'text-success' : isActive ? 'text-primary' : 'text-muted-foreground'
+                          }`}>
+                            {step.label}
+                          </h4>
+                          {step.fecha ? (
+                            <p className="text-xs text-muted-foreground">
+                              {formatFechaHora(step.fecha, {
+                                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                              })}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">Pendiente</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          </div>}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Vista Gestión (wizard de etapas) ───────────────────────────────────────
   return (
     <div className="container mx-auto py-8 px-4 max-w-7xl">
       {/* Header */}
@@ -433,21 +999,18 @@ export default function DetalleViaje() {
           Volver a Viajes
         </Button>
         <div className="flex items-center gap-3">
-          <h1 className="text-3xl font-bold text-primary">Detalle del Viaje - {remisionId}</h1>
-          <Badge variant="outline" className={
-            estadoActual === 'Creado' ? 'bg-muted text-muted-foreground border-muted' :
-            estadoActual === 'En Validación' ? 'bg-primary/10 text-primary dark:text-primary border-blue-500/30' :
-            'bg-success/10 text-success border-success/30'
-          }>
+          <h1 className="text-3xl font-bold text-primary">Carga Remisión</h1>
+          <Badge variant="outline" className={badgeClass}>
             {estadoActual}
           </Badge>
         </div>
-        <p className="text-muted-foreground mt-1">Visualiza y gestiona la información del viaje</p>
+        <p className="text-muted-foreground mt-1 text-sm">{remisionId}</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Columna izquierda: Wizard (2/3) */}
-        <div className="lg:col-span-2 space-y-8">
+      {/* Una sola columna a ancho completo: la carga de la remisión no
+          convive con el timeline ni con las acciones del detalle. */}
+      <div className="space-y-8">
+        <div className="space-y-8">
           {/* Stepper — oculto cuando el viaje está en validación (solo se muestra el formulario) */}
           {estadoActual !== 'En Validación' && (
           <Card className="border-border">
@@ -460,8 +1023,9 @@ export default function DetalleViaje() {
                     <React.Fragment key={etapa.numero}>
                       <button
                         onClick={() => irAEtapa(etapa.numero)}
-                        className={`flex flex-col items-center gap-2 ${estaActiva || estaCompleta ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
-                        disabled={!estaActiva && !estaCompleta}
+                        /* Sin "Siguiente" en el pie, el círculo del stepper es
+                           la única forma de llegar a la etapa de Cosecha. */
+                        className={`flex flex-col items-center gap-2 cursor-pointer ${estaActiva || estaCompleta ? '' : 'opacity-50'}`}
                       >
                         <div className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition-all ${
                           estaCompleta ? 'bg-primary border-primary text-white'
@@ -506,38 +1070,33 @@ export default function DetalleViaje() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {/* Solo lectura: la edición vive en la vista Detalle del
+                      Viaje (`?vista=editar`), que es la única que alcanza un
+                      viaje en estado CREADO. */}
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Fecha del Viaje</Label>
-                      <Input type="date"
-                        value={modoEdicion ? datosViaje.fecha : fechaViaje}
-                        disabled={!modoEdicion}
-                        onChange={(e) => setDatosViaje({ ...datosViaje, fecha: e.target.value })}
-                      />
+                      <Input type="date" value={fechaViaje} disabled />
                     </div>
                     <div className="space-y-2">
                       <Label>Placa del Vehículo</Label>
-                      <Input value={modoEdicion ? datosViaje.placaVehiculo : placa} disabled />
+                      <Input value={placa} disabled />
                     </div>
                     <div className="space-y-2">
                       <Label>Conductor</Label>
-                      <Input value={modoEdicion ? datosViaje.conductor : conductor} disabled />
+                      <Input value={conductor} disabled />
                     </div>
                     <div className="space-y-2">
                       <Label>Transportador</Label>
-                      <Input value={modoEdicion ? datosViaje.transportador : transporte} disabled />
+                      <Input value={transporte} disabled />
                     </div>
                     <div className="space-y-2">
                       <Label>Extractora Destino</Label>
-                      <Input value={modoEdicion ? datosViaje.extractora : extractora} disabled />
+                      <Input value={extractora} disabled />
                     </div>
                     <div className="space-y-2">
                       <Label>Hora de Salida</Label>
-                      <Input type="time"
-                        value={modoEdicion ? datosViaje.horaSalida : horaSalida}
-                        disabled={!modoEdicion}
-                        onChange={(e) => setDatosViaje({ ...datosViaje, horaSalida: e.target.value })}
-                      />
+                      <Input type="time" value={horaSalida} disabled />
                     </div>
                   </div>
                 </CardContent>
@@ -962,44 +1521,21 @@ export default function DetalleViaje() {
 
               <div className="flex gap-2 ml-auto">
                 {estadoActual === 'Creado' ? (
-                  modoEdicion ? (
-                    <>
-                      <Button variant="outline" onClick={cancelarEdicion} disabled={procesando} className="gap-2">
-                        <X className="h-4 w-4" /> Cancelar
-                      </Button>
-                      <Button onClick={guardarEdicion} disabled={procesando} className="gap-2 bg-success hover:bg-success/90">
-                        <Save className="h-4 w-4" /> {procesando ? 'Guardando...' : 'Guardar'}
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      {etapaActual === 1 && (
-                        <>
-                          <Button variant="outline" onClick={eliminarViaje} className="gap-2 text-destructive hover:text-destructive">
-                            <Trash2 className="h-4 w-4" /> Eliminar
-                          </Button>
-                          <Button onClick={habilitarEdicion} className="gap-2">
-                            <Edit className="h-4 w-4" /> Editar
-                          </Button>
-                          <Button onClick={siguienteEtapa} className="gap-2">
-                            Siguiente <ArrowRight className="h-4 w-4" />
-                          </Button>
-                        </>
-                      )}
-                      {etapaActual === 2 && (
-                        <Button variant="outline" onClick={etapaAnterior} className="gap-2">
-                          <ArrowLeft className="h-4 w-4" /> Anterior
-                        </Button>
-                      )}
-                    </>
-                  )
+                  <>
+                    <Button variant="outline" onClick={eliminarViaje} className="gap-2 text-destructive hover:text-destructive">
+                      <Trash2 className="h-4 w-4" /> Eliminar
+                    </Button>
+                    <Button onClick={habilitarEdicion} className="gap-2">
+                      <Edit className="h-4 w-4" /> Editar
+                    </Button>
+                  </>
                 ) : estadoActual === 'Finalizado' && etapaActual < 3 ? (
                   <Button onClick={siguienteEtapa} className="gap-2">
                     Siguiente <ArrowRight className="h-4 w-4" />
                   </Button>
                 ) : estadoActual === 'En Validación' && etapaActual === 3 ? (
                   <Button onClick={guardarValidacion} disabled={!imagenFormulario || procesandoIA || procesando}
-                    className="gap-2 bg-success hover:bg-success/90">
+                    className="gap-2">
                     <Check className="h-4 w-4" />
                     {procesando ? 'Procesando...' : 'Guardar y Finalizar'}
                   </Button>
@@ -1009,74 +1545,6 @@ export default function DetalleViaje() {
           </div>
         </div>
 
-        {/* Columna derecha: Timeline (1/3) - sticky */}
-        <div className="lg:col-span-1">
-          <div className="sticky top-8">
-            <Card className="border-border">
-              <CardHeader className="border-b border-border">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Clock className="h-4 w-4 text-primary" />
-                  Timeline del Viaje
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6 space-y-6">
-                {/* Progreso */}
-                {estadoActual !== 'Finalizado' && (
-                  <>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Progreso</span>
-                        <span className="font-semibold">
-                          {etapasDisponibles.findIndex(e => e.numero === etapaActual) + 1} de {etapasDisponibles.length}
-                        </span>
-                      </div>
-                      <div className="h-2 bg-muted rounded-full overflow-hidden">
-                        <div className="h-full bg-primary transition-all duration-300"
-                          style={{ width: `${((etapasDisponibles.findIndex(e => e.numero === etapaActual) + 1) / etapasDisponibles.length) * 100}%` }} />
-                      </div>
-                    </div>
-                    <div className="h-px bg-border" />
-                  </>
-                )}
-
-                <div className="relative space-y-6">
-                  <div className="absolute left-4 top-4 bottom-4 w-0.5 bg-border" />
-                  {timelineSteps.map((step) => {
-                    const Icon = step.icon;
-                    const isActive = step.estado === estadoActual;
-                    const isCompleted = step.completado;
-                    return (
-                      <div key={step.estado} className="relative flex gap-3">
-                        <div className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 ${
-                          isCompleted ? 'bg-success border-success/20' : 'bg-muted border-border'
-                        } ${isActive ? 'ring-2 ring-primary/30' : ''}`}>
-                          {isCompleted ? <CheckCircle className="h-4 w-4 text-white" /> : <Icon className="h-4 w-4 text-muted-foreground" />}
-                        </div>
-                        <div className="flex-1 pb-2">
-                          <h4 className={`text-sm font-semibold ${
-                            isCompleted ? 'text-success' : isActive ? 'text-primary' : 'text-muted-foreground'
-                          }`}>
-                            {step.label}
-                          </h4>
-                          {step.fecha && (
-                            <p className="text-xs text-muted-foreground">
-                              {formatFechaHora(step.fecha, {
-                                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-                              })}
-                            </p>
-                          )}
-                          {!step.fecha && !isCompleted && (
-                            <p className="text-xs text-muted-foreground">Pendiente</p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
       </div>
 
       {/* AlertDialog: confirmar eliminar viaje */}

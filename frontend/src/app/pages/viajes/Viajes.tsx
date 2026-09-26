@@ -587,7 +587,9 @@ export default function Viajes() {
                                       <Button size="sm" variant="outline" asChild
                                         className="hover:bg-primary/10 hover:text-primary hover:border-primary"
                                         title="Editar">
-                                        <Link to={`/viajes/${viaje.id}`}>
+                                        {/* Abre el detalle directamente en el
+                                            formulario de edición. */}
+                                        <Link to={`/viajes/${viaje.id}?vista=editar`}>
                                           <Edit className="h-4 w-4" />
                                         </Link>
                                       </Button>
@@ -605,7 +607,7 @@ export default function Viajes() {
                                     <Button size="sm" variant="outline" asChild
                                       className="hover:bg-primary/10 hover:text-primary hover:border-primary"
                                       title="Cargar remisión extractora">
-                                      <Link to={`/viajes/${viaje.id}`}>
+                                      <Link to={`/viajes/${viaje.id}?vista=gestion`}>
                                         <FileUp className="h-4 w-4" />
                                       </Link>
                                     </Button>

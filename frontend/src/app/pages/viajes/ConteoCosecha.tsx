@@ -672,6 +672,29 @@ export default function ConteoCosecha() {
           }
         }
       }
+
+      // El salto a EN_VALIDACION lo dispara el backend al aprobar el ÚLTIMO
+      // detalle pendiente. Si todas las cosechas ya estaban aprobadas de una
+      // visita anterior, el bucle de arriba no llama a nada y el viaje se
+      // quedaba en CREADO mientras la pantalla decía que todo salió bien.
+      // Reaprobamos los detalles ya aprobados para que el backend vuelva a
+      // evaluar la transición, y solo confirmamos si el estado realmente cambió.
+      const yaAprobadas = cosechas.filter((c) => c.aprobado && c.detalleId);
+      for (const c of yaAprobadas) {
+        const r = await viajesApi
+          .aprobarReconteo(viaje.id, c.detalleId!)
+          .catch(() => null);
+        if (r?.data.auto_en_validacion) break;
+      }
+
+      const verif = await viajesApi.ver(viaje.id);
+      if (verif.data.estado === 'CREADO') {
+        toast.error('El viaje sigue en estado Creado', {
+          description: 'El backend no aprobó la transición a validación. Revisa que todas las cosechas tengan gajos en viaje.',
+        });
+        return;
+      }
+
       toast.success('Conteo registrado exitosamente', {
         description: 'El viaje ahora está en camino hacia la extractora.',
       });
@@ -1269,7 +1292,7 @@ export default function ConteoCosecha() {
                   <Button
                     onClick={finalizarConteo}
                     disabled={procesando || cosechas.length === 0}
-                    className="gap-2 bg-success hover:bg-success/90"
+                    className="gap-2"
                   >
                     <Check className="h-4 w-4" />
                     {procesando ? 'Procesando...' : 'Finalizar Conteo'}
