@@ -224,7 +224,12 @@ export interface Viaje {
     numero_actual: number;
   } | null;
   fecha_viaje: string;                               // YYYY-MM-DD
-  hora_salida: string;                               // HH:MM:SS
+  /**
+   * Hora planeada de salida, `HH:MM:SS`. **Opcional** (2026-09-28): la columna
+   * siempre fue nullable y ahora el request tampoco la exige. `null` cuando no
+   * se conoce; la UI y el desprendible la pintan como "—".
+   */
+  hora_salida: string | null;
   estado: EstadoViajeApi;
   estado_activo?: boolean;
   // Snapshot del transportador (no edita)
@@ -311,7 +316,8 @@ export interface ViajeDesprendible {
   estado: EstadoViajeApi;
   estado_label: string;
   fecha_viaje: string;
-  hora_salida: string;
+  /** `null` cuando el viaje se creó sin hora; el PDF la pinta como "—". */
+  hora_salida: string | null;
   placa_vehiculo: string;
   nombre_conductor: string;
   transportador: string;
@@ -374,7 +380,8 @@ export interface EnlaceDesprendible {
  */
 export interface CrearViajePayload {
   fecha_viaje: string;
-  hora_salida: string;
+  /** Opcional (2026-09-28), `HH:mm` 24 h. Se puede omitir o mandar `null`. */
+  hora_salida?: string | null;
   transportador_id: number;
   extractora_id: number;
   rango_numeracion_id?: number | null;
@@ -392,7 +399,8 @@ export interface CrearViajePayload {
  */
 export interface EditarViajePayload {
   fecha_viaje?: string;
-  hora_salida?: string;
+  /** Opcional, `HH:mm` 24 h. Mandar `null` la limpia. */
+  hora_salida?: string | null;
   transportador_id?: number;
   extractora_id?: number;
   rango_numeracion_id?: number | null;

@@ -248,15 +248,17 @@ export default function DetalleViaje() {
 
   const guardarEdicion = async () => {
     if (!id) return;
-    if (!datosViaje.fecha || !datosViaje.horaSalida || !datosViaje.transportadorId || !datosViaje.extractoraId) {
-      toast.error('Completa fecha, hora, transportador y extractora');
+    // La hora de salida es opcional (2026-09-28); las otras tres no.
+    if (!datosViaje.fecha || !datosViaje.transportadorId || !datosViaje.extractoraId) {
+      toast.error('Completa fecha, transportador y extractora');
       return;
     }
     setGuardandoEdicion(true);
     try {
       await viajesApi.editar(Number(id), {
         fecha_viaje: datosViaje.fecha,
-        hora_salida: datosViaje.horaSalida,
+        // Vacía se manda como `null` para limpiarla en el backend.
+        hora_salida: datosViaje.horaSalida || null,
         transportador_id: Number(datosViaje.transportadorId),
         extractora_id: Number(datosViaje.extractoraId),
         observaciones: null,
@@ -673,6 +675,9 @@ export default function DetalleViaje() {
                           value={datosViaje.horaSalida}
                           onChange={(e) => setDatosViaje({ ...datosViaje, horaSalida: e.target.value })}
                         />
+                        <p className="text-xs text-muted-foreground">
+                          Opcional. Vaciarla la borra del viaje.
+                        </p>
                       </div>
                       <div className="space-y-2">
                         <Label>Transportador</Label>
@@ -1096,7 +1101,11 @@ export default function DetalleViaje() {
                     </div>
                     <div className="space-y-2">
                       <Label>Hora de Salida</Label>
-                      <Input type="time" value={horaSalida} disabled />
+                      {/* `type="time"` vacío no distingue "sin hora" de un
+                          campo en blanco; con texto se puede mostrar "—". */}
+                      {horaSalida
+                        ? <Input type="time" value={horaSalida} disabled />
+                        : <Input value="—" disabled />}
                     </div>
                   </div>
                 </CardContent>

@@ -828,7 +828,9 @@ export default function ConteoCosecha() {
                     </div>
                     <div className="space-y-2">
                       <Label>Hora de Salida</Label>
-                      <Input value={horaSalida} disabled />
+                      {/* Opcional desde el 2026-09-28: sin hora se muestra "—"
+                          en vez de un campo vacío que parece un dato perdido. */}
+                      <Input value={horaSalida || '—'} disabled />
                     </div>
                   </div>
                 </CardContent>

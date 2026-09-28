@@ -55,13 +55,43 @@ import {
   CeldaColaborador,
   EstadoValidacion,
   IncidenciasFila,
+  PasoCard,
   Regla,
-  SelectorArchivo,
+  VistaPreviaPlantilla,
+  ZonaArchivo,
   esApiError,
   mensajeArchivo,
 } from './comunes';
 
 const ANIOS = aniosCargables();
+
+/**
+ * Columnas del archivo, con el nombre exacto que el lector reconoce
+ * (API_LIQUIDACIONES §12.1). El lector acepta alias ("cédula", "valor
+ * cesantías"…) y descarta las columnas que no conoce, pero estos son los
+ * nombres que trae la plantilla.
+ *
+ * Solo la cédula y el valor de las cesantías son obligatorios en la celda.
+ * Las demás las rellena el backend con un valor por defecto: la fecha límite
+ * legal, el fondo de la ficha, y un `intereses_valor` vacío significa "a este
+ * colaborador no se le cargan intereses". La cabecera sí tiene que existir
+ * siempre, incluida la de intereses.
+ */
+const COLUMNAS_PLANTILLA = [
+  { nombre: 'documento', requerida: true },
+  { nombre: 'cesantias_valor', requerida: true },
+  { nombre: 'cesantias_fecha_consignacion' },
+  { nombre: 'cesantias_fondo' },
+  { nombre: 'intereses_valor' },
+  { nombre: 'intereses_fecha_pago' },
+  { nombre: 'observacion' },
+];
+
+const FILAS_EJEMPLO = [
+  ['1012345678', '1.234.567', '2024-02-10', 'Porvenir',   '148.000', '2024-01-25', ''],
+  ['52000002',   '2.100.000', '12/02/2024', 'Protección', '252.000', '28/01/2024', 'Giro conjunto'],
+  ['1098765432', '980.000',   '',           '',           '',        '',           'Sin intereses'],
+];
 
 export default function CargaHistoricoCesantias() {
   const navigate = useNavigate();
@@ -111,11 +141,9 @@ export default function CargaHistoricoCesantias() {
     [],
   );
 
+  // La zona de arrastre ya entrega el `File`, venga del input o del drop.
   const elegirArchivo = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      e.target.value = ''; // permite volver a elegir el mismo archivo corregido
-      if (!file) return;
+    (file: File) => {
       setArchivo(file);
       setCargado(false);
       void validar(file, anio, sobrescribir);
@@ -206,99 +234,101 @@ export default function CargaHistoricoCesantias() {
         </div>
       </div>
 
-      {/* Paso 1: año y plantilla */}
-      <Card>
-        <CardHeader className="border-b">
-          <CardTitle>1. Elija el año y prepare el archivo</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4 p-6 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="anio">
-              Año que va a cargar <span className="text-destructive">*</span>
-            </Label>
-            <Select value={String(anio)} onValueChange={cambiarAnio}>
-              <SelectTrigger id="anio">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ANIOS.map((a) => (
-                  <SelectItem key={a} value={String(a)}>
-                    {a}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Solo años ya cerrados. El año en curso se liquida con el asistente normal.
-            </p>
-          </div>
+      {/* Paso 1: plantilla + el año, que en cesantías no va dentro del
+          archivo sino que se elige aquí. */}
+      <PasoCard
+        n={1}
+        titulo="Descarga la plantilla"
+        subtitulo="Usa esta plantilla para preparar tus datos correctamente"
+        accion={
+          <Button
+            variant="outline"
+            onClick={() => void descargarPlantilla()}
+            disabled={descargandoPlantilla}
+            className="gap-2"
+          >
+            {descargandoPlantilla ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            Descargar plantilla
+          </Button>
+        }
+      >
+        <VistaPreviaPlantilla columnas={COLUMNAS_PLANTILLA} filas={FILAS_EJEMPLO} />
 
-          <div className="flex flex-col justify-between gap-3 rounded-lg border border-border bg-muted/30 p-4">
-            <div>
-              <p className="text-sm font-semibold">Use la plantilla</p>
-              <p className="mt-0.5 text-sm text-muted-foreground">
-                Trae las columnas con el nombre correcto y la cédula en formato de texto, que es
-                lo que evita que Excel la dañe.
-              </p>
-            </div>
-            <Button
-              variant="outline"
-              onClick={() => void descargarPlantilla()}
-              disabled={descargandoPlantilla}
-              className="w-full gap-2"
-            >
-              {descargandoPlantilla ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Download className="h-4 w-4" />
-              )}
-              Descargar plantilla
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+        <p className="text-xs text-muted-foreground">
+          La plantilla trae estas columnas y la cédula en formato de texto, que es lo que
+          evita que Excel le quite los ceros de la izquierda. Formatos aceptados:{' '}
+          <strong className="text-foreground">.xlsx, .xls, .csv</strong>. Las fechas se leen
+          como día/mes: <strong className="text-foreground">10/02/2024 es el 10 de febrero</strong>.
+        </p>
+      </PasoCard>
 
       {/* Paso 2: archivo */}
-      <Card>
-        <CardHeader className="border-b">
-          <CardTitle>2. Suba el archivo</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4 p-6">
-          <SelectorArchivo
-            archivo={archivo}
-            analisis={analisis?.archivo}
-            inputRef={inputRef}
-            accept={ACCEPT_ARCHIVO}
-            onElegir={elegirArchivo}
-            onQuitar={limpiar}
-            detalle={
-              analisis
-                ? `${analisis.archivo.filas_leidas} fila${
-                    analisis.archivo.filas_leidas === 1 ? '' : 's'
-                  } leída${analisis.archivo.filas_leidas === 1 ? '' : 's'} · año ${analisis.anio}`
-                : null
-            }
-          />
-
+      <PasoCard
+        n={2}
+        titulo="Carga tu archivo"
+        subtitulo="Arrastra el archivo o haz clic para seleccionarlo"
+      >
+        {/* El año va aquí y no en el paso 1: el paso 1 solo baja la plantilla,
+            y el año es lo que define contra qué se valida este archivo. */}
+        <div className="max-w-sm space-y-2">
+          <Label htmlFor="anio">
+            Año que va a cargar <span className="text-destructive">*</span>
+          </Label>
+          <Select value={String(anio)} onValueChange={cambiarAnio}>
+            <SelectTrigger id="anio">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ANIOS.map((a) => (
+                <SelectItem key={a} value={String(a)}>
+                  {a}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <p className="text-xs text-muted-foreground">
-            Archivos .xlsx, .xls o .csv, hasta {MAX_FILAS_ARCHIVO} colaboradores por archivo. Al
-            subirlo se revisa contra las fichas, pero todavía no se guarda nada.
+            Solo años ya cerrados. El año no va dentro del archivo.
           </p>
+        </div>
 
-          <EstadoValidacion validando={validando} error={errorArchivo} />
+        <ZonaArchivo
+          archivo={archivo}
+          analisis={analisis?.archivo}
+          inputRef={inputRef}
+          accept={ACCEPT_ARCHIVO}
+          onArchivo={elegirArchivo}
+          onQuitar={limpiar}
+          detalle={
+            analisis
+              ? `${analisis.archivo.filas_leidas} fila${
+                  analisis.archivo.filas_leidas === 1 ? '' : 's'
+                } leída${analisis.archivo.filas_leidas === 1 ? '' : 's'} · año ${analisis.anio}`
+              : null
+          }
+        />
 
-          {analisis && <CabecerasIgnoradas cabeceras={analisis.archivo.cabeceras_ignoradas} />}
+        <p className="text-xs text-muted-foreground">
+          Hasta {MAX_FILAS_ARCHIVO} colaboradores por archivo. Al subirlo se revisa contra las
+          fichas, pero todavía no se guarda nada.
+        </p>
 
-          {analisis?.periodos.cesantias && !cargado && (
-            <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800/30 dark:bg-amber-950/30 dark:text-amber-400">
-              <Info className="mt-0.5 h-4 w-4 shrink-0" />
-              El año {analisis.anio} ya tiene un histórico cargado con{' '}
-              {analisis.periodos.cesantias.total_colaboradores} colaboradores. Lo que suba ahora
-              se agrega a ese mismo período.
-            </p>
-          )}
-        </CardContent>
-      </Card>
+        <EstadoValidacion validando={validando} error={errorArchivo} />
+
+        {analisis && <CabecerasIgnoradas cabeceras={analisis.archivo.cabeceras_ignoradas} />}
+
+        {analisis?.periodos.cesantias && !cargado && (
+          <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800/30 dark:bg-amber-950/30 dark:text-amber-400">
+            <Info className="mt-0.5 h-4 w-4 shrink-0" />
+            El año {analisis.anio} ya tiene un histórico cargado con{' '}
+            {analisis.periodos.cesantias.total_colaboradores} colaboradores. Lo que suba ahora
+            se agrega a ese mismo período.
+          </p>
+        )}
+      </PasoCard>
 
       {/* Paso 3: revisión */}
       {analisis && resumen && (

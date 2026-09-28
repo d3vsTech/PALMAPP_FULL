@@ -283,7 +283,8 @@ export default function NuevoEditarViaje() {
     if (!formData.conductor.trim()) n.conductor = 'El conductor es requerido';
     if (!formData.placaVehiculo.trim()) n.placaVehiculo = 'La placa del vehículo es requerida';
     if (!formData.extractoraId) n.extractoraId = 'Debe seleccionar una extractora';
-    if (!formData.horaSalida) n.horaSalida = 'La hora de salida es requerida';
+    // `hora_salida` es opcional desde el 2026-09-28: si no se conoce a qué
+    // hora salió el camión, el viaje se crea igual y el campo queda en null.
     setErrors(n);
     return Object.keys(n).length === 0;
   };
@@ -307,7 +308,9 @@ export default function NuevoEditarViaje() {
       if (esEdicion && id) {
         const payload: EditarViajePayload = {
           fecha_viaje: formData.fecha,
-          hora_salida: formData.horaSalida,
+          // Vacío se manda como `null`, no como cadena: en edición eso limpia
+          // la hora, y en creación el backend la deja sin asignar.
+          hora_salida: formData.horaSalida || null,
           transportador_id: Number(formData.transportadorId),
           extractora_id: Number(formData.extractoraId),
           observaciones: null,
@@ -318,7 +321,9 @@ export default function NuevoEditarViaje() {
       } else {
         const payload: CrearViajePayload = {
           fecha_viaje: formData.fecha,
-          hora_salida: formData.horaSalida,
+          // Vacío se manda como `null`, no como cadena: en edición eso limpia
+          // la hora, y en creación el backend la deja sin asignar.
+          hora_salida: formData.horaSalida || null,
           transportador_id: Number(formData.transportadorId),
           extractora_id: Number(formData.extractoraId),
           observaciones: null,
@@ -643,7 +648,13 @@ export default function NuevoEditarViaje() {
                     onChange={(e) => handleInputChange('horaSalida', e.target.value)}
                     className={errors.horaSalida ? 'border-destructive' : ''}
                   />
-                  {errors.horaSalida && <p className="text-xs text-destructive">{errors.horaSalida}</p>}
+                  {errors.horaSalida ? (
+                    <p className="text-xs text-destructive">{errors.horaSalida}</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Opcional. Déjala vacía si no se conoce.
+                    </p>
+                  )}
                 </div>
               </div>
             </CardContent>

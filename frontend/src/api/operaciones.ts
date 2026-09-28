@@ -46,6 +46,13 @@ export interface Planilla {
   jornales_count?: number;
   cosechas_count?: number;
   ausencias_count?: number;
+  /**
+   * Personas únicas de las que la planilla da cuenta ese día: presentes
+   * (colaboradores y operarios de tercero en jornales y cuadrilla de cosecha)
+   * **más** los colaboradores con ausencia registrada, deduplicados
+   * (2026-09-28). No sumarle `ausencias_count`: ya viene dentro. La ausencia
+   * cuenta en cualquier estado; las horas extra no suman por sí solas.
+   */
   colaboradores_count?: number;
   total_jornales_sum?: string | number;
   total_cosechas_sum?: string | number;
@@ -131,9 +138,14 @@ export type Periodo = 'semanal' | 'quincenal' | 'mensual' | 'personalizado';
 /**
  * Response de `GET /operaciones/{id}/cobertura` (§7.1).
  *
- * Lista colaboradores y operarios que deberían aparecer en la planilla
- * (activos y con contrato vigente para colaboradores) pero no tienen
- * jornal, cosecha ni ausencia registrada en ella.
+ * Lista colaboradores y operarios que deberían aparecer en la planilla pero
+ * no tienen jornal, cosecha ni ausencia registrada en ella.
+ *
+ * El criterio va por la **fecha de la planilla**, no por "vigente hoy"
+ * (2026-09-23): entra quien tenía un contrato que cubre `operacion.fecha`,
+ * incluidos los retirados en esa fecha o después. `estado_contrato` no
+ * participa. Quien está de vacaciones ese día cuenta como presente y no sale
+ * en la lista (PR-L8).
  */
 export interface CoberturaColaboradorFaltante {
   id: number;
@@ -803,13 +815,15 @@ export const operacionesApi = {
   /**
    * GET /operaciones/{id}/cobertura (§7.1)
    *
-   * Devuelve qué colaboradores activos con contrato vigente y qué operarios
-   * activos NO aparecen en la planilla (sin labor de palma, sin labor de
-   * finca ni ausencia registrada). Se llama en el Paso 5 antes de aprobar
-   * para mostrar un banner informativo.
+   * Devuelve qué colaboradores con contrato que cubre la fecha de la planilla
+   * y qué operarios activos NO aparecen en ella (sin labor de palma, sin labor
+   * de finca, sin ausencia y sin vacaciones ese día). Se llama en el Paso 5
+   * antes de aprobar para mostrar un banner informativo.
    *
-   * Es INFORMATIVO, no bloqueante — el endpoint /aprobar no verifica
-   * cobertura, el usuario decide si aprueba con faltantes.
+   * Es INFORMATIVO, no bloqueante: el usuario decide si aprueba con faltantes.
+   * `POST /aprobar` devuelve la misma información en `advertencias[]` con el
+   * código `PLANILLA_CON_PERSONAL_SIN_REGISTRAR`, para el caso habitual en que
+   * nadie consultó este endpoint antes.
    */
   cobertura: (id: number) =>
     requestConToken<{ data: CoberturaPlanilla }>(

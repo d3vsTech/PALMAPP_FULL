@@ -18,7 +18,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../ui/alert-dialog';
 import {
-  Plus, FileText, Calculator, Eye, Search, Filter, Trash2, FileSpreadsheet,
+  Plus, FileText, Calculator, Eye, Search, Filter, Trash2,
   Users, AlertTriangle, PiggyBank, Percent, Gift, CheckCircle, Clock, Loader2,
 } from 'lucide-react';
 import StatusBadge from '../common/StatusBadge';
@@ -223,27 +223,9 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
           <p className="text-muted-foreground mt-1">{txt.subtitulo}</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          {/* Cargue del histórico. Por cesantías (§12) entra el año completo,
-              porque el mismo archivo crea el período de intereses; por prima
-              (§13) entra un semestre, que es su unidad. La pestaña de intereses
-              no lo ofrece: sus datos llegan con el archivo de cesantías. */}
-          {(tipo === 'CESANTIAS' || esPrima) && (
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={() =>
-                navigate(
-                  esPrima
-                    ? '/liquidaciones/prima/carga-historico'
-                    : '/liquidaciones/cesantias/carga-historico',
-                )
-              }
-              className="gap-2"
-            >
-              <FileSpreadsheet className="h-5 w-5" />
-              {esPrima ? 'Cargar semestres anteriores' : 'Cargar años anteriores'}
-            </Button>
-          )}
+          {/* El cargue del histórico vive en el botón "Importar" del
+              encabezado de Liquidaciones, el mismo para las cinco pestañas.
+              Aquí había un segundo botón que llevaba a la misma pantalla. */}
           <Button onClick={() => navigate(`${txt.ruta}/nueva`)} size="lg" className="gap-2">
             <Plus className="h-5 w-5" />
             {txt.botonNuevo}

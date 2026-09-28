@@ -55,12 +55,35 @@ import {
   EstadoValidacion,
   IncidenciasFila,
   Regla,
-  SelectorArchivo,
+  PasoCard,
+  VistaPreviaPlantilla,
+  ZonaArchivo,
   esApiError,
   mensajeArchivo,
 } from './comunes';
 
 const SEMESTRES = semestresCargables();
+
+/**
+ * Columnas del archivo de prima, con el nombre exacto que reconoce el lector
+ * (API_LIQUIDACIONES §13.1). Son cuatro: la prima no tiene fondo ni intereses
+ * porque se le paga al trabajador, no a un fondo.
+ *
+ * Ningún alias coincide con los de cesantías, así que subir aquí el archivo
+ * del otro módulo falla con CABECERAS_FALTANTES en vez de cargar basura.
+ */
+const COLUMNAS_PLANTILLA = [
+  { nombre: 'documento', requerida: true },
+  { nombre: 'prima_valor', requerida: true },
+  { nombre: 'prima_fecha_pago' },
+  { nombre: 'observacion' },
+];
+
+const FILAS_EJEMPLO = [
+  ['1012345678', '1.000.000', '2026-06-26', 'Planilla de junio'],
+  ['52000002',   '875.450',   '26/06/2026', ''],
+  ['1098765432', '640.000',   '',           'Ingresó en marzo'],
+];
 
 export default function CargaHistoricoPrima() {
   const navigate = useNavigate();
@@ -110,11 +133,10 @@ export default function CargaHistoricoPrima() {
     [],
   );
 
+  // La zona de arrastre ya entrega el `File`, venga del input o del drop.
   const elegirArchivo = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      e.target.value = ''; // permite volver a elegir el mismo archivo corregido
-      if (!file || !seleccion) return;
+    (file: File) => {
+      if (!seleccion) return;
       setArchivo(file);
       setCargado(false);
       void validar(file, seleccion.anio, seleccion.semestre, sobrescribir);
@@ -214,105 +236,106 @@ export default function CargaHistoricoPrima() {
         </div>
       </div>
 
-      {/* Paso 1: semestre y plantilla */}
-      <Card>
-        <CardHeader className="border-b">
-          <CardTitle>1. Elija el semestre y prepare el archivo</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4 p-6 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="semestre">
-              Semestre que va a cargar <span className="text-destructive">*</span>
-            </Label>
-            <Select value={seleccion?.valor ?? ''} onValueChange={cambiarSemestre}>
-              <SelectTrigger id="semestre">
-                <SelectValue placeholder="Seleccionar semestre..." />
-              </SelectTrigger>
-              <SelectContent>
-                {SEMESTRES.map((s) => (
-                  <SelectItem key={s.valor} value={s.valor}>
-                    {s.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {rango && seleccion && (
-              <p className="text-xs text-muted-foreground">
-                Del {rango.inicio} al {rango.fin} de {seleccion.anio}. Solo semestres ya
-                terminados. El que va en curso se liquida con el asistente normal.
-              </p>
+      {/* Paso 1: plantilla + el semestre, que no va dentro del archivo. */}
+      <PasoCard
+        n={1}
+        titulo="Descarga la plantilla"
+        subtitulo="Usa esta plantilla para preparar tus datos correctamente"
+        accion={
+          <Button
+            variant="outline"
+            onClick={() => void descargarPlantilla()}
+            disabled={descargandoPlantilla}
+            className="gap-2"
+          >
+            {descargandoPlantilla ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
             )}
-          </div>
+            Descargar plantilla
+          </Button>
+        }
+      >
+        <VistaPreviaPlantilla columnas={COLUMNAS_PLANTILLA} filas={FILAS_EJEMPLO} />
 
-          <div className="flex flex-col justify-between gap-3 rounded-lg border border-border bg-muted/30 p-4">
-            <div>
-              <p className="text-sm font-semibold">Use la plantilla</p>
-              <p className="mt-0.5 text-sm text-muted-foreground">
-                Trae las cuatro columnas con el nombre correcto y la cédula en formato de texto,
-                que es lo que evita que Excel la dañe.
-              </p>
-            </div>
-            <Button
-              variant="outline"
-              onClick={() => void descargarPlantilla()}
-              disabled={descargandoPlantilla}
-              className="w-full gap-2"
-            >
-              {descargandoPlantilla ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Download className="h-4 w-4" />
-              )}
-              Descargar plantilla
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+        <p className="text-xs text-muted-foreground">
+          La plantilla trae estas cuatro columnas y la cédula en formato de texto, que es lo
+          que evita que Excel le quite los ceros de la izquierda. Formatos aceptados:{' '}
+          <strong className="text-foreground">.xlsx, .xls, .csv</strong>. Las fechas se leen
+          como día/mes: <strong className="text-foreground">26/06/2026 es el 26 de junio</strong>.
+        </p>
+      </PasoCard>
 
       {/* Paso 2: archivo */}
-      <Card>
-        <CardHeader className="border-b">
-          <CardTitle>2. Suba el archivo</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4 p-6">
-          <SelectorArchivo
-            archivo={archivo}
-            analisis={analisis?.archivo}
-            inputRef={inputRef}
-            accept={ACCEPT_ARCHIVO}
-            onElegir={elegirArchivo}
-            onQuitar={limpiar}
-            detalle={
-              analisis
-                ? `${analisis.archivo.filas_leidas} fila${
-                    analisis.archivo.filas_leidas === 1 ? '' : 's'
-                  } leída${analisis.archivo.filas_leidas === 1 ? '' : 's'} · ${etiquetaSemestre(
-                    analisis.anio,
-                    analisis.semestre,
-                  )}`
-                : null
-            }
-          />
-
-          <p className="text-xs text-muted-foreground">
-            Archivos .xlsx, .xls o .csv, hasta {MAX_FILAS_ARCHIVO} colaboradores por archivo. Al
-            subirlo se revisa contra las fichas, pero todavía no se guarda nada.
-          </p>
-
-          <EstadoValidacion validando={validando} error={errorArchivo} />
-
-          {analisis && <CabecerasIgnoradas cabeceras={analisis.archivo.cabeceras_ignoradas} />}
-
-          {analisis?.periodos.prima && !cargado && (
-            <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800/30 dark:bg-amber-950/30 dark:text-amber-400">
-              <Info className="mt-0.5 h-4 w-4 shrink-0" />
-              El {etiquetaSemestre(analisis.anio, analisis.semestre)} ya tiene un histórico
-              cargado con {analisis.periodos.prima.total_colaboradores} colaboradores. Lo que
-              suba ahora se agrega a ese mismo período.
+      <PasoCard
+        n={2}
+        titulo="Carga tu archivo"
+        subtitulo="Arrastra el archivo o haz clic para seleccionarlo"
+      >
+        {/* El semestre va aquí y no en el paso 1: el paso 1 solo baja la
+            plantilla, y el semestre define contra qué se valida el archivo. */}
+        <div className="max-w-sm space-y-2">
+          <Label htmlFor="semestre">
+            Semestre que va a cargar <span className="text-destructive">*</span>
+          </Label>
+          <Select value={seleccion?.valor ?? ''} onValueChange={cambiarSemestre}>
+            <SelectTrigger id="semestre">
+              <SelectValue placeholder="Seleccionar semestre..." />
+            </SelectTrigger>
+            <SelectContent>
+              {SEMESTRES.map((s) => (
+                <SelectItem key={s.valor} value={s.valor}>
+                  {s.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {rango && seleccion && (
+            <p className="text-xs text-muted-foreground">
+              Del {rango.inicio} al {rango.fin} de {seleccion.anio}. Solo semestres ya
+              terminados. El semestre no va dentro del archivo.
             </p>
           )}
-        </CardContent>
-      </Card>
+        </div>
+
+        <ZonaArchivo
+          archivo={archivo}
+          analisis={analisis?.archivo}
+          inputRef={inputRef}
+          accept={ACCEPT_ARCHIVO}
+          onArchivo={elegirArchivo}
+          onQuitar={limpiar}
+          detalle={
+            analisis
+              ? `${analisis.archivo.filas_leidas} fila${
+                  analisis.archivo.filas_leidas === 1 ? '' : 's'
+                } leída${analisis.archivo.filas_leidas === 1 ? '' : 's'} · ${etiquetaSemestre(
+                  analisis.anio,
+                  analisis.semestre,
+                )}`
+              : null
+          }
+        />
+
+        <p className="text-xs text-muted-foreground">
+          Hasta {MAX_FILAS_ARCHIVO} colaboradores por archivo. Al subirlo se revisa contra las
+          fichas, pero todavía no se guarda nada.
+        </p>
+
+        <EstadoValidacion validando={validando} error={errorArchivo} />
+
+        {analisis && <CabecerasIgnoradas cabeceras={analisis.archivo.cabeceras_ignoradas} />}
+
+        {analisis?.periodos.prima && !cargado && (
+          <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800/30 dark:bg-amber-950/30 dark:text-amber-400">
+            <Info className="mt-0.5 h-4 w-4 shrink-0" />
+            El {etiquetaSemestre(analisis.anio, analisis.semestre)} ya tiene un histórico
+            cargado con {analisis.periodos.prima.total_colaboradores} colaboradores. Lo que
+            suba ahora se agrega a ese mismo período.
+          </p>
+        )}
+      </PasoCard>
 
       {/* Paso 3: revisión */}
       {analisis && resumen && (

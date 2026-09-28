@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
+import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
-import { Info, DollarSign, TrendingUp, Calendar, FileText, Briefcase } from 'lucide-react';
+import { Info, DollarSign, TrendingUp, Calendar, FileText, Briefcase, Upload } from 'lucide-react';
 import { InfoTooltip } from '../../components/common/InfoTooltip';
 import {
   Tooltip,
@@ -17,8 +19,29 @@ import PrimaTab from './PrimaTab';
 import VacacionesTab from './VacacionesTab';
 import LiquidacionFinalTab from './LiquidacionFinalTab';
 
+/**
+ * Botón "Importar" del encabezado, uno por pestaña.
+ *
+ * Antes cada pestaña resolvía la carga de histórico a su manera: Vacaciones la
+ * tenía al pie, y Cesantías y Prima tenían pantalla y ruta pero ningún enlace
+ * que llevara a ellas. Ahora el botón vive siempre en el mismo sitio y cambia
+ * de destino según la pestaña abierta.
+ *
+ * Intereses no lleva botón: sus valores van en las mismas filas del archivo
+ * de cesantías (§12), que crea los dos períodos de una vez. No existe un
+ * cargue de intereses por separado, y mandar a la pantalla de cesantías desde
+ * aquí solo confundía: pide el año y muestra la plantilla del otro módulo.
+ */
+const IMPORTAR_POR_TAB: Record<string, { label: string; ruta: string }> = {
+  cesantias:  { label: 'Importar Cesantías',  ruta: '/liquidaciones/cesantias/carga-historico' },
+  prima:      { label: 'Importar Prima',      ruta: '/liquidaciones/prima/carga-historico' },
+  vacaciones: { label: 'Importar Vacaciones', ruta: '/liquidaciones/vacaciones/carga-historico' },
+};
+
 function LiquidacionesContent() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('cesantias');
+  const importar = IMPORTAR_POR_TAB[activeTab];
 
   return (
     <div className="space-y-6">
@@ -53,6 +76,19 @@ function LiquidacionesContent() {
             Cesantías, intereses, prima de servicios, vacaciones y liquidaciones finales
           </p>
         </div>
+
+        {/* Sin botón en Intereses (van dentro del archivo de cesantías) ni en
+            Liquidación final (no hay endpoint que reciba un cargue). */}
+        {importar && (
+          <Button
+            variant="outline"
+            onClick={() => navigate(importar.ruta)}
+            className="gap-2 shrink-0 rounded-full"
+          >
+            <Upload className="h-4 w-4" />
+            {importar.label}
+          </Button>
+        )}
       </div>
 
       {/* Pestañas del módulo */}

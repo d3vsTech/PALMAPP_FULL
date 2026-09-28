@@ -360,16 +360,16 @@ export default function Operaciones() {
                           <StatusBadge status={mapEstadoUI(planilla.estado)} />
                         </td>
                         <td className="p-4 text-center">
-                          {/* Suma los que trabajaron y los que tienen novedad:
-                              `colaboradores_count` solo cuenta jornales y
-                              cuadrilla, así que una planilla de un día de
-                              lluvia, con los 18 en ausencia, salía en 0 y se
-                              veía igual que una planilla vacía. */}
+                          {/* Desde el 2026-09-28 `colaboradores_count` ya
+                              incluye a los colaboradores con ausencia y
+                              deduplica: quien trabajó medio día y además tiene
+                              novedad cuenta una sola vez. Sumarle
+                              `ausencias_count` aquí lo contaba dos veces. */}
                           <span
                             className="inline-flex items-center justify-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary"
-                            title={`${planilla.colaboradores_count ?? 0} con labor registrada · ${planilla.ausencias_count ?? 0} con novedad`}
+                            title={`${planilla.ausencias_count ?? 0} con novedad registrada`}
                           >
-                            {(planilla.colaboradores_count ?? 0) + (planilla.ausencias_count ?? 0)}
+                            {planilla.colaboradores_count ?? 0}
                           </span>
                         </td>
                         <td className="p-4">
