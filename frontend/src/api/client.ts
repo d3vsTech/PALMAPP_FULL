@@ -144,13 +144,17 @@ async function rawRequest(
         // estado de React Router). El AuthContext escucha este evento y llama
         // a `navigate('/login', { replace: true })`.
         clearLocalSession();
-        window.dispatchEvent(new CustomEvent('palmapp:auth:logout', {
-          detail: { reason: 'refresh_failed' },
-        }));
+        cerrarSesion('refresh_failed');
         throw err;
       }
     }
+    // Cualquier otro 401 también cierra la sesión: `TOKEN_INVALID`,
+    // `TOKEN_ABSENT`, o el "Unauthenticated." pelado de Laravel, que llega sin
+    // `code`. Antes solo se limpiaba el storage y el error subía a la pantalla,
+    // así que tras un rato inactivo aparecía "Unauthenticated" en medio de la
+    // app en vez de mandar al login.
     clearLocalSession();
+    cerrarSesion('token_invalido');
     throw err;
   }
 
@@ -174,6 +178,28 @@ async function request<T>(
 }
 
 // ─── Refresh token ────────────────────────────────────────────────────────────
+
+/**
+ * Avisa al árbol React que navegue al login.
+ *
+ * No se usa `window.location.href`: eso recarga la página entera y pierde el
+ * estado de React Router. El `AuthContext` escucha el evento y hace el
+ * `navigate('/login')`.
+ *
+ * Se emite una sola vez: varias peticiones en paralelo fallando con 401
+ * dispararían un evento cada una, y el listener terminaría empujando varias
+ * entradas al historial.
+ */
+let sesionYaCerrada = false;
+
+function cerrarSesion(reason: string): void {
+  if (sesionYaCerrada) return;
+  sesionYaCerrada = true;
+  window.dispatchEvent(new CustomEvent('palmapp:auth:logout', { detail: { reason } }));
+  // La bandera solo evita la ráfaga del mismo momento; un login nuevo en la
+  // misma pestaña tiene que poder volver a cerrarse después.
+  setTimeout(() => { sesionYaCerrada = false; }, 1000);
+}
 
 /**
  * Single-flight: si varias peticiones paralelas expiran a la vez, solo se

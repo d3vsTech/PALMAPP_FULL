@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { toast } from 'sonner';
 import { API_URL } from '../../api/env';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -220,9 +221,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // sin causar full page reload (history.pushState + popstate hace que React
   // Router detecte el cambio).
   useEffect(() => {
-    const handleLogout = () => {
+    const handleLogout = (e: Event) => {
       clearAll();
       if (window.location.pathname !== '/login') {
+        // Sin el aviso, la app se va al login sin explicación y parece que se
+        // hubiera cerrado sola o que se perdió lo que el usuario estaba viendo.
+        const motivo = (e as CustomEvent)?.detail?.reason;
+        toast.info(
+          motivo === 'token_invalido'
+            ? 'Tu sesión ya no es válida. Vuelve a iniciar sesión.'
+            : 'Tu sesión expiró por inactividad. Vuelve a iniciar sesión.',
+        );
         window.history.pushState({}, '', '/login');
         window.dispatchEvent(new PopStateEvent('popstate'));
       }

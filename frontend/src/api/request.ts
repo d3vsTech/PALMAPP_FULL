@@ -23,6 +23,20 @@ function clearTenantSession(): void {
 }
 
 /**
+ * Avisa al `AuthContext` que navegue al login. Mismo evento y misma guarda
+ * contra la ráfaga que en `client.ts`: una pantalla con varios fetches en
+ * paralelo emitiría un evento por cada 401.
+ */
+let sesionYaCerrada = false;
+
+function avisarLogout(reason: string): void {
+  if (sesionYaCerrada) return;
+  sesionYaCerrada = true;
+  window.dispatchEvent(new CustomEvent('palmapp:auth:logout', { detail: { reason } }));
+  setTimeout(() => { sesionYaCerrada = false; }, 1000);
+}
+
+/**
  * Refresh del token de finca con single-flight: si varias peticiones
  * paralelas expiran a la vez (típico al volver a una pantalla con varios
  * fetches), solo se dispara UN refresh y todas esperan el mismo resultado.
@@ -143,13 +157,15 @@ export async function fetchConToken(
         return await doFetch(endpoint, null, opciones);
       } catch {
         clearTenantSession();
-        window.dispatchEvent(new CustomEvent('palmapp:auth:logout', {
-          detail: { reason: 'refresh_failed' },
-        }));
+        avisarLogout('refresh_failed');
         return res;
       }
     }
+    // Los demás 401 (`TOKEN_INVALID`, `TOKEN_ABSENT` o el "Unauthenticated."
+    // sin `code` de Laravel) también cierran la sesión. Antes solo se limpiaba
+    // el storage y la pantalla mostraba el error.
     clearTenantSession();
+    avisarLogout('token_invalido');
   }
   return res;
 }
