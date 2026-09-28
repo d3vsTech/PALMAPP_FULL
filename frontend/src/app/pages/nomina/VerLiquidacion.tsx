@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { nominaApi, type DesprendibleData } from '../../../api/nomina';
-import { generarDesprendiblePdf } from './DesprendiblePago';
+import { nombreArchivoDesprendible } from './DesprendiblePago';
 import type { ApiError } from '../../../api/client';
 
 function getIniciales(nombre: string): string {
@@ -81,16 +81,23 @@ export default function VerLiquidacion() {
       .finally(() => setCargando(false));
   }, [nominaEmpleadoId]);
 
+  /** El PDF lo genera el backend, con el membrete de la finca (§6.3). */
   const descargarPdf = async () => {
-    if (!data) return;
+    if (!nominaEmpleadoId || !data) return;
     setDescargando(true);
     try {
-      // Generado en el cliente con jsPDF — el template blade del backend
-      // pegaba los valores al texto sin alineación (BASE JORNALES$421.000).
-      generarDesprendiblePdf(data);
+      const blob = await nominaApi.desprendiblePdf(nominaEmpleadoId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = nombreArchivoDesprendible(data);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
     } catch (err) {
       const e = err as ApiError;
-      toast.error(e.message ?? 'Error al descargar PDF');
+      toast.error(e.message ?? 'Error al descargar el desprendible');
     } finally {
       setDescargando(false);
     }
