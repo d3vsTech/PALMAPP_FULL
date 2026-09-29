@@ -198,7 +198,7 @@ export default function CalendarioFestivos({ standalone = true }: CalendarioFest
 
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-3xl font-bold text-primary mb-1">Calendario de Festivos</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-primary mb-1">Calendario de Festivos</h1>
             <p className="text-muted-foreground text-sm">
               Los festivos nacionales son de solo lectura. Puedes agregar festivos
               locales o suprimir alguno nacional creando tu propia fila para esa fecha.

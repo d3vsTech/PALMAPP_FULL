@@ -72,10 +72,10 @@ export default function Dashboard() {
       <Card className="border-border">
         <CardContent className="pt-6">
           {/* Versión Desktop */}
-          <div className="hidden lg:flex items-center gap-6">
-            <h3 className="whitespace-nowrap">Filtro de Fechas</h3>
+          <div className="hidden lg:flex lg:flex-wrap items-end gap-x-4 gap-y-4 xl:gap-x-6">
+            <h3 className="self-center whitespace-nowrap">Filtro de Fechas</h3>
 
-            <div className="flex gap-2">
+            <div className="flex self-center gap-2">
               <Button
                 variant={filterPreset === 'semanal' ? 'default' : 'outline'}
                 size="sm"
@@ -102,8 +102,7 @@ export default function Dashboard() {
               </Button>
             </div>
 
-            <div className="flex-1" />
-
+            <div className="flex flex-1 flex-wrap items-end justify-end gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="fechaInicio" className="text-sm font-medium">Fecha Inicio</Label>
               <Input
@@ -134,6 +133,7 @@ export default function Dashboard() {
             >
               {loading ? 'Cargando…' : 'Aplicar'}
             </Button>
+            </div>
           </div>
 
           {/* Versión Mobile/Tablet */}
@@ -233,7 +233,7 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-1">
-                  <p className="text-4xl font-bold">
+                  <p className="text-3xl sm:text-4xl font-bold">
                     {Number(lote.kg_promedio).toLocaleString('es-CO', { maximumFractionDigits: 1 })}
                   </p>
                   <p className="text-sm text-muted-foreground">kg promedio</p>
@@ -348,28 +348,28 @@ export default function Dashboard() {
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div className="space-y-2 p-4 border border-border rounded-lg">
                 <p className="text-sm text-muted-foreground">Semana Actual</p>
-                <p className="text-4xl font-bold">
+                <p className="text-3xl sm:text-4xl font-bold">
                   {data ? Number(data.lluvias.semana_actual_mm).toLocaleString('es-CO') : '—'}
                 </p>
                 <p className="text-xs text-muted-foreground">mm acumulados</p>
               </div>
               <div className="space-y-2 p-4 border border-border rounded-lg">
                 <p className="text-sm text-muted-foreground">Semana Anterior</p>
-                <p className="text-4xl font-bold">
+                <p className="text-3xl sm:text-4xl font-bold">
                   {data ? Number(data.lluvias.semana_anterior_mm).toLocaleString('es-CO') : '—'}
                 </p>
                 <p className="text-xs text-muted-foreground">mm acumulados</p>
               </div>
               <div className="space-y-2 p-4 border border-border rounded-lg">
                 <p className="text-sm text-muted-foreground">Mes Actual</p>
-                <p className="text-4xl font-bold">
+                <p className="text-3xl sm:text-4xl font-bold">
                   {data ? Number(data.lluvias.mes_actual_mm).toLocaleString('es-CO') : '—'}
                 </p>
                 <p className="text-xs text-muted-foreground">mm acumulados</p>
               </div>
               <div className="space-y-2 p-4 border border-border rounded-lg">
                 <p className="text-sm text-muted-foreground">Promedio Mensual</p>
-                <p className="text-4xl font-bold">
+                <p className="text-3xl sm:text-4xl font-bold">
                   {data ? Number(data.lluvias.promedio_mensual_historico_mm).toLocaleString('es-CO') : '—'}
                 </p>
                 <p className="text-xs text-muted-foreground">mm histórico</p>

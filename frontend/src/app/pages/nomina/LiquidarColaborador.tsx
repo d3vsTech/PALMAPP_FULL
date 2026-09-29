@@ -530,7 +530,7 @@ export default function LiquidarColaborador() {
             </span>
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-primary">{empleado.nombre_completo}</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-primary">{empleado.nombre_completo}</h1>
             <div className="flex items-center gap-2 mt-1 text-sm">
               {esOperario ? (
                 <Badge className="bg-amber-500/10 text-amber-700 border-amber-300 text-[10px] font-bold uppercase">
@@ -1457,7 +1457,7 @@ export default function LiquidarColaborador() {
 
               <div className="flex items-center justify-between pt-4 border-t border-primary/30">
                 <span className="font-bold text-lg tracking-wide">TOTAL NETO</span>
-                <span className="font-bold text-3xl text-primary">
+                <span className="font-bold text-2xl sm:text-3xl text-primary">
                   ${totales.neto.toLocaleString('es-CO')}
                 </span>
               </div>

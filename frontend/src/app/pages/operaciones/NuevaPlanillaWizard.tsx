@@ -2762,7 +2762,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                 <CardContent className="space-y-4 pt-6">
                   <NotaColaboradoresExcluidos excluidos={colaboradoresExcluidos} fecha={fecha} />
                   <Tabs defaultValue="cosecha" className="space-y-4">
-                    <TabsList className="grid w-full grid-cols-6">
+                    <TabsList className="w-full justify-start gap-1 overflow-x-auto sm:grid sm:grid-cols-6 sm:overflow-visible">
                       <TabsTrigger value="cosecha">Cosecha</TabsTrigger>
                       <TabsTrigger value="plateo">Plateo</TabsTrigger>
                       <TabsTrigger value="poda">Poda</TabsTrigger>

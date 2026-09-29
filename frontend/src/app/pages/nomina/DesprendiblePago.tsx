@@ -177,7 +177,7 @@ export default function DesprendiblePago() {
         </Button>
 
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-primary">Desprendible Generado</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-primary">Desprendible Generado</h1>
           <p className="text-muted-foreground mt-2">Liquidación confirmada exitosamente</p>
         </div>
       </div>
@@ -187,7 +187,7 @@ export default function DesprendiblePago() {
         <CardContent className="p-8">
           {/* Header del desprendible: grid 3 col con panel finca + título */}
           <div className="mb-8">
-            <div className="grid grid-cols-3 mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 mb-6">
               <div className="col-span-1 p-6 flex items-center justify-center bg-primary/5 rounded-l-lg">
                 <p className="font-bold text-primary text-center uppercase">{data.finca}</p>
               </div>
@@ -197,7 +197,7 @@ export default function DesprendiblePago() {
             </div>
 
             {/* Grid 3x2 de info — mini-cards */}
-            <div className="grid grid-cols-3 gap-2 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
               <InfoMini label="Nombre" value={empleado.nombre_completo} />
               <InfoMini label="Cédula" value={empleado.documento} />
               <InfoMini label="Base" value={empleado.salario_tipo ?? '—'} />
@@ -300,7 +300,7 @@ export default function DesprendiblePago() {
             <div className="bg-primary/10 rounded-lg p-4 border-2 border-primary mt-4">
               <div className="flex justify-between items-center">
                 <span className="font-bold text-lg">TOTAL NETO</span>
-                <span className="font-bold text-3xl text-primary">{fmt(liquidacion.total_neto)}</span>
+                <span className="font-bold text-2xl sm:text-3xl text-primary">{fmt(liquidacion.total_neto)}</span>
               </div>
             </div>
 
@@ -356,7 +356,7 @@ export default function DesprendiblePago() {
 
           {/* Footer: firmas */}
           <div className="mt-12 pt-8 border-t border-border">
-            <div className="grid grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
               <div className="text-center">
                 <div className="h-20 border-b-2 border-muted-foreground/30 mb-3"></div>
                 <p className="text-sm font-semibold text-muted-foreground">FIRMA RECIBIDO</p>

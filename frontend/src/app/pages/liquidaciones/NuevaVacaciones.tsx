@@ -241,7 +241,7 @@ export default function NuevaVacaciones() {
       </Button>
 
       <div>
-        <h1 className="text-3xl font-bold text-primary">Liquidación de Vacaciones</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-primary">Liquidación de Vacaciones</h1>
         <p className="mt-1 text-muted-foreground">Registra los días de disfrute y la compensación en dinero</p>
       </div>
 
@@ -269,7 +269,7 @@ export default function NuevaVacaciones() {
             </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-3 divide-x divide-border border-t border-border pt-4">
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 divide-x divide-border border-t border-border pt-4">
             <div className="pr-4">
               <p className="text-xs text-muted-foreground">Base mensual (art. 192)</p>
               <p className="font-semibold text-foreground">{fmtCOP(detalle.base.base_mensual)}</p>

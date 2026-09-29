@@ -129,7 +129,7 @@ export default function VacacionesHistorico() {
       </Button>
 
       <div>
-        <h1 className="text-3xl font-bold text-primary">Histórico de Vacaciones</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-primary">Histórico de Vacaciones</h1>
         <p className="mt-1 text-muted-foreground">Registro de todas las vacaciones liquidadas</p>
       </div>
 

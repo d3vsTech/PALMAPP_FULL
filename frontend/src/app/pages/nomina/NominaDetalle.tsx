@@ -1164,10 +1164,10 @@ export default function NominaDetalle() {
           </Link>
         </Button>
 
-        <div className="flex items-start justify-between">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-3xl font-bold text-primary">{periodoLabel(nomina)}</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold text-primary">{periodoLabel(nomina)}</h1>
               <StatusBadge status={nomina.estado as any} />
             </div>
             <p className="text-muted-foreground">
@@ -1285,7 +1285,7 @@ export default function NominaDetalle() {
       })()}
 
       {/* Selector de vista (tabs visuales V.15) */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <button
           type="button"
           onClick={() => setTabActivo('colaboradores')}

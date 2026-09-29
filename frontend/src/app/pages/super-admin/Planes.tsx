@@ -110,7 +110,7 @@ export default function Planes() {
                 </div>
                 <h3 className="text-2xl font-bold text-white mb-2">{plan.nombre}</h3>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-bold text-white">${plan.precio}</span>
+                  <span className="text-3xl sm:text-4xl font-bold text-white">${plan.precio}</span>
                   <span className="text-white/70">/mes</span>
                 </div>
               </div>

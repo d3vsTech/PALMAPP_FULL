@@ -80,7 +80,7 @@ export default function ProveedorDashboard() {
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">¡Bienvenido, {nombreProveedor}!</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">¡Bienvenido, {nombreProveedor}!</h1>
           <p className="text-muted-foreground mt-1">
             Resumen de tu actividad en el marketplace
           </p>
@@ -100,7 +100,7 @@ export default function ProveedorDashboard() {
           <Card>
             <CardContent className="p-6">
               <p className="text-sm text-muted-foreground mb-1">Productos Activos</p>
-              <p className="text-4xl font-bold">{indicadores?.productos_activos ?? 0}</p>
+              <p className="text-3xl sm:text-4xl font-bold">{indicadores?.productos_activos ?? 0}</p>
               <p className="text-xs text-muted-foreground mt-1">
                 de {indicadores?.productos_total ?? 0} totales
               </p>
@@ -110,7 +110,7 @@ export default function ProveedorDashboard() {
           <Card>
             <CardContent className="p-6">
               <p className="text-sm text-muted-foreground mb-1">Pedidos Pendientes</p>
-              <p className="text-4xl font-bold">{indicadores?.pedidos_pendientes ?? 0}</p>
+              <p className="text-3xl sm:text-4xl font-bold">{indicadores?.pedidos_pendientes ?? 0}</p>
               <p className="text-xs text-muted-foreground mt-1">
                 {indicadores?.pedidos_en_proceso ?? 0} en proceso
               </p>
@@ -120,7 +120,7 @@ export default function ProveedorDashboard() {
           <Card>
             <CardContent className="p-6">
               <p className="text-sm text-muted-foreground mb-1">Pedidos Completados</p>
-              <p className="text-4xl font-bold">{indicadores?.pedidos_completados_mes ?? 0}</p>
+              <p className="text-3xl sm:text-4xl font-bold">{indicadores?.pedidos_completados_mes ?? 0}</p>
               <p className="text-xs text-muted-foreground mt-1">este mes</p>
             </CardContent>
           </Card>
@@ -128,7 +128,7 @@ export default function ProveedorDashboard() {
           <Card>
             <CardContent className="p-6">
               <p className="text-sm text-muted-foreground mb-1">Ventas del Mes</p>
-              <p className="text-4xl font-bold">
+              <p className="text-3xl sm:text-4xl font-bold">
                 ${((indicadores?.ventas_mes_actual ?? 0) / 1_000_000).toFixed(1)}M
               </p>
               <p className={`text-xs mt-1 ${variacionColor}`}>{variacionLabel}</p>

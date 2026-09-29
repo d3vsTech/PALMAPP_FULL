@@ -181,7 +181,7 @@ export default function VistaPeriodoCerrado({ periodo, tipo, onReload }: Props) 
       {/* Encabezado con el estado del período */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-3xl font-bold text-primary">{periodo.descripcion}</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-primary">{periodo.descripcion}</h1>
           <p className="text-muted-foreground mt-1">
             {txt.subtituloWizard} · Cerrada el {periodo.cerrado_at ? formatFecha(periodo.cerrado_at) : '—'}
             {periodo.cerrado_por ? ` por ${periodo.cerrado_por.name}` : ''}

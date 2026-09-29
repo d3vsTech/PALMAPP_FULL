@@ -376,7 +376,7 @@ export default function NuevoPrestamo() {
               <span className="text-destructive">*</span>
             </Label>
             {periodicidadTenant === 'QUINCENAL' ? (
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <Select value={String(inicioAnio)} onValueChange={(v) => setInicioAnio(parseInt(v))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -401,7 +401,7 @@ export default function NuevoPrestamo() {
                 </Select>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Select value={String(inicioAnio)} onValueChange={(v) => setInicioAnio(parseInt(v))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>

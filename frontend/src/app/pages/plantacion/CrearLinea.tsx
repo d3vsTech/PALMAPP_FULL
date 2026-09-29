@@ -82,7 +82,7 @@ export default function CrearLinea() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
-          <h1 className="text-4xl font-bold text-foreground flex items-center gap-3">
+          <h1 className="text-3xl sm:text-4xl font-bold text-foreground flex items-center gap-3">
             <SquareStack className="h-10 w-10 text-success" />
             Nueva Línea
           </h1>

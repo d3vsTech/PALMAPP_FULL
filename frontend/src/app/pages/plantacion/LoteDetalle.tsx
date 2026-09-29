@@ -503,7 +503,7 @@ export default function LoteDetalle() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="space-y-2">
-            <h1 className="text-4xl font-bold text-foreground">{lote.nombre}</h1>
+            <h1 className="text-3xl sm:text-4xl font-bold text-foreground">{lote.nombre}</h1>
             <p className="text-muted-foreground">
               Predio: {predio.nombre}
               {(lote.variedad || semillas.length > 0) && (

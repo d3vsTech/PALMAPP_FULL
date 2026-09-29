@@ -151,7 +151,7 @@ export function ParametrosNominaTab() {
                 {/* Primera Quincena */}
                 <div className="p-4 rounded-lg bg-muted/30 border border-border">
                   <h4 className="font-medium mb-3">Primera Quincena</h4>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="fechaInicioQ1">Día de Inicio</Label>
                       <Select
@@ -201,7 +201,7 @@ export function ParametrosNominaTab() {
                 {/* Segunda Quincena */}
                 <div className="p-4 rounded-lg bg-muted/30 border border-border">
                   <h4 className="font-medium mb-3">Segunda Quincena</h4>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="fechaInicioQ2">Día de Inicio</Label>
                       <Select
@@ -253,7 +253,7 @@ export function ParametrosNominaTab() {
               <div className="max-w-2xl">
                 <div className="p-4 rounded-lg bg-muted/30 border border-border">
                   <h4 className="font-medium mb-3">Periodo Mensual</h4>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="fechaInicioMes">Día de Inicio</Label>
                       <Select

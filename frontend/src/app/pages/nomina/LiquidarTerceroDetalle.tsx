@@ -494,7 +494,7 @@ export default function LiquidarTerceroDetalle() {
           <ArrowLeft className="h-4 w-4" />
           Volver
         </Button>
-        <h1 className="text-3xl font-bold text-primary">Liquidar — {nombre}</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-primary">Liquidar — {nombre}</h1>
         <p className="text-muted-foreground mt-1">{detalle.nomina.periodo_label}</p>
       </div>
 
@@ -626,7 +626,7 @@ export default function LiquidarTerceroDetalle() {
                 {abierto && (
                   <div className="border-t border-border/40 bg-muted/5">
                     {/* Totales del operario */}
-                    <div className="grid grid-cols-4 divide-x divide-border/40 border-b border-border/40 bg-muted/10">
+                    <div className="grid grid-cols-1 sm:grid-cols-4 divide-x divide-border/40 border-b border-border/40 bg-muted/10">
                       <div className="px-5 py-3">
                         <p className="text-xs text-muted-foreground">Jornales</p>
                         <p className="text-sm font-bold">${totalJornales.toLocaleString('es-CO')}</p>
@@ -1113,7 +1113,7 @@ export default function LiquidarTerceroDetalle() {
           </div>
 
           <div className="space-y-2">
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <Button
                 onClick={cerrarModalExito}
                 className="bg-primary hover:bg-primary/90 gap-1.5"

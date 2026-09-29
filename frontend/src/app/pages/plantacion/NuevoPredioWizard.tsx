@@ -1397,7 +1397,7 @@ export default function NuevoPredioWizard() {
                     <h5 className="font-semibold text-sm flex items-center gap-2">
                       <Check className="h-4 w-4 text-primary" /> Totales Generales
                     </h5>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                       <div className="flex items-center justify-between p-2 rounded bg-background/50">
                         <span className="text-muted-foreground">Lotes</span>
                         <span className="font-bold">{lotesTotal}</span>
@@ -1545,7 +1545,7 @@ export default function NuevoPredioWizard() {
             {lotes.length > 0 && (
               <div className="border-2 border-primary/30 rounded-lg p-3 bg-primary/5 space-y-2">
                 <h5 className="font-semibold text-sm">Totales Generales</h5>
-                <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                   <div className="flex items-center justify-between p-2 rounded bg-background/50">
                     <span className="text-muted-foreground">Lotes</span>
                     <span className="font-bold">{lotes.length}</span>
@@ -1613,13 +1613,13 @@ export default function NuevoPredioWizard() {
         document.body,
       )}
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 mb-2">
             <Button variant="ghost" size="icon" onClick={() => navigate('/plantacion')} className="rounded-xl">
               <ArrowLeft className="h-5 w-5" />
             </Button>
-            <h1 className="text-4xl font-bold text-foreground">{editId ? 'Editar Plantación' : 'Crear Nueva Plantación'}</h1>
+            <h1 className="text-3xl sm:text-4xl font-bold text-foreground">{editId ? 'Editar Plantación' : 'Crear Nueva Plantación'}</h1>
           </div>
           <p className="text-muted-foreground ml-14">Configura tu plantación paso a paso</p>
         </div>

@@ -125,7 +125,7 @@ export default function ProveedorProductos() {
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Mis Productos</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Mis Productos</h1>
           <p className="text-muted-foreground mt-1">
             Gestiona tu catálogo de productos
           </p>
@@ -152,19 +152,19 @@ export default function ProveedorProductos() {
           <Card>
             <CardContent className="p-5">
               <p className="text-sm text-muted-foreground mb-1">Activos</p>
-              <p className="text-3xl font-bold text-success">{stats.total_activos}</p>
+              <p className="text-2xl sm:text-3xl font-bold text-success">{stats.total_activos}</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-5">
               <p className="text-sm text-muted-foreground mb-1">Inactivos</p>
-              <p className="text-3xl font-bold text-muted-foreground">{stats.total_inactivos}</p>
+              <p className="text-2xl sm:text-3xl font-bold text-muted-foreground">{stats.total_inactivos}</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-5">
               <p className="text-sm text-muted-foreground mb-1">Sin stock</p>
-              <p className="text-3xl font-bold text-destructive">{stats.total_sin_stock}</p>
+              <p className="text-2xl sm:text-3xl font-bold text-destructive">{stats.total_sin_stock}</p>
             </CardContent>
           </Card>
         </div>

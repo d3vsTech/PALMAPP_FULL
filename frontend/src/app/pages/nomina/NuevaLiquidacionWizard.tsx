@@ -186,7 +186,7 @@ export default function NuevaLiquidacionWizard() {
           <ArrowLeft className="h-4 w-4" />
           Volver
         </Button>
-        <h1 className="text-3xl font-bold text-primary">Nueva Liquidación</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-primary">Nueva Liquidación</h1>
         <p className="text-muted-foreground mt-2">
           Crea una nueva liquidación de prestaciones sociales
         </p>
@@ -545,7 +545,7 @@ export default function NuevaLiquidacionWizard() {
               <Card className="border-success bg-success/5">
                 <CardContent className="p-8 text-center">
                   <p className="text-sm text-muted-foreground mb-2">Valor Calculado</p>
-                  <p className="text-4xl font-bold text-success mb-4">
+                  <p className="text-3xl sm:text-4xl font-bold text-success mb-4">
                     ${valorCalculado.toLocaleString('es-CO')}
                   </p>
                   <p className="text-xs text-muted-foreground">

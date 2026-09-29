@@ -313,9 +313,9 @@ export default function Viajes() {
       </AlertDialog>
 
       {/* Header */}
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex flex-wrap items-start justify-between mb-6 gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-primary">Viajes</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-primary">Viajes</h1>
           <p className="text-muted-foreground mt-1">
             Gestión de despachos de fruto hacia la extractora
           </p>
@@ -360,7 +360,7 @@ export default function Viajes() {
               <div className="flex-1">
                 <p className="text-sm font-medium text-muted-foreground mb-2">Total Viajes</p>
                 <div className="flex items-baseline gap-2">
-                  <p className="text-3xl font-bold text-foreground">{loadingKPI ? '…' : totalViajes}</p>
+                  <p className="text-2xl sm:text-3xl font-bold text-foreground">{loadingKPI ? '…' : totalViajes}</p>
                   <span className="text-sm text-muted-foreground">despachos</span>
                 </div>
               </div>
@@ -373,7 +373,7 @@ export default function Viajes() {
               <div className="flex-1">
                 <p className="text-sm font-medium text-muted-foreground mb-2">En Validación</p>
                 <div className="flex items-baseline gap-2">
-                  <p className="text-3xl font-bold text-foreground">{loadingKPI ? '…' : viajesEnValidacion}</p>
+                  <p className="text-2xl sm:text-3xl font-bold text-foreground">{loadingKPI ? '…' : viajesEnValidacion}</p>
                   <span className="text-sm text-muted-foreground">pendientes</span>
                 </div>
               </div>
@@ -386,7 +386,7 @@ export default function Viajes() {
               <div className="flex-1">
                 <p className="text-sm font-medium text-muted-foreground mb-2">Finalizados</p>
                 <div className="flex items-baseline gap-2">
-                  <p className="text-3xl font-bold text-foreground">{loadingKPI ? '…' : viajesFinalizados}</p>
+                  <p className="text-2xl sm:text-3xl font-bold text-foreground">{loadingKPI ? '…' : viajesFinalizados}</p>
                   <span className="text-sm text-muted-foreground">completados</span>
                 </div>
               </div>
@@ -399,7 +399,7 @@ export default function Viajes() {
               <div className="flex-1">
                 <p className="text-sm font-medium text-muted-foreground mb-2">Kilogramos Totales</p>
                 <div className="flex items-baseline gap-2">
-                  <p className="text-3xl font-bold text-foreground">{loadingKPI ? '…' : pesoTotal.toLocaleString('es-CO')}</p>
+                  <p className="text-2xl sm:text-3xl font-bold text-foreground">{loadingKPI ? '…' : pesoTotal.toLocaleString('es-CO')}</p>
                   <span className="text-sm text-muted-foreground">kg</span>
                 </div>
               </div>

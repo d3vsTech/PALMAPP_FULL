@@ -128,7 +128,7 @@ export default function Actividad() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-lg p-4">
           <p className="text-sm text-slate-400 mb-1">Total registros</p>
           <p className="text-2xl font-bold text-white">{total}</p>

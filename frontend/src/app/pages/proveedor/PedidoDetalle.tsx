@@ -191,7 +191,7 @@ export default function PedidoDetalleProveedor() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Cargando...</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Cargando...</h1>
           </div>
         </div>
         <div className="flex items-center justify-center py-20 gap-2 text-muted-foreground">
@@ -210,7 +210,7 @@ export default function PedidoDetalleProveedor() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Pedido no encontrado</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Pedido no encontrado</h1>
           </div>
         </div>
         <Card>
@@ -266,7 +266,7 @@ export default function PedidoDetalleProveedor() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-foreground">{pedido.codigo}</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">{pedido.codigo}</h1>
             <p className="text-muted-foreground mt-1">Detalle del pedido</p>
           </div>
         </div>
@@ -687,7 +687,7 @@ export default function PedidoDetalleProveedor() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Prioridad</Label>
                 <Select value={prioridadNueva} onValueChange={(v: any) => setPrioridadNueva(v)}>

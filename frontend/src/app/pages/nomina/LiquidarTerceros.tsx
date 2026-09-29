@@ -262,7 +262,7 @@ export default function LiquidarTerceros() {
         </Button>
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-primary">Liquidación de Terceros</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-primary">Liquidación de Terceros</h1>
             <p className="text-muted-foreground mt-1">{periodoLabel}</p>
           </div>
           <div className="flex items-center gap-3">
@@ -480,7 +480,7 @@ export default function LiquidarTerceros() {
                 <p className="text-sm text-muted-foreground">
                   Total a transferir a empresas terceras
                 </p>
-                <p className="text-3xl font-bold text-primary mt-1">
+                <p className="text-2xl sm:text-3xl font-bold text-primary mt-1">
                   ${totalGeneral.toLocaleString('es-CO')}
                 </p>
                 {/* El resumen §7.1 no trae la lista de operarios; el conteo

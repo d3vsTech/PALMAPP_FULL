@@ -197,7 +197,7 @@ export default function LiquidacionFinalDetalle() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-3xl font-bold text-primary">{liq.titulo}</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold text-primary">{liq.titulo}</h1>
               <Badge variant="outline" className={ESTADO_BADGE[estado]}>
                 {ESTADO_LIQUIDACION_LABEL[estado]}
               </Badge>
@@ -440,7 +440,7 @@ export default function LiquidacionFinalDetalle() {
               <div className="rounded-lg border border-primary/30 bg-primary/10 p-4">
                 <div className="flex items-center justify-between">
                   <span className="text-lg font-bold">Neto a pagar</span>
-                  <span className="text-3xl font-bold text-primary">
+                  <span className="text-2xl sm:text-3xl font-bold text-primary">
                     {fmtCOP(liq.totales.total_neto)}
                   </span>
                 </div>

@@ -342,7 +342,7 @@ export default function ProveedorPedidos() {
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Gestión de Pedidos</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Gestión de Pedidos</h1>
           <p className="text-muted-foreground mt-1">Administra y procesa los pedidos de tus clientes</p>
         </div>
         <Button variant="outline" onClick={exportarExcel} disabled={exportando} className="gap-2">
@@ -359,7 +359,7 @@ export default function ProveedorPedidos() {
               <p className="text-sm text-muted-foreground">Por Confirmar</p>
               <Clock className="h-4 w-4 text-amber-600" />
             </div>
-            <p className="text-3xl font-bold">{stats?.por_confirmar ?? 0}</p>
+            <p className="text-2xl sm:text-3xl font-bold">{stats?.por_confirmar ?? 0}</p>
             <p className="text-xs text-muted-foreground mt-1">Requieren acción</p>
           </CardContent>
         </Card>
@@ -370,7 +370,7 @@ export default function ProveedorPedidos() {
               <p className="text-sm text-muted-foreground">Activos</p>
               <Package className="h-4 w-4 text-blue-600" />
             </div>
-            <p className="text-3xl font-bold">{stats?.activos ?? 0}</p>
+            <p className="text-2xl sm:text-3xl font-bold">{stats?.activos ?? 0}</p>
             <p className="text-xs text-muted-foreground mt-1">En proceso</p>
           </CardContent>
         </Card>
@@ -381,7 +381,7 @@ export default function ProveedorPedidos() {
               <p className="text-sm text-muted-foreground">En Tránsito</p>
               <Truck className="h-4 w-4 text-cyan-600" />
             </div>
-            <p className="text-3xl font-bold">{stats?.en_transito ?? 0}</p>
+            <p className="text-2xl sm:text-3xl font-bold">{stats?.en_transito ?? 0}</p>
             <p className="text-xs text-muted-foreground mt-1">En camino</p>
           </CardContent>
         </Card>
@@ -392,7 +392,7 @@ export default function ProveedorPedidos() {
               <p className="text-sm text-muted-foreground">Completados</p>
               <CheckCircle className="h-4 w-4 text-success" />
             </div>
-            <p className="text-3xl font-bold">{stats?.completados ?? 0}</p>
+            <p className="text-2xl sm:text-3xl font-bold">{stats?.completados ?? 0}</p>
             <p className="text-xs text-muted-foreground mt-1">Entregados</p>
           </CardContent>
         </Card>

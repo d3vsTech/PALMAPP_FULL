@@ -167,7 +167,7 @@ export default function VerLiquidacion() {
         </BreadcrumbList>
       </Breadcrumb>
 
-      <div className="flex items-start justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Button
             variant="ghost"
@@ -185,7 +185,7 @@ export default function VerLiquidacion() {
               </span>
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-primary">{empleado.nombre_completo}</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold text-primary">{empleado.nombre_completo}</h1>
               <div className="flex items-center gap-3 mt-2">
                 <Badge variant="outline">{empleado.salario_tipo}</Badge>
                 <span className="text-muted-foreground">·</span>
@@ -339,7 +339,7 @@ export default function VerLiquidacion() {
       {/* Resumen Final — layout V.15: 2 columnas */}
       <Card className="border-2 border-primary bg-primary/5">
         <CardContent className="p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
             <div className="space-y-3">
               <h4 className="text-sm font-semibold text-success mb-3">+ INGRESOS</h4>
               <div>
@@ -370,7 +370,7 @@ export default function VerLiquidacion() {
               <span className="font-bold text-2xl">TOTAL NETO</span>
               <p className="text-xs text-muted-foreground mt-1">{liquidacion.fecha_humana}</p>
             </div>
-            <span className="font-bold text-3xl text-primary">{fmt(liquidacion.total_neto)}</span>
+            <span className="font-bold text-2xl sm:text-3xl text-primary">{fmt(liquidacion.total_neto)}</span>
           </div>
         </CardContent>
       </Card>

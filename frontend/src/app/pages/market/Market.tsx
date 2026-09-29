@@ -205,9 +205,9 @@ export default function Market() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-start justify-between mb-8">
+      <div className="flex flex-wrap items-start justify-between mb-8 gap-4">
         <div>
-          <h1 className="text-4xl font-bold text-foreground">Market</h1>
+          <h1 className="text-3xl sm:text-4xl font-bold text-foreground">Market</h1>
           <p className="text-muted-foreground mt-2">
             Compra insumos y equipos para tu plantación
           </p>
@@ -343,7 +343,7 @@ export default function Market() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-2">
+            <div className="flex flex-wrap items-center justify-between pt-2 gap-4">
               <p className="text-sm text-muted-foreground">
                 Mostrando <span className="font-medium text-foreground">{productos.length}</span> productos
                 {meta && meta.total > productos.length && ` de ${meta.total}`}
@@ -720,7 +720,7 @@ export default function Market() {
                             {cantidadModal} × ${precio.toLocaleString('es-CO')}
                           </p>
                         </div>
-                        <p className="text-3xl font-bold text-success">
+                        <p className="text-2xl sm:text-3xl font-bold text-success">
                           ${(precio * cantidadModal).toLocaleString('es-CO')}
                         </p>
                       </div>

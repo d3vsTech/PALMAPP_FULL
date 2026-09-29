@@ -124,7 +124,7 @@ export default function VacacionesDetalle() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-3xl font-bold text-primary">Comprobante de Vacaciones</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-primary">Comprobante de Vacaciones</h1>
             <Badge variant="outline" className={ESTADO_VACACION_BADGE[estado]}>
               {ESTADO_VACACION_LABEL[estado]}
             </Badge>

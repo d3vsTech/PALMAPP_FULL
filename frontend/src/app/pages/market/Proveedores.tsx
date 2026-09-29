@@ -169,7 +169,7 @@ export default function Proveedores() {
           <ArrowLeft className="h-4 w-4" />
           Volver al catálogo
         </Button>
-        <h1 className="text-4xl font-bold text-foreground">Proveedores</h1>
+        <h1 className="text-3xl sm:text-4xl font-bold text-foreground">Proveedores</h1>
         <p className="text-muted-foreground mt-2">
           Conoce a nuestros proveedores certificados y de confianza
         </p>
@@ -184,7 +184,7 @@ export default function Proveedores() {
                 <p className="text-sm font-medium text-muted-foreground mb-2">
                   Proveedores Activos
                 </p>
-                <p className="text-3xl font-bold text-foreground">{proveedoresTotales}</p>
+                <p className="text-2xl sm:text-3xl font-bold text-foreground">{proveedoresTotales}</p>
                 <p className="text-xs text-muted-foreground mt-1">Certificados</p>
               </div>
               <div className="h-14 w-14 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -202,7 +202,7 @@ export default function Proveedores() {
                   Rating Promedio
                 </p>
                 <div className="flex items-baseline gap-2">
-                  <p className="text-3xl font-bold text-foreground">
+                  <p className="text-2xl sm:text-3xl font-bold text-foreground">
                     {ratingPromedio.toFixed(1)}
                   </p>
                   <Star className="h-5 w-5 fill-amber-400 text-amber-400" />
@@ -223,7 +223,7 @@ export default function Proveedores() {
                 <p className="text-sm font-medium text-muted-foreground mb-2">
                   Productos Disponibles
                 </p>
-                <p className="text-3xl font-bold text-foreground">{productosTotales}</p>
+                <p className="text-2xl sm:text-3xl font-bold text-foreground">{productosTotales}</p>
                 <p className="text-xs text-muted-foreground mt-1">En el catálogo</p>
               </div>
               <div className="h-14 w-14 rounded-xl bg-success/10 flex items-center justify-center">

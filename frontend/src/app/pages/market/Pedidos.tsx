@@ -198,7 +198,7 @@ export default function Pedidos() {
           <ArrowLeft className="h-4 w-4" />
           Volver al catálogo
         </Button>
-        <h1 className="text-4xl font-bold text-foreground">Mis Pedidos</h1>
+        <h1 className="text-3xl sm:text-4xl font-bold text-foreground">Mis Pedidos</h1>
         <p className="text-muted-foreground mt-2">
           Gestiona y realiza seguimiento a tus pedidos
         </p>
@@ -211,7 +211,7 @@ export default function Pedidos() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground mb-2">Pedidos Activos</p>
-                <p className="text-3xl font-bold text-foreground">{stats?.pedidos_activos ?? 0}</p>
+                <p className="text-2xl sm:text-3xl font-bold text-foreground">{stats?.pedidos_activos ?? 0}</p>
                 <p className="text-xs text-muted-foreground mt-1">En proceso</p>
               </div>
               <div className="h-14 w-14 rounded-xl bg-amber-500/10 flex items-center justify-center">
@@ -226,7 +226,7 @@ export default function Pedidos() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground mb-2">Pedidos Entregados</p>
-                <p className="text-3xl font-bold text-foreground">{stats?.pedidos_entregados ?? 0}</p>
+                <p className="text-2xl sm:text-3xl font-bold text-foreground">{stats?.pedidos_entregados ?? 0}</p>
                 <p className="text-xs text-muted-foreground mt-1">Completados</p>
               </div>
               <div className="h-14 w-14 rounded-xl bg-success/10 flex items-center justify-center">
@@ -241,7 +241,7 @@ export default function Pedidos() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground mb-2">Total Gastado</p>
-                <p className="text-3xl font-bold text-success">
+                <p className="text-2xl sm:text-3xl font-bold text-success">
                   ${(stats?.total_gastado ?? 0).toLocaleString('es-CO')}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">Acumulado</p>

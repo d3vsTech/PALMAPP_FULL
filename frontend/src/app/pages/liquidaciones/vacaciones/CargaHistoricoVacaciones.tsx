@@ -230,7 +230,7 @@ export default function CargaHistoricoVacaciones() {
 
       <div>
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-3xl font-bold text-primary">Cargar vacaciones anteriores</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-primary">Cargar vacaciones anteriores</h1>
           <Badge variant="outline">Puesta en marcha</Badge>
         </div>
         <p className="mt-1 text-muted-foreground">

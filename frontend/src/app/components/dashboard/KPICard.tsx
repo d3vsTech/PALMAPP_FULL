@@ -45,7 +45,7 @@ export function KPICard({ title, value, icon: Icon, trend, trendValue, subtitle 
           <div className="flex-1">
             <p className="text-sm font-medium text-muted-foreground mb-2">{title}</p>
             <div className="flex items-baseline gap-2">
-              <p className="text-3xl font-bold text-foreground">{value}</p>
+              <p className="text-2xl sm:text-3xl font-bold text-foreground">{value}</p>
               {subtitle && (
                 <span className="text-sm text-muted-foreground">{subtitle}</span>
               )}

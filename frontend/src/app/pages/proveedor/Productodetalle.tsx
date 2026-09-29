@@ -91,7 +91,7 @@ export default function ProductoDetalle() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Producto no encontrado</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Producto no encontrado</h1>
           </div>
         </div>
         <Card>
@@ -146,7 +146,7 @@ export default function ProductoDetalle() {
           </Button>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-3xl font-bold text-foreground">{producto.nombre}</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold text-foreground">{producto.nombre}</h1>
               {producto.destacado && (
                 <Badge variant="outline" className="border-amber-500/40 text-amber-600 gap-1">
                   <Star className="h-3 w-3" /> Destacado

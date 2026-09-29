@@ -1241,7 +1241,7 @@ export default function NuevaNominaWizard() {
           <ArrowLeft className="h-4 w-4" />
           Volver
         </Button>
-        <h1 className="text-3xl font-bold text-primary">
+        <h1 className="text-2xl sm:text-3xl font-bold text-primary">
           {esFlujoCreacion ? 'Nuevo Período de Pago' : 'Editar Período de Pago'}
         </h1>
         <p className="text-muted-foreground mt-2">
@@ -1420,7 +1420,7 @@ export default function NuevaNominaWizard() {
                           {mesNombre} {ano} - {quincenaNombre}
                         </p>
                       </div>
-                      <div className="grid grid-cols-2 gap-4 pt-2 border-t border-primary/20">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-primary/20">
                         <div>
                           <p className="text-xs text-muted-foreground">Fecha Inicio:</p>
                           <p className="text-sm font-semibold text-foreground">
@@ -1452,7 +1452,7 @@ export default function NuevaNominaWizard() {
           {/* Paso 2: Seleccionar empleados */}
           {pasoActual === 2 && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex flex-wrap items-center justify-between mb-6 gap-4">
                 <div className="flex items-center gap-3">
                   <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
                     <Users className="h-6 w-6 text-primary" />
@@ -1961,7 +1961,7 @@ export default function NuevaNominaWizard() {
               paso se puede saltar; el cierre no lo exige. */}
           {pasoActual === 3 && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex flex-wrap items-center justify-between mb-6 gap-4">
                 <div className="flex items-center gap-3">
                   <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
                     <FileText className="h-6 w-6 text-primary" />
@@ -2161,11 +2161,11 @@ export default function NuevaNominaWizard() {
                           "Despachado fuera" desapareció: la extractora YA viene
                           ajustada por la conciliación cruzada entre períodos.
                           El desglose (si aplica) va debajo de Extractora. */}
-                      <div className="grid grid-cols-3 divide-x divide-border">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 divide-x divide-border">
                         <div className="px-6 py-5 space-y-2">
                           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Colaboradores</p>
                           <div className="flex items-end gap-1.5">
-                            <p className="text-3xl font-bold text-foreground leading-none">
+                            <p className="text-2xl sm:text-3xl font-bold text-foreground leading-none">
                               {totalColabs > 0 ? totalColabs.toLocaleString('es-CO') : '—'}
                             </p>
                             <p className="text-sm text-muted-foreground mb-0.5">kg</p>
@@ -2186,7 +2186,7 @@ export default function NuevaNominaWizard() {
                         <div className="px-6 py-5 space-y-2">
                           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Extractora</p>
                           <div className="flex items-end gap-1.5">
-                            <p className="text-3xl font-bold text-foreground leading-none">
+                            <p className="text-2xl sm:text-3xl font-bold text-foreground leading-none">
                               {totalExtr > 0 ? totalExtr.toLocaleString('es-CO') : '—'}
                             </p>
                             <p className="text-sm text-muted-foreground mb-0.5">kg</p>
@@ -3028,7 +3028,7 @@ export default function NuevaNominaWizard() {
                 </div>
                 {/* §4.6 (2026-09-05) — 3 celdas fijas. La extractora ya viene
                     ajustada por la conciliación cruzada entre períodos. */}
-                <div className="grid grid-cols-3 divide-x divide-border">
+                <div className="grid grid-cols-1 sm:grid-cols-3 divide-x divide-border">
                   <div className="px-6 py-4">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
                       Colaboradores
@@ -3064,8 +3064,8 @@ export default function NuevaNominaWizard() {
 
           {/* Tabla de promedios por lote (solo lotes con cosechas en el período).
               4 columnas: Fecha Actualización | Lote | Auto | Ajuste Manual. */}
-          <div className="rounded-lg border overflow-hidden">
-            <table className="w-full">
+          <div className="rounded-lg border overflow-x-auto">
+            <table className="w-full min-w-[640px]">
               <thead>
                 <tr className="border-b border-border bg-muted/50 text-xs text-muted-foreground">
                   <th className="text-left p-3 pl-5 font-semibold">

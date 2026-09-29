@@ -149,7 +149,7 @@ export default function NuevaExtractora() {
   return (
     <div className="space-y-6">
       {/* Header: back arrow + título. El botón Guardar va al pie. */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           <Button
             variant="ghost"
@@ -161,7 +161,7 @@ export default function NuevaExtractora() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-primary">
+            <h1 className="text-2xl sm:text-3xl font-bold text-primary">
               {isEdit ? 'Editar Extractora' : 'Nueva Extractora'}
             </h1>
             <p className="text-muted-foreground mt-1">

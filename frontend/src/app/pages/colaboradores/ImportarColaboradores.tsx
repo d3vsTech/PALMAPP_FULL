@@ -307,7 +307,7 @@ export default function ImportarColaboradores() {
           <FileSpreadsheet className="h-6 w-6 text-primary" />
         </div>
         <div>
-          <h1 className="text-3xl font-bold text-primary">Importar colaboradores</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-primary">Importar colaboradores</h1>
           <p className="mt-0.5 text-muted-foreground">
             {fase === 'intro'
               ? 'Cargue un archivo de Excel con la información de los colaboradores'
@@ -678,8 +678,8 @@ function VistaResultado({
                 <Download className="h-4 w-4" /> CSV
               </Button>
             </div>
-            <div className="max-h-72 overflow-y-auto">
-              <table className="w-full text-sm">
+            <div className="max-h-72 overflow-auto">
+              <table className="w-full min-w-[640px] text-sm">
                 <thead className="sticky top-0 bg-background">
                   <tr className="border-b border-border">
                     <th className="text-left p-3 font-semibold text-muted-foreground w-16">Fila</th>

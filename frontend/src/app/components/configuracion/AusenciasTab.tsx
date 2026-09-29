@@ -340,7 +340,7 @@ export function AusenciasTab() {
             </div>
 
             {/* Condición + Norma Legal */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="condicion">Condición</Label>
                 <Input
@@ -364,7 +364,7 @@ export function AusenciasTab() {
             </div>
 
             {/* Concepto + % Aplicación */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="concepto">
                   Concepto <span className="text-destructive">*</span>
@@ -512,8 +512,8 @@ export function AusenciasTab() {
               `motivo.color` (hex → clase Tailwind). Los checks de S.S./Paraf.
               y Prest. leen los flags persistidos en el motivo (con fallback al
               heurístico por `tipo_base` para registros viejos pre-migración). */}
-          <div className="rounded-lg border border-border overflow-hidden">
-            <table className="w-full">
+          <div className="rounded-lg border border-border overflow-x-auto">
+            <table className="w-full min-w-[640px]">
               <thead className="bg-muted/50">
                 <tr>
                   <th className="text-left p-4 font-semibold text-sm">Novedad</th>

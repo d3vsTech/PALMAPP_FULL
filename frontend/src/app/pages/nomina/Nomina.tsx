@@ -345,9 +345,9 @@ export default function Nomina() {
   return (
     <div className="space-y-6">
       {/* Header con botón de crear */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-primary">Pagos</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-primary">Pagos</h1>
           <p className="text-muted-foreground mt-2">
             Gestión de períodos de nómina y desprendibles de pago
           </p>

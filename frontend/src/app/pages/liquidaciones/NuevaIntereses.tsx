@@ -139,7 +139,7 @@ export default function NuevaIntereses() {
           Volver a Liquidaciones
         </Button>
         <div>
-          <h1 className="text-3xl font-bold text-primary">Nuevo Período de Intereses</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-primary">Nuevo Período de Intereses</h1>
           <p className="text-muted-foreground mt-1">
             Define el período anual (tasa 12% — Ley 52 de 1975). Los colaboradores se agregan al liquidar.
           </p>

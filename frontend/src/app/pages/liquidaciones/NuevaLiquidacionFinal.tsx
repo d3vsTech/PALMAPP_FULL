@@ -256,7 +256,7 @@ export default function NuevaLiquidacionFinal() {
             Volver a Liquidaciones
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-primary">Nueva Liquidación</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-primary">Nueva Liquidación</h1>
             <p className="mt-1 text-muted-foreground">Elija qué necesita hacer</p>
           </div>
         </div>
@@ -345,7 +345,7 @@ export default function NuevaLiquidacionFinal() {
           {modoEdicion ? 'Volver al comprobante' : 'Cambiar tipo'}
         </Button>
         <div>
-          <h1 className="text-3xl font-bold text-primary">
+          <h1 className="text-2xl sm:text-3xl font-bold text-primary">
             {esSimulacion
               ? 'Estado de cuenta'
               : modoEdicion

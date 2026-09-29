@@ -291,7 +291,7 @@ export default function PlanillaDiaria() {
 
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="space-y-1">
-            <h1 className="text-3xl font-bold text-primary">Planilla Diaria de Trabajo</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-primary">Planilla Diaria de Trabajo</h1>
             <p className="text-muted-foreground">Registro diario de operaciones y cosecha</p>
           </div>
           <div className="flex items-center gap-3 flex-wrap">

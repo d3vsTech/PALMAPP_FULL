@@ -51,7 +51,7 @@ export default function Login() {
 
           {/* Descripción principal */}
           <div className="space-y-4">
-            <h2 className="text-3xl font-bold leading-tight text-foreground">
+            <h2 className="text-2xl sm:text-3xl font-bold leading-tight text-foreground">
               Sistema integral de gestión agrícola para tu plantación
             </h2>
             <p className="text-lg text-muted-foreground leading-relaxed">

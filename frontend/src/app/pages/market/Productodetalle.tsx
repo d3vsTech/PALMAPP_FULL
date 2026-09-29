@@ -190,7 +190,7 @@ export default function ProductoDetalle() {
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-4xl font-bold text-foreground">{producto.nombre}</h1>
+              <h1 className="text-3xl sm:text-4xl font-bold text-foreground">{producto.nombre}</h1>
               {producto.stock_bajo && <Badge className="bg-amber-500">Stock limitado</Badge>}
               {producto.destacado && <Badge className="bg-primary">Destacado</Badge>}
             </div>
@@ -448,7 +448,7 @@ export default function ProductoDetalle() {
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Precio unitario</p>
                   <div className="flex items-baseline gap-2 flex-wrap">
-                    <p className="text-3xl font-bold text-success">
+                    <p className="text-2xl sm:text-3xl font-bold text-success">
                       ${precioInfo.precio.toLocaleString('es-CO')}
                     </p>
                     {precioInfo.descuento > 0 && (

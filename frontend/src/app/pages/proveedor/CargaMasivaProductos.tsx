@@ -233,7 +233,7 @@ export default function CargaMasivaProductos() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Carga Masiva de Productos</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Carga Masiva de Productos</h1>
           <p className="text-muted-foreground mt-1">
             Importa múltiples productos con sus imágenes desde un archivo ZIP
           </p>
@@ -483,7 +483,7 @@ export default function CargaMasivaProductos() {
 
                       {/* Métricas */}
                       {importacion.total_filas > 0 && (
-                        <div className="grid grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                           <div className="text-center p-3 rounded-lg bg-muted/50">
                             <p className="text-2xl font-bold">{importacion.total_filas}</p>
                             <p className="text-xs text-muted-foreground">Total</p>

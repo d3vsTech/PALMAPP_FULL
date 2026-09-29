@@ -97,7 +97,7 @@ export default function CrearPalmas() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
-          <h1 className="text-4xl font-bold text-foreground flex items-center gap-3">
+          <h1 className="text-3xl sm:text-4xl font-bold text-foreground flex items-center gap-3">
             <Leaf className="h-10 w-10 text-success" />
             Agregar Palmas
           </h1>
@@ -136,7 +136,7 @@ export default function CrearPalmas() {
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Info de línea actual */}
             <div className="rounded-xl bg-muted/30 border border-border/50 p-6">
-              <div className="grid grid-cols-3 gap-4 text-center">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Sublote</p>
                   <p className="font-semibold text-primary">{nombreSublote}</p>

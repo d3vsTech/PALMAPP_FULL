@@ -97,7 +97,7 @@ export default function Carrito() {
             <ArrowLeft className="h-4 w-4" />
             Volver al catálogo
           </Button>
-          <h1 className="text-4xl font-bold text-foreground">Carrito de Compras</h1>
+          <h1 className="text-3xl sm:text-4xl font-bold text-foreground">Carrito de Compras</h1>
         </div>
 
         <Card className="border-border">
@@ -122,7 +122,7 @@ export default function Carrito() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Button
             variant="ghost"
@@ -133,7 +133,7 @@ export default function Carrito() {
             <ArrowLeft className="h-4 w-4" />
             Continuar comprando
           </Button>
-          <h1 className="text-4xl font-bold text-foreground">Carrito de Compras</h1>
+          <h1 className="text-3xl sm:text-4xl font-bold text-foreground">Carrito de Compras</h1>
           <p className="text-muted-foreground mt-2">
             {items.length} {items.length === 1 ? 'producto' : 'productos'} en tu carrito
           </p>

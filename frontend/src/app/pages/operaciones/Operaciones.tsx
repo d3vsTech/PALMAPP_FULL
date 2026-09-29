@@ -206,9 +206,9 @@ export default function Operaciones() {
   return (
     <div className="space-y-8">
       {/* Header con botones - mismo estilo que Mi Plantación */}
-      <div className="flex items-start justify-between mb-8">
+      <div className="flex flex-wrap items-start justify-between mb-8 gap-4">
         <div>
-          <h1 className="text-4xl font-bold text-foreground">Operaciones</h1>
+          <h1 className="text-3xl sm:text-4xl font-bold text-foreground">Operaciones</h1>
           <p className="text-muted-foreground mt-2">
             Gestiona las labores diarias, planillas de cosecha y jornales
           </p>
@@ -257,7 +257,7 @@ export default function Operaciones() {
                 <div className="flex-1">
                   <p className="text-sm font-medium text-muted-foreground mb-2">Planillas en Borrador</p>
                   <div className="flex items-baseline gap-2">
-                    <p className="text-3xl font-bold text-foreground">
+                    <p className="text-2xl sm:text-3xl font-bold text-foreground">
                       {cargandoIndicadores ? '—' : (indicadores?.planillas_borrador ?? 0)}
                     </p>
                     <span className="text-sm text-muted-foreground">pendientes</span>
@@ -273,7 +273,7 @@ export default function Operaciones() {
                 <div className="flex-1">
                   <p className="text-sm font-medium text-muted-foreground mb-2">Planillas Aprobadas</p>
                   <div className="flex items-baseline gap-2">
-                    <p className="text-3xl font-bold text-foreground">
+                    <p className="text-2xl sm:text-3xl font-bold text-foreground">
                       {cargandoIndicadores ? '—' : (indicadores?.planillas_aprobadas ?? 0)}
                     </p>
                     <span className="text-sm text-muted-foreground">completadas</span>
@@ -289,7 +289,7 @@ export default function Operaciones() {
                 <div className="flex-1">
                   <p className="text-sm font-medium text-muted-foreground mb-2">Total Planillas</p>
                   <div className="flex items-baseline gap-2">
-                    <p className="text-3xl font-bold text-foreground">
+                    <p className="text-2xl sm:text-3xl font-bold text-foreground">
                       {cargandoIndicadores ? '—' : (indicadores?.total_planillas ?? 0)}
                     </p>
                     <span className="text-sm text-muted-foreground">registros</span>

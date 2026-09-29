@@ -203,7 +203,7 @@ export default function SuperAdminDashboard() {
                 Total
               </span>
             </div>
-            <p className="text-3xl font-bold text-white mb-1">{totalFincas}</p>
+            <p className="text-2xl sm:text-3xl font-bold text-white mb-1">{totalFincas}</p>
             <p className="text-sm text-gray-400">Fincas registradas</p>
           </div>
         </div>
@@ -221,7 +221,7 @@ export default function SuperAdminDashboard() {
                 {porcentajeActivas}%
               </span>
             </div>
-            <p className="text-3xl font-bold text-white mb-1">{fincasActivas}</p>
+            <p className="text-2xl sm:text-3xl font-bold text-white mb-1">{fincasActivas}</p>
             <p className="text-sm text-gray-400">Fincas activas</p>
           </div>
         </div>
@@ -238,7 +238,7 @@ export default function SuperAdminDashboard() {
                 Estado
               </span>
             </div>
-            <p className="text-3xl font-bold text-white mb-1">{fincasSuspendidas}</p>
+            <p className="text-2xl sm:text-3xl font-bold text-white mb-1">{fincasSuspendidas}</p>
             <p className="text-sm text-gray-400">Fincas suspendidas</p>
           </div>
         </div>
@@ -255,7 +255,7 @@ export default function SuperAdminDashboard() {
                 Estado
               </span>
             </div>
-            <p className="text-3xl font-bold text-white mb-1">{fincasInactivas}</p>
+            <p className="text-2xl sm:text-3xl font-bold text-white mb-1">{fincasInactivas}</p>
             <p className="text-sm text-gray-400">Fincas inactivas</p>
           </div>
         </div>
@@ -272,7 +272,7 @@ export default function SuperAdminDashboard() {
                 {usuariosActivos} activos
               </span>
             </div>
-            <p className="text-3xl font-bold text-white mb-1">{usuariosTotales}</p>
+            <p className="text-2xl sm:text-3xl font-bold text-white mb-1">{usuariosTotales}</p>
             <p className="text-sm text-gray-400">Usuarios del sistema</p>
           </div>
         </div>
@@ -289,7 +289,7 @@ export default function SuperAdminDashboard() {
                 Global
               </span>
             </div>
-            <p className="text-3xl font-bold text-white mb-1">{superAdmins}</p>
+            <p className="text-2xl sm:text-3xl font-bold text-white mb-1">{superAdmins}</p>
             <p className="text-sm text-gray-400">Super admins</p>
           </div>
         </div>
@@ -309,11 +309,11 @@ export default function SuperAdminDashboard() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <p className="text-3xl font-bold text-white mb-1">{totalAsignaciones}</p>
+                <p className="text-2xl sm:text-3xl font-bold text-white mb-1">{totalAsignaciones}</p>
                 <p className="text-sm text-gray-400">Total de asignaciones</p>
               </div>
               <div>
-                <p className="text-3xl font-bold text-white mb-1">
+                <p className="text-2xl sm:text-3xl font-bold text-white mb-1">
                   {rolesChartData.length}
                 </p>
                 <p className="text-sm text-gray-400">Roles con actividad</p>

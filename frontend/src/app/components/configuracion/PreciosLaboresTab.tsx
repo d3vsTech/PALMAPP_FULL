@@ -718,8 +718,8 @@ export function PreciosLaboresTab() {
       );
     }
     return (
-      <div className="rounded-lg border border-border overflow-hidden">
-        <table className="w-full table-fixed">
+      <div className="rounded-lg border border-border overflow-x-auto">
+        <table className="w-full min-w-[720px] table-fixed">
           <thead className="bg-muted/50">
             <tr>
               <th className="text-left p-3 font-semibold text-sm w-2/3">Trabajo</th>
@@ -817,8 +817,8 @@ export function PreciosLaboresTab() {
                       varios sublotes del mismo lote leen del mismo input — al
                       editar cualquiera se sincronizan. El año actual se usa
                       implícito (no hay columna). */}
-                  <div className="rounded-lg border border-border overflow-hidden">
-                    <table className="w-full table-fixed">
+                  <div className="rounded-lg border border-border overflow-x-auto">
+                    <table className="w-full min-w-[720px] table-fixed">
                       <thead className="bg-muted/50">
                         <tr>
                           <th className="text-left p-4 font-semibold w-2/5">Lote</th>
@@ -909,8 +909,8 @@ export function PreciosLaboresTab() {
 
                     {/* Tabla inline. Filas guardadas → PUT al guardar. Filas nuevas
                         (tempId) → POST cuando los 3 campos están llenos. */}
-                    <div className="rounded-lg border border-border overflow-hidden">
-                      <table className="w-full table-fixed">
+                    <div className="rounded-lg border border-border overflow-x-auto">
+                      <table className="w-full min-w-[720px] table-fixed">
                         <thead className="bg-muted/50">
                           <tr>
                             <th className="text-left p-4 font-semibold w-1/4">Gramos Mínimo</th>
@@ -1393,8 +1393,8 @@ export function PreciosLaboresTab() {
         ) : (
           <Card className="border-border">
             <CardContent className="p-6">
-              <div className="rounded-lg border border-border overflow-hidden">
-                <table className="w-full table-fixed">
+              <div className="rounded-lg border border-border overflow-x-auto">
+                <table className="w-full min-w-[720px] table-fixed">
                   <thead className="bg-muted/50">
                     <tr>
                       <th className="text-left p-4 font-semibold w-1/2">Labor</th>

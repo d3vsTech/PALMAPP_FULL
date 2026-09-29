@@ -129,7 +129,7 @@ export default function NuevaCesantia() {
           Volver a Liquidaciones
         </Button>
         <div>
-          <h1 className="text-3xl font-bold text-primary">Nuevo Período de Cesantías</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-primary">Nuevo Período de Cesantías</h1>
           <p className="text-muted-foreground mt-1">
             Define el período anual. Los colaboradores se agregan al momento de liquidar.
           </p>

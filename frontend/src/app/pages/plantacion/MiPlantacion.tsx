@@ -189,7 +189,7 @@ export default function MiPlantacion() {
 
       {/* Lista de predios */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <h2>Predios</h2>
           <p className="text-sm text-muted-foreground">
             {predios.length} {predios.length === 1 ? 'predio registrado' : 'predios registrados'}

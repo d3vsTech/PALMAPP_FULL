@@ -260,7 +260,7 @@ export default function CargaHistoricoVacacionesArchivo() {
             <CalendarDays className="h-6 w-6 text-primary" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-primary">Cargar histórico de vacaciones</h1>
+            <h1 className="text-2xl font-bold text-primary sm:text-3xl">Cargar histórico de vacaciones</h1>
             <p className="mt-0.5 text-muted-foreground">
               Registre las vacaciones que sus colaboradores ya disfrutaron antes de usar el
               sistema. Un archivo por año de inicio del disfrute.

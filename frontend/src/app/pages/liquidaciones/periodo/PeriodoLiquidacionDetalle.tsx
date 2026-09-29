@@ -122,7 +122,7 @@ function DesprendiblePreview({ fila, tipo }: { fila: PreviewFilaLiquidacion; tip
       </div>
 
       {/* Info bar */}
-      <div className="grid grid-cols-3 divide-x divide-border bg-muted/20 border-b border-border">
+      <div className="grid grid-cols-1 sm:grid-cols-3 divide-x divide-border bg-muted/20 border-b border-border">
         <div className="px-5 py-3">
           <p className="text-xs text-muted-foreground mb-0.5">Cédula</p>
           <p className="text-sm font-medium">{col.documento}</p>
@@ -517,7 +517,7 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
       </Button>
 
       <div>
-        <h1 className="text-3xl font-bold text-primary">{periodo.descripcion}</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-primary">{periodo.descripcion}</h1>
         <p className="text-muted-foreground mt-1">
           {txt.subtituloWizard} · Fecha límite: {formatFecha(periodo.fecha_limite_operativa)}
           <span title={`Fecha legal: ${formatFecha(periodo.fecha_limite_legal)}`}> (legal {formatFecha(periodo.fecha_limite_legal)})</span>
@@ -543,7 +543,7 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
                 <p className="text-sm text-muted-foreground">Revisa los datos antes de continuar</p>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div className="space-y-1.5">
                 <Label>Año</Label>
                 <Input value={periodo.anio} disabled className="bg-muted/30" />
@@ -600,7 +600,7 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
       {paso === 2 && (
         <Card className="border-border">
           <CardContent className="p-6 space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
                   <Users className="h-5 w-5 text-primary" />
@@ -656,7 +656,7 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
                 No hay más colaboradores elegibles para este período.
               </p>
             ) : (
-              <div className="rounded-xl border border-border overflow-hidden">
+              <div className="rounded-xl border border-border overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-border bg-muted/30">

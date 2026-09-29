@@ -361,7 +361,7 @@ export default function UsuarioPermisos() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="space-y-1 flex-1">
-          <h1 className="text-4xl font-bold text-foreground">Editar Permisos</h1>
+          <h1 className="text-3xl sm:text-4xl font-bold text-foreground">Editar Permisos</h1>
           <p className="text-muted-foreground">Configura los permisos personalizados para {usuarioNombre}</p>
         </div>
       </div>

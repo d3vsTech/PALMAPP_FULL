@@ -120,7 +120,7 @@ export default function ConfiguracionInicialWizard() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 mb-2">
             <Button
@@ -131,7 +131,7 @@ export default function ConfiguracionInicialWizard() {
             >
               <ArrowLeft className="h-5 w-5" />
             </Button>
-            <h1 className="text-4xl font-bold text-foreground">Configuración Inicial</h1>
+            <h1 className="text-3xl sm:text-4xl font-bold text-foreground">Configuración Inicial</h1>
           </div>
           <p className="text-muted-foreground ml-14">
             Completa la información paso a paso para configurar tu cuenta

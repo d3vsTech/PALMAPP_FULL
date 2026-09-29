@@ -86,7 +86,7 @@ export default function DesprendibleFilaCard({
       </div>
 
       {/* Barra de datos */}
-      <div className="grid grid-cols-3 divide-x divide-border bg-muted/20 border-b border-border">
+      <div className="grid grid-cols-1 sm:grid-cols-3 divide-x divide-border bg-muted/20 border-b border-border">
         <div className="px-5 py-3">
           <p className="text-xs text-muted-foreground mb-0.5">Cédula</p>
           <p className="text-sm font-medium">{col.documento}</p>

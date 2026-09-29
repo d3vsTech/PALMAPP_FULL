@@ -292,7 +292,7 @@ export default function Checkout() {
           <ArrowLeft className="h-4 w-4" />
           Volver al carrito
         </Button>
-        <h1 className="text-4xl font-bold text-foreground">Finalizar Compra</h1>
+        <h1 className="text-3xl sm:text-4xl font-bold text-foreground">Finalizar Compra</h1>
         <p className="text-muted-foreground mt-2">
           Completa la información para procesar tu pedido
         </p>

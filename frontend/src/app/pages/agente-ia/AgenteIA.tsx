@@ -419,7 +419,7 @@ export default function AgenteIA() {
   return (
     <div className="flex flex-col h-full -m-8">
       {/* Header compacto */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-background flex-shrink-0">
+      <div className="flex flex-wrap items-center justify-between px-4 py-3 border-b border-border bg-background flex-shrink-0 gap-4">
         <div className="flex items-center gap-3">
           <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center">
             <Sparkles className="h-4 w-4 text-white" />

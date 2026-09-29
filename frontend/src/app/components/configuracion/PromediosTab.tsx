@@ -330,7 +330,7 @@ export function PromediosTab() {
             <CardContent className="pt-6">
               <div className="text-center">
                 <p className="text-sm text-muted-foreground mb-2">Promedio General {anioSeleccionado}</p>
-                <p className="text-4xl font-bold text-primary">
+                <p className="text-3xl sm:text-4xl font-bold text-primary">
                   {promedioGeneral.toFixed(2)} <span className="text-lg">kg/gajo</span>
                 </p>
               </div>
@@ -460,8 +460,8 @@ export function PromediosTab() {
                                     </SelectContent>
                                   </Select>
                                 </div>
-                                <div className="rounded-lg border border-border/60 overflow-hidden">
-                                  <table className="w-full text-sm">
+                                <div className="rounded-lg border border-border/60 overflow-x-auto">
+                                  <table className="w-full min-w-[640px] text-sm">
                                     <thead>
                                       <tr className="bg-muted/40 border-b border-border/60">
                                         <th className="text-left px-4 py-2 text-xs font-semibold text-muted-foreground">Fecha</th>
@@ -544,8 +544,8 @@ export function PromediosTab() {
                               <History className="h-3.5 w-3.5" />
                               Historial de promedios — {lote.nombre}
                             </p>
-                            <div className="rounded-lg border border-border/60 overflow-hidden">
-                              <table className="w-full text-sm">
+                            <div className="rounded-lg border border-border/60 overflow-x-auto">
+                              <table className="w-full min-w-[640px] text-sm">
                                 <thead>
                                   <tr className="bg-muted/40 border-b border-border/60">
                                     <th className="text-left px-4 py-2 text-xs font-semibold text-muted-foreground">Año</th>

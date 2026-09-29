@@ -132,7 +132,7 @@ export default function Sidebar() {
   const NavContent = () => (
     <div className="flex h-full min-h-0 min-w-0 flex-col bg-card glass-subtle border-r border-border">
       {/* Logo y título */}
-      <div className="flex h-20 items-center justify-center border-b border-border px-6">
+      <div className="flex h-20 shrink-0 items-center justify-center border-b border-border px-6">
         <PalmappLogo 
           variant="complete"
           className="h-12 w-auto"
@@ -140,7 +140,7 @@ export default function Sidebar() {
       </div>
 
       {/* Navegación */}
-      <nav className="flex-1 space-y-2 px-4 py-6">
+      <nav className="min-h-0 flex-1 space-y-2 overflow-y-auto custom-scrollbar px-4 py-6">
         {filteredItems.map(item => {
           const Icon = item.icon;
           const isActive = location.pathname === item.href ||
@@ -194,12 +194,12 @@ export default function Sidebar() {
           </div>
           <div className="min-w-0">
             <p
-              className="font-bold text-foreground truncate"
+              className="truncate text-sm font-bold text-foreground"
               title={user?.fincaActual?.nombre}
             >
               {user?.fincaActual?.nombre ?? 'Sin finca seleccionada'}
             </p>
-            <p className="text-sm text-muted-foreground mt-1 truncate">
+            <p className="mt-0.5 text-xs leading-tight text-muted-foreground">
               Sistema de gestión integral
             </p>
           </div>
@@ -227,7 +227,7 @@ export default function Sidebar() {
           />
 
           {/* Sidebar */}
-          <div className="absolute left-0 top-0 bottom-0 w-72 animate-in slide-in-from-left duration-300">
+          <div className="absolute left-0 top-0 bottom-0 w-72 max-w-[85vw] animate-in slide-in-from-left duration-300">
             <NavContent />
           </div>
         </div>

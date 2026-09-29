@@ -229,7 +229,7 @@ export default function CargaHistoricoPrima() {
             <Gift className="h-6 w-6 text-primary" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-primary">Cargar histórico de prima</h1>
+            <h1 className="text-2xl font-bold text-primary sm:text-3xl">Cargar histórico de prima</h1>
             <p className="mt-0.5 text-muted-foreground">
               Registre la prima que ya pagó antes de usar el sistema. Un archivo por semestre.
             </p>

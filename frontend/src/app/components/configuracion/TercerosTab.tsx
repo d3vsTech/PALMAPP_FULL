@@ -467,8 +467,8 @@ export function TercerosTab() {
                           )}
 
                           {!cargando && ops.length > 0 && (
-                            <div className="rounded-xl border border-border overflow-hidden mb-3">
-                              <table className="w-full text-sm">
+                            <div className="rounded-xl border border-border overflow-x-auto mb-3">
+                              <table className="w-full min-w-[640px] text-sm">
                                 <thead>
                                   <tr className="bg-muted/30 text-xs text-muted-foreground">
                                     <th className="text-left p-3 font-semibold">Nombre</th>

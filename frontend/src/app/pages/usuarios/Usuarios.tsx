@@ -157,7 +157,7 @@ export default function Usuarios() {
                   <div className="flex-1">
                     <p className="text-sm text-muted-foreground mb-2">{label}</p>
                     <div className="flex items-baseline gap-2">
-                      <p className="text-4xl font-bold">{loading ? '—' : value}</p>
+                      <p className="text-3xl sm:text-4xl font-bold">{loading ? '—' : value}</p>
                       <span className="text-sm text-muted-foreground">{sub}</span>
                     </div>
                   </div>

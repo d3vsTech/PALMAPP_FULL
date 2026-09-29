@@ -550,22 +550,22 @@ export default function UsuariosFinca() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
           <p className="text-sm text-gray-400 mb-1">Total asignados</p>
-          <p className="text-3xl font-bold text-white">{users.length}</p>
+          <p className="text-2xl sm:text-3xl font-bold text-white">{users.length}</p>
         </div>
 
         <div className="rounded-2xl border border-green-500/20 bg-green-500/5 p-5">
           <p className="text-sm text-gray-400 mb-1">Asignaciones activas</p>
-          <p className="text-3xl font-bold text-green-400">{totalActivos}</p>
+          <p className="text-2xl sm:text-3xl font-bold text-green-400">{totalActivos}</p>
         </div>
 
         <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-5">
           <p className="text-sm text-gray-400 mb-1">Asignaciones inactivas</p>
-          <p className="text-3xl font-bold text-red-400">{totalInactivos}</p>
+          <p className="text-2xl sm:text-3xl font-bold text-red-400">{totalInactivos}</p>
         </div>
 
         <div className="rounded-2xl border border-yellow-500/20 bg-yellow-500/5 p-5">
           <p className="text-sm text-gray-400 mb-1">Usuarios globales inactivos</p>
-          <p className="text-3xl font-bold text-yellow-300">
+          <p className="text-2xl sm:text-3xl font-bold text-yellow-300">
             {totalGlobalInactive}
           </p>
         </div>

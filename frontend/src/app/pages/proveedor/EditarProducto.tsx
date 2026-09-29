@@ -160,7 +160,7 @@ export default function EditarProducto() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Cargando...</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Cargando...</h1>
           </div>
         </div>
         <div className="flex items-center justify-center py-20 gap-2 text-muted-foreground">
@@ -179,7 +179,7 @@ export default function EditarProducto() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Editar Producto</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Editar Producto</h1>
           <p className="text-muted-foreground mt-1">{producto?.nombre ?? 'Actualiza la información del producto'}</p>
         </div>
       </div>

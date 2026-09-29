@@ -87,7 +87,7 @@ export default function CrearEditarLote() {
             <Sprout className="h-8 w-8 text-success" />
           </div>
           <div>
-            <h1 className="text-4xl font-bold text-foreground">
+            <h1 className="text-3xl sm:text-4xl font-bold text-foreground">
               {isEditing ? 'Editar Lote' : 'Crear Nuevo Lote'}
             </h1>
             <p className="text-muted-foreground mt-1">

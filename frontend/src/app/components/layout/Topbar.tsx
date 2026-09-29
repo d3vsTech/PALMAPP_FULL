@@ -43,9 +43,9 @@ export default function Topbar() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-card glass-subtle shadow-sm">
-      <div className="flex h-20 items-center justify-between px-8 lg:px-8 pl-20 lg:pl-8">
+      <div className="flex h-16 items-center justify-between gap-2 px-4 pl-16 sm:h-20 sm:px-6 sm:pl-20 lg:px-8 lg:pl-8">
         {/* Isotipo visible en móvil y tablet (oculto en lg+) */}
-        <div className="flex items-center gap-4">
+        <div className="flex min-w-0 items-center gap-4">
           <PalmappLogo
             variant="isotipo"
             className="h-12 w-12 lg:hidden"
@@ -58,7 +58,7 @@ export default function Topbar() {
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="flex items-center gap-3 px-4 py-2 rounded-xl bg-muted hover:bg-muted/80 transition-colors"
+              className="flex items-center gap-2 rounded-xl bg-muted px-2 py-2 transition-colors hover:bg-muted/80 sm:gap-3 sm:px-4"
             >
               <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-primary-foreground font-bold">
                 {user?.nombre.charAt(0).toUpperCase()}
@@ -72,7 +72,7 @@ export default function Topbar() {
 
             {/* Dropdown Menu */}
             {dropdownOpen && (
-              <div className="absolute right-0 mt-2 w-64 bg-card border border-border rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="absolute right-0 mt-2 w-64 max-w-[calc(100vw-2rem)] bg-card border border-border rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                 {/* User Info */}
                 <div className="p-4 border-b border-border">
                   <p className="font-bold text-foreground">{user?.nombre}</p>

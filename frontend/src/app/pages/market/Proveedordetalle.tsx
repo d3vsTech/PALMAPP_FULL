@@ -194,7 +194,7 @@ export default function ProveedorDetalle() {
             {/* Información principal */}
             <div className="flex-1 space-y-4">
               <div>
-                <h1 className="text-4xl font-bold text-foreground mb-2">
+                <h1 className="text-3xl sm:text-4xl font-bold text-foreground mb-2">
                   {proveedorData.nombre}
                 </h1>
                 <p className="text-lg text-muted-foreground">{proveedorData.descripcion}</p>
@@ -257,7 +257,7 @@ export default function ProveedorDetalle() {
 
       {/* Tabs */}
       <Tabs value={tabActual} onValueChange={setTabActual}>
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="w-full justify-start gap-1 overflow-x-auto sm:grid sm:grid-cols-3 sm:overflow-visible">
           <TabsTrigger value="productos">
             Productos ({proveedorData.productos.length})
           </TabsTrigger>
@@ -303,7 +303,7 @@ export default function ProveedorDetalle() {
                     </div>
                   </div>
 
-                  <div className="flex items-baseline justify-between">
+                  <div className="flex flex-wrap items-baseline justify-between gap-4">
                     <div>
                       <p className="text-2xl font-bold text-success">
                         ${producto.precio.toLocaleString()}

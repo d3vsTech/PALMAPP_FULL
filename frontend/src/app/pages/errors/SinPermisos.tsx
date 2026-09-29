@@ -8,7 +8,7 @@ export default function SinPermisos() {
       <div className="mb-8 flex h-24 w-24 items-center justify-center rounded-full bg-destructive/10">
         <ShieldAlert className="h-12 w-12 text-destructive" />
       </div>
-      <h1 className="mb-2 text-4xl font-bold">403</h1>
+      <h1 className="mb-2 text-3xl sm:text-4xl font-bold">403</h1>
       <h2 className="mb-4 text-2xl">Sin permisos de acceso</h2>
       <p className="mb-8 max-w-md text-muted-foreground">
         No tienes los permisos necesarios para acceder a esta página.

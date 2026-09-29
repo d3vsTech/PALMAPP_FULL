@@ -633,7 +633,7 @@ export default function DetalleViaje() {
           </Button>
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold text-primary">
+              <h1 className="text-2xl sm:text-3xl font-bold text-primary">
                 {modoGestion ? 'Editar Viaje' : 'Detalle del Viaje'}
               </h1>
               <Badge variant="outline" className={badgeClass}>{estadoActual}</Badge>
@@ -796,17 +796,17 @@ export default function DetalleViaje() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-6 space-y-5">
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="rounded-xl bg-primary/5 p-4 text-center">
-                    <p className="text-3xl font-bold text-primary">{numFmt(totalGajos)}</p>
+                    <p className="text-2xl sm:text-3xl font-bold text-primary">{numFmt(totalGajos)}</p>
                     <p className="text-xs text-muted-foreground mt-1">Gajos Totales</p>
                   </div>
                   <div className="rounded-xl bg-primary/5 p-4 text-center">
-                    <p className="text-3xl font-bold text-primary">{(totalKg / 1000).toFixed(1)}t</p>
+                    <p className="text-2xl sm:text-3xl font-bold text-primary">{(totalKg / 1000).toFixed(1)}t</p>
                     <p className="text-xs text-muted-foreground mt-1">Toneladas</p>
                   </div>
                   <div className="rounded-xl bg-primary/5 p-4 text-center">
-                    <p className="text-3xl font-bold text-primary">{lotesSummary.length}</p>
+                    <p className="text-2xl sm:text-3xl font-bold text-primary">{lotesSummary.length}</p>
                     <p className="text-xs text-muted-foreground mt-1">Lotes</p>
                   </div>
                 </div>
@@ -1004,7 +1004,7 @@ export default function DetalleViaje() {
           Volver a Viajes
         </Button>
         <div className="flex items-center gap-3">
-          <h1 className="text-3xl font-bold text-primary">Carga Remisión</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-primary">Carga Remisión</h1>
           <Badge variant="outline" className={badgeClass}>
             {estadoActual}
           </Badge>

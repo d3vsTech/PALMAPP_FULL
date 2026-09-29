@@ -83,7 +83,7 @@ export default function SuperAdminLogin() {
                 />
               </div>
               <div>
-                <h1 className="text-4xl font-bold text-white tracking-tight">PALMAPP</h1>
+                <h1 className="text-3xl sm:text-4xl font-bold text-white tracking-tight">PALMAPP</h1>
                 <div className="h-1 w-20 bg-gradient-to-r from-[#9032F0] to-[#6506FF] rounded-full mt-1" />
               </div>
             </div>

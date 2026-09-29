@@ -226,7 +226,7 @@ export default function CargaHistoricoCesantias() {
             <FileSpreadsheet className="h-6 w-6 text-primary" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-primary">Cargar histórico de cesantías</h1>
+            <h1 className="text-2xl font-bold text-primary sm:text-3xl">Cargar histórico de cesantías</h1>
             <p className="mt-0.5 text-muted-foreground">
               Registre lo que ya consignó y pagó antes de usar el sistema. Un archivo por año.
             </p>

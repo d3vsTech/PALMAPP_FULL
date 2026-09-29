@@ -53,10 +53,10 @@ function LiquidacionesContent() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
           <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold text-primary">Liquidaciones</h1>
+            <h1 className="text-2xl font-bold text-primary sm:text-3xl">Liquidaciones</h1>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -90,7 +90,7 @@ function LiquidacionesContent() {
           <Button
             variant="outline"
             onClick={() => navigate(importar.ruta)}
-            className="gap-2 shrink-0 rounded-full"
+            className="w-full gap-2 rounded-full sm:w-auto sm:shrink-0"
           >
             <Upload className="h-4 w-4" />
             {importar.label}
@@ -102,10 +102,10 @@ function LiquidacionesContent() {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <Card className="border-border">
           <CardContent className="p-3">
-            <TabsList className="h-auto p-0 bg-transparent grid grid-cols-5 gap-2 w-full">
+            <TabsList className="h-auto w-full justify-start gap-2 overflow-x-auto bg-transparent p-0 sm:grid sm:grid-cols-5 sm:overflow-visible">
               <TabsTrigger
                 value="cesantias"
-                className="flex items-center justify-center gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md h-12 py-0 transition-all duration-200 hover:bg-muted"
+                className="flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md h-12 py-0 transition-all duration-200 hover:bg-muted"
               >
                 <DollarSign className="h-4 w-4" />
                 <span>Cesantías</span>
@@ -113,28 +113,28 @@ function LiquidacionesContent() {
               </TabsTrigger>
               <TabsTrigger
                 value="intereses"
-                className="flex items-center justify-center gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md h-12 py-0 transition-all duration-200 hover:bg-muted"
+                className="flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md h-12 py-0 transition-all duration-200 hover:bg-muted"
               >
                 <TrendingUp className="h-4 w-4" />
                 <span>Intereses</span>
               </TabsTrigger>
               <TabsTrigger
                 value="prima"
-                className="flex items-center justify-center gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md h-12 py-0 transition-all duration-200 hover:bg-muted"
+                className="flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md h-12 py-0 transition-all duration-200 hover:bg-muted"
               >
                 <Briefcase className="h-4 w-4" />
                 <span>Prima</span>
               </TabsTrigger>
               <TabsTrigger
                 value="vacaciones"
-                className="flex items-center justify-center gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md h-12 py-0 transition-all duration-200 hover:bg-muted"
+                className="flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md h-12 py-0 transition-all duration-200 hover:bg-muted"
               >
                 <Calendar className="h-4 w-4" />
                 <span>Vacaciones</span>
               </TabsTrigger>
               <TabsTrigger
                 value="liquidacion-final"
-                className="flex items-center justify-center gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md h-12 py-0 transition-all duration-200 hover:bg-muted"
+                className="flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md h-12 py-0 transition-all duration-200 hover:bg-muted"
               >
                 <FileText className="h-4 w-4" />
                 <span>Liquidación</span>

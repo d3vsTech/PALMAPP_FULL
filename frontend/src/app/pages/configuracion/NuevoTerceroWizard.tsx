@@ -252,7 +252,7 @@ export function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange
                 </AccordionTrigger>
               </CardHeader>
               <AccordionContent>
-                <CardContent className="p-0">
+                <CardContent className="overflow-x-auto p-0">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/50">
                       <tr>
@@ -304,6 +304,7 @@ export function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange
                       <Plus className="h-3 w-3" /> Agregar Rango
                     </Button>
                   </div>
+                  <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/50"><tr>
                       <th className="text-left p-2 text-xs font-semibold">Gramos Mín.</th>
@@ -322,6 +323,7 @@ export function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 </CardContent>
               </AccordionContent>
             </Card>
@@ -818,7 +820,7 @@ export default function NuevoTerceroWizard() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
-          <h1 className="text-3xl font-bold text-primary">Nuevo Tercero</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-primary">Nuevo Tercero</h1>
           <p className="text-muted-foreground mt-1">Registra un contratista o empresa prestadora de servicios</p>
         </div>
       </div>

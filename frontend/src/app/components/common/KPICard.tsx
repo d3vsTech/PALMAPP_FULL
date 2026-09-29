@@ -44,7 +44,7 @@ export default function KPICard({
           <p className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-2">
             {title}
           </p>
-          <p className="text-4xl font-bold text-foreground">
+          <p className="text-3xl sm:text-4xl font-bold text-foreground">
             {value}
           </p>
           {subtitle && (

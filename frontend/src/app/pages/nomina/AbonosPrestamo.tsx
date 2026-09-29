@@ -191,9 +191,9 @@ export default function AbonosPrestamo() {
             Volver a Préstamos
           </Link>
         </Button>
-        <div className="flex items-start justify-between">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-primary">Abonos del Préstamo</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-primary">Abonos del Préstamo</h1>
             <p className="text-muted-foreground mt-1">
               {p.concepto}
             </p>
@@ -403,7 +403,7 @@ export default function AbonosPrestamo() {
               </span>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Fecha del abono</Label>
                 <Input

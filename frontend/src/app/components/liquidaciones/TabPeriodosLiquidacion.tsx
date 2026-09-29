@@ -217,16 +217,20 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="min-w-0">
           <h2>{txt.titulo}</h2>
           <p className="text-muted-foreground mt-1">{txt.subtitulo}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
           {/* El cargue del histórico vive en el botón "Importar" del
               encabezado de Liquidaciones, el mismo para las cinco pestañas.
               Aquí había un segundo botón que llevaba a la misma pantalla. */}
-          <Button onClick={() => navigate(`${txt.ruta}/nueva`)} size="lg" className="gap-2">
+          <Button
+            onClick={() => navigate(`${txt.ruta}/nueva`)}
+            size="lg"
+            className="w-full gap-2 sm:w-auto"
+          >
             <Plus className="h-5 w-5" />
             {txt.botonNuevo}
           </Button>

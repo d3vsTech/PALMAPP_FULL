@@ -388,7 +388,7 @@ export default function NuevoEditarViaje() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="space-y-1">
-          <h1 className="text-3xl font-bold text-primary">
+          <h1 className="text-2xl sm:text-3xl font-bold text-primary">
             {esEdicion ? 'Editar Viaje' : 'Nuevo Viaje'}
           </h1>
           <p className="text-muted-foreground">

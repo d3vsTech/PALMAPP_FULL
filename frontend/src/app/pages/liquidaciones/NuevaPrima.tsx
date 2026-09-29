@@ -164,7 +164,7 @@ export default function NuevaPrima() {
           Volver a Liquidaciones
         </Button>
         <div>
-          <h1 className="text-3xl font-bold text-primary">Nuevo Período de Prima</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-primary">Nuevo Período de Prima</h1>
           <p className="text-muted-foreground mt-1">
             Define el semestre. Los colaboradores se agregan al momento de liquidar.
           </p>

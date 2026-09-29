@@ -187,7 +187,7 @@ export default function ProveedorEstadisticas() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Estadísticas y Reportes</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Estadísticas y Reportes</h1>
         <p className="text-muted-foreground mt-1">Análisis de rendimiento y ventas</p>
       </div>
 
@@ -312,7 +312,7 @@ export default function ProveedorEstadisticas() {
                     <Icon className="h-5 w-5" />
                   </div>
                 </div>
-                <p className="text-3xl font-bold mb-1">{valor}</p>
+                <p className="text-2xl sm:text-3xl font-bold mb-1">{valor}</p>
                 <div className="flex items-center gap-1">
                   {renderVariacion(k)}
                   <span className="text-xs text-muted-foreground ml-1">vs. periodo anterior</span>
@@ -407,7 +407,7 @@ export default function ProveedorEstadisticas() {
             </ResponsiveContainer>
 
             {/* Resúmenes debajo del gráfico (calculados sobre los 6 puntos) */}
-            <div className="grid grid-cols-3 gap-4 mt-6 pt-6 border-t">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6 pt-6 border-t">
               <div className="text-center">
                 <p className="text-2xl font-bold text-foreground">
                   {formatCompactCOP(evolucion_ventas.puntos.at(-1)?.total ?? 0)}

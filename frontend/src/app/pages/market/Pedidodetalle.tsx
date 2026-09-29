@@ -148,7 +148,7 @@ export default function PedidoDetalle() {
         </Button>
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-bold text-foreground">{pedido.codigo}</h1>
+            <h1 className="text-3xl sm:text-4xl font-bold text-foreground">{pedido.codigo}</h1>
             <p className="text-muted-foreground mt-2">
               Realizado el {formatFecha(pedido.fecha_pedido)}
             </p>

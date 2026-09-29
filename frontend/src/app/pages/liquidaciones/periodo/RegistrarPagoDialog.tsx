@@ -146,7 +146,7 @@ export default function RegistrarPagoDialog({ periodoId, tipo, objetivo, onClose
           </AlertDialogDescription>
         </AlertDialogHeader>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label htmlFor="fechaPago">Fecha del giro <span className="text-destructive">*</span></Label>
             <Input id="fechaPago" type="date" max={hoy} value={fechaPago} onChange={(e) => setFechaPago(e.target.value)} />

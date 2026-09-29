@@ -195,10 +195,10 @@ export default function PrestamoDetalle() {
             Volver a Préstamos
           </Link>
         </Button>
-        <div className="flex items-start justify-between">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-3xl font-bold text-primary">{prestamo.concepto}</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold text-primary">{prestamo.concepto}</h1>
               <Badge variant="outline" className={cfg.className}>{cfg.label}</Badge>
               <Badge variant="outline" className="text-xs">{prestamo.frecuencia}</Badge>
             </div>
