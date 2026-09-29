@@ -28,7 +28,6 @@ import {
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
-  Download,
   FileSpreadsheet,
   Info,
   Loader2,
@@ -55,6 +54,7 @@ import {
   CeldaColaborador,
   EstadoValidacion,
   IncidenciasFila,
+  BotonesPlantilla,
   PasoCard,
   Regla,
   VistaPreviaPlantilla,
@@ -105,21 +105,21 @@ export default function CargaHistoricoCesantias() {
 
   const [validando, setValidando] = useState(false);
   const [cargando, setCargando] = useState(false);
-  const [descargandoPlantilla, setDescargandoPlantilla] = useState(false);
+  const [descargandoPlantilla, setDescargandoPlantilla] = useState<'xlsx' | 'csv' | null>(null);
   const [errorArchivo, setErrorArchivo] = useState<string | null>(null);
   const [cargado, setCargado] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const descargarPlantilla = useCallback(async () => {
-    setDescargandoPlantilla(true);
+  const descargarPlantilla = useCallback(async (formato: 'xlsx' | 'csv') => {
+    setDescargandoPlantilla(formato);
     try {
-      const blob = await historicoCesantiasApi.plantilla();
-      descargarBlob(blob, 'plantilla_historico_cesantias.xlsx');
+      const blob = await historicoCesantiasApi.plantilla(formato);
+      descargarBlob(blob, `plantilla_historico_cesantias.${formato}`);
     } catch (e) {
       toast.error(mensajeArchivo(e));
     } finally {
-      setDescargandoPlantilla(false);
+      setDescargandoPlantilla(null);
     }
   }, []);
 
@@ -241,19 +241,10 @@ export default function CargaHistoricoCesantias() {
         titulo="Descarga la plantilla"
         subtitulo="Usa esta plantilla para preparar tus datos correctamente"
         accion={
-          <Button
-            variant="outline"
-            onClick={() => void descargarPlantilla()}
-            disabled={descargandoPlantilla}
-            className="gap-2"
-          >
-            {descargandoPlantilla ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Download className="h-4 w-4" />
-            )}
-            Descargar plantilla
-          </Button>
+          <BotonesPlantilla
+            descargando={descargandoPlantilla}
+            onDescargar={(formato) => void descargarPlantilla(formato)}
+          />
         }
       >
         <VistaPreviaPlantilla columnas={COLUMNAS_PLANTILLA} filas={FILAS_EJEMPLO} />

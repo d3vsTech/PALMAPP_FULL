@@ -31,11 +31,18 @@ import LiquidacionFinalTab from './LiquidacionFinalTab';
  * de cesantías (§12), que crea los dos períodos de una vez. No existe un
  * cargue de intereses por separado, y mandar a la pantalla de cesantías desde
  * aquí solo confundía: pide el año y muestra la plantilla del otro módulo.
+ *
+ * Liquidación sí lo lleva desde PR-L14 (§15): un archivo por año de retiro.
  */
 const IMPORTAR_POR_TAB: Record<string, { label: string; ruta: string }> = {
   cesantias:  { label: 'Importar Cesantías',  ruta: '/liquidaciones/cesantias/carga-historico' },
   prima:      { label: 'Importar Prima',      ruta: '/liquidaciones/prima/carga-historico' },
   vacaciones: { label: 'Importar Vacaciones', ruta: '/liquidaciones/vacaciones/carga-historico' },
+  // La clave es el `value` del TabsTrigger, no el nombre de la pestaña.
+  'liquidacion-final': {
+    label: 'Importar Liquidación Final',
+    ruta: '/liquidaciones/finales/carga-historico',
+  },
 };
 
 function LiquidacionesContent() {
@@ -77,8 +84,8 @@ function LiquidacionesContent() {
           </p>
         </div>
 
-        {/* Sin botón en Intereses (van dentro del archivo de cesantías) ni en
-            Liquidación final (no hay endpoint que reciba un cargue). */}
+        {/* Sin botón solo en Intereses: sus valores van dentro del archivo de
+            cesantías y no tiene un cargue propio. */}
         {importar && (
           <Button
             variant="outline"

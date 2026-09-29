@@ -25,7 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../../components/ui/select';
-import { AlertTriangle, ArrowLeft, CheckCircle2, Download, Gift, Info, Loader2, Upload } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CheckCircle2, Gift, Info, Loader2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../../contexts/AuthContext';
 import {
@@ -55,6 +55,7 @@ import {
   EstadoValidacion,
   IncidenciasFila,
   Regla,
+  BotonesPlantilla,
   PasoCard,
   VistaPreviaPlantilla,
   ZonaArchivo,
@@ -97,21 +98,21 @@ export default function CargaHistoricoPrima() {
 
   const [validando, setValidando] = useState(false);
   const [cargando, setCargando] = useState(false);
-  const [descargandoPlantilla, setDescargandoPlantilla] = useState(false);
+  const [descargandoPlantilla, setDescargandoPlantilla] = useState<'xlsx' | 'csv' | null>(null);
   const [errorArchivo, setErrorArchivo] = useState<string | null>(null);
   const [cargado, setCargado] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const descargarPlantilla = useCallback(async () => {
-    setDescargandoPlantilla(true);
+  const descargarPlantilla = useCallback(async (formato: 'xlsx' | 'csv') => {
+    setDescargandoPlantilla(formato);
     try {
-      const blob = await historicoPrimaApi.plantilla();
-      descargarBlob(blob, 'plantilla_historico_prima.xlsx');
+      const blob = await historicoPrimaApi.plantilla(formato);
+      descargarBlob(blob, `plantilla_historico_prima.${formato}`);
     } catch (e) {
       toast.error(mensajeArchivo(e));
     } finally {
-      setDescargandoPlantilla(false);
+      setDescargandoPlantilla(null);
     }
   }, []);
 
@@ -242,19 +243,10 @@ export default function CargaHistoricoPrima() {
         titulo="Descarga la plantilla"
         subtitulo="Usa esta plantilla para preparar tus datos correctamente"
         accion={
-          <Button
-            variant="outline"
-            onClick={() => void descargarPlantilla()}
-            disabled={descargandoPlantilla}
-            className="gap-2"
-          >
-            {descargandoPlantilla ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Download className="h-4 w-4" />
-            )}
-            Descargar plantilla
-          </Button>
+          <BotonesPlantilla
+            descargando={descargandoPlantilla}
+            onDescargar={(formato) => void descargarPlantilla(formato)}
+          />
         }
       >
         <VistaPreviaPlantilla columnas={COLUMNAS_PLANTILLA} filas={FILAS_EJEMPLO} />

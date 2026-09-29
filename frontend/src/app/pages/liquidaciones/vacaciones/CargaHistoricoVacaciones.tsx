@@ -60,11 +60,15 @@ function diasCalendario(inicio: string, fin: string): number {
   return Math.floor((b.getTime() - a.getTime()) / 86400000) + 1;
 }
 
+/** Tope de `valor_pagado` en el backend (§10.6). */
+const MAX_VALOR_PAGADO = 999_999_999.99;
+
 const FORM_VACIO = {
   fechaInicio: '',
   fechaFin: '',
   diasHabiles: '15',
   diasDinero: '',
+  valorPagado: '',
   fechaPago: '',
   observacion: '',
 };
@@ -152,6 +156,11 @@ export default function CargaHistoricoVacaciones() {
       if (!Number.isFinite(dinero) || dinero < 0 || dinero > 30) return 'Los días en dinero van de 0 a 30';
       if (Math.round(dinero * 2) !== dinero * 2) return 'Los días en dinero van de medio en medio';
     }
+    if (form.valorPagado) {
+      const valor = Number(form.valorPagado);
+      if (!Number.isFinite(valor) || valor < 0) return 'El valor pagado no sirve';
+      if (valor > MAX_VALOR_PAGADO) return 'El valor pagado supera el tope';
+    }
     if (form.fechaPago && form.fechaPago > HOY()) return 'La fecha de pago no puede ser futura';
     return null;
   };
@@ -169,6 +178,7 @@ export default function CargaHistoricoVacaciones() {
         fecha_fin: form.fechaFin,
         dias_habiles: Number(form.diasHabiles),
         dias_dinero: form.diasDinero ? Number(form.diasDinero) : undefined,
+        valor_pagado: form.valorPagado ? Number(form.valorPagado) : undefined,
         fecha_pago: form.fechaPago || undefined,
         observacion: form.observacion.trim() || undefined,
       });
@@ -505,6 +515,21 @@ export default function CargaHistoricoVacaciones() {
                         value={form.diasDinero}
                         onChange={(e) => set('diasDinero', e.target.value)}
                       />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Valor pagado <span className="font-normal text-muted-foreground">(opcional)</span></Label>
+                      <Input
+                        type="number" min={0} max={MAX_VALOR_PAGADO} step={0.01} placeholder="0"
+                        disabled={!puedeCargar}
+                        value={form.valorPagado}
+                        onChange={(e) => set('valorPagado', e.target.value)}
+                      />
+                      {/* El backend lo reparte entre disfrute y días en dinero
+                          al mismo valor día; acá va la cifra total. */}
+                      <p className="text-xs text-muted-foreground">
+                        Lo que se pagó por esta vacación, disfrute y días en dinero juntos.
+                        Es informativo: no cambia saldos ni ningún cálculo.
+                      </p>
                     </div>
                     <div className="space-y-1.5">
                       <Label>Fecha de pago <span className="font-normal text-muted-foreground">(opcional)</span></Label>

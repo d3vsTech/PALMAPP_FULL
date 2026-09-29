@@ -7,7 +7,7 @@
  * de un error no haya que hacerlo dos veces.
  */
 import { useState } from 'react';
-import { AlertTriangle, FileSpreadsheet, Info, Loader2, Upload, X } from 'lucide-react';
+import { AlertTriangle, Download, FileSpreadsheet, Info, Loader2, Upload, X } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
 import { Badge } from '../../../components/ui/badge';
 import { Card, CardContent, CardHeader } from '../../../components/ui/card';
@@ -292,6 +292,50 @@ export function ZonaArchivo({
   );
 }
 
+
+/**
+ * Los dos botones de descarga de la plantilla.
+ *
+ * El CSV (v1.6) trae las mismas cabeceras y la misma fila de ejemplo, pero sin
+ * la hoja de instrucciones. Existe para quien no abre Excel o prefiere editar
+ * el archivo con otra herramienta.
+ */
+export function BotonesPlantilla({
+  descargando,
+  onDescargar,
+}: {
+  /** El formato que se está bajando, o `null` si no hay ninguno en curso. */
+  descargando: 'xlsx' | 'csv' | null;
+  onDescargar: (formato: 'xlsx' | 'csv') => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <Button
+        variant="outline"
+        onClick={() => onDescargar('xlsx')}
+        disabled={descargando !== null}
+        className="gap-2"
+      >
+        {descargando === 'xlsx' ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Download className="h-4 w-4" />
+        )}
+        Descargar plantilla
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => onDescargar('csv')}
+        disabled={descargando !== null}
+        className="gap-1.5 text-muted-foreground"
+      >
+        {descargando === 'csv' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+        CSV
+      </Button>
+    </div>
+  );
+}
 
 /** Una columna de la plantilla, como la nombra el backend en la fila 1. */
 export interface ColumnaPlantilla {

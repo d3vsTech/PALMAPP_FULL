@@ -161,6 +161,8 @@ export interface LiquidacionActivaRef {
   numero_comprobante: string;
   estado: EstadoLiquidacionFinal;
   fecha_retiro: string | null;
+  /** v1.7: una activa puede venir de un archivo. */
+  origen?: OrigenLiquidacionFinal;
 }
 
 export interface ContratoVigenteRef {
@@ -181,7 +183,14 @@ export interface ColaboradorLiquidable {
   fecha_retiro: string | null;
   estado: boolean;
   contrato_vigente: ContratoVigenteRef | null;
-  /** Con valor, ya tiene una liquidación no anulada: no se puede liquidar otra. */
+  /**
+   * Con valor, el **vínculo actual** ya tiene una liquidación no anulada.
+   *
+   * v1.7: se compara contra el contrato de referencia, no contra cualquier
+   * liquidación del colaborador. Quien se retiró, fue liquidado y reingresó
+   * vuelve a ser elegible; su liquidación anterior sigue en `liquidaciones[]`
+   * de la ficha pero ya no bloquea.
+   */
   liquidacion_activa: LiquidacionActivaRef | null;
   elegible: boolean;
 }
@@ -323,6 +332,12 @@ export interface BloqueContrato {
   tipo_contrato: TipoContrato;
   tipo_contrato_etiqueta?: string;
   tipo_contrato_origen: TipoContratoOrigen;
+  /**
+   * v1.7, solo en una `HISTORICO`: nadie informó el tipo. Se guardó
+   * `INDEFINIDO` porque la columna es obligatoria, pero no es un dato: la
+   * pantalla no debe mostrarlo como cierto (el PDF imprime "—").
+   */
+  tipo_contrato_asumido?: boolean;
   fecha_inicio: string | null;
   fecha_fin_pactada: string | null;
   estado_contrato: string | null;
@@ -407,6 +422,15 @@ export interface ComprobanteLiquidacionFinal {
   id: number | null;
   numero_comprobante: string | null;
   estado: EstadoLiquidacionFinal | null;
+  /** v1.7. `SISTEMA` en todo lo que calculó la pestaña. */
+  origen?: OrigenLiquidacionFinal;
+  /**
+   * v1.7. La traza del cargue; `null` en las del sistema. En una histórica
+   * `nomina`, `seguridad_social` y `retencion` llegan en `null` (no se calculó
+   * contra nóminas) y `empleado.salario_contractual` puede ser `null`, que no
+   * es lo mismo que cero.
+   */
+  historico?: TrazaHistoricoLiquidacion | null;
   empleado: EmpleadoLiquidacionRef;
   contrato: BloqueContrato;
   retiro: BloqueRetiro;
@@ -431,10 +455,53 @@ export interface ComprobanteLiquidacionFinal {
   auditoria: AuditoriaLiquidacion;
 }
 
+// ─── Origen del registro (§0.2, PR-L14) ───────────────────────────────────────
+
+/**
+ * De dónde salió la liquidación.
+ *
+ * `SISTEMA` la calculó la pestaña. `HISTORICO` se cargó desde un archivo
+ * (§15): nace `PAGADA` con los valores que reportó el empleador, sin nóminas
+ * ni bases, sin aplicar el retiro, sin vacación compensada y sin saldar
+ * préstamos. Solo admite ver, imprimir, compartir y **eliminar**: editar,
+ * aprobar, anular y tocar el pago responden 409 `LIQUIDACION_HISTORICA`.
+ */
+export type OrigenLiquidacionFinal = 'SISTEMA' | 'HISTORICO';
+
+/** Cómo se enlazó el contrato en el cargue (§15). */
+export type ContratoEnlace = 'EXACTO' | 'FICHA' | 'SIN_CONTRATO';
+
+/** De dónde salió el dato. `DESCONOCIDO` solo aplica al salario. */
+export type OrigenDatoHistorico = 'CONTRATO' | 'ARCHIVO' | 'FICHA' | 'DESCONOCIDO';
+
+/**
+ * Traza del cargue, solo en el JSON y solo para el administrador: el PDF del
+ * colaborador no la imprime. `null` en las liquidaciones del sistema.
+ */
+export interface TrazaHistoricoLiquidacion {
+  nombre_original: string;
+  fila: number;
+  anio: number;
+  cargado_por: string | null;
+  cargado_at: string;
+  sin_desglose: boolean;
+  /** El `neto_pagado` que traía el archivo. */
+  neto_archivo: number;
+  /** Lo que difiere del calculado; hasta un peso solo advierte. */
+  diferencia_neto: number;
+  contrato_enlace: ContratoEnlace;
+  fecha_ingreso_origen: OrigenDatoHistorico;
+  salario_base_origen: OrigenDatoHistorico;
+  motivo_por_defecto: boolean;
+  fecha_pago_por_defecto: boolean;
+}
+
 // ─── Listado y resumen (§11.2, §11.5) ─────────────────────────────────────────
 
 export interface ResumenLiquidacionFinal {
   anio: number | null;
+  /** Eco del filtro; `null` sin filtrar (v1.7). */
+  origen: OrigenLiquidacionFinal | null;
   borradores: number;
   aprobadas: number;
   pagadas: number;
@@ -442,12 +509,24 @@ export interface ResumenLiquidacionFinal {
   monto_por_pagar: number;
   monto_pagado: number;
   monto_total: number;
+  /**
+   * Cuánto de `pagadas` / `monto_pagado` vino de archivo (v1.7). Las
+   * históricas nacen `PAGADA` y cuentan en las cards como cualquier otra.
+   */
+  historicas: number;
+  monto_historico: number;
 }
 
 export interface LiquidacionFinalItem {
   id: number;
   numero_comprobante: string;
   estado: EstadoLiquidacionFinal;
+  /**
+   * v1.7. En una `HISTORICO`: `contrato_id` puede ser `null`, `aprobado_at` es
+   * la fecha del cargue y `motivo_etiqueta` es "Otro" a secas cuando el
+   * archivo no trajo motivo.
+   */
+  origen: OrigenLiquidacionFinal;
   empleado: EmpleadoLiquidacionRef;
   contrato_id: number | null;
   motivo_retiro: MotivoRetiroCodigo | null;
@@ -476,6 +555,9 @@ export interface MetaPaginacion {
 export interface FiltrosListadoLiquidaciones {
   q?: string;
   estado?: EstadoLiquidacionFinal;
+  /** v1.7: separa lo calculado por la pestaña de lo cargado desde archivo. */
+  origen?: OrigenLiquidacionFinal;
+  /** Año de la fecha de retiro. Desde v1.7 acepta desde 2000. */
   anio?: number;
   motivo_retiro?: MotivoRetiroCodigo;
   page?: number;
@@ -597,10 +679,13 @@ export interface RespuestaListadoLiquidaciones {
 // ─── Cliente ──────────────────────────────────────────────────────────────────
 
 export const liquidacionFinalApi = {
-  /** Cards del listado. `anio` filtra por el año de la fecha de retiro. */
-  resumen: (anio?: number) =>
+  /**
+   * Cards del listado. `anio` filtra por el año de la fecha de retiro (desde
+   * 2000 en v1.7) y `origen` separa lo cargado desde archivo.
+   */
+  resumen: (anio?: number, origen?: OrigenLiquidacionFinal) =>
     apiClient
-      .get<{ data: ResumenLiquidacionFinal }>(`${BASE}/resumen${toQuery({ anio })}`, T)
+      .get<{ data: ResumenLiquidacionFinal }>(`${BASE}/resumen${toQuery({ anio, origen })}`, T)
       .then((r) => r.data),
 
   listar: (filtros?: FiltrosListadoLiquidaciones) =>
@@ -689,6 +774,13 @@ export const LiquidacionFinalErrorCodes = {
   PRESTAMO_NO_VIGENTE: 'PRESTAMO_NO_VIGENTE',
   LIQUIDACION_FECHA_RETIRO_INVALIDA: 'LIQUIDACION_FECHA_RETIRO_INVALIDA',
   LIQUIDACION_ESTADO_INVALIDO: 'LIQUIDACION_ESTADO_INVALIDO',
+  /**
+   * v1.7 — 409 sobre una liquidación `origen = HISTORICO` en `PUT`, aprobar,
+   * anular, registrar el pago o anular el pago. Se evalúa **antes** que el
+   * estado: no es que esté en el estado equivocado, es que no pasa por el
+   * ciclo de vida. Para corregirla: eliminarla y volver a cargar.
+   */
+  LIQUIDACION_HISTORICA: 'LIQUIDACION_HISTORICA',
   LIQUIDACION_CONTRATO_YA_LIQUIDADO: 'LIQUIDACION_CONTRATO_YA_LIQUIDADO',
   LIQUIDACION_RETIRO_FUTURO: 'LIQUIDACION_RETIRO_FUTURO',
   LIQUIDACION_FECHA_RETIRO_DISTINTA: 'LIQUIDACION_FECHA_RETIRO_DISTINTA',

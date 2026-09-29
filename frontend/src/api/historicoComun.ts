@@ -1,6 +1,11 @@
 /**
  * API — Piezas comunes de los cargues históricos desde archivo
- * Contrato: docs/API_LIQUIDACIONES.md (v1.5, PR-L12, 2026-09-22) §12 y §13.
+ * Contrato: docs/API_LIQUIDACIONES.md (v1.7, PR-L14, 2026-09-29) §12 a §15.
+ *
+ * Son cuatro cargues con el mismo mecanismo y columnas distintas: cesantías
+ * (§12), prima (§13), vacaciones (§14) y liquidaciones finales (§15). Mismo
+ * lector, mismos estados de fila, mismos códigos de archivo, mismo flujo de
+ * validar antes de importar.
  *
  * Cesantías (§12) y prima (§13) son el mismo mecanismo con columnas distintas:
  * mismo lector, mismos estados de fila, mismos códigos de archivo, mismo flujo
@@ -28,8 +33,22 @@ export const MAX_FILAS_ARCHIVO = 1000;
 /** Tope de tamaño del request. */
 export const MAX_MB_ARCHIVO = 5;
 
-/** Lo que aceptan los dos `input[type=file]` (§12.1, CSV desde PR-L12). */
+/** Lo que aceptan los cuatro `input[type=file]` (§12.1, CSV desde PR-L12). */
 export const ACCEPT_ARCHIVO = '.xlsx,.xls,.csv';
+
+/**
+ * Formato de la plantilla descargable (`?formato=`, v1.6 en los tres primeros
+ * cargues y v1.7 en el de liquidaciones finales).
+ *
+ * El CSV sale en UTF-8 con BOM, primera línea `sep=;` y separador `;`, y trae
+ * solo la hoja de datos: las instrucciones existen únicamente en el `.xlsx`.
+ */
+export type FormatoPlantilla = 'xlsx' | 'csv';
+
+/** Query de la plantilla. Sin formato el backend entrega el `.xlsx`. */
+export function queryPlantilla(formato: FormatoPlantilla = 'xlsx'): string {
+  return formato === 'csv' ? '?formato=csv' : '';
+}
 
 // ─── Enumeraciones ────────────────────────────────────────────────────────────
 
@@ -134,6 +153,12 @@ export const HistoricoArchivoErrorCodes = {
   HISTORICO_ARCHIVO_VACIO: 'HISTORICO_ARCHIVO_VACIO',
   HISTORICO_ARCHIVO_CON_ERRORES: 'HISTORICO_ARCHIVO_CON_ERRORES',
   HISTORICO_SEMESTRE_NO_CERRADO: 'HISTORICO_SEMESTRE_NO_CERRADO',
+  /** Vacaciones (§14) y liquidaciones finales (§15): año fuera de 2000..hoy. */
+  HISTORICO_ANIO_INVALIDO: 'HISTORICO_ANIO_INVALIDO',
+  /** Vacaciones: carrera con la pestaña sobre el mismo colaborador. */
+  VACACIONES_SOLAPADAS: 'VACACIONES_SOLAPADAS',
+  /** Liquidaciones finales: carrera contra los únicos parciales. */
+  LIQUIDACION_CONTRATO_YA_LIQUIDADO: 'LIQUIDACION_CONTRATO_YA_LIQUIDADO',
   CONFIG_LEGAL_INCOMPLETA: 'CONFIG_LEGAL_INCOMPLETA',
   COLABORADOR_EN_LIQUIDACION_SOLAPADA: 'COLABORADOR_EN_LIQUIDACION_SOLAPADA',
   PERMISSION_DENIED: 'PERMISSION_DENIED',
@@ -180,6 +205,13 @@ export const ADVERTENCIA_FILA_COMUN_LABEL: Record<string, string> = {
   DIAS_DESCONTADOS: 'Se le descontaron días de servicio',
   FALTAS_IMPLICITAS_NO_DESCONTADAS: 'Tiene faltas sin soporte, no descontadas',
   AUSENCIAS_PENDIENTES_EN_RANGO: 'Tiene ausencias sin aprobar en el período',
+
+  // Cruce con las liquidaciones finales (v1.7). Aparecen en los cargues de
+  // cesantías y de prima cuando el colaborador tiene una final del año.
+  LIQUIDACION_FINAL_CONTRATO_ANTERIOR:
+    'Tiene una liquidación final de un contrato anterior',
+  CONCEPTO_PAGADO_EN_PERIODO: 'Su liquidación final no pagó este concepto',
+  SIN_DESGLOSE_CON_PERIODO: 'Su liquidación final se cargó sin desglose',
 };
 
 // ─── Rótulos ──────────────────────────────────────────────────────────────────

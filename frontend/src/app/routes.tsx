@@ -114,6 +114,8 @@ const VacacionesHistorico = lazyWithRetry(() => import('./pages/liquidaciones/Va
 const CargaHistoricoVacaciones = lazyWithRetry(() => import('./pages/liquidaciones/vacaciones/CargaHistoricoVacaciones'));
 const CargaHistoricoCesantias  = lazyWithRetry(() => import('./pages/liquidaciones/historico/CargaHistoricoCesantias'));
 const CargaHistoricoPrima      = lazyWithRetry(() => import('./pages/liquidaciones/historico/CargaHistoricoPrima'));
+const CargaHistoricoFinal      = lazyWithRetry(() => import('./pages/liquidaciones/historico/CargaHistoricoLiquidacionFinal'));
+const CargaHistoricoVacArchivo = lazyWithRetry(() => import('./pages/liquidaciones/historico/CargaHistoricoVacacionesArchivo'));
 const LiquidacionFinalDetalle = lazyWithRetry(() => import('./pages/liquidaciones/LiquidacionFinalDetalle'));
 const NuevaCesantia = lazyWithRetry(() => import('./pages/liquidaciones/NuevaCesantia'));
 const NuevaIntereses = lazyWithRetry(() => import('./pages/liquidaciones/NuevaIntereses'));
@@ -332,9 +334,11 @@ export const router = createBrowserRouter([
           { path: 'prima/:id',                 element: L(<PrimaDetalle />) },
           { path: 'vacaciones/nueva',          element: L(<NuevaVacaciones />) },
           { path: 'vacaciones/historico',      element: L(<VacacionesHistorico />) },
-          { path: 'vacaciones/carga-historico', element: L(<CargaHistoricoVacaciones />) },
+          { path: 'vacaciones/carga-historico', element: L(<CargaHistoricoVacArchivo />) },
+          { path: 'vacaciones/carga-historico/manual', element: L(<CargaHistoricoVacaciones />) },
           { path: 'cesantias/carga-historico', element: L(<CargaHistoricoCesantias />) },
           { path: 'prima/carga-historico',     element: L(<CargaHistoricoPrima />) },
+          { path: 'finales/carga-historico',   element: L(<CargaHistoricoFinal />) },
           { path: 'vacaciones/:id',            element: L(<VacacionesDetalle />) },
           { path: 'liquidacion-final/nueva',   element: L(<NuevaLiquidacionFinal />) },
           { path: 'liquidacion-final/:id/editar', element: L(<NuevaLiquidacionFinal />) },

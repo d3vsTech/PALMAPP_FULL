@@ -68,9 +68,19 @@ export default function SeleccionarFinca() {
                 disabled={loadingId !== null}
                 className="w-full flex items-center gap-4 p-4 rounded-xl border border-border bg-card hover:bg-accent hover:border-primary/30 transition-all text-left disabled:opacity-60 group"
               >
-                {/* Icono */}
-                <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
-                  <Building2 className="w-6 h-6 text-primary" />
+                {/* Logo de la finca. `logo_url` llega absoluto en cada item de
+                    `tenants[]` del login (API_AUTH_FINCA §1) y es `null` cuando
+                    la finca no cargó ninguno: ahí va el icono genérico. */}
+                <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center overflow-hidden">
+                  {finca.logo_url ? (
+                    <img
+                      src={finca.logo_url}
+                      alt={finca.nombre}
+                      className="w-full h-full object-contain"
+                    />
+                  ) : (
+                    <Building2 className="w-6 h-6 text-primary" />
+                  )}
                 </div>
 
                 {/* Info */}

@@ -38,6 +38,8 @@ import type {
 import {
   ADVERTENCIA_FILA_COMUN_LABEL,
   ERROR_FILA_COMUN_LABEL,
+  queryPlantilla,
+  type FormatoPlantilla,
 } from './historicoComun';
 
 const T = true; // requiresTenant
@@ -132,7 +134,12 @@ function armarForm(
 
 export const historicoPrimaApi = {
   /** Plantilla oficial con las cabeceras, el formato y la hoja de instrucciones. */
-  plantilla: () => apiClient.getBlob(`${BASE}/plantilla`, T),
+  /**
+   * Plantilla oficial. `csv` (§13.1, v1.6) entrega el mismo archivo en UTF-8 con
+   * BOM y separador `;`, pero sin la hoja de instrucciones.
+   */
+  plantilla: (formato: FormatoPlantilla = 'xlsx') =>
+    apiClient.getBlob(`${BASE}/plantilla${queryPlantilla(formato)}`, T),
 
   /**
    * Simulación: lee, cruza y valida sin guardar nada, ni siquiera el archivo.

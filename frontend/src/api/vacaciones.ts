@@ -410,6 +410,21 @@ export interface CrearHistoricoPayload {
   fecha_fin: string;
   dias_habiles: number;
   dias_dinero?: number;
+  /**
+   * v1.6 — Lo que el empleador pagó por esa vacación: el disfrute y los días
+   * en dinero en **una sola cifra**, de 0 a 999.999.999,99.
+   *
+   * Es opcional e informativo. Completa el registro del CST art. 187-3 y sale
+   * en el listado, en sus totales y en el comprobante; no entra al saldo de
+   * días, a la base de cesantías o prima, a la nómina ni a la liquidación
+   * final. Sin él los cinco valores quedan en cero, como antes.
+   *
+   * Con `dias_dinero` el backend lo reparte por días al mismo valor día:
+   * `valor_dia = valor_pagado ÷ (dias_calendario + dias_dinero)`.
+   *
+   * Negativo o por encima del tope → 422 `errors.valor_pagado`.
+   */
+  valor_pagado?: number;
   fecha_pago?: string;
   observacion?: string;
 }
@@ -519,6 +534,8 @@ export const vacacionesApi = {
 
 export const VacacionesErrorCodes = {
   VACACION_NO_ENCONTRADA: 'VACACION_NO_ENCONTRADA',
+  /** v1.6 — `valor_pagado` negativo o por encima de 999.999.999,99. */
+  VACACIONES_VALOR_INVALIDO: 'VACACIONES_VALOR_INVALIDO',
   EMPLEADO_NO_ENCONTRADO: 'EMPLEADO_NO_ENCONTRADO',
   EMPLEADO_NO_ELEGIBLE: 'EMPLEADO_NO_ELEGIBLE',
   VACACIONES_SALDO_INSUFICIENTE: 'VACACIONES_SALDO_INSUFICIENTE',
