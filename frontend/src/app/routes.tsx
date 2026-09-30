@@ -103,6 +103,10 @@ const VerLiquidacion = lazyWithRetry(() => import('./pages/nomina/VerLiquidacion
 const PlanillaDiaria = lazyWithRetry(() => import('./pages/nomina/PlanillaDiaria'));
 const DesprendiblePago = lazyWithRetry(() => import('./pages/nomina/DesprendiblePago'));
 
+// Novedades
+const NovedadesPage = lazyWithRetry(() => import('./pages/novedades/NovedadesPage'));
+const NuevaNovedadPage = lazyWithRetry(() => import('./pages/novedades/NuevaNovedadPage'));
+
 // Liquidaciones
 const LiquidacionesLayout = lazyWithRetry(() => import('./pages/liquidaciones/LiquidacionesLayout'));
 const Liquidaciones = lazyWithRetry(() => import('./pages/liquidaciones/Liquidaciones'));
@@ -350,6 +354,9 @@ export const router = createBrowserRouter([
       { path: 'operaciones/planilla/nueva',      element: P('operaciones.ver', <NuevaPlanillaWizard />) },
       { path: 'operaciones/planilla/editar/:id', element: P('operaciones.ver', <NuevaPlanillaWizard />) },
       { path: 'operaciones/planilla/:id',        element: P('operaciones.ver', <VerPlanilla />) },
+
+      { path: 'novedades',                 element: P('novedades.ver', <NovedadesPage />) },
+      { path: 'novedades/nueva',           element: P('novedades.ver', <NuevaNovedadPage />) },
 
       { path: 'viajes',                    element: P('remisiones.ver', <Viajes />) },
       { path: 'viajes/ajustes-cosecha',    element: P('remisiones.ver', <AjustesCosecha />) },

@@ -16,6 +16,7 @@ import {
   Menu,
   X,
   UserCog,
+  CalendarDays,
   Sparkles,
   FileText,
   type LucideIcon,
@@ -72,6 +73,13 @@ const navItems: NavItem[] = [
     icon: DollarSign,
     roles: ['dueño', 'administrador', 'jefe_campo'],
     permiso: 'nomina.ver',
+  },
+  {
+    label: 'Novedades',
+    href: '/novedades',
+    icon: CalendarDays,
+    roles: ['dueño', 'administrador', 'jefe_campo'],
+    permiso: 'novedades.ver',
   },
   {
     label: 'Liquidaciones',
