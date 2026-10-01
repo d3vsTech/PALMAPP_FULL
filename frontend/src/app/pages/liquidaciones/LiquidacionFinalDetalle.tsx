@@ -145,7 +145,7 @@ export default function LiquidacionFinalDetalle() {
     try {
       await liquidacionFinalApi.eliminar(liq.id);
       toast.success('Borrador eliminado');
-      navigate('/liquidaciones');
+      navigate('/liquidaciones?tab=liquidacion-final');
     } catch (e) {
       toast.error(mensajeErrorLiquidacion(e, 'No se pudo eliminar el borrador'));
     } finally {
@@ -166,7 +166,7 @@ export default function LiquidacionFinalDetalle() {
       <div className="space-y-4 py-12 text-center">
         <FileText className="mx-auto h-10 w-10 text-muted-foreground" />
         <p className="text-muted-foreground">No se encontró la liquidación</p>
-        <Button variant="outline" onClick={() => navigate('/liquidaciones')}>
+        <Button variant="outline" onClick={() => navigate('/liquidaciones?tab=liquidacion-final')}>
           <ArrowLeft className="mr-2 h-4 w-4" />
           Volver a Liquidaciones
         </Button>
@@ -189,7 +189,7 @@ export default function LiquidacionFinalDetalle() {
     <div className="space-y-6">
       {/* Encabezado */}
       <div className="space-y-4 print:hidden">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/liquidaciones')} className="gap-2">
+        <Button variant="ghost" size="sm" onClick={() => navigate('/liquidaciones?tab=liquidacion-final')} className="gap-2">
           <ArrowLeft className="h-4 w-4" />
           Volver a Liquidaciones
         </Button>

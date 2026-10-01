@@ -159,7 +159,7 @@ export default function NuevaPrima() {
   return (
     <div className="space-y-6">
       <div className="space-y-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/liquidaciones')} className="gap-2">
+        <Button variant="ghost" size="sm" onClick={() => navigate('/liquidaciones?tab=prima')} className="gap-2">
           <ArrowLeft className="h-4 w-4" />
           Volver a Liquidaciones
         </Button>
@@ -290,7 +290,7 @@ export default function NuevaPrima() {
       </Card>
 
       <div className="flex justify-end gap-3">
-        <Button variant="outline" size="lg" onClick={() => navigate('/liquidaciones')} disabled={guardando}>
+        <Button variant="outline" size="lg" onClick={() => navigate('/liquidaciones?tab=prima')} disabled={guardando}>
           Cancelar
         </Button>
         <Button size="lg" onClick={() => guardar()} disabled={guardando} className="gap-2">

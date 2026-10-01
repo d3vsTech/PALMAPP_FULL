@@ -246,7 +246,7 @@ export default function CargaHistoricoLiquidacionFinal() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => navigate('/liquidaciones')}
+          onClick={() => navigate('/liquidaciones?tab=liquidacion-final')}
           className="gap-2"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -451,7 +451,7 @@ export default function CargaHistoricoLiquidacionFinal() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => navigate('/liquidaciones')}
+                    onClick={() => navigate('/liquidaciones?tab=liquidacion-final')}
                   >
                     Ver el listado
                   </Button>

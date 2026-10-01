@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
@@ -45,10 +44,24 @@ const IMPORTAR_POR_TAB: Record<string, { label: string; ruta: string }> = {
   },
 };
 
+/** `value` de cada TabsTrigger. Es lo que viaja en `?tab=`. */
+const TABS = ['cesantias', 'intereses', 'prima', 'vacaciones', 'liquidacion-final'] as const;
+const TAB_POR_DEFECTO = 'cesantias';
+
 function LiquidacionesContent() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('cesantias');
+  /**
+   * La pestaña vive en la URL, no en estado local. Así las pantallas hijas
+   * pueden devolver a la pestaña de la que salieron (`?tab=vacaciones`) en
+   * vez de caer siempre en Cesantías, y el botón Atrás del navegador funciona.
+   */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabUrl = searchParams.get('tab');
+  const activeTab = TABS.includes(tabUrl as typeof TABS[number]) ? tabUrl! : TAB_POR_DEFECTO;
   const importar = IMPORTAR_POR_TAB[activeTab];
+
+  // `replace` para no llenar el historial con un paso por cada pestaña abierta.
+  const cambiarTab = (tab: string) => setSearchParams({ tab }, { replace: true });
 
   return (
     <div className="space-y-6">
@@ -99,7 +112,7 @@ function LiquidacionesContent() {
       </div>
 
       {/* Pestañas del módulo */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+      <Tabs value={activeTab} onValueChange={cambiarTab} className="space-y-6">
         <Card className="border-border">
           <CardContent className="p-3">
             <TabsList className="h-auto w-full justify-start gap-2 overflow-x-auto bg-transparent p-0 sm:grid sm:grid-cols-5 sm:overflow-visible">

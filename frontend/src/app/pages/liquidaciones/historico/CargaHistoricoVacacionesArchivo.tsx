@@ -248,7 +248,7 @@ export default function CargaHistoricoVacacionesArchivo() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => navigate('/liquidaciones')}
+          onClick={() => navigate('/liquidaciones?tab=vacaciones')}
           className="gap-2"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -446,7 +446,7 @@ export default function CargaHistoricoVacacionesArchivo() {
                   Vacaciones de {analisis.anio} cargadas.
                 </p>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => navigate('/liquidaciones')}>
+                  <Button variant="outline" size="sm" onClick={() => navigate('/liquidaciones?tab=vacaciones')}>
                     Ver turnos pendientes
                   </Button>
                   <Button size="sm" onClick={limpiar}>

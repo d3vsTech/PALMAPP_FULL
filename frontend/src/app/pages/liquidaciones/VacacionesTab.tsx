@@ -208,7 +208,7 @@ export default function VacacionesTab() {
           className="gap-2"
         >
           <History className="h-4 w-4" />
-          Histórico de liquidaciones
+          Histórico de vacaciones
         </Button>
       </div>
     </div>

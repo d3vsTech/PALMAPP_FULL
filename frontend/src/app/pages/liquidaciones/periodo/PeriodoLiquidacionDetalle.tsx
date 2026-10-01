@@ -495,7 +495,7 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
     return (
       <div className="space-y-4">
         <Button variant="ghost" size="sm" asChild className="gap-2">
-          <Link to="/liquidaciones"><ArrowLeft className="h-4 w-4" />Volver a Liquidaciones</Link>
+          <Link to={txt.rutaTab}><ArrowLeft className="h-4 w-4" />Volver a Liquidaciones</Link>
         </Button>
         <p className="text-muted-foreground">Período no encontrado.</p>
       </div>
@@ -513,7 +513,7 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
   return (
     <div className="space-y-6">
       <Button variant="ghost" size="sm" asChild className="gap-2">
-        <Link to="/liquidaciones"><ArrowLeft className="h-4 w-4" />Volver a Liquidaciones</Link>
+        <Link to={txt.rutaTab}><ArrowLeft className="h-4 w-4" />Volver a Liquidaciones</Link>
       </Button>
 
       <div>
@@ -813,7 +813,7 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
 
       {/* Navegación */}
       <div className="flex justify-between">
-        <Button variant="outline" onClick={paso === 1 ? () => navigate('/liquidaciones') : retroceder} disabled={avanzando || confirmando} className="gap-2">
+        <Button variant="outline" onClick={paso === 1 ? () => navigate(txt.rutaTab) : retroceder} disabled={avanzando || confirmando} className="gap-2">
           <ArrowLeft className="h-4 w-4" />
           {paso === 1 ? 'Cancelar' : 'Anterior'}
         </Button>

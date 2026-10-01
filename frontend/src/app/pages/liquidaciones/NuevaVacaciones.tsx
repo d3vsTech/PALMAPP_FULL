@@ -205,7 +205,7 @@ export default function NuevaVacaciones() {
     return (
       <div className="space-y-4">
         <Button variant="ghost" size="sm" asChild className="gap-2">
-          <Link to="/liquidaciones"><ArrowLeft className="h-4 w-4" />Volver a Liquidaciones</Link>
+          <Link to="/liquidaciones?tab=vacaciones"><ArrowLeft className="h-4 w-4" />Volver a Liquidaciones</Link>
         </Button>
         <p className="text-muted-foreground">
           Elige un colaborador desde la lista de turnos pendientes para liquidar sus vacaciones.
@@ -237,7 +237,7 @@ export default function NuevaVacaciones() {
   return (
     <div className="space-y-6">
       <Button variant="ghost" size="sm" asChild className="gap-2">
-        <Link to="/liquidaciones"><ArrowLeft className="h-4 w-4" />Volver a Liquidaciones</Link>
+        <Link to="/liquidaciones?tab=vacaciones"><ArrowLeft className="h-4 w-4" />Volver a Liquidaciones</Link>
       </Button>
 
       <div>
@@ -601,7 +601,7 @@ export default function NuevaVacaciones() {
       {/* ── Acciones ─────────────────────────────────────────────────────── */}
       <div className="flex justify-between">
         <Button variant="outline" asChild className="gap-2">
-          <Link to="/liquidaciones"><ArrowLeft className="h-4 w-4" />Cancelar</Link>
+          <Link to="/liquidaciones?tab=vacaciones"><ArrowLeft className="h-4 w-4" />Cancelar</Link>
         </Button>
         <Button
           onClick={() => confirmar(false)}

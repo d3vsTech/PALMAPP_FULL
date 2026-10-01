@@ -193,7 +193,7 @@ export default function NuevaLiquidacionFinal() {
       } catch (e) {
         if (!vivo) return;
         toast.error(mensajeErrorLiquidacion(e, 'No se pudo cargar la liquidación'));
-        navigate('/liquidaciones');
+        navigate('/liquidaciones?tab=liquidacion-final');
       } finally {
         if (vivo) setCargandoEdicion(false);
       }
@@ -251,7 +251,7 @@ export default function NuevaLiquidacionFinal() {
     return (
       <div className="space-y-6">
         <div className="space-y-4">
-          <Button variant="ghost" size="sm" onClick={() => navigate('/liquidaciones')} className="gap-2">
+          <Button variant="ghost" size="sm" onClick={() => navigate('/liquidaciones?tab=liquidacion-final')} className="gap-2">
             <ArrowLeft className="h-4 w-4" />
             Volver a Liquidaciones
           </Button>

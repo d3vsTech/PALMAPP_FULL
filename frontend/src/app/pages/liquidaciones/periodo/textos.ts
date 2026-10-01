@@ -36,7 +36,7 @@ export interface TextosPeriodo {
 export const TEXTOS_PERIODO: Record<TipoPeriodoDetalle, TextosPeriodo> = {
   CESANTIAS: {
     nombre: 'cesantías',
-    rutaTab: '/liquidaciones',
+    rutaTab: '/liquidaciones?tab=cesantias',
     subtituloWizard: 'Liquidación de cesantías',
     girarTodos: 'Consignar todos',
     girarFila: 'Registrar consignación',
@@ -54,7 +54,7 @@ export const TEXTOS_PERIODO: Record<TipoPeriodoDetalle, TextosPeriodo> = {
   },
   INTERESES_CESANTIAS: {
     nombre: 'intereses de cesantías',
-    rutaTab: '/liquidaciones',
+    rutaTab: '/liquidaciones?tab=intereses',
     subtituloWizard: 'Liquidación de intereses de cesantías',
     girarTodos: 'Pagar todos',
     girarFila: 'Registrar pago',
@@ -72,7 +72,7 @@ export const TEXTOS_PERIODO: Record<TipoPeriodoDetalle, TextosPeriodo> = {
   },
   PRIMA: {
     nombre: 'prima de servicios',
-    rutaTab: '/liquidaciones',
+    rutaTab: '/liquidaciones?tab=prima',
     subtituloWizard: 'Liquidación de prima de servicios',
     girarTodos: 'Pagar todos',
     girarFila: 'Registrar pago',
