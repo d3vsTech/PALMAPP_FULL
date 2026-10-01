@@ -29,6 +29,7 @@ const FORM_VACIO = {
   nombres: '',
   apellidos: '',
   cedula: '',
+  nombreComercial: '',
   nombreEmpresa: '',
   razonSocial: '',
   nit: '',
@@ -46,9 +47,32 @@ const FORM_VACIO = {
 
 type FormState = typeof FORM_VACIO;
 
+/** Campos exclusivos de cada tipo de persona. Los de contacto son comunes. */
+const CAMPOS_POR_TIPO: Record<'natural' | 'juridica', (keyof FormState)[]> = {
+  natural: ['nombres', 'apellidos', 'cedula', 'nombreComercial'],
+  juridica: ['nombreEmpresa', 'razonSocial', 'nit', 'representanteLegal', 'cedulaRepresentante'],
+};
+
+/**
+ * Deja en blanco los campos que no pertenecen al tipo guardado.
+ *
+ * Hace falta porque al guardar una persona natural el backend copia el nombre
+ * completo en `nombre` y `razon_social`, que son los campos de empresa. Sin
+ * esta limpieza, al pasar a Jurídica aparecería el nombre del dueño como si
+ * fuera la razón social.
+ */
+function soloDelTipo(tipo: 'natural' | 'juridica', form: FormState): FormState {
+  const otro = tipo === 'natural' ? 'juridica' : 'natural';
+  const limpio = { ...form };
+  for (const campo of CAMPOS_POR_TIPO[otro]) limpio[campo] = '';
+  return limpio;
+}
+
 function apiToForm(data: InfoEmpresa): { tipoPersona: 'natural' | 'juridica'; form: FormState } {
-  // Siempre derivamos nombres/apellidos del representante_nombre, así al
-  // alternar el dropdown de Tipo de Persona ambos branches conservan datos.
+  // El backend guarda un solo `representante_nombre`; el formulario natural
+  // lo parte en nombres y apellidos para poder pintarlo. Esto es solo para la
+  // carga: al alternar el tipo de persona los campos del nuevo tipo se vacían
+  // (ver `cambiarTipoPersona`).
   const partes = (data.representante_nombre ?? '').trim().split(/\s+/).filter(Boolean);
   const nombres = partes.slice(0, Math.ceil(partes.length / 2)).join(' ');
   const apellidos = partes.slice(Math.ceil(partes.length / 2)).join(' ');
@@ -66,6 +90,12 @@ function apiToForm(data: InfoEmpresa): { tipoPersona: 'natural' | 'juridica'; fo
       nombres,
       apellidos,
       cedula: data.representante_cedula ?? '',
+      // Antes el formulario copiaba el nombre completo en `nombre`. Si los dos
+      // coinciden no hay nombre comercial de verdad, es ese rastro viejo.
+      nombreComercial:
+        (data.nombre ?? '').trim() === (data.representante_nombre ?? '').trim()
+          ? ''
+          : (data.nombre ?? ''),
       nombreEmpresa: data.nombre ?? '',
       razonSocial: data.razon_social ?? '',
       nit: data.nit ?? '',
@@ -87,9 +117,12 @@ function formToPayload(tipo: 'natural' | 'juridica', f: FormState): InfoEmpresaP
   const tipo_persona: TipoPersona = tipo === 'natural' ? 'NATURAL' : 'JURIDICA';
   if (tipo === 'natural') {
     const nombreCompleto = `${f.nombres.trim()} ${f.apellidos.trim()}`.trim();
+    const comercial = f.nombreComercial.trim();
     return {
       tipo_persona,
-      nombre: nombreCompleto,
+      // `nombre` es el comercial, igual que en jurídica. Sin él la finca
+      // quedaría sin nombre, así que cae al nombre completo.
+      nombre: comercial || nombreCompleto,
       razon_social: nombreCompleto,
       representante_nombre: nombreCompleto,
       representante_cedula: f.cedula.trim(),
@@ -119,7 +152,7 @@ function formToPayload(tipo: 'natural' | 'juridica', f: FormState): InfoEmpresaP
   };
 }
 
-/** Nombre que mostramos en la finca activa: "Nombre de la Empresa" cuando es
+/** Nombre que mostramos en la finca activa: el de la persona jurídica cuando es
  *  Jurídica, "Nombres Apellidos" cuando es Natural. */
 function nombreFincaPara(tipo: 'natural' | 'juridica', data: InfoEmpresa): string {
   if (tipo === 'natural') {
@@ -131,7 +164,42 @@ function nombreFincaPara(tipo: 'natural' | 'juridica', data: InfoEmpresa): strin
 export function DatosEmpresaTab() {
   const { user, updateUser } = useAuth();
   const [tipoPersona, setTipoPersona] = useState<'natural' | 'juridica'>('juridica');
+
   const [datosEmpresa, setDatosEmpresa] = useState<FormState>(FORM_VACIO);
+
+  /**
+   * Cambio manual del tipo de persona.
+   *
+   * Entra con los campos del nuevo tipo en blanco: los datos de una persona
+   * natural no son los de una empresa, y arrastrarlos hacía que uno guardara
+   * sin darse cuenta la cédula del dueño como NIT. Los datos de contacto sí
+   * se conservan porque son los mismos en ambos casos.
+   *
+   * Solo corre desde el selector. La carga inicial usa `setTipoPersona`.
+   */
+  /**
+   * Último estado confirmado por el backend: lo que hay en la base.
+   * Es la fuente de la restauración al alternar el tipo de persona, y solo
+   * cambia al cargar la pantalla y al guardar con éxito.
+   */
+  const formGuardado = useRef<FormState>(FORM_VACIO);
+  const tipoGuardado = useRef<'natural' | 'juridica'>('juridica');
+
+  const cambiarTipoPersona = (nuevo: 'natural' | 'juridica') => {
+    if (nuevo === tipoPersona) return;
+    setTipoPersona(nuevo);
+    setDatosEmpresa((prev) => {
+      const sig = { ...prev };
+      // Se restauran desde lo último guardado. Si la finca está guardada como
+      // natural, el tipo jurídica no tiene nada que restaurar y entra vacío;
+      // al volver a natural reaparecen los datos tal como se guardaron.
+      for (const campo of CAMPOS_POR_TIPO[nuevo]) {
+        sig[campo] = nuevo === tipoGuardado.current ? formGuardado.current[campo] : '';
+      }
+      return sig;
+    });
+  };
+
   const [loading, setLoading] = useState(true);
 
   // Selects encadenados de Departamento → Municipio (códigos DANE).
@@ -160,8 +228,11 @@ export function DatosEmpresaTab() {
     cached('config:info-empresa', () => configuracionApi.infoEmpresa.obtener())
       .then((res) => {
         const { tipoPersona: tp, form } = apiToForm(res.data);
+        const guardado = soloDelTipo(tp, form);
         setTipoPersona(tp);
-        setDatosEmpresa(form);
+        setDatosEmpresa(guardado);
+        formGuardado.current = guardado;
+        tipoGuardado.current = tp;
         setLogoUrl(res.data.logo_url ?? null);
       })
       .catch((e: any) => {
@@ -241,8 +312,11 @@ export function DatosEmpresaTab() {
       // devuelve el valor viejo y no se ve el cambio de tipo_persona.
       invalidate('config:info-empresa');
       const { tipoPersona: tp, form } = apiToForm(res.data);
+      const guardado = soloDelTipo(tp, form);
       setTipoPersona(tp);
-      setDatosEmpresa(form);
+      setDatosEmpresa(guardado);
+      formGuardado.current = guardado;
+      tipoGuardado.current = tp;
       // La respuesta ya trae la URL pública final del logo. Cada subida genera
       // un nombre distinto y el anterior se borra, así que no hace falta
       // cache-busting ni volver a llamar a `/me`.
@@ -372,13 +446,13 @@ export function DatosEmpresaTab() {
             {/* Tipo de Persona */}
             <div className="max-w-md">
               <Label htmlFor="tipoPersona">Tipo de Persona *</Label>
-              <Select value={tipoPersona} onValueChange={(value: 'natural' | 'juridica') => setTipoPersona(value)}>
+              <Select value={tipoPersona} onValueChange={cambiarTipoPersona}>
                 <SelectTrigger id="tipoPersona" className="mt-2">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="natural">Persona Natural</SelectItem>
-                  <SelectItem value="juridica">Persona Jurídica (Empresa)</SelectItem>
+                  <SelectItem value="juridica">Persona Jurídica</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -420,15 +494,28 @@ export function DatosEmpresaTab() {
                       />
                     </div>
                   </div>
+
+                  <div className="mt-6 max-w-md space-y-2">
+                    <Label htmlFor="nombreComercial">Nombre comercial</Label>
+                    <Input
+                      id="nombreComercial"
+                      value={datosEmpresa.nombreComercial}
+                      onChange={(e) => handleChange('nombreComercial', e.target.value)}
+                      placeholder="Ej: Finca La Esperanza"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Opcional. Si lo dejas vacío se usa el nombre completo.
+                    </p>
+                  </div>
                 </div>
               ) : (
                 // Persona Jurídica
                 <div className="space-y-6">
                   <div>
-                    <h3 className="text-sm font-semibold mb-4 text-muted-foreground">Datos de la Empresa</h3>
+                    <h3 className="text-sm font-semibold mb-4 text-muted-foreground">Datos de la persona jurídica</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
-                        <Label htmlFor="nombreEmpresa">Nombre de la Empresa *</Label>
+                        <Label htmlFor="nombreEmpresa">Nombre de la persona jurídica *</Label>
                         <Input
                           id="nombreEmpresa"
                           value={datosEmpresa.nombreEmpresa}

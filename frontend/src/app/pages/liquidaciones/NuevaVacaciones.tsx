@@ -22,13 +22,16 @@ import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Textarea } from '../../components/ui/textarea';
 import { Checkbox } from '../../components/ui/checkbox';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '../../components/ui/select';
 import { Badge } from '../../components/ui/badge';
 import {
   AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
 import {
-  ArrowLeft, Plane, Info, AlertCircle, AlertTriangle, Check, Loader2, CalendarDays,
+  ArrowLeft, Plane, Info, AlertCircle, AlertTriangle, Check, Loader2, CalendarDays, DollarSign,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -39,6 +42,7 @@ import {
   type CalendarioVacaciones,
   type ComprobanteVacaciones,
   type DetalleColaboradorVacaciones,
+  type MetodoPagoVacacion,
 } from '../../../api/vacaciones';
 import { BLOQUEANTE_LABEL } from '../../../api/liquidaciones';
 import type { ApiError } from '../../../api/client';
@@ -61,6 +65,17 @@ export default function NuevaVacaciones() {
   const [diasDinero, setDiasDinero] = useState('');
   const [acuerdoEscrito, setAcuerdoEscrito] = useState(false);
   const [observacion, setObservacion] = useState('');
+
+  /**
+   * Forma de pago. Liquidar y pagar son dos llamadas distintas en el backend:
+   * `crear` deja la vacación APROBADA y `registrarPago` la pasa a PAGADA.
+   * "Pago en nómina" es simplemente no llamar la segunda: queda pendiente y
+   * entra en la nómina del período.
+   */
+  const [tipoPago, setTipoPago] = useState<'nomina' | 'anticipado'>('nomina');
+  const [fechaPago, setFechaPago] = useState(() => new Date().toISOString().slice(0, 10));
+  const [metodoPago, setMetodoPago] = useState<MetodoPagoVacacion>('TRANSFERENCIA');
+  const [referenciaPago, setReferenciaPago] = useState('');
 
   const [calendario, setCalendario] = useState<CalendarioVacaciones | null>(null);
   const [calculandoCalendario, setCalculandoCalendario] = useState(false);
@@ -174,7 +189,28 @@ export default function NuevaVacaciones() {
         motivo_forzado: forzar ? motivoForzado.trim() : undefined,
       });
       setForzarDialog(null);
-      toast.success(res.message ?? 'Vacaciones liquidadas');
+
+      // El pago anticipado es una segunda llamada. Si falla, la liquidación ya
+      // existe: se avisa y se sigue al detalle, donde se puede reintentar.
+      if (tipoPago === 'anticipado') {
+        try {
+          await vacacionesApi.registrarPago(res.data.id, {
+            fecha_pago: fechaPago,
+            metodo_pago: metodoPago,
+            referencia_pago: referenciaPago.trim() || undefined,
+          });
+          toast.success('Vacaciones liquidadas y pago registrado');
+        } catch (errPago) {
+          const ep = errPago as ApiError;
+          toast.warning(
+            `Se liquidaron las vacaciones, pero el pago no quedó registrado: ${ep.message ?? 'error desconocido'}. Regístralo desde el detalle.`,
+            { duration: 9000 },
+          );
+        }
+      } else {
+        toast.success(res.message ?? 'Vacaciones liquidadas');
+      }
+
       navigate(`/liquidaciones/vacaciones/${res.data.id}`);
     } catch (err) {
       const e = err as ApiError;
@@ -223,6 +259,11 @@ export default function NuevaVacaciones() {
   const faltaAcuerdo = nDinero > 0 && !acuerdoEscrito;
   const bloqueado = !detalle.elegible || detalle.bloqueantes_base.length > 0;
 
+  // El consumo es FIFO: se liquida contra el período completo más viejo con
+  // saldo, que es el que el backend va a imputar.
+  const periodoALiquidar = detalle.causacion.periodos.find((p) => p.saldo > 0) ?? null;
+  const auxilio = detalle.base.componentes.excluido_192.auxilio;
+
   // §1.2 — El preview trae sus propios `bloqueantes[]`. Solo la cobertura
   // incompleta se puede forzar con motivo; el resto cierra la confirmación.
   const bloqueantesPreview = preview?.bloqueantes ?? [];
@@ -232,7 +273,8 @@ export default function NuevaVacaciones() {
     !bloqueado && !!preview && !calculandoPreview && totalPedido > 0 &&
     !excedeSaldo && !excedeDinero && !faltaAcuerdo &&
     bloqueantesDuros.length === 0 &&
-    (nDisfrute === 0 || !!fechaInicio);
+    (nDisfrute === 0 || !!fechaInicio) &&
+    (tipoPago === 'nomina' || !!fechaPago);
 
   return (
     <div className="space-y-6">
@@ -245,45 +287,78 @@ export default function NuevaVacaciones() {
         <p className="mt-1 text-muted-foreground">Registra los días de disfrute y la compensación en dinero</p>
       </div>
 
-      {/* ── Colaborador ──────────────────────────────────────────────────── */}
-      <Card className="border-border">
-        <CardContent className="p-5">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-sm font-bold text-primary">
-              {getIniciales(emp.nombre_completo)}
-            </div>
-            <div className="flex-1">
-              <p className="text-base font-semibold text-foreground">{emp.nombre_completo}</p>
-              <p className="text-sm text-muted-foreground">
-                {emp.cargo ?? 'Sin cargo'} · CC {emp.documento}
-              </p>
-            </div>
+      {/* ── Colaborador ──────────────────────────────────────────────────
+          Una sola tarjeta con tres franjas: identidad, causación y base. Todo
+          sale del detalle del backend; aquí no se recalcula nada. */}
+      <Card className="overflow-hidden border-border">
+        <div className="flex flex-wrap items-center gap-4 border-b border-border bg-muted/10 px-5 py-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-sm font-bold text-primary">
+            {getIniciales(emp.nombre_completo)}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-base font-semibold text-foreground">{emp.nombre_completo}</p>
+            <p className="truncate text-sm text-muted-foreground">
+              {emp.cargo ?? 'Sin cargo'} · CC {emp.documento}
+            </p>
+          </div>
+          {emp.fecha_ingreso && (
             <div className="shrink-0 text-right">
-              <p className="text-xs text-muted-foreground">Días disponibles</p>
-              <p className="text-2xl font-bold text-primary">{fmtDias(maxDisfrute)}</p>
-              {detalle.causacion.dias_causados_periodo_actual > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  +{fmtDias(detalle.causacion.dias_causados_periodo_actual)} del año en curso
-                </p>
-              )}
+              <p className="text-xs text-muted-foreground">Fecha de ingreso</p>
+              <p className="text-sm font-semibold text-foreground">{formatFecha(emp.fecha_ingreso)}</p>
             </div>
-          </div>
+          )}
+        </div>
 
-          <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 divide-x divide-border border-t border-border pt-4">
-            <div className="pr-4">
-              <p className="text-xs text-muted-foreground">Base mensual (art. 192)</p>
-              <p className="font-semibold text-foreground">{fmtCOP(detalle.base.base_mensual)}</p>
-            </div>
-            <div className="px-4">
-              <p className="text-xs text-muted-foreground">Valor día</p>
-              <p className="font-semibold text-foreground">{fmtCOP(detalle.valor_dia)}</p>
-            </div>
-            <div className="pl-4">
-              <p className="text-xs text-muted-foreground">Máximo en dinero</p>
-              <p className="font-semibold text-foreground">{fmtDias(maxDinero)} días</p>
-            </div>
+        <div className="grid grid-cols-2 divide-border border-b border-border sm:grid-cols-4 sm:divide-x">
+          <div className="px-5 py-2.5">
+            <p className="text-xs text-muted-foreground">Período que se liquida</p>
+            <p className="text-sm font-medium text-foreground">
+              {periodoALiquidar
+                ? `${formatFecha(periodoALiquidar.inicio)} – ${formatFecha(periodoALiquidar.fin)}`
+                : '—'}
+            </p>
           </div>
-        </CardContent>
+          <div className="px-5 py-2.5">
+            <p className="text-xs text-muted-foreground">Días causados</p>
+            <p className="text-xl font-bold text-foreground">{fmtDias(detalle.causacion.dias_generados)}</p>
+          </div>
+          <div className="px-5 py-2.5">
+            <p className="text-xs text-muted-foreground">Días disfrutados</p>
+            <p className="text-xl font-bold text-muted-foreground">{fmtDias(detalle.causacion.dias_disfrutados)}</p>
+          </div>
+          <div className="px-5 py-2.5">
+            <p className="text-xs text-muted-foreground">Días a liquidar</p>
+            <p className="text-xl font-bold text-primary">{fmtDias(maxDisfrute)}</p>
+            {detalle.causacion.dias_causados_periodo_actual > 0 && (
+              <p className="text-xs text-muted-foreground">
+                +{fmtDias(detalle.causacion.dias_causados_periodo_actual)} en curso
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 divide-border sm:grid-cols-3 sm:divide-x">
+          <div className="px-5 py-3">
+            <p className="text-xs text-muted-foreground">Salario básico</p>
+            <p className="text-sm font-semibold text-foreground">{fmtCOP(detalle.base.salario_basico)}</p>
+          </div>
+          <div className="px-5 py-3">
+            {/* El auxilio no entra en la base del art. 192. Se muestra porque
+                el usuario lo espera en la ficha, no porque se liquide. */}
+            <p className="text-xs text-muted-foreground">Auxilio de transporte</p>
+            <p className="text-sm font-semibold text-foreground">
+              {auxilio > 0
+                ? <>{fmtCOP(auxilio)} <span className="font-normal text-muted-foreground">(no entra en la base)</span></>
+                : <span className="font-normal text-muted-foreground">No aplica</span>}
+            </p>
+          </div>
+          <div className="px-5 py-3">
+            <p className="text-xs text-muted-foreground">
+              Valor día (base / {detalle.base.dias_mes})
+            </p>
+            <p className="text-sm font-bold text-primary">{fmtCOP(detalle.valor_dia)}</p>
+          </div>
+        </div>
       </Card>
 
       {/* ── Bloqueos ─────────────────────────────────────────────────────── */}
@@ -317,14 +392,14 @@ export default function NuevaVacaciones() {
               <Plane className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold">Días de Vacaciones</h2>
-              <p className="text-sm text-muted-foreground">Ingresa la fecha de inicio y los días a liquidar</p>
+              <h2 className="text-lg font-semibold">Datos de la liquidación</h2>
+              <p className="text-sm text-muted-foreground">Ingresa las fechas y días a liquidar</p>
             </div>
           </div>
 
-          <div className="grid gap-6 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>Fecha inicio de vacaciones</Label>
+              <Label>Fecha inicio de vacaciones <span className="text-destructive">*</span></Label>
               <Input
                 type="date"
                 value={fechaInicio}
@@ -334,9 +409,28 @@ export default function NuevaVacaciones() {
             </div>
 
             <div className="space-y-1.5">
+              <Label>Fecha fin de vacaciones</Label>
+              {/* Solo lectura: la resuelve `/calendario` en el backend, que es
+                  quien sabe qué días son festivos y si el sábado es hábil. */}
+              <Input
+                type="date"
+                value={calendario?.fecha_fin ?? ''}
+                readOnly
+                className="cursor-not-allowed bg-muted/40 text-muted-foreground"
+              />
+              <p className="text-xs text-muted-foreground">
+                {calculandoCalendario
+                  ? 'Calculando…'
+                  : 'Calculada automáticamente según días de disfrute'}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <div className="space-y-1.5">
               <Label>
                 <span className="font-semibold text-success">Días de disfrute</span>
-                <span className="ml-2 text-xs text-muted-foreground">(hábiles)</span>
+                <span className="ml-2 text-xs text-muted-foreground">(descanso efectivo, hábiles)</span>
               </Label>
               <Input
                 type="number" min={0} step={1} placeholder="0"
@@ -345,12 +439,15 @@ export default function NuevaVacaciones() {
                 disabled={bloqueado}
                 className={excedeSaldo ? 'border-destructive focus-visible:ring-destructive' : ''}
               />
+              <p className="text-xs text-muted-foreground">
+                Máximo: {fmtDias(maxDisfrute)} días disponibles
+              </p>
             </div>
 
             <div className="space-y-1.5">
               <Label>
                 <span className="font-semibold text-amber-600">Días en dinero</span>
-                <span className="ml-2 text-xs text-muted-foreground">(máx. {fmtDias(maxDinero)})</span>
+                <span className="ml-2 text-xs text-muted-foreground">(compensación, opcional)</span>
               </Label>
               <Input
                 type="number" min={0} step={0.5} max={maxDinero} placeholder="0"
@@ -359,8 +456,87 @@ export default function NuevaVacaciones() {
                 disabled={bloqueado || maxDinero <= 0}
                 className={excedeDinero ? 'border-destructive focus-visible:ring-destructive' : ''}
               />
+              <p className="text-xs text-muted-foreground">
+                Máximo: {fmtDias(maxDinero)} días, la mitad del período causado (Art. 189 CST)
+              </p>
             </div>
           </div>
+
+          {/* Forma de pago */}
+          <div className="space-y-1.5">
+            <Label>Forma de pago <span className="text-destructive">*</span></Label>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex overflow-hidden rounded-lg border border-input">
+                <button
+                  type="button"
+                  onClick={() => setTipoPago('nomina')}
+                  disabled={bloqueado}
+                  className={`px-4 py-2 text-sm font-medium transition-colors ${
+                    tipoPago === 'nomina'
+                      ? 'bg-primary text-white'
+                      : 'bg-background text-muted-foreground hover:bg-muted'
+                  }`}
+                >
+                  Pago en nómina
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTipoPago('anticipado')}
+                  disabled={bloqueado}
+                  className={`border-l border-input px-4 py-2 text-sm font-medium transition-colors ${
+                    tipoPago === 'anticipado'
+                      ? 'bg-primary text-white'
+                      : 'bg-background text-muted-foreground hover:bg-muted'
+                  }`}
+                >
+                  Pago anticipado
+                </button>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {tipoPago === 'nomina'
+                ? 'Queda pendiente de pago y entra en la nómina del período.'
+                : 'Se registra el pago de inmediato y la vacación queda PAGADA.'}
+            </p>
+          </div>
+
+          {tipoPago === 'anticipado' && (
+            <div className="grid grid-cols-1 gap-5 rounded-xl border border-border bg-muted/20 p-4 sm:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label>Fecha de pago <span className="text-destructive">*</span></Label>
+                <Input
+                  type="date"
+                  value={fechaPago}
+                  onChange={(e) => setFechaPago(e.target.value)}
+                  disabled={bloqueado}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Método <span className="text-destructive">*</span></Label>
+                <Select
+                  value={metodoPago}
+                  onValueChange={(v) => setMetodoPago(v as MetodoPagoVacacion)}
+                  disabled={bloqueado}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="TRANSFERENCIA">Transferencia</SelectItem>
+                    <SelectItem value="EFECTIVO">Efectivo</SelectItem>
+                    <SelectItem value="CHEQUE">Cheque</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Referencia <span className="font-normal text-muted-foreground">(opcional)</span></Label>
+                <Input
+                  placeholder="No. de comprobante"
+                  value={referenciaPago}
+                  onChange={(e) => setReferenciaPago(e.target.value)}
+                  disabled={bloqueado}
+                />
+              </div>
+            </div>
+          )}
 
           {/* Calendario resuelto por el backend */}
           {nDisfrute > 0 && fechaInicio && (
@@ -424,6 +600,47 @@ export default function NuevaVacaciones() {
             </label>
           )}
 
+          {/* Cuánto del saldo se está consumiendo. */}
+          {totalPedido > 0 && maxDisfrute > 0 && (
+            <div className="space-y-2 rounded-xl border border-border bg-muted/20 p-4">
+              <div className="flex flex-wrap justify-between gap-2 text-sm">
+                <span className="text-muted-foreground">
+                  Días a liquidar: <strong className="text-foreground">{fmtDias(totalPedido)}</strong> de{' '}
+                  <strong className="text-foreground">{fmtDias(maxDisfrute)}</strong> disponibles
+                </span>
+                <span className={`font-semibold ${excedeSaldo ? 'text-destructive' : 'text-foreground'}`}>
+                  {Math.round((totalPedido / maxDisfrute) * 100)}%
+                </span>
+              </div>
+              <div className="h-2.5 overflow-hidden rounded-full bg-border">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    excedeSaldo ? 'bg-destructive'
+                      : totalPedido / maxDisfrute > 0.75 ? 'bg-amber-500'
+                      : 'bg-success'
+                  }`}
+                  style={{ width: `${Math.min((totalPedido / maxDisfrute) * 100, 100)}%` }}
+                />
+              </div>
+              <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block h-2 w-2 rounded-full bg-success" />
+                  Disfrute: {fmtDias(nDisfrute)} días
+                </span>
+                {nDinero > 0 && (
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
+                    Dinero: {fmtDias(nDinero)} días
+                  </span>
+                )}
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block h-2 w-2 rounded-full bg-border" />
+                  Quedan: {fmtDias(Math.max(maxDisfrute - totalPedido, 0))}
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Errores de captura */}
           {(excedeSaldo || excedeDinero) && (
             <div className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
@@ -445,9 +662,11 @@ export default function NuevaVacaciones() {
           <div className="flex gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
             <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
             <p className="text-muted-foreground">
-              <strong className="text-foreground">Art. 189 y 192 CST:</strong> el disfrute se paga por
-              días calendario, y la compensación en dinero no puede pasar de la mitad de cada período
-              causado. El sistema aplica los dos topes.
+              <strong className="text-foreground">Art. 186 CST:</strong> 15 días hábiles por año de
+              servicio. <strong className="text-foreground">Art. 189 CST:</strong> los días compensados
+              en dinero no pueden superar la mitad del período causado.{' '}
+              <strong className="text-foreground">Art. 192 CST:</strong> el disfrute se paga por días
+              calendario. El sistema aplica los tres topes.
             </p>
           </div>
         </CardContent>
@@ -500,45 +719,99 @@ export default function NuevaVacaciones() {
           )}
 
           <Card className="overflow-hidden border-border">
-            <div className="border-b border-border bg-muted/20 px-5 py-3">
+            <div className="flex flex-wrap items-center gap-3 border-b border-border bg-muted/20 px-5 py-3">
+              <DollarSign className="h-4 w-4 shrink-0 text-primary" />
               <p className="text-sm font-semibold">Resumen de liquidación</p>
+              {puedeConfirmar && (
+                <Badge variant="outline" className="ml-auto border-success/30 bg-success/10 text-xs text-success">
+                  Listo para confirmar
+                </Badge>
+              )}
             </div>
             <CardContent className="p-0">
-              {preview.resultado.dias_calendario > 0 && (
-                <div className="border-b border-success/10 bg-success/5">
-                  <div className="flex items-center justify-between px-5 py-3">
-                    <div>
-                      <p className="text-sm font-semibold text-success">Días de disfrute</p>
-                      <p className="text-xs text-muted-foreground">
-                        {fmtDias(preview.resultado.dias_calendario)} días calendario × {fmtCOP(preview.resultado.valor_dia)}
-                        {' · '}equivalen a {fmtDias(preview.resultado.dias_disfrute)} hábiles
-                      </p>
-                    </div>
-                    <p className="font-bold text-success">{fmtCOP(preview.resultado.valor_disfrute)}</p>
-                  </div>
-                </div>
-              )}
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[560px]">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="px-5 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Concepto</th>
+                      <th className="px-5 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">Días</th>
+                      <th className="px-5 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">Valor día</th>
+                      <th className="px-5 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.resultado.dias_calendario > 0 && (
+                      <tr className="border-b border-border bg-success/5">
+                        <td className="px-5 py-3">
+                          <p className="text-sm font-medium text-success">Días de disfrute</p>
+                          {/* Se pagan calendario, no hábiles: por eso van los dos. */}
+                          <p className="text-xs text-muted-foreground">
+                            Equivalen a {fmtDias(preview.resultado.dias_disfrute)} días hábiles
+                          </p>
+                        </td>
+                        <td className="px-5 py-3 text-center text-sm text-foreground">
+                          {fmtDias(preview.resultado.dias_calendario)}
+                        </td>
+                        <td className="px-5 py-3 text-center text-sm text-foreground">
+                          {fmtCOP(preview.resultado.valor_dia)}
+                        </td>
+                        <td className="px-5 py-3 text-right text-sm font-semibold text-success">
+                          {fmtCOP(preview.resultado.valor_disfrute)}
+                        </td>
+                      </tr>
+                    )}
+                    {preview.resultado.dias_dinero > 0 && (
+                      <tr className="border-b border-border bg-amber-50/60 dark:bg-amber-950/10">
+                        <td className="px-5 py-3 text-sm font-medium text-amber-700 dark:text-amber-400">
+                          Días en dinero (Art. 189 CST)
+                        </td>
+                        <td className="px-5 py-3 text-center text-sm text-foreground">
+                          {fmtDias(preview.resultado.dias_dinero)}
+                        </td>
+                        <td className="px-5 py-3 text-center text-sm text-foreground">
+                          {fmtCOP(preview.resultado.valor_dia)}
+                        </td>
+                        <td className="px-5 py-3 text-right text-sm font-semibold text-amber-700 dark:text-amber-400">
+                          {fmtCOP(preview.resultado.valor_dinero)}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-border">
+                      <td colSpan={3} className="px-5 py-4">
+                        <p className="text-base font-bold">Total a pagar</p>
+                        <p className="text-xs font-normal text-muted-foreground">
+                          {preview.resultado.formula_aplicada}
+                        </p>
+                      </td>
+                      <td className="px-5 py-4 text-right text-2xl font-bold text-primary">
+                        {fmtCOP(preview.resultado.valor_total)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
 
-              {preview.resultado.dias_dinero > 0 && (
-                <div className="border-b border-amber-100 bg-amber-50/60 dark:border-amber-900/20 dark:bg-amber-950/10">
-                  <div className="flex items-center justify-between px-5 py-3">
-                    <div>
-                      <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">Días en dinero</p>
-                      <p className="text-xs text-muted-foreground">
-                        {fmtDias(preview.resultado.dias_dinero)} días × {fmtCOP(preview.resultado.valor_dia)}
-                      </p>
-                    </div>
-                    <p className="font-bold text-amber-700 dark:text-amber-400">{fmtCOP(preview.resultado.valor_dinero)}</p>
-                  </div>
+              <div className="grid grid-cols-1 divide-border border-t border-border sm:grid-cols-3 sm:divide-x">
+                <div className="px-5 py-3">
+                  <p className="text-xs text-muted-foreground">Inicio de vacaciones</p>
+                  <p className="text-sm font-medium">
+                    {calendario ? formatFecha(calendario.fecha_inicio) : '—'}
+                  </p>
                 </div>
-              )}
-
-              <div className="flex items-center justify-between px-5 py-4">
-                <div>
-                  <p className="text-base font-bold">Total a pagar</p>
-                  <p className="text-xs text-muted-foreground">{preview.resultado.formula_aplicada}</p>
+                <div className="px-5 py-3">
+                  <p className="text-xs text-muted-foreground">Fin de vacaciones</p>
+                  <p className="text-sm font-medium">
+                    {calendario ? formatFecha(calendario.fecha_fin) : '—'}
+                  </p>
                 </div>
-                <p className="text-2xl font-bold text-primary">{fmtCOP(preview.resultado.valor_total)}</p>
+                <div className="px-5 py-3">
+                  <p className="text-xs text-muted-foreground">Regreso a trabajar</p>
+                  <p className="text-sm font-medium text-primary">
+                    {calendario ? 'El día hábil siguiente' : '—'}
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>

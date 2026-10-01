@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -121,6 +121,36 @@ function writeCache(payload: Omit<CacheShape, 'ts' | 'tenant'>) {
       ...payload,
     }));
   } catch { /* cuota llena, ignorar */ }
+}
+
+/**
+ * Botón Guardar de una sección de precios.
+ *
+ * Al terminar devuelve la vista al encabezado de su tarjeta. Las secciones son
+ * largas y el botón queda al pie: sin esto uno guarda y se queda mirando el
+ * final de la lista, sin ver de qué sección era el guardado.
+ */
+function BotonGuardarSeccion({ onGuardar }: { onGuardar: () => Promise<void> | void }) {
+  const ref = useRef<HTMLButtonElement>(null);
+
+  const click = async () => {
+    // Se resuelve antes de guardar: el DOM puede recomponerse con la respuesta.
+    const tarjeta = ref.current?.closest('[data-slot="card"]');
+    try {
+      await onGuardar();
+    } finally {
+      tarjeta?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  return (
+    <div className="flex justify-end pt-2">
+      <Button ref={ref} onClick={click} className="gap-2">
+        <Save className="h-4 w-4" />
+        Guardar
+      </Button>
+    </div>
+  );
 }
 
 export function PreciosLaboresTab() {
@@ -871,13 +901,7 @@ export function PreciosLaboresTab() {
                       </tbody>
                     </table>
                   </div>
-                {/* El botón de cada sección guarda solo lo suyo (diseño V.26). */}
-                <div className="flex justify-end pt-2">
-                  <Button onClick={guardarCosecha} className="gap-2">
-                    <Save className="h-4 w-4" />
-                    Guardar
-                  </Button>
-                </div>
+                <BotonGuardarSeccion onGuardar={guardarCosecha} />
                 </CardContent>
               </AccordionContent>
             </Card>
@@ -1182,13 +1206,7 @@ export function PreciosLaboresTab() {
                       </table>
                     </div>
                   </div>
-                {/* El botón de cada sección guarda solo lo suyo (diseño V.26). */}
-                <div className="flex justify-end pt-2">
-                  <Button onClick={guardarAbono} className="gap-2">
-                    <Save className="h-4 w-4" />
-                    Guardar
-                  </Button>
-                </div>
+                <BotonGuardarSeccion onGuardar={guardarAbono} />
                 </CardContent>
               </AccordionContent>
             </Card>
@@ -1232,13 +1250,7 @@ export function PreciosLaboresTab() {
                         <span className="text-muted-foreground">/jornal</span>
                       </div>
                     </div>
-                  {/* El botón de cada sección guarda solo lo suyo (diseño V.26). */}
-                  <div className="flex justify-end pt-2">
-                    <Button onClick={() => handleSavePalma(labor)} className="gap-2">
-                      <Save className="h-4 w-4" />
-                      Guardar
-                    </Button>
-                  </div>
+                  <BotonGuardarSeccion onGuardar={() => handleSavePalma(labor)} />
                   </CardContent>
                 </AccordionContent>
               </Card>
@@ -1301,13 +1313,7 @@ export function PreciosLaboresTab() {
                         {renderSublaboresPanel(palma.id, palmaUnidad(palma))}
                       </div>
                     )}
-                  {/* El botón de cada sección guarda solo lo suyo (diseño V.26). */}
-                  <div className="flex justify-end pt-2">
-                    <Button onClick={() => handleSavePalma(palma)} className="gap-2">
-                      <Save className="h-4 w-4" />
-                      Guardar
-                    </Button>
-                  </div>
+                  <BotonGuardarSeccion onGuardar={() => handleSavePalma(palma)} />
                   </CardContent>
                 </AccordionContent>
               </Card>
@@ -1362,13 +1368,7 @@ export function PreciosLaboresTab() {
                       </div>
                       {renderSublaboresPanel(labor.id, palmaUnidad(labor))}
                     </div>
-                    {/* El botón de cada sección guarda solo lo suyo (diseño V.26). */}
-                    <div className="flex justify-end pt-2">
-                      <Button onClick={() => handleSaveLaborPalmaCustom(labor)} className="gap-2">
-                        <Save className="h-4 w-4" />
-                        Guardar
-                      </Button>
-                    </div>
+                    <BotonGuardarSeccion onGuardar={() => handleSaveLaborPalmaCustom(labor)} />
                   </CardContent>
                 </AccordionContent>
               </Card>
@@ -1428,13 +1428,7 @@ export function PreciosLaboresTab() {
                   </tbody>
                 </table>
               </div>
-            {/* El botón de cada sección guarda solo lo suyo (diseño V.26). */}
-            <div className="flex justify-end pt-2">
-              <Button onClick={guardarFinca} className="gap-2">
-                <Save className="h-4 w-4" />
-                Guardar
-              </Button>
-            </div>
+            <BotonGuardarSeccion onGuardar={guardarFinca} />
             </CardContent>
           </Card>
         )}
