@@ -42,18 +42,21 @@ export const SEMAFORO: Record<EstadoVencimiento, EstiloSemaforo> = {
   },
 };
 
+// PR-N4 — PENDIENTE pasó a ser un estado real: una solicitud venida de
+// Novedades, sin valores y sin consumir saldo. Se pinta en ámbar fuerte
+// porque pide acción: liquidarla o rechazarla.
 export const ESTADO_VACACION_BADGE: Record<EstadoVacacion, string> = {
   APROBADA: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800/30',
   PAGADA: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800/30',
   CANCELADA: 'bg-destructive/10 text-destructive border-destructive/30',
-  PENDIENTE: 'bg-muted/50 text-muted-foreground border-border',
+  PENDIENTE: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800/30',
 };
 
 export const ESTADO_VACACION_LABEL: Record<EstadoVacacion, string> = {
   APROBADA: 'Pendiente de pago',
   PAGADA: 'Pagada',
   CANCELADA: 'Anulada',
-  PENDIENTE: 'Pendiente',
+  PENDIENTE: 'Solicitud pendiente',
 };
 
 export const ORIGEN_LABEL: Record<OrigenVacacion, string> = {

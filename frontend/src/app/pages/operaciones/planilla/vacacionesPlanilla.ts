@@ -42,6 +42,10 @@ export function marcarVacaciones(
 
   const porEmpleado = new Map<string, VacacionEnPlanilla>();
   enVacaciones.forEach((v) => {
+    // PR-N4: una solicitud PENDIENTE no es un disfrute, es un pedido sin
+    // aprobar. Bloquear el jornal por ella dejaria sin pagar un dia que la
+    // persona si trabajo, y el bloqueo no se puede forzar en el paso 5.
+    if (v.estado === 'PENDIENTE' || v.estado === 'CANCELADA') return;
     // Fechas YYYY-MM-DD: comparar strings basta y evita lios de zona horaria.
     if (fecha >= v.fecha_inicio && fecha <= v.fecha_fin) {
       porEmpleado.set(String(v.empleado_id), {

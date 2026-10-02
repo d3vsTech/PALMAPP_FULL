@@ -14,7 +14,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
 import {
-  ArrowLeft, Search, Download, Eye, Loader2, Banknote, MoreHorizontal, RotateCcw, Ban,
+  ArrowLeft, Search, Download, Eye, Loader2, Banknote, MoreHorizontal, RotateCcw, Ban, Check,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -159,6 +159,7 @@ export default function VacacionesHistorico() {
           <SelectTrigger className="h-9 w-[11rem]"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="todos">Todos los estados</SelectItem>
+            <SelectItem value="PENDIENTE">Solicitudes pendientes</SelectItem>
             <SelectItem value="APROBADA">Pendiente de pago</SelectItem>
             <SelectItem value="PAGADA">Pagada</SelectItem>
             <SelectItem value="CANCELADA">Anulada</SelectItem>
@@ -261,6 +262,30 @@ export default function VacacionesHistorico() {
                       </td>
                       <td className="p-4">
                         <div className="flex justify-end gap-2">
+                          {/* PR-N4 — Una solicitud PENDIENTE no tiene valores
+                              ni comprobante: aprobarla ES liquidarla, con el
+                              `solicitud_id` por delante. */}
+                          {h.estado === 'PENDIENTE' && (
+                            <>
+                              <Button
+                                size="sm"
+                                onClick={() => navigate(`/liquidaciones/vacaciones/nueva?solicitud=${h.id}`)}
+                                className="gap-1.5 bg-success hover:bg-success/90"
+                              >
+                                <Check className="h-3.5 w-3.5" />
+                                Liquidar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setAAnular({ fila: h, modo: 'solicitud' })}
+                                className="gap-1.5 hover:border-destructive hover:bg-destructive/10 hover:text-destructive"
+                              >
+                                <Ban className="h-3.5 w-3.5" />
+                                Rechazar
+                              </Button>
+                            </>
+                          )}
                           {h.estado === 'APROBADA' && h.origen === 'SISTEMA' && (
                             <Button
                               size="sm"
@@ -281,21 +306,25 @@ export default function VacacionesHistorico() {
                             <Eye className="h-3.5 w-3.5" />
                             Ver
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={descargando === h.id}
-                            onClick={() => descargarComprobante(h)}
-                            className="gap-1.5 hover:border-primary hover:bg-primary/10 hover:text-primary"
-                          >
-                            {descargando === h.id
-                              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              : <Download className="h-3.5 w-3.5" />}
-                            PDF
-                          </Button>
+                          {/* Una solicitud no tiene comprobante que descargar:
+                              el PDF se genera al liquidarla. */}
+                          {h.estado !== 'PENDIENTE' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={descargando === h.id}
+                              onClick={() => descargarComprobante(h)}
+                              className="gap-1.5 hover:border-primary hover:bg-primary/10 hover:text-primary"
+                            >
+                              {descargando === h.id
+                                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                : <Download className="h-3.5 w-3.5" />}
+                              PDF
+                            </Button>
+                          )}
                           {/* Las dos anulaciones van en menú: son destructivas
                               y no deben quedar al lado de "Ver" (§10.9, §10.10). */}
-                          {h.estado !== 'CANCELADA' && h.origen !== 'LIQUIDACION_FINAL' && (
+                          {h.estado !== 'CANCELADA' && h.estado !== 'PENDIENTE' && h.origen !== 'LIQUIDACION_FINAL' && (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button size="sm" variant="outline" className="px-2">
@@ -337,6 +366,14 @@ export default function VacacionesHistorico() {
               {(filtroDesde || filtroHasta) && ' en el período seleccionado'}
               {meta && meta.totales.pendientes_pago > 0 && (
                 <span> · {meta.totales.pendientes_pago} sin pagar</span>
+              )}
+              {/* PR-N4 — Sin liquidar, la nómina del período paga esos días
+                  como trabajados. Merece su propio contador. */}
+              {meta && (meta.totales.solicitudes_pendientes ?? 0) > 0 && (
+                <span className="text-orange-600 dark:text-orange-400">
+                  {' · '}{meta.totales.solicitudes_pendientes} solicitud
+                  {meta.totales.solicitudes_pendientes !== 1 ? 'es' : ''} por resolver
+                </span>
               )}
             </p>
             <p className="text-sm text-muted-foreground">

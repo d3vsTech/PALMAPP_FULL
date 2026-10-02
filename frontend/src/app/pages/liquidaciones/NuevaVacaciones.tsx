@@ -43,6 +43,7 @@ import {
   type ComprobanteVacaciones,
   type DetalleColaboradorVacaciones,
   type MetodoPagoVacacion,
+  type VacacionItem,
 } from '../../../api/vacaciones';
 import { BLOQUEANTE_LABEL } from '../../../api/liquidaciones';
 import type { ApiError } from '../../../api/client';
@@ -55,7 +56,17 @@ const FORZABLE = VacacionesErrorCodes.LIQUIDACION_COBERTURA_INCOMPLETA;
 export default function NuevaVacaciones() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const empleadoId = Number(searchParams.get('col')) || 0;
+  /**
+   * PR-N4 — Dos formas de entrar: `?col=` desde los turnos pendientes, o
+   * `?solicitud=` al aprobar una solicitud creada en Novedades. En el segundo
+   * caso el colaborador y las fechas los trae la solicitud, y el `solicitud_id`
+   * viaja en el confirmar para que el backend la convierta en liquidación en
+   * lugar de crear una fila nueva que chocaría consigo misma.
+   */
+  const solicitudId = Number(searchParams.get('solicitud')) || 0;
+  const [solicitud, setSolicitud] = useState<VacacionItem | null>(null);
+  const colParam = Number(searchParams.get('col')) || 0;
+  const empleadoId = colParam || solicitud?.empleado.id || 0;
 
   const [detalle, setDetalle] = useState<DetalleColaboradorVacaciones | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -91,6 +102,37 @@ export default function NuevaVacaciones() {
 
   const nDisfrute = Number(diasDisfrute) || 0;
   const nDinero = Number(diasDinero) || 0;
+
+  // ── 0. Solicitud a aprobar (PR-N4) ─────────────────────────────────────────
+  useEffect(() => {
+    if (!solicitudId) return;
+    let vivo = true;
+    setCargando(true);
+    vacacionesApi
+      .ver(solicitudId)
+      .then((res) => {
+        if (!vivo) return;
+        const v = res.data;
+        if (v.estado !== 'PENDIENTE') {
+          toast.error('Esta solicitud ya se resolvió.');
+          navigate('/liquidaciones/vacaciones/historico');
+          return;
+        }
+        setSolicitud(v);
+        // Lo que pidió el colaborador es el punto de partida, no una
+        // imposición: el liquidador puede ajustar días y agregar compensación.
+        if (v.fecha_inicio) setFechaInicio(String(v.fecha_inicio).slice(0, 10));
+        if (v.dias_habiles > 0) setDiasDisfrute(String(v.dias_habiles));
+        if (v.observacion) setObservacion(v.observacion);
+      })
+      .catch((err) => {
+        if (!vivo) return;
+        toast.error((err as ApiError).message ?? 'No se pudo cargar la solicitud');
+        setCargando(false);
+      });
+    return () => { vivo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [solicitudId]);
 
   // ── 1. Colaborador ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -144,6 +186,7 @@ export default function NuevaVacaciones() {
     setCalculandoPreview(true);
     return vacacionesApi
       .preview(empleadoId, {
+        solicitud_id: solicitudId || undefined,
         fecha_inicio: nDisfrute > 0 ? fechaInicio || undefined : undefined,
         dias_disfrute: nDisfrute,
         dias_dinero: nDinero || undefined,
@@ -160,7 +203,7 @@ export default function NuevaVacaciones() {
         setErrorPreview(mensajeError(e));
       })
       .finally(() => { if (reqId === prevRef.current) setCalculandoPreview(false); });
-  }, [empleadoId, fechaInicio, nDisfrute, nDinero]);
+  }, [empleadoId, solicitudId, fechaInicio, nDisfrute, nDinero]);
 
   useEffect(() => {
     if (nDisfrute > 0 && !fechaInicio) { setPreview(null); return; }
@@ -179,6 +222,7 @@ export default function NuevaVacaciones() {
     try {
       const res = await vacacionesApi.crear({
         empleado_id: empleadoId,
+        solicitud_id: solicitudId || undefined,
         fecha_inicio: nDisfrute > 0 ? fechaInicio : undefined,
         dias_disfrute: nDisfrute,
         dias_dinero: nDinero || undefined,
@@ -283,9 +327,38 @@ export default function NuevaVacaciones() {
       </Button>
 
       <div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-primary">Liquidación de Vacaciones</h1>
-        <p className="mt-1 text-muted-foreground">Registra los días de disfrute y la compensación en dinero</p>
+        <h1 className="text-2xl sm:text-3xl font-bold text-primary">
+          {solicitud ? 'Aprobar solicitud de vacaciones' : 'Liquidación de Vacaciones'}
+        </h1>
+        <p className="mt-1 text-muted-foreground">
+          {solicitud
+            ? 'Al liquidar queda aprobada la solicitud que el colaborador pidió desde Novedades'
+            : 'Registra los días de disfrute y la compensación en dinero'}
+        </p>
       </div>
+
+      {/* PR-N4 — Lo que pidió el colaborador, para que el liquidador vea de
+          dónde salen los campos prellenados y qué cambió si los ajusta. */}
+      {solicitud && (
+        <div className="flex items-start gap-3 rounded-xl border border-orange-200 bg-orange-50/60 p-4 text-sm dark:border-orange-900 dark:bg-orange-950/20">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-orange-700 dark:text-orange-400" />
+          <div className="space-y-1">
+            <p className="font-semibold text-orange-800 dark:text-orange-300">
+              Solicitud {solicitud.numero_comprobante}
+            </p>
+            <p className="text-orange-700 dark:text-orange-400">
+              Pidió {solicitud.dias_habiles} días hábiles
+              {solicitud.fecha_inicio && ` desde el ${String(solicitud.fecha_inicio).slice(0, 10)}`}.
+              Puedes ajustar los días antes de liquidar; lo que guardes es lo que queda.
+            </p>
+            {solicitud.observacion && (
+              <p className="text-xs text-orange-700/90 dark:text-orange-400/90">
+                Observación: {solicitud.observacion}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Colaborador ──────────────────────────────────────────────────
           Una sola tarjeta con tres franjas: identidad, causación y base. Todo
@@ -933,7 +1006,16 @@ function mensajeError(e: ApiError): string {
     case VacacionesErrorCodes.VACACIONES_CON_AUSENCIA_EN_RANGO:
       return 'El colaborador tiene una ausencia registrada dentro de esas fechas.';
     case VacacionesErrorCodes.VACACIONES_SOLAPADAS:
-      return 'Ya hay vacaciones registradas que se cruzan con ese rango.';
+      // §10.14: una solicitud PENDIENTE bloquea por esta vía cuando no se
+      // liquida con su `solicitud_id`. El backend lo dice en el `message`.
+      return e.message
+        ?? 'Ya hay vacaciones registradas que se cruzan con ese rango. Si es una solicitud, liquídala desde el histórico o recházala.';
+    case VacacionesErrorCodes.VACACION_SOLICITUD_NO_PENDIENTE:
+      return 'Esta solicitud ya se aprobó o se rechazó. Vuelve al histórico y recárgalo.';
+    case VacacionesErrorCodes.VACACION_SOLICITUD_DIFIERE:
+      return 'Los días o la fecha no son los que pidió el colaborador. Edita la solicitud en Novedades o liquídala como está.';
+    case VacacionesErrorCodes.VACACION_SOLICITUD_EMPLEADO_DISTINTO:
+      return 'Esa solicitud es de otro colaborador.';
     case VacacionesErrorCodes.CALENDARIO_FESTIVOS_AUSENTE:
       return 'Falta el calendario de festivos de ese año. Revisa Configuración.';
     case VacacionesErrorCodes.EMPLEADO_NO_ELEGIBLE:

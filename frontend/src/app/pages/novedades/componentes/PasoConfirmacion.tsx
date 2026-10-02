@@ -1,23 +1,26 @@
 /** Paso 3: resumen de lo que se va a registrar. Solo lectura. */
 import { Card, CardContent } from '../../../components/ui/card';
-import { AlertCircle, CheckCircle, Clock, FileX, Paperclip } from 'lucide-react';
-import type { BorradorNovedad } from '../borrador';
+import { AlertCircle, CheckCircle, Clock, FileX, Paperclip, Umbrella } from 'lucide-react';
 import {
-  TIPOS_NOVEDAD, calcularDias, categoriaDe, esIncapacidad, esTerminacion,
-  etiquetaDias, formatFechaCorta, formatFechaLarga, formatHora, humanizarCausa,
-  iniciales, type Colaborador, type TipoNovedad,
+  esAusencia, esParcial, esTerminacion, esVacaciones, type BorradorNovedad,
+} from '../borrador';
+import type { CategoriaInit } from '../../../../api/novedades';
+import {
+  ICONO_CATEGORIA, calcularDias, esIncapacidad, etiquetaDias,
+  formatFechaCorta, formatFechaLarga, formatHora, formatPorcentaje,
+  iconoDeMotivo, iniciales,
 } from '../tipos';
 
 const PILDORA = 'inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium';
 const ROTULO = 'text-xs font-semibold uppercase tracking-wide text-muted-foreground';
 
 interface Props {
-  tipo: TipoNovedad;
-  colaborador: Colaborador;
   borrador: BorradorNovedad;
+  categorias: CategoriaInit[];
+  /** Con qué estado nacerá la ausencia, de `init.estado_inicial_ausencias`. */
+  estadoInicial: 'APROBADA' | 'PENDIENTE';
 }
 
-/** Recuadro de una fecha del período. */
 function CajaFecha({ rotulo, valor }: { rotulo: string; valor: string }) {
   return (
     <div className="min-w-0 flex-1 rounded-lg bg-muted/30 px-4 py-3 text-center">
@@ -27,14 +30,30 @@ function CajaFecha({ rotulo, valor }: { rotulo: string; valor: string }) {
   );
 }
 
-export function PasoConfirmacion({ tipo, colaborador, borrador }: Props) {
-  const info = TIPOS_NOVEDAD[tipo];
-  const TipoIcono = info.icono;
-  const categoria = categoriaDe(tipo);
-  const CatIcono = categoria.icono;
-  const terminacion = esTerminacion(tipo);
-  const dias = calcularDias(borrador.fechaInicio, borrador.fechaFin);
-  const conHorario = info.requiereHoras && borrador.horaInicio && borrador.horaFin;
+function Dato({ rotulo, valor }: { rotulo: string; valor: string }) {
+  return (
+    <div className="rounded-lg bg-muted/20 px-4 py-3">
+      <p className="mb-0.5 text-xs text-muted-foreground">{rotulo}</p>
+      <p className="text-sm font-medium">{valor}</p>
+    </div>
+  );
+}
+
+export function PasoConfirmacion({ borrador, categorias, estadoInicial }: Props) {
+  const categoria = categorias.find((c) => c.codigo === borrador.categoria);
+  const motivo = borrador.motivo;
+  const ausencia = esAusencia(borrador);
+  const vacaciones = esVacaciones(borrador);
+  const terminacion = esTerminacion(borrador);
+  const parcial = esParcial(borrador);
+
+  const Icono = motivo
+    ? iconoDeMotivo(motivo)
+    : borrador.categoria ? ICONO_CATEGORIA[borrador.categoria] : Umbrella;
+
+  const motivoRetiro = categoria?.motivos_retiro?.find((m) => m.codigo === borrador.motivoRetiro);
+  const fechaFin = borrador.fechaFin || borrador.fechaInicio;
+  const dias = calcularDias(borrador.fechaInicio, fechaFin);
 
   return (
     <div className="space-y-4">
@@ -50,122 +69,141 @@ export function PasoConfirmacion({ tipo, colaborador, borrador }: Props) {
 
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-5 py-3.5">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary">
-          <TipoIcono className="h-4 w-4 text-white" />
+          <Icono className="h-4 w-4 text-white" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className={ROTULO}>{categoria.label}</p>
-          <p className="truncate text-sm font-semibold text-primary">{info.label}</p>
+          <p className={ROTULO}>{categoria?.etiqueta}</p>
+          <p className="truncate text-sm font-semibold text-primary">
+            {motivo?.nombre ?? motivoRetiro?.etiqueta ?? categoria?.etiqueta}
+          </p>
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-1">
-          <span className={`${PILDORA} ${info.remunerado ? 'border-success/20 bg-success/10 text-success' : 'border-border bg-muted text-muted-foreground'}`}>
-            {info.remunerado ? `Remunerado ${info.pct}` : 'No remunerado'}
-          </span>
-          <span className={`${PILDORA} ${info.afectaSubsidio ? 'border-destructive/20 bg-destructive/10 text-destructive' : 'border-border bg-muted text-muted-foreground'}`}>
-            Subsidio: {info.afectaSubsidio ? 'afecta' : 'no afecta'}
-          </span>
-        </div>
+        {motivo && (
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <span className={`${PILDORA} ${motivo.es_remunerada ? 'border-success/20 bg-success/10 text-success' : 'border-border bg-muted text-muted-foreground'}`}>
+              {motivo.es_remunerada
+                ? `Remunerado ${formatPorcentaje(motivo.porcentaje_pago_default)}`
+                : 'No remunerado'}
+            </span>
+            <span className={`${PILDORA} ${motivo.afecta_auxilio_transporte ? 'border-destructive/20 bg-destructive/10 text-destructive' : 'border-border bg-muted text-muted-foreground'}`}>
+              Subsidio: {motivo.afecta_auxilio_transporte ? 'afecta' : 'no afecta'}
+            </span>
+          </div>
+        )}
       </div>
 
       <Card className="overflow-hidden border-border">
         <div className="flex items-center gap-3 border-b border-border bg-muted/20 px-5 py-4">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 border-primary/20 bg-primary/10 text-sm font-bold text-primary">
-            {iniciales(colaborador.nombre)}
+            {iniciales(borrador.colaboradorNombre || '?')}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-base font-semibold">{colaborador.nombre}</p>
-            <p className="truncate text-xs text-muted-foreground">
-              {colaborador.cargo} · CC {colaborador.cedula}
-            </p>
+            <p className="truncate text-base font-semibold">{borrador.colaboradorNombre}</p>
+            <p className="text-xs text-muted-foreground">Colaborador</p>
           </div>
-          <CatIcono className="h-5 w-5 shrink-0 text-muted-foreground/50" />
         </div>
 
         <CardContent className="p-0">
-          {!terminacion ? (
+          {terminacion ? (
             <div className="border-b border-border px-5 py-4">
-              <p className={`mb-3 ${ROTULO}`}>Período</p>
-              <div className="flex flex-wrap items-center gap-4">
-                <CajaFecha rotulo="Inicio" valor={formatFechaCorta(borrador.fechaInicio)} />
-                <div className="text-xl font-light text-muted-foreground/40">→</div>
-                <CajaFecha rotulo="Fin" valor={formatFechaCorta(borrador.fechaFin)} />
-                <div className="min-w-0 flex-1 rounded-lg border border-primary/20 bg-primary/10 px-4 py-3 text-center">
-                  <p className="mb-0.5 text-xs text-primary/70">Total</p>
-                  <p className="text-lg font-bold leading-none text-primary">{dias}</p>
-                  <p className="text-xs text-primary/70">{etiquetaDias(dias)}</p>
-                </div>
-              </div>
-              {conHorario && (
-                <div className="mt-3 flex items-center gap-2 rounded-lg border border-border bg-muted/20 px-3 py-2">
-                  <Clock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  <span className="text-xs text-muted-foreground">Horario:</span>
-                  <span className="text-sm font-medium">
-                    {formatHora(borrador.horaInicio)} – {formatHora(borrador.horaFin)}
-                  </span>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="border-b border-border px-5 py-4">
-              <p className={`mb-3 ${ROTULO}`}>Fecha de terminación</p>
+              <p className={`mb-3 ${ROTULO}`}>Fecha de retiro</p>
               <div className="flex items-center gap-3 rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3">
                 <FileX className="h-4 w-4 shrink-0 text-destructive" />
                 <p className="text-sm font-semibold text-destructive">
                   {formatFechaLarga(borrador.fechaInicio)}
                 </p>
               </div>
-              {borrador.causaTerminacion && (
-                <div className="mt-3">
-                  <p className="mb-1 text-xs text-muted-foreground">Causa</p>
-                  <p className="text-sm font-medium">{humanizarCausa(borrador.causaTerminacion)}</p>
+              {motivoRetiro && (
+                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Dato rotulo="Causa" valor={motivoRetiro.etiqueta} />
+                  <Dato
+                    rotulo="Indemniza"
+                    valor={motivoRetiro.indemniza ? `Sí · ${motivoRetiro.norma ?? 'CST art. 64'}` : 'No'}
+                  />
+                </div>
+              )}
+            </div>
+          ) : vacaciones ? (
+            <div className="border-b border-border px-5 py-4">
+              <p className={`mb-3 ${ROTULO}`}>Disfrute solicitado</p>
+              <div className="flex flex-wrap items-center gap-4">
+                <CajaFecha rotulo="Inicio" valor={formatFechaCorta(borrador.fechaInicio)} />
+                <div className="text-xl font-light text-muted-foreground/40">→</div>
+                {borrador.diasHabiles ? (
+                  <div className="min-w-0 flex-1 rounded-lg border border-primary/20 bg-primary/10 px-4 py-3 text-center">
+                    <p className="mb-0.5 text-xs text-primary/70">Días hábiles</p>
+                    <p className="text-lg font-bold leading-none text-primary">{borrador.diasHabiles}</p>
+                  </div>
+                ) : (
+                  <CajaFecha rotulo="Fin" valor={formatFechaCorta(borrador.fechaFin)} />
+                )}
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground">
+                El backend calcula el otro dato con el calendario de festivos de la finca.
+              </p>
+            </div>
+          ) : (
+            <div className="border-b border-border px-5 py-4">
+              <p className={`mb-3 ${ROTULO}`}>Período</p>
+              {parcial ? (
+                <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-muted/20 px-4 py-3">
+                  <Clock className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="text-sm font-medium">
+                    {formatFechaLarga(borrador.fechaInicio)}
+                  </span>
+                  <span className="text-sm text-muted-foreground">
+                    de {formatHora(borrador.horaInicio)} a {formatHora(borrador.horaFin)}
+                  </span>
+                  <span className={`${PILDORA} border-border bg-muted text-muted-foreground`}>
+                    Informativa
+                  </span>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-4">
+                  <CajaFecha rotulo="Inicio" valor={formatFechaCorta(borrador.fechaInicio)} />
+                  <div className="text-xl font-light text-muted-foreground/40">→</div>
+                  <CajaFecha rotulo="Fin" valor={formatFechaCorta(fechaFin)} />
+                  <div className="min-w-0 flex-1 rounded-lg border border-primary/20 bg-primary/10 px-4 py-3 text-center">
+                    <p className="mb-0.5 text-xs text-primary/70">Total</p>
+                    <p className="text-lg font-bold leading-none text-primary">{dias}</p>
+                    <p className="text-xs text-primary/70">{etiquetaDias(dias)}</p>
+                  </div>
                 </div>
               )}
             </div>
           )}
 
-          {esIncapacidad(tipo) && (borrador.radicado || borrador.diagnostico) && (
+          {esIncapacidad(motivo) && (borrador.entidad || borrador.numeroRadicado) && (
             <div className="border-b border-border px-5 py-4">
-              <p className={`mb-3 ${ROTULO}`}>Información médica</p>
+              <p className={`mb-3 ${ROTULO}`}>Información de la incapacidad</p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {borrador.radicado && (
-                  <div className="rounded-lg bg-muted/20 px-4 py-3">
-                    <p className="mb-0.5 text-xs text-muted-foreground">Número de radicado</p>
-                    <p className="text-sm font-medium">{borrador.radicado}</p>
-                  </div>
-                )}
-                {borrador.diagnostico && (
-                  <div className="rounded-lg bg-muted/20 px-4 py-3">
-                    <p className="mb-0.5 text-xs text-muted-foreground">Diagnóstico (CIE-10)</p>
-                    <p className="text-sm font-medium">{borrador.diagnostico}</p>
-                  </div>
-                )}
+                {borrador.entidad && <Dato rotulo="Entidad" valor={borrador.entidad} />}
+                {borrador.numeroRadicado && <Dato rotulo="Radicado" valor={borrador.numeroRadicado} />}
               </div>
             </div>
           )}
 
-          {info.tieneAdjunto && (
-            <div className="border-b border-border px-5 py-4">
-              <p className={`mb-2 ${ROTULO}`}>Soporte adjunto</p>
-              {borrador.adjunto ? (
-                <div className="flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2.5">
-                  <Paperclip className="h-4 w-4 shrink-0 text-primary" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs text-muted-foreground">{info.labelAdjunto}</p>
-                    <p className="truncate text-sm font-medium">{borrador.adjunto.name}</p>
-                  </div>
-                  <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                    {(borrador.adjunto.size / 1024).toFixed(0)} KB
-                  </span>
-                </div>
-              ) : (
-                <p className="text-xs italic text-muted-foreground">Sin soporte adjunto</p>
-              )}
-            </div>
-          )}
+          <div className="border-b border-border px-5 py-4">
+            <p className={`mb-2 ${ROTULO}`}>Soporte adjunto</p>
+            {borrador.documento ? (
+              <div className="flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2.5">
+                <Paperclip className="h-4 w-4 shrink-0 text-primary" />
+                <p className="min-w-0 flex-1 truncate text-sm font-medium">{borrador.documento.name}</p>
+                <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                  {(borrador.documento.size / 1024).toFixed(0)} KB
+                </span>
+              </div>
+            ) : (
+              <p className="text-xs italic text-muted-foreground">
+                Sin soporte adjunto
+                {motivo?.requiere_soporte && '. Este motivo lo pide: se puede adjuntar después.'}
+              </p>
+            )}
+          </div>
 
           <div className="px-5 py-4">
             <p className={`mb-2 ${ROTULO}`}>Observaciones</p>
-            {borrador.observaciones ? (
-              <p className="text-sm leading-relaxed text-foreground">{borrador.observaciones}</p>
+            {borrador.observacion ? (
+              <p className="text-sm leading-relaxed text-foreground">{borrador.observacion}</p>
             ) : (
               <p className="text-xs italic text-muted-foreground">Sin observaciones</p>
             )}
@@ -173,14 +211,39 @@ export function PasoConfirmacion({ tipo, colaborador, borrador }: Props) {
         </CardContent>
       </Card>
 
+      {/* Avisos de lo que pasa al confirmar, uno por fuente. */}
+      {ausencia && (
+        <div className="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
+          <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+          <p className="text-sm text-muted-foreground">
+            {estadoInicial === 'APROBADA'
+              ? 'La novedad quedará APROBADA de inmediato, porque tienes permiso para aprobar.'
+              : 'La novedad quedará PENDIENTE hasta que alguien con permiso la apruebe.'}
+          </p>
+        </div>
+      )}
+
+      {vacaciones && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/30 dark:bg-amber-950/20">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+          <div className="text-sm">
+            <p className="font-semibold text-amber-800 dark:text-amber-300">Es una solicitud, no una liquidación</p>
+            <p className="mt-0.5 text-amber-700 dark:text-amber-400">
+              Reserva las fechas pero no consume saldo ni toca la nómina. Para aprobarla hay que
+              liquidarla desde Liquidaciones.
+            </p>
+          </div>
+        </div>
+      )}
+
       {terminacion && (
         <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/30 dark:bg-amber-950/20">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
           <div className="text-sm">
-            <p className="font-semibold text-amber-800 dark:text-amber-300">Generará liquidación final</p>
+            <p className="font-semibold text-amber-800 dark:text-amber-300">Queda el retiro registrado</p>
             <p className="mt-0.5 text-amber-700 dark:text-amber-400">
-              Se creará automáticamente una liquidación final pendiente para{' '}
-              <strong>{colaborador.nombre}</strong> en el módulo de Liquidaciones.
+              La ficha de <strong>{borrador.colaboradorNombre}</strong> recibe la fecha y el motivo, y
+              el contrato queda terminado. La liquidación final se hace aparte.
             </p>
           </div>
         </div>

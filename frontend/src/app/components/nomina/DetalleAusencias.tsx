@@ -32,9 +32,21 @@ export interface AusenciaItem {
   porcentaje_pago: number;
   /** Suma (INCAPACIDAD) o descuenta (DESCUENTO). Ausente en el desprendible. */
   valor_calculado?: number;
-  afecta: 'INCAPACIDAD' | 'DESCUENTO' | string;
+  /**
+   * PR-N3 — `INFORMATIVA` es una novedad parcial: quedó LIQUIDADA en la
+   * nómina pero nunca entró al cálculo, así que no suma ni descuenta.
+   */
+  afecta: 'INCAPACIDAD' | 'DESCUENTO' | 'INFORMATIVA' | string;
+  /** PR-N3 — Solo en el desprendible: la novedad es por horas. */
+  parcial?: boolean;
+  hora_inicio?: string | null;
+  hora_fin?: string | null;
   /** §9.6 — Tramos contiguos agrupados en un solo evento EPS. */
   ausencia_ids?: number[];
+  /** PR-N6 — Si estos días descuentan del auxilio de transporte. */
+  afecta_auxilio_transporte?: boolean;
+  /** PR-N6 — Días de la fila que conservan el auxilio. */
+  dias_con_auxilio?: number;
 }
 
 interface Props {
@@ -93,6 +105,10 @@ export function DetalleAusencias({ items, formatMoney, variant = 'default', titu
         {items.map((a, i) => {
           const dias = a.dias_en_rango ?? a.dias_calendario ?? 0;
           const descuenta = a.afecta === 'DESCUENTO';
+          const informativa = a.afecta === 'INFORMATIVA' || a.parcial === true;
+          const horario = a.hora_inicio && a.hora_fin
+            ? `${String(a.hora_inicio).slice(0, 5)} a ${String(a.hora_fin).slice(0, 5)}`
+            : null;
           const valor = Number(a.valor_calculado ?? 0);
           const tramos = a.ausencia_ids?.length ?? 0;
 
@@ -106,16 +122,31 @@ export function DetalleAusencias({ items, formatMoney, variant = 'default', titu
               }`}
             >
               <span className="font-mono">{rangoFechas(a)}</span>
-              <span className="text-center">{dias}</span>
+              {/* PR-N3: una parcial tiene 0 días; el horario es lo que la
+                  explica, y poner un 0 ahí parece un error de cálculo. */}
+              <span className="text-center">{informativa && horario ? '—' : dias}</span>
 
               <span className="min-w-0">
                 <span className="block truncate">{a.motivo_nombre}</span>
                 {/* §9.6 — Varios tramos contiguos cuentan como un solo evento
                     EPS, para que la regla del 100 % los dos primeros días
                     arranque en el día real y no se reinicie en cada fila. */}
+                {informativa && (
+                  <span className="block text-[10px] text-sky-700 dark:text-sky-400">
+                    {horario ? `${horario} · ` : ''}informativa: no descuenta día
+                  </span>
+                )}
                 {tramos > 1 && (
                   <span className="text-[10px] text-muted-foreground">
                     {tramos} tramos en un solo evento
+                  </span>
+                )}
+                {/* PR-N6 — Conservar el auxilio esos días cambia la cifra
+                    del subsidio, así que se dice en la fila que lo causa. */}
+                {a.afecta_auxilio_transporte === false && (
+                  <span className="block text-[10px] text-muted-foreground">
+                    Conserva el auxilio de transporte
+                    {(a.dias_con_auxilio ?? 0) > 0 && ` (${a.dias_con_auxilio} día${a.dias_con_auxilio !== 1 ? 's' : ''})`}
                   </span>
                 )}
               </span>
@@ -123,7 +154,7 @@ export function DetalleAusencias({ items, formatMoney, variant = 'default', titu
               <span
                 className={`text-right font-semibold ${descuenta ? 'text-destructive' : ''}`}
               >
-                {valor > 0 ? `${descuenta ? '−' : ''}${formatMoney(valor)}` : '—'}
+                {valor > 0 && !informativa ? `${descuenta ? '−' : ''}${formatMoney(valor)}` : '—'}
               </span>
             </div>
           );

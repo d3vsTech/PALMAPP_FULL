@@ -38,7 +38,13 @@ function toQuery(params?: Record<string, unknown>): string {
 
 // ─── Enumeraciones (§0.2) ─────────────────────────────────────────────────────
 
-/** Ciclo propio, sin período. PENDIENTE está reservado y hoy no se produce. */
+/**
+ * Ciclo propio, sin período.
+ *
+ * PR-N4 (v1.8) — PENDIENTE dejó de estar reservado: es el estado de una
+ * SOLICITUD creada desde Novedades. No tiene valores ni consume saldo todavía;
+ * se aprueba liquidándola (`crear` con `solicitud_id`) o se rechaza.
+ */
 export type EstadoVacacion = 'APROBADA' | 'PAGADA' | 'CANCELADA' | 'PENDIENTE';
 /**
  * SISTEMA = liquidada por el módulo, con valores.
@@ -47,6 +53,11 @@ export type EstadoVacacion = 'APROBADA' | 'PAGADA' | 'CANCELADA' | 'PENDIENTE';
  * una liquidación final: solo dinero, sin acuerdo escrito y sin el tope de
  * la mitad del art. 189, porque el art. 189-2 obliga a compensar el saldo
  * completo. No se crea ni se anula desde esta pestaña.
+ */
+/**
+ * PR-N4: una solicitud creada desde Novedades nace con `origen: SISTEMA`
+ * (API_NOVEDADES §5.1). Lo que la distingue es `estado = PENDIENTE` y
+ * `es_solicitud`, no el origen.
  */
 export type OrigenVacacion = 'SISTEMA' | 'HISTORICO' | 'LIQUIDACION_FINAL';
 export type EstadoVencimiento = 'VENCIDA' | 'URGENTE' | 'PROXIMA' | 'CON_TIEMPO' | 'AL_DIA';
@@ -301,7 +312,19 @@ export interface ComprobanteVacaciones {
     liquidado_at?: string;
   };
   calendario: CalendarioVacaciones | null;
-  solicitud: { dias_disfrute: number; dias_dinero: number };
+  /**
+   * Lo que se pidió. PR-N4 (v1.8 §10.4) añade los datos de la solicitud
+   * aprobada: con `id` no nulo, el backend confirmó que tomó la solicitud y
+   * que la fecha y los días salen de ella.
+   */
+  solicitud: {
+    dias_disfrute: number;
+    dias_dinero: number;
+    id?: number | null;
+    solicitado_por?: number | string | null;
+    solicitado_at?: string | null;
+    observacion?: string | null;
+  };
   saldo: SaldoVacaciones | null;
   periodos_afectados: PeriodoAfectado[];
   base: BaseVacaciones | null;
@@ -369,6 +392,35 @@ export interface VacacionItem {
   advertencias: AdvertenciaLiquidacion[];
   calculo_hash: string | null;
   created_at?: string;
+  /**
+   * PR-N4 (v1.8) — Es una solicitud PENDIENTE venida de Novedades, no una
+   * liquidación. Sus valores están en cero y no consume saldo. En el listado
+   * no se puede editar, pagar ni anular: se liquida o se rechaza.
+   */
+  /**
+   * PR-N4 (v1.8 §10.8) — Sigue PENDIENTE: es una solicitud, no una
+   * liquidación. Sus valores están en cero y no consume saldo.
+   */
+  es_solicitud?: boolean;
+  /**
+   * Rastro de haber nacido como solicitud. Sigue presente después de
+   * aprobarla o rechazarla. Los días pedidos son `dias_habiles` de la propia
+   * fila y la observación es la de arriba: aquí no se repiten.
+   */
+  solicitud?: {
+    solicitado_por: number | string | null;
+    solicitado_at: string | null;
+    /** `CANCELADA` sin `liquidado_at`: la solicitud se rechazó. */
+    rechazada: boolean;
+    documento?: {
+      id: number;
+      nombre_archivo: string;
+      mime_type: string;
+      archivo_tamano: number;
+      previsualizable: boolean;
+      enlaces: { descargar: string; visualizar: string; expediente: string };
+    } | null;
+  } | null;
 }
 
 export interface MetaHistoricoVacaciones {
@@ -385,11 +437,22 @@ export interface MetaHistoricoVacaciones {
     pendientes_pago: number;
     pagadas: number;
     canceladas: number;
+    /** PR-N4 — Solicitudes PENDIENTE del filtro. Sin liquidar, la nómina
+     *  paga esos días como trabajados. */
+    solicitudes_pendientes?: number;
   };
 }
 
 export interface CrearVacacionPayload {
   empleado_id: number;
+  /**
+   * PR-N4 (v1.8) — Id de la solicitud PENDIENTE que se está aprobando.
+   * Con él el backend no crea una fila nueva: convierte la solicitud en
+   * liquidación APROBADA. Sin él se crea una vacación desde cero, y si el
+   * colaborador tenía una solicitud en esas fechas choca con 422
+   * `VACACIONES_SOLAPADAS`.
+   */
+  solicitud_id?: number;
   /** Obligatoria si dias_disfrute > 0. */
   fecha_inicio?: string;
   dias_disfrute: number;
@@ -463,7 +526,18 @@ export const vacacionesApi = {
   /** §10.4 — Calcula sin persistir; devuelve el comprobante y el hash. */
   preview: (
     empleadoId: number,
-    params: { fecha_inicio?: string; dias_disfrute: number; dias_dinero?: number; fecha_liquidacion?: string },
+    params: {
+      fecha_inicio?: string;
+      dias_disfrute: number;
+      dias_dinero?: number;
+      fecha_liquidacion?: string;
+      /**
+       * PR-N4 (v1.8 §10.4) — Aprueba una solicitud PENDIENTE: la fecha y los
+       * días salen de ella. Enviarlos distintos responde 409
+       * `VACACION_SOLICITUD_DIFIERE`; `dias_dinero` sigue siendo libre.
+       */
+      solicitud_id?: number;
+    },
   ) =>
     apiClient.get<{ data: ComprobanteVacaciones }>(
       `${BASE}/colaboradores/${empleadoId}/preview${toQuery(params)}`,
@@ -498,6 +572,8 @@ export const vacacionesApi = {
     estado?: EstadoVacacion;
     origen?: OrigenVacacion;
     empleado_id?: number;
+    /** PR-N4 — `1` para ver solo las solicitudes PENDIENTE. */
+    es_solicitud?: 0 | 1;
     page?: number;
     per_page?: number;
   }) =>
@@ -518,7 +594,14 @@ export const vacacionesApi = {
   anularPago: (id: number) =>
     apiClient.delete<{ message: string; data: VacacionItem }>(`${BASE}/${id}/pago`, T),
 
-  /** §10.10 — CANCELADA con motivo; el saldo vuelve a estar disponible. */
+  /**
+   * §10.10 — CANCELADA con motivo; el saldo vuelve a estar disponible.
+   *
+   * PR-N4 (v1.8): desde PENDIENTE **este mismo endpoint es el rechazo** de la
+   * solicitud, sin guardas de nómina porque nunca neutralizó nada. No hay un
+   * `POST .../rechazar` bajo liquidaciones; ese vive en Novedades
+   * (`POST novedades/vacaciones/{id}/rechazar`).
+   */
   anular: (id: number, motivo: string) =>
     apiClient.post<{ message: string; data: VacacionItem }>(`${BASE}/${id}/anular`, { motivo }, T),
 
@@ -551,6 +634,12 @@ export const VacacionesErrorCodes = {
   VACACION_EN_NOMINA_CERRADA: 'VACACION_EN_NOMINA_CERRADA',
   VACACION_PAGADA: 'VACACION_PAGADA',
   VACACION_ESTADO_INVALIDO: 'VACACION_ESTADO_INVALIDO',
+  /** PR-N4 — La solicitud ya se aprobó o se rechazó. */
+  VACACION_SOLICITUD_NO_PENDIENTE: 'VACACION_SOLICITUD_NO_PENDIENTE',
+  /** PR-N4 — Se enviaron fecha o días distintos de los de la solicitud. */
+  VACACION_SOLICITUD_DIFIERE: 'VACACION_SOLICITUD_DIFIERE',
+  /** PR-N4 — La solicitud es de otro colaborador. */
+  VACACION_SOLICITUD_EMPLEADO_DISTINTO: 'VACACION_SOLICITUD_EMPLEADO_DISTINTO',
   // Reutilizados de los períodos, con la misma semántica:
   LIQUIDACION_DESACTUALIZADA: 'LIQUIDACION_DESACTUALIZADA',
   LIQUIDACION_ADVERTENCIAS_BLOQUEANTES: 'LIQUIDACION_ADVERTENCIAS_BLOQUEANTES',

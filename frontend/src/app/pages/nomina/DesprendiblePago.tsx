@@ -255,7 +255,16 @@ export default function DesprendiblePago() {
                   </div>
                 </div>
                 <div className="flex justify-between items-center pt-1">
-                  <span className="font-medium text-xs">Subsidio Transporte</span>
+                  <span className="font-medium text-xs">
+                    Subsidio Transporte
+                    {/* PR-N6 — el colaborador firma este papel: tiene que
+                        poder ver con cuántos días se calculó el auxilio. */}
+                    {liquidacion.dias_auxilio_transporte != null && (
+                      <span className="ml-1 text-[10px] font-normal text-muted-foreground">
+                        ({liquidacion.dias_auxilio_transporte} día{liquidacion.dias_auxilio_transporte !== 1 ? 's' : ''})
+                      </span>
+                    )}
+                  </span>
                   <span className="font-bold text-sm">{fmt(liquidacion.subsidio_transporte)}</span>
                 </div>
               </div>

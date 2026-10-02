@@ -301,6 +301,14 @@ export default function LiquidacionFinalTab() {
                           <Badge variant="outline" className={ESTADO_BADGE[liq.estado]}>
                             {ESTADO_LIQUIDACION_LABEL[liq.estado]}
                           </Badge>
+                          {/* PR-L14 — Una PAGADA del sistema y una cargada
+                              desde archivo se ven iguales sin esta marca, y
+                              no admiten las mismas acciones. */}
+                          {liq.origen === 'HISTORICO' && (
+                            <Badge variant="outline" className="border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                              Histórico
+                            </Badge>
+                          )}
                           <span className="text-xs text-muted-foreground">{ESTADO_NOTA[liq.estado]}</span>
                         </div>
                       </td>

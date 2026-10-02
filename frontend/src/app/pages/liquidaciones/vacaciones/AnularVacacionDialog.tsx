@@ -6,6 +6,10 @@
  *  - `pago`: devuelve la vacación a APROBADA. El saldo no se mueve.
  *  - `liquidacion`: la deja CANCELADA y los días vuelven al saldo. Exige
  *    motivo, y el backend la rechaza si todavía tiene el pago registrado.
+ *  - `solicitud` (PR-N4): rechaza una solicitud PENDIENTE venida de Novedades.
+ *    Es el **mismo** `anular` llamado desde PENDIENTE: el contrato no tiene un
+ *    endpoint de rechazo bajo liquidaciones. Cambia solo el texto, porque la
+ *    solicitud nunca consumió saldo y no hay nada que devolver.
  *
  * Lo usan el histórico y el comprobante, para no tener dos copias del mismo
  * manejo de errores.
@@ -27,7 +31,7 @@ import {
 } from '../../../../api/vacaciones';
 import type { ApiError } from '../../../../api/client';
 
-export type ModoAnulacion = 'pago' | 'liquidacion';
+export type ModoAnulacion = 'pago' | 'liquidacion' | 'solicitud';
 
 interface Props {
   /** `null` cierra el diálogo. */
@@ -48,8 +52,10 @@ export default function AnularVacacionDialog({ vacacion, modo, onCerrar, onAnula
 
   const ejecutar = async () => {
     if (!vacacion) return;
-    if (modo === 'liquidacion' && motivo.trim().length < 5) {
-      toast.error('Escribe el motivo de la anulación');
+    if (modo !== 'pago' && motivo.trim().length < 5) {
+      toast.error(modo === 'solicitud'
+        ? 'Escribe el motivo del rechazo'
+        : 'Escribe el motivo de la anulación');
       return;
     }
     setProcesando(true);
@@ -57,7 +63,11 @@ export default function AnularVacacionDialog({ vacacion, modo, onCerrar, onAnula
       const res = modo === 'pago'
         ? await vacacionesApi.anularPago(vacacion.id)
         : await vacacionesApi.anular(vacacion.id, motivo.trim());
-      toast.success(res.message ?? (modo === 'pago' ? 'Pago anulado' : 'Vacaciones anuladas'));
+      toast.success(res.message ?? (
+        modo === 'pago' ? 'Pago anulado'
+          : modo === 'solicitud' ? 'Solicitud rechazada'
+          : 'Vacaciones anuladas'
+      ));
       onAnulada(res.data);
       onCerrar();
     } catch (err) {
@@ -75,6 +85,9 @@ export default function AnularVacacionDialog({ vacacion, modo, onCerrar, onAnula
         case VacacionesErrorCodes.VACACION_ESTADO_INVALIDO:
           toast.error('Esta liquidación ya está anulada');
           break;
+        case VacacionesErrorCodes.VACACION_SOLICITUD_NO_PENDIENTE:
+          toast.error('Esta solicitud ya se resolvió. Recarga el listado.');
+          break;
         default:
           toast.error(e.message ?? 'No se pudo completar la anulación');
       }
@@ -84,18 +97,23 @@ export default function AnularVacacionDialog({ vacacion, modo, onCerrar, onAnula
   };
 
   const esPago = modo === 'pago';
+  const esSolicitud = modo === 'solicitud';
 
   return (
     <AlertDialog open={vacacion !== null} onOpenChange={(v) => { if (!v && !procesando) onCerrar(); }}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>
-            {esPago ? 'Anular el pago' : 'Anular la liquidación'}
+            {esPago ? 'Anular el pago'
+              : esSolicitud ? 'Rechazar la solicitud'
+              : 'Anular la liquidación'}
           </AlertDialogTitle>
           <AlertDialogDescription>
             {esPago
               ? 'La liquidación vuelve a quedar pendiente de pago. Los días siguen descontados del saldo del colaborador.'
-              : 'Los días vuelven al saldo del colaborador y el comprobante queda marcado como anulado. No se borra.'}
+              : esSolicitud
+                ? 'La solicitud queda rechazada con el motivo guardado. No consumió saldo, así que no hay nada que devolver.'
+                : 'Los días vuelven al saldo del colaborador y el comprobante queda marcado como anulado. No se borra.'}
             {vacacion && ` · ${vacacion.empleado.nombre_completo}`}
           </AlertDialogDescription>
         </AlertDialogHeader>
@@ -105,7 +123,9 @@ export default function AnularVacacionDialog({ vacacion, modo, onCerrar, onAnula
             <Label>Motivo</Label>
             <Textarea
               rows={3}
-              placeholder="Por qué se anula esta liquidación."
+              placeholder={esSolicitud
+                ? 'Por qué se rechaza esta solicitud.'
+                : 'Por qué se anula esta liquidación.'}
               value={motivo}
               onChange={(e) => setMotivo(e.target.value)}
             />
@@ -120,7 +140,7 @@ export default function AnularVacacionDialog({ vacacion, modo, onCerrar, onAnula
             className={esPago ? 'gap-2' : 'gap-2 bg-destructive text-destructive-foreground hover:bg-destructive/90'}
           >
             {procesando && <Loader2 className="h-4 w-4 animate-spin" />}
-            {esPago ? 'Anular pago' : 'Anular'}
+            {esPago ? 'Anular pago' : esSolicitud ? 'Rechazar' : 'Anular'}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

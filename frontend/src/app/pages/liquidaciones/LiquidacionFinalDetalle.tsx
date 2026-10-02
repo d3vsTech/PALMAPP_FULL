@@ -144,7 +144,11 @@ export default function LiquidacionFinalDetalle() {
     setEliminando(true);
     try {
       await liquidacionFinalApi.eliminar(liq.id);
-      toast.success('Borrador eliminado');
+      toast.success(
+        liq.origen === 'HISTORICO'
+          ? 'Registro histórico eliminado'
+          : 'Borrador eliminado',
+      );
       navigate('/liquidaciones?tab=liquidacion-final');
     } catch (e) {
       toast.error(mensajeErrorLiquidacion(e, 'No se pudo eliminar el borrador'));
@@ -175,9 +179,17 @@ export default function LiquidacionFinalDetalle() {
   }
 
   const estado = liq.estado ?? 'BORRADOR';
-  const esBorrador = estado === 'BORRADOR';
-  const esAprobada = estado === 'APROBADA';
-  const esPagada = estado === 'PAGADA';
+  /**
+   * PR-L14 (§11.1) — Una liquidación cargada desde archivo es el registro de
+   * un pago hecho antes del sistema: nace PAGADA y no pasa por el ciclo de
+   * vida. Editar, aprobar, anular y tocar el pago responden 409
+   * `LIQUIDACION_HISTORICA`, así que esos botones no se ofrecen. Lo único
+   * que admite, además de verse e imprimirse, es eliminarse.
+   */
+  const esHistorica = liq.origen === 'HISTORICO';
+  const esBorrador = estado === 'BORRADOR' && !esHistorica;
+  const esAprobada = estado === 'APROBADA' && !esHistorica;
+  const esPagada = estado === 'PAGADA' && !esHistorica;
   const esAnulada = estado === 'ANULADA';
 
   const puedeEditar = hasPermiso('liquidaciones.editar');
@@ -201,6 +213,11 @@ export default function LiquidacionFinalDetalle() {
               <Badge variant="outline" className={ESTADO_BADGE[estado]}>
                 {ESTADO_LIQUIDACION_LABEL[estado]}
               </Badge>
+              {esHistorica && (
+                <Badge variant="outline" className="border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                  Histórico
+                </Badge>
+              )}
             </div>
             <p className="mt-1 text-muted-foreground">
               {liq.numero_comprobante} · {liq.empleado.nombre_completo}
@@ -264,7 +281,7 @@ export default function LiquidacionFinalDetalle() {
               </Button>
             )}
 
-            {(esBorrador || esAprobada || esPagada) && (puedeLiquidar || puedePagar || puedeEliminar) && (
+            {(esBorrador || esAprobada || esPagada || esHistorica) && (puedeLiquidar || puedePagar || puedeEliminar) && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="px-2">
@@ -287,14 +304,14 @@ export default function LiquidacionFinalDetalle() {
                       Anular liquidación
                     </DropdownMenuItem>
                   )}
-                  {esBorrador && puedeEliminar && (
+                  {(esBorrador || esHistorica) && puedeEliminar && (
                     <DropdownMenuItem
                       onClick={() => void eliminar()}
                       disabled={eliminando}
                       className="gap-2 text-destructive focus:text-destructive"
                     >
                       <Trash2 className="h-4 w-4" />
-                      Eliminar borrador
+                      {esHistorica ? 'Eliminar registro histórico' : 'Eliminar borrador'}
                     </DropdownMenuItem>
                   )}
                 </DropdownMenuContent>

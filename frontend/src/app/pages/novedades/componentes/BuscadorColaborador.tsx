@@ -1,42 +1,72 @@
-/** Campo de búsqueda con sugerencias para elegir un colaborador. */
-import { useMemo, useRef, useState } from 'react';
+/**
+ * Paso 2: colaborador por nombre o cédula, vinculado en la fecha.
+ *
+ * Consulta `GET colaboradores/select?q=&fecha=` (API_COLABORADORES §0): el
+ * backend ya filtra por contrato vigente ese día y marca `novedad_vigente`.
+ * La marca no bloquea la selección, solo avisa.
+ */
+import { useEffect, useRef, useState } from 'react';
 import { Input } from '../../../components/ui/input';
 import { Label } from '../../../components/ui/label';
-import { User } from 'lucide-react';
-import type { Colaborador } from '../tipos';
+import { AlertTriangle, Loader2, User } from 'lucide-react';
+import { colaboradoresApi, type ColaboradorSelectItem } from '../../../../api/colaboradores';
+import type { ApiError } from '../../../../api/client';
+import { formatFecha } from '../tipos';
 
 interface Props {
-  colaboradores: Colaborador[];
-  seleccionadoId: string;
-  onSeleccionar: (id: string) => void;
+  /** Acota el listado a quienes tenían contrato ese día. */
+  fecha: string;
+  seleccionadoId: number | null;
+  nombreInicial: string;
+  onSeleccionar: (id: number | null, nombre: string) => void;
 }
 
-export function BuscadorColaborador({ colaboradores, seleccionadoId, onSeleccionar }: Props) {
-  const seleccionado = colaboradores.find((c) => c.id === seleccionadoId);
-  const [texto, setTexto] = useState(seleccionado?.nombre ?? '');
+export function BuscadorColaborador({ fecha, seleccionadoId, nombreInicial, onSeleccionar }: Props) {
+  const [texto, setTexto] = useState(nombreInicial);
   const [abierto, setAbierto] = useState(false);
-  // El blur del input se dispara antes que el click de la sugerencia, así que
-  // se cierra con retardo. El timeout se guarda para poder cancelarlo.
+  const [cargando, setCargando] = useState(false);
+  const [opciones, setOpciones] = useState<ColaboradorSelectItem[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  // El blur del input llega antes que el click de la sugerencia: se cierra con
+  // retardo y el timeout se guarda para poder cancelarlo al elegir.
   const cierre = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reqId = useRef(0);
 
-  const filtrados = useMemo(() => {
-    const q = texto.trim().toLowerCase();
-    if (!q) return colaboradores;
-    return colaboradores.filter(
-      (c) => c.nombre.toLowerCase().includes(q) || c.cedula.includes(q),
-    );
-  }, [colaboradores, texto]);
+  const elegido = opciones.find((c) => c.id === seleccionadoId) ?? null;
 
-  const elegir = (c: Colaborador) => {
+  useEffect(() => {
+    if (!abierto) return;
+    const id = ++reqId.current;
+    setCargando(true);
+    const t = setTimeout(() => {
+      colaboradoresApi
+        .selectListado({ q: texto.trim() || undefined, fecha: fecha || undefined })
+        .then((res) => {
+          if (id !== reqId.current) return;
+          setOpciones(res.data ?? []);
+          setError(null);
+        })
+        .catch((err) => {
+          if (id !== reqId.current) return;
+          setOpciones([]);
+          setError((err as ApiError).message ?? 'No se pudo cargar la lista');
+        })
+        .finally(() => { if (id === reqId.current) setCargando(false); });
+    }, texto ? 300 : 0);
+    return () => clearTimeout(t);
+  }, [texto, fecha, abierto]);
+
+  const elegir = (c: ColaboradorSelectItem) => {
     if (cierre.current) clearTimeout(cierre.current);
-    onSeleccionar(c.id);
-    setTexto(c.nombre);
+    onSeleccionar(c.id, c.nombre_completo);
+    setTexto(c.nombre_completo);
     setAbierto(false);
   };
 
   return (
     <div className="space-y-1.5">
-      <Label>Colaborador</Label>
+      <Label>Colaborador <span className="text-destructive">*</span></Label>
       <div className="relative">
         <User className="absolute left-3 top-2.5 z-10 h-4 w-4 text-muted-foreground" />
         <Input
@@ -45,29 +75,64 @@ export function BuscadorColaborador({ colaboradores, seleccionadoId, onSeleccion
           value={texto}
           onChange={(e) => {
             setTexto(e.target.value);
-            onSeleccionar('');
+            onSeleccionar(null, '');
             setAbierto(true);
           }}
           onFocus={() => setAbierto(true)}
           onBlur={() => { cierre.current = setTimeout(() => setAbierto(false), 150); }}
         />
-        {abierto && filtrados.length > 0 && (
-          <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-border bg-background shadow-lg">
-            {filtrados.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onMouseDown={() => elegir(c)}
-                className="flex w-full flex-col border-b border-border px-4 py-2.5 text-left text-sm transition-colors last:border-0 hover:bg-muted"
-              >
-                <span className="font-medium text-foreground">{c.nombre}</span>
-                <span className="text-xs text-muted-foreground">{c.cedula} · {c.cargo}</span>
-              </button>
-            ))}
+        {cargando && (
+          <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
+        )}
+
+        {abierto && (
+          <div className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border border-border bg-background shadow-lg">
+            {error ? (
+              <p className="px-4 py-3 text-sm text-destructive">{error}</p>
+            ) : opciones.length === 0 && !cargando ? (
+              <p className="px-4 py-3 text-sm text-muted-foreground">
+                {fecha
+                  ? 'Nadie con contrato vigente en esa fecha coincide con la búsqueda'
+                  : 'Sin resultados'}
+              </p>
+            ) : (
+              opciones.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onMouseDown={() => elegir(c)}
+                  className="flex w-full flex-col border-b border-border px-4 py-2.5 text-left text-sm transition-colors last:border-0 hover:bg-muted"
+                >
+                  <span className="font-medium text-foreground">{c.nombre_completo}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {c.documento} · {c.modalidad_pago === 'FIJO' ? 'Fijo' : 'Producción'}
+                  </span>
+                  {c.novedad_vigente && (
+                    <span className="mt-1 flex items-center gap-1 text-xs text-amber-700 dark:text-amber-400">
+                      <AlertTriangle className="h-3 w-3 shrink-0" />
+                      Ya tiene {c.novedad_vigente.tipo.nombre} esos días
+                    </span>
+                  )}
+                </button>
+              ))
+            )}
           </div>
         )}
       </div>
-      {seleccionado && <p className="text-xs text-muted-foreground">{seleccionado.cargo}</p>}
+
+      {elegido?.novedad_vigente && (
+        <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+          <span>
+            Ya tiene {elegido.novedad_vigente.tipo.nombre} del{' '}
+            {formatFecha(elegido.novedad_vigente.fecha_inicio)} al{' '}
+            {formatFecha(elegido.novedad_vigente.fecha_fin)}
+            {elegido.novedad_vigente.parcial
+              ? '. Es parcial, así que no bloquea.'
+              : '. Registrar otra en esas fechas será rechazado.'}
+          </span>
+        </p>
+      )}
     </div>
   );
 }

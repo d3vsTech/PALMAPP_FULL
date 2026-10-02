@@ -267,6 +267,11 @@ export interface NominaEmpleado {
   total_incapacidades: string;
   total_devengado: string;
   subsidio_transporte: string;
+  /**
+   * PR-N6 — Base del prorrateo del subsidio, congelada al liquidar
+   * (`nomina_empleado.dias_auxilio`). `null` = fila anterior a PR-N6.
+   */
+  dias_auxilio?: number | null;
   total_bonificaciones: string;
   total_deducciones: string;
   total_neto: string;
@@ -436,6 +441,16 @@ export interface DetalleAusenciaPreview {
    * Puede venir `undefined` para ausencias no-EPS o cuando no hay agrupación.
    */
   ausencia_ids?: number[];
+  /**
+   * PR-N6 (API_NOMINA §9.3) — Si estos días descuentan del auxilio de
+   * transporte. Lo decide el motivo en Configuración → Novedades.
+   */
+  afecta_auxilio_transporte?: boolean;
+  /**
+   * PR-N6 — Días de esta ausencia que SÍ conservan el auxilio. Es 0 cuando
+   * `afecta_auxilio_transporte` es true, y `dias_en_rango` cuando es false.
+   */
+  dias_con_auxilio?: number;
 }
 
 /**
@@ -463,6 +478,26 @@ export interface PendientesAusenciasRich {
 export interface PendientesPorAprobar {
   horas_extra: number;
   ausencias: number | PendientesAusenciasRich;
+  /**
+   * PR-N4 — Solicitudes de vacaciones PENDIENTE que cruzan el período. No
+   * entran al cálculo: se aprueban liquidándolas en Liquidaciones → Vacaciones.
+   * Si quedan sin liquidar, la nómina paga esos días como trabajados.
+   *
+   * Es un objeto, igual que `ausencias` en su forma nueva: un contador suelto
+   * no le sirve al liquidador, que necesita las fechas para cruzarlas.
+   */
+  vacaciones?: {
+    total: number;
+    fechas?: string[];
+    dias_impactados?: number;
+    solicitudes?: Array<{
+      id: number;
+      numero_comprobante?: string;
+      fecha_inicio: string;
+      fecha_fin: string;
+      dias_habiles?: number;
+    }>;
+  };
 }
 
 export interface PreviewLiquidacion {
@@ -481,9 +516,24 @@ export interface PreviewLiquidacion {
   total_recargos?: number;
   total_incapacidades?: number;
   dias_ausencia_descontados?: number;
+  /**
+   * Días de incapacidades y licencias del rango. Es la segunda mitad del piso
+   * del IBC del FIJO (§9.4) y el universo del que sale
+   * `dias_ausencia_remunerados_con_auxilio`.
+   */
+  dias_ausencia_remunerados?: number;
   total_ausencias_descuento?: number;
   total_devengado: number;
   subsidio_transporte?: number;
+  /**
+   * PR-N6 (API_NOMINA §9.3) — Días con los que se calculó el auxilio:
+   * `min(techo, dias_trabajados + dias_ausencia_remunerados_con_auxilio)`.
+   * Antes el auxilio salía solo de `dias_trabajados`, así que un permiso
+   * remunerado lo recortaba aunque la ley dice que se conserva.
+   */
+  dias_auxilio_transporte?: number;
+  /** Días de novedad que conservaron el auxilio y entraron al cálculo. */
+  dias_ausencia_remunerados_con_auxilio?: number;
   conceptos_legales?: ConceptoLegalPreview[];
   total_deducciones_legales?: number;
   total_neto_propuesto: number;
@@ -839,6 +889,14 @@ export interface DesprendibleData {
     total_recargos: number;
     total_incapacidades: number;
     subsidio_transporte: number;
+    /**
+     * PR-N6 — Días con los que se calculó el auxilio, leídos de
+     * `nomina_empleado.dias_auxilio` congelada al liquidar. `null` o ausente =
+     * fila liquidada antes de PR-N6, donde la base fue `dias_trabajados`; es
+     * distinto de `0`, que significa sin auxilio.
+     */
+    dias_auxilio_transporte?: number | null;
+    dias_ausencia_remunerados_con_auxilio?: number;
     total_devengado: number;
     total_bonificaciones: number;
     total_deducciones: number;
@@ -865,8 +923,17 @@ export interface DesprendibleData {
      * totales de la ausencia, no los que caen en el período.
      * Array vacío `[]` si no hubo ausencias.
      */
-    detalle_ausencias?: (Omit<DetalleAusenciaPreview, 'dias_en_rango' | 'valor_calculado'> & {
+    detalle_ausencias?: (Omit<DetalleAusenciaPreview, 'dias_en_rango' | 'valor_calculado' | 'afecta'> & {
       dias_calendario: number;
+      /**
+       * PR-N3 — Una parcial nunca entró al cálculo (no está en el preview)
+       * pero quedó LIQUIDADA en esta nómina y se lista como informativa, con
+       * `dias_calendario: 0` y sin valor.
+       */
+      afecta: 'INCAPACIDAD' | 'DESCUENTO' | 'INFORMATIVA';
+      parcial?: boolean;
+      hora_inicio?: string | null;
+      hora_fin?: string | null;
     })[];
     /**
      * §9.9 — Desglose de descansos en el desprendible. Coincide con lo que

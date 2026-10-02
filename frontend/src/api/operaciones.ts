@@ -68,6 +68,11 @@ export interface Planilla {
  * intención a futuro es ir reemplazando esos accesos por los campos tipados.
  */
 export interface PlanillaDetalle extends Planilla {
+  /**
+   * PR-N3 — Novedades que cubren la fecha **exacta** de la planilla, de
+   * cualquier origen. `ausencias[]` sigue siendo solo lo reportado aquí.
+   */
+  novedades_vigentes?: NovedadVigente[];
   cosechas?: Cosecha[];
   jornales?: Jornal[];
   /**
@@ -124,6 +129,17 @@ export interface Resumen {
     horas_totales: string;
     valor_total: string;
   };
+  /**
+   * PR-N3 — Lo que cubre la **fecha** de la planilla venga de donde venga.
+   * El bloque `ausencias` de arriba sigue contando solo lo reportado aquí.
+   */
+  novedades_del_dia?: {
+    total: number;
+    pendientes: number;
+    parciales: number;
+    de_esta_planilla: number;
+    de_otras_fuentes: number;
+  };
 }
 
 export interface Indicadores {
@@ -165,6 +181,14 @@ export interface CoberturaPlanilla {
   tiene_faltantes: boolean;
   colaboradores_faltantes: CoberturaColaboradorFaltante[];
   operarios_faltantes: CoberturaOperarioFaltante[];
+  /**
+   * PR-N3, aditivo. Todos los cubiertos por una novedad ese día. Nunca
+   * aparecen en `colaboradores_faltantes[]`. Es el equivalente de
+   * `en_vacaciones[]` para el Paso 5: marcar en el selector.
+   */
+  con_novedad?: CoberturaConNovedad[];
+  /** Subconjunto cubierto solo por ítems PENDIENTE. No es "faltante". */
+  con_novedad_pendiente?: CoberturaConNovedad[];
 }
 
 // ─── Entidades del módulo (cuerpo de respuestas) ──────────────────────────────
@@ -482,6 +506,11 @@ export interface MotivoAusenciaWizardItem {
   afecta_seguridad_social?: boolean;
   afecta_parafiscales?: boolean;
   afecta_prestaciones?: boolean;
+  /**
+   * PR-N1 — "Afecta subsidio de transporte". El bundle se cachea 15 minutos,
+   * así que tras el deploy puede tardar en aparecer. Ver API_PARAMETRICAS §16.
+   */
+  afecta_auxilio_transporte?: boolean;
 }
 
 export interface TipoHoraExtraWizardItem {
@@ -530,6 +559,56 @@ export interface ColaboradorEnVacaciones {
   fecha_inicio: string;
   fecha_fin: string;
   dias_habiles: number;
+  /**
+   * PR-N3. Una solicitud `PENDIENTE` (PR-N4) se marca igual que una vacación
+   * concedida, pero no lo es: no bloquear el jornal por ella.
+   */
+  estado?: string;
+}
+
+/**
+ * PR-N3 — Novedad que cubre un día, venga de donde venga: una ausencia de
+ * cualquier origen (esta planilla, otra, el módulo Novedades o importación) o
+ * una vacación viva. Reemplaza la pregunta "¿qué ausencias tiene esta
+ * planilla?" por "¿quién tiene novedad ese día?", que es la que hace la nómina.
+ *
+ * **Marca, no bloquea.** Una parcial no cubre el día y un PENDIENTE es una
+ * solicitud: el jornal se puede registrar igual.
+ */
+export interface NovedadVigente {
+  fuente: 'AUSENCIA' | 'VACACION';
+  id: number;
+  empleado_id: number;
+  categoria: string;
+  tipo: { codigo: string; nombre: string; color: string | null };
+  fecha_inicio: string;
+  fecha_fin: string;
+  estado: string;
+  origen: string;
+  /** Tiene horario: es informativa y no cuenta como día de ausencia. */
+  parcial: boolean;
+  horario: string | null;
+  operacion_id: number | null;
+  /** Se reportó en la planilla que se está editando. */
+  de_esta_planilla: boolean;
+  enlaces?: { detalle: string };
+}
+
+/** Colaborador cubierto por una novedad ese día (§7.1). */
+export interface CoberturaConNovedad {
+  id: number;
+  nombre_completo: string;
+  documento: string;
+  modalidad_pago: string;
+  novedad: {
+    fuente: 'AUSENCIA' | 'VACACION';
+    id: number;
+    tipo: { codigo: string; nombre: string; color: string | null };
+    estado: string;
+    fecha_inicio: string;
+    fecha_fin: string;
+    parcial: boolean;
+  };
 }
 
 /**
@@ -545,6 +624,12 @@ export interface WizardInitBundle {
    * vacaciones. Ausente en backends anteriores a PR-L8.
    */
   en_vacaciones?: ColaboradorEnVacaciones[];
+  /**
+   * PR-N3 — Misma ventana que `en_vacaciones[]`: cubre la fecha de la planilla
+   * o terminó hace menos de 45 días. El front filtra por la fecha del tab.
+   * Ausente en backends anteriores a PR-N3.
+   */
+  novedades_vigentes?: NovedadVigente[];
   parametricas: {
     colaboradores: ColaboradorWizardItem[];
     /** Nuevo en §1.1: operarios de terceros. Se unifican con colaboradores en el dropdown. */
@@ -1276,7 +1361,19 @@ export const ausenciasApi = {
     empleado_id: number;
     motivo_ausencia_id: number;
     motivo?: string;
+    /**
+     * "Hasta". Default: la fecha de la planilla. **El wizard debe exponerlo**:
+     * sin él una incapacidad de 10 días queda de un día y las planillas
+     * siguientes la ven como falta.
+     */
     fecha_fin?: string;
+    /**
+     * "Horario", `HH:MM`. Las dos o ninguna. Con horas la novedad es
+     * **parcial**: un solo día, informativa, no cuenta como día de ausencia
+     * en nómina ni cubre el día en la cobertura (D3).
+     */
+    hora_inicio?: string;
+    hora_fin?: string;
     entidad?: string;
     numero_radicado?: string;
     porcentaje_pago?: number;
@@ -1293,6 +1390,11 @@ export const ausenciasApi = {
     empleado_id: number;
     motivo_ausencia_id: number;
     motivo?: string;
+    fecha_fin?: string;
+    hora_inicio?: string;
+    hora_fin?: string;
+    entidad?: string;
+    numero_radicado?: string;
   }>) =>
     smartRequest<{ data: Array<{ id: number }> }>(
       `${BASE}/operaciones/${operacionId}/ausencias/bulk`,
@@ -1334,7 +1436,11 @@ export const ausenciasApi = {
   editar: (id: number, payload: Partial<{
     motivo_ausencia_id: number;
     motivo: string;
+    fecha_inicio: string;
     fecha_fin: string;
+    /** Solo editable en PENDIENTE (409 `NOVEDAD_CAMPO_NO_EDITABLE`). */
+    hora_inicio: string;
+    hora_fin: string;
     entidad: string;
     numero_radicado: string;
     porcentaje_pago: number;
@@ -1538,6 +1644,24 @@ export const OperacionesErrorCodes = {
   AUSENCIA_ESTADO_INVALIDO: 'AUSENCIA_ESTADO_INVALIDO',
   /** Eliminar un motivo de ausencia con ausencias asociadas. */
   MOTIVO_CON_AUSENCIAS: 'MOTIVO_CON_AUSENCIAS',
+  /**
+   * 422 (PR-N2) — El colaborador ya tiene una novedad de **día completo** no
+   * rechazada que cubre alguna fecha del rango, venga de esta planilla, de
+   * otra o del módulo Novedades. **Antes se creaban las dos.** El cuerpo trae
+   * `novedad{}` con la que choca: hay que mostrarla. Las parciales (con
+   * horario) no bloquean ni son bloqueadas.
+   */
+  NOVEDAD_SOLAPADA: 'NOVEDAD_SOLAPADA',
+  /**
+   * 422 (PR-N2) — `fecha_fin` anterior a la fecha de la planilla. En el bulk
+   * reemplaza al antiguo `VALIDATION_ERROR` y trae `fila` e
+   * `items.{i}.fecha_fin`.
+   */
+  RANGO_INVALIDO: 'RANGO_INVALIDO',
+  /** 422 (PR-N2) — Horas incompletas, fin <= inicio, o rango de varios días. */
+  HORARIO_INVALIDO: 'HORARIO_INVALIDO',
+  /** 422 (PR-N2) — El motivo no es del tenant o está inactivo. */
+  MOTIVO_INACTIVO: 'MOTIVO_INACTIVO',
   /** Editar/eliminar una hora extra ya liquidada en nómina. */
   HORA_EXTRA_LIQUIDADA: 'HORA_EXTRA_LIQUIDADA',
   /** Aprobar/rechazar una hora extra que no está en PENDIENTE. */

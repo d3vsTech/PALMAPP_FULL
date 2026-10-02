@@ -11,6 +11,7 @@ import { Badge } from '../../components/ui/badge';
 import { MultiSelectColaboradores } from '../../components/operaciones/MultiSelectColaboradores';
 import type { ColaboradorEnVacaciones } from '../../../api/operaciones';
 import { marcarVacaciones } from './planilla/vacacionesPlanilla';
+import { marcarNovedades } from './planilla/novedadesPlanilla';
 import { marcarVinculacion } from './planilla/vinculacionPlanilla';
 import { NotaColaboradoresExcluidos } from './planilla/NotaColaboradoresExcluidos';
 import { SelectActividadLabor } from '../../components/operaciones/SelectActividadLabor';
@@ -58,6 +59,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { operacionesApi, cosechasApi, jornalesApi, jornalGruposApi, horasExtraApi, ausenciasApi, selectsApi, OperacionesErrorCodes } from '../../../api/operaciones';
+import type { NovedadVigente } from '../../../api/operaciones';
 import { configuracionApi, ConfiguracionErrorCodes } from '../../../api/configuracion';
 import { toast } from 'sonner';
 // Tipos y piezas del wizard — extraídos a la carpeta `planilla/` para partir
@@ -259,6 +261,12 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
    * minutos y esto cambia cada vez que alguien liquida vacaciones.
    */
   const [enVacaciones, setEnVacaciones] = useState<ColaboradorEnVacaciones[]>([]);
+  /**
+   * PR-N3 — Novedades que ya cubren la fecha (`data.novedades_vigentes` del
+   * wizard-init). Llegan por el mismo canal que las vacaciones y se refrescan
+   * con ella cada vez que cambia la fecha del paso 1.
+   */
+  const [novedadesVigentes, setNovedadesVigentes] = useState<NovedadVigente[]>([]);
   /** Descarta respuestas de fechas que el usuario ya cambió. */
   const vacacionesReqRef = useRef(0);
   const [lotesData, setLotesData] = useState<Array<{id: string; nombre: string}>>([]);
@@ -376,7 +384,10 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         // PR-L8: en edición la fecha sale de la operación, así que el bundle
         // ya trae las vacaciones correctas. En creación las pide el efecto de
         // abajo cada vez que cambia la fecha del paso 1.
-        if (isEditMode) setEnVacaciones(bundle.data.en_vacaciones ?? []);
+        if (isEditMode) {
+          setEnVacaciones(bundle.data.en_vacaciones ?? []);
+          setNovedadesVigentes(bundle.data.novedades_vigentes ?? []);
+        }
 
         // ── Catálogos ─────────────────────────────────────────────────────
         // Labores PALMA: separar fijas (es_sistema=true, tipo!=null) de las
@@ -529,8 +540,12 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
    * cubran la fecha de esta planilla. Los selectores lo usan para bloquear.
    */
   const colaboradoresMarcados = useMemo(
-    () => marcarVacaciones(colaboradores, enVacaciones, fecha),
-    [colaboradores, enVacaciones, fecha],
+    () => marcarNovedades(
+      marcarVacaciones(colaboradores, enVacaciones, fecha),
+      novedadesVigentes,
+      fecha,
+    ),
+    [colaboradores, enVacaciones, novedadesVigentes, fecha],
   );
 
   /**
@@ -560,11 +575,15 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
       .then((bundle) => {
         if (reqId !== vacacionesReqRef.current) return;
         setEnVacaciones(bundle.data.en_vacaciones ?? []);
+        setNovedadesVigentes(bundle.data.novedades_vigentes ?? []);
       })
       .catch(() => {
         // Un fallo aquí no puede tumbar el wizard: sin la lista simplemente
         // nadie sale marcado, que es como se comportaba antes de PR-L8.
-        if (reqId === vacacionesReqRef.current) setEnVacaciones([]);
+        if (reqId === vacacionesReqRef.current) {
+          setEnVacaciones([]);
+          setNovedadesVigentes([]);
+        }
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fecha, isEditMode]);
@@ -587,6 +606,10 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   const [colaboradorAusenteSeleccionado, setColaboradorAusenteSeleccionado] = useState('');
   const [motivoAusenteSeleccionado, setMotivoAusenteSeleccionado] = useState('');
   const [otroMotivoAusente, setOtroMotivoAusente] = useState('');
+  /** PR-N3 — "Hasta" y "Horario" del formulario de novedades del paso 5. */
+  const [hastaAusente, setHastaAusente] = useState('');
+  const [horaInicioAusente, setHoraInicioAusente] = useState('');
+  const [horaFinAusente, setHoraFinAusente] = useState('');
   
   // Estados de trabajos
   const [trabajosCosecha, setTrabajosCosecha] = useState<TrabajoCosecha[]>([]);
@@ -964,6 +987,11 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
             motivoAusenciaId: a.motivo_ausencia_id != null
               ? Number(a.motivo_ausencia_id)
               : undefined,
+            // PR-N3 — el rango y el horario tienen que volver tal cual: si
+            // se pierden, un PUT los borraría y la novedad quedaría de un día.
+            fechaFin: a.fecha_fin ? String(a.fecha_fin).slice(0, 10) : undefined,
+            horaInicio: a.hora_inicio ? String(a.hora_inicio).slice(0, 5) : undefined,
+            horaFin: a.hora_fin ? String(a.hora_fin).slice(0, 5) : undefined,
           };
         });
         setAusentes(ausenciasHidratadas);
@@ -1581,11 +1609,20 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           empleado_id: parseInt(a.colaboradorId),
           motivo_ausencia_id: motivoId,
           motivo: esMotivoOtro ? (a.otroMotivo ?? '') : '',
+          // PR-N3 — sin estos tres campos toda novedad quedaba de un día y
+          // sin horario, aunque el usuario hubiera dicho otra cosa.
+          fecha_fin: a.fechaFin || undefined,
+          hora_inicio: a.horaInicio || undefined,
+          hora_fin: a.horaFin || undefined,
         };
         if (isBackendId(a.id)) {
           // Dirty tracking: skip PUT si el snapshot inicial coincide.
           if (!itemCambio('ausencia', a)) continue;
-          updates.push(ausenciasApi.editar(parseInt(a.id), payload).catch(() => {}));
+          updates.push(
+            ausenciasApi.editar(parseInt(a.id), payload).catch((err: any) => {
+              erroresGuardado.push(`Ausencias: ${err?.message ?? 'no se pudo actualizar'}`);
+            }),
+          );
         } else {
           newAusencias.push({ localId: a.id, payload });
         }
@@ -1596,6 +1633,22 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
       // Cada bulk es una transacción en el backend → consistencia atómica por tipo.
       /** Detecta CALC_ERROR de precio_abono y devuelve un mensaje amigable
        *  con el gramaje faltante, para guiar al usuario a Configuración. */
+      /**
+       * PR-N3 — El 422 `NOVEDAD_SOLAPADA` es nuevo y trae `novedad{}` con la
+       * que estorba. Sin esto el usuario solo veía "error en bulk" y no tenía
+       * forma de saber que la novedad ya estaba registrada en otra parte.
+       */
+      const parseErrorAusencia = (e: any): string => {
+        if (e?.code !== OperacionesErrorCodes.NOVEDAD_SOLAPADA) {
+          return e?.message ?? 'error en bulk';
+        }
+        const n = e?.data?.novedad ?? e?.novedad;
+        if (!n) return e?.message ?? 'El colaborador ya tiene una novedad en esas fechas.';
+        const tipo = n.tipo?.nombre ?? n.categoria ?? 'novedad';
+        const nombre = n.empleado?.nombre_completo ?? 'El colaborador';
+        const donde = n.origen === 'PLANILLA' ? 'otra planilla' : 'el módulo de Novedades';
+        return `${nombre} ya tiene ${tipo} del ${n.fecha_inicio} al ${n.fecha_fin}, registrada desde ${donde}.`;
+      };
       const parseErrorJornal = (e: any): string => {
         const msg: string = e?.message ?? '';
         const code: string = e?.code ?? '';
@@ -1631,7 +1684,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           : Promise.resolve(null),
         newAusencias.length > 0
           ? ausenciasApi.bulkCrear(pid!, newAusencias.map(i => i.payload))
-              .catch((e: any) => { erroresGuardado.push(`Ausencias: ${e?.message ?? 'error en bulk'}`); return null; })
+              .catch((e: any) => { erroresGuardado.push(`Ausencias: ${parseErrorAusencia(e)}`); return null; })
           : Promise.resolve(null),
         // Bulk update de jornales individuales modificados — 1 sola petición.
         jornalesParaBulkUpdate.length > 0
@@ -2548,21 +2601,45 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
   // Funciones para ausentes
   const agregarAusente = () => {
-    if (colaboradorAusenteSeleccionado && motivoAusenteSeleccionado) {
-      if (motivoAusenteSeleccionado === 'Otro' && !otroMotivoAusente) {
-        return;
-      }
-      const nuevoAusente: AusenteRegistro = {
-        id: `ausente-${Date.now()}`,
-        colaboradorId: colaboradorAusenteSeleccionado,
-        motivo: motivoAusenteSeleccionado,
-        otroMotivo: motivoAusenteSeleccionado === 'Otro' ? otroMotivoAusente : undefined
-      };
-      setAusentes([...ausentes, nuevoAusente]);
-      setColaboradorAusenteSeleccionado('');
-      setMotivoAusenteSeleccionado('');
-      setOtroMotivoAusente('');
+    if (!colaboradorAusenteSeleccionado || !motivoAusenteSeleccionado) return;
+    if (motivoAusenteSeleccionado === 'Otro' && !otroMotivoAusente) return;
+
+    // PR-N3 — las dos horas o ninguna: el backend rechaza media con 422
+    // `HORARIO_INVALIDO`.
+    if (!!horaInicioAusente !== !!horaFinAusente) {
+      toast.error('Indica la hora de inicio y la de fin, o deja el horario vacío.');
+      return;
     }
+    if (horaInicioAusente && horaFinAusente && horaFinAusente <= horaInicioAusente) {
+      toast.error('La hora de fin debe ser posterior a la de inicio.');
+      return;
+    }
+    // Una novedad con horario es parcial: un solo día, el de la planilla.
+    if (horaInicioAusente && hastaAusente && hastaAusente !== fecha) {
+      toast.error('Una novedad por horas es de un solo día. Quita el "Hasta" o el horario.');
+      return;
+    }
+    if (hastaAusente && hastaAusente < fecha) {
+      toast.error('El "Hasta" no puede ser anterior a la fecha de la planilla.');
+      return;
+    }
+
+    const nuevoAusente: AusenteRegistro = {
+      id: `ausente-${Date.now()}`,
+      colaboradorId: colaboradorAusenteSeleccionado,
+      motivo: motivoAusenteSeleccionado,
+      otroMotivo: motivoAusenteSeleccionado === 'Otro' ? otroMotivoAusente : undefined,
+      fechaFin: hastaAusente && hastaAusente !== fecha ? hastaAusente : undefined,
+      horaInicio: horaInicioAusente || undefined,
+      horaFin: horaFinAusente || undefined,
+    };
+    setAusentes([...ausentes, nuevoAusente]);
+    setColaboradorAusenteSeleccionado('');
+    setMotivoAusenteSeleccionado('');
+    setOtroMotivoAusente('');
+    setHastaAusente('');
+    setHoraInicioAusente('');
+    setHoraFinAusente('');
   };
 
   const eliminarAusente = async (id: string) => {
@@ -2948,6 +3025,13 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                 motivoAusenteSeleccionado={motivoAusenteSeleccionado}
                 setMotivoAusenteSeleccionado={setMotivoAusenteSeleccionado}
                 setOtroMotivoAusente={setOtroMotivoAusente}
+                fecha={fecha}
+                hastaAusente={hastaAusente}
+                setHastaAusente={setHastaAusente}
+                horaInicioAusente={horaInicioAusente}
+                setHoraInicioAusente={setHoraInicioAusente}
+                horaFinAusente={horaFinAusente}
+                setHoraFinAusente={setHoraFinAusente}
                 motivosLista={motivosLista}
                 motivosMap={motivosMap}
                 agregarAusente={agregarAusente}
@@ -3525,9 +3609,59 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                               <div className="text-xs text-muted-foreground mt-0.5">
                                 {motivoMostrar}
                               </div>
+                              {/* PR-N3 — un rango o un horario cambian lo que
+                                  nómina va a descontar: va a la vista. */}
+                              {ausente.horaInicio && ausente.horaFin ? (
+                                <div className="text-xs text-sky-700 mt-0.5 dark:text-sky-400">
+                                  {ausente.horaInicio} a {ausente.horaFin} · parcial
+                                </div>
+                              ) : ausente.fechaFin && ausente.fechaFin !== fecha ? (
+                                <div className="text-xs text-muted-foreground mt-0.5">
+                                  Hasta {ausente.fechaFin}
+                                </div>
+                              ) : null}
                             </div>
                           );
                         })}
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* PR-N3 — Novedades del día que NO salieron de esta planilla
+                    (módulo de Novedades, importación, otra planilla). Sin esto
+                    el usuario registraba otra vez lo que ya estaba puesto y
+                    chocaba con 422 NOVEDAD_SOLAPADA al guardar. */}
+                {(resumen?.novedades_del_dia?.de_otras_fuentes ?? 0) > 0 && (
+                  <>
+                    <div className="h-px bg-border" />
+                    <div className="space-y-2">
+                      <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+                        Novedades del día
+                      </h4>
+                      <div className="rounded-md bg-muted/30 p-2 space-y-1 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Registradas en otra parte</span>
+                          <span className="font-semibold">
+                            {resumen!.novedades_del_dia!.de_otras_fuentes}
+                          </span>
+                        </div>
+                        {resumen!.novedades_del_dia!.pendientes > 0 && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Sin aprobar</span>
+                            <span className="font-semibold text-amber-700 dark:text-amber-400">
+                              {resumen!.novedades_del_dia!.pendientes}
+                            </span>
+                          </div>
+                        )}
+                        {resumen!.novedades_del_dia!.parciales > 0 && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Por horas</span>
+                            <span className="font-semibold">
+                              {resumen!.novedades_del_dia!.parciales}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </>
@@ -3625,6 +3759,12 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                   {(coberturaFaltantes?.operarios_faltantes.length ?? 0)}
                   {' '}operario(s) no registraron labor de palma, labor de
                   finca ni novedad para este día.
+                  {(coberturaFaltantes?.con_novedad?.length ?? 0) > 0 && (
+                    <>
+                      {' '}Otros {coberturaFaltantes!.con_novedad!.length} están
+                      cubiertos por una novedad y no cuentan como faltantes.
+                    </>
+                  )}
                   {coberturaModo === 'aprobar'
                     ? ' Puedes registrar su actividad antes o aprobar de todas formas.'
                     : ' Puedes guardar el borrador igual o volver a editar para agregarlos.'}
@@ -3644,6 +3784,30 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         </li>
                       ))}
                     </ul>
+                  </div>
+                )}
+                {/* PR-N3 — Los cubiertos por una novedad NO son faltantes: el
+                    backend ya los excluyó. Se listan los que solo están
+                    cubiertos por algo PENDIENTE, porque si nadie aprueba esa
+                    novedad el día se queda sin respaldo en nómina. */}
+                {(coberturaFaltantes?.con_novedad_pendiente?.length ?? 0) > 0 && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/30">
+                    <p className="text-xs font-semibold uppercase text-amber-800 mb-1.5 dark:text-amber-400">
+                      Con novedad sin aprobar ({coberturaFaltantes!.con_novedad_pendiente!.length})
+                    </p>
+                    <ul className="text-sm space-y-0.5 max-h-40 overflow-y-auto">
+                      {coberturaFaltantes!.con_novedad_pendiente!.map((c) => (
+                        <li key={`pend-${c.id}`}>
+                          {c.nombre_completo}
+                          <span className="text-xs text-muted-foreground ml-1">
+                            · {c.novedad.tipo.nombre}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-2 text-xs text-amber-800 dark:text-amber-400">
+                      Apruébalas en Novedades antes de liquidar la nómina.
+                    </p>
                   </div>
                 )}
                 {(coberturaFaltantes?.operarios_faltantes.length ?? 0) > 0 && (

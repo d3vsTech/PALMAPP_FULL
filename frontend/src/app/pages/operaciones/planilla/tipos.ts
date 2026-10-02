@@ -122,6 +122,20 @@ export interface AusenteRegistro {
   motivo: string;
   otroMotivo?: string;
   /**
+   * PR-N3 — "Hasta". Vacío = un solo día, el de la planilla. Es el campo que
+   * convierte una falta puntual en una incapacidad de varios días; sin él una
+   * incapacidad de 10 días quedaba registrada como un día y las planillas
+   * siguientes la volvían a pedir.
+   */
+  fechaFin?: string;
+  /**
+   * PR-N3 — "Horario", `HH:MM`. Las dos o ninguna. Con horas la novedad es
+   * PARCIAL: un solo día, informativa, no descuenta día en nómina ni cubre
+   * el día en la cobertura.
+   */
+  horaInicio?: string;
+  horaFin?: string;
+  /**
    * ID del motivo del catálogo (`motivos_ausencia.id`) — se guarda al cargar
    * la planilla desde el backend para que el render pueda resolver el nombre
    * contra `motivosMap` incluso si al momento del prefill ese mapa no estaba
@@ -155,6 +169,23 @@ export const ETAPAS = [
 /** Ventana de contrato del colaborador, tal como llega del bundle. */
 export type VentanaVinculacion = import('../../../../api/operaciones').VentanaVinculacion;
 
+/**
+ * PR-N3 — Novedad ya vigente el día de la planilla, venga de donde venga
+ * (otra planilla, el módulo de Novedades o una importación). Forma local de
+ * `novedades_vigentes[]` del wizard-init.
+ */
+export interface NovedadEnPlanilla {
+  fuente: 'AUSENCIA' | 'VACACION' | 'TERMINACION';
+  tipo: string;
+  estado: string;
+  fechaInicio: string;
+  fechaFin: string;
+  parcial: boolean;
+  horario: string | null;
+  /** True si la registró esta misma planilla: entonces no es un conflicto. */
+  deEstaPlanilla: boolean;
+}
+
 export interface VacacionEnPlanilla {
   comprobante: string;
   fechaInicio: string;
@@ -187,4 +218,11 @@ export interface ColaboradorWizard {
    * interrumpir y el trabajador pudo haber ido de verdad.
    */
   enVacaciones?: VacacionEnPlanilla;
+  /**
+   * PR-N3 — Presente cuando ya hay una novedad que cubre la fecha. Una
+   * novedad PARCIAL no se marca: son horas sueltas y el día sigue siendo
+   * trabajado. Solo bloquea registrar OTRA novedad (el backend responde 422
+   * `NOVEDAD_SOLAPADA`); el jornal se sigue permitiendo.
+   */
+  novedadVigente?: NovedadEnPlanilla;
 }

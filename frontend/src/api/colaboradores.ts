@@ -219,6 +219,8 @@ export interface ColaboradorSelectParams {
   estado?: boolean;
   modalidad_pago?: ModalidadPago;
   predio_id?: number;
+  /** Busca por nombre o documento (API_NOVEDADES §9). */
+  q?: string;
   /**
    * `YYYY-MM-DD` (2026-09-23). Devuelve solo a quienes tienen un contrato que
    * cubre ese día: `estado = true`, `fecha_inicio <= fecha` y
@@ -237,6 +239,20 @@ export interface ColaboradorSelectItem {
   nombre_completo: string;
   documento: string;
   modalidad_pago: ModalidadPago;
+  /**
+   * PR-N3. Solo se resuelve cuando se envía `fecha`; sin ella es `null` para
+   * todos. Marca al colaborador en el selector, no lo bloquea: una parcial no
+   * cubre el día y un PENDIENTE es una solicitud, no una ausencia concedida.
+   */
+  novedad_vigente?: {
+    fuente: 'AUSENCIA' | 'VACACION';
+    id: number;
+    tipo: { codigo: string; nombre: string; color: string | null };
+    estado: string;
+    fecha_inicio: string;
+    fecha_fin: string;
+    parcial: boolean;
+  } | null;
 }
 
 // ─── Tipos de documentos del colaborador (§7-§12) ─────────────────────────────

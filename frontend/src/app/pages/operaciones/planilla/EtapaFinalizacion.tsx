@@ -14,10 +14,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../../components/ui/select';
-import { Plus, Trash2, ClipboardList } from 'lucide-react';
+import { Input } from '../../../components/ui/input';
+import { Plus, Trash2, ClipboardList, Info } from 'lucide-react';
 import type { AusenteRegistro, ColaboradorWizard } from './tipos';
 import { opcionesSeleccionables } from './vinculacionPlanilla';
 import { etiquetaVacaciones } from './vacacionesPlanilla';
+import { etiquetaNovedad } from './novedadesPlanilla';
 
 interface Props {
   modoLectura: boolean;
@@ -30,6 +32,14 @@ interface Props {
   motivoAusenteSeleccionado: string;
   setMotivoAusenteSeleccionado: (v: string) => void;
   setOtroMotivoAusente: (v: string) => void;
+  /** PR-N3 — fecha de la planilla; es el piso del campo "Hasta". */
+  fecha: string;
+  hastaAusente: string;
+  setHastaAusente: (v: string) => void;
+  horaInicioAusente: string;
+  setHoraInicioAusente: (v: string) => void;
+  horaFinAusente: string;
+  setHoraFinAusente: (v: string) => void;
   motivosLista: string[];
   motivosMap: Map<string, number>;
   agregarAusente: () => void;
@@ -47,6 +57,13 @@ export function EtapaFinalizacion({
   motivoAusenteSeleccionado,
   setMotivoAusenteSeleccionado,
   setOtroMotivoAusente,
+  fecha,
+  hastaAusente,
+  setHastaAusente,
+  horaInicioAusente,
+  setHoraInicioAusente,
+  horaFinAusente,
+  setHoraFinAusente,
   motivosLista,
   motivosMap,
   agregarAusente,
@@ -83,7 +100,7 @@ export function EtapaFinalizacion({
           <Label>Novedades</Label>
           {!modoLectura && (
             <>
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="colaboradorAusente">Colaborador</Label>
                   <Select
@@ -103,11 +120,22 @@ export function EtapaFinalizacion({
                           /* PR-L8: unas vacaciones ya son la novedad del día.
                              Aquí no hay salida: no existe caso válido para
                              registrarle falta a alguien de vacaciones. */
-                          <SelectItem key={col.id} value={col.id} disabled={!!col.enVacaciones}>
+                          <SelectItem
+                            key={col.id}
+                            value={col.id}
+                            disabled={!!col.enVacaciones || !!col.novedadVigente}
+                          >
                             {col.nombres} {col.apellidos}
                             {col.enVacaciones && (
                               <span className="ml-2 text-xs text-amber-700 dark:text-amber-500">
                                 {etiquetaVacaciones(col.enVacaciones)}
+                              </span>
+                            )}
+                            {/* PR-N3: dos novedades el mismo día chocan con
+                                422 NOVEDAD_SOLAPADA. Se bloquea antes. */}
+                            {!col.enVacaciones && col.novedadVigente && (
+                              <span className="ml-2 text-xs text-amber-700 dark:text-amber-500">
+                                {etiquetaNovedad(col.novedadVigente)}
                               </span>
                             )}
                           </SelectItem>
@@ -138,6 +166,46 @@ export function EtapaFinalizacion({
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              {/* PR-N3 — "Hasta" y "Horario". Antes solo existía la fecha de
+                  la planilla, así que una incapacidad de 10 días se guardaba
+                  como un día y volvía a pedirse en cada planilla siguiente. */}
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="space-y-2">
+                  <Label htmlFor="hastaAusente">Hasta</Label>
+                  <Input
+                    id="hastaAusente"
+                    type="date"
+                    value={hastaAusente}
+                    min={fecha || undefined}
+                    disabled={!!horaInicioAusente || !!horaFinAusente}
+                    onChange={(e) => setHastaAusente(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Vacío = solo el día de la planilla
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="horaInicioAusente">Horario (opcional)</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="horaInicioAusente"
+                      type="time"
+                      value={horaInicioAusente}
+                      disabled={!!hastaAusente}
+                      onChange={(e) => setHoraInicioAusente(e.target.value)}
+                    />
+                    <span className="text-sm text-muted-foreground">a</span>
+                    <Input
+                      aria-label="Hora de fin"
+                      type="time"
+                      value={horaFinAusente}
+                      disabled={!!hastaAusente}
+                      onChange={(e) => setHoraFinAusente(e.target.value)}
+                    />
+                  </div>
+                </div>
                 <div className="space-y-2">
                   <Label>&nbsp;</Label>
                   <Button
@@ -151,16 +219,27 @@ export function EtapaFinalizacion({
                   </Button>
                 </div>
               </div>
+
+              {(horaInicioAusente || horaFinAusente) && (
+                <div className="flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-300">
+                  <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <p>
+                    Con horario la novedad es informativa: se registra el permiso
+                    por horas pero el día sigue contando como trabajado en nómina.
+                  </p>
+                </div>
+              )}
             </>
           )}
 
           {ausentes.length > 0 && (
             <div className="border border-border rounded-lg overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full min-w-[640px]">
                 <thead className="bg-muted/50">
                   <tr>
                     <th className="text-left p-3 text-sm font-semibold">Colaborador</th>
                     <th className="text-left p-3 text-sm font-semibold">Motivo</th>
+                    <th className="text-left p-3 text-sm font-semibold">Periodo</th>
                     <th className="text-right p-3 text-sm font-semibold">Acciones</th>
                   </tr>
                 </thead>
@@ -183,12 +262,27 @@ export function EtapaFinalizacion({
                       }
                     }
                     motivoMostrar = motivoMostrar || '—';
+                    // PR-N3 — el periodo real de la novedad: un rango, un
+                    // horario o el día de la planilla.
+                    const periodo = ausente.horaInicio && ausente.horaFin
+                      ? `${ausente.horaInicio} a ${ausente.horaFin}`
+                      : ausente.fechaFin && ausente.fechaFin !== fecha
+                        ? `${fecha} al ${ausente.fechaFin}`
+                        : fecha || 'Un día';
                     return (
                       <tr key={ausente.id} className="border-t border-border">
                         <td className="p-3 text-sm">
                           {col ? `${col.nombres} ${col.apellidos}` : '-'}
                         </td>
                         <td className="p-3 text-sm">{motivoMostrar}</td>
+                        <td className="p-3 text-sm">
+                          {periodo}
+                          {ausente.horaInicio && (
+                            <span className="ml-2 rounded-full bg-sky-100 px-2 py-0.5 text-xs text-sky-800 dark:bg-sky-950/40 dark:text-sky-300">
+                              Parcial
+                            </span>
+                          )}
+                        </td>
                         <td className="p-3 text-right">
                           <Button
                             variant="ghost"

@@ -1,226 +1,62 @@
 /**
- * Catálogo de novedades laborales.
+ * Piezas de presentación del módulo de novedades.
  *
- * Fuente única de verdad del módulo: ambas pantallas leen de aquí en vez de
- * duplicar etiquetas, colores o reglas de remuneración. Si mañana entra el
- * backend, lo único que cambia es de dónde sale `TIPOS_NOVEDAD`.
+ * El catálogo de motivos **no vive aquí**: sale de `GET novedades/init` y cambia
+ * por finca (API_NOVEDADES §3). Lo único que se fija en el front es qué ícono
+ * acompaña a cada `tipo_base` y cómo se formatean fechas y días.
  */
 import {
   Activity, Baby, Ban, CalendarCheck, Clock, FileX, Heart, Home,
-  LogOut, ShieldAlert, Umbrella, UserMinus, UserX, type LucideIcon,
+  ShieldAlert, Umbrella, UserMinus, UserX, type LucideIcon,
 } from 'lucide-react';
+import type {
+  CategoriaNovedad, MotivoNovedad, TipoBaseAusencia,
+} from '../../../api/novedades';
 
-export type TipoNovedad =
-  | 'AUSENCIA_INJUSTIFICADA'
-  | 'CALAMIDAD_DOMESTICA'
-  | 'INCAPACIDAD_ARL'
-  | 'INCAPACIDAD_EPS'
-  | 'LICENCIA_MATERNIDAD'
-  | 'LICENCIA_PATERNIDAD'
-  | 'LICENCIA_LUTO'
-  | 'PERMISO_NO_REMUNERADO'
-  | 'PERMISO_REMUNERADO'
-  | 'SUSPENSION_DISCIPLINARIA'
-  | 'RENUNCIA'
-  | 'FINALIZACION_CONTRATO'
-  | 'VACACIONES';
+export type {
+  CategoriaNovedad, FuenteNovedad, TipoBaseAusencia, MotivoNovedad, MotivoRetiro,
+  CategoriaInit, InitNovedades, NovedadFila, AusenciaDetalle, AdvertenciaNovedad,
+} from '../../../api/novedades';
 
-export type CategoriaNovedad =
-  | 'permisos'
-  | 'incapacidades'
-  | 'ausencias'
-  | 'vacaciones'
-  | 'terminacion';
-
-export interface InfoTipoNovedad {
-  /** Etiqueta visible al usuario. */
-  label: string;
-  /** Clases del badge, con su variante oscura. */
-  color: string;
-  /** Clase del punto de color que acompaña al badge. */
-  dot: string;
-  /** Ícono representativo del tipo. */
-  icono: LucideIcon;
-  categoria: CategoriaNovedad;
-  remunerado: boolean;
-  /** Porcentaje del salario que se paga. `—` cuando no aplica. */
-  pct: string;
-  afectaSubsidio: boolean;
-  /** Pide franja horaria además de las fechas. */
-  requiereHoras: boolean;
-  /** Admite soporte documental. `labelAdjunto` describe cuál. */
-  tieneAdjunto: boolean;
-  labelAdjunto: string;
-}
-
-export const TIPOS_NOVEDAD: Record<TipoNovedad, InfoTipoNovedad> = {
-  PERMISO_REMUNERADO: {
-    label: 'Permiso remunerado',
-    color: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400',
-    dot: 'bg-emerald-500', icono: CalendarCheck, categoria: 'permisos',
-    remunerado: true, pct: '100%', afectaSubsidio: false,
-    requiereHoras: true, tieneAdjunto: true, labelAdjunto: 'Solicitud o autorización',
-  },
-  PERMISO_NO_REMUNERADO: {
-    label: 'Permiso no remunerado',
-    color: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400',
-    dot: 'bg-red-500', icono: Clock, categoria: 'permisos',
-    remunerado: false, pct: '0%', afectaSubsidio: true,
-    requiereHoras: true, tieneAdjunto: true, labelAdjunto: 'Solicitud escrita',
-  },
-  CALAMIDAD_DOMESTICA: {
-    label: 'Calamidad doméstica',
-    color: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/30 dark:text-orange-400',
-    dot: 'bg-orange-500', icono: Home, categoria: 'permisos',
-    remunerado: true, pct: '100%', afectaSubsidio: false,
-    requiereHoras: true, tieneAdjunto: true, labelAdjunto: 'Certificado o prueba',
-  },
-  LICENCIA_MATERNIDAD: {
-    label: 'Licencia de maternidad',
-    color: 'bg-pink-50 text-pink-700 border-pink-200 dark:bg-pink-950/30 dark:text-pink-400',
-    dot: 'bg-pink-500', icono: Baby, categoria: 'permisos',
-    remunerado: true, pct: '100%', afectaSubsidio: false,
-    requiereHoras: false, tieneAdjunto: true, labelAdjunto: 'Certificado médico',
-  },
-  LICENCIA_PATERNIDAD: {
-    label: 'Licencia de paternidad',
-    color: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/30 dark:text-purple-400',
-    dot: 'bg-purple-500', icono: Baby, categoria: 'permisos',
-    remunerado: true, pct: '100%', afectaSubsidio: false,
-    requiereHoras: false, tieneAdjunto: true, labelAdjunto: 'Registro civil del bebé',
-  },
-  LICENCIA_LUTO: {
-    label: 'Licencia por luto',
-    color: 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800/30 dark:text-slate-400',
-    dot: 'bg-slate-500', icono: Heart, categoria: 'permisos',
-    remunerado: true, pct: '100%', afectaSubsidio: false,
-    requiereHoras: false, tieneAdjunto: true, labelAdjunto: 'Certificado de defunción',
-  },
-  INCAPACIDAD_EPS: {
-    label: 'Incapacidad EPS',
-    color: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/30 dark:text-sky-400',
-    dot: 'bg-sky-400', icono: Activity, categoria: 'incapacidades',
-    remunerado: true, pct: '66.67%', afectaSubsidio: true,
-    requiereHoras: false, tieneAdjunto: true, labelAdjunto: 'Incapacidad médica EPS',
-  },
-  INCAPACIDAD_ARL: {
-    label: 'Incapacidad ARL',
-    color: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800/30',
-    dot: 'bg-blue-500', icono: ShieldAlert, categoria: 'incapacidades',
-    remunerado: true, pct: '100%', afectaSubsidio: true,
-    requiereHoras: false, tieneAdjunto: true, labelAdjunto: 'Incapacidad ARL',
-  },
-  AUSENCIA_INJUSTIFICADA: {
-    label: 'Ausencia injustificada',
-    color: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800/30',
-    dot: 'bg-blue-500', icono: UserX, categoria: 'ausencias',
-    remunerado: false, pct: '0%', afectaSubsidio: true,
-    requiereHoras: true, tieneAdjunto: false, labelAdjunto: '',
-  },
-  SUSPENSION_DISCIPLINARIA: {
-    label: 'Suspensión disciplinaria',
-    color: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400',
-    dot: 'bg-amber-500', icono: Ban, categoria: 'ausencias',
-    remunerado: false, pct: '0%', afectaSubsidio: true,
-    requiereHoras: false, tieneAdjunto: true, labelAdjunto: 'Acta disciplinaria',
-  },
-  VACACIONES: {
-    label: 'Vacaciones',
-    color: 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/30 dark:text-teal-400',
-    dot: 'bg-teal-500', icono: Umbrella, categoria: 'vacaciones',
-    remunerado: true, pct: '100%', afectaSubsidio: false,
-    requiereHoras: false, tieneAdjunto: false, labelAdjunto: '',
-  },
-  RENUNCIA: {
-    label: 'Renuncia',
-    color: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-400',
-    dot: 'bg-rose-600', icono: LogOut, categoria: 'terminacion',
-    remunerado: false, pct: '—', afectaSubsidio: false,
-    requiereHoras: false, tieneAdjunto: true, labelAdjunto: 'Carta de renuncia',
-  },
-  FINALIZACION_CONTRATO: {
-    label: 'Finalización de contrato',
-    color: 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-800/30 dark:text-gray-400',
-    dot: 'bg-gray-500', icono: FileX, categoria: 'terminacion',
-    remunerado: false, pct: '—', afectaSubsidio: false,
-    requiereHoras: false, tieneAdjunto: true, labelAdjunto: 'Acta de terminación',
-  },
+/** Ícono por `tipo_base`. Un motivo custom hereda el de su tipo. */
+export const ICONO_TIPO: Record<TipoBaseAusencia, LucideIcon> = {
+  PERMISO_REMUNERADO: CalendarCheck,
+  PERMISO_NO_REMUNERADO: Clock,
+  CALAMIDAD_DOMESTICA: Home,
+  LICENCIA_MATERNIDAD: Baby,
+  LICENCIA_PATERNIDAD: Baby,
+  LICENCIA_LUTO: Heart,
+  INCAPACIDAD_EPS: Activity,
+  INCAPACIDAD_ARL: ShieldAlert,
+  AUSENCIA_INJUSTIFICADA: UserX,
+  SUSPENSION_DISCIPLINARIA: Ban,
+  OTRO: CalendarCheck,
 };
 
-export interface InfoCategoria {
-  key: CategoriaNovedad;
-  label: string;
-  icono: LucideIcon;
-  tipos: TipoNovedad[];
+/** Ícono de cada pestaña del Paso 1. */
+export const ICONO_CATEGORIA: Record<CategoriaNovedad, LucideIcon> = {
+  PERMISOS_LICENCIAS: CalendarCheck,
+  INCAPACIDADES: Activity,
+  AUSENCIAS_SANCIONES: UserMinus,
+  VACACIONES: Umbrella,
+  TERMINACION_CONTRATO: FileX,
+};
+
+export function iconoDeMotivo(motivo: MotivoNovedad): LucideIcon {
+  return ICONO_TIPO[motivo.tipo_base] ?? CalendarCheck;
 }
 
-const ORDEN_CATEGORIAS: { key: CategoriaNovedad; label: string; icono: LucideIcon }[] = [
-  { key: 'permisos',      label: 'Permisos y Licencias',    icono: CalendarCheck },
-  { key: 'incapacidades', label: 'Incapacidades',           icono: Activity      },
-  { key: 'ausencias',     label: 'Ausencias y Sanciones',   icono: UserMinus     },
-  { key: 'vacaciones',    label: 'Vacaciones',              icono: Umbrella      },
-  { key: 'terminacion',   label: 'Terminación de Contrato', icono: FileX         },
-];
-
-const TIPOS_ORDENADOS = Object.keys(TIPOS_NOVEDAD) as TipoNovedad[];
-
-/** Las pestañas del paso 1. Los tipos se derivan del catálogo, no se repiten. */
-export const CATEGORIAS: InfoCategoria[] = ORDEN_CATEGORIAS.map((cat) => ({
-  ...cat,
-  tipos: TIPOS_ORDENADOS.filter((t) => TIPOS_NOVEDAD[t].categoria === cat.key),
-}));
-
-export function categoriaDe(tipo: TipoNovedad): InfoCategoria {
-  return CATEGORIAS.find((c) => c.key === TIPOS_NOVEDAD[tipo].categoria)!;
+/** Las incapacidades piden entidad y número de radicado. */
+export function esIncapacidad(motivo: MotivoNovedad | null): boolean {
+  return motivo?.tipo_base === 'INCAPACIDAD_EPS' || motivo?.tipo_base === 'INCAPACIDAD_ARL';
 }
 
-/** Renuncia y finalización no tienen rango: son una fecha efectiva. */
-export function esTerminacion(tipo: TipoNovedad | null): boolean {
-  return tipo === 'RENUNCIA' || tipo === 'FINALIZACION_CONTRATO';
-}
-
-export function esIncapacidad(tipo: TipoNovedad | null): boolean {
-  return tipo === 'INCAPACIDAD_EPS' || tipo === 'INCAPACIDAD_ARL';
-}
-
-export const CAUSAS_RENUNCIA = [
-  { value: 'RENUNCIA_VOLUNTARIA', label: 'Renuncia voluntaria' },
-  { value: 'RENUNCIA_PRESIONADA', label: 'Renuncia presionada' },
-] as const;
-
-export const CAUSAS_FINALIZACION = [
-  { value: 'VENCIMIENTO_CONTRATO',    label: 'Vencimiento de contrato'      },
-  { value: 'MUTUO_ACUERDO',           label: 'Mutuo acuerdo'                },
-  { value: 'DESPIDO_JUSTA_CAUSA',     label: 'Despido con justa causa'      },
-  { value: 'DESPIDO_SIN_JUSTA_CAUSA', label: 'Despido sin justa causa'      },
-  { value: 'OBRA_TERMINADA',          label: 'Terminación de obra o labor'  },
-] as const;
-
-export function causasDe(tipo: TipoNovedad | null) {
-  return tipo === 'RENUNCIA' ? CAUSAS_RENUNCIA : CAUSAS_FINALIZACION;
-}
-
-// ── Modelos ───────────────────────────────────────────────────────────────────
-
-export interface Colaborador {
-  id: string;
-  nombre: string;
-  cedula: string;
-  cargo: string;
-}
-
-export interface Novedad {
-  id: string;
-  colaborador: string;
-  cedula: string;
-  cargo: string;
-  tipo: TipoNovedad;
-  /** ISO `YYYY-MM-DD`. En terminaciones es la fecha efectiva. */
-  fechaInicio: string;
-  fechaFin: string;
-  dias: number;
-  observaciones?: string;
-  fechaRegistro: string;
+/** `"66.67"` → `"66.67%"`. Las terminaciones no tienen porcentaje. */
+export function formatPorcentaje(valor: string | number | null): string {
+  if (valor === null || valor === undefined || valor === '') return '—';
+  const n = Number(valor);
+  if (Number.isNaN(n)) return String(valor);
+  return `${n % 1 === 0 ? n.toFixed(0) : n.toFixed(2)}%`;
 }
 
 // ── Formato ───────────────────────────────────────────────────────────────────
@@ -229,28 +65,28 @@ export interface Novedad {
  * Las fechas llegan como `YYYY-MM-DD`. El `T00:00:00` evita que el navegador
  * las lea como UTC y las corra un día hacia atrás en la zona de Colombia.
  */
-export function formatFecha(iso: string): string {
-  if (!iso) return '';
+export function formatFecha(iso: string | null): string {
+  if (!iso) return '—';
   return new Date(`${iso}T00:00:00`).toLocaleDateString('es-CO', {
     day: '2-digit', month: 'short', year: 'numeric',
   });
 }
 
-export function formatFechaLarga(iso: string): string {
-  if (!iso) return '';
+export function formatFechaLarga(iso: string | null): string {
+  if (!iso) return '—';
   return new Date(`${iso}T00:00:00`).toLocaleDateString('es-CO', {
     day: '2-digit', month: 'long', year: 'numeric',
   });
 }
 
-export function formatFechaCorta(iso: string): string {
-  if (!iso) return '';
+export function formatFechaCorta(iso: string | null): string {
+  if (!iso) return '—';
   return new Date(`${iso}T00:00:00`).toLocaleDateString('es-CO', {
     day: '2-digit', month: 'short',
   });
 }
 
-export function formatHora(hhmm: string): string {
+export function formatHora(hhmm: string | null): string {
   if (!hhmm) return '';
   const [hh, mm] = hhmm.split(':');
   const n = Number(hh);
@@ -276,7 +112,40 @@ export function iniciales(nombre: string): string {
   return nombre.trim().split(/\s+/).slice(0, 2).map((p) => p[0] ?? '').join('').toUpperCase();
 }
 
-/** `DESPIDO_JUSTA_CAUSA` → `Despido Justa Causa`. */
-export function humanizarCausa(causa: string): string {
-  return causa.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+export function hoyIso(): string {
+  return new Date().toISOString().slice(0, 10);
 }
+
+// ── Estados ───────────────────────────────────────────────────────────────────
+
+/** Clases del badge por estado. Las tres fuentes usan nombres distintos. */
+export const ESTADO_BADGE: Record<string, string> = {
+  PENDIENTE: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400',
+  APROBADA: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400',
+  RECHAZADA: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400',
+  LIQUIDADA: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/30 dark:text-sky-400',
+  PAGADA: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400',
+  PROGRAMADA: 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800/30 dark:text-slate-400',
+  EFECTIVA: 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-800/30 dark:text-gray-400',
+};
+
+export const ESTADO_LABEL: Record<string, string> = {
+  PENDIENTE: 'Pendiente',
+  APROBADA: 'Aprobada',
+  RECHAZADA: 'Rechazada',
+  LIQUIDADA: 'Liquidada',
+  PAGADA: 'Pagada',
+  PROGRAMADA: 'Programada',
+  EFECTIVA: 'Efectiva',
+};
+
+export const ORIGEN_LABEL: Record<string, string> = {
+  PLANILLA: 'Planilla',
+  NOVEDADES: 'Novedades',
+  IMPORTACION: 'Importación',
+  SISTEMA: 'Sistema',
+  HISTORICO: 'Histórico',
+  LIQUIDACION_FINAL: 'Liquidación final',
+  CONTRATO: 'Contrato',
+  FICHA: 'Ficha',
+};

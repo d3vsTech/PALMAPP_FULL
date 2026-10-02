@@ -1,39 +1,54 @@
 /**
  * Paso 2: datos de la novedad.
  *
- * Los campos que se muestran dependen del tipo elegido: horario solo si lo
- * exige, radicado y diagnóstico solo en incapacidades, causa solo en
- * terminaciones. Todo sale del catálogo, no de condiciones sueltas aquí.
+ * Lo que se pide depende de la pestaña: una ausencia admite rango y horario,
+ * una solicitud de vacaciones pide días hábiles o fecha fin, y una terminación
+ * pide la causa del catálogo de retiro.
  */
 import { Card, CardContent } from '../../../components/ui/card';
 import { Badge } from '../../../components/ui/badge';
 import { Input } from '../../../components/ui/input';
 import { Label } from '../../../components/ui/label';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '../../../components/ui/select';
 import { AlertCircle, Clock, FileText, Info } from 'lucide-react';
 import { BuscadorColaborador } from './BuscadorColaborador';
 import { CampoAdjunto } from './CampoAdjunto';
-import type { BorradorNovedad } from '../borrador';
 import {
-  TIPOS_NOVEDAD, calcularDias, causasDe, esIncapacidad, esTerminacion,
-  etiquetaDias, formatHora, type Colaborador, type TipoNovedad,
+  esAusencia, esParcial, esTerminacion, esVacaciones, type BorradorNovedad,
+} from '../borrador';
+import type { CategoriaInit } from '../../../../api/novedades';
+import {
+  calcularDias, esIncapacidad, etiquetaDias, formatHora, formatPorcentaje,
 } from '../tipos';
 
-const CLASE_SELECT =
-  'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ' +
-  'ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+const CLASE_TEXTAREA =
+  'flex w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm ' +
+  'ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none ' +
+  'focus-visible:ring-2 focus-visible:ring-ring';
 
 interface Props {
-  tipo: TipoNovedad;
   borrador: BorradorNovedad;
-  colaboradores: Colaborador[];
+  /** Para leer `motivos_retiro[]` de la pestaña de terminación. */
+  categorias: CategoriaInit[];
+  soporte: { mimes: string[]; max_kb: number };
   onCambiar: (parcial: Partial<BorradorNovedad>) => void;
 }
 
-export function PasoDetalles({ tipo, borrador, colaboradores, onCambiar }: Props) {
-  const info = TIPOS_NOVEDAD[tipo];
-  const terminacion = esTerminacion(tipo);
-  const incapacidad = esIncapacidad(tipo);
-  const dias = calcularDias(borrador.fechaInicio, borrador.fechaFin);
+export function PasoDetalles({ borrador, categorias, soporte, onCambiar }: Props) {
+  const ausencia = esAusencia(borrador);
+  const vacaciones = esVacaciones(borrador);
+  const terminacion = esTerminacion(borrador);
+  const parcial = esParcial(borrador);
+  const motivo = borrador.motivo;
+
+  const motivosRetiro = categorias.find((c) => c.codigo === 'TERMINACION_CONTRATO')?.motivos_retiro ?? [];
+  const dias = calcularDias(borrador.fechaInicio, borrador.fechaFin || borrador.fechaInicio);
+
+  const titulo = terminacion
+    ? 'Datos de la terminación'
+    : vacaciones ? 'Datos de la solicitud' : 'Datos de la novedad';
 
   return (
     <Card className="border-border">
@@ -43,47 +58,127 @@ export function PasoDetalles({ tipo, borrador, colaboradores, onCambiar }: Props
             <FileText className="h-5 w-5 text-primary" />
           </div>
           <div className="min-w-0 flex-1">
-            <h2 className="text-lg font-semibold">Detalles de la novedad</h2>
-            <div className="mt-1 flex items-center gap-2">
-              <span className={`h-2 w-2 rounded-full ${info.dot}`} />
-              <Badge variant="outline" className={`text-xs ${info.color}`}>{info.label}</Badge>
-            </div>
+            <h2 className="text-lg font-semibold">{titulo}</h2>
+            {motivo ? (
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <Badge variant="outline" className="text-xs" style={motivo.color ? { borderColor: motivo.color, color: motivo.color } : undefined}>
+                  {motivo.nombre}
+                </Badge>
+                <span className="text-xs text-muted-foreground">
+                  {motivo.es_remunerada ? `Remunerado ${formatPorcentaje(motivo.porcentaje_pago_default)}` : 'No remunerado'}
+                  {' · '}
+                  {motivo.afecta_auxilio_transporte ? 'descuenta auxilio' : 'conserva el auxilio'}
+                </span>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {vacaciones ? 'Queda pendiente hasta que Liquidaciones la apruebe' : 'Registra el retiro del colaborador'}
+              </p>
+            )}
           </div>
         </div>
 
         <BuscadorColaborador
-          colaboradores={colaboradores}
+          fecha={borrador.fechaInicio}
           seleccionadoId={borrador.colaboradorId}
-          onSeleccionar={(colaboradorId) => onCambiar({ colaboradorId })}
+          nombreInicial={borrador.colaboradorNombre}
+          onSeleccionar={(colaboradorId, colaboradorNombre) => onCambiar({ colaboradorId, colaboradorNombre })}
         />
 
-        <div className={`grid gap-4 ${terminacion ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
-          <div className="space-y-1.5">
-            <Label>{terminacion ? 'Fecha efectiva de terminación' : 'Fecha inicio'}</Label>
-            <Input
-              type="date"
-              value={borrador.fechaInicio}
-              onChange={(e) => onCambiar({ fechaInicio: e.target.value })}
-            />
-          </div>
-          {!terminacion && (
+        {/* ── Fechas ────────────────────────────────────────────────────── */}
+        {terminacion ? (
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>Fecha fin</Label>
+              <Label>Fecha de retiro <span className="text-destructive">*</span></Label>
+              <Input
+                type="date"
+                value={borrador.fechaInicio}
+                onChange={(e) => onCambiar({ fechaInicio: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Puede ser futura: la ficha se apaga ese día.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Causa de terminación <span className="text-destructive">*</span></Label>
+              <Select
+                value={borrador.motivoRetiro}
+                onValueChange={(motivoRetiro) => onCambiar({ motivoRetiro })}
+              >
+                <SelectTrigger><SelectValue placeholder="Seleccionar causa..." /></SelectTrigger>
+                <SelectContent>
+                  {motivosRetiro.map((m) => (
+                    <SelectItem key={m.codigo} value={m.codigo}>
+                      {m.etiqueta}{m.indemniza ? ' (indemniza)' : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        ) : vacaciones ? (
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+            <div className="space-y-1.5">
+              <Label>Fecha de inicio <span className="text-destructive">*</span></Label>
+              <Input
+                type="date"
+                value={borrador.fechaInicio}
+                onChange={(e) => onCambiar({ fechaInicio: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">Debe ser hoy o posterior, y día hábil.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Días hábiles</Label>
+              <Input
+                type="number" min={1} max={60} placeholder="15"
+                value={borrador.diasHabiles}
+                onChange={(e) => onCambiar({ diasHabiles: e.target.value, fechaFin: '' })}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>o Fecha fin</Label>
               <Input
                 type="date"
                 value={borrador.fechaFin}
                 min={borrador.fechaInicio}
-                onChange={(e) => onCambiar({ fechaFin: e.target.value })}
+                onChange={(e) => onCambiar({ fechaFin: e.target.value, diasHabiles: '' })}
               />
             </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Fecha de inicio <span className="text-destructive">*</span></Label>
+              <Input
+                type="date"
+                value={borrador.fechaInicio}
+                onChange={(e) => onCambiar({ fechaInicio: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Hasta <span className="font-normal text-muted-foreground">(opcional)</span></Label>
+              <Input
+                type="date"
+                value={borrador.fechaFin}
+                min={borrador.fechaInicio}
+                disabled={parcial}
+                onChange={(e) => onCambiar({ fechaFin: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                {parcial ? 'Una novedad con horario es de un solo día.' : 'Vacío = un solo día.'}
+              </p>
+            </div>
+          </div>
+        )}
 
-        {info.requiereHoras && (
+        {/* ── Horario: cualquier ausencia puede ser parcial ─────────────── */}
+        {ausencia && (
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-muted-foreground" />
-              <Label className="text-sm font-medium">Horario</Label>
+              <Label className="text-sm font-medium">
+                Horario <span className="font-normal text-muted-foreground">(opcional)</span>
+              </Label>
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
@@ -104,92 +199,89 @@ export function PasoDetalles({ tipo, borrador, colaboradores, onCambiar }: Props
                 />
               </div>
             </div>
-          </div>
-        )}
-
-        {!terminacion && dias > 0 && (
-          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2.5 text-sm">
-            <Info className="h-4 w-4 shrink-0 text-primary" />
-            <span className="text-muted-foreground">Días de novedad:</span>
-            <span className="font-bold text-primary">{dias} {etiquetaDias(dias)}</span>
-            {info.requiereHoras && borrador.horaInicio && borrador.horaFin && (
-              <>
-                <span className="mx-1 text-muted-foreground">·</span>
+            {parcial && (
+              <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/20 px-4 py-2.5 text-xs">
+                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 <span className="text-muted-foreground">
-                  {formatHora(borrador.horaInicio)} – {formatHora(borrador.horaFin)}
+                  De {formatHora(borrador.horaInicio)} a {formatHora(borrador.horaFin)}. Es informativa:
+                  no cuenta como día de ausencia en nómina ni cubre el día en la planilla.
                 </span>
-              </>
+              </div>
             )}
           </div>
         )}
 
-        {incapacidad && (
+        {ausencia && !parcial && borrador.fechaInicio && dias > 0 && (
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2.5 text-sm">
+            <Info className="h-4 w-4 shrink-0 text-primary" />
+            <span className="text-muted-foreground">Días de novedad:</span>
+            <span className="font-bold text-primary">{dias} {etiquetaDias(dias)}</span>
+          </div>
+        )}
+
+        {/* ── Incapacidades: entidad y radicado ─────────────────────────── */}
+        {esIncapacidad(motivo) && (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>Número de radicado</Label>
+              <Label>Entidad (EPS o ARL)</Label>
               <Input
-                placeholder="Ej: 2026-88210"
-                value={borrador.radicado}
-                onChange={(e) => onCambiar({ radicado: e.target.value })}
+                placeholder="Ej: EPS SURA"
+                maxLength={100}
+                value={borrador.entidad}
+                onChange={(e) => onCambiar({ entidad: e.target.value })}
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Diagnóstico (CIE-10)</Label>
+              <Label>Número de radicado</Label>
               <Input
-                placeholder="Ej: J06 - Infección respiratoria"
-                value={borrador.diagnostico}
-                onChange={(e) => onCambiar({ diagnostico: e.target.value })}
+                placeholder="Ej: INC-2026-0412"
+                maxLength={50}
+                value={borrador.numeroRadicado}
+                onChange={(e) => onCambiar({ numeroRadicado: e.target.value })}
               />
             </div>
           </div>
         )}
 
         {terminacion && (
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label>Causa de terminación</Label>
-              <select
-                value={borrador.causaTerminacion}
-                onChange={(e) => onCambiar({ causaTerminacion: e.target.value })}
-                className={CLASE_SELECT}
-              >
-                <option value="">Seleccionar causa...</option>
-                {causasDe(tipo).map((c) => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/30 dark:bg-amber-950/20">
-              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-              <div className="text-sm">
-                <p className="font-semibold text-amber-800 dark:text-amber-300">Genera liquidación final</p>
-                <p className="mt-0.5 text-amber-700 dark:text-amber-400">
-                  Al confirmar esta novedad, se creará automáticamente una liquidación final
-                  pendiente para el colaborador.
-                </p>
-              </div>
+          <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/30 dark:bg-amber-950/20">
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+            <div className="text-sm">
+              <p className="font-semibold text-amber-800 dark:text-amber-300">Esto no liquida</p>
+              <p className="mt-0.5 text-amber-700 dark:text-amber-400">
+                Al confirmar queda el retiro en la ficha y el contrato terminado. La liquidación
+                final se hace después, desde el enlace que aparece al terminar.
+              </p>
             </div>
           </div>
         )}
 
-        {info.tieneAdjunto && (
-          <CampoAdjunto
-            etiqueta={info.labelAdjunto}
-            archivo={borrador.adjunto}
-            onCambiar={(adjunto) => onCambiar({ adjunto })}
-          />
-        )}
+        <CampoAdjunto
+          etiqueta={terminacion ? 'Carta o acta de terminación' : vacaciones ? 'Carta de solicitud' : 'Soporte'}
+          ayuda={
+            terminacion
+              ? 'Solo PDF.'
+              : motivo?.requiere_soporte
+                ? 'Este motivo pide soporte. Si no lo tiene ahora, puede adjuntarlo después desde el detalle.'
+                : undefined
+          }
+          mimes={terminacion ? ['pdf'] : soporte.mimes}
+          maxKb={soporte.max_kb}
+          archivo={borrador.documento}
+          onCambiar={(documento) => onCambiar({ documento })}
+        />
 
         <div className="space-y-1.5">
           <Label>
             Observaciones <span className="font-normal text-muted-foreground">(opcional)</span>
           </Label>
           <textarea
-            value={borrador.observaciones}
-            onChange={(e) => onCambiar({ observaciones: e.target.value })}
+            value={borrador.observacion}
+            onChange={(e) => onCambiar({ observacion: e.target.value })}
             rows={3}
+            maxLength={terminacion ? 500 : 2000}
             placeholder="Detalles adicionales sobre la novedad..."
-            className="flex w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={CLASE_TEXTAREA}
           />
         </div>
       </CardContent>

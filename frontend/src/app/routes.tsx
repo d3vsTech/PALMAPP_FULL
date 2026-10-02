@@ -106,6 +106,7 @@ const DesprendiblePago = lazyWithRetry(() => import('./pages/nomina/Desprendible
 // Novedades
 const NovedadesPage = lazyWithRetry(() => import('./pages/novedades/NovedadesPage'));
 const NuevaNovedadPage = lazyWithRetry(() => import('./pages/novedades/NuevaNovedadPage'));
+const ImportarNovedadesPage = lazyWithRetry(() => import('./pages/novedades/ImportarNovedadesPage'));
 
 // Liquidaciones
 const LiquidacionesLayout = lazyWithRetry(() => import('./pages/liquidaciones/LiquidacionesLayout'));
@@ -357,6 +358,7 @@ export const router = createBrowserRouter([
 
       { path: 'novedades',                 element: P('novedades.ver', <NovedadesPage />) },
       { path: 'novedades/nueva',           element: P('novedades.ver', <NuevaNovedadPage />) },
+      { path: 'novedades/importar',        element: P('novedades.importar', <ImportarNovedadesPage />) },
 
       { path: 'viajes',                    element: P('remisiones.ver', <Viajes />) },
       { path: 'viajes/ajustes-cosecha',    element: P('remisiones.ver', <AjustesCosecha />) },

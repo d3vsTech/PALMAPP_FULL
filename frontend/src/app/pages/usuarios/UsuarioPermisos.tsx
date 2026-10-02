@@ -144,6 +144,18 @@ const MODULOS: Modulo[] = [
     ],
   },
   {
+    id: 'novedades',
+    nombre: 'Novedades',
+    permisos: [
+      { id: 'novedades.ver',      nombre: 'Ver',      descripcion: 'Visualizar novedades de todas las fuentes' },
+      { id: 'novedades.crear',    nombre: 'Crear',    descripcion: 'Registrar permisos, incapacidades, vacaciones y retiros' },
+      { id: 'novedades.editar',   nombre: 'Editar',   descripcion: 'Modificar novedades pendientes' },
+      { id: 'novedades.eliminar', nombre: 'Eliminar', descripcion: 'Eliminar novedades pendientes' },
+      { id: 'novedades.aprobar',  nombre: 'Aprobar',  descripcion: 'Aprobar o rechazar novedades' },
+      { id: 'novedades.importar', nombre: 'Importar', descripcion: 'Cargar novedades masivas desde Excel' },
+    ],
+  },
+  {
     id: 'viajes',
     nombre: 'Viajes',
     permisos: [

@@ -90,14 +90,36 @@ function flagsDesdeTipoBase(tipoBase: TipoBaseAusencia): { ss: boolean; prest: b
   }
 }
 
+/**
+ * PR-N1 — Default de "afecta subsidio de transporte" para registros viejos.
+ * `true` = los días descuentan del auxilio, que es lo que la nómina hacía con
+ * toda ausencia. Solo conservan el auxilio el permiso remunerado, la calamidad
+ * doméstica y el luto: son días que la empresa sigue pagando como trabajados.
+ * Las incapacidades y las licencias las paga la EPS o la ARL, así que
+ * descuentan.
+ */
+function auxilioDesdeTipoBase(tipoBase: TipoBaseAusencia): boolean {
+  switch (tipoBase) {
+    case 'PERMISO_REMUNERADO':
+    case 'CALAMIDAD_DOMESTICA':
+    case 'LICENCIA_LUTO':
+      return false;
+    default:
+      return true;
+  }
+}
+
 /** Lee los flags persistidos en el motivo. Si vienen undefined (registros viejos)
  *  cae al heurístico por `tipo_base`. */
-function flagsDeMotivo(motivo: MotivoAusencia): { ss: boolean; paraf: boolean; prest: boolean } {
+function flagsDeMotivo(motivo: MotivoAusencia): {
+  ss: boolean; paraf: boolean; prest: boolean; auxilio: boolean;
+} {
   const fallback = flagsDesdeTipoBase(motivo.tipo_base);
   return {
     ss:    motivo.afecta_seguridad_social ?? fallback.ss,
     paraf: motivo.afecta_parafiscales     ?? fallback.ss,
     prest: motivo.afecta_prestaciones     ?? fallback.prest,
+    auxilio: motivo.afecta_auxilio_transporte ?? auxilioDesdeTipoBase(motivo.tipo_base),
   };
 }
 
@@ -136,6 +158,8 @@ const FORM_VACIO = {
   seguridadSocial: true,
   parafiscales: true,
   prestaciones: true,
+  /** PR-N1 — ver `auxilioDesdeTipoBase`. */
+  auxilioTransporte: true,
 };
 
 /** Catálogo inicial sembrado en background si el tenant no tiene motivos.
@@ -192,7 +216,12 @@ export function AusenciasTab() {
         const creados: MotivoAusencia[] = [];
         for (const m of MOTIVOS_DEFAULT) {
           try {
-            const r = await configuracionApi.motivosAusencia.crear(m);
+            // PR-N1 — el flag del auxilio sale del tipo_base para no repetir
+            // el valor once veces en el catálogo semilla.
+            const r = await configuracionApi.motivosAusencia.crear({
+              ...m,
+              afecta_auxilio_transporte: auxilioDesdeTipoBase(m.tipo_base),
+            });
             creados.push(r.data);
           } catch { /* si falla uno seguimos con los demás */ }
         }
@@ -229,6 +258,7 @@ export function AusenciasTab() {
         seguridadSocial: flags.ss,
         parafiscales: flags.paraf,
         prestaciones: flags.prest,
+        auxilioTransporte: flags.auxilio,
       });
     } else {
       setMotivoEdit(null);
@@ -267,6 +297,7 @@ export function AusenciasTab() {
       afecta_seguridad_social: formData.seguridadSocial,
       afecta_parafiscales: formData.parafiscales,
       afecta_prestaciones: formData.prestaciones,
+      afecta_auxilio_transporte: formData.auxilioTransporte,
     };
 
     try {
@@ -479,6 +510,25 @@ export function AusenciasTab() {
                   <p className="text-xs text-muted-foreground">Cuenta para cesantías, prima e intereses</p>
                 </div>
               </label>
+
+              {/* PR-N1 — la nómina lo consume desde PR-N6: con el flag activo
+                  los días de la novedad salen del cálculo del auxilio. */}
+              <label className="flex items-start gap-3 cursor-pointer">
+                <Checkbox
+                  checked={formData.auxilioTransporte}
+                  onCheckedChange={(checked) =>
+                    setFormData((prev) => ({ ...prev, auxilioTransporte: checked === true }))
+                  }
+                  className="mt-0.5"
+                />
+                <div className="flex-1">
+                  <p className="font-medium text-sm">Afecta subsidio de transporte</p>
+                  <p className="text-xs text-muted-foreground">
+                    Activo: los días de la novedad descuentan del auxilio.
+                    Inactivo: el colaborador lo conserva completo.
+                  </p>
+                </div>
+              </label>
             </div>
           </div>
 
@@ -521,19 +571,20 @@ export function AusenciasTab() {
                   <th className="text-left p-4 font-semibold text-sm">% Aplicación</th>
                   <th className="text-left p-4 font-semibold text-sm">S.S. / Paraf.</th>
                   <th className="text-left p-4 font-semibold text-sm">Prest.</th>
+                  <th className="text-left p-4 font-semibold text-sm">Aux. transp.</th>
                   <th className="text-right p-4 font-semibold text-sm">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {motivos.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-6 text-center text-sm text-muted-foreground">
+                    <td colSpan={7} className="p-6 text-center text-sm text-muted-foreground">
                       No hay tipos de novedades registradas
                     </td>
                   </tr>
                 ) : (
                   [...motivos].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((motivo) => {
-                    const { ss, prest } = flagsDeMotivo(motivo);
+                    const { ss, prest, auxilio } = flagsDeMotivo(motivo);
                     return (
                       <tr key={motivo.id} className="border-t border-border hover:bg-muted/30 transition-colors">
                         <td className="p-4">
@@ -555,6 +606,13 @@ export function AusenciasTab() {
                         </td>
                         <td className="p-4">
                           {prest
+                            ? <Check className="h-4 w-4 text-success" />
+                            : <XIcon className="h-4 w-4 text-destructive" />}
+                        </td>
+                        <td className="p-4">
+                          {/* Aquí el check significa "descuenta": es lo que la
+                              nómina va a restar del auxilio. */}
+                          {auxilio
                             ? <Check className="h-4 w-4 text-success" />
                             : <XIcon className="h-4 w-4 text-destructive" />}
                         </td>

@@ -1,19 +1,23 @@
-/** Adjunto de soporte documental, opcional en todos los tipos que lo admiten. */
+/** Soporte documental. Siempre opcional: el certificado llega días después. */
 import { useRef } from 'react';
 import { Label } from '../../../components/ui/label';
 import { Paperclip, X } from 'lucide-react';
 
-const EXTENSIONES = '.pdf,.jpg,.jpeg,.png,.doc,.docx';
-
 interface Props {
-  /** Describe qué documento se espera, según el tipo de novedad. */
   etiqueta: string;
+  /** Texto bajo el campo. Útil cuando el motivo pide soporte. */
+  ayuda?: string;
+  /** Extensiones que acepta el backend, de `init.parametros.soporte`. */
+  mimes: string[];
+  maxKb: number;
   archivo: File | null;
   onCambiar: (archivo: File | null) => void;
 }
 
-export function CampoAdjunto({ etiqueta, archivo, onCambiar }: Props) {
+export function CampoAdjunto({ etiqueta, ayuda, mimes, maxKb, archivo, onCambiar }: Props) {
   const input = useRef<HTMLInputElement>(null);
+  const accept = mimes.map((m) => `.${m}`).join(',');
+  const maxMb = Math.round(maxKb / 1024);
 
   const quitar = () => {
     onCambiar(null);
@@ -32,7 +36,7 @@ export function CampoAdjunto({ etiqueta, archivo, onCambiar }: Props) {
         ref={input}
         type="file"
         className="hidden"
-        accept={EXTENSIONES}
+        accept={accept}
         onChange={(e) => onCambiar(e.target.files?.[0] ?? null)}
       />
       {archivo ? (
@@ -59,10 +63,12 @@ export function CampoAdjunto({ etiqueta, archivo, onCambiar }: Props) {
         >
           <Paperclip className="h-4 w-4 shrink-0 transition-colors group-hover:text-primary" />
           <span className="transition-colors group-hover:text-foreground">
-            Adjuntar archivo <span className="text-xs">(PDF, imagen o Word)</span>
+            Adjuntar archivo{' '}
+            <span className="text-xs">({mimes.join(', ')} · máx. {maxMb} MB)</span>
           </span>
         </button>
       )}
+      {ayuda && <p className="text-xs text-muted-foreground">{ayuda}</p>}
     </div>
   );
 }

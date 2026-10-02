@@ -735,6 +735,15 @@ export interface MotivoAusencia {
   afecta_parafiscales?: boolean;
   /** Snapshoteado en ausencias. Cuenta para cesantías, prima, vacaciones. */
   afecta_prestaciones?: boolean;
+  /**
+   * "Afecta subsidio de transporte" (PR-N1). Default `true`: los días de la
+   * ausencia **descuentan** del auxilio, que es lo que la nómina hacía con toda
+   * ausencia. `false` = el colaborador **conserva** el auxilio esos días.
+   * Defaults en `false` solo para permiso remunerado, calamidad doméstica y
+   * luto; las incapacidades y las licencias las paga la EPS, así que descuentan.
+   * Lo consume la nómina desde PR-N6 (API_NOMINA §9.3).
+   */
+  afecta_auxilio_transporte?: boolean;
 }
 
 export interface MotivoAusenciaPayload {
@@ -753,6 +762,8 @@ export interface MotivoAusenciaPayload {
   afecta_seguridad_social?: boolean;
   afecta_parafiscales?: boolean;
   afecta_prestaciones?: boolean;
+  /** PR-N1. Ver `MotivoAusencia.afecta_auxilio_transporte`. */
+  afecta_auxilio_transporte?: boolean;
 }
 
 export interface MotivoAusenciaSelectItem {
@@ -767,6 +778,8 @@ export interface MotivoAusenciaSelectItem {
   afecta_seguridad_social?: boolean;
   afecta_parafiscales?: boolean;
   afecta_prestaciones?: boolean;
+  /** PR-N1. Ver `MotivoAusencia.afecta_auxilio_transporte`. */
+  afecta_auxilio_transporte?: boolean;
 }
 
 export interface MotivoAusenciaListadoParams extends ParametricaParams {

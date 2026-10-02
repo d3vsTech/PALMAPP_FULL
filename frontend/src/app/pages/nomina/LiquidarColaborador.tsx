@@ -839,7 +839,12 @@ export default function LiquidarColaborador() {
               typeof ausenciasRaw === 'object' && ausenciasRaw !== null
                 ? ausenciasRaw
                 : null;
-            if (horasExtra === 0 && totalAusencias === 0) return null;
+            // PR-N4 — las solicitudes de vacaciones PENDIENTE también quedan
+            // fuera: se aprueban liquidándolas en Liquidaciones → Vacaciones.
+            // Viene como objeto con las fechas, igual que `ausencias`.
+            const vacacionesRich = pend.vacaciones ?? null;
+            const vacaciones = vacacionesRich?.total ?? 0;
+            if (horasExtra === 0 && totalAusencias === 0 && vacaciones === 0) return null;
             return (
               <div className="flex items-start gap-3 p-4 rounded-lg border border-amber-400/40 bg-amber-50/60 dark:bg-amber-950/20">
                 <TrendingDown className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
@@ -860,9 +865,25 @@ export default function LiquidarColaborador() {
                         {totalAusencias} ausencia{totalAusencias !== 1 ? 's' : ''}
                       </strong>
                     )}
+                    {(horasExtra > 0 || totalAusencias > 0) && vacaciones > 0 && ' y '}
+                    {vacaciones > 0 && (
+                      <strong>
+                        {vacaciones} solicitud{vacaciones !== 1 ? 'es' : ''} de vacaciones
+                      </strong>
+                    )}
                     {' '}en estado PENDIENTE — no se incluyen en el cálculo hasta que
                     se aprueben desde la planilla correspondiente.
                   </p>
+                  {vacaciones > 0 && (
+                    <p className="text-xs text-amber-700/90 dark:text-amber-400/90 mt-2">
+                      {(vacacionesRich?.fechas?.length ?? 0) > 0 && (
+                        <>Fechas: {vacacionesRich!.fechas!.join(', ')}. </>
+                      )}
+                      Las vacaciones se aprueban liquidándolas en Liquidaciones →
+                      Vacaciones. Si se quedan sin liquidar, esta nómina paga
+                      esos días como trabajados.
+                    </p>
+                  )}
                   {ausenciasRich && (ausenciasRich.fechas?.length ?? 0) > 0 && (
                     <p className="text-xs text-amber-700/90 dark:text-amber-400/90 mt-2">
                       Fechas: {ausenciasRich.fechas!.join(', ')}
@@ -1067,7 +1088,24 @@ export default function LiquidarColaborador() {
               </div>
               {!esOperario && (
                 <div className="flex justify-between px-4 py-3">
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">Subsidio transporte</span>
+                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Subsidio transporte
+                    {/* PR-N6 — el auxilio ya no sale solo de los días
+                        trabajados: los días de novedad que lo conservan
+                        también cuentan. Sin el desglose la cifra no se
+                        puede verificar contra la tabla de ausencias. */}
+                    {preview.dias_auxilio_transporte != null && (
+                      <span className="ml-2 normal-case tracking-normal text-muted-foreground/80">
+                        · {preview.dias_auxilio_transporte} día{preview.dias_auxilio_transporte !== 1 ? 's' : ''}
+                        {(preview.dias_ausencia_remunerados_con_auxilio ?? 0) > 0 && (
+                          <>
+                            {' '}({preview.dias_ausencia_remunerados_con_auxilio} de novedad
+                            que conservan el auxilio)
+                          </>
+                        )}
+                      </span>
+                    )}
+                  </span>
                   <span className="font-semibold">${(preview.subsidio_transporte ?? 0).toLocaleString('es-CO')}</span>
                 </div>
               )}

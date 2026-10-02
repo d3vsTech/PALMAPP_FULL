@@ -11,12 +11,13 @@ import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { Input } from '../../components/ui/input';
-import { History, Search, Loader2, Plane } from 'lucide-react';
+import { History, Search, Loader2, Plane, Inbox } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   vacacionesApi,
   type MetaTurnosPendientes,
   type TurnoPendienteVacaciones,
+  type VacacionItem,
 } from '../../../api/vacaciones';
 import type { ApiError } from '../../../api/client';
 import { formatFecha } from '../../utils/fecha';
@@ -29,6 +30,12 @@ export default function VacacionesTab() {
   const [meta, setMeta] = useState<MetaTurnosPendientes | null>(null);
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState('');
+  /**
+   * PR-N4 — Solicitudes PENDIENTE venidas de Novedades. Van arriba porque
+   * piden acción: mientras no se liquiden ni se rechacen, la nómina del
+   * período paga esos días como trabajados.
+   */
+  const [solicitudes, setSolicitudes] = useState<VacacionItem[]>([]);
   const reqIdRef = useRef(0);
 
   const cargar = () => {
@@ -54,6 +61,17 @@ export default function VacacionesTab() {
       });
   };
 
+  // Las solicitudes no dependen de la búsqueda: son pocas y son un aviso,
+  // no un listado. Un fallo aquí no puede tumbar la pestaña.
+  useEffect(() => {
+    let vivo = true;
+    vacacionesApi
+      .listar({ estado: 'PENDIENTE', per_page: 10 })
+      .then((res) => { if (vivo) setSolicitudes(res.data); })
+      .catch(() => { if (vivo) setSolicitudes([]); });
+    return () => { vivo = false; };
+  }, []);
+
   // Búsqueda con respiro: el endpoint recorre la causación de cada empleado.
   useEffect(() => {
     const t = setTimeout(cargar, busqueda ? 350 : 0);
@@ -63,6 +81,46 @@ export default function VacacionesTab() {
 
   return (
     <div className="space-y-8">
+
+      {/* ── Solicitudes por resolver (PR-N4) ──────────────────────────────── */}
+      {solicitudes.length > 0 && (
+        <div className="rounded-xl border border-orange-200 bg-orange-50/60 p-4 dark:border-orange-900 dark:bg-orange-950/20">
+          <div className="flex items-start gap-3">
+            <Inbox className="mt-0.5 h-5 w-5 shrink-0 text-orange-700 dark:text-orange-400" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <p className="font-semibold text-orange-800 dark:text-orange-300">
+                {solicitudes.length} solicitud{solicitudes.length !== 1 ? 'es' : ''} de vacaciones por resolver
+              </p>
+              <p className="text-sm text-orange-700 dark:text-orange-400">
+                Se pidieron desde Novedades. Liquidarlas es aprobarlas; mientras no se resuelvan,
+                la nómina del período paga esos días como trabajados.
+              </p>
+              <div className="space-y-1">
+                {solicitudes.map((s) => (
+                  <div key={s.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-orange-200/60 bg-background/60 px-3 py-2 dark:border-orange-900/60">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {s.empleado.nombre_completo}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {s.dias_habiles} días hábiles
+                        {s.fecha_inicio && ` desde ${formatFecha(s.fecha_inicio)}`}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => navigate(`/liquidaciones/vacaciones/nueva?solicitud=${s.id}`)}
+                      className="gap-1.5 bg-success hover:bg-success/90"
+                    >
+                      Liquidar
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Vacaciones pendientes ─────────────────────────────────────────── */}
       <div className="space-y-4">

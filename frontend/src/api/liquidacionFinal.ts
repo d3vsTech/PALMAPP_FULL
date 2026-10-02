@@ -254,6 +254,18 @@ export interface BloqueVacacionesLiquidacion {
   vacacion_id?: number | null;
   vacaciones_pendientes_pago?: unknown[];
   vacaciones_posteriores?: unknown[];
+  /**
+   * PR-N4 — Solicitudes de vacaciones PENDIENTE del colaborador. Hay que
+   * rechazarlas o liquidarlas antes de aprobar el retiro: el bloqueante
+   * `VACACION_SOLICITUD_PENDIENTE` no es forzable.
+   */
+  vacaciones_solicitudes_pendientes?: Array<{
+    id: number;
+    numero_comprobante?: string;
+    fecha_inicio: string;
+    fecha_fin: string;
+    dias_habiles?: number;
+  }>;
 }
 
 export interface ParametrosFichaLiquidacion {
@@ -801,6 +813,13 @@ export const LiquidacionFinalErrorCodes = {
   // Bloqueantes forzables que aprobar devuelve como 409
   ULTIMA_NOMINA_SIN_CERRAR: 'ULTIMA_NOMINA_SIN_CERRAR',
   NOMINA_POSTERIOR_AL_RETIRO: 'NOMINA_POSTERIOR_AL_RETIRO',
+  /**
+   * PR-N4 (API_LIQUIDACIONES v1.8) — Hay una solicitud de vacaciones
+   * PENDIENTE del colaborador. **No es forzable**: el saldo que la
+   * liquidación final compensa depende de si esa solicitud se aprueba o se
+   * rechaza, así que hay que resolverla antes en Liquidaciones → Vacaciones.
+   */
+  VACACION_SOLICITUD_PENDIENTE: 'VACACION_SOLICITUD_PENDIENTE',
 } as const;
 
 /** Bloqueantes que aprobar admite superar con `forzar` + `motivo_forzado`. */
@@ -810,7 +829,17 @@ export const BLOQUEANTES_FORZABLES: readonly string[] = [
   LiquidacionFinalErrorCodes.NOMINA_POSTERIOR_AL_RETIRO,
 ];
 
+/**
+ * PR-N4 — Bloqueantes que no admiten `forzar` por más que el backend los
+ * marque como forzables. Se evalúa primero para no ofrecer un botón que el
+ * backend va a rechazar con otro 409.
+ */
+export const BLOQUEANTES_NO_FORZABLES: readonly string[] = [
+  LiquidacionFinalErrorCodes.VACACION_SOLICITUD_PENDIENTE,
+];
+
 export function esBloqueanteForzable(b: BloqueanteLiquidacion): boolean {
+  if (BLOQUEANTES_NO_FORZABLES.includes(b.code)) return false;
   return b.forzable === true || BLOQUEANTES_FORZABLES.includes(b.code);
 }
 
