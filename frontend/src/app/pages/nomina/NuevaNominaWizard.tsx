@@ -1654,23 +1654,23 @@ export default function NuevaNominaWizard() {
                       </div>
                     ) : (
                       <div className="overflow-x-auto">
-                        <table className="w-full">
+                        <table className="w-full min-w-[760px] table-fixed">
                           <thead>
                             <tr className="border-b border-border bg-muted/30">
                               <th className="text-left p-4 font-semibold text-sm text-muted-foreground w-12">
                                 <span className="sr-only">Seleccionar</span>
                               </th>
-                              <th className="text-left p-4 font-semibold text-sm text-muted-foreground">
+                              <th className="text-left p-4 font-semibold text-sm text-muted-foreground w-[32%]">
                                 Nombre
                               </th>
-                              <th className="text-left p-4 font-semibold text-sm text-muted-foreground">
+                              <th className="text-left p-4 font-semibold text-sm text-muted-foreground w-[22%]">
+                                Documento
+                              </th>
+                              <th className="text-left p-4 font-semibold text-sm text-muted-foreground w-[28%]">
                                 Cargo
                               </th>
-                              <th className="text-left p-4 font-semibold text-sm text-muted-foreground">
+                              <th className="text-left p-4 font-semibold text-sm text-muted-foreground w-[18%]">
                                 Modalidad
-                              </th>
-                              <th className="text-right p-4 font-semibold text-sm text-muted-foreground">
-                                Salario Base
                               </th>
                             </tr>
                           </thead>
@@ -1736,6 +1736,11 @@ export default function NuevaNominaWizard() {
                                     })()}
                                   </td>
                                   <td className="p-4">
+                                    <span className="text-sm text-muted-foreground">
+                                      {empleado.documento || '—'}
+                                    </span>
+                                  </td>
+                                  <td className="p-4">
                                     <span className="text-sm font-medium">
                                       {empleado.cargo || 'Sin cargo'}
                                     </span>
@@ -1748,11 +1753,6 @@ export default function NuevaNominaWizard() {
                                           ? 'Fijo'
                                           : (empleado.modalidad_pago ?? 'N/A')}
                                     </Badge>
-                                  </td>
-                                  <td className="p-4 text-right">
-                                    <span className="text-sm font-medium">
-                                      ${(empleado.salario_base ?? 0).toLocaleString('es-CO')}
-                                    </span>
                                   </td>
                                 </tr>
                               );
