@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { toast } from 'sonner';
@@ -15,8 +15,10 @@ import {
 } from '../../components/ui/alert-dialog';
 import {
   Plus, Truck, Package, MapPin, Scale, Eye, TrendingUp, CheckCircle, Clock,
-  FileText, FileUp, Search, Calculator, Edit, Trash2, AlertTriangle, Info,
+  FileText, FileUp, Search, Calculator, Edit, Trash2, AlertTriangle, Info, Download,
 } from 'lucide-react';
+import { configuracionApi } from '../../../api/configuracion';
+import { descargarRemision, type DatosRemisionEmpresa } from './remisionPdf';
 import {
   viajesApi, strField,
   type Viaje, type EstadoViajeApi, type IndicadoresViajes,
@@ -45,6 +47,9 @@ interface ViajeUI {
   estadoApi: EstadoViajeApi;
   gajosEstimados: number;
   peso?: number;
+  /** Para la remisión impresa: dirección de la planta y notas del despacho. */
+  extractoraUbicacion: string;
+  observaciones: string;
 }
 
 function mapViaje(v: Viaje): ViajeUI {
@@ -63,6 +68,8 @@ function mapViaje(v: Viaje): ViajeUI {
     estadoApi,
     gajosEstimados: Number(r.cantidad_gajos_total ?? 0),
     peso:           r.peso_viaje ? parseFloat(String(r.peso_viaje)) : undefined,
+    extractoraUbicacion: String(r.extractora?.ubicacion ?? ''),
+    observaciones:  String(r.observaciones ?? ''),
   };
 }
 
@@ -122,6 +129,57 @@ export default function Viajes() {
   const [loadingList, setLoadingList] = useState(true);
 
   // Diálogos de confirmación
+  /**
+   * Membrete de la finca para la remisión impresa. Se pide la primera vez que
+   * alguien descarga y se queda en memoria: no cambia entre descargas y no
+   * tiene por qué costar una petición en cada carga del listado.
+   */
+  const empresaRemision = useRef<DatosRemisionEmpresa | null>(null);
+  const [descargando, setDescargando] = useState<string | null>(null);
+
+  const descargarRemisionViaje = async (viaje: ViajeUI) => {
+    setDescargando(viaje.id);
+    try {
+      if (!empresaRemision.current) {
+        try {
+          const res = await configuracionApi.infoEmpresa.obtener();
+          empresaRemision.current = {
+            nombre: res.data.nombre,
+            razonSocial: res.data.razon_social,
+            nit: res.data.nit,
+            direccion: res.data.direccion,
+            municipio: res.data.municipio,
+            departamento: res.data.departamento,
+            telefono: res.data.telefono,
+            telefonoFijo: res.data.telefono_fijo,
+            representante: res.data.representante_nombre,
+            logoUrl: res.data.logo_url,
+          };
+        } catch {
+          // Sin los datos de la finca la remisión sale igual, solo sin
+          // membrete: es preferible a no poder imprimirla.
+          empresaRemision.current = {};
+        }
+      }
+      await descargarRemision({
+        remision: viaje.remisionId,
+        fecha: viaje.fecha,
+        horaSalida: viaje.horaSalida,
+        extractora: viaje.extractora,
+        extractoraUbicacion: viaje.extractoraUbicacion,
+        transportador: viaje.transportador,
+        conductor: viaje.conductor,
+        placaVehiculo: viaje.placaVehiculo,
+        gajosEstimados: viaje.gajosEstimados,
+        observaciones: viaje.observaciones,
+      }, empresaRemision.current);
+    } catch {
+      toast.error('No se pudo generar la remisión');
+    } finally {
+      setDescargando(null);
+    }
+  };
+
   const [viajeAEliminar, setViajeAEliminar] = useState<{ id: string; remision: string } | null>(null);
   const [viajeAValidar, setViajeAValidar]   = useState<{ id: string; remision: string } | null>(null);
   const [loadingKPI,  setLoadingKPI]  = useState(true);
@@ -569,6 +627,18 @@ export default function Viajes() {
                                 <div className="flex gap-2 justify-end">
                                   {viaje.estado === 'Creado' ? (
                                     <>
+                                      {/* La remisión se imprime ANTES de salir:
+                                          es el papel que lleva el conductor y
+                                          que firma la planta al recibir. El
+                                          desprendible del backend es otra cosa
+                                          y solo existe en FINALIZADO. */}
+                                      <Button size="sm" variant="outline"
+                                        disabled={descargando === viaje.id}
+                                        onClick={() => void descargarRemisionViaje(viaje)}
+                                        className="hover:bg-primary/10 hover:text-primary hover:border-primary"
+                                        title="Descargar remisión de entrega">
+                                        <Download className="h-4 w-4" />
+                                      </Button>
                                       <Button size="sm" variant="outline"
                                         onClick={() => navigate(`/viajes/${viaje.id}/conteo`, {
                                           state: {

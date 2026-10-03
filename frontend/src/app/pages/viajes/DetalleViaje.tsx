@@ -24,6 +24,8 @@ import {
   type TransportadorSelect, type ExtractoraSelect,
 } from '../../../api/viajes';
 import { formatFecha, formatFechaHora, formatHora } from '../../utils/fecha';
+import { configuracionApi } from '../../../api/configuracion';
+import { descargarRemision, type DatosRemisionEmpresa } from './remisionPdf';
 
 // ─── tipos UI (3 estados compactos) ───────────────────────────────────────────
 export type EstadoViaje = 'Creado' | 'En Validación' | 'Finalizado';
@@ -95,6 +97,9 @@ export default function DetalleViaje() {
   // cambiar el transportador, igual que en el formulario de creación.
   const [guardandoEdicion, setGuardandoEdicion] = useState(false);
   const [descargandoPdf, setDescargandoPdf] = useState(false);
+  const [descargandoRemision, setDescargandoRemision] = useState(false);
+  /** Membrete de la finca; se pide una sola vez por sesión de pantalla. */
+  const empresaRemision = useRef<DatosRemisionEmpresa | null>(null);
   const [generandoEnlace, setGenerandoEnlace] = useState(false);
   const [datosViaje, setDatosViaje] = useState({
     fecha: '', horaSalida: '', transportadorId: '', extractoraId: '',
@@ -575,6 +580,55 @@ export default function DetalleViaje() {
   // responde 409 VIAJE_ESTADO_INVALIDO, por eso los botones se ocultan.
   const puedeDesprendible = estadoActual === 'Finalizado';
 
+  /**
+   * Remisión de entrega (estado CREADO). La arma el front porque el
+   * desprendible del backend exige el viaje finalizado: en CREADO responde
+   * 409 `VIAJE_ESTADO_INVALIDO`.
+   */
+  const descargarRemisionEntrega = async () => {
+    if (!viaje) return;
+    setDescargandoRemision(true);
+    try {
+      if (!empresaRemision.current) {
+        try {
+          const res = await configuracionApi.infoEmpresa.obtener();
+          empresaRemision.current = {
+            nombre: res.data.nombre,
+            razonSocial: res.data.razon_social,
+            nit: res.data.nit,
+            direccion: res.data.direccion,
+            municipio: res.data.municipio,
+            departamento: res.data.departamento,
+            telefono: res.data.telefono,
+            telefonoFijo: res.data.telefono_fijo,
+            representante: res.data.representante_nombre,
+            logoUrl: res.data.logo_url,
+          };
+        } catch {
+          // Sin membrete la remisión sirve igual; no poder imprimirla, no.
+          empresaRemision.current = {};
+        }
+      }
+      await descargarRemision({
+        remision: remisionId,
+        fecha: viaje.fecha_viaje,
+        horaSalida: (viaje.hora_salida ?? '').slice(0, 5),
+        extractora: strField(viaje.extractora),
+        extractoraUbicacion: viaje.extractora?.ubicacion ?? '',
+        transportador: strField(viaje.empresa),
+        conductor: viaje.nombre_conductor,
+        placaVehiculo: viaje.placa_vehiculo,
+        gajosEstimados: viaje.cantidad_gajos_total ?? undefined,
+        observaciones: viaje.observaciones ?? undefined,
+      }, empresaRemision.current);
+      toast.success('Remisión descargada');
+    } catch {
+      toast.error('No se pudo generar la remisión');
+    } finally {
+      setDescargandoRemision(false);
+    }
+  };
+
   const descargarDesprendible = async () => {
     if (!id) return;
     setDescargandoPdf(true);
@@ -925,6 +979,20 @@ export default function DetalleViaje() {
                   </svg>
                   {generandoEnlace ? 'Generando enlace...' : 'Enviar por WhatsApp'}
                 </Button>
+                )}
+                {/* La remisión de entrega es el papel que lleva el
+                    conductor, así que se imprime antes de salir. El
+                    desprendible de arriba es otro documento y solo existe
+                    cuando el viaje ya está finalizado. */}
+                {estadoActual === 'Creado' && (
+                  <Button
+                    onClick={() => void descargarRemisionEntrega()}
+                    disabled={descargandoRemision}
+                    className="w-full gap-2"
+                  >
+                    <Download className="h-4 w-4" />
+                    {descargandoRemision ? 'Generando...' : 'Descargar Remisión'}
+                  </Button>
                 )}
                 {/* CREADO entra al formulario de edición; EN_VALIDACION al
                     wizard de carga de la remisión de extractora. FINALIZADO
