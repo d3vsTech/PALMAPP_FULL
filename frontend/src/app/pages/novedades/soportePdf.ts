@@ -9,6 +9,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import {
+  asegurarLogoEmpresa,
   C, TABLE_ALT, pdfChip, pdfFooter, pdfHeader, pdfSectionTitle, pdfSignatureBlock,
 } from '../../lib/pdf/palmappPDF';
 import type { AusenciaDetalle } from '../../../api/novedades';
@@ -71,7 +72,10 @@ function filasDetalle(n: AusenciaDetalle): string[][] {
   return filas;
 }
 
-export function descargarSoporte(n: AusenciaDetalle): void {
+export async function descargarSoporte(n: AusenciaDetalle): Promise<void> {
+  // El logo de la finca vive en localStorage y hay que traerlo antes de pintar
+  // la cabecera; si no, el acta sale solo con el logo de Palmapp.
+  await asegurarLogoEmpresa();
   const doc = new jsPDF();
   const anchoPagina = pdfHeader(doc, 'SOPORTE DE NOVEDAD LABORAL', n.motivo_ausencia.nombre);
 

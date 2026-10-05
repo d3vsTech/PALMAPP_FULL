@@ -68,6 +68,15 @@ function buildDevProxy(env: Record<string, string>) {
   const apiTarget = (env.VITE_API_URL ?? '').replace(/\/api\/?$/, '');
   if (apiTarget) {
     proxy['/api'] = { target: apiTarget, changeOrigin: true, secure: false };
+    // Archivos servidos por nginx (`/storage/...`). Van sin cabeceras CORS, así
+    // que leerlos con `fetch` solo funciona desde el mismo origen. Lo usan los
+    // PDF para incrustar el logo de la finca.
+    proxy['/backend-files'] = {
+      target: apiTarget,
+      changeOrigin: true,
+      secure: false,
+      rewrite: (p: string) => p.replace(/^\/backend-files/, ''),
+    };
   }
 
   const agroTarget = env.VITE_AGRO_AGENTE_TARGET;

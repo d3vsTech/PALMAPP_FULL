@@ -6,6 +6,7 @@
  */
 
 import jsPDF from 'jspdf';
+import { configuracionApi } from '../../../api/configuracion';
 import palmappIsotipoSrc from '../../../assets/90f63474a4a0ddb51ea409c23fa86e2b485ee0b8.png';
 import palmappLogoSrc from '../../../assets/adf2cc8f5c11d4595840726d8165f5dc63d3cec0.png';
 
@@ -53,9 +54,82 @@ export const TABLE_FOOT_GREEN: object = {
   fontSize:  10,
 };
 
+// ── Logo de la finca ──────────────────────────────────────────────────────────
+/** Donde `pdfHeader` busca el logo de la finca. */
+const CLAVE_LOGO = 'palmapp_empresa_logo';
+const CLAVE_LOGO_URL = 'palmapp_empresa_logo_url';
+
+/** Host del backend, sin el sufijo `/api`. */
+const HOST_BACKEND = String(import.meta.env.VITE_API_URL ?? '').replace(/\/api\/?$/, '');
+
+/**
+ * Nginx sirve `/storage` sin cabeceras CORS, así que `fetch` contra la URL
+ * absoluta del logo se bloquea y el PDF salía solo con el logo de Palmapp.
+ *
+ * Se pide por `/backend-files`, que es el mismo origen del frontend: lo
+ * reescribe el proxy de Vite en dev y el de `public/_redirects` en Netlify.
+ * Un `<img src>` no necesita esto (mostrar una imagen de otro origen siempre
+ * se permite); leer sus bytes, sí.
+ */
+function viaProxy(url: string): string {
+  if (!HOST_BACKEND || !url.startsWith(HOST_BACKEND)) return url;
+  return `/backend-files${url.slice(HOST_BACKEND.length)}`;
+}
+
+/** Una sola consulta por sesión, aunque se bajen varios PDF seguidos. */
+let _logoEmpresaEnCurso: Promise<void> | null = null;
+
+/**
+ * Deja el logo de la finca en el almacenamiento local, que es de donde lo lee
+ * `pdfHeader`. Hay que llamarlo (y esperarlo) antes de armar cualquier PDF: si
+ * no, el documento sale solo con el logo de Palmapp.
+ *
+ * Se guarda en base64 porque jsPDF no acepta una URL, necesita los bytes.
+ *
+ * Nunca interrumpe la descarga: si la imagen no se puede traer o no cabe en el
+ * almacenamiento, el PDF sale con el logo de Palmapp y el nombre de la finca.
+ *
+ * @param logoUrl `info-empresa.logo_url`. Si no se pasa, se consulta solo.
+ */
+export async function asegurarLogoEmpresa(logoUrl?: string | null): Promise<void> {
+  if (logoUrl === undefined) {
+    _logoEmpresaEnCurso ??= (async () => {
+      try {
+        const res = await configuracionApi.infoEmpresa.obtener();
+        await asegurarLogoEmpresa(res.data.logo_url);
+      } catch {
+        // Sin permiso sobre configuración, o la finca no tiene logo cargado.
+      }
+    })();
+    return _logoEmpresaEnCurso;
+  }
+  if (!logoUrl) return;
+  try {
+    if (localStorage.getItem(CLAVE_LOGO) && localStorage.getItem(CLAVE_LOGO_URL) === logoUrl) {
+      return;
+    }
+    const res = await fetch(viaProxy(logoUrl));
+    if (!res.ok) return;
+    const blob = await res.blob();
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const lector = new FileReader();
+      lector.onload = () => resolve(String(lector.result));
+      lector.onerror = reject;
+      lector.readAsDataURL(blob);
+    });
+    localStorage.setItem(CLAVE_LOGO, base64);
+    localStorage.setItem(CLAVE_LOGO_URL, logoUrl);
+  } catch {
+    // Logo inalcanzable, CORS, o cuota del almacenamiento superada.
+  }
+}
+
 // ── Encabezado Palmapp ────────────────────────────────────────────────────────
 /**
- * Dibuja la barra de encabezado verde con el logo de Palmapp.
+ * Dibuja la barra de encabezado verde con el logo de la finca.
+ *
+ * El logo lo deja `asegurarLogoEmpresa`, que hay que esperar antes de llamar
+ * aquí. Sin él sale el de Palmapp.
  * @param doc        Instancia de jsPDF
  * @param docTitle   Título del documento (ej. "LIQUIDACIÓN DE VACACIONES")
  * @param docSubtitle Subtítulo opcional (ej. nombre del colaborador)
@@ -68,59 +142,75 @@ export function pdfHeader(doc: jsPDF, docTitle: string, docSubtitle?: string): n
   doc.setFillColor(...C.primary);
   doc.rect(0, 0, pageW, 36, 'F');
 
-  // ── Logo Palmapp (izquierda) ───────────────────────────────────────────────
-  const palmContW = 72;
-  const palmContX = 8;
-  const palmContY = 5;
-  const palmContH = 26;
-  doc.setFillColor(...C.white);
-  doc.roundedRect(palmContX, palmContY, palmContW, palmContH, 3, 3, 'F');
+  // ── Logo (izquierda) ───────────────────────────────────────────────────────
+  /*
+   * Manda el logo de la finca: el documento lo emite ella, no Palmapp. El de
+   * Palmapp solo aparece cuando la finca no tiene uno cargado en Configuración,
+   * para que la cabecera no quede vacía. Los dos juntos confundían: el acta
+   * parecía emitida por el proveedor del software.
+   *
+   * El logo de la finca va directo sobre la barra verde, sin recuadro blanco
+   * detrás. El de Palmapp sí lo necesita: es verde y sobre verde no se vería.
+   */
+  const logoFinca = localStorage.getItem(CLAVE_LOGO);
+  const contW = 72;
+  const contX = 8;
+  const contY = 5;
+  const contH = 26;
+  const imgX = contX + 4;
+  const imgY = contY + 3;
+  const imgH = contH - 6;
+  const imgMaxW = contW - 8;
+  let logoPintado = false;
 
-  const palmImgX = palmContX + 4;
-  const palmImgY = palmContY + 3;
-  const palmImgH = palmContH - 6;
-
-  if (_logoComplete) {
-    const ratio = _logoComplete.naturalWidth / _logoComplete.naturalHeight;
-    const w = Math.min(palmImgH * ratio, palmContW - 8);
-    try { doc.addImage(_logoComplete, 'PNG', palmImgX, palmImgY, w, palmImgH); }
-    catch { _drawLogoFallback(doc, palmImgX, palmImgY, palmImgH); }
-  } else if (_isotipo) {
-    const ratio = _isotipo.naturalWidth / _isotipo.naturalHeight;
-    const isoW = palmImgH * ratio;
+  if (logoFinca) {
     try {
-      doc.addImage(_isotipo, 'PNG', palmImgX, palmImgY, isoW, palmImgH);
+      // Sin esto la imagen sale estirada al ancho de la caja: los logos de las
+      // fincas no vienen con una proporción fija.
+      const props = doc.getImageProperties(logoFinca);
+      const escala = Math.min(imgMaxW / props.width, contH / props.height);
+      const w = props.width * escala;
+      const h = props.height * escala;
+      doc.addImage(logoFinca, contX, contY + (contH - h) / 2, w, h);
+      logoPintado = true;
+    } catch { /* formato que jsPDF no reconoce: cae al logo de Palmapp */ }
+  }
+
+  if (!logoPintado) {
+    doc.setFillColor(...C.white);
+    doc.roundedRect(contX, contY, contW, contH, 3, 3, 'F');
+  }
+
+  if (!logoPintado && _logoComplete) {
+    const ratio = _logoComplete.naturalWidth / _logoComplete.naturalHeight;
+    const w = Math.min(imgH * ratio, imgMaxW);
+    try {
+      doc.addImage(_logoComplete, 'PNG', imgX, imgY, w, imgH);
+      logoPintado = true;
+    } catch { /* se intenta con el isotipo */ }
+  }
+
+  if (!logoPintado && _isotipo) {
+    const ratio = _isotipo.naturalWidth / _isotipo.naturalHeight;
+    const isoW = imgH * ratio;
+    try {
+      doc.addImage(_isotipo, 'PNG', imgX, imgY, isoW, imgH);
       doc.setTextColor(...C.primary);
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
-      doc.text('PALMAPP', palmImgX + isoW + 3, palmImgY + palmImgH * 0.52);
+      doc.text('PALMAPP', imgX + isoW + 3, imgY + imgH * 0.52);
       doc.setFontSize(6);
       doc.setFont('helvetica', 'normal');
-      doc.text('Tu palma en la palma', palmImgX + isoW + 3, palmImgY + palmImgH * 0.8);
-    } catch { _drawLogoFallback(doc, palmImgX, palmImgY, palmImgH); }
-  } else {
-    _drawLogoFallback(doc, palmImgX, palmImgY, palmImgH);
+      doc.text('Tu palma en la palma', imgX + isoW + 3, imgY + imgH * 0.8);
+      logoPintado = true;
+    } catch { /* se cae al texto */ }
   }
 
-  // ── Logo de la empresa (derecha, si está configurado) ─────────────────────
-  const empresaLogoBase64 = localStorage.getItem('palmapp_empresa_logo');
-  const titleRightEdge = pageW - 12;
-  let titleMaxRight = titleRightEdge;
+  if (!logoPintado) _drawLogoFallback(doc, imgX, imgY, imgH);
 
-  if (empresaLogoBase64) {
-    const empContH = 26;
-    const empContW = 60;
-    const empContX = pageW - 8 - empContW;
-    const empContY = 5;
-    doc.setFillColor(...C.white);
-    doc.roundedRect(empContX, empContY, empContW, empContH, 3, 3, 'F');
-    try {
-      doc.addImage(empresaLogoBase64, 'PNG', empContX + 4, empContY + 3, empContW - 8, empContH - 6);
-    } catch { /* ignorar si el formato no es compatible */ }
-    titleMaxRight = empContX - 6;
-  }
+  const titleMaxRight = pageW - 12;
 
-  // ── Título y fecha (texto blanco, entre los dos logos) ────────────────────
+  // ── Título y fecha (texto blanco, a la derecha del logo) ────────────────────
   doc.setTextColor(...C.white);
   doc.setFontSize(9.5);
   doc.setFont('helvetica', 'bold');

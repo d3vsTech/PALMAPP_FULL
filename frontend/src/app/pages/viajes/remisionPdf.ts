@@ -13,7 +13,7 @@
  * planta reconozca el mismo documento.
  */
 import jsPDF from 'jspdf';
-import { C, pdfFooter, pdfHeader } from '../../lib/pdf/palmappPDF';
+import { asegurarLogoEmpresa, C, pdfFooter, pdfHeader } from '../../lib/pdf/palmappPDF';
 
 /** Lo que el PDF necesita del viaje. Todo opcional salvo la remisión. */
 export interface DatosRemisionViaje {
@@ -45,43 +45,6 @@ export interface DatosRemisionEmpresa {
   representante?: string | null;
   /** URL pública del logo (`info-empresa.logo_url`). */
   logoUrl?: string | null;
-}
-
-/** Donde `palmappPDF.pdfHeader` busca el logo de la finca. */
-const CLAVE_LOGO = 'palmapp_empresa_logo';
-const CLAVE_LOGO_URL = 'palmapp_empresa_logo_url';
-
-/**
- * Deja el logo de la finca en el almacenamiento local, que es de donde lo lee
- * la cabecera de **todos** los PDF del sistema.
- *
- * Esa clave se leía pero nadie la escribía, así que ningún descargable salía
- * con el logo de la finca aunque estuviera cargado en Configuración. Se guarda
- * en base64 porque jsPDF no acepta una URL: necesita los bytes.
- *
- * Nunca interrumpe la descarga: si la imagen no se puede traer o no cabe en el
- * almacenamiento, el PDF sale con el logo de Palmapp y el nombre de la finca.
- */
-export async function asegurarLogoEmpresa(logoUrl?: string | null): Promise<void> {
-  if (!logoUrl) return;
-  try {
-    if (localStorage.getItem(CLAVE_LOGO) && localStorage.getItem(CLAVE_LOGO_URL) === logoUrl) {
-      return;
-    }
-    const res = await fetch(logoUrl);
-    if (!res.ok) return;
-    const blob = await res.blob();
-    const base64 = await new Promise<string>((resolve, reject) => {
-      const lector = new FileReader();
-      lector.onload = () => resolve(String(lector.result));
-      lector.onerror = reject;
-      lector.readAsDataURL(blob);
-    });
-    localStorage.setItem(CLAVE_LOGO, base64);
-    localStorage.setItem(CLAVE_LOGO_URL, logoUrl);
-  } catch {
-    // Logo inalcanzable, CORS, o cuota del almacenamiento superada.
-  }
 }
 
 // ── Geometría del talonario (mm) ──────────────────────────────────────────────

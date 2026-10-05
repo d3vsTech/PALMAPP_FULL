@@ -5,6 +5,11 @@
 /agro-api/*       http://31.97.7.50/agro-agente/api/:splat       200
 /agro-uploads/*   http://31.97.7.50/agro-agente/uploads/:splat   200
 
+# Archivos de `/storage` del backend Laravel. Nginx los sirve sin cabeceras
+# CORS, así que los PDF no podían leer los bytes del logo de la finca. Por
+# aquí salen del mismo origen y el navegador no los bloquea.
+/backend-files/*  https://back.palmapp.com.co/:splat             200
+
 # Catch-all para que React Router maneje las rutas en el cliente.
 # Debe ir AL FINAL para que los proxies de arriba matcheen primero.
 /*                /index.html                                    200

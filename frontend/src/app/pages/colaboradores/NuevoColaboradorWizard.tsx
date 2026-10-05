@@ -171,6 +171,18 @@ function limpiarBorrador() {
 }
 
 // ─── Componente ─────────────────────────────────────────────────────────────────
+/**
+ * Interruptor de la sección "Finalización de Contrato" de la etapa 3.
+ *
+ * Apagada: la terminación se registra desde Novedades, que es donde queda el
+ * histórico, el motivo y el soporte para firma. Dejarla también aquí abría dos
+ * caminos para el mismo dato y uno de los dos no alimentaba el histórico.
+ *
+ * El formulario, el estado y el envío siguen completos: poner `true` la vuelve
+ * a mostrar sin tocar nada más.
+ */
+const MOSTRAR_FINALIZACION: boolean = false;
+
 export default function NuevoColaboradorWizard() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -1424,9 +1436,10 @@ export default function NuevoColaboradorWizard() {
                   )}
                 </div>
 
-                {/* Sección "Finalización de Contrato" — visible siempre (crear
-                    y editar). Al poner una fecha, se despliega el bloque rojo
-                    con motivo + soporte documental. */}
+                {/* Sección "Finalización de Contrato" — apagada. La terminación
+                    se registra desde Novedades, que además deja el histórico y
+                    el soporte firmado. Ver `MOSTRAR_FINALIZACION`. */}
+                {MOSTRAR_FINALIZACION && (
                 <div className="pt-5 mt-2 border-t border-border space-y-5">
                   <div>
                     <h3 className="font-semibold text-sm text-foreground">Finalización de Contrato</h3>
@@ -1565,6 +1578,7 @@ export default function NuevoColaboradorWizard() {
                     </div>
                   )}
                 </div>
+                )}
 
               </CardContent>
             </Card>
