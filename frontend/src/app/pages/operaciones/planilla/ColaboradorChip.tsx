@@ -1,6 +1,7 @@
 import { Badge } from '../../../components/ui/badge';
 import type { ColaboradorWizard } from './tipos';
 import { etiquetaVacaciones } from './vacacionesPlanilla';
+import { etiquetaNovedad } from './novedadesPlanilla';
 
 /**
  * Chip con el nombre de un colaborador/operario para las tarjetas de palma.
@@ -13,6 +14,8 @@ import { etiquetaVacaciones } from './vacacionesPlanilla';
  *  - Empleado propio con `modalidad_pago = 'PRODUCCION'` → chip neutro.
  *  - Cualquiera con vacaciones liquidadas ese día → badge ámbar con el
  *    comprobante. No bloquea: avisa antes de que la nómina lo advierta.
+ *  - Cualquiera con una novedad vigente (incapacidad, permiso, licencia) →
+ *    badge ámbar con el tipo. Mismo criterio: avisa, no borra la tarjeta.
  */
 export function ColaboradorChip({ col }: { col: ColaboradorWizard }) {
   const esFijo = !col.terceroNombre && col.modalidad_pago === 'FIJO';
@@ -33,6 +36,8 @@ export function ColaboradorChip({ col }: { col: ColaboradorWizard }) {
           ? col.noVinculado.motivo
           : col.enVacaciones
           ? etiquetaVacaciones(col.enVacaciones)
+          : col.novedadVigente
+          ? etiquetaNovedad(col.novedadVigente)
           : col.terceroNombre
           ? `Tercero · ${col.terceroNombre}`
           : esFijo
@@ -52,6 +57,11 @@ export function ColaboradorChip({ col }: { col: ColaboradorWizard }) {
       {col.enVacaciones && (
         <span className="ml-1.5 rounded bg-amber-200/70 px-1 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-amber-900">
           Vacaciones
+        </span>
+      )}
+      {!col.enVacaciones && col.novedadVigente && (
+        <span className="ml-1.5 rounded bg-amber-200/70 px-1 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-amber-900">
+          {col.novedadVigente.fuente === 'TERMINACION' ? 'Retirado' : 'Novedad'}
         </span>
       )}
       {col.terceroNombre && (

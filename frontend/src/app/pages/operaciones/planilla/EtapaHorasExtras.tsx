@@ -19,6 +19,7 @@ import { Plus, Trash2, Pencil, Check, Clock } from 'lucide-react';
 import type { HoraExtra, ColaboradorWizard } from './tipos';
 import { opcionesSeleccionables } from './vinculacionPlanilla';
 import { etiquetaVacaciones } from './vacacionesPlanilla';
+import { etiquetaNovedad } from './novedadesPlanilla';
 
 interface Props {
   horasExtras: HoraExtra[];
@@ -91,13 +92,20 @@ export function EtapaHorasExtras({
                     {/* Otro selector sin XOR de operario (paso 4/5). */}
                     {opcionesSeleccionables(colaboradores, [horaExtraEnEdicion.colaboradorId])
                       .filter(c => !c.terceroNombre).map((col) => {
-                      const bloqueado = !!col.enVacaciones;
+                      // PR-N3: una incapacidad o un permiso vigente deja el
+                      // día sin jornada, así que tampoco hay horas extra.
+                      const bloqueado = !!col.enVacaciones || !!col.novedadVigente;
                       return (
                         <SelectItem key={col.id} value={col.id} disabled={bloqueado}>
                           {col.nombres} {col.apellidos}
                           {col.enVacaciones && (
                             <span className="ml-2 text-xs text-amber-700 dark:text-amber-500">
                               {etiquetaVacaciones(col.enVacaciones)}
+                            </span>
+                          )}
+                          {!col.enVacaciones && col.novedadVigente && (
+                            <span className="ml-2 text-xs text-amber-700 dark:text-amber-500">
+                              {etiquetaNovedad(col.novedadVigente)}
                             </span>
                           )}
                         </SelectItem>

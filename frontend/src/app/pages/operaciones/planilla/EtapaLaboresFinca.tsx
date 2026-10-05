@@ -17,6 +17,7 @@ import {
 import { Plus, Trash2, Pencil, X, Save } from 'lucide-react';
 import type { TrabajoAuxiliar, ColaboradorWizard } from './tipos';
 import { etiquetaVacaciones } from './vacacionesPlanilla';
+import { etiquetaNovedad } from './novedadesPlanilla';
 import { MultiSelectColaboradores } from '../../../components/operaciones/MultiSelectColaboradores';
 
 interface Props {
@@ -183,6 +184,10 @@ export function EtapaLaboresFinca({
                       {personaSel?.enVacaciones ? (
                         <span className="ml-2 inline-block align-middle text-[10px] px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-200 font-medium">
                           {etiquetaVacaciones(personaSel.enVacaciones)}
+                        </span>
+                      ) : personaSel?.novedadVigente ? (
+                        <span className="ml-2 inline-block align-middle text-[10px] px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-200 font-medium">
+                          {etiquetaNovedad(personaSel.novedadVigente)}
                         </span>
                       ) : null}
                     </p>

@@ -10,10 +10,11 @@
  *  - Trigger tipo botón: "N colaboradores seleccionados" o el placeholder.
  *  - Primera fila de la lista alterna todos los visibles.
  *  - Búsqueda por nombre o por empresa del tercero.
- *  - Quien esté de vacaciones ese día sale deshabilitado, con el rango y el
- *    comprobante. Se puede forzar uno por uno: las vacaciones se interrumpen
- *    legalmente y el trabajador pudo haber ido. El backend acepta el
- *    registro y la nómina lo advierte después.
+ *  - Quien esté de vacaciones o con una novedad vigente ese día (incapacidad,
+ *    permiso, licencia) sale deshabilitado, con el rango. Se puede forzar uno
+ *    por uno: tanto las vacaciones como una incapacidad se pueden interrumpir
+ *    y el trabajador pudo haber ido. El backend acepta el registro y la
+ *    nómina lo advierte después.
  *  - Quien no tenía contrato ese día no se ofrece (§1.1), salvo que ya esté
  *    escogido en una tarjeta guardada: ahí sigue visible para poder quitarlo.
  *
@@ -27,8 +28,9 @@ import { Button } from '../ui/button';
 import { Checkbox } from '../ui/checkbox';
 import { Input } from '../ui/input';
 import { Users, Search, ChevronDown, Plane, AlertTriangle } from 'lucide-react';
-import type { VacacionEnPlanilla } from '../../pages/operaciones/planilla/tipos';
+import type { NovedadEnPlanilla, VacacionEnPlanilla } from '../../pages/operaciones/planilla/tipos';
 import { etiquetaVacaciones } from '../../pages/operaciones/planilla/vacacionesPlanilla';
+import { etiquetaNovedad } from '../../pages/operaciones/planilla/novedadesPlanilla';
 import { opcionesSeleccionables } from '../../pages/operaciones/planilla/vinculacionPlanilla';
 
 export interface ColaboradorOption {
@@ -39,6 +41,19 @@ export interface ColaboradorOption {
   modalidad_pago?: 'FIJO' | 'PRODUCCION' | string;
   /** PR-L8 — Vacaciones que cubren la fecha de la planilla. */
   enVacaciones?: VacacionEnPlanilla;
+  /** PR-N3 — Incapacidad, permiso o licencia que cubre la fecha. */
+  novedadVigente?: NovedadEnPlanilla;
+}
+
+/**
+ * Texto del motivo por el que la fila sale trabada, o null si no lo está.
+ * Las vacaciones mandan sobre la novedad: son el caso más conocido y el que
+ * ya tiene su propia nota en la nómina.
+ */
+function motivoBloqueo(col: ColaboradorOption): string | null {
+  if (col.enVacaciones) return etiquetaVacaciones(col.enVacaciones);
+  if (col.novedadVigente) return etiquetaNovedad(col.novedadVigente);
+  return null;
 }
 
 interface Props {
@@ -60,7 +75,7 @@ export function MultiSelectColaboradores({
   const [open, setOpen] = useState(false);
   const [busqueda, setBusqueda] = useState('');
   /**
-   * Ids de vacacionistas que el usuario destrabó a propósito en esta apertura
+   * Ids que el usuario destrabó a propósito en esta apertura
    * del dropdown. Se limpia al cerrar: forzar es una decisión puntual, no un
    * permiso permanente.
    */
@@ -100,11 +115,11 @@ export function MultiSelectColaboradores({
   };
 
   /**
-   * Alterna todos los visibles. Deja fuera a los de vacaciones: forzarlos es
-   * uno por uno y a conciencia.
+   * Alterna todos los visibles. Deja fuera a los trabados: forzarlos es uno
+   * por uno y a conciencia.
    */
   const elegiblesVisibles = useMemo(
-    () => opciones.filter((o) => !o.enVacaciones || forzados.includes(o.id)),
+    () => opciones.filter((o) => !motivoBloqueo(o) || forzados.includes(o.id)),
     [opciones, forzados],
   );
   const todosVisiblesMarcados =
@@ -199,7 +214,8 @@ export function MultiSelectColaboradores({
               const checked = seleccionadosSet.has(col.id);
               // Ya seleccionado cuenta como destrabado: si viene de una
               // planilla guardada no se le puede quitar el check de golpe.
-              const bloqueado = !!col.enVacaciones && !forzados.includes(col.id) && !checked;
+              const motivo = motivoBloqueo(col);
+              const bloqueado = !!motivo && !forzados.includes(col.id) && !checked;
               const confirmando = porForzar === col.id;
 
               return (
@@ -217,10 +233,12 @@ export function MultiSelectColaboradores({
                       <span className={`block truncate ${checked ? 'font-medium text-primary' : ''}`}>
                         {col.nombres} {col.apellidos}
                       </span>
-                      {col.enVacaciones && (
+                      {motivo && (
                         <span className="mt-0.5 flex items-center gap-1 text-[11px] font-medium text-amber-700 dark:text-amber-500">
-                          <Plane className="h-3 w-3 shrink-0" />
-                          {etiquetaVacaciones(col.enVacaciones)}
+                          {col.enVacaciones
+                            ? <Plane className="h-3 w-3 shrink-0" />
+                            : <AlertTriangle className="h-3 w-3 shrink-0" />}
+                          {motivo}
                         </span>
                       )}
                     </span>
@@ -248,8 +266,11 @@ export function MultiSelectColaboradores({
                     <div className="mx-3 mb-2 ml-10 rounded-md border border-amber-300 bg-amber-50 p-2 dark:border-amber-800/40 dark:bg-amber-950/20">
                       <p className="flex gap-1.5 text-[11px] text-amber-900 dark:text-amber-200">
                         <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
-                        Está de vacaciones. Regístralo solo si de verdad trabajó ese día;
-                        la nómina lo va a advertir.
+                        {col.enVacaciones
+                          ? 'Está de vacaciones.'
+                          : `Tiene novedad vigente: ${col.novedadVigente?.tipo ?? 'ausencia'}.`}{' '}
+                        Regístralo solo si de verdad trabajó ese día; la nómina lo va a
+                        advertir.
                       </p>
                       <div className="mt-2 flex gap-2">
                         <Button
