@@ -99,8 +99,18 @@ export default function NuevaNovedadPage() {
         const res = await novedadesApi.vacaciones.solicitar({
           empleado_id: borrador.colaboradorId,
           fecha_inicio: borrador.fechaInicio,
-          dias_habiles: borrador.diasHabiles ? Number(borrador.diasHabiles) : undefined,
-          fecha_fin: borrador.fechaFin || undefined,
+          /*
+           * §5.1 pide exactamente uno: mandar los dos responde 422
+           * `VACACIONES_DIAS_INVALIDOS`. En el formulario se ven llenos
+           * porque el calendario completa el que falta, así que aquí solo
+           * viaja el que escribió el usuario.
+           */
+          dias_habiles: borrador.campoVacaciones === 'DIAS' && borrador.diasHabiles
+            ? Number(borrador.diasHabiles)
+            : undefined,
+          fecha_fin: borrador.campoVacaciones === 'FECHA' && borrador.fechaFin
+            ? borrador.fechaFin
+            : undefined,
           observacion: borrador.observacion.trim() || undefined,
           documento: borrador.documento ?? undefined,
         });

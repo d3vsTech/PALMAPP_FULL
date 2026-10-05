@@ -15,6 +15,7 @@ import {
 import { AlertCircle, Clock, FileText, Info } from 'lucide-react';
 import { BuscadorColaborador } from './BuscadorColaborador';
 import { CampoAdjunto } from './CampoAdjunto';
+import { CalendarioSolicitud } from './CalendarioSolicitud';
 import {
   esAusencia, esParcial, esTerminacion, esVacaciones, type BorradorNovedad,
 } from '../borrador';
@@ -128,20 +129,41 @@ export function PasoDetalles({ borrador, categorias, soporte, onCambiar }: Props
               <p className="text-xs text-muted-foreground">Debe ser hoy o posterior, y día hábil.</p>
             </div>
             <div className="space-y-1.5">
-              <Label>Días hábiles</Label>
+              <Label>
+                Días hábiles
+                {borrador.campoVacaciones === 'FECHA' && (
+                  <span className="ml-1 text-xs font-normal text-muted-foreground">(calculado)</span>
+                )}
+              </Label>
               <Input
                 type="number" min={1} max={60} placeholder="15"
                 value={borrador.diasHabiles}
-                onChange={(e) => onCambiar({ diasHabiles: e.target.value, fechaFin: '' })}
+                onChange={(e) => onCambiar({ diasHabiles: e.target.value, campoVacaciones: 'DIAS' })}
               />
             </div>
             <div className="space-y-1.5">
-              <Label>o Fecha fin</Label>
+              <Label>
+                o Fecha fin
+                {borrador.campoVacaciones === 'DIAS' && (
+                  <span className="ml-1 text-xs font-normal text-muted-foreground">(calculada)</span>
+                )}
+              </Label>
               <Input
                 type="date"
                 value={borrador.fechaFin}
                 min={borrador.fechaInicio}
-                onChange={(e) => onCambiar({ fechaFin: e.target.value, diasHabiles: '' })}
+                onChange={(e) => onCambiar({ fechaFin: e.target.value, campoVacaciones: 'FECHA' })}
+              />
+            </div>
+            {/* El calendario del backend cierra el campo que el usuario no
+                llenó: va fuera de la rejilla para ocupar las tres columnas. */}
+            <div className="sm:col-span-3">
+              <CalendarioSolicitud
+                fechaInicio={borrador.fechaInicio}
+                diasHabiles={borrador.diasHabiles}
+                fechaFin={borrador.fechaFin}
+                campo={borrador.campoVacaciones}
+                onCambiar={onCambiar}
               />
             </div>
           </div>

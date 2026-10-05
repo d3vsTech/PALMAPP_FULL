@@ -1,10 +1,15 @@
 /**
  * Detalle de una novedad del listado.
  *
- * Solo las ausencias tienen endpoint de detalle (§4.2): para ellas se carga
- * `editable{}`, que dice qué se puede tocar en el estado actual, y se ofrecen
- * aprobar y rechazar. Vacaciones y terminaciones se ven con lo que ya trae la
- * fila y enlazan a su propia pantalla.
+ * Dos de las tres fuentes traen detalle propio: las ausencias (§4.2, con
+ * `editable{}` para saber qué se puede tocar y los botones de aprobar y
+ * rechazar) y las terminaciones de contrato (§6.2, con el motivo del catálogo,
+ * las observaciones y la liquidación final si ya existe). Las vacaciones se
+ * ven con lo que trae la fila y enlazan a su comprobante.
+ *
+ * `enlaces.detalle` de la fila es una ruta de **API**, no del front: el front
+ * la traduce a la pantalla que corresponde (`rutaDelDetalle`). Navegar a ella
+ * tal cual lleva a un 404.
  */
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
@@ -15,12 +20,14 @@ import {
   Dialog, DialogContent, DialogDescription, DialogTitle,
 } from '../../../components/ui/dialog';
 import {
-  AlertTriangle, ArrowUpRight, Calendar, Check, Download, FileSignature, Loader2, Paperclip, Pencil, X,
+  AlertTriangle, ArrowUpRight, Calendar, Check, Download, FileSignature, Loader2,
+  Paperclip, Pencil, Receipt, User, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   novedadesApi,
   type AusenciaDetalle, type InitNovedades, type NovedadFila, type PermisosNovedades,
+  type TerminacionData,
 } from '../../../../api/novedades';
 import type { ApiError } from '../../../../api/client';
 import { descargarSoporte } from '../soportePdf';
@@ -43,6 +50,26 @@ interface Props {
   onCambio: () => void;
 }
 
+/**
+ * A qué pantalla del front lleva "Ver completo".
+ *
+ * No se puede navegar a `enlaces.detalle` tal cual: son rutas de la API
+ * (`novedades/terminaciones/31`) y el router no las conoce. Una terminación se
+ * corrige desde la ficha del colaborador (`PUT colaboradores/{id}`), así que
+ * ahí es donde lleva.
+ */
+function rutaDelDetalle(fila: NovedadFila): { ruta: string; etiqueta: string } | null {
+  switch (fila.fuente) {
+    case 'VACACION':
+      return { ruta: `/liquidaciones/vacaciones/${fila.id}`, etiqueta: 'Ver liquidación' };
+    case 'TERMINACION':
+      return { ruta: `/colaboradores/${fila.empleado.id}`, etiqueta: 'Ver colaborador' };
+    default:
+      // La ausencia ya se ve completa en este mismo diálogo.
+      return null;
+  }
+}
+
 function Dato({ label, valor, icono }: { label: string; valor: string; icono?: boolean }) {
   return (
     <div className="space-y-0.5">
@@ -58,6 +85,7 @@ function Dato({ label, valor, icono }: { label: string; valor: string; icono?: b
 export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio }: Props) {
   const navigate = useNavigate();
   const [detalle, setDetalle] = useState<AusenciaDetalle | null>(null);
+  const [terminacion, setTerminacion] = useState<TerminacionData | null>(null);
   const [cargando, setCargando] = useState(false);
   const [accion, setAccion] = useState<'aprobar' | 'rechazar' | 'editar' | null>(null);
   const [motivoRechazo, setMotivoRechazo] = useState('');
@@ -66,15 +94,25 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
 
   useEffect(() => {
     setDetalle(null);
+    setTerminacion(null);
     setAccion(null);
     setMotivoRechazo('');
-    if (!fila || fila.fuente !== 'AUSENCIA') return;
+    if (!fila) return;
+
+    // Una terminación de origen FICHA no tiene detalle (§6.2): el tenant no
+    // lleva contratos y el retiro vive solo en la ficha del colaborador.
+    const pide = fila.fuente === 'AUSENCIA'
+      || (fila.fuente === 'TERMINACION' && !!fila.enlaces.detalle);
+    if (!pide) return;
 
     let vivo = true;
     setCargando(true);
-    novedadesApi.ausencias
-      .ver(fila.id)
-      .then((res) => { if (vivo) setDetalle(res.data); })
+    const peticion = fila.fuente === 'AUSENCIA'
+      // En una terminación `id` es el id del CONTRATO, no del colaborador.
+      ? novedadesApi.ausencias.ver(fila.id).then((res) => { if (vivo) setDetalle(res.data); })
+      : novedadesApi.terminaciones.ver(fila.id).then((res) => { if (vivo) setTerminacion(res.data); });
+
+    peticion
       .catch((err) => {
         if (!vivo) return;
         toast.error((err as ApiError).message ?? 'No se pudo cargar el detalle');
@@ -134,10 +172,9 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
     }
   };
 
-  const irAlDetalle = () => {
-    if (!fila?.enlaces.detalle) return;
+  const irA = (ruta: string) => {
     onCerrar();
-    navigate(`/${fila.enlaces.detalle.replace(/^\/+/, '')}`);
+    navigate(ruta);
   };
 
   return (
@@ -154,9 +191,9 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                 <div className="min-w-0">
                   <DialogTitle className="text-base font-semibold">{fila.tipo.nombre}</DialogTitle>
                   <DialogDescription className="mt-0.5 text-xs">
-                    {ORIGEN_LABEL[fila.origen] ?? fila.origen}
-                    {' · '}
-                    <span className="uppercase">{fila.fuente.toLowerCase()}</span>
+                    {fila.fuente === 'TERMINACION'
+                      ? 'Terminación de contrato'
+                      : `Registrada desde ${ORIGEN_LABEL[fila.origen] ?? fila.origen}`}
                   </DialogDescription>
                 </div>
               </div>
@@ -196,6 +233,62 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                 />
               )}
             </div>
+
+            {terminacion && (
+              <>
+                <div className="grid grid-cols-1 gap-4 border-t border-border px-6 py-4 sm:grid-cols-2">
+                  <Dato label="Motivo" valor={terminacion.terminacion.motivo.etiqueta} />
+                  <Dato label="Norma" valor={terminacion.terminacion.motivo.norma || '—'} />
+                  {terminacion.contrato && (
+                    <>
+                      <Dato label="Tipo de contrato" valor={terminacion.contrato.tipo_contrato} />
+                      <Dato icono label="Inicio del contrato" valor={formatFecha(terminacion.contrato.fecha_inicio)} />
+                    </>
+                  )}
+                </div>
+
+                {terminacion.terminacion.observaciones && (
+                  <div className="border-t border-border px-6 py-4">
+                    <p className="mb-1 text-xs text-muted-foreground">Observaciones</p>
+                    <p className="text-sm text-foreground">{terminacion.terminacion.observaciones}</p>
+                  </div>
+                )}
+
+                {/*
+                  Por qué esta fila existe si la ficha no muestra retiro.
+                  `coincide_con_ficha` es la señal: el contrato conserva su
+                  terminación aunque después alguien reingrese al colaborador
+                  desde la ficha, porque un reingreso abre un contrato nuevo y
+                  no resucita el anterior. Sin decirlo, la fila parece salida
+                  de la nada.
+                */}
+                {(() => {
+                  const t = terminacion.terminacion;
+                  const notas: string[] = [];
+                  if (!t.coincide_con_ficha) {
+                    notas.push(
+                      terminacion.empleado.fecha_retiro
+                        ? `La ficha del colaborador registra otro retiro (${formatFecha(terminacion.empleado.fecha_retiro)}). Esta fila es la del contrato.`
+                        : 'La ficha del colaborador ya no registra retiro: se reingresó después. Esta fila es el contrato anterior, que quedó terminado.',
+                    );
+                  } else if (!t.ficha_inactivada) {
+                    notas.push('La ficha del colaborador sigue activa: se apaga el día del retiro.');
+                  }
+                  if (t.reingreso) {
+                    notas.push('El colaborador reingresó con un contrato posterior a esta terminación.');
+                  }
+                  if (notas.length === 0) return null;
+                  return (
+                    <div className="flex items-start gap-2 border-t border-border bg-muted/20 px-6 py-3 text-xs text-muted-foreground">
+                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span className="space-y-1">
+                        {notas.map((n) => <span key={n} className="block">{n}</span>)}
+                      </span>
+                    </div>
+                  );
+                })()}
+              </>
+            )}
 
             {cargando && (
               <div className="flex items-center justify-center gap-2 border-t border-border py-4 text-sm text-muted-foreground">
@@ -275,7 +368,7 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                       className="gap-2 border-primary/40 text-primary hover:border-primary hover:bg-primary/5"
                     >
                       <FileSignature className="h-3.5 w-3.5" />
-                      Acta para firma
+                      Descargar soporte para firma
                     </Button>
                   )}
                   {fila.tiene_soporte && esAusencia && (
@@ -290,12 +383,31 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                       Falta el soporte
                     </span>
                   )}
-                  {fila.enlaces.detalle && !esAusencia && (
-                    <Button size="sm" variant="outline" onClick={irAlDetalle} className="gap-2">
-                      <ArrowUpRight className="h-3.5 w-3.5" />
-                      Ver completo
+                  {/* Una terminación ya liquidada enlaza a su liquidación
+                      final: es el documento que cierra el retiro. */}
+                  {terminacion?.liquidacion && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => irA(`/liquidaciones/liquidacion-final/${terminacion.liquidacion!.id}`)}
+                      className="gap-2"
+                    >
+                      <Receipt className="h-3.5 w-3.5" />
+                      Liquidación final
                     </Button>
                   )}
+                  {(() => {
+                    const destino = rutaDelDetalle(fila);
+                    if (!destino) return null;
+                    return (
+                      <Button size="sm" variant="outline" onClick={() => irA(destino.ruta)} className="gap-2">
+                        {fila.fuente === 'TERMINACION'
+                          ? <User className="h-3.5 w-3.5" />
+                          : <ArrowUpRight className="h-3.5 w-3.5" />}
+                        {destino.etiqueta}
+                      </Button>
+                    );
+                  })()}
                 </div>
 
                 <div className="flex flex-wrap gap-2">

@@ -23,6 +23,14 @@ export interface BorradorNovedad {
   horaFin: string;
   /** Solo en Vacaciones: alternativa a `fechaFin`. */
   diasHabiles: string;
+  /**
+   * Solo en Vacaciones: cuál de los dos campos escribió el usuario.
+   *
+   * El otro se rellena con el calendario del backend para que se vea hasta
+   * dónde llega el disfrute, pero **no viaja en el payload**: §5.1 exige
+   * exactamente uno y mandar los dos responde 422 `VACACIONES_DIAS_INVALIDOS`.
+   */
+  campoVacaciones: 'DIAS' | 'FECHA' | null;
   entidad: string;
   numeroRadicado: string;
   observacion: string;
@@ -40,6 +48,7 @@ export const BORRADOR_VACIO: BorradorNovedad = {
   horaInicio: '',
   horaFin: '',
   diasHabiles: '',
+  campoVacaciones: null,
   entidad: '',
   numeroRadicado: '',
   observacion: '',
@@ -89,15 +98,16 @@ export function validarPaso(paso: number, b: BorradorNovedad): string | null {
     if (b.fechaInicio < hoyIso()) {
       return 'La solicitud no puede empezar antes de hoy. Un disfrute ya ocurrido se registra desde Liquidaciones.';
     }
-    const tieneDias = b.diasHabiles.trim() !== '';
-    const tieneFin = b.fechaFin.trim() !== '';
-    if (tieneDias === tieneFin) return 'Indica los días hábiles o la fecha fin, pero no las dos';
-    if (tieneDias) {
+    // Los dos campos se ven llenos (uno lo calcula el calendario), así que
+    // lo que se valida es el que el usuario escribió.
+    if (!b.campoVacaciones) return 'Indica los días hábiles o la fecha fin';
+    if (b.campoVacaciones === 'DIAS') {
+      if (b.diasHabiles.trim() === '') return 'Indica los días hábiles';
       const n = Number(b.diasHabiles);
       if (!Number.isInteger(n) || n < 1 || n > 60) return 'Los días hábiles van de 1 a 60';
-    }
-    if (tieneFin && b.fechaFin < b.fechaInicio) {
-      return 'La fecha fin debe ser posterior a la de inicio';
+    } else {
+      if (b.fechaFin.trim() === '') return 'Indica la fecha fin';
+      if (b.fechaFin < b.fechaInicio) return 'La fecha fin debe ser posterior a la de inicio';
     }
     return null;
   }

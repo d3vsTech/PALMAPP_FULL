@@ -128,17 +128,21 @@ export function PasoConfirmacion({ borrador, categorias, estadoInicial }: Props)
               <div className="flex flex-wrap items-center gap-4">
                 <CajaFecha rotulo="Inicio" valor={formatFechaCorta(borrador.fechaInicio)} />
                 <div className="text-xl font-light text-muted-foreground/40">→</div>
-                {borrador.diasHabiles ? (
+                {/* El calendario ya completó los dos, así que se muestran los
+                    dos: el rango es lo que se paga y los hábiles lo que se
+                    descuenta del saldo. */}
+                {borrador.fechaFin && (
+                  <CajaFecha rotulo="Fin" valor={formatFechaCorta(borrador.fechaFin)} />
+                )}
+                {borrador.diasHabiles && (
                   <div className="min-w-0 flex-1 rounded-lg border border-primary/20 bg-primary/10 px-4 py-3 text-center">
                     <p className="mb-0.5 text-xs text-primary/70">Días hábiles</p>
                     <p className="text-lg font-bold leading-none text-primary">{borrador.diasHabiles}</p>
                   </div>
-                ) : (
-                  <CajaFecha rotulo="Fin" valor={formatFechaCorta(borrador.fechaFin)} />
                 )}
               </div>
               <p className="mt-3 text-xs text-muted-foreground">
-                El backend calcula el otro dato con el calendario de festivos de la finca.
+                Se pagan los días calendario del rango, no los hábiles (CST art. 192).
               </p>
             </div>
           ) : (
