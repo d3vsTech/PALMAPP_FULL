@@ -29,6 +29,7 @@
  * Permisos: liquidaciones.ver / .crear / .editar / .eliminar / .liquidar / .pagar.
  */
 import { apiClient } from './client';
+import type { ModoPagoVacacion } from './vacaciones';
 import type { AdvertenciaLiquidacion } from './liquidaciones';
 
 const T = true; // requiresTenant
@@ -252,7 +253,34 @@ export interface BloqueVacacionesLiquidacion {
   metodo_base?: MetodoBaseLiquidacion | null;
   /** Id de la vacación compensada creada al aprobar. */
   vacacion_id?: number | null;
-  vacaciones_pendientes_pago?: unknown[];
+  /**
+   * Vacaciones `APROBADA` sin pagar. Bloqueante **no forzable**: hay que
+   * pagarlas o anularlas antes de aprobar el retiro.
+   *
+   * PR-L15 — En una `NOMINA` el bloqueo se levanta de dos maneras: cerrando
+   * la nómina que cubre el tramo (`nominas_pendientes[]`) o pagando el saldo
+   * a mano. `dias_sin_nomina` son los días del disfrute que no tiene ninguna
+   * fila de nómina: esos solo se resuelven pagando el saldo.
+   */
+  vacaciones_pendientes_pago?: Array<{
+    id: number;
+    numero_comprobante?: string;
+    fecha_inicio?: string | null;
+    fecha_fin?: string | null;
+    valor_total?: number;
+    modo_pago?: ModoPagoVacacion;
+    total_pagado?: number;
+    pendiente?: number;
+    nominas_pendientes?: Array<{
+      nomina_id: number;
+      nomina_empleado_id?: number;
+      etiqueta?: string | null;
+      periodo?: { fecha_inicio: string; fecha_fin: string };
+      estado_nomina?: string;
+      estado_fila?: string;
+    }>;
+    dias_sin_nomina?: number;
+  }>;
   vacaciones_posteriores?: unknown[];
   /**
    * PR-N4 — Solicitudes de vacaciones PENDIENTE del colaborador. Hay que

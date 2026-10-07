@@ -3,7 +3,9 @@
  * Los helpers de dinero y descarga viven en periodo/textos.ts y se reexportan
  * aquí para no duplicarlos.
  */
-import type { EstadoVacacion, EstadoVencimiento, OrigenVacacion } from '../../../../api/vacaciones';
+import type {
+  EstadoVacacion, EstadoVencimiento, ModoPagoVacacion, OrigenVacacion,
+} from '../../../../api/vacaciones';
 
 export { fmtCOP, getIniciales, descargarBlob } from '../periodo/textos';
 
@@ -57,6 +59,13 @@ export const ESTADO_VACACION_LABEL: Record<EstadoVacacion, string> = {
   PAGADA: 'Pagada',
   CANCELADA: 'Anulada',
   PENDIENTE: 'Solicitud pendiente',
+};
+
+// PR-L15 — El modo de pago no es un estado: es quien pone la plata. En
+// NOMINA el modulo no gira nada, cada nomina paga su tramo del disfrute.
+export const MODO_PAGO_BADGE: Record<ModoPagoVacacion, string> = {
+  DIRECTO: 'bg-muted/50 text-muted-foreground border-border',
+  NOMINA: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/30 dark:text-sky-400 dark:border-sky-800/30',
 };
 
 export const ORIGEN_LABEL: Record<OrigenVacacion, string> = {

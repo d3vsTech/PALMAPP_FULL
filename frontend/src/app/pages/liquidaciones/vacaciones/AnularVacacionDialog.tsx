@@ -88,6 +88,11 @@ export default function AnularVacacionDialog({ vacacion, modo, onCerrar, onAnula
         case VacacionesErrorCodes.VACACION_SOLICITUD_NO_PENDIENTE:
           toast.error('Esta solicitud ya se resolvió. Recarga el listado.');
           break;
+        // PR-L15 — El pago lo completó el cierre de una nómina: no hay giro
+        // manual que devolver, hay que reabrir esa nómina.
+        case VacacionesErrorCodes.VACACION_PAGO_POR_NOMINA:
+          toast.error('El pago lo hizo una nómina. Reábrela para deshacerlo.');
+          break;
         default:
           toast.error(e.message ?? 'No se pudo completar la anulación');
       }

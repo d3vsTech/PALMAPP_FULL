@@ -18,14 +18,16 @@ import { toast } from 'sonner';
 import {
   vacacionesApi,
   VacacionesErrorCodes,
+  ADVERTENCIA_PAGO_NOMINA_LABEL,
   DIA_NO_HABIL_LABEL,
+  MODO_PAGO_LABEL,
   type ComprobanteVacaciones,
   type VacacionItem,
 } from '../../../api/vacaciones';
 import type { ApiError } from '../../../api/client';
 import { formatFecha } from '../../utils/fecha';
 import {
-  ESTADO_VACACION_BADGE, ESTADO_VACACION_LABEL, ORIGEN_LABEL,
+  ESTADO_VACACION_BADGE, ESTADO_VACACION_LABEL, MODO_PAGO_BADGE, ORIGEN_LABEL,
   descargarBlob, fmtCOP, fmtDias, getIniciales,
 } from './vacaciones/comunes';
 import PagoVacacionDialog from './vacaciones/PagoVacacionDialog';
@@ -112,6 +114,20 @@ export default function VacacionesDetalle() {
   const cal = comprobante.calendario;
   const esHistorico = item.origen === 'HISTORICO';
 
+  /*
+   * PR-L15 - En `modo_pago = NOMINA` el modulo no gira nada: cada nomina que
+   * cubre el disfrute paga su tramo al cerrarse, `total_pagado` va subiendo y
+   * `pendiente` es lo que falta. Con tramos ya pagados la liquidacion deja de
+   * ser anulable desde aqui.
+   */
+  const porNomina = item.modo_pago === 'NOMINA';
+  const pagadoEnNomina = item.pago.total_pagado ?? 0;
+  const saldoNomina = item.pago.pendiente ?? Math.max(item.valor_total - pagadoEnNomina, 0);
+  const tramosNomina = item.pago.nominas ?? [];
+  const saldoVencido = item.advertencias?.some(
+    (a) => a.code === 'VACACIONES_PAGO_EN_NOMINA_PENDIENTE',
+  ) ?? false;
+
   return (
     <div className="space-y-6">
       <div className="print:hidden">
@@ -129,6 +145,12 @@ export default function VacacionesDetalle() {
               {ESTADO_VACACION_LABEL[estado]}
             </Badge>
             {esHistorico && <Badge variant="outline">{ORIGEN_LABEL.HISTORICO}</Badge>}
+            {/* PR-L15 - Quien pone la plata: el modulo o cada nomina. */}
+            {!esHistorico && estado !== 'PENDIENTE' && (
+              <Badge variant="outline" className={MODO_PAGO_BADGE[item.modo_pago ?? 'DIRECTO']}>
+                {MODO_PAGO_LABEL[item.modo_pago ?? 'DIRECTO']}
+              </Badge>
+            )}
           </div>
           <p className="mt-1 text-muted-foreground">
             {item.numero_comprobante} · Liquidado el {formatFecha(comprobante.fechas.fecha_liquidacion)}
@@ -147,16 +169,19 @@ export default function VacacionesDetalle() {
           {estado === 'APROBADA' && !esHistorico && (
             <Button onClick={() => setPagoAbierto(true)} className="gap-2">
               <Banknote className="h-4 w-4" />
-              Registrar pago
+              {/* En NOMINA el giro solo cubre lo que las nominas no pagaron. */}
+              {porNomina ? 'Pagar el saldo' : 'Registrar pago'}
             </Button>
           )}
-          {estado === 'PAGADA' && (
+          {/* El pago que completo una nomina cerrada no se devuelve desde
+              aqui: hay que reabrir esa nomina (409 VACACION_PAGO_POR_NOMINA). */}
+          {estado === 'PAGADA' && item.pago.metodo_pago !== 'NOMINA' && (
             <Button variant="outline" onClick={() => setModoAnular('pago')} className="gap-2">
               <RotateCcw className="h-4 w-4" />
               Anular pago
             </Button>
           )}
-          {estado !== 'CANCELADA' && (
+          {estado !== 'CANCELADA' && !(porNomina && pagadoEnNomina > 0) && (
             <Button
               variant="outline"
               onClick={() => setModoAnular('liquidacion')}
@@ -276,7 +301,12 @@ export default function VacacionesDetalle() {
               <div>
                 <p className="text-sm font-semibold text-success">Días de disfrute</p>
                 <p className="text-xs text-muted-foreground">
-                  {fmtDias(res.dias_calendario)} días calendario × {fmtCOP(res.valor_dia)}
+                  {/* PR-L15 (D1) - Lo remunerado son dias comerciales, no
+                      calendario: del 16 al 31 de octubre son 30, no 31. Solo
+                      se nombra cuando difieren, para no ruidear. */}
+                  {res.dias_pago != null && res.dias_pago !== res.dias_calendario
+                    ? `${fmtDias(res.dias_pago)} días comerciales × ${fmtCOP(res.valor_dia)}`
+                    : `${fmtDias(res.dias_calendario)} días calendario × ${fmtCOP(res.valor_dia)}`}
                   {' · '}equivalen a {fmtDias(res.dias_disfrute)} hábiles
                 </p>
               </div>
@@ -366,7 +396,7 @@ export default function VacacionesDetalle() {
           <Banknote className="h-4 w-4 text-primary" />
           <p className="text-sm font-semibold">Pago</p>
         </div>
-        <CardContent className="p-5">
+        <CardContent className="space-y-4 p-5">
           {item.pago.fecha_pago ? (
             <div className="grid gap-4 sm:grid-cols-4">
               <div>
@@ -375,7 +405,9 @@ export default function VacacionesDetalle() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Método</p>
-                <p className="font-semibold text-foreground">{item.pago.metodo_pago ?? '—'}</p>
+                <p className="font-semibold text-foreground">
+                  {item.pago.metodo_pago === 'NOMINA' ? 'Nómina' : item.pago.metodo_pago ?? '—'}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Referencia</p>
@@ -386,11 +418,68 @@ export default function VacacionesDetalle() {
                 <p className="font-semibold text-foreground">{fmtCOP(item.pago.total_pagado ?? 0)}</p>
               </div>
             </div>
+          ) : porNomina ? (
+            /* PR-L15 - En NOMINA no hay fecha de pago hasta que cierra el
+               ultimo tramo, pero si hay plata pagada: se muestra el avance. */
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div>
+                <p className="text-xs text-muted-foreground">Pagado por nómina</p>
+                <p className="font-semibold text-foreground">{fmtCOP(pagadoEnNomina)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Saldo pendiente</p>
+                <p className="font-semibold text-foreground">{fmtCOP(saldoNomina)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Total liquidado</p>
+                <p className="font-semibold text-foreground">{fmtCOP(item.valor_total)}</p>
+              </div>
+            </div>
           ) : (
             <p className="text-sm text-muted-foreground">
               {esHistorico
                 ? 'Registro histórico: no genera pago en el sistema.'
                 : 'Sin pago registrado todavía.'}
+            </p>
+          )}
+
+          {/* Una fila por nomina cerrada que pago un tramo del disfrute. */}
+          {tramosNomina.length > 0 && (
+            <div className="overflow-hidden rounded-lg border border-border">
+              <div className="border-b border-border bg-muted/20 px-4 py-2">
+                <p className="text-xs font-semibold text-muted-foreground">
+                  Tramos pagados en nómina
+                </p>
+              </div>
+              {tramosNomina.map((t) => (
+                <div
+                  key={t.nomina_empleado_id}
+                  className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2.5 last:border-0"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-foreground">
+                      {t.etiqueta ?? `NOM-${t.nomina_id}`}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatFecha(t.fecha_desde)} a {formatFecha(t.fecha_hasta)}
+                      {' · '}{fmtDias(t.dias)} días
+                      {t.dias_dinero > 0 && ` · ${fmtDias(t.dias_dinero)} en dinero`}
+                    </p>
+                  </div>
+                  <p className="text-sm font-semibold text-foreground">{fmtCOP(t.total)}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {porNomina && saldoNomina > 0 && (
+            <p className={`flex gap-2 text-xs ${saldoVencido ? 'text-destructive' : 'text-muted-foreground'}`}>
+              {saldoVencido
+                ? <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                : <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />}
+              {saldoVencido
+                ? ADVERTENCIA_PAGO_NOMINA_LABEL.VACACIONES_PAGO_EN_NOMINA_PENDIENTE
+                : 'Cada nómina que cubre el disfrute paga su tramo al cerrarse.'}
             </p>
           )}
         </CardContent>

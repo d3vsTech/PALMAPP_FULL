@@ -8,6 +8,7 @@
  */
 
 import { apiClient, PaginatedResponse } from './client';
+import type { ModoPagoVacacion } from './vacaciones';
 
 const T = true;
 
@@ -230,6 +231,48 @@ export interface DetalleVacacionNomina {
   dias: number;
   dias_calendario: number;
   valor_dia: number;
+
+  // ── PR-L15 — pago del tramo en esta nómina ──────────────────────────────
+  /** `DIRECTO` solo neutraliza; `NOMINA` además paga. */
+  modo_pago?: ModoPagoVacacion;
+  /** Días comerciales que paga la vacación entera; `null` en las de antes. */
+  dias_pago?: number | null;
+  /** Días del **tramo**: comerciales si la vacación tiene `dias_pago`. */
+  dias_remunerados?: number;
+  /**
+   * `valor_dia × dias_remunerados`, solo en una `NOMINA` todavía `APROBADA`.
+   * 0 en `DIRECTO` y en una ya `PAGADA` (el saldo se pagó a mano).
+   */
+  valor_tramo?: number;
+  /** La compensación CST 189 va con el período que contiene `fecha_inicio`. */
+  paga_dinero_aqui?: boolean;
+  valor_dinero?: number;
+  dias_dinero?: number;
+  valor_disfrute?: number;
+  /** True si esta nómina paga el tramo. Es lo que lee el cierre. */
+  pagada_aqui?: boolean;
+}
+
+/**
+ * PR-L15 — Un tramo de vacaciones que **este** cierre pagó.
+ * Lo devuelve `POST nominas/{id}/cerrar` en `data.vacaciones_pagadas[]`.
+ */
+export interface VacacionPagadaEnCierre {
+  vacacion_id: number;
+  numero_comprobante: string;
+  empleado_id: number;
+  nomina_empleado_id: number;
+  dias: number;
+  valor_disfrute: number;
+  valor_dinero: number;
+  /** Lo que pagó esta nómina. */
+  pagado_aqui: number;
+  /** Acumulado de todas las nóminas cerradas. */
+  total_pagado: number;
+  valor_total: number;
+  pendiente: number;
+  /** `PAGADA` cuando este cierre completó el total. */
+  estado: string;
 }
 
 export interface NominaEmpleadoConcepto {
@@ -324,6 +367,13 @@ export interface NominaEmpleado {
   dias_vacaciones?: number | null;
   /** `null` = fila liquidada antes de PR-L8. `[]` = no hubo vacaciones. */
   detalle_vacaciones?: DetalleVacacionNomina[] | null;
+  /**
+   * PR-L15 — Disfrute de vacaciones `NOMINA` que pagó esta fila (salario,
+   * dentro de `total_devengado`) y compensación en dinero pagada aquí (fuera
+   * del devengado, dentro del neto). Sin backfill: 0 en todo lo anterior.
+   */
+  total_vacaciones?: number | string | null;
+  total_vacaciones_compensadas?: number | string | null;
   /**
    * PR-L8 — Recargo nocturno de jornada ordinaria (RN) que ya viene dentro
    * de `total_recargos`, separado porque la base de vacaciones del art. 192
@@ -707,6 +757,11 @@ export interface PreviewLiquidacion {
        * ya pagó como vacaciones. El jornal se liquida igual: o la planilla
        * está mal, o las vacaciones se interrumpieron. Trae `fechas[]` y
        * `comprobantes[]` en `detalle`.
+       *
+       * PR-L15: el `detalle` lleva además `doble_pago` y
+       * `fechas_doble_pago[]`. Con `doble_pago` el día cae en un tramo que
+       * **esta nómina paga**, así que paga el jornal y el día de vacaciones:
+       * hay que corregir la planilla o anular y re-liquidar las vacaciones.
        */
       | 'VACACIONES_CON_TRABAJO_REGISTRADO'
       | string;
@@ -730,6 +785,19 @@ export interface PreviewLiquidacion {
    */
   dias_vacaciones?: number;
   detalle_vacaciones?: DetalleVacacionNomina[] | null;
+  /**
+   * PR-L15 — Lo que **esta** nómina paga de vacaciones `modo_pago = NOMINA`.
+   *
+   * `total_vacaciones` es **salario**: ya está dentro de `total_devengado` y
+   * del IBC, y sus días (`dias_vacaciones_pagados`) vuelven al piso del SMLV.
+   * `total_vacaciones_compensadas` es la compensación en dinero del CST 189:
+   * **no** es IBC, va fuera del devengado y dentro del neto, como el subsidio.
+   * Los tres valen 0 sin vacaciones `NOMINA`, que es el caso de todo lo
+   * anterior a PR-L15.
+   */
+  total_vacaciones?: number;
+  total_vacaciones_compensadas?: number;
+  dias_vacaciones_pagados?: number;
   /**
    * PR-L8 — Recargo nocturno ordinario (RN) incluido en `total_recargos`.
    * Se expone aparte porque la base de vacaciones del art. 192 lo suma.
@@ -1003,6 +1071,13 @@ export interface DesprendibleData {
      */
     dias_vacaciones?: number;
     detalle_vacaciones?: DetalleVacacionNomina[] | null;
+    /**
+     * PR-L15 — Un tramo con `pagada_aqui` se imprime **con valor**; los de
+     * una vacación `DIRECTO` siguen siendo la línea informativa. La
+     * compensación sale en la nómina del inicio y el total bruto la suma.
+     */
+    total_vacaciones?: number;
+    total_vacaciones_compensadas?: number;
     total_recargo_nocturno?: number;
   };
   resumen_trabajo: ResumenTrabajo | null;
@@ -1807,7 +1882,14 @@ export const nominaApi = {
    */
   cerrar: (id: number) =>
     apiClient.post<{
-      data: Nomina;
+      data: Nomina & {
+        /**
+         * PR-L15 — Tramos de vacaciones `NOMINA` que **este** cierre pagó.
+         * `[]` si ninguna fila pagó tramos. Sirve para el toast del cierre
+         * sin otra llamada.
+         */
+        vacaciones_pagadas?: VacacionPagadaEnCierre[];
+      };
       message: string;
       advertencia?: AdvertenciaGajosSinDespachar;
     }>(`/v1/tenant/nominas/${id}/cerrar`, undefined, T),
@@ -2183,6 +2265,13 @@ export const NominaErrorCodes = {
   NOMINA_CON_LIQUIDADOS: 'NOMINA_CON_LIQUIDADOS',
   /** Intento de cerrar nómina con empleados aún PENDIENTES. */
   NOMINA_CON_PENDIENTES: 'NOMINA_CON_PENDIENTES',
+  /**
+   * PR-L15 — Al cerrar: una fila liquidó un tramo de vacaciones que ya no
+   * coincide con la vacación viva (se anuló, se pagó a mano, se re-liquidó o
+   * cambió de modo). Trae `nomina_empleado_ids[]` y `vacaciones[]` con las
+   * diferencias; hay que re-liquidar esas filas y cerrar de nuevo.
+   */
+  VACACIONES_DESACTUALIZADAS_EN_NOMINA: 'VACACIONES_DESACTUALIZADAS_EN_NOMINA',
   /** Intento de quitar un empleado ya liquidado. */
   EMPLEADO_LIQUIDADO: 'EMPLEADO_LIQUIDADO',
   /** Intento de pedir desprendible a un empleado aún PENDIENTE. */

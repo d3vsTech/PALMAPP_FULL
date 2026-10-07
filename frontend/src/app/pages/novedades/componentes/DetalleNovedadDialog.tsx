@@ -232,6 +232,17 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                     : 'No remunerado'}
                 />
               )}
+              {/* v1.6 (PR-L15) — Solo lectura: el modo se escoge al liquidar
+                  en Liquidaciones. Aquí importa porque explica por qué la
+                  quincena del disfrute trae ese valor. */}
+              {fila.modo_pago && (
+                <Dato
+                  label="Forma de pago"
+                  valor={fila.modo_pago === 'NOMINA'
+                    ? 'En nómina: cada nómina del disfrute paga su tramo'
+                    : 'Pago directo desde Liquidaciones'}
+                />
+              )}
             </div>
 
             {terminacion && (

@@ -19,6 +19,7 @@
  *     salen en `categorias[].motivos[]` y tienen sus propios endpoints.
  */
 import { apiClient } from './client';
+import type { ModoPagoVacacion } from './vacaciones';
 import type { ArchivoHistorico } from './historicoComun';
 
 const BASE = '/v1/tenant/novedades';
@@ -131,6 +132,13 @@ export interface NovedadFila {
   contrato_id?: number | null;
   liquidacion_id?: number | null;
   reingreso?: boolean;
+  /**
+   * v1.6 (PR-L15) — Solo en `fuente: VACACION`: cómo se paga la vacación.
+   * `null` en las demás fuentes. Solo lectura: el modo se escoge al liquidar
+   * desde Liquidaciones, y una solicitud PENDIENTE dice `DIRECTO` hasta que
+   * se apruebe.
+   */
+  modo_pago?: ModoPagoVacacion | null;
   enlaces: EnlacesNovedad;
 }
 

@@ -61,8 +61,31 @@ export type EstadoVacacion = 'APROBADA' | 'PAGADA' | 'CANCELADA' | 'PENDIENTE';
  */
 export type OrigenVacacion = 'SISTEMA' | 'HISTORICO' | 'LIQUIDACION_FINAL';
 export type EstadoVencimiento = 'VENCIDA' | 'URGENTE' | 'PROXIMA' | 'CON_TIEMPO' | 'AL_DIA';
-/** Sin PILA: las vacaciones se pagan a la persona, no a un fondo. */
+/**
+ * Sin PILA: las vacaciones se pagan a la persona, no a un fondo.
+ *
+ * `NOMINA` es **solo de lectura** (PR-L15): lo escribe el cierre de la nómina
+ * que completa el pago. El request de pago manual lo rechaza con 422, por eso
+ * no está en este tipo sino en el de lectura de abajo.
+ */
 export type MetodoPagoVacacion = 'TRANSFERENCIA' | 'EFECTIVO' | 'CHEQUE';
+
+/** Lo que puede traer `pago.metodo_pago` al leer una vacación. */
+export type MetodoPagoVacacionLeido = MetodoPagoVacacion | 'NOMINA';
+
+/**
+ * PR-L15 — Cómo se paga la vacación, escogido al liquidarla.
+ *
+ * `DIRECTO` es el default y lo de siempre: el módulo la paga con
+ * `POST …/pago`. `NOMINA` hace que cada nómina que cubre el disfrute pague su
+ * tramo como devengado, con sus deducciones; el cierre acumula `total_pagado`
+ * y la que completa el total deja la vacación `PAGADA`.
+ *
+ * Solo en vacaciones `SISTEMA` y solo con disfrute: una compensación solo en
+ * dinero o un disfrute de un solo día 31 responden 422
+ * `VACACION_MODO_PAGO_INVALIDO`.
+ */
+export type ModoPagoVacacion = 'DIRECTO' | 'NOMINA';
 export type MetodoBaseVacacion = 'ULTIMO_SALARIO' | 'PROMEDIO' | 'MANUAL';
 export type MotivoNoElegible = 'RETIRADO' | 'INACTIVO' | 'SIN_CONTRATO' | 'ELIMINADO';
 export type MotivoDiaNoHabil = 'DOMINGO' | 'FESTIVO' | 'SABADO';
@@ -251,6 +274,8 @@ export interface PeriodoAfectado {
 }
 
 export interface ResultadoVacaciones {
+  /** PR-L15 (D1) — Días comerciales que se pagan; ver `VacacionItem`. */
+  dias_pago?: number | null;
   dias_disfrute: number;
   /** Los que se pagan: CST 192. */
   dias_calendario: number;
@@ -281,15 +306,66 @@ export interface BloqueanteVacaciones {
   [k: string]: unknown;
 }
 
+/** Una nómina CERRADA que ya pagó un tramo del disfrute (PR-L15). */
+export interface NominaQuePago {
+  nomina_id: number;
+  nomina_empleado_id: number;
+  etiqueta: string | null;
+  periodo: { fecha_inicio: string; fecha_fin: string };
+  fecha_desde: string;
+  fecha_hasta: string;
+  dias: number;
+  valor_disfrute: number;
+  /** La compensación va con la nómina que contiene `fecha_inicio`. */
+  dias_dinero: number;
+  valor_dinero: number;
+  total: number;
+  cerrada_at: string | null;
+}
+
 export interface PagoVacacion {
   estado: EstadoVacacion | null;
+  /** PR-L15 — Viaja siempre, en los dos modos. */
+  modo_pago?: ModoPagoVacacion;
   fecha_pago: string | null;
-  metodo_pago: MetodoPagoVacacion | null;
+  /** `NOMINA` cuando el pago lo completó el cierre de una nómina. */
+  metodo_pago: MetodoPagoVacacionLeido | null;
+  /** `NOM-{id}` de la nómina que completó el pago. */
   referencia_pago: string | null;
+  /**
+   * `null` mientras no esté `PAGADA`, **salvo en `modo_pago = NOMINA`**, donde
+   * es numérico desde el inicio: 0 y luego lo que fueron pagando las nóminas.
+   * Varias pantallas dependen de ese `null` en `DIRECTO`.
+   */
   total_pagado: number | null;
+  /** Solo en `NOMINA`: `valor_total − total_pagado`. */
+  pendiente?: number | null;
+  /** Solo en `NOMINA`: una entrada por nómina CERRADA que pagó un tramo. */
+  nominas?: NominaQuePago[] | null;
   pagado_por: string | number | null;
   pagado_at?: string | null;
   observacion: string | null;
+}
+
+/**
+ * Una fila del plan de pago del preview (PR-L15 §10.4).
+ *
+ * Dice qué nómina del colaborador pagará cada tramo del disfrute. La nómina
+ * puede estar todavía en BORRADOR: es una previsión, no un hecho.
+ */
+export interface TramoPlanPago {
+  nomina_id: number;
+  nomina_empleado_id: number;
+  etiqueta: string | null;
+  periodo: { fecha_inicio: string; fecha_fin: string };
+  estado_nomina: string;
+  estado_fila: string;
+  fecha_desde: string;
+  fecha_hasta: string;
+  dias: number;
+  valor_tramo: number;
+  paga_dinero: boolean;
+  valor_dinero: number;
 }
 
 /** Preview (§10.4) y comprobante (§10.11) comparten contrato. */
@@ -343,6 +419,10 @@ export interface ComprobanteVacaciones {
     nominas_en_rango?: Array<Record<string, unknown>>;
     nominas_cerradas?: Array<Record<string, unknown>>;
     borradores_a_reliquidar?: Array<Record<string, unknown>>;
+    /** PR-L15 — Qué nómina pagará cada tramo. `null` en `DIRECTO`. */
+    plan_pago?: TramoPlanPago[] | null;
+    /** Lo que todavía no cubre ninguna fila de nómina. `null` en `DIRECTO`. */
+    sin_nomina?: { dias: number; valor: number; paga_dinero: boolean } | null;
   };
   observacion?: string | null;
   anulacion: Record<string, unknown> | null;
@@ -368,6 +448,18 @@ export interface VacacionItem {
   dias_calendario: number;
   dias_dinero: number;
   acuerdo_escrito: boolean;
+  /**
+   * PR-L15 — Cómo se paga. Viaja siempre; `DIRECTO` en todo lo liquidado
+   * antes de v1.10.
+   */
+  modo_pago?: ModoPagoVacacion;
+  /**
+   * PR-L15 (D1) — Días **comerciales** remunerados del disfrute (`Dias360`,
+   * mínimo 1): `valor_disfrute = valor_dia × dias_pago`. `null` en lo
+   * liquidado antes, que pagó los días calendario, y en lo que no tiene
+   * disfrute. Del 16 al 31 de octubre son 15, no 16.
+   */
+  dias_pago?: number | null;
   base_mensual: number;
   valor_dia: number;
   valor_disfrute: number;
@@ -440,6 +532,11 @@ export interface MetaHistoricoVacaciones {
     /** PR-N4 — Solicitudes PENDIENTE del filtro. Sin liquidar, la nómina
      *  paga esos días como trabajados. */
     solicitudes_pendientes?: number;
+    /**
+     * PR-L15 — De las `pendientes_pago`, las de `modo_pago = NOMINA` que
+     * todavía esperan una nómina o el pago del saldo.
+     */
+    pendientes_pago_nomina?: number;
   };
 }
 
@@ -459,6 +556,12 @@ export interface CrearVacacionPayload {
   /** Múltiplos de 0,5. Exige acuerdo_escrito. */
   dias_dinero?: number;
   acuerdo_escrito?: boolean;
+  /**
+   * PR-L15 — `DIRECTO` por defecto. Con `NOMINA` cada nómina que cubre el
+   * disfrute paga su tramo. No entra al `calculo_hash`: el mismo preview
+   * firma igual en los dos modos.
+   */
+  modo_pago?: ModoPagoVacacion;
   fecha_liquidacion?: string;
   observacion?: string;
   calculo_hash: string;
@@ -537,6 +640,12 @@ export const vacacionesApi = {
        * `VACACION_SOLICITUD_DIFIERE`; `dias_dinero` sigue siendo libre.
        */
       solicitud_id?: number;
+      /**
+       * PR-L15 — Con `NOMINA` la respuesta trae `nomina.plan_pago[]` y
+       * `nomina.sin_nomina`. Sin disfrute, o con un disfrute de un solo día
+       * 31, responde 422 `VACACION_MODO_PAGO_INVALIDO`.
+       */
+      modo_pago?: ModoPagoVacacion;
     },
   ) =>
     apiClient.get<{ data: ComprobanteVacaciones }>(
@@ -571,6 +680,8 @@ export const vacacionesApi = {
     hasta?: string;
     estado?: EstadoVacacion;
     origen?: OrigenVacacion;
+    /** PR-L15 — Separa las que paga el módulo de las que paga la nómina. */
+    modo_pago?: ModoPagoVacacion;
     empleado_id?: number;
     /** PR-N4 — `1` para ver solo las solicitudes PENDIENTE. */
     es_solicitud?: 0 | 1;
@@ -634,6 +745,22 @@ export const VacacionesErrorCodes = {
   VACACION_EN_NOMINA_CERRADA: 'VACACION_EN_NOMINA_CERRADA',
   VACACION_PAGADA: 'VACACION_PAGADA',
   VACACION_ESTADO_INVALIDO: 'VACACION_ESTADO_INVALIDO',
+  /**
+   * PR-L15 — `modo_pago = NOMINA` en una liquidación sin disfrute
+   * (`motivo: SIN_DISFRUTE`) o de un solo día 31 (`DIA_31`: vale 0 días
+   * comerciales y ninguna nómina lo pagaría).
+   */
+  VACACION_MODO_PAGO_INVALIDO: 'VACACION_MODO_PAGO_INVALIDO',
+  /**
+   * PR-L15 — `DELETE …/pago` de una vacación cuyo pago completó el cierre de
+   * una nómina: no hay giro manual que anular.
+   */
+  VACACION_PAGO_POR_NOMINA: 'VACACION_PAGO_POR_NOMINA',
+  /**
+   * PR-L15 — Lo responde `POST nominas/{id}/cerrar`: una fila liquidó un
+   * tramo que ya no coincide con la vacación viva. Re-liquidar esas filas.
+   */
+  VACACIONES_DESACTUALIZADAS_EN_NOMINA: 'VACACIONES_DESACTUALIZADAS_EN_NOMINA',
   /** PR-N4 — La solicitud ya se aprobó o se rechazó. */
   VACACION_SOLICITUD_NO_PENDIENTE: 'VACACION_SOLICITUD_NO_PENDIENTE',
   /** PR-N4 — Se enviaron fecha o días distintos de los de la solicitud. */
@@ -651,6 +778,24 @@ export const VacacionesErrorCodes = {
   PERMISSION_DENIED: 'PERMISSION_DENIED',
   CALC_ERROR: 'CALC_ERROR',
 } as const;
+
+/** PR-L15 — Cómo se paga, para las columnas y el selector. */
+export const MODO_PAGO_LABEL: Record<ModoPagoVacacion, string> = {
+  DIRECTO: 'Pago directo',
+  NOMINA: 'En nómina',
+};
+
+/**
+ * Advertencias propias del pago en nómina (Anexo A.1.1). No bloquean.
+ */
+export const ADVERTENCIA_PAGO_NOMINA_LABEL: Record<string, string> = {
+  VACACIONES_SIN_NOMINA_PARA_TRAMO:
+    'Una nómina ya cerrada cruza el disfrute sin este colaborador: ese tramo habrá que pagarlo a mano',
+  VACACIONES_PAGO_MANUAL_DEL_SALDO:
+    'El giro cubre el saldo que las nóminas no pagaron',
+  VACACIONES_PAGO_EN_NOMINA_PENDIENTE:
+    'El disfrute ya terminó y queda saldo: cierre la nómina del tramo o pague el saldo',
+};
 
 /** Rótulos del semáforo de vencimiento. */
 export const VENCIMIENTO_LABEL: Record<EstadoVencimiento, string> = {

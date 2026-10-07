@@ -1,6 +1,11 @@
 /**
  * Registro del pago de una vacación (API_LIQUIDACIONES §10.9).
  * No hay fondo ni PILA: el dinero va directo al trabajador.
+ *
+ * PR-L15 — En `modo_pago = NOMINA` el giro ya no es el total: las nóminas
+ * cerradas pagaron sus tramos y aquí solo se cubre el saldo (`pago.pendiente`).
+ * El monto lo pone el backend; este formulario solo manda cómo y cuándo. Por
+ * eso `NOMINA` nunca aparece como método: es un modo, no una forma de giro.
  */
 import { useEffect, useState } from 'react';
 import {
@@ -13,7 +18,7 @@ import { Textarea } from '../../../components/ui/textarea';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../../components/ui/select';
-import { Banknote, Loader2 } from 'lucide-react';
+import { Banknote, Loader2, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   vacacionesApi,
@@ -23,6 +28,7 @@ import {
 } from '../../../../api/vacaciones';
 import type { ApiError } from '../../../../api/client';
 import { fmtCOP } from './comunes';
+import { formatFecha } from '../../../utils/fecha';
 
 const METODOS: Array<{ valor: MetodoPagoVacacion; label: string }> = [
   { valor: 'TRANSFERENCIA', label: 'Transferencia' },
@@ -37,6 +43,14 @@ interface Props {
 }
 
 export default function PagoVacacionDialog({ vacacion, onCerrar, onPagada }: Props) {
+  // Lo que falta por girar. En DIRECTO es el total; en NOMINA, el saldo.
+  const porNomina = vacacion?.modo_pago === 'NOMINA';
+  const pagado = vacacion?.pago.total_pagado ?? 0;
+  const aPagar = porNomina
+    ? vacacion?.pago.pendiente ?? Math.max((vacacion?.valor_total ?? 0) - pagado, 0)
+    : vacacion?.valor_total ?? 0;
+  const tramos = vacacion?.pago.nominas ?? [];
+
   const [fechaPago, setFechaPago] = useState('');
   const [metodo, setMetodo] = useState<MetodoPagoVacacion>('TRANSFERENCIA');
   const [referencia, setReferencia] = useState('');
@@ -71,6 +85,8 @@ export default function PagoVacacionDialog({ vacacion, onCerrar, onPagada }: Pro
         toast.error('Esta vacación ya tiene el pago registrado');
       } else if (e.code === VacacionesErrorCodes.VACACION_ESTADO_INVALIDO) {
         toast.error('La vacación está anulada: no admite pago');
+      } else if (e.code === VacacionesErrorCodes.VACACION_PAGO_POR_NOMINA) {
+        toast.error('Las nóminas ya cubrieron el total: no queda saldo por girar');
       } else {
         toast.error(e.message ?? 'No se pudo registrar el pago');
       }
@@ -85,16 +101,39 @@ export default function PagoVacacionDialog({ vacacion, onCerrar, onPagada }: Pro
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Banknote className="h-5 w-5 text-primary" />
-            Registrar pago
+            {porNomina ? 'Pagar el saldo' : 'Registrar pago'}
           </DialogTitle>
           <DialogDescription>
             {vacacion
-              ? `${vacacion.empleado.nombre_completo} · ${fmtCOP(vacacion.valor_total)}`
+              ? `${vacacion.empleado.nombre_completo} · ${fmtCOP(aPagar)}`
               : ''}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
+          {porNomina && vacacion && (
+            <div className="space-y-2 rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs dark:border-sky-800/30 dark:bg-sky-950/20">
+              <p className="flex items-start gap-2 text-sky-700 dark:text-sky-300">
+                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                Esta vacación se paga en nómina. El giro cubre solo el saldo que
+                las nóminas cerradas no alcanzaron a pagar.
+              </p>
+              {tramos.map((t) => (
+                <p key={t.nomina_empleado_id} className="flex justify-between text-sky-700 dark:text-sky-300">
+                  <span>
+                    {t.etiqueta ?? `NOM-${t.nomina_id}`}
+                    {' · '}
+                    {formatFecha(t.fecha_desde)} a {formatFecha(t.fecha_hasta)}
+                  </span>
+                  <span className="font-medium">{fmtCOP(t.total)}</span>
+                </p>
+              ))}
+              <p className="flex justify-between border-t border-sky-200 pt-2 font-semibold text-sky-800 dark:border-sky-800/30 dark:text-sky-200">
+                <span>Saldo por girar</span>
+                <span>{fmtCOP(aPagar)}</span>
+              </p>
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Fecha de pago</Label>
@@ -131,7 +170,7 @@ export default function PagoVacacionDialog({ vacacion, onCerrar, onPagada }: Pro
           <Button variant="outline" onClick={onCerrar} disabled={guardando}>Cancelar</Button>
           <Button onClick={guardar} disabled={guardando} className="gap-2">
             {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
-            Registrar pago
+            {porNomina ? 'Pagar el saldo' : 'Registrar pago'}
           </Button>
         </DialogFooter>
       </DialogContent>

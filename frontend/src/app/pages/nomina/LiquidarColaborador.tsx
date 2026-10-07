@@ -1080,6 +1080,37 @@ export default function LiquidarColaborador() {
                   <span className="font-semibold">${(preview.total_incapacidades ?? 0).toLocaleString('es-CO')}</span>
                 </div>
               )}
+              {/* PR-L15 — Vacaciones con `modo_pago = NOMINA`: el tramo del
+                  disfrute es salario de este período y ya viene dentro de
+                  `total_devengado`. Las `DIRECTO` llegan en 0: las pagó
+                  Liquidaciones y solo aparecen en el bloque informativo. */}
+              {(preview.total_vacaciones ?? 0) > 0 && (
+                <div className="flex justify-between px-4 py-3 border-b border-success/10">
+                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Vacaciones
+                    {(preview.dias_vacaciones_pagados ?? 0) > 0 && (
+                      <span className="ml-2 normal-case tracking-normal text-muted-foreground/80">
+                        · {preview.dias_vacaciones_pagados} día
+                        {preview.dias_vacaciones_pagados !== 1 ? 's' : ''} remunerado
+                        {preview.dias_vacaciones_pagados !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </span>
+                  <span className="font-semibold">
+                    ${(preview.total_vacaciones ?? 0).toLocaleString('es-CO')}
+                  </span>
+                </div>
+              )}
+              {(preview.total_vacaciones_compensadas ?? 0) > 0 && (
+                <div className="flex justify-between px-4 py-3 border-b border-success/10">
+                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Vacaciones compensadas en dinero
+                  </span>
+                  <span className="font-semibold">
+                    ${(preview.total_vacaciones_compensadas ?? 0).toLocaleString('es-CO')}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between px-4 py-3 border-b border-success/10 bg-success/10">
                 <span className="text-xs uppercase tracking-wide font-bold text-success">Total bruto</span>
                 <span className="font-bold text-lg text-success">
@@ -1141,8 +1172,10 @@ export default function LiquidarColaborador() {
             titulo="Faltas sin novedad registrada"
           />
 
-          {/* PR-L8 — Vacaciones que Liquidaciones ya pagó. Informativas:
-              explican por qué el período trae menos días trabajados. */}
+          {/* PR-L8 — Las vacaciones del período. En `DIRECTO` la línea es
+              informativa: explica por qué el período trae menos días
+              trabajados. En `NOMINA` el tramo lo paga esta nómina y el bloque
+              muestra cuánto (PR-L15). */}
           <DiasVacaciones
             items={preview.detalle_vacaciones}
             total={preview.dias_vacaciones}

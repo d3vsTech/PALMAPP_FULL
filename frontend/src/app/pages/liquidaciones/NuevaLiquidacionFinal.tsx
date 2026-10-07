@@ -447,6 +447,47 @@ export default function NuevaLiquidacionFinal() {
                   {a.mensaje}
                 </p>
               ))}
+
+              {/*
+                * PR-L15 — Una vacación APROBADA sin pagar bloquea el retiro y
+                * no es forzable. El mensaje del bloqueante no dice **cómo**
+                * salir, y en `modo_pago = NOMINA` hay dos caminos: cerrar las
+                * nóminas que cubren los tramos, o pagar el saldo a mano. Los
+                * días que ninguna nómina cubre solo salen pagando el saldo.
+                */}
+              {(ficha.vacaciones.vacaciones_pendientes_pago ?? []).map((v) => (
+                <div
+                  key={v.id}
+                  className="space-y-1 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive"
+                >
+                  <p className="flex items-start gap-2 font-medium">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    {v.numero_comprobante ?? `Vacación ${v.id}`} sin pagar
+                    {v.pendiente != null && ` · falta ${fmtCOP(v.pendiente)}`}
+                  </p>
+                  {v.modo_pago === 'NOMINA' ? (
+                    <div className="space-y-0.5 pl-5">
+                      {(v.nominas_pendientes ?? []).map((n) => (
+                        <p key={n.nomina_empleado_id ?? n.nomina_id}>
+                          Cierre {n.etiqueta ?? `NOM-${n.nomina_id}`}
+                          {n.estado_nomina && ` (${n.estado_nomina.toLowerCase()})`}
+                        </p>
+                      ))}
+                      {(v.dias_sin_nomina ?? 0) > 0 && (
+                        <p>
+                          {v.dias_sin_nomina} día{v.dias_sin_nomina !== 1 ? 's' : ''} sin nómina
+                          que los cubra: solo se resuelven pagando el saldo.
+                        </p>
+                      )}
+                      {(v.nominas_pendientes?.length ?? 0) === 0 && (v.dias_sin_nomina ?? 0) === 0 && (
+                        <p>Pague el saldo desde el histórico de vacaciones.</p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="pl-5">Páguela o anúlela antes de aprobar el retiro.</p>
+                  )}
+                </div>
+              ))}
             </div>
           )}
 

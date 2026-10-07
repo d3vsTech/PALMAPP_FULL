@@ -628,6 +628,28 @@ export default function NominaDetalle() {
       if (res.advertencia?.code === 'COSECHA_GAJOS_SIN_DESPACHAR') {
         toast.warning(res.advertencia.texto, { duration: 10000 });
       }
+      /*
+       * PR-L15 — El cierre acaba de pagar tramos de vacaciones `NOMINA`. Hay
+       * que decirlo aquí: el usuario cerró una nómina y además movió plata en
+       * Liquidaciones, y las que quedan con saldo necesitan otra nómina o un
+       * giro manual. El cierre es irreversible, así que el aviso se queda.
+       */
+      const pagadas = res.data.vacaciones_pagadas ?? [];
+      if (pagadas.length > 0) {
+        const totalPagado = pagadas.reduce((acumulado, v) => acumulado + v.pagado_aqui, 0);
+        const conSaldo = pagadas.filter((v) => v.pendiente > 0);
+        toast.success(
+          `Se pagaron ${pagadas.length} vacacion${pagadas.length !== 1 ? 'es' : ''} `
+          + `por $${totalPagado.toLocaleString('es-CO')}`,
+          {
+            duration: 10000,
+            description: conSaldo.length > 0
+              ? `${conSaldo.length} queda${conSaldo.length !== 1 ? 'n' : ''} con saldo: `
+                + conSaldo.map((v) => v.numero_comprobante).join(', ')
+              : 'Ninguna quedó con saldo pendiente',
+          },
+        );
+      }
       setConfirmarCerrar(false);
       cargar();
     } catch (err) {
@@ -638,6 +660,14 @@ export default function NominaDetalle() {
         toast.error('Debes confirmar la validación de cosecha antes de cerrar');
       } else if (e.code === NominaErrorCodes.NOMINA_TERCERO_NO_LIQUIDADO) {
         toast.error('Hay terceros sin liquidar — calcula sus actas en "Liquidar Terceros"');
+      } else if (e.code === NominaErrorCodes.VACACIONES_DESACTUALIZADAS_EN_NOMINA) {
+        // PR-L15 — Alguna fila liquidó un tramo que ya no coincide con la
+        // vacación viva. Re-liquidar esas filas y volver a cerrar.
+        toast.error('Hay vacaciones que cambiaron después de liquidar', {
+          duration: 10000,
+          description: e.message
+            ?? 'Vuelve a liquidar los colaboradores con vacaciones y cierra de nuevo.',
+        });
       } else {
         toast.error(e.message ?? 'Error al cerrar nómina');
       }

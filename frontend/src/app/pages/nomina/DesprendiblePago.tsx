@@ -151,7 +151,17 @@ export default function DesprendiblePago() {
     (liquidacion.total_dominicales ?? 0) +
     (liquidacion.total_festivos ?? 0) +
     (liquidacion.total_recargo_dominical ?? 0) +
-    (liquidacion.total_recargo_festivo ?? 0);
+    (liquidacion.total_recargo_festivo ?? 0) +
+    // PR-L15 - Vacaciones con `modo_pago = NOMINA`: el disfrute es salario
+    // del periodo y la compensacion CST 189 va con el periodo que contiene
+    // la fecha de inicio. Las `DIRECTO` llegan en 0 y no mueven el bruto.
+    (liquidacion.total_vacaciones ?? 0) +
+    (liquidacion.total_vacaciones_compensadas ?? 0);
+  // El desprendible no trae un contador aparte: los dias remunerados son los
+  // de los tramos que esta nomina paga. Los `DIRECTO` no cuentan aqui.
+  const diasVacacionesPagados = (liquidacion.detalle_vacaciones ?? [])
+    .filter((v) => v.pagada_aqui)
+    .reduce((acumulado, v) => acumulado + (v.dias_remunerados ?? v.dias), 0);
   const adelantos = liquidacion.deducciones
     .filter((d) => /adelant|prestam/i.test(d.nombre))
     .reduce((s, d) => s + d.valor, 0);
@@ -227,6 +237,25 @@ export default function DesprendiblePago() {
                   />
                 )}
                 <RowSmall label="Incapacidades" value={fmt(liquidacion.total_incapacidades)} />
+                {/* PR-L15 - Solo las vacaciones que paga esta nomina. Las que
+                    pago Liquidaciones llegan en 0 y siguen apareciendo abajo,
+                    sin valor, para explicar los dias que faltan. */}
+                {(liquidacion.total_vacaciones ?? 0) > 0 && (
+                  <RowSmall
+                    label={
+                      diasVacacionesPagados > 0
+                        ? `Vacaciones (${diasVacacionesPagados} día${diasVacacionesPagados !== 1 ? 's' : ''})`
+                        : 'Vacaciones'
+                    }
+                    value={fmt(liquidacion.total_vacaciones!)}
+                  />
+                )}
+                {(liquidacion.total_vacaciones_compensadas ?? 0) > 0 && (
+                  <RowSmall
+                    label="Vacaciones compensadas en dinero"
+                    value={fmt(liquidacion.total_vacaciones_compensadas!)}
+                  />
+                )}
                 {/* §9.9 — Dominicales / festivos / recargo. Solo se muestra si
                     llegan del backend (nóminas anteriores al cambio no los
                     tienen). Sistema todo-o-nada según art. 173 num. 1. */}
@@ -350,15 +379,17 @@ export default function DesprendiblePago() {
               />
             </div>
 
-            {/* PR-L8 — Línea informativa sin valor: estos días los pagó
-                Liquidaciones con su comprobante VAC-n, no esta nómina. */}
+            {/* PR-L8 — Los días del disfrute dentro del período. En `DIRECTO`
+                la línea va sin valor: los pagó Liquidaciones con su
+                comprobante VAC-n. En `NOMINA` el tramo lo paga esta nómina y
+                el propio bloque muestra cuánto (PR-L15). */}
             <div className="mt-4">
               <DiasVacaciones
                 items={liquidacion.detalle_vacaciones}
                 total={liquidacion.dias_vacaciones}
                 formatMoney={fmt}
                 variant="compact"
-                titulo="Vacaciones pagadas por liquidaciones"
+                titulo="Vacaciones del período"
               />
             </div>
           </div>

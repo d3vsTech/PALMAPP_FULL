@@ -43,6 +43,7 @@ import {
   type ComprobanteVacaciones,
   type DetalleColaboradorVacaciones,
   type MetodoPagoVacacion,
+  type ModoPagoVacacion,
   type VacacionItem,
 } from '../../../api/vacaciones';
 import { BLOQUEANTE_LABEL } from '../../../api/liquidaciones';
@@ -83,7 +84,18 @@ export default function NuevaVacaciones() {
    * "Pago en nómina" es simplemente no llamar la segunda: queda pendiente y
    * entra en la nómina del período.
    */
-  const [tipoPago, setTipoPago] = useState<'nomina' | 'anticipado'>('nomina');
+  /**
+   * PR-L15 — Cómo se paga la vacación, no cuándo. Con `NOMINA` cada nómina
+   * que cubre el disfrute paga su tramo como devengado; con `DIRECTO` la
+   * paga el módulo, que es lo de siempre.
+   */
+  const [modoPago, setModoPago] = useState<ModoPagoVacacion>('DIRECTO');
+  /**
+   * Solo aplica en `DIRECTO`: si el giro se registra ya o queda pendiente.
+   * En `NOMINA` no hay giro que registrar (lo haría el saldo manual y
+   * desarmaría el motivo de escoger el modo), así que se fuerza a pendiente.
+   */
+  const [tipoPago, setTipoPago] = useState<'pendiente' | 'anticipado'>('pendiente');
   const [fechaPago, setFechaPago] = useState(() => new Date().toISOString().slice(0, 10));
   const [metodoPago, setMetodoPago] = useState<MetodoPagoVacacion>('TRANSFERENCIA');
   const [referenciaPago, setReferenciaPago] = useState('');
@@ -190,6 +202,7 @@ export default function NuevaVacaciones() {
         fecha_inicio: nDisfrute > 0 ? fechaInicio || undefined : undefined,
         dias_disfrute: nDisfrute,
         dias_dinero: nDinero || undefined,
+        modo_pago: modoPago,
       })
       .then((res) => {
         if (reqId !== prevRef.current) return;
@@ -203,7 +216,7 @@ export default function NuevaVacaciones() {
         setErrorPreview(mensajeError(e));
       })
       .finally(() => { if (reqId === prevRef.current) setCalculandoPreview(false); });
-  }, [empleadoId, solicitudId, fechaInicio, nDisfrute, nDinero]);
+  }, [empleadoId, solicitudId, fechaInicio, nDisfrute, nDinero, modoPago]);
 
   useEffect(() => {
     if (nDisfrute > 0 && !fechaInicio) { setPreview(null); return; }
@@ -227,6 +240,7 @@ export default function NuevaVacaciones() {
         dias_disfrute: nDisfrute,
         dias_dinero: nDinero || undefined,
         acuerdo_escrito: nDinero > 0 ? acuerdoEscrito : undefined,
+        modo_pago: modoPago,
         observacion: observacion.trim() || undefined,
         calculo_hash: preview.calculo_hash,
         forzar: forzar || undefined,
@@ -236,7 +250,7 @@ export default function NuevaVacaciones() {
 
       // El pago anticipado es una segunda llamada. Si falla, la liquidación ya
       // existe: se avisa y se sigue al detalle, donde se puede reintentar.
-      if (tipoPago === 'anticipado') {
+      if (modoPago === 'DIRECTO' && tipoPago === 'anticipado') {
         try {
           await vacacionesApi.registrarPago(res.data.id, {
             fecha_pago: fechaPago,
@@ -313,12 +327,16 @@ export default function NuevaVacaciones() {
   const bloqueantesPreview = preview?.bloqueantes ?? [];
   const bloqueantesDuros = bloqueantesPreview.filter((b) => b.forzable !== true);
 
+  // D1: los días que de verdad se pagan. `null` solo si el backend todavía no
+  // los manda (una liquidación anterior a v1.10 pagaba los calendario).
+  const diasPago = preview?.resultado.dias_pago ?? null;
+
   const puedeConfirmar =
     !bloqueado && !!preview && !calculandoPreview && totalPedido > 0 &&
     !excedeSaldo && !excedeDinero && !faltaAcuerdo &&
     bloqueantesDuros.length === 0 &&
     (nDisfrute === 0 || !!fechaInicio) &&
-    (tipoPago === 'nomina' || !!fechaPago);
+    (modoPago === 'NOMINA' || tipoPago === 'pendiente' || !!fechaPago);
 
   return (
     <div className="space-y-6">
@@ -535,22 +553,62 @@ export default function NuevaVacaciones() {
             </div>
           </div>
 
-          {/* Forma de pago */}
+          {/* Forma de pago (PR-L15). Hasta aquí este control decía "pago en
+              nómina" para algo que la nómina no pagaba: era solo "dejar
+              pendiente". Ahora son dos preguntas distintas: quién paga y
+              cuándo. */}
           <div className="space-y-1.5">
             <Label>Forma de pago <span className="text-destructive">*</span></Label>
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex overflow-hidden rounded-lg border border-input">
+              <button
+                type="button"
+                onClick={() => setModoPago('DIRECTO')}
+                disabled={bloqueado}
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  modoPago === 'DIRECTO'
+                    ? 'bg-primary text-white'
+                    : 'bg-background text-muted-foreground hover:bg-muted'
+                }`}
+              >
+                Pago directo
+              </button>
+              <button
+                type="button"
+                onClick={() => { setModoPago('NOMINA'); setTipoPago('pendiente'); }}
+                disabled={bloqueado || nDisfrute <= 0}
+                title={nDisfrute <= 0 ? 'En nómina solo se puede pagar un disfrute, no una compensación suelta' : undefined}
+                className={`border-l border-input px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
+                  modoPago === 'NOMINA'
+                    ? 'bg-primary text-white'
+                    : 'bg-background text-muted-foreground hover:bg-muted'
+                }`}
+              >
+                En nómina
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {modoPago === 'DIRECTO'
+                ? 'La paga este módulo, con su propio comprobante.'
+                : 'Cada nómina que cubre el disfrute paga su tramo como devengado, con las deducciones de salud y pensión de esa nómina. La compensación en dinero va con la nómina del inicio.'}
+            </p>
+          </div>
+
+          {/* En NOMINA no hay giro que registrar: lo pagan las nóminas. */}
+          {modoPago === 'DIRECTO' && (
+            <div className="space-y-1.5">
+              <Label>¿Cuándo se paga?</Label>
               <div className="flex overflow-hidden rounded-lg border border-input">
                 <button
                   type="button"
-                  onClick={() => setTipoPago('nomina')}
+                  onClick={() => setTipoPago('pendiente')}
                   disabled={bloqueado}
                   className={`px-4 py-2 text-sm font-medium transition-colors ${
-                    tipoPago === 'nomina'
+                    tipoPago === 'pendiente'
                       ? 'bg-primary text-white'
                       : 'bg-background text-muted-foreground hover:bg-muted'
                   }`}
                 >
-                  Pago en nómina
+                  Pagar después
                 </button>
                 <button
                   type="button"
@@ -565,15 +623,17 @@ export default function NuevaVacaciones() {
                   Pago anticipado
                 </button>
               </div>
+              <p className="text-xs text-muted-foreground">
+                {tipoPago === 'pendiente'
+                  ? 'Queda APROBADA y el pago se registra después desde el histórico.'
+                  : 'Se registra el pago de inmediato y la vacación queda PAGADA.'}
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground">
-              {tipoPago === 'nomina'
-                ? 'Queda pendiente de pago y entra en la nómina del período.'
-                : 'Se registra el pago de inmediato y la vacación queda PAGADA.'}
-            </p>
-          </div>
+          )}
 
-          {tipoPago === 'anticipado' && (
+          {modoPago === 'NOMINA' && <PlanDePago preview={preview} />}
+
+          {modoPago === 'DIRECTO' && tipoPago === 'anticipado' && (
             <div className="grid grid-cols-1 gap-5 rounded-xl border border-border bg-muted/20 p-4 sm:grid-cols-3">
               <div className="space-y-1.5">
                 <Label>Fecha de pago <span className="text-destructive">*</span></Label>
@@ -630,7 +690,9 @@ export default function NuevaVacaciones() {
                       {fmtDias(calendario.dias_habiles)} días hábiles
                     </span>
                     <span className="font-semibold text-foreground">
-                      {fmtDias(calendario.dias_calendario)} días calendario a pagar
+                      {diasPago != null && diasPago !== calendario.dias_calendario
+                        ? `${fmtDias(diasPago)} días a pagar (${fmtDias(calendario.dias_calendario)} calendario)`
+                        : `${fmtDias(calendario.dias_calendario)} días calendario a pagar`}
                     </span>
                   </div>
                   {calendario.dias_no_habiles.length > 0 && (
@@ -817,13 +879,18 @@ export default function NuevaVacaciones() {
                       <tr className="border-b border-border bg-success/5">
                         <td className="px-5 py-3">
                           <p className="text-sm font-medium text-success">Días de disfrute</p>
-                          {/* Se pagan calendario, no hábiles: por eso van los dos. */}
+                          {/* Se pagan calendario, no hábiles: por eso van los dos.
+                              PR-L15 (D1): desde v1.10 lo que se paga son los días
+                              comerciales, que en meses de 31 y en febrero no son
+                              los calendario. Se muestran los dos cuando difieren. */}
                           <p className="text-xs text-muted-foreground">
                             Equivalen a {fmtDias(preview.resultado.dias_disfrute)} días hábiles
+                            {diasPago != null && diasPago !== preview.resultado.dias_calendario
+                              && ` · ${fmtDias(preview.resultado.dias_calendario)} calendario`}
                           </p>
                         </td>
                         <td className="px-5 py-3 text-center text-sm text-foreground">
-                          {fmtDias(preview.resultado.dias_calendario)}
+                          {fmtDias(diasPago ?? preview.resultado.dias_calendario)}
                         </td>
                         <td className="px-5 py-3 text-center text-sm text-foreground">
                           {fmtCOP(preview.resultado.valor_dia)}
@@ -989,6 +1056,73 @@ export default function NuevaVacaciones() {
 }
 
 /** Traduce los códigos del contrato a algo que el usuario pueda accionar. */
+/**
+ * Qué nómina va a pagar cada tramo del disfrute (§10.4, `nomina.plan_pago`).
+ *
+ * Es una previsión, no un hecho: las nóminas pueden estar en BORRADOR y
+ * algunos tramos no tener todavía una fila del colaborador. Eso último es lo
+ * que importa mostrar, porque esos días solo se podrán pagar a mano.
+ */
+function PlanDePago({ preview }: { preview: ComprobanteVacaciones | null }) {
+  const plan = preview?.nomina?.plan_pago ?? [];
+  const sinNomina = preview?.nomina?.sin_nomina ?? null;
+  const sinCubrir = (sinNomina?.dias ?? 0) > 0 || !!sinNomina?.paga_dinero;
+
+  if (!preview) {
+    return (
+      <p className="rounded-xl border border-border bg-muted/20 p-4 text-xs text-muted-foreground">
+        Completa las fechas para ver qué nómina paga cada tramo.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-3 rounded-xl border border-border bg-muted/20 p-4">
+      <p className="text-sm font-medium">Plan de pago</p>
+
+      {plan.length === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          Ninguna nómina del colaborador cubre todavía estas fechas.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {plan.map((t) => (
+            <div
+              key={`${t.nomina_id}-${t.fecha_desde}`}
+              className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border/60 pb-2 last:border-0 last:pb-0"
+            >
+              <div className="min-w-0">
+                <p className="text-sm">
+                  {t.etiqueta || `Nómina ${t.nomina_id}`}
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    {formatFecha(t.fecha_desde)} al {formatFecha(t.fecha_hasta)} · {fmtDias(t.dias)} días
+                  </span>
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {t.estado_nomina === 'CERRADA' ? 'Cerrada' : 'En borrador'}
+                  {t.paga_dinero && ` · paga además ${fmtCOP(t.valor_dinero)} de compensación`}
+                </p>
+              </div>
+              <p className="text-sm font-semibold tabular-nums">{fmtCOP(t.valor_tramo)}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {sinCubrir && (
+        <p className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800/40 dark:bg-amber-950/20 dark:text-amber-200">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            Quedan {fmtDias(sinNomina?.dias ?? 0)} días ({fmtCOP(sinNomina?.valor ?? 0)}) que
+            ninguna nómina cubre todavía. Si la nómina de ese tramo ya cerró sin el colaborador,
+            ese saldo habrá que pagarlo a mano desde el histórico.
+          </span>
+        </p>
+      )}
+    </div>
+  );
+}
+
 function mensajeError(e: ApiError): string {
   switch (e.code) {
     case VacacionesErrorCodes.VACACIONES_SALDO_INSUFICIENTE:
@@ -1018,6 +1152,12 @@ function mensajeError(e: ApiError): string {
       return 'Esa solicitud es de otro colaborador.';
     case VacacionesErrorCodes.CALENDARIO_FESTIVOS_AUSENTE:
       return 'Falta el calendario de festivos de ese año. Revisa Configuración.';
+    case VacacionesErrorCodes.VACACION_MODO_PAGO_INVALIDO:
+      // §10.15: `NOMINA` exige disfrute, y un disfrute de un solo día 31
+      // vale 0 días comerciales, así que ninguna nómina lo pagaría.
+      return (e as { motivo?: string }).motivo === 'DIA_31'
+        ? 'Un disfrute de un solo día 31 no se puede pagar en nómina: ese día vale 0 en el mes comercial.'
+        : 'Para pagar en nómina la liquidación tiene que incluir días de disfrute. Una compensación solo en dinero se paga desde el módulo.';
     case VacacionesErrorCodes.EMPLEADO_NO_ELEGIBLE:
       return 'Este colaborador no puede liquidar vacaciones.';
     case VacacionesErrorCodes.CONFIG_LEGAL_INCOMPLETA:
