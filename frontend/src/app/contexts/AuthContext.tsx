@@ -11,6 +11,8 @@ export interface TenantInfo {
   nombre: string;
   nit?: string | null;
   razon_social?: string | null;
+  /** Persona natural: su equivalente de la razón social (API_AUTH_FINCA §1). */
+  nombre_comercial?: string | null;
   tipo_persona?: 'NATURAL' | 'JURIDICA';
   correo_contacto?: string | null;
   telefono?: string | null;

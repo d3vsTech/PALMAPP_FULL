@@ -564,6 +564,11 @@ export interface InfoEmpresa {
   tipo_persona: TipoPersona;
   nit: string | null;
   razon_social: string | null;
+  /**
+   * Solo persona natural: su equivalente de la razón social. `null` cuando no
+   * lo definió, y entonces la finca se presenta con `nombre` (§13).
+   */
+  nombre_comercial: string | null;
   actividad_economica: string | null;
   representante_nombre: string | null;
   representante_cedula: string | null;
@@ -584,6 +589,8 @@ export interface InfoEmpresaPayload {
   tipo_persona?: TipoPersona;
   nit?: string;
   razon_social?: string;
+  /** Persona natural. Vacío o `null` lo borra (§13). */
+  nombre_comercial?: string | null;
   actividad_economica?: string;
   representante_nombre?: string;
   representante_cedula?: string;

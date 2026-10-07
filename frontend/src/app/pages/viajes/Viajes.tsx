@@ -146,6 +146,8 @@ export default function Viajes() {
           empresaRemision.current = {
             nombre: res.data.nombre,
             razonSocial: res.data.razon_social,
+            nombreComercial: res.data.nombre_comercial,
+            tipoPersona: res.data.tipo_persona,
             nit: res.data.nit,
             direccion: res.data.direccion,
             municipio: res.data.municipio,

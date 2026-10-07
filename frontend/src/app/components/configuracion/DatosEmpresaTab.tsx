@@ -56,10 +56,9 @@ const CAMPOS_POR_TIPO: Record<'natural' | 'juridica', (keyof FormState)[]> = {
 /**
  * Deja en blanco los campos que no pertenecen al tipo guardado.
  *
- * Hace falta porque al guardar una persona natural el backend copia el nombre
- * completo en `nombre` y `razon_social`, que son los campos de empresa. Sin
- * esta limpieza, al pasar a Jurídica aparecería el nombre del dueño como si
- * fuera la razón social.
+ * Los dos tipos comparten columnas (`nombre`, `nit`), así que sin esta
+ * limpieza al pasar de Natural a Jurídica aparecería el nombre del dueño
+ * donde va la razón social.
  */
 function soloDelTipo(tipo: 'natural' | 'juridica', form: FormState): FormState {
   const otro = tipo === 'natural' ? 'juridica' : 'natural';
@@ -69,11 +68,11 @@ function soloDelTipo(tipo: 'natural' | 'juridica', form: FormState): FormState {
 }
 
 function apiToForm(data: InfoEmpresa): { tipoPersona: 'natural' | 'juridica'; form: FormState } {
-  // El backend guarda un solo `representante_nombre`; el formulario natural
-  // lo parte en nombres y apellidos para poder pintarlo. Esto es solo para la
-  // carga: al alternar el tipo de persona los campos del nuevo tipo se vacían
-  // (ver `cambiarTipoPersona`).
-  const partes = (data.representante_nombre ?? '').trim().split(/\s+/).filter(Boolean);
+  // En persona natural el nombre completo del titular va en `nombre`, en un
+  // solo texto. El formulario lo parte para poder pintarlo en dos campos.
+  // Es solo para la carga: al alternar el tipo de persona los campos del
+  // nuevo tipo se vacían (ver `cambiarTipoPersona`).
+  const partes = (data.nombre ?? '').trim().split(/\s+/).filter(Boolean);
   const nombres = partes.slice(0, Math.ceil(partes.length / 2)).join(' ');
   const apellidos = partes.slice(Math.ceil(partes.length / 2)).join(' ');
 
@@ -89,13 +88,10 @@ function apiToForm(data: InfoEmpresa): { tipoPersona: 'natural' | 'juridica'; fo
     form: {
       nombres,
       apellidos,
-      cedula: data.representante_cedula ?? '',
-      // Antes el formulario copiaba el nombre completo en `nombre`. Si los dos
-      // coinciden no hay nombre comercial de verdad, es ese rastro viejo.
-      nombreComercial:
-        (data.nombre ?? '').trim() === (data.representante_nombre ?? '').trim()
-          ? ''
-          : (data.nombre ?? ''),
+      // Natural: la cédula del titular es el `nit` de la finca, no un campo
+      // de representante legal. En natural no hay representante.
+      cedula: data.nit ?? '',
+      nombreComercial: data.nombre_comercial ?? '',
       nombreEmpresa: data.nombre ?? '',
       razonSocial: data.razon_social ?? '',
       nit: data.nit ?? '',
@@ -117,15 +113,16 @@ function formToPayload(tipo: 'natural' | 'juridica', f: FormState): InfoEmpresaP
   const tipo_persona: TipoPersona = tipo === 'natural' ? 'NATURAL' : 'JURIDICA';
   if (tipo === 'natural') {
     const nombreCompleto = `${f.nombres.trim()} ${f.apellidos.trim()}`.trim();
-    const comercial = f.nombreComercial.trim();
     return {
       tipo_persona,
-      // `nombre` es el comercial, igual que en jurídica. Sin él la finca
-      // quedaría sin nombre, así que cae al nombre completo.
-      nombre: comercial || nombreCompleto,
-      razon_social: nombreCompleto,
-      representante_nombre: nombreCompleto,
-      representante_cedula: f.cedula.trim(),
+      // `nombre` es el nombre completo del titular; el comercial tiene su
+      // propio campo y es opcional. Vacío lo borra, y la finca se presenta
+      // con `nombre`.
+      nombre: nombreCompleto,
+      nombre_comercial: f.nombreComercial.trim() || null,
+      // La cédula del titular identifica al empleador: va en `nit`, que es lo
+      // que los PDF imprimen como "C.C.". `representante_*` no aplica aquí.
+      nit: f.cedula.trim(),
       direccion: f.direccion.trim(),
       municipio: f.municipio.trim(),
       departamento: f.departamento.trim(),
@@ -139,6 +136,9 @@ function formToPayload(tipo: 'natural' | 'juridica', f: FormState): InfoEmpresaP
     tipo_persona,
     nombre: f.nombreEmpresa.trim(),
     razon_social: f.razonSocial.trim(),
+    // El comercial es de persona natural. Se borra al guardar como jurídica
+    // para que no quede un rastro que después confunda al cambiar de tipo.
+    nombre_comercial: null,
     nit: f.nit.trim(),
     representante_nombre: f.representanteLegal.trim(),
     representante_cedula: f.cedulaRepresentante.trim(),
@@ -152,13 +152,16 @@ function formToPayload(tipo: 'natural' | 'juridica', f: FormState): InfoEmpresaP
   };
 }
 
-/** Nombre que mostramos en la finca activa: el de la persona jurídica cuando es
- *  Jurídica, "Nombres Apellidos" cuando es Natural. */
+/**
+ * Nombre con el que se presenta la finca, con la misma regla que los PDF
+ * (`Tenant::nombreParaDocumentos()`): jurídica se presenta con la razón
+ * social, natural con el nombre comercial, y sin ellos con `nombre`.
+ */
 function nombreFincaPara(tipo: 'natural' | 'juridica', data: InfoEmpresa): string {
   if (tipo === 'natural') {
-    return (data.representante_nombre ?? data.nombre ?? '').trim();
+    return (data.nombre_comercial || data.nombre || '').trim();
   }
-  return (data.nombre ?? data.razon_social ?? '').trim();
+  return (data.razon_social || data.nombre || '').trim();
 }
 
 export function DatosEmpresaTab() {
@@ -333,6 +336,9 @@ export function DatosEmpresaTab() {
             ...user.fincaActual,
             nombre: nuevoNombre,
             nit: res.data.nit ?? user.fincaActual.nit ?? '',
+            razon_social: res.data.razon_social ?? null,
+            nombre_comercial: res.data.nombre_comercial ?? null,
+            tipo_persona: res.data.tipo_persona,
             logo_url: res.data.logo_url ?? null,
           },
         });

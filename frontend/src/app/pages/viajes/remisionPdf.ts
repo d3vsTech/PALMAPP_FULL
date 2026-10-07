@@ -36,6 +36,11 @@ export interface DatosRemisionViaje {
 export interface DatosRemisionEmpresa {
   nombre?: string | null;
   razonSocial?: string | null;
+  /** Persona natural: su equivalente de la razón social. */
+  nombreComercial?: string | null;
+  /** Decide con qué nombre se presenta la finca y si el número es NIT o C.C. */
+  tipoPersona?: 'NATURAL' | 'JURIDICA' | null;
+  /** NIT si es jurídica, cédula del titular si es natural. */
   nit?: string | null;
   direccion?: string | null;
   municipio?: string | null;
@@ -74,8 +79,20 @@ function formatFecha(iso?: string): string {
   return d.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+/**
+ * Con qué nombre se presenta la finca, con la regla de los desprendibles del
+ * backend: jurídica con la razón social, natural con el nombre comercial, y
+ * sin ellos con `nombre`. Decide el tipo de persona, no cuál campo esté lleno.
+ */
 function nombreFinca(e: DatosRemisionEmpresa): string {
+  if (e.tipoPersona === 'NATURAL') return e.nombreComercial || e.nombre || 'Finca';
   return e.razonSocial || e.nombre || 'Finca';
+}
+
+/** "NIT 900.123.456-7" o "C.C. 16.123.456", según el tipo de persona. */
+function identificacion(e: DatosRemisionEmpresa): string {
+  if (!e.nit) return '';
+  return `${e.tipoPersona === 'NATURAL' ? 'C.C.' : 'NIT'} ${e.nit}`;
 }
 
 /** Etiqueta pequeña en verde, como el texto preimpreso del talonario. */
@@ -146,7 +163,7 @@ function membrete(doc: jsPDF, e: DatosRemisionEmpresa, remision: string, y: numb
     [e.direccion, [e.municipio, e.departamento].filter(Boolean).join(' - ')].filter(Boolean).join(' · '),
     [
       [e.telefono, e.telefonoFijo].filter(Boolean).map((t) => `Cel: ${t}`).join('  '),
-      e.nit ? `NIT ${e.nit}` : '',
+      identificacion(e),
     ].filter(Boolean).join('  ·  '),
   ].filter(Boolean) as string[];
 
@@ -253,7 +270,10 @@ function tablaArticulos(
   doc.text('1', xCant + COL_CANT / 2, linea(1), { align: 'center' });
   doc.text('Viaje de Fruto de Palma de Aceite', xDesc + 6, linea(1));
   doc.text(nombreFinca(e), xDesc + 6, linea(3));
-  if (e.representante) doc.text(`De: ${e.representante}`, xDesc + 6, linea(5));
+  // El representante legal es de la persona jurídica. En natural el titular
+  // ya es el nombre de arriba, así que repetirlo sobra.
+  const representante = e.tipoPersona === 'NATURAL' ? null : e.representante;
+  if (representante) doc.text(`De: ${representante}`, xDesc + 6, linea(5));
 
   // Los gajos son el estimado del despacho, no el peso: van en REFERENCIA.
   if (v.gajosEstimados) {
