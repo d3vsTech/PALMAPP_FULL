@@ -11,7 +11,7 @@ import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { Input } from '../../components/ui/input';
-import { History, Search, Loader2, Plane, Inbox } from 'lucide-react';
+import { Search, Loader2, Plane, Inbox } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   vacacionesApi,
@@ -124,6 +124,9 @@ export default function VacacionesTab() {
 
       {/* ── Vacaciones pendientes ─────────────────────────────────────────── */}
       <div className="space-y-4">
+        {/* "Histórico de vacaciones" vive en el encabezado del módulo, al
+            lado de Importar: al pie quedaba debajo de la tabla y con muchos
+            colaboradores tocaba bajar hasta el final para encontrarlo. */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <h2 className="text-base font-semibold text-foreground">Vacaciones pendientes</h2>
           <div className="relative w-full sm:w-80">
@@ -256,19 +259,6 @@ export default function VacacionesTab() {
         </Card>
       </div>
 
-      {/* ── Acciones de pie ───────────────────────────────────────────────── */}
-      <div className="flex flex-wrap justify-end gap-3">
-        {/* "Cargar vacaciones anteriores" se movió al botón Importar del
-            encabezado, donde vive el de todas las pestañas. */}
-        <Button
-          variant="outline"
-          onClick={() => navigate('/liquidaciones/vacaciones/historico')}
-          className="gap-2"
-        >
-          <History className="h-4 w-4" />
-          Histórico de vacaciones
-        </Button>
-      </div>
     </div>
   );
 }

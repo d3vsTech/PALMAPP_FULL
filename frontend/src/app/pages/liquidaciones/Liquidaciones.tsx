@@ -2,7 +2,7 @@ import { useNavigate, useSearchParams } from 'react-router';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
-import { Info, DollarSign, TrendingUp, Calendar, FileText, Briefcase, Upload } from 'lucide-react';
+import { Info, DollarSign, TrendingUp, Calendar, FileText, Briefcase, Upload, History } from 'lucide-react';
 import { InfoTooltip } from '../../components/common/InfoTooltip';
 import {
   Tooltip,
@@ -97,18 +97,32 @@ function LiquidacionesContent() {
           </p>
         </div>
 
-        {/* Sin botón solo en Intereses: sus valores van dentro del archivo de
-            cesantías y no tiene un cargue propio. */}
-        {importar && (
-          <Button
-            variant="outline"
-            onClick={() => navigate(importar.ruta)}
-            className="w-full gap-2 rounded-full sm:w-auto sm:shrink-0"
-          >
-            <Upload className="h-4 w-4" />
-            {importar.label}
-          </Button>
-        )}
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:shrink-0">
+          {/* Solo Vacaciones tiene histórico propio: las demás pestañas lo
+              resuelven desde el detalle de cada liquidación. */}
+          {activeTab === 'vacaciones' && (
+            <Button
+              variant="outline"
+              onClick={() => navigate('/liquidaciones/vacaciones/historico')}
+              className="w-full gap-2 rounded-full sm:w-auto"
+            >
+              <History className="h-4 w-4" />
+              Histórico de vacaciones
+            </Button>
+          )}
+          {/* Sin botón solo en Intereses: sus valores van dentro del archivo de
+              cesantías y no tiene un cargue propio. */}
+          {importar && (
+            <Button
+              variant="outline"
+              onClick={() => navigate(importar.ruta)}
+              className="w-full gap-2 rounded-full sm:w-auto"
+            >
+              <Upload className="h-4 w-4" />
+              {importar.label}
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Pestañas del módulo */}
