@@ -486,16 +486,26 @@ export function CeldaColaborador({
   nombre,
   documento,
   documentoArchivo,
+  nombresArchivo,
+  apellidosArchivo,
 }: {
   nombre: string | undefined;
   documento: string | undefined;
   documentoArchivo: string | null;
+  /** Lo que decía el archivo (2026-10-06); el cruce sigue siendo por cédula. */
+  nombresArchivo?: string | null;
+  apellidosArchivo?: string | null;
 }) {
+  const delArchivo = [nombresArchivo, apellidosArchivo]
+    .filter(Boolean).join(' ').trim();
+
   if (!nombre) {
     return (
-      <div>
-        <p className="text-sm text-muted-foreground">Sin colaborador</p>
-        <p className="text-xs text-muted-foreground">
+      <div className="min-w-0">
+        <p className="text-sm text-muted-foreground">
+          {delArchivo || 'Sin colaborador'}
+        </p>
+        <p className="truncate text-xs text-muted-foreground">
           {documentoArchivo ? `en el archivo: ${documentoArchivo}` : 'sin cédula'}
         </p>
       </div>
@@ -505,6 +515,28 @@ export function CeldaColaborador({
     <div className="min-w-0">
       <p className="truncate text-sm font-medium">{nombre}</p>
       <p className="truncate text-xs text-muted-foreground">CC {documento}</p>
+      {/* El nombre del archivo solo se muestra cuando no es el de la ficha: la
+          advertencia dice que algo pasa, esto dice qué decía el archivo. */}
+      {delArchivo && !mismoNombre(delArchivo, nombre) && (
+        <p className="truncate text-xs text-amber-700 dark:text-amber-500">
+          en el archivo: {delArchivo}
+        </p>
+      )}
     </div>
   );
+}
+
+/**
+ * Compara dos nombres como lo hace el backend al emitir
+ * `NOMBRE_DIFIERE_DE_LA_FICHA`: por palabras, sin tildes ni mayúsculas y
+ * saltando las partículas. No decide nada, solo evita repetir en pantalla un
+ * nombre que ya está arriba escrito distinto.
+ */
+const PARTICULAS = new Set(['de', 'del', 'la', 'las', 'los', 'y']);
+
+function mismoNombre(a: string, b: string): boolean {
+  const palabras = (t: string) =>
+    t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+      .split(/\s+/).filter((p) => p && !PARTICULAS.has(p)).sort().join(' ');
+  return palabras(a) === palabras(b);
 }

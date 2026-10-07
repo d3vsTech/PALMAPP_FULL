@@ -79,6 +79,8 @@ const ANIOS = aniosCargables();
  */
 const COLUMNAS_PLANTILLA = [
   { nombre: 'documento', requerida: true },
+  { nombre: 'nombres' },
+  { nombre: 'apellidos' },
   { nombre: 'cesantias_valor', requerida: true },
   { nombre: 'cesantias_fecha_consignacion' },
   { nombre: 'cesantias_fondo' },
@@ -88,9 +90,9 @@ const COLUMNAS_PLANTILLA = [
 ];
 
 const FILAS_EJEMPLO = [
-  ['1012345678', '1.234.567', '2024-02-10', 'Porvenir',   '148.000', '2024-01-25', ''],
-  ['52000002',   '2.100.000', '12/02/2024', 'Protección', '252.000', '28/01/2024', 'Giro conjunto'],
-  ['1098765432', '980.000',   '',           '',           '',        '',           'Sin intereses'],
+  ['1012345678', 'Juan Carlos', 'Pérez Gómez', '1.234.567', '2024-02-10', 'Porvenir',   '148.000', '2024-01-25', ''],
+  ['52000002', 'Ana María', 'Rojas',   '2.100.000', '12/02/2024', 'Protección', '252.000', '28/01/2024', 'Giro conjunto'],
+  ['1098765432', '', '', '980.000',   '',           '',           '',        '',           'Sin intereses'],
 ];
 
 export default function CargaHistoricoCesantias() {
@@ -562,6 +564,8 @@ function TablaFilas({ filas }: { filas: FilaHistorico[] }) {
                   nombre={f.empleado?.nombre_completo}
                   documento={f.empleado?.documento}
                   documentoArchivo={f.documento}
+                  nombresArchivo={f.nombres}
+                  apellidosArchivo={f.apellidos}
                 />
                 <IncidenciasFila
                   errores={f.errores}

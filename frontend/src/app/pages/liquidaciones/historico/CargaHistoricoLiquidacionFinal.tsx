@@ -72,7 +72,7 @@ import {
 const ANIOS = aniosCargables();
 
 /**
- * Las 23 columnas del archivo, con el nombre exacto que reconoce el lector
+ * Las 25 columnas del archivo, con el nombre exacto que reconoce el lector
  * (API_LIQUIDACIONES §15.1).
  *
  * Los prefijos `liq_` y `ded_` son deliberados: los lectores de cesantías y
@@ -82,6 +82,8 @@ const ANIOS = aniosCargables();
  */
 const COLUMNAS_PLANTILLA = [
   { nombre: 'documento', requerida: true },
+  { nombre: 'nombres' },
+  { nombre: 'apellidos' },
   { nombre: 'fecha_retiro', requerida: true },
   { nombre: 'motivo_retiro' },
   { nombre: 'fecha_ingreso' },
@@ -108,13 +110,13 @@ const COLUMNAS_PLANTILLA = [
 
 /** Las dos primeras filas del ejemplo del documento de estructura. */
 const FILAS_EJEMPLO = [
-  ['1012345678', '2023-08-15', 'RENUNCIA', '2021-03-01', 'INDEFINIDO', '1.160.000',
+  ['1012345678', 'Juan Carlos', 'Pérez Gómez', '2023-08-15', 'RENUNCIA', '2021-03-01', 'INDEFINIDO', '1.160.000',
    '', '812.879', '60.966', '162.576', '580.000', '15', '', '',
    '', '', '', '', '1.616.421', '2023-08-18', 'TRANSFERENCIA', 'TRF-000123', ''],
-  ['52.000.001', '30/06/2023', 'Despido sin justa causa', '', '', '1.300.000',
+  ['52.000.001', 'Ana María', 'Rojas', '30/06/2023', 'Despido sin justa causa', '', '', '1.300.000',
    '433.333', '720.303', '43.218', '720.303', '346.667', '8', '2.450.000', '',
    '17.333', '17.333', '200.000', '', '4.479.158', '05/07/2023', 'Cheque', 'CH-4471', ''],
-  ['52000002', '2023-11-30', '', '2023-05-02', '', '',
+  ['52000002', '', '', '2023-11-30', '', '2023-05-02', '', '',
    '', '', '', '', '', '', '', '',
    '', '', '', '', '1.250.000', '', '', '', 'Solo se conserva el recibo por el total'],
 ];
@@ -637,6 +639,8 @@ function TablaFilasLiquidacion({ filas }: { filas: FilaHistoricoLiquidacionFinal
                       nombre={f.empleado?.nombre_completo}
                       documento={f.empleado?.documento}
                       documentoArchivo={f.documento}
+                      nombresArchivo={f.nombres}
+                      apellidosArchivo={f.apellidos}
                     />
                     <IncidenciasFila
                       errores={f.errores}

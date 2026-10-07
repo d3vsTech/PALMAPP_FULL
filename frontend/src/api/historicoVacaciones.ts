@@ -157,6 +157,14 @@ export interface FilaHistoricoVacaciones {
   fila: number;
   estado: EstadoFilaHistorico;
   documento: string;
+  /**
+   * Nombres y apellidos tal como venían en el archivo (2026-10-06).
+   * **Solo informativos:** el colaborador se cruza por `documento`. Si no se
+   * parecen al nombre de la ficha, la fila trae la advertencia
+   * `NOMBRE_DIFIERE_DE_LA_FICHA` y se carga igual.
+   */
+  nombres: string | null;
+  apellidos: string | null;
   empleado: (EmpleadoHistoricoRef & { estado?: boolean }) | null;
   vacacion: VacacionFila | null;
   /** `null` en filas con error: no hay nada que imputar. */

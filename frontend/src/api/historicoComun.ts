@@ -212,6 +212,11 @@ export const ADVERTENCIA_FILA_COMUN_LABEL: Record<string, string> = {
     'Tiene una liquidación final de un contrato anterior',
   CONCEPTO_PAGADO_EN_PERIODO: 'Su liquidación final no pagó este concepto',
   SIN_DESGLOSE_CON_PERIODO: 'Su liquidación final se cargó sin desglose',
+
+  // 2026-10-06. El cruce es por cédula; los nombres del archivo solo se
+  // comparan. Si no se parecen, lo más probable es que la cédula esté mal
+  // digitada y la fila se le esté cargando a otra persona.
+  NOMBRE_DIFIERE_DE_LA_FICHA: 'El nombre del archivo no es el de esa cédula',
 };
 
 // ─── Rótulos ──────────────────────────────────────────────────────────────────

@@ -78,7 +78,7 @@ import {
 const ANIOS = aniosCargables();
 
 /**
- * Las 8 columnas del archivo, con el nombre exacto que reconoce el lector
+ * Las 10 columnas del archivo, con el nombre exacto que reconoce el lector
  * (API_LIQUIDACIONES §14.1).
  *
  * `fecha_fin` y `dias_habiles` no llevan asterisco porque ninguna es
@@ -88,6 +88,8 @@ const ANIOS = aniosCargables();
  */
 const COLUMNAS_PLANTILLA = [
   { nombre: 'documento', requerida: true },
+  { nombre: 'nombres' },
+  { nombre: 'apellidos' },
   { nombre: 'fecha_inicio', requerida: true },
   { nombre: 'fecha_fin' },
   { nombre: 'dias_habiles' },
@@ -99,10 +101,10 @@ const COLUMNAS_PLANTILLA = [
 
 /** Las cuatro filas del ejemplo del documento de estructura. */
 const FILAS_EJEMPLO = [
-  ['1012345678', '2024-10-07', '2024-10-24', '15', '', '780.000', '2024-10-04', 'Archivo físico 2024'],
-  ['52.000.001', '04/03/2024', '', '15', '7,5', '1.061.667', '', 'Compensó 7,5 días por escrito'],
-  ['52000002', '2024-12-16', '2025-01-03', '', '', '', '', 'Regresó el lunes 6 de enero'],
-  ['52000002', '2024-09-02', '2024-09-07', '6', '', '$ 260.000', '', 'Semana corta de septiembre'],
+  ['1012345678', 'Carlos', 'Martínez', '2024-10-07', '2024-10-24', '15', '', '780.000', '2024-10-04', 'Archivo físico 2024'],
+  ['52.000.001', 'Ana María', 'Rojas', '04/03/2024', '', '15', '7,5', '1.061.667', '', 'Compensó 7,5 días por escrito'],
+  ['52000002', 'Luis', 'Martínez', '2024-12-16', '2025-01-03', '', '', '', '', 'Regresó el lunes 6 de enero'],
+  ['52000002', '', '', '2024-09-02', '2024-09-07', '6', '', '$ 260.000', '', 'Semana corta de septiembre'],
 ];
 
 /** Colores del semáforo de vencimiento, para el panel de saldos. */
@@ -617,6 +619,8 @@ function TablaFilasVacaciones({ filas }: { filas: FilaHistoricoVacaciones[] }) {
                     nombre={f.empleado?.nombre_completo}
                     documento={f.empleado?.documento}
                     documentoArchivo={f.documento}
+                    nombresArchivo={f.nombres}
+                    apellidosArchivo={f.apellidos}
                   />
                   <IncidenciasFila
                     errores={f.errores}

@@ -75,15 +75,17 @@ const SEMESTRES = semestresCargables();
  */
 const COLUMNAS_PLANTILLA = [
   { nombre: 'documento', requerida: true },
+  { nombre: 'nombres' },
+  { nombre: 'apellidos' },
   { nombre: 'prima_valor', requerida: true },
   { nombre: 'prima_fecha_pago' },
   { nombre: 'observacion' },
 ];
 
 const FILAS_EJEMPLO = [
-  ['1012345678', '1.000.000', '2026-06-26', 'Planilla de junio'],
-  ['52000002',   '875.450',   '26/06/2026', ''],
-  ['1098765432', '640.000',   '',           'Ingresó en marzo'],
+  ['1012345678', 'Juan Carlos', 'Pérez Gómez', '1.000.000', '2026-06-26', 'Planilla de junio'],
+  ['52000002', 'Ana María', 'Rojas',   '875.450',   '26/06/2026', ''],
+  ['1098765432', '', '', '640.000',   '',           'Ingresó en marzo'],
 ];
 
 export default function CargaHistoricoPrima() {
@@ -252,7 +254,7 @@ export default function CargaHistoricoPrima() {
         <VistaPreviaPlantilla columnas={COLUMNAS_PLANTILLA} filas={FILAS_EJEMPLO} />
 
         <p className="text-xs text-muted-foreground">
-          La plantilla trae estas cuatro columnas y la cédula en formato de texto, que es lo
+          La plantilla trae estas columnas y la cédula en formato de texto, que es lo
           que evita que Excel le quite los ceros de la izquierda. Formatos aceptados:{' '}
           <strong className="text-foreground">.xlsx, .xls, .csv</strong>. Las fechas se leen
           como día/mes: <strong className="text-foreground">26/06/2026 es el 26 de junio</strong>.
@@ -557,6 +559,8 @@ function TablaFilasPrima({ filas }: { filas: FilaHistoricoPrima[] }) {
                   nombre={f.empleado?.nombre_completo}
                   documento={f.empleado?.documento}
                   documentoArchivo={f.documento}
+                  nombresArchivo={f.nombres}
+                  apellidosArchivo={f.apellidos}
                 />
                 <IncidenciasFila
                   errores={f.errores}
