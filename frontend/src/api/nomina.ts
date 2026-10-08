@@ -71,6 +71,35 @@ export interface AdvertenciaGajosSinDespachar {
   cosecha_ids: number[];
 }
 
+/**
+ * Bloque `resumen` del listado (API_NOMINA §2.2, 2026-10-07).
+ *
+ * Es lo que pinta la tabla "Nóminas Creadas" en **una sola petición**: lo real
+ * de las filas LIQUIDADO más una proyección de las PENDIENTES, calculada por
+ * el backend con las reglas de §9 (presencia plena, sin novedades). Antes la
+ * pantalla abría `GET /nominas/{id}` por cada borrador y estimaba las
+ * deducciones al 8 %; el doc ahora dice expresamente que no se haga.
+ *
+ * Los operarios de tercero cuentan en `operarios_count` pero no suman dinero:
+ * el suyo va por el acta (§7) y por `GET /nominas/indicadores`.
+ */
+export interface ResumenNomina {
+  /** Filas de empleados propios, sin operarios. */
+  empleados_count: number;
+  liquidados_count: number;
+  pendientes_count: number;
+  operarios_count: number;
+  /** Incluye el auxilio de transporte. */
+  devengado: number;
+  /** La parte de `devengado` que es auxilio; informativa. */
+  auxilio_transporte: number;
+  deducciones: number;
+  /** `devengado − deducciones`. En una CERRADA coincide con `total_general`. */
+  neto: number;
+  /** `true` mientras quede una fila PENDIENTE: solo entonces se rotula "(est.)". */
+  estimado: boolean;
+}
+
 export interface Nomina {
   id: number;
   tenant_id?: number;
@@ -89,8 +118,11 @@ export interface Nomina {
   total_bonificaciones: string;
   total_deducciones: string;
   total_general: string;
+  /** Conteos legados: todas las filas, operarios incluidos. */
   empleados_count?: number;
   empleados_liquidados_count?: number;
+  /** §2.2 — Lo que pinta la tabla; evita el `GET /nominas/{id}` por fila. */
+  resumen?: ResumenNomina;
   cerrada_por?: number | null;
   cerrada_at?: string | null;
   cerrada_por_rel?: { id: number; name: string } | null;

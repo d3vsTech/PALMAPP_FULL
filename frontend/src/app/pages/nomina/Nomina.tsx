@@ -113,21 +113,16 @@ export default function Nomina() {
   const [nominaAEliminar, setNominaAEliminar] = useState<NominaT | null>(null);
   const [eliminando, setEliminando] = useState(false);
 
-  // Proyección de lo que se va a liquidar por nómina en BORRADOR — se
-  // calcula sumando el `salario_base` (snapshot) de cada colaborador, ya que
-  // los PENDIENTES no aportan al `total_general` del backend hasta que
-  // pasan por el editor.
-  //
-  // Compromiso vs performance: hacemos UNA request por nómina en BORRADOR
-  // (GET /nominas/{id}). Con la paginación default (50) y pocas borradores
-  // activas simultáneamente, es aceptable. Se ejecuta con Promise.allSettled
-  // para que una falla no bloquee el resto.
-  //
-  // Las deducciones se estiman al 8% (Salud 4% + Pensión 4%) sobre el
-  // devengado de INTERNOS. Los operarios de tercero no cotizan (§9.8).
-  const [proyeccionesPorNomina, setProyeccionesPorNomina] = useState<
-    Map<number, { devengado: number; deducciones: number; neto: number }>
-  >(new Map());
+  /*
+   * La proyección de los borradores la trae el propio listado en `resumen`
+   * (API_NOMINA §2.2, 2026-10-07). Antes esta pantalla abría
+   * `GET /nominas/{id}` por cada borrador y estimaba las deducciones al 8 %;
+   * el backend ahora proyecta cada fila PENDIENTE con las reglas de §9 y
+   * devuelve devengado, auxilio, deducciones reales y neto en una sola
+   * petición. Las cifras de un borrador cambian: ahora el devengado incluye
+   * el auxilio de transporte y las deducciones son SALUD/PENSION/FSP, no un
+   * 8 % plano.
+   */
 
   // Editar nómina: navega a `/nomina/:id/editar` que carga el wizard completo
   // en modo edición (paso 1 pre-poblado, paso 2 con colaboradores ya agregados,
@@ -154,59 +149,12 @@ export default function Nomina() {
         setNominas(listRes.data);
         setIndicadores(indRes.data);
         setCargando(false);
-        // Dispara la proyección de lo que se va a liquidar solo para las
-        // nóminas en BORRADOR (las CERRADAS ya tienen total_general definitivo).
-        const borradores = listRes.data.filter((n) => n.estado === 'BORRADOR');
-        if (borradores.length > 0) refrescarProyecciones(borradores.map((n) => n.id), reqId);
       })
       .catch((err: ApiError) => {
         if (reqId !== reqIdRef.current) return;
         toast.error(err.message ?? 'Error al cargar nóminas');
         setCargando(false);
       });
-  };
-
-  // Trae `GET /nominas/{id}` para cada nómina en BORRADOR y arma la
-  // proyección con `salario_base` de los PENDIENTES + `total_devengado` de
-  // los ya LIQUIDADOS + total de actas de tercero. Es incremental — cada
-  // fila se actualiza en cuanto llega su request.
-  const refrescarProyecciones = async (ids: number[], reqId: number) => {
-    if (reqId !== reqIdRef.current) return;
-    setProyeccionesPorNomina(new Map());
-    await Promise.all(
-      ids.map((id) =>
-        nominaApi
-          .ver(id)
-          .then((r) => {
-            if (reqId !== reqIdRef.current) return;
-            const emps = r.data.empleados ?? [];
-            let devengadoInternos = 0;
-            let devengadoTercerosOperarios = 0;
-            for (const e of emps) {
-              // Si ya está liquidado, usar el valor real congelado.
-              const usar = e.estado === 'LIQUIDADO'
-                ? Number(e.total_devengado ?? 0)
-                : Number(e.salario_base ?? 0);
-              if (e.tercero_id != null) devengadoTercerosOperarios += usar;
-              else devengadoInternos += usar;
-            }
-            // Estimación: solo internos cotizan Salud + Pensión (8%).
-            // Es una aproximación intencional — el valor exacto solo lo
-            // sabe el motor al liquidar. Los operarios NO cotizan (§9.8).
-            const deducciones = Math.round(devengadoInternos * 0.08);
-            const devengado = devengadoInternos + devengadoTercerosOperarios;
-            const neto = devengado - deducciones;
-            setProyeccionesPorNomina((prev) => {
-              const nuevo = new Map(prev);
-              nuevo.set(id, { devengado, deducciones, neto });
-              return nuevo;
-            });
-          })
-          .catch(() => {
-            /* silencio — la fila conserva el valor del backend */
-          }),
-      ),
-    );
   };
 
   useEffect(() => {
@@ -288,16 +236,12 @@ export default function Nomina() {
   // Período específico → cálculo en cliente con la data ya listada (los KPIs de
   //   terceros por nómina vendrían del endpoint /nominas/{id}/terceros).
   const kpis = useMemo(() => {
-    // Neto de una nómina: para BORRADOR usa la PROYECCIÓN local (la misma
-    // que pinta la tabla de abajo — snapshot de pendientes + liquidados −
-    // deducciones estimadas). El `total_general` del backend solo suma lo
-    // confirmado (liquidados + actas calculadas) y quedaba muy por debajo
-    // de lo que realmente se va a pagar. Cae a total_general mientras la
-    // proyección aún carga o para CERRADAS (donde ya es definitivo).
-    const netoDeNomina = (n: NominaT): number => {
-      const proy = n.estado === 'BORRADOR' ? proyeccionesPorNomina.get(n.id) : undefined;
-      return proy ? proy.neto : toNumber(n.total_general);
-    };
+    // Neto de una nómina: `resumen.neto` (§2.2) ya trae lo liquidado más la
+    // proyección de los pendientes. El `total_general` del backend solo suma
+    // lo confirmado y queda muy por debajo de lo que se va a pagar; se usa
+    // de respaldo para las CERRADAS, donde los dos coinciden.
+    const netoDeNomina = (n: NominaT): number =>
+      n.resumen ? n.resumen.neto : toNumber(n.total_general);
 
     if (periodoKpi === 'todos' && indicadores) {
       const borradores = nominas.filter((n) => n.estado === 'BORRADOR');
@@ -340,7 +284,7 @@ export default function Nomina() {
       : `${borradores.length} períodos abiertos`;
 
     return { totalColaboradores, totalTerceros, netoAPagar, totalPendiente, labelBorrador, borradoresLen: borradores.length };
-  }, [nominas, periodoKpi, indicadores, indicadoresPeriodo, proyeccionesPorNomina]);
+  }, [nominas, periodoKpi, indicadores, indicadoresPeriodo]);
 
   return (
     <div className="space-y-6">
@@ -598,17 +542,14 @@ export default function Nomina() {
                     {nominasFiltradas.map((n, index) => {
                       const totalReal = toNumber(n.total_general);
                       const dedReal = toNumber(n.total_deducciones);
-                      const esBorrador = n.estado === 'BORRADOR';
-                      const proy = esBorrador ? proyeccionesPorNomina.get(n.id) : undefined;
-                      // Mientras la proyección de un BORRADOR está en vuelo
-                      // NO mostramos el `total_general` parcial (que solo
-                      // incluye actas de tercero y confunde al usuario). Se
-                      // renderiza un skeleton hasta que llegue la proyección.
-                      const cargandoProy = esBorrador && !proy;
-                      const usarEstimado = !!proy;
-                      const dev = proy ? proy.devengado : (esBorrador ? 0 : totalReal + dedReal);
-                      const ded = proy ? proy.deducciones : (esBorrador ? 0 : dedReal);
-                      const total = proy ? proy.neto : (esBorrador ? 0 : totalReal);
+                      // §2.2 — `resumen` llega con el listado, así que no hay
+                      // nada que esperar. `estimado` es del backend: marca las
+                      // cifras solo mientras quede una fila PENDIENTE.
+                      const res = n.resumen;
+                      const usarEstimado = res?.estimado ?? false;
+                      const dev = res ? res.devengado : totalReal + dedReal;
+                      const ded = res ? res.deducciones : dedReal;
+                      const total = res ? res.neto : totalReal;
                       return (
                         <tr
                           key={n.id}
@@ -634,45 +575,33 @@ export default function Nomina() {
                           </td>
                           <td className="p-4 text-right">
                             <div className="flex flex-col items-end">
-                              {cargandoProy ? (
-                                <span className="inline-block h-4 w-20 rounded bg-muted animate-pulse" />
-                              ) : (
-                                <span className="text-sm font-semibold text-success">
-                                  ${dev.toLocaleString('es-CO')}
-                                </span>
-                              )}
+                              <span className="text-sm font-semibold text-success">
+                                ${dev.toLocaleString('es-CO')}
+                              </span>
                               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                 <TrendingUp className="h-3 w-3 text-success" />
-                                {cargandoProy ? 'Calculando...' : (usarEstimado ? 'Ingresos estimados' : 'Ingresos')}
+                                {usarEstimado ? 'Ingresos estimados' : 'Ingresos'}
                               </div>
                             </div>
                           </td>
                           <td className="p-4 text-right">
                             <div className="flex flex-col items-end">
-                              {cargandoProy ? (
-                                <span className="inline-block h-4 w-16 rounded bg-muted animate-pulse" />
-                              ) : (
-                                <span className="text-sm font-semibold text-destructive">
-                                  ${ded.toLocaleString('es-CO')}
-                                </span>
-                              )}
+                              <span className="text-sm font-semibold text-destructive">
+                                ${ded.toLocaleString('es-CO')}
+                              </span>
                               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                 <TrendingDown className="h-3 w-3 text-destructive" />
-                                {cargandoProy ? 'Calculando...' : (usarEstimado ? 'Descuentos estimados' : 'Descuentos')}
+                                {usarEstimado ? 'Descuentos estimados' : 'Descuentos'}
                               </div>
                             </div>
                           </td>
                           <td className="p-4 text-right">
                             <div className="flex flex-col items-end">
-                              {cargandoProy ? (
-                                <span className="inline-block h-5 w-24 rounded bg-muted animate-pulse" />
-                              ) : (
-                                <span className="text-sm font-bold text-primary">
-                                  ${total.toLocaleString('es-CO')}
-                                </span>
-                              )}
+                              <span className="text-sm font-bold text-primary">
+                                ${total.toLocaleString('es-CO')}
+                              </span>
                               <span className="text-xs text-muted-foreground">
-                                {cargandoProy ? 'Calculando...' : (usarEstimado ? 'A pagar (est.)' : 'A pagar')}
+                                {usarEstimado ? 'A pagar (est.)' : 'A pagar'}
                               </span>
                             </div>
                           </td>
