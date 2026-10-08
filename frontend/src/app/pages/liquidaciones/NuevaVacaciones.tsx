@@ -39,6 +39,7 @@ import {
   VacacionesErrorCodes,
   NO_ELEGIBLE_LABEL,
   DIA_NO_HABIL_LABEL,
+  ADVERTENCIA_PAGO_NOMINA_LABEL,
   type CalendarioVacaciones,
   type ComprobanteVacaciones,
   type DetalleColaboradorVacaciones,
@@ -330,6 +331,18 @@ export default function NuevaVacaciones() {
   // D1: los días que de verdad se pagan. `null` solo si el backend todavía no
   // los manda (una liquidación anterior a v1.10 pagaba los calendario).
   const diasPago = preview?.resultado.dias_pago ?? null;
+
+  /*
+   * v1.11 (ajuste A) — En DIRECTO el comprobante ya no paga el bruto: descuenta
+   * salud, pensión y FSP sobre el disfrute, igual que haría la nómina, y gira
+   * el neto. `valor_total` sigue siendo el bruto, que es lo que entra a nómina,
+   * cesantías, prima y liquidación final. En NOMINA las deducciones llegan en
+   * cero porque las aplica la nómina que paga cada tramo.
+   */
+  const deducciones = preview?.resultado.deducciones ?? null;
+  const totalDeducciones = deducciones?.total ?? 0;
+  const valorNeto = preview?.resultado.valor_neto ?? preview?.resultado.valor_total ?? 0;
+  const tasas = preview?.seguridad_social?.tasas ?? null;
 
   const puedeConfirmar =
     !bloqueado && !!preview && !calculandoPreview && totalPedido > 0 &&
@@ -847,7 +860,7 @@ export default function NuevaVacaciones() {
               {preview.advertencias.map((a, i) => (
                 <p key={`${a.code}-${i}`} className="flex gap-2 text-amber-800 dark:text-amber-400">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  {a.mensaje ?? a.code}
+                  {a.mensaje ?? ADVERTENCIA_PAGO_NOMINA_LABEL[a.code] ?? a.code}
                 </p>
               ))}
             </div>
@@ -918,17 +931,67 @@ export default function NuevaVacaciones() {
                     )}
                   </tbody>
                   <tfoot>
+                    {/* Sin deducciones el pie es el de siempre: una sola fila
+                        con el total. Con ellas se abre en devengado, lo que se
+                        le descuenta al trabajador y lo que se le gira. */}
                     <tr className="border-t-2 border-border">
                       <td colSpan={3} className="px-5 py-4">
-                        <p className="text-base font-bold">Total a pagar</p>
+                        <p className={totalDeducciones > 0 ? 'text-sm font-semibold' : 'text-base font-bold'}>
+                          {totalDeducciones > 0 ? 'Total devengado' : 'Total a pagar'}
+                        </p>
                         <p className="text-xs font-normal text-muted-foreground">
                           {preview.resultado.formula_aplicada}
                         </p>
                       </td>
-                      <td className="px-5 py-4 text-right text-2xl font-bold text-primary">
+                      <td className={`px-5 py-4 text-right font-bold ${totalDeducciones > 0 ? 'text-base text-foreground' : 'text-2xl text-primary'}`}>
                         {fmtCOP(preview.resultado.valor_total)}
                       </td>
                     </tr>
+                    {deducciones && totalDeducciones > 0 && (
+                      <>
+                        {deducciones.salud > 0 && (
+                          <tr className="border-t border-border">
+                            <td colSpan={3} className="px-5 py-2 text-sm text-muted-foreground">
+                              Salud del trabajador{tasas ? ` (${tasas.salud} %)` : ''}
+                            </td>
+                            <td className="px-5 py-2 text-right text-sm text-destructive">
+                              −{fmtCOP(deducciones.salud)}
+                            </td>
+                          </tr>
+                        )}
+                        {deducciones.pension > 0 && (
+                          <tr className="border-t border-border">
+                            <td colSpan={3} className="px-5 py-2 text-sm text-muted-foreground">
+                              Pensión del trabajador{tasas ? ` (${tasas.pension} %)` : ''}
+                            </td>
+                            <td className="px-5 py-2 text-right text-sm text-destructive">
+                              −{fmtCOP(deducciones.pension)}
+                            </td>
+                          </tr>
+                        )}
+                        {deducciones.fsp > 0 && (
+                          <tr className="border-t border-border">
+                            <td colSpan={3} className="px-5 py-2 text-sm text-muted-foreground">
+                              Fondo de Solidaridad Pensional{tasas?.fsp ? ` (${tasas.fsp} %)` : ''}
+                            </td>
+                            <td className="px-5 py-2 text-right text-sm text-destructive">
+                              −{fmtCOP(deducciones.fsp)}
+                            </td>
+                          </tr>
+                        )}
+                        <tr className="border-t-2 border-border">
+                          <td colSpan={3} className="px-5 py-4">
+                            <p className="text-base font-bold">Neto a pagar</p>
+                            <p className="text-xs font-normal text-muted-foreground">
+                              La compensación en dinero no cotiza (CST art. 189)
+                            </p>
+                          </td>
+                          <td className="px-5 py-4 text-right text-2xl font-bold text-primary">
+                            {fmtCOP(valorNeto)}
+                          </td>
+                        </tr>
+                      </>
+                    )}
                   </tfoot>
                 </table>
               </div>

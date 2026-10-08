@@ -6,6 +6,11 @@
  * cerradas pagaron sus tramos y aquí solo se cubre el saldo (`pago.pendiente`).
  * El monto lo pone el backend; este formulario solo manda cómo y cuándo. Por
  * eso `NOMINA` nunca aparece como método: es un modo, no una forma de giro.
+ *
+ * v1.11 (ajuste A) — En `DIRECTO` lo que se le entrega al trabajador es el
+ * **neto**: el comprobante ya descontó salud, pensión y FSP sobre el disfrute.
+ * `total_pagado` sigue registrando el bruto, así que el diálogo muestra los
+ * dos y nombra el que de verdad sale de caja.
  */
 import { useEffect, useState } from 'react';
 import {
@@ -48,8 +53,11 @@ export default function PagoVacacionDialog({ vacacion, onCerrar, onPagada }: Pro
   const pagado = vacacion?.pago.total_pagado ?? 0;
   const aPagar = porNomina
     ? vacacion?.pago.pendiente ?? Math.max((vacacion?.valor_total ?? 0) - pagado, 0)
-    : vacacion?.valor_total ?? 0;
+    : vacacion?.valor_neto ?? vacacion?.valor_total ?? 0;
   const tramos = vacacion?.pago.nominas ?? [];
+  // El saldo de una NOMINA se gira bruto: ninguna nómina lo descontó.
+  const deducciones = porNomina ? null : vacacion?.deducciones ?? null;
+  const totalDeducciones = deducciones?.total ?? 0;
 
   const [fechaPago, setFechaPago] = useState('');
   const [metodo, setMetodo] = useState<MetodoPagoVacacion>('TRANSFERENCIA');
@@ -111,6 +119,23 @@ export default function PagoVacacionDialog({ vacacion, onCerrar, onPagada }: Pro
         </DialogHeader>
 
         <div className="space-y-4">
+          {totalDeducciones > 0 && vacacion && (
+            <div className="space-y-1 rounded-lg border border-border bg-muted/30 p-3 text-xs">
+              <p className="flex justify-between text-muted-foreground">
+                <span>Total devengado</span>
+                <span>{fmtCOP(vacacion.valor_total)}</span>
+              </p>
+              <p className="flex justify-between text-muted-foreground">
+                <span>Aportes del trabajador</span>
+                <span className="text-destructive">−{fmtCOP(totalDeducciones)}</span>
+              </p>
+              <p className="flex justify-between border-t border-border pt-2 font-semibold text-foreground">
+                <span>Neto a girar</span>
+                <span>{fmtCOP(aPagar)}</span>
+              </p>
+            </div>
+          )}
+
           {porNomina && vacacion && (
             <div className="space-y-2 rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs dark:border-sky-800/30 dark:bg-sky-950/20">
               <p className="flex items-start gap-2 text-sky-700 dark:text-sky-300">

@@ -473,9 +473,19 @@ export default function VacacionesHistorico() {
                 </span>
               )}
             </p>
+            {/* v1.11 — `total_pagado` es el bruto; `valor_neto` es lo que de
+                verdad salió de caja, ya sin los aportes del trabajador. */}
             <p className="text-sm text-muted-foreground">
               Total pagado:{' '}
               <span className="font-semibold text-foreground">{fmtCOP(meta?.totales.total_pagado ?? 0)}</span>
+              {meta && (meta.totales.total_deducciones ?? 0) > 0 && (
+                <>
+                  {' · '}Neto girado:{' '}
+                  <span className="font-semibold text-foreground">
+                    {fmtCOP(meta.totales.valor_neto ?? 0)}
+                  </span>
+                </>
+              )}
             </p>
           </div>
 

@@ -176,6 +176,12 @@ export interface CalendarioVacaciones {
   dias_habiles: number;
   /** Lo que se paga (CST 192), no los hábiles. */
   dias_calendario: number;
+  /**
+   * PR-L15 (D1) — Días **comerciales** del rango (`Dias360`, mínimo 1). Es lo
+   * que se remunera en las liquidaciones nuevas; `dias_calendario` sigue
+   * siendo el descanso real. Del 16 al 31 de octubre son 15, no 16.
+   */
+  dias_pago?: number | null;
   sabado_habil: boolean;
   dias_no_habiles: Array<{ fecha: string; motivo: MotivoDiaNoHabil }>;
   festivos_hash?: string;
@@ -273,6 +279,31 @@ export interface PeriodoAfectado {
   saldo_restante: number;
 }
 
+/**
+ * v1.11 (ajuste A) — Aportes del trabajador que **descuenta el comprobante**
+ * cuando `modo_pago = DIRECTO`, para que liquidar en los dos modos valga lo
+ * mismo. Todo en 0 en `NOMINA` (descuenta la nómina que paga cada tramo), en
+ * `HISTORICO`, en `LIQUIDACION_FINAL` y en lo liquidado antes de v1.11.
+ */
+export interface DeduccionesVacaciones {
+  salud: number;
+  pension: number;
+  /** Fondo de Solidaridad Pensional; 0 si la base no llega a 4 SMLV. */
+  fsp: number;
+  total: number;
+}
+
+/** v1.11 — Tasas con las que se calcularon las deducciones. */
+export interface TasasVacaciones {
+  salud: number;
+  pension: number;
+  fsp: number;
+  /** `FSP_1` … `FSP_6`, o `null` si no aplica. */
+  fsp_codigo: string | null;
+  /** `nomina_concepto` si salieron de la configuración; `default_4_4` si no. */
+  fuente: string;
+}
+
 export interface ResultadoVacaciones {
   /** PR-L15 (D1) — Días comerciales que se pagan; ver `VacacionItem`. */
   dias_pago?: number | null;
@@ -282,18 +313,34 @@ export interface ResultadoVacaciones {
   valor_disfrute: number;
   dias_dinero: number;
   valor_dinero: number;
+  /** Bruto: lo que entra a nómina, cesantías, prima y liquidación final. */
   valor_total: number;
   valor_dia: number;
+  /** v1.11 — Lo que el comprobante `DIRECTO` descuenta al trabajador. */
+  deducciones?: DeduccionesVacaciones;
+  /** v1.11 — `valor_total − deducciones.total`: lo que se le gira. */
+  valor_neto?: number;
   formula_aplicada: string;
   ajuste_manual: Record<string, unknown> | null;
   acuerdo_escrito?: boolean;
 }
 
-/** Informativo: el módulo paga el bruto, PILA va aparte. */
+/**
+ * IBC del disfrute y aportes del trabajador. La compensación en dinero no
+ * cotiza (CST 189). PILA sigue fuera del sistema en los dos modos.
+ *
+ * v1.11 — `aplicadas` es `true` en una `DIRECTO` liquidada desde v1.11: el
+ * comprobante las descontó de verdad. Sigue `false` en `NOMINA` (las aplica
+ * la nómina) y en lo liquidado antes, que pagó el bruto.
+ */
 export interface SeguridadSocialVacaciones {
   ibc: number;
   salud_trabajador: number;
   pension_trabajador: number;
+  /** v1.11; ausente en las liquidadas antes. */
+  fsp_trabajador?: number;
+  total_trabajador?: number;
+  tasas?: TasasVacaciones;
   aplicadas: boolean;
   nota: string;
 }
@@ -338,6 +385,11 @@ export interface PagoVacacion {
    * Varias pantallas dependen de ese `null` en `DIRECTO`.
    */
   total_pagado: number | null;
+  /**
+   * v1.11 — Lo que se **giró** de verdad: `valor_neto`. `null` en `NOMINA` y
+   * mientras no esté `PAGADA`. `total_pagado` sigue siendo el bruto.
+   */
+  neto_pagado?: number | null;
   /** Solo en `NOMINA`: `valor_total − total_pagado`. */
   pendiente?: number | null;
   /** Solo en `NOMINA`: una entrada por nómina CERRADA que pagó un tramo. */
@@ -464,7 +516,12 @@ export interface VacacionItem {
   valor_dia: number;
   valor_disfrute: number;
   valor_dinero: number;
+  /** Bruto, en los dos modos. */
   valor_total: number;
+  /** v1.11 — Lo descontado al trabajador; 0 fuera de `DIRECTO`. */
+  deducciones?: DeduccionesVacaciones;
+  /** v1.11 — Lo girado: `valor_total − deducciones.total`. */
+  valor_neto?: number;
   metodo_base: MetodoBaseVacacion | null;
   fuente_base: string | null;
   cobertura_nominas_pct: number | null;
@@ -537,6 +594,9 @@ export interface MetaHistoricoVacaciones {
      * todavía esperan una nómina o el pago del saldo.
      */
     pendientes_pago_nomina?: number;
+    /** v1.11 — Lo descontado y lo girado en el filtro; `total_pagado` es bruto. */
+    total_deducciones?: number;
+    valor_neto?: number;
   };
 }
 
@@ -748,7 +808,8 @@ export const VacacionesErrorCodes = {
   /**
    * PR-L15 — `modo_pago = NOMINA` en una liquidación sin disfrute
    * (`motivo: SIN_DISFRUTE`) o de un solo día 31 (`DIA_31`: vale 0 días
-   * comerciales y ninguna nómina lo pagaría).
+   * comerciales y ninguna nómina lo pagaría). `MODO_DESCONOCIDO` es la
+   * defensa del servicio ante un valor que no es DIRECTO ni NOMINA.
    */
   VACACION_MODO_PAGO_INVALIDO: 'VACACION_MODO_PAGO_INVALIDO',
   /**
@@ -795,6 +856,13 @@ export const ADVERTENCIA_PAGO_NOMINA_LABEL: Record<string, string> = {
     'El giro cubre el saldo que las nóminas no pagaron',
   VACACIONES_PAGO_EN_NOMINA_PENDIENTE:
     'El disfrute ya terminó y queda saldo: cierre la nómina del tramo o pague el saldo',
+  /*
+   * v1.11 — La base pasa de 4 SMLV y tocaría Fondo de Solidaridad Pensional,
+   * pero el tenant no tiene activo el concepto FSP_n. El comprobante descuenta
+   * solo salud y pensión, igual que haría la nómina.
+   */
+  VACACIONES_FSP_SIN_CONCEPTO:
+    'Falta activar el concepto del Fondo de Solidaridad Pensional en Configuración: el comprobante descuenta solo salud y pensión',
 };
 
 /** Rótulos del semáforo de vencimiento. */

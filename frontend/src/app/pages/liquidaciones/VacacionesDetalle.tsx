@@ -121,6 +121,17 @@ export default function VacacionesDetalle() {
    * ser anulable desde aqui.
    */
   const porNomina = item.modo_pago === 'NOMINA';
+
+  /*
+   * v1.11 (ajuste A) - En DIRECTO el comprobante descuenta salud, pension y
+   * FSP sobre el disfrute y gira el neto; `valor_total` sigue siendo el bruto
+   * (lo que entra a nomina, cesantias, prima y liquidacion final). En NOMINA
+   * y en lo liquidado antes de v1.11 las deducciones llegan en cero.
+   */
+  const deducciones = res.deducciones ?? null;
+  const totalDeducciones = deducciones?.total ?? 0;
+  const valorNeto = res.valor_neto ?? res.valor_total;
+  const tasas = comprobante.seguridad_social?.tasas ?? null;
   const pagadoEnNomina = item.pago.total_pagado ?? 0;
   const saldoNomina = item.pago.pendiente ?? Math.max(item.valor_total - pagadoEnNomina, 0);
   const tramosNomina = item.pago.nominas ?? [];
@@ -327,13 +338,57 @@ export default function VacacionesDetalle() {
             </div>
           )}
 
+          {/* Sin deducciones queda el total de siempre. Con ellas se abre en
+              devengado, lo descontado al trabajador y lo girado. */}
           <div className="flex items-center justify-between px-5 py-4">
             <div>
-              <p className="text-base font-bold">Total</p>
+              <p className={totalDeducciones > 0 ? 'text-sm font-semibold' : 'text-base font-bold'}>
+                {totalDeducciones > 0 ? 'Total devengado' : 'Total'}
+              </p>
               <p className="text-xs text-muted-foreground">{res.formula_aplicada}</p>
             </div>
-            <p className="text-2xl font-bold text-primary">{fmtCOP(res.valor_total)}</p>
+            <p className={totalDeducciones > 0 ? 'text-base font-bold text-foreground' : 'text-2xl font-bold text-primary'}>
+              {fmtCOP(res.valor_total)}
+            </p>
           </div>
+
+          {deducciones && totalDeducciones > 0 && (
+            <>
+              {deducciones.salud > 0 && (
+                <div className="flex items-center justify-between border-t border-border px-5 py-2">
+                  <p className="text-sm text-muted-foreground">
+                    Salud del trabajador{tasas ? ` (${tasas.salud} %)` : ''}
+                  </p>
+                  <p className="text-sm text-destructive">−{fmtCOP(deducciones.salud)}</p>
+                </div>
+              )}
+              {deducciones.pension > 0 && (
+                <div className="flex items-center justify-between border-t border-border px-5 py-2">
+                  <p className="text-sm text-muted-foreground">
+                    Pensión del trabajador{tasas ? ` (${tasas.pension} %)` : ''}
+                  </p>
+                  <p className="text-sm text-destructive">−{fmtCOP(deducciones.pension)}</p>
+                </div>
+              )}
+              {deducciones.fsp > 0 && (
+                <div className="flex items-center justify-between border-t border-border px-5 py-2">
+                  <p className="text-sm text-muted-foreground">
+                    Fondo de Solidaridad Pensional{tasas?.fsp ? ` (${tasas.fsp} %)` : ''}
+                  </p>
+                  <p className="text-sm text-destructive">−{fmtCOP(deducciones.fsp)}</p>
+                </div>
+              )}
+              <div className="flex items-center justify-between border-t-2 border-border px-5 py-4">
+                <div>
+                  <p className="text-base font-bold">Neto a pagar</p>
+                  <p className="text-xs text-muted-foreground">
+                    La compensación en dinero no cotiza (CST art. 189)
+                  </p>
+                </div>
+                <p className="text-2xl font-bold text-primary">{fmtCOP(valorNeto)}</p>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -414,8 +469,18 @@ export default function VacacionesDetalle() {
                 <p className="font-semibold text-foreground">{item.pago.referencia_pago ?? '—'}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Total pagado</p>
-                <p className="font-semibold text-foreground">{fmtCOP(item.pago.total_pagado ?? 0)}</p>
+                {/* `total_pagado` es el bruto; `neto_pagado` es lo que se giró. */}
+                <p className="text-xs text-muted-foreground">
+                  {item.pago.neto_pagado != null ? 'Neto girado' : 'Total pagado'}
+                </p>
+                <p className="font-semibold text-foreground">
+                  {fmtCOP(item.pago.neto_pagado ?? item.pago.total_pagado ?? 0)}
+                </p>
+                {item.pago.neto_pagado != null && (
+                  <p className="text-xs text-muted-foreground">
+                    Devengado {fmtCOP(item.pago.total_pagado ?? 0)}
+                  </p>
+                )}
               </div>
             </div>
           ) : porNomina ? (
