@@ -21,7 +21,7 @@ import {
 } from '../../../components/ui/dialog';
 import {
   AlertTriangle, ArrowUpRight, Calendar, Check, Download, FileSignature, Loader2,
-  Paperclip, Pencil, Receipt, User, X,
+  Paperclip, Pencil, Receipt, Trash2, User, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -87,10 +87,19 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
   const [detalle, setDetalle] = useState<AusenciaDetalle | null>(null);
   const [terminacion, setTerminacion] = useState<TerminacionData | null>(null);
   const [cargando, setCargando] = useState(false);
-  const [accion, setAccion] = useState<'aprobar' | 'rechazar' | 'editar' | null>(null);
+  const [accion, setAccion] = useState<'aprobar' | 'rechazar' | 'editar' | 'eliminar' | null>(null);
   const [motivoRechazo, setMotivoRechazo] = useState('');
 
   const esAusencia = fila?.fuente === 'AUSENCIA';
+  /*
+   * §5.3 — Una vacación no tiene DELETE: la solicitud PENDIENTE se rechaza
+   * (queda CANCELADA y libera el rango), la APROBADA se anula desde
+   * Liquidaciones y la PAGADA exige anular el pago primero. El rechazo tiene
+   * dos puertas al mismo código; desde aquí se usa la de Novedades.
+   */
+  const esSolicitudVacacion = fila?.fuente === 'VACACION' && fila.estado === 'PENDIENTE';
+  /** §4.2 — Lo decide el backend: una LIQUIDADA o con días en nómina cerrada no. */
+  const puedeEliminar = esAusencia && (detalle?.editable.puede_eliminar ?? false);
 
   useEffect(() => {
     setDetalle(null);
@@ -145,12 +154,40 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
     }
     setCargando(true);
     try {
-      const res = await novedadesApi.ausencias.rechazar(fila.id, motivoRechazo.trim());
+      const res = esSolicitudVacacion
+        ? await novedadesApi.vacaciones.rechazar(fila.id, motivoRechazo.trim())
+        : await novedadesApi.ausencias.rechazar(fila.id, motivoRechazo.trim());
       toast.success(res.message ?? 'Novedad rechazada');
       onCambio();
       onCerrar();
     } catch (err) {
       toast.error((err as ApiError).message ?? 'No se pudo rechazar');
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  /**
+   * §4.3 — Borrado físico, solo de ausencias. Se lleva el soporte del
+   * expediente, así que no hay vuelta atrás y se confirma aparte.
+   */
+  const eliminar = async () => {
+    if (!fila) return;
+    setCargando(true);
+    try {
+      const res = await novedadesApi.ausencias.eliminar(fila.id);
+      toast.success(res.message ?? 'Novedad eliminada');
+      onCambio();
+      onCerrar();
+    } catch (err) {
+      const e = err as ApiError;
+      if (e.code === 'AUSENCIA_LIQUIDADA') {
+        toast.error('Ya se liquidó en una nómina: no se puede eliminar');
+      } else if (e.code === 'NOVEDAD_EN_NOMINA_CERRADA') {
+        toast.error('Sus días caen en una nómina cerrada: no se puede eliminar');
+      } else {
+        toast.error(e.message ?? 'No se pudo eliminar');
+      }
     } finally {
       setCargando(false);
     }
@@ -347,6 +384,22 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                   onCambio();
                 }}
               />
+            ) : accion === 'eliminar' ? (
+              <div className="space-y-3 border-t border-border px-6 py-4">
+                <p className="flex items-start gap-2 text-sm text-destructive">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  Se elimina la novedad y su soporte del expediente. No se puede deshacer.
+                </p>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setAccion(null)} disabled={cargando}>
+                    Cancelar
+                  </Button>
+                  <Button size="sm" variant="destructive" onClick={eliminar} disabled={cargando} className="gap-2">
+                    {cargando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                    Eliminar
+                  </Button>
+                </div>
+              </div>
             ) : accion === 'rechazar' ? (
               <div className="space-y-2 border-t border-border px-6 py-4">
                 <Label>Motivo del rechazo</Label>
@@ -355,9 +408,16 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                   maxLength={500}
                   value={motivoRechazo}
                   onChange={(e) => setMotivoRechazo(e.target.value)}
-                  placeholder="Ej: no llegó el soporte después de 5 días hábiles"
+                  placeholder={esSolicitudVacacion
+                    ? 'Ej: no hay cobertura en campo esa semana'
+                    : 'Ej: no llegó el soporte después de 5 días hábiles'}
                   className="flex w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
+                {esSolicitudVacacion && (
+                  <p className="text-xs text-muted-foreground">
+                    La solicitud queda rechazada y las fechas vuelven a estar libres.
+                  </p>
+                )}
                 <div className="flex flex-wrap justify-end gap-2 pt-1">
                   <Button variant="outline" size="sm" onClick={() => setAccion(null)} disabled={cargando}>
                     Cancelar
@@ -437,6 +497,18 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                       Editar
                     </Button>
                   )}
+                  {puedeEliminar && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setAccion('eliminar')}
+                      disabled={cargando}
+                      className="gap-2 text-destructive hover:border-destructive hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Eliminar
+                    </Button>
+                  )}
                   {esAusencia && fila.estado === 'PENDIENTE' && permisos?.puede_aprobar && (
                     <>
                       <Button size="sm" variant="outline" onClick={() => setAccion('rechazar')} disabled={cargando} className="gap-2">
@@ -448,6 +520,21 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                         Aprobar
                       </Button>
                     </>
+                  )}
+                  {/* La solicitud de vacaciones se liquida desde Liquidaciones
+                      (ese es el botón "Liquidar" de arriba); aquí solo se
+                      rechaza. */}
+                  {esSolicitudVacacion && permisos?.puede_aprobar && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setAccion('rechazar')}
+                      disabled={cargando}
+                      className="gap-2 text-destructive hover:border-destructive hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                      Rechazar solicitud
+                    </Button>
                   )}
                   <Button variant="outline" size="sm" onClick={onCerrar}>Cerrar</Button>
                 </div>

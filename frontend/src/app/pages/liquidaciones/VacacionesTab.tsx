@@ -11,7 +11,7 @@ import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { Input } from '../../components/ui/input';
-import { Search, Loader2, Plane, Inbox } from 'lucide-react';
+import { Search, Loader2, Plane, Inbox, X } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   vacacionesApi,
@@ -22,6 +22,7 @@ import {
 import type { ApiError } from '../../../api/client';
 import { formatFecha } from '../../utils/fecha';
 import { SEMAFORO, fmtDias } from './vacaciones/comunes';
+import AnularVacacionDialog from './vacaciones/AnularVacacionDialog';
 
 export default function VacacionesTab() {
   const navigate = useNavigate();
@@ -36,6 +37,12 @@ export default function VacacionesTab() {
    * período paga esos días como trabajados.
    */
   const [solicitudes, setSolicitudes] = useState<VacacionItem[]>([]);
+  /**
+   * §10.10 — Rechazar es `anular` desde PENDIENTE: no hay endpoint propio.
+   * Sin guardas de nómina, porque una solicitud nunca neutralizó nada; queda
+   * CANCELADA sin `liquidado_at` y el rango vuelve a estar libre.
+   */
+  const [aRechazar, setARechazar] = useState<VacacionItem | null>(null);
   const reqIdRef = useRef(0);
 
   const cargar = () => {
@@ -107,13 +114,24 @@ export default function VacacionesTab() {
                         {s.fecha_inicio && ` desde ${formatFecha(s.fecha_inicio)}`}
                       </p>
                     </div>
-                    <Button
-                      size="sm"
-                      onClick={() => navigate(`/liquidaciones/vacaciones/nueva?solicitud=${s.id}`)}
-                      className="gap-1.5 bg-success hover:bg-success/90"
-                    >
-                      Liquidar
-                    </Button>
+                    <div className="flex shrink-0 gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setARechazar(s)}
+                        className="gap-1.5 bg-background hover:border-destructive hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                        Rechazar
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => navigate(`/liquidaciones/vacaciones/nueva?solicitud=${s.id}`)}
+                        className="gap-1.5 bg-success hover:bg-success/90"
+                      >
+                        Liquidar
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -121,6 +139,15 @@ export default function VacacionesTab() {
           </div>
         </div>
       )}
+
+      {/* Al rechazarla desaparece del panel y el saldo del colaborador no se
+          mueve: una solicitud nunca lo consumió. */}
+      <AnularVacacionDialog
+        vacacion={aRechazar}
+        modo="solicitud"
+        onCerrar={() => setARechazar(null)}
+        onAnulada={(v) => setSolicitudes((prev) => prev.filter((s) => s.id !== v.id))}
+      />
 
       {/* ── Vacaciones pendientes ─────────────────────────────────────────── */}
       <div className="space-y-4">
