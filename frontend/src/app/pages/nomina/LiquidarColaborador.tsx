@@ -38,6 +38,7 @@ import { AdvertenciasBanner, NotaAntesDeConfirmar } from '../../components/nomin
 import { DetalleDescansos } from '../../components/nomina/DetalleDescansos';
 import { DetalleAusencias } from '../../components/nomina/DetalleAusencias';
 import { FaltasInjustificadas } from '../../components/nomina/FaltasInjustificadas';
+import { avisarCierreAutomatico } from '../../utils/cierreAutomaticoNomina';
 import { DiasVacaciones } from '../../components/nomina/DiasVacaciones';
 import {
   nominaApi,
@@ -452,6 +453,19 @@ export default function LiquidarColaborador() {
       // `alerta_despacho = "ALTA"`. No bloquea (la liquidación ya se hizo).
       if (res.advertencia?.code === 'COSECHA_GAJOS_SIN_DESPACHAR') {
         toast.warning(res.advertencia.texto, { duration: 8000 });
+      }
+      /*
+       * §5.3 — Si esta era la última fila PENDIENTE, el backend ya cerró la
+       * nómina. Y si el cierre se bloqueó, la liquidación igual quedó
+       * guardada: el aviso dice qué falta por resolver.
+       *
+       * Al cerrarse, la pantalla a la que lleva es Pagos y no el
+       * desprendible: el período terminó y lo que sigue es el listado, no
+       * un comprobante más. El desprendible queda a un clic desde ahí.
+       */
+      if (avisarCierreAutomatico(res.cierre_automatico)) {
+        navigate('/nomina');
+        return;
       }
       navigate(`/nomina/${nominaId}/desprendible/${nominaEmpleadoId}`);
     } catch (err) {

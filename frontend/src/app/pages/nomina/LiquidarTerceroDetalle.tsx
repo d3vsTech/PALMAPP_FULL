@@ -41,6 +41,7 @@ import {
   MessageCircle, CheckCircle2, Plus, Trash2, Minus,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { avisarCierreAutomatico } from '../../utils/cierreAutomaticoNomina';
 import {
   nominaApi,
   NominaTerceroActaDetalle,
@@ -195,6 +196,15 @@ export default function LiquidarTerceroDetalle() {
       setDetalle(liq.data);
       setActaSinCalcular(false);
       toast.success('Acta calculada');
+      /*
+       * §7.3 — Calcular el acta también intenta el cierre. Si era lo último
+       * pendiente, la nómina queda finalizada y el acta ya no admite
+       * descuentos: por eso el aviso va aquí y no al salir de la pantalla.
+       */
+      if (avisarCierreAutomatico(liq.cierre_automatico)) {
+        navigate('/nomina');
+        return;
+      }
     } catch (err) {
       const e = err as ApiError;
       toast.error(e.message ?? 'No se pudieron calcular los totales del acta');

@@ -3,6 +3,7 @@ import { cn } from '../ui/utils';
 
 type StatusType = 
   | 'BORRADOR'
+  | 'EN_PROGRESO'
   | 'CERRADA'
   | 'APROBADO'
   | 'EN_CAMINO'
@@ -23,8 +24,10 @@ interface StatusBadgeProps {
 }
 
 const statusConfig: Record<StatusType, { label: string; variant: string }> = {
-  BORRADOR: { label: 'Borrador', variant: 'secondary' },
-  CERRADA: { label: 'Cerrada', variant: 'default' },
+  // §10.1 — Los rótulos no son los códigos: "Finalizada" se guarda CERRADA.
+  BORRADOR: { label: 'En borrador', variant: 'secondary' },
+  EN_PROGRESO: { label: 'En progreso', variant: 'default' },
+  CERRADA: { label: 'Finalizada', variant: 'default' },
   APROBADO: { label: 'Aprobado', variant: 'default' },
   EN_CAMINO: { label: 'En Camino', variant: 'default' },
   EN_PLANTA: { label: 'En Planta', variant: 'default' },
@@ -51,6 +54,7 @@ export default function StatusBadge({ status, className }: StatusBadgeProps) {
         status === 'FINALIZADO' && 'bg-muted hover:bg-muted/80 text-muted-foreground',
         status === 'EN_CAMINO' && 'bg-info hover:bg-info/80 text-info-foreground',
         status === 'EN_PLANTA' && 'bg-warning hover:bg-warning/80 text-warning-foreground',
+        status === 'EN_PROGRESO' && 'bg-info hover:bg-info/80 text-info-foreground',
         status === 'CERRADA' && 'bg-muted hover:bg-muted/80 text-foreground',
         status === 'PAGADA' && 'bg-success hover:bg-success/80 text-success-foreground',
         status === 'Vigente' && 'bg-success hover:bg-success/80 text-success-foreground',

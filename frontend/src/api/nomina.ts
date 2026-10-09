@@ -24,7 +24,13 @@ function toQuery(params?: Record<string, unknown>): string {
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
-export type EstadoNomina = 'BORRADOR' | 'CERRADA';
+/**
+ * §10.1 — Tres estados desde el 2026-10-09. `EN_PROGRESO` es "no cerrada",
+ * igual que `BORRADOR`: lo que bloquea una mutación es `CERRADA`, nunca
+ * "distinto de BORRADOR". La UI los rotula "En borrador", "En progreso" y
+ * "Finalizada"; el código de la última sigue siendo `CERRADA`.
+ */
+export type EstadoNomina = 'BORRADOR' | 'EN_PROGRESO' | 'CERRADA';
 export type EstadoNominaEmpleado = 'PENDIENTE' | 'LIQUIDADO';
 export type Periodicidad = 'QUINCENAL' | 'MENSUAL';
 export type SalarioTipo = 'FIJO' | 'VARIABLE';
@@ -98,6 +104,37 @@ export interface ResumenNomina {
   neto: number;
   /** `true` mientras quede una fila PENDIENTE: solo entonces se rotula "(est.)". */
   estimado: boolean;
+}
+
+/**
+ * §5.3 — La nómina se cierra **sola** al liquidar la última fila PENDIENTE.
+ * Viaja en el 200 de liquidar, re-liquidar y liquidar el acta de un tercero.
+ *
+ * Un cierre bloqueado **no deshace la liquidación**: la fila queda LIQUIDADO
+ * y la nómina sigue `EN_PROGRESO`. `code` dice qué resolver; con
+ * `VACACIONES_DESACTUALIZADAS_EN_NOMINA`, `detalle.nomina_empleado_ids` trae
+ * las filas que hay que volver a liquidar, y esa re-liquidación reintenta el
+ * cierre sola.
+ */
+export interface CierreAutomaticoNomina {
+  /** `false` si aún quedan filas PENDIENTES o la nómina ya estaba CERRADA. */
+  intentado: boolean;
+  /** `true` ⇒ esta liquidación cerró la nómina. Ya es inmutable. */
+  cerrada: boolean;
+  estado: EstadoNomina;
+  pendientes: number;
+  /** `null` si cerró o no se intentó. */
+  code: string | null;
+  message: string | null;
+  /** Mismo contrato que en el cierre manual (§6.1); solo cuando cerró. */
+  vacaciones_pagadas?: VacacionPagadaEnCierre[];
+  /** `COSECHA_GAJOS_SIN_DESPACHAR` del cierre (§4.4). */
+  advertencia?: AdvertenciaGajosSinDespachar | null;
+  /** Solo con `VACACIONES_DESACTUALIZADAS_EN_NOMINA`. */
+  detalle?: {
+    nomina_empleado_ids?: number[];
+    vacaciones?: Array<Record<string, unknown>>;
+  } | null;
 }
 
 export interface Nomina {
@@ -188,8 +225,14 @@ export interface EmpleadoExcluido {
 }
 
 export interface NominaIndicadores {
+  /** `borradores + en_progreso + cerradas`. Reemplaza a `total_periodos`. */
+  total_nominas?: number;
+  /** Deprecated — mismo valor que `total_nominas` (§2.3). */
   total_periodos: number;
+  /** Sin ninguna fila liquidada. */
   borradores: number;
+  /** §2.3 — Al menos una fila liquidada y todavía sin cerrar. */
+  en_progreso?: number;
   cerradas: number;
   /** Deprecated — quedará una versión más para compatibilidad (doc §2.3). */
   total_devengado: number;
@@ -1797,6 +1840,16 @@ export interface PasoCuatroChecklist {
   nomina_validacion_cosecha_confirmada: boolean;
   requiere_validacion_cosecha: boolean;
   listo_para_cerrar: boolean;
+  /** §3.6 — Estado actual de la nómina. */
+  estado?: EstadoNomina;
+  /**
+   * §3.6 — Lo que hoy impediría cerrar, automático o manual: las mismas
+   * validaciones del cierre con su `code`. Vacío en una CERRADA. Con todas
+   * las filas liquidadas y esta lista vacía, el botón "Cerrar" manual basta.
+   * No incluye `VACACIONES_DESACTUALIZADAS_EN_NOMINA`, que solo se detecta
+   * dentro de la transacción del cierre.
+   */
+  bloqueos_cierre?: Array<{ code: string; message: string }>;
   /**
    * §3.6 — Domingos y festivos del mes que NINGUNA nómina del tenant cubre.
    * Con cortes personalizados (§2.1) un domingo puede caer en el hueco entre
@@ -2033,7 +2086,12 @@ export const nominaApi = {
      * Preserva descuentos existentes al recalcular.
      */
     liquidar: (nominaId: number, terceroId: number) =>
-      apiClient.post<{ data: NominaTerceroActaDetalle; message: string }>(
+      apiClient.post<{
+        data: NominaTerceroActaDetalle;
+        message: string;
+        /** §7.3 — El acta también intenta el cierre; después ya no admite descuentos. */
+        cierre_automatico?: CierreAutomaticoNomina;
+      }>(
         `/v1/tenant/nominas/${nominaId}/terceros/${terceroId}/liquidar`,
         undefined,
         T,
@@ -2227,11 +2285,13 @@ export const nominaApi = {
       T,
     ),
 
+  /** §5.3 — Liquidar la última fila PENDIENTE cierra la nómina (`cierre_automatico`). */
   liquidar: (nominaEmpleadoId: number, payload: LiquidarPayload) =>
     apiClient.post<{
       data: NominaEmpleado;
       message: string;
       advertencia?: AdvertenciaGajosSinDespachar;
+      cierre_automatico?: CierreAutomaticoNomina;
     }>(`/v1/tenant/nomina-empleado/${nominaEmpleadoId}/liquidar`, payload, T),
 
   reLiquidar: (nominaEmpleadoId: number, payload: LiquidarPayload) =>
@@ -2239,6 +2299,7 @@ export const nominaApi = {
       data: NominaEmpleado;
       message: string;
       advertencia?: AdvertenciaGajosSinDespachar;
+      cierre_automatico?: CierreAutomaticoNomina;
     }>(`/v1/tenant/nomina-empleado/${nominaEmpleadoId}/liquidacion`, payload, T),
 
   desprendible: (nominaEmpleadoId: number) =>

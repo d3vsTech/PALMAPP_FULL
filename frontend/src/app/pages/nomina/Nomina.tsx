@@ -38,6 +38,7 @@ import {
 import { toast } from 'sonner';
 import {
   nominaApi, Nomina as NominaT, NominaIndicadores, NominaErrorCodes,
+  type EstadoNomina,
 } from '../../../api/nomina';
 import type { ApiError } from '../../../api/client';
 
@@ -138,7 +139,7 @@ export default function Nomina() {
     setCargando(true);
     return Promise.all([
       nominaApi.listar({
-        estado: filtroEstado !== 'todos' ? (filtroEstado as 'BORRADOR' | 'CERRADA') : undefined,
+        estado: filtroEstado !== 'todos' ? (filtroEstado as EstadoNomina) : undefined,
         mes: filtroMes !== 'todos' ? parseInt(filtroMes) : undefined,
         per_page: 50,
       }),
@@ -244,7 +245,10 @@ export default function Nomina() {
       n.resumen ? n.resumen.neto : toNumber(n.total_general);
 
     if (periodoKpi === 'todos' && indicadores) {
-      const borradores = nominas.filter((n) => n.estado === 'BORRADOR');
+      // §10.1 — Una nómina EN_PROGRESO sigue abierta: lo que la cierra es
+      // CERRADA. Agruparlas por "distinto de BORRADOR" dejaría fuera de los
+      // KPIs todo lo que ya tiene a alguien liquidado.
+      const borradores = nominas.filter((n) => n.estado !== 'CERRADA');
       const labelBorrador = borradores.length === 1
         ? periodoLabel(borradores[0])
         : `${borradores.length} períodos abiertos`;
@@ -269,7 +273,7 @@ export default function Nomina() {
       : nominas.filter((n) => String(n.id) === periodoKpi);
 
     const cerradas = filtradas.filter((n) => n.estado === 'CERRADA');
-    const borradores = filtradas.filter((n) => n.estado === 'BORRADOR');
+    const borradores = filtradas.filter((n) => n.estado !== 'CERRADA');
 
     // "Pagado" del mes del período, desde el backend cuando ya cargó;
     // fallback a la suma local de cerradas mientras tanto.
@@ -467,8 +471,9 @@ export default function Nomina() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos</SelectItem>
-                  <SelectItem value="BORRADOR">Borrador</SelectItem>
-                  <SelectItem value="CERRADA">Cerrada</SelectItem>
+                  <SelectItem value="BORRADOR">En borrador</SelectItem>
+                  <SelectItem value="EN_PROGRESO">En progreso</SelectItem>
+                  <SelectItem value="CERRADA">Finalizada</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -607,7 +612,12 @@ export default function Nomina() {
                           </td>
                           <td className="p-4">
                             <div className="flex gap-2 justify-end">
-                              {n.estado === 'BORRADOR' ? (
+                              {/* §10.1 — Liquidar sigue disponible mientras la
+                                  nómina no esté CERRADA; editar y eliminar
+                                  solo en BORRADOR, porque con una fila ya
+                                  liquidada el backend responde 409
+                                  NOMINA_CON_LIQUIDADOS. */}
+                              {n.estado !== 'CERRADA' ? (
                                 <>
                                   <Button
                                     size="sm"
@@ -617,29 +627,33 @@ export default function Nomina() {
                                     <Calculator className="h-4 w-4" />
                                     Liquidar
                                   </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      navigate(`/nomina/${n.id}/editar`);
-                                    }}
-                                    title="Editar nómina"
-                                  >
-                                    <Pencil className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setNominaAEliminar(n);
-                                    }}
-                                    className="text-destructive hover:bg-destructive/10 hover:text-destructive hover:border-destructive/50"
-                                    title="Eliminar nómina"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
+                                  {n.estado === 'BORRADOR' && (
+                                    <>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          navigate(`/nomina/${n.id}/editar`);
+                                        }}
+                                        title="Editar nómina"
+                                      >
+                                        <Pencil className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setNominaAEliminar(n);
+                                        }}
+                                        className="text-destructive hover:bg-destructive/10 hover:text-destructive hover:border-destructive/50"
+                                        title="Eliminar nómina"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </>
+                                  )}
                                 </>
                               ) : (
                                 <Button

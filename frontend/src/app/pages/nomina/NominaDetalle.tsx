@@ -229,6 +229,13 @@ export default function NominaDetalle() {
 
   const [empleadoAQuitar, setEmpleadoAQuitar] = useState<NominaEmpleado | null>(null);
   const [confirmarCerrar, setConfirmarCerrar] = useState(false);
+  /*
+   * §6.1 — Liquidar la última fila PENDIENTE cierra la nómina sola y ya no
+   * se puede reabrir. El aviso va aquí, que es donde se sabe cuántos quedan,
+   * y no en la pantalla de liquidación, que tendría que pedir la nómina
+   * entera solo para contar.
+   */
+  const [ultimoPendiente, setUltimoPendiente] = useState<number | null>(null);
   // §4.4 — datos de gajos pendientes precargados al abrir el diálogo de
   // cerrar, para que el usuario decida CON la info a la vista antes del POST
   // /cerrar (que es irreversible).
@@ -240,6 +247,14 @@ export default function NominaDetalle() {
   // §3.6 — Domingos/festivos que ninguna nómina del mes cubre (por cortes
   // personalizados que dejan huecos). Se lee del paso-4-checklist antes de
   // cerrar. Aviso, NO bloqueo — el hueco puede ser deliberado.
+  /**
+   * §3.6 — Lo que hoy impediría cerrar, con el `code` del backend. Se lee
+   * junto al resto de la precarga y se muestra en el diálogo: sin esto el
+   * usuario pulsa "Cerrar" y recibe un 409 sin saber qué le falta.
+   */
+  const [bloqueosCierre, setBloqueosCierre] = useState<
+    Array<{ code: string; message: string }>
+  >([]);
   const [descansosHuerfanosPreCierre, setDescansosHuerfanosPreCierre] = useState<
     Array<{ fecha: string; tipo: 'DOMINICAL' | 'FESTIVO'; nombre: string }>
   >([]);
@@ -397,7 +412,7 @@ export default function NominaDetalle() {
         // Paso 2: disparar previews de los PENDIENTES que faltan, en batches
         // de 6 para no saturar el navegador. Cancelables si el usuario navega
         // (ej. abre "Liquidar" antes de que terminen).
-        if (res.data.estado === 'BORRADOR') {
+        if (res.data.estado !== 'CERRADA') {
           const faltan = emps
             .filter((e) => e.estado === 'PENDIENTE' && !yaCacheados.has(e.id))
             .map((e) => e.id);
@@ -588,12 +603,17 @@ export default function NominaDetalle() {
     }
   };
 
-  const esBorrador = nomina?.estado === 'BORRADOR';
+  /*
+   * §10.1 — Tres estados desde el 2026-10-09. Lo que apaga la liquidación es
+   * CERRADA, no "distinto de BORRADOR": una nómina EN_PROGRESO tiene filas
+   * liquidadas y otras pendientes, y sigue siendo editable fila por fila.
+   */
+  const abierta = nomina?.estado !== 'CERRADA';
   // Los operarios NO van en la tabla de "Liquidación de Colaboradores" — se
   // gestionan por acta en el tab Terceros. Aquí filtramos solo internos.
   const empleadosInternos = empleados.filter((e) => e.empleado_id != null);
   const empleadosOperarios = empleados.filter((e) => e.operario_id != null);
-  const empleadosMostrar = esBorrador
+  const empleadosMostrar = abierta
     ? empleadosInternos
     : empleadosInternos.filter((e) => e.estado === 'LIQUIDADO');
 
@@ -1207,7 +1227,11 @@ export default function NominaDetalle() {
           </div>
 
           <div className="flex gap-2">
-            {esBorrador && (() => {
+            {/* §6.1 — La nómina se cierra sola al liquidar la última fila.
+                Este botón es la salida cuando el automático se bloqueó y el
+                bloqueo ya se resolvió por otra vía (p. ej. la validación de
+                cosecha se confirmó después). */}
+            {abierta && (() => {
               const puedeCerrar = totalColabs > 0 && liquidados === totalColabs;
               return (
                 <Button
@@ -1242,12 +1266,15 @@ export default function NominaDetalle() {
                         setDescansosHuerfanosPreCierre(
                           checkRes.value.data.dias_descanso_fuera_de_rango ?? [],
                         );
+                        setBloqueosCierre(checkRes.value.data.bloqueos_cierre ?? []);
                       } else {
                         setDescansosHuerfanosPreCierre([]);
+                        setBloqueosCierre([]);
                       }
                     } catch {
                       setAlertaGajosPreCierre(null);
                       setDescansosHuerfanosPreCierre([]);
+                      setBloqueosCierre([]);
                     } finally {
                       setCargandoValidacionPreCierre(false);
                       setConfirmarCerrar(true);
@@ -1513,7 +1540,7 @@ export default function NominaDetalle() {
                 <Building2 className="h-16 w-16 text-muted-foreground mb-4" />
                 <p className="text-lg font-semibold mb-2">No hay terceros en este período</p>
                 <p className="text-sm text-muted-foreground mb-4 text-center max-w-md">
-                  {esBorrador
+                  {abierta
                     ? 'Agrega operarios de empresas contratistas en el wizard de nómina para verlos aquí.'
                     : 'No se liquidaron empresas contratistas en este período.'}
                 </p>
@@ -1821,10 +1848,10 @@ export default function NominaDetalle() {
         <div className="space-y-4">
           <div>
             <h2 className="mb-2">
-              {esBorrador ? 'Liquidación de Colaboradores' : 'Detalle por Colaborador'}
+              {abierta ? 'Liquidación de Colaboradores' : 'Detalle por Colaborador'}
             </h2>
             <p className="text-muted-foreground">
-              {esBorrador
+              {abierta
                 ? `${totalColabs} colaboradores - ${liquidados} liquidados, ${pendientesInternos} pendientes`
                 : `${empleadosMostrar.length} colaboradores liquidados en este período`}
             </p>
@@ -1834,7 +1861,7 @@ export default function NominaDetalle() {
             <CardContent className="p-0">
               {empleadosMostrar.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
-                  {esBorrador
+                  {abierta
                     ? 'No hay empleados en esta nómina. Edita la nómina para agregar.'
                     : 'No hay empleados liquidados.'}
                 </div>
@@ -1846,7 +1873,7 @@ export default function NominaDetalle() {
                         <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Colaborador</th>
                         <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Tipo</th>
                         <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Salario Base</th>
-                        {!esBorrador && (
+                        {!abierta && (
                           <>
                             <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Jornales</th>
                             <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Cosechas</th>
@@ -1855,7 +1882,7 @@ export default function NominaDetalle() {
                             <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Neto</th>
                           </>
                         )}
-                        {esBorrador && (
+                        {abierta && (
                           <th className="text-center p-4 font-semibold text-sm text-muted-foreground">Estado</th>
                         )}
                         <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Acciones</th>
@@ -1962,7 +1989,7 @@ export default function NominaDetalle() {
                                 );
                               })()}
                             </td>
-                            {!esBorrador && (
+                            {!abierta && (
                               <>
                                 <td className="p-4 text-right">
                                   <span className="text-sm font-medium">${jornales.toLocaleString('es-CO')}</span>
@@ -1987,7 +2014,7 @@ export default function NominaDetalle() {
                                 </td>
                               </>
                             )}
-                            {esBorrador && (
+                            {abierta && (
                               <td className="p-4 text-center">
                                 <Badge
                                   className={`text-xs ${
@@ -2002,11 +2029,17 @@ export default function NominaDetalle() {
                             )}
                             <td className="p-4">
                               <div className="flex gap-2 justify-end">
-                                {esBorrador && !liquidado && (
+                                {abierta && !liquidado && (
                                   <>
                                     <Button
                                       size="sm"
-                                      onClick={() => navigate(`/nomina/${nominaId}/liquidar/${emp.id}`)}
+                                      onClick={() => {
+                                        if (liquidados === totalColabs - 1) {
+                                          setUltimoPendiente(emp.id);
+                                          return;
+                                        }
+                                        navigate(`/nomina/${nominaId}/liquidar/${emp.id}`);
+                                      }}
                                       className="gap-1 bg-primary hover:bg-primary/90"
                                       title="Liquidar"
                                     >
@@ -2032,9 +2065,9 @@ export default function NominaDetalle() {
                                       className="hover:bg-primary/10 hover:text-primary hover:border-primary"
                                       title="Ver liquidación"
                                     >
-                                      {esBorrador ? <Eye className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+                                      {abierta ? <Eye className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
                                     </Button>
-                                    {esBorrador && (
+                                    {abierta && (
                                       <Button
                                         size="sm"
                                         variant="outline"
@@ -2087,6 +2120,44 @@ export default function NominaDetalle() {
       </AlertDialog>
 
       {/* Confirmar cerrar nómina */}
+      {/* Antes del último: después del cierre no hay reabrir, así que los
+          descuentos del acta de terceros y la validación de cosecha tienen
+          que estar listos ya (§6.1, §7.5). */}
+      <AlertDialog
+        open={ultimoPendiente !== null}
+        onOpenChange={(abierto) => { if (!abierto) setUltimoPendiente(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Es el último colaborador pendiente</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <p>
+                  Al liquidarlo la nómina se finaliza sola y deja de poder modificarse:
+                  no se puede reabrir, ni re-liquidar a nadie, ni agregar descuentos a
+                  las actas de los contratistas.
+                </p>
+                <p>
+                  Si falta algo de eso, resuélvalo antes de continuar.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const id = ultimoPendiente;
+                setUltimoPendiente(null);
+                if (id != null) navigate(`/nomina/${nominaId}/liquidar/${id}`);
+              }}
+            >
+              Continuar y liquidar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={confirmarCerrar} onOpenChange={setConfirmarCerrar}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -2144,11 +2215,27 @@ export default function NominaDetalle() {
               </div>
             );
           })()}
+          {/* §3.6 — Lo que el backend va a rechazar. Con la lista vacía el
+              cierre manual pasa; con algo aquí, el 409 ya está anunciado. */}
+          {bloqueosCierre.length > 0 && (
+            <div className="my-2 rounded-lg border-2 border-destructive/40 bg-destructive/5 p-3">
+              <p className="text-sm font-semibold text-destructive">
+                {bloqueosCierre.length === 1
+                  ? 'Hay algo que impide cerrar'
+                  : `Hay ${bloqueosCierre.length} cosas que impiden cerrar`}
+              </p>
+              <ul className="mt-2 space-y-1 text-xs text-destructive/90">
+                {bloqueosCierre.map((b) => (
+                  <li key={b.code}>{b.message}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={accionando}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={cerrarNomina}
-              disabled={accionando}
+              disabled={accionando || bloqueosCierre.length > 0}
               className={alertaGajosPreCierre ? 'bg-orange-600 hover:bg-orange-700' : undefined}
             >
               {accionando
