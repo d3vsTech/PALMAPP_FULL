@@ -767,7 +767,7 @@ export interface PreviewLiquidacion {
    * bloquea por estas, solo las muestra.
    */
   advertencias?: Array<{
-    codigo:
+    codigo?:
       | 'CALENDARIO_FESTIVOS_DESACTUALIZADO'
       | 'RECARGO_DOMINICAL_DESACTUALIZADO'
       | 'DESCANSO_DOMINICAL_PERDIDO'
@@ -797,8 +797,18 @@ export interface PreviewLiquidacion {
        */
       | 'VACACIONES_CON_TRABAJO_REGISTRADO'
       | string;
-    mensaje: string;
+    mensaje?: string;
+    /**
+     * §5.1 manda las del **preview** como `{code, message}`, en inglés, y
+     * §6.1 las de `GET /nominas/{id}` como `{codigo, mensaje}`. Los dos
+     * nombres viajan aquí porque el banner los lee indistintamente: leer
+     * solo `mensaje` dejaba el recuadro del preview pintado y sin texto.
+     */
+    code?: string;
+    message?: string;
     detalle?: unknown;
+    /** `FALTAS_NO_REGISTRADAS_EN_PLANILLA` y las de vacaciones traen fechas. */
+    fechas?: string[];
   }>;
 
   /**

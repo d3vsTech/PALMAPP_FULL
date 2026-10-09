@@ -21,10 +21,22 @@ import {
  * Si `items` es undefined o vacío no renderiza nada — el consumidor no necesita
  * envolver la llamada en un condicional.
  */
+/**
+ * El backend nombra estos dos campos distinto segun el endpoint: el preview
+ * de §5.1 manda `{code, message}` y `GET /nominas/{id}` de §6.1 manda
+ * `{codigo, mensaje}`. El banner acepta los dos y normaliza al leer; antes
+ * solo miraba los de §6.1 y el recuadro del preview salia con el icono y
+ * sin una sola letra.
+ */
 export interface AdvertenciaItem {
-  codigo: string;
-  mensaje: string;
+  codigo?: string;
+  mensaje?: string;
+  code?: string;
+  message?: string;
 }
+
+const codigoDe = (a: AdvertenciaItem) => a.codigo ?? a.code ?? '';
+const mensajeDe = (a: AdvertenciaItem) => a.mensaje ?? a.message ?? '';
 
 interface Props {
   items?: AdvertenciaItem[];
@@ -48,8 +60,8 @@ const ESTILO: Record<SeveridadAdvertencia, { caja: string; texto: string; icono:
 export function AdvertenciasBanner({ items, size = 'md' }: Props) {
   if (!items || items.length === 0) return null;
 
-  const criticas = items.filter((a) => severidadAdvertencia(a.codigo) === 'critica');
-  const informativas = items.filter((a) => severidadAdvertencia(a.codigo) !== 'critica');
+  const criticas = items.filter((a) => severidadAdvertencia(codigoDe(a)) === 'critica');
+  const informativas = items.filter((a) => severidadAdvertencia(codigoDe(a)) !== 'critica');
 
   return (
     <div className="space-y-3">
@@ -80,11 +92,17 @@ function Bloque({
         <Icono className={`mt-0.5 h-5 w-5 shrink-0 ${estilo.icono}`} />
         <div className="flex-1 space-y-2">
           {items.map((a, i) => {
-            const titulo = tituloAdvertencia(a.codigo);
+            const codigo = codigoDe(a);
+            const titulo = tituloAdvertencia(codigo);
+            const mensaje = mensajeDe(a);
             return (
-              <div key={`${a.codigo}-${i}`} className={`${textSize} ${estilo.texto}`}>
+              <div key={`${codigo}-${i}`} className={`${textSize} ${estilo.texto}`}>
                 {titulo && <p className="font-semibold">{titulo}</p>}
-                <p className={titulo ? 'opacity-90' : undefined}>{a.mensaje}</p>
+                {/* Sin título ni mensaje queda el código crudo: feo, pero
+                    menos inútil que un recuadro vacío. */}
+                <p className={titulo ? 'opacity-90' : undefined}>
+                  {mensaje || (titulo ? '' : codigo)}
+                </p>
               </div>
             );
           })}
@@ -99,7 +117,7 @@ function Bloque({
  * debería resolver antes de liquidar. No bloquea: el backend tampoco lo hace.
  */
 export function NotaAntesDeConfirmar({ items }: { items?: AdvertenciaItem[] }) {
-  const criticas = (items ?? []).filter((a) => severidadAdvertencia(a.codigo) === 'critica');
+  const criticas = (items ?? []).filter((a) => severidadAdvertencia(codigoDe(a)) === 'critica');
   if (criticas.length === 0) return null;
 
   return (
