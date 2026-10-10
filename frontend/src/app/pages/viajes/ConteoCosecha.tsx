@@ -1200,17 +1200,24 @@ export default function ConteoCosecha() {
                   return (
                   <Card key={cosecha.id} className="border-border hover:border-primary/30 transition-colors">
                     <CardContent className="p-4">
-                      <div className="flex items-center justify-between gap-4">
-                        {/* Icon + Lote/Sublote header */}
-                        <div className="flex items-center gap-3">
+                      {/* La fila envuelve: con cinco bloques `shrink-0` en
+                          línea, en cuanto la ventana se angosta (o se abre el
+                          panel lateral del viaje) las cifras de la derecha se
+                          salían de la tarjeta y quedaban cortadas. Ahora el
+                          encabezado se encoge y, si aun así no caben, las
+                          cifras bajan en bloque a la segunda línea. */}
+                      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+                        {/* Icono + lote y cuadrilla. Es lo único que cede
+                            ancho; `min-w-0` es lo que habilita el truncate. */}
+                        <div className="flex min-w-0 flex-1 items-center gap-3">
                           <div className="h-10 w-10 rounded-lg bg-success/10 flex items-center justify-center shrink-0">
                             <Leaf className="h-5 w-5 text-success" />
                           </div>
                           <div className="min-w-0">
-                            <h4 className="font-semibold text-sm">{cosecha.loteName}</h4>
+                            <h4 className="truncate font-semibold text-sm">{cosecha.loteName}</h4>
                             {nombresCuadrilla.length > 0 ? (
                               <p
-                                className="text-xs text-muted-foreground truncate max-w-[240px]"
+                                className="truncate text-xs text-muted-foreground"
                                 title={nombresCuadrilla.join(', ')}
                               >
                                 {nombresCuadrilla.join(', ')}
@@ -1225,6 +1232,9 @@ export default function ConteoCosecha() {
                           </div>
                         </div>
 
+                        {/* Las cifras y el botón van juntos: separarlos dejaría
+                            "En Viaje" solo en una línea sin su contexto. */}
+                        <div className="flex shrink-0 flex-wrap items-center gap-4">
                         {/* Lote/Sublote */}
                         <div className="text-center shrink-0">
                           <p className="text-xs text-muted-foreground">Lote</p>
@@ -1262,6 +1272,7 @@ export default function ConteoCosecha() {
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
