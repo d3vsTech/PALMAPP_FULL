@@ -49,7 +49,13 @@ export function formatFechaHora(
   return isNaN(d.getTime()) ? FALLBACK : d.toLocaleString('es-CO', opts);
 }
 
-/** Solo la hora (HH:mm). Útil para marcas de tiempo dentro del mismo día. */
+/**
+ * Solo la hora (HH:mm). Útil para marcas de tiempo dentro del mismo día.
+ *
+ * Acepta tanto un timestamp completo como una hora suelta: el backend manda
+ * `hora_salida` y `hora_llegada` como "14:30:00", que `new Date` no parsea.
+ * Sin este caso el dato existía pero la pantalla pintaba "—".
+ */
 export function formatHora(
   raw?: string | number | Date | null,
   opts: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit' },
@@ -58,6 +64,19 @@ export function formatHora(
   if (raw instanceof Date) {
     return isNaN(raw.getTime()) ? FALLBACK : raw.toLocaleTimeString('es-CO', opts);
   }
-  const d = new Date(String(raw));
+
+  const s = String(raw).trim();
+  // Hora suelta "H:mm", "HH:mm" o "HH:mm:ss". Se ancla a una fecha cualquiera
+  // para poder formatearla; solo se usan las horas y los minutos.
+  const soloHora = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(s);
+  if (soloHora) {
+    const h = Number(soloHora[1]);
+    const m = Number(soloHora[2]);
+    const seg = Number(soloHora[3] ?? '0');
+    if (h > 23 || m > 59 || seg > 59) return FALLBACK;
+    return new Date(2000, 0, 1, h, m, seg).toLocaleTimeString('es-CO', opts);
+  }
+
+  const d = new Date(s);
   return isNaN(d.getTime()) ? FALLBACK : d.toLocaleTimeString('es-CO', opts);
 }
