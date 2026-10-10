@@ -167,10 +167,10 @@ const MODULOS: Modulo[] = [
   },
   {
     id: 'nomina',
-    nombre: 'Nómina',
+    nombre: 'Pagos',
     secciones: [
       {
-        titulo: 'Nóminas',
+        titulo: 'Pagos',
         permisos: [
           { id: 'nomina.ver',      nombre: 'Ver',      descripcion: 'Visualizar nóminas' },
           { id: 'nomina.crear',    nombre: 'Crear',    descripcion: 'Crear nóminas' },
@@ -202,7 +202,7 @@ const MODULOS: Modulo[] = [
   },
   {
     id: 'market',
-    nombre: 'Market (B2B)',
+    nombre: 'Tienda de Insumos',
     permisos: [
       { id: 'market.catalogo', nombre: 'Catálogo', descripcion: 'Navegar el catálogo de productos' },
       { id: 'market.carrito',  nombre: 'Carrito',  descripcion: 'Gestionar el carrito de compras' },
