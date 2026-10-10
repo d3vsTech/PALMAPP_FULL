@@ -180,22 +180,24 @@ export interface ViajeDetalle {
   estado?: boolean;
   cosecha?: {
     id: number;
+    operacion_id?: number;
     gajos_reportados: number;
     gajos_reconteo?: number | null;
     peso_confirmado?: string | null;
     cuadrilla_count?: number;
+    /** Fecha de la planilla (§5.3.1). Misma serialización que `CosechaLibre.fecha`. */
+    fecha?: string | null;
+    operacion?: { id: number; fecha: string } | null;
     lote?: { id: number; nombre: string };
     sublote?: { id: number; nombre: string };
+    /** Nombres listos para pintar (§5.3.1). */
+    colaboradores?: string[];
     /**
      * Cuadrilla de la cosecha. XOR por miembro: `empleado_id` (colaborador
      * propio) u `operario_id` (operario de tercero). El backend inyecta
      * `tercero_id` cuando aplica; el frontend nunca lo envía.
      */
-    cuadrilla?: Array<{
-      empleado_id?: number | null;
-      operario_id?: number | null;
-      tercero_id?: number | null;
-    }>;
+    cuadrilla?: CuadrillaMiembroCosecha[];
   };
 }
 
@@ -455,6 +457,42 @@ export interface ValidarViajePayload {
   observaciones_extractora?: string | null;
 }
 
+/**
+ * Miembro de la cuadrilla de una cosecha (§5.3).
+ *
+ * XOR por miembro: `empleado_id` para colaborador propio, `operario_id` para
+ * operario de contratista. El backend inyecta `tercero_id` cuando aplica.
+ * Mismas llaves que `GET /operaciones/{id}`, así que el render es el mismo.
+ */
+export interface CuadrillaMiembroCosecha {
+  id: number;
+  cosecha_id: number;
+  empleado_id?: number | null;
+  operario_id?: number | null;
+  tercero_id?: number | null;
+  estado?: boolean;
+  empleado?: {
+    id: number;
+    primer_nombre?: string | null;
+    segundo_nombre?: string | null;
+    primer_apellido?: string | null;
+    segundo_apellido?: string | null;
+    documento?: string | null;
+  } | null;
+  operario?: {
+    id: number;
+    tercero_id?: number | null;
+    nombres?: string | null;
+    apellidos?: string | null;
+  } | null;
+  tercero?: {
+    id: number;
+    tipo_persona?: string;
+    razon_social?: string | null;
+    nombre_completo?: string | null;
+  } | null;
+}
+
 /** Operación APROBADA con cosechas disponibles */
 export interface OperacionDisponible {
   id: number;
@@ -476,6 +514,14 @@ export interface OperacionDisponible {
  */
 export interface CosechaLibre {
   id: number;
+  operacion_id?: number;
+  /**
+   * Fecha de la planilla a la que pertenece la cosecha (§5.3, 2026-10-10).
+   * Misma serialización que `fecha` en `/operaciones`: medianoche local
+   * expresada en UTC, así que se formatea tomando los 10 primeros caracteres.
+   */
+  fecha?: string | null;
+  operacion?: { id: number; fecha: string } | null;
   gajos_reportados: number;
   gajos_reconteo?: number | null;
   /**
@@ -488,6 +534,9 @@ export interface CosechaLibre {
   cuadrilla_count?: number;
   lote?: { id: number; nombre: string };
   sublote?: { id: number; nombre: string };
+  /** Nombres listos para pintar, misma regla que el desprendible (§14.3). */
+  colaboradores?: string[];
+  cuadrilla?: CuadrillaMiembroCosecha[];
 }
 
 /** Respuesta de aprobar-reconteo */

@@ -19,8 +19,9 @@ import { toast } from 'sonner';
 import {
   viajesApi, strField, ViajesErrorCodes as ErrorCodes,
   type Viaje, type ViajeDetalle, type OperacionDisponible, type CosechaLibre,
+  type CuadrillaMiembroCosecha,
 } from '../../../api/viajes';
-import { selectsApi, operacionesApi } from '../../../api/operaciones';
+import { selectsApi } from '../../../api/operaciones';
 import { tercerosApi } from '../../../api/terceros';
 import { ajustesCosechaApi } from '../../../api/ajustesCosecha';
 
@@ -137,6 +138,15 @@ export default function ConteoCosecha() {
    */
   const [cuadrillaCountPorCosecha, setCuadrillaCountPorCosecha] = useState<Map<number, number>>(new Map());
   /**
+   * Fecha de la planilla a la que pertenece cada cosecha, por `cosecha_id`.
+   *
+   * La manda el backend en `cosecha.fecha` tanto en `GET /viajes/{id}` como
+   * en `/viajes/operaciones/{id}/cosechas` (§5.3.1). Se acumula en un mapa
+   * para que una cosecha recién agregada en el formulario ya salga fechada
+   * sin esperar a que `cargar()` vuelva.
+   */
+  const [fechaPorCosecha, setFechaPorCosecha] = useState<Map<number, string>>(new Map());
+  /**
    * Detalle de la cuadrilla por cosecha enriquecido — usado para mostrar
    * nombres y empresa contratista en el dropdown de "Cuadrilla Reconteo"
    * y también en las tarjetas de cosechas ya guardadas del viaje.
@@ -157,6 +167,9 @@ export default function ConteoCosecha() {
   // no re-creamos el callback en cada mutación (evita loops de fetch).
   const miembrosPorCosechaRef = useRef(miembrosPorCosecha);
   useEffect(() => { miembrosPorCosechaRef.current = miembrosPorCosecha; }, [miembrosPorCosecha]);
+  // Mismo truco para los counts: `cargar()` los lee sin tenerlos en su deps.
+  const cuadrillaCountPorCosechaRef = useRef(cuadrillaCountPorCosecha);
+  useEffect(() => { cuadrillaCountPorCosechaRef.current = cuadrillaCountPorCosecha; }, [cuadrillaCountPorCosecha]);
   /** Map terceroId → nombre_display (razón social), para resolver operarios. */
   const [terceroMap, setTerceroMap] = useState<Map<number, string>>(new Map());
   const [cuadrillaSeleccionada, setCuadrillaSeleccionada] = useState<string[]>([]);
@@ -203,10 +216,53 @@ export default function ConteoCosecha() {
     })();
   }, []);
 
+  /**
+   * Convierte la `cuadrilla[]` que mandan `GET /viajes/{id}` y
+   * `GET /viajes/operaciones/{id}/cosechas` en lo que pinta la pantalla.
+   *
+   * Las dos respuestas traen las mismas llaves (§5.3.1), así que la lectura
+   * es una sola. `colaboradores[]` viene con los nombres ya resueltos por el
+   * backend y se usa cuando la cuadrilla no trae el nombre anidado.
+   */
+  const leerCuadrilla = useCallback((c: {
+    cuadrilla?: CuadrillaMiembroCosecha[];
+    colaboradores?: string[];
+  } | null | undefined) => {
+    const empleadoIds: number[] = [];
+    const miembros: Array<{
+      tipo: 'EMP' | 'OP';
+      id: number;
+      nombre: string;
+      terceroNombre?: string;
+    }> = [];
+    const nombresBackend = c?.colaboradores ?? [];
+
+    (c?.cuadrilla ?? []).forEach((q, i) => {
+      // El backend ya resolvió los nombres en el mismo orden que la
+      // cuadrilla. Se usa ese si el objeto anidado no trae con qué armarlo.
+      const delBackend = nombresBackend[i] ?? '';
+      if (q.empleado_id) {
+        empleadoIds.push(Number(q.empleado_id));
+        const nombre = `${q.empleado?.primer_nombre ?? ''} ${q.empleado?.primer_apellido ?? ''}`.trim()
+          || delBackend; // vacío → se resuelve con colaboradoresMap al pintar
+        miembros.push({ tipo: 'EMP', id: Number(q.empleado_id), nombre });
+      } else if (q.operario_id) {
+        const nombre = `${q.operario?.nombres ?? ''} ${q.operario?.apellidos ?? ''}`.trim()
+          || delBackend
+          || `Operario ${q.operario_id}`;
+        const terceroDelPayload = q.tercero?.razon_social || q.tercero?.nombre_completo || '';
+        const terceroNombre = terceroDelPayload
+          || (q.tercero_id ? terceroMap.get(Number(q.tercero_id)) : undefined);
+        miembros.push({ tipo: 'OP', id: Number(q.operario_id), nombre, terceroNombre: terceroNombre || undefined });
+      }
+    });
+
+    return { empleadoIds, miembros };
+  }, [terceroMap]);
+
   // ── mapeo API → local
   const mapDetalle = (
     d: ViajeDetalle,
-    _planillaNombreById: Map<number, string>,
     countMap?: Map<number, number>,
   ): CosechaConteo => {
     // Orden de resolución del cuadrillaCount:
@@ -217,11 +273,12 @@ export default function ConteoCosecha() {
     const countBackend = d.cosecha?.cuadrilla_count
       ?? (d.cosecha?.cuadrilla?.length ?? 0);
     const countLocal = countMap?.get(d.cosecha_id) ?? 0;
+    const operacionId = d.cosecha?.operacion?.id ?? d.cosecha?.operacion_id;
     return {
       id: String(d.id),
       detalleId: d.id,
       cosechaId: d.cosecha_id,
-      planillaId: '',
+      planillaId: operacionId != null ? String(operacionId) : '',
       planillaNombre: '',
       loteName: d.cosecha?.lote?.nombre ?? '—',
       subloteName: d.cosecha?.sublote?.nombre ?? '',
@@ -242,127 +299,60 @@ export default function ConteoCosecha() {
     try {
       const res = await viajesApi.ver(Number(id));
       setViaje(res.data);
-      const planillaMap = new Map<number, string>();
-      // Snapshot atómico del map — evitamos que setState asíncrono nos deje
-      // el mapDetalle leyendo una versión desactualizada.
-      const snapshotMap = cuadrillaCountPorCosecha;
-      setCosechas((res.data.detalles ?? []).map((d) => mapDetalle(d, planillaMap, snapshotMap)));
+      const detalles = res.data.detalles ?? [];
 
-      // Enriquecimiento: si algún detalle sigue sin cuadrilla_count, poblamos
-      // el map global consultando la planilla padre de cada cosecha. Como el
-      // backend NO incluye `operacion_id` en el detalle, resolvemos por
-      // barrido: pedimos todas las operaciones disponibles y sus cosechas.
-      // Costo: 1 request + N requests (N = planillas del viaje, típicamente
-      // 1-3). Solo se ejecuta si hace falta.
-      const faltantes = (res.data.detalles ?? []).filter((d) => {
-        const backend = d.cosecha?.cuadrilla_count ?? (d.cosecha?.cuadrilla?.length ?? 0);
-        const local = snapshotMap.get(d.cosecha_id) ?? 0;
-        return backend === 0 && local === 0;
-      });
-      // Cosechas del detalle que ya tienen miembros cargados desde alguna
-      // consulta previa. No las volvemos a pedir.
-      const miembrosActuales = miembrosPorCosechaRef.current;
-      const yaConMiembros = new Set<number>();
-      for (const d of res.data.detalles ?? []) {
-        const arr = miembrosActuales.get(d.cosecha_id);
-        if (arr && arr.length > 0) yaConMiembros.add(d.cosecha_id);
+      /*
+       * §5.3.1 — `detalles[].cosecha` ya trae fecha, lote, sublote,
+       * `colaboradores[]` y `cuadrilla[]`. Hasta 2026-10-10 esta pantalla
+       * listaba todas las planillas APROBADAS y pedía el detalle de cada una
+       * solo para sacar los nombres de la cuadrilla: más de cien peticiones
+       * al abrir el paso. Ahora el viaje llega completo y no hace falta
+       * ninguna consulta extra.
+       */
+      const countUpdates: Array<[number, number]> = [];
+      const miembrosUpdates: Array<[number, Array<{
+        tipo: 'EMP' | 'OP';
+        id: number;
+        nombre: string;
+        terceroNombre?: string;
+      }>]> = [];
+      const fechasUpdates: Array<[number, string]> = [];
+
+      for (const d of detalles) {
+        if (!d.cosecha) continue;
+        const { miembros } = leerCuadrilla(d.cosecha);
+        if (miembros.length > 0) {
+          miembrosUpdates.push([d.cosecha_id, miembros]);
+          countUpdates.push([d.cosecha_id, miembros.length]);
+        }
+        const fecha = d.cosecha.fecha ?? d.cosecha.operacion?.fecha;
+        if (fecha) fechasUpdates.push([d.cosecha_id, fecha]);
       }
-      const pendientesNombres = (res.data.detalles ?? [])
-        .filter((d) => !yaConMiembros.has(d.cosecha_id))
-        .map((d) => d.cosecha_id);
 
-      if (faltantes.length > 0 || pendientesNombres.length > 0) {
-        try {
-          const nuevoMap = new Map(snapshotMap);
-          // Fast path para contadores: `/cosechas-libres` devuelve
-          // `cuadrilla_count` sin nombres. Cubre cosechas todavía con gajos
-          // pendientes; NO borra del set porque queremos ir por los nombres
-          // también.
-          const opsRes = await viajesApi.operacionesDisponibles().catch(() => ({ data: [] as any[] }));
-          for (const op of opsRes.data ?? []) {
-            const cRes = await viajesApi.cosechasLibresDeOperacion(op.id).catch(() => ({ data: [] as any[] }));
-            for (const c of cRes.data ?? []) {
-              if ((c.cuadrilla_count ?? 0) > 0) {
-                nuevoMap.set(c.id, c.cuadrilla_count ?? 0);
-              }
-            }
-          }
+      // Se parte del cache local para no perder lo aprendido en cargas
+      // previas, y se le encima lo que acaba de llegar.
+      const counts = new Map(cuadrillaCountPorCosechaRef.current);
+      for (const [cid, count] of countUpdates) counts.set(cid, count);
 
-          // Path completo — cosechas ya asignadas y también las que
-          // aparecieron en /cosechas-libres pero sin nombres. Iteramos
-          // planillas APROBADAS y usamos `operacionesApi.ver(pl.id)` que sí
-          // devuelve la cuadrilla con nombres.
-          const pendientesSet = new Set<number>([
-            ...faltantes.map((d) => d.cosecha_id),
-            ...pendientesNombres,
-          ]);
-          const miembrosParaAgregar: Array<[number, Array<{
-            tipo: 'EMP' | 'OP';
-            id: number;
-            nombre: string;
-            terceroNombre?: string;
-          }>]> = [];
-          if (pendientesSet.size > 0) {
-            const planRes = await operacionesApi.listar({
-              estado: 'APROBADA',
-              per_page: 100,
-            });
-            for (const pl of planRes.data ?? []) {
-              if (pendientesSet.size === 0) break;
-              try {
-                const det: any = await operacionesApi.ver(pl.id);
-                for (const c of (det?.data?.cosechas ?? []) as any[]) {
-                  const cosechaIdNum = Number(c.id);
-                  if (pendientesSet.has(cosechaIdNum)) {
-                    const miembros: Array<{
-                      tipo: 'EMP' | 'OP';
-                      id: number;
-                      nombre: string;
-                      terceroNombre?: string;
-                    }> = [];
-                    for (const q of (c.cuadrilla ?? []) as any[]) {
-                      if (q.empleado_id) {
-                        const emp = q.empleado ?? {};
-                        const nombre = emp.nombre_completo
-                          || `${emp.primer_nombre ?? ''} ${emp.primer_apellido ?? ''}`.trim()
-                          || '';
-                        miembros.push({ tipo: 'EMP', id: Number(q.empleado_id), nombre });
-                      } else if (q.operario_id) {
-                        const op = q.operario ?? {};
-                        const nombre = op.nombre_completo
-                          || `${op.nombres ?? ''} ${op.apellidos ?? ''}`.trim()
-                          || `Operario ${q.operario_id}`;
-                        const terceroNombre = q.tercero_id ? terceroMap.get(Number(q.tercero_id)) : undefined;
-                        miembros.push({ tipo: 'OP', id: Number(q.operario_id), nombre, terceroNombre });
-                      }
-                    }
-                    if (miembros.length > 0) {
-                      nuevoMap.set(cosechaIdNum, miembros.length);
-                      miembrosParaAgregar.push([cosechaIdNum, miembros]);
-                    }
-                    pendientesSet.delete(cosechaIdNum);
-                  }
-                }
-              } catch { /* saltamos esa planilla */ }
-            }
-          }
-
-          if (miembrosParaAgregar.length > 0) {
-            setMiembrosPorCosecha((prev) => {
-              const next = new Map(prev);
-              for (const [id, ms] of miembrosParaAgregar) next.set(id, ms);
-              return next;
-            });
-          }
-          if (nuevoMap.size !== snapshotMap.size) {
-            setCuadrillaCountPorCosecha(nuevoMap);
-            setCosechas((res.data.detalles ?? []).map((d) => mapDetalle(d, planillaMap, nuevoMap)));
-          }
-        } catch { /* enriquecimiento best-effort */ }
+      setCosechas(detalles.map((d) => mapDetalle(d, counts)));
+      if (countUpdates.length > 0) setCuadrillaCountPorCosecha(counts);
+      if (miembrosUpdates.length > 0) {
+        setMiembrosPorCosecha((prev) => {
+          const next = new Map(prev);
+          for (const [cid, ms] of miembrosUpdates) next.set(cid, ms);
+          return next;
+        });
+      }
+      if (fechasUpdates.length > 0) {
+        setFechaPorCosecha((prev) => {
+          const next = new Map(prev);
+          for (const [cid, f] of fechasUpdates) next.set(cid, f);
+          return next;
+        });
       }
     } catch { navigate('/viajes'); }
     finally { setLoading(false); }
-  }, [id, navigate, cuadrillaCountPorCosecha]);
+  }, [id, navigate, leerCuadrilla]);
 
   useEffect(() => { cargar(); }, [cargar]);
 
@@ -376,7 +366,7 @@ export default function ConteoCosecha() {
     finally { setCargandoOps(false); }
   };
 
-  // ── al elegir planilla, cargar cosechas libres + cuadrillas (empleados por cosecha)
+  // ── al elegir planilla, cargar sus cosechas con gajos pendientes
   useEffect(() => {
     if (!cosechaEnEdicion?.planillaId) {
       setCosechasLibres([]);
@@ -385,60 +375,36 @@ export default function ConteoCosecha() {
     }
     setCargandoCosechas(true);
     viajesApi.cosechasLibresDeOperacion(Number(cosechaEnEdicion.planillaId))
-      .then(r => {
-        setCosechasLibres(r.data ?? []);
-      })
-      .catch(() => setCosechasLibres([]))
-      .finally(() => setCargandoCosechas(false));
+      .then((r) => {
+        const libres = r.data ?? [];
+        setCosechasLibres(libres);
 
-    // Traer la planilla completa para extraer la cuadrilla de cada cosecha.
-    // La cuadrilla puede tener empleados internos (`empleado_id`) o operarios
-    // de terceros (`operario_id` + `tercero_id`). XOR: solo uno de los dos.
-    operacionesApi.ver(Number(cosechaEnEdicion.planillaId))
-      .then((r: any) => {
-        const m = new Map<number, number[]>();
+        /*
+         * §5.3 — la respuesta ya trae fecha, `colaboradores[]` y
+         * `cuadrilla[]` con las mismas llaves que la planilla. Antes había
+         * que pedir `GET /operaciones/{id}` aparte solo para esto, lo que
+         * además obligaba a tener permiso `operaciones.ver`.
+         */
+        const ids = new Map<number, number[]>();
         const mi = new Map<number, Array<{
           tipo: 'EMP' | 'OP';
           id: number;
           nombre: string;
           terceroNombre?: string;
         }>>();
-        // También llenamos el map global de counts para que las tarjetas
-        // "Sin cuadrilla" se actualicen aunque el usuario esté editando otra
-        // cosecha de la misma planilla.
         const countUpdates: Array<[number, number]> = [];
-        for (const c of (r?.data?.cosechas ?? []) as any[]) {
-          const ids: number[] = [];
-          const miembros: Array<{
-            tipo: 'EMP' | 'OP';
-            id: number;
-            nombre: string;
-            terceroNombre?: string;
-          }> = [];
-          for (const q of (c.cuadrilla ?? []) as any[]) {
-            if (q.empleado_id) {
-              ids.push(Number(q.empleado_id));
-              const emp = q.empleado ?? {};
-              const nombre = emp.nombre_completo
-                || `${emp.primer_nombre ?? ''} ${emp.primer_apellido ?? ''}`.trim()
-                || ''; // queda vacío y se resuelve después vía colaboradoresMap
-              miembros.push({ tipo: 'EMP', id: Number(q.empleado_id), nombre });
-            } else if (q.operario_id) {
-              const op = q.operario ?? {};
-              const nombre = op.nombre_completo
-                || `${op.nombres ?? ''} ${op.apellidos ?? ''}`.trim()
-                || `Operario ${q.operario_id}`;
-              const terceroNombre = q.tercero_id ? terceroMap.get(Number(q.tercero_id)) : undefined;
-              miembros.push({ tipo: 'OP', id: Number(q.operario_id), nombre, terceroNombre });
-            }
-          }
-          const cosechaIdNum = Number(c.id);
-          m.set(cosechaIdNum, ids);
-          mi.set(cosechaIdNum, miembros);
-          const total = miembros.length;
-          if (total > 0) countUpdates.push([cosechaIdNum, total]);
+        const fechas: Array<[number, string]> = [];
+
+        for (const c of libres) {
+          const { empleadoIds, miembros } = leerCuadrilla(c);
+          ids.set(c.id, empleadoIds);
+          mi.set(c.id, miembros);
+          if (miembros.length > 0) countUpdates.push([c.id, miembros.length]);
+          const fecha = c.fecha ?? c.operacion?.fecha;
+          if (fecha) fechas.push([c.id, fecha]);
         }
-        setCuadrillaPorCosecha(m);
+
+        setCuadrillaPorCosecha(ids);
         // Merge acumulativo: no perdemos los miembros de cosechas de otras
         // planillas cuando el usuario cambia el select de "Planilla".
         setMiembrosPorCosecha((prev) => {
@@ -450,19 +416,28 @@ export default function ConteoCosecha() {
           setCuadrillaCountPorCosecha((prev) => {
             let changed = false;
             const next = new Map(prev);
-            for (const [id, count] of countUpdates) {
-              if (next.get(id) !== count) { next.set(id, count); changed = true; }
+            for (const [cid, count] of countUpdates) {
+              if (next.get(cid) !== count) { next.set(cid, count); changed = true; }
             }
             return changed ? next : prev;
           });
         }
+        if (fechas.length > 0) {
+          setFechaPorCosecha((prev) => {
+            const next = new Map(prev);
+            for (const [cid, f] of fechas) next.set(cid, f);
+            return next;
+          });
+        }
       })
       .catch(() => {
+        setCosechasLibres([]);
         setCuadrillaPorCosecha(new Map());
         // No borramos `miembrosPorCosecha` — mantiene lo acumulado de
         // consultas previas.
-      });
-  }, [cosechaEnEdicion?.planillaId, terceroMap]);
+      })
+      .finally(() => setCargandoCosechas(false));
+  }, [cosechaEnEdicion?.planillaId, leerCuadrilla]);
 
   // ── handlers
   const siguienteEtapa = () => etapaActual < ETAPAS.length && setEtapaActual(etapaActual + 1);
@@ -1197,6 +1172,17 @@ export default function ConteoCosecha() {
                     }
                     return `Operario ${m.id}`;
                   }).filter(Boolean);
+                  /*
+                   * Encima de los nombres va la fecha del corte. El lote ya
+                   * tiene su propia columna en la misma tarjeta, repetirlo
+                   * arriba no aportaba y se comía el ancho. Si todavía no se
+                   * resolvió la fecha, se cae al lote para no dejar el
+                   * encabezado vacío.
+                   */
+                  const fechaCosecha = fechaPorCosecha.get(cosecha.cosechaId);
+                  const tituloCosecha = fechaCosecha
+                    ? `Cosecha del ${formatearFechaViaje(fechaCosecha)}`
+                    : cosecha.loteName;
                   return (
                   <Card key={cosecha.id} className="border-border hover:border-primary/30 transition-colors">
                     <CardContent className="p-4">
@@ -1214,7 +1200,7 @@ export default function ConteoCosecha() {
                             <Leaf className="h-5 w-5 text-success" />
                           </div>
                           <div className="min-w-0">
-                            <h4 className="truncate font-semibold text-sm">{cosecha.loteName}</h4>
+                            <h4 className="truncate font-semibold text-sm">{tituloCosecha}</h4>
                             {nombresCuadrilla.length > 0 ? (
                               <p
                                 className="truncate text-xs text-muted-foreground"
