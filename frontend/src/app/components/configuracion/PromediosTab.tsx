@@ -52,6 +52,67 @@ interface PromedioRow extends PromedioLote {
   updated_at?: string;
 }
 
+/**
+ * Orden del histórico, del registro más reciente al más viejo.
+ *
+ * `fecha` es el día al que corresponde el promedio y es la que manda. Los
+ * baselines sembrados llegan con `fecha: null` y solo traen `updated_at`,
+ * que dice cuándo se grabaron, no a qué día aplican. Compararlas entre sí
+ * hacía que un baseline grabado en julio tapara los promedios que los
+ * viajes generaron en enero, justo los que interesa ver. Por eso los
+ * registros sin fecha quedan al final, como el fallback que son.
+ */
+const compararRegistros = (a: PromedioRow, b: PromedioRow): number => {
+  const fa = a.fecha ? new Date(a.fecha).getTime() : null;
+  const fb = b.fecha ? new Date(b.fecha).getTime() : null;
+  if (fa != null && fb != null && fa !== fb) return fb - fa;
+  if (fa != null && fb == null) return -1;
+  if (fa == null && fb != null) return 1;
+  const ua = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+  const ub = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+  return ub - ua || b.id - a.id;
+};
+
+/** Fecha que representa al registro: la del promedio, o la de grabación. */
+const fechaDeRegistro = (p: PromedioRow): string | null =>
+  p.fecha ?? p.updated_at ?? null;
+
+/** Cuántos registros se listan con el filtro "Más recientes". */
+const ULTIMOS_VISIBLES = 10;
+
+/** Tamaño de página al recorrer los listados. */
+const PER_PAGE = 200;
+
+/**
+ * Tope de páginas. Es un seguro: si el backend devolviera un `last_page`
+ * raro, el bucle no se queda girando contra la API.
+ */
+const MAX_PAGINAS = 25;
+
+/**
+ * Trae todas las páginas de un listado paginado y las devuelve en una lista.
+ *
+ * Los promedios crecen solos: cada viaje homogéneo agrega uno al pesar. Con
+ * una sola página los más viejos quedaban fuera y el histórico mostraba
+ * menos de lo que hay. Se pide la primera, se lee `last_page` y el resto
+ * sale en paralelo.
+ */
+async function traerTodo<T>(
+  pedir: (page: number) => Promise<{
+    data: T[];
+    meta?: { last_page?: number };
+  }>,
+): Promise<T[]> {
+  const primera = await pedir(1);
+  const paginas = Math.min(primera.meta?.last_page ?? 1, MAX_PAGINAS);
+  if (paginas <= 1) return primera.data;
+
+  const restantes = await Promise.all(
+    Array.from({ length: paginas - 1 }, (_, i) => pedir(i + 2)),
+  );
+  return [primera.data, ...restantes.map((r) => r.data)].flat();
+}
+
 const ANIO_ACTUAL = new Date().getFullYear();
 const aniosDisponibles = Array.from({ length: 5 }, (_, i) => ANIO_ACTUAL - 2 + i);
 
@@ -70,17 +131,23 @@ export function PromediosTab() {
     setLoading(true);
     Promise.all([
       cached(`config:promedios:${anio}`, () =>
-        configuracionApi.promediosLote.listar({ anio, per_page: 100 }),
+        traerTodo((page) =>
+          configuracionApi.promediosLote.listar({ anio, per_page: PER_PAGE, page }),
+        ),
       ),
       cached('config:promedios:all', () =>
-        configuracionApi.promediosLote.listar({ per_page: 500 }),
+        traerTodo((page) =>
+          configuracionApi.promediosLote.listar({ per_page: PER_PAGE, page }),
+        ),
       ),
-      cached('config:lotes:select', () => lotesApi.listar({ per_page: 100 })),
+      cached('config:lotes:select', () =>
+        traerTodo((page) => lotesApi.listar({ per_page: PER_PAGE, page })),
+      ),
     ])
-      .then(([resPromedios, resHistorico, resLotes]) => {
-        setPromedios(resPromedios.data as PromedioRow[]);
-        setHistoricoTodo(resHistorico.data as PromedioRow[]);
-        setLotes(resLotes.data.map((l: any) => ({ id: l.id, nombre: l.nombre })));
+      .then(([listaPromedios, listaHistorico, listaLotes]) => {
+        setPromedios(listaPromedios as PromedioRow[]);
+        setHistoricoTodo(listaHistorico as PromedioRow[]);
+        setLotes(listaLotes.map((l: any) => ({ id: l.id, nombre: l.nombre })));
         setEditados({});
       })
       .catch((e: any) => {
@@ -122,6 +189,23 @@ export function PromediosTab() {
       if (tsNuevo > tsViejo || (tsNuevo === tsViejo && p.id > existente.id)) {
         map.set(p.lote_id, p);
       }
+    }
+    return map;
+  }, [promedios]);
+
+  /**
+   * Último registro del lote en el año seleccionado, venga de donde venga.
+   *
+   * Alimenta la columna "Fecha Actualización". Antes esa columna leía el
+   * baseline, y como los baselines se sembraron todos el mismo día, la
+   * tabla entera repetía esa fecha y parecía congelada aunque los viajes
+   * siguieran generando promedios.
+   */
+  const ultimoRegistroPorLote = useMemo(() => {
+    const map = new Map<number, PromedioRow>();
+    for (const p of promedios) {
+      const existente = map.get(p.lote_id);
+      if (!existente || compararRegistros(p, existente) < 0) map.set(p.lote_id, p);
     }
     return map;
   }, [promedios]);
@@ -190,14 +274,14 @@ export function PromediosTab() {
   };
 
   /**
-   * Última fecha de actualización entre los promedios mostrados en la tabla
-   * (uno por lote — el más reciente). Se usa el ISO completo para que
-   * `formatearFecha` lo parsee en hora local (si pasamos solo YYYY-MM-DD JS
-   * lo trata como UTC y en COT podríamos ver el día anterior).
+   * Fecha del movimiento más reciente de todo el año, de cualquier origen.
+   * Se usa el ISO completo para que `formatearFecha` lo parsee en hora
+   * local. Si pasamos solo YYYY-MM-DD, JS lo trata como UTC y en COT
+   * podríamos ver el día anterior.
    */
   const obtenerUltimaActualizacion = () => {
-    const fechas = Array.from(promedioMasRecientePorLote.values())
-      .map((p) => p.updated_at)
+    const fechas = Array.from(ultimoRegistroPorLote.values())
+      .map(fechaDeRegistro)
       .filter((f): f is string => !!f)
       .map((f) => new Date(f).getTime())
       .filter((t) => !Number.isNaN(t));
@@ -245,18 +329,12 @@ export function PromediosTab() {
   }, [historicoTodo, anioSeleccionado]);
 
   /**
-   * TODOS los registros de promedio por lote (cualquier año), del más
-   * reciente al más viejo. `viaje_id = null` es un baseline del admin
-   * ("Base"); con `viaje_id` lo generó un viaje homogéneo al pesar.
-   * Se ordena por `fecha` del registro (fallback `updated_at`, luego id).
-   * El render filtra por mes y recorta según el filtro elegido.
+   * TODOS los registros de promedio por lote, de cualquier año, del más
+   * reciente al más viejo según `compararRegistros`. Sin `viaje_id` es un
+   * baseline del admin, con `viaje_id` lo generó un viaje homogéneo al
+   * pesar. El render filtra por mes y recorta según el filtro elegido.
    */
   const registrosPorLote = useMemo(() => {
-    const ts = (p: PromedioRow): number => {
-      const f = p.fecha ?? p.updated_at;
-      const t = f ? new Date(f).getTime() : NaN;
-      return Number.isNaN(t) ? p.id : t;
-    };
     const map = new Map<number, PromedioRow[]>();
     for (const p of historicoTodo) {
       const lista = map.get(p.lote_id) ?? [];
@@ -264,7 +342,7 @@ export function PromediosTab() {
       map.set(p.lote_id, lista);
     }
     map.forEach((lista, k) => {
-      map.set(k, [...lista].sort((a, b) => ts(b) - ts(a)));
+      map.set(k, [...lista].sort(compararRegistros));
     });
     return map;
   }, [historicoTodo]);
@@ -285,7 +363,7 @@ export function PromediosTab() {
 
   /** Mes (01-12) del registro, desde su fecha de pesaje o de grabación. */
   const mesDeRegistro = (r: PromedioRow): string =>
-    (r.fecha ?? r.updated_at ?? '').slice(5, 7);
+    (fechaDeRegistro(r) ?? '').slice(5, 7);
 
   const toggleExpandido = (loteId: number, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -372,13 +450,18 @@ export function PromediosTab() {
                 // Si hay varios baselines por (lote, año), se elige por
                 // `updated_at` desc (mismo criterio que `valorActual`).
                 const promedioLote = promedioMasRecientePorLote.get(lote.id);
+                const ultimoRegistro = ultimoRegistroPorLote.get(lote.id);
+                const fechaUltimo = ultimoRegistro ? fechaDeRegistro(ultimoRegistro) : null;
                 const historial = historicoPorLote.get(lote.id) ?? [];
-                // Base fijo arriba (el mismo que edita el input) + registros
-                // filtrados por mes. Con 'todos' solo los 3 más recientes.
+                // Base fijo arriba, el mismo que edita el input, más los
+                // registros filtrados por mes. Con 'todos' se listan los
+                // últimos `ULTIMOS_VISIBLES`. Con tres cupos, los baselines
+                // sembrados se los llevaban todos y los promedios de viaje
+                // no alcanzaban a aparecer.
                 const registros = registrosPorLote.get(lote.id) ?? [];
                 const sinBase = registros.filter((r) => r.id !== promedioLote?.id);
                 const ultimos = mesFiltroHistorico === 'todos'
-                  ? sinBase.slice(0, 3)
+                  ? sinBase.slice(0, ULTIMOS_VISIBLES)
                   : sinBase.filter((r) => mesDeRegistro(r) === mesFiltroHistorico);
                 const estaExpandido = expandido === lote.id;
                 const valor = valorActual(lote.id);
@@ -410,9 +493,21 @@ export function PromediosTab() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <div
+                          className="flex items-center gap-2 text-sm text-muted-foreground"
+                          title={
+                            ultimoRegistro?.viaje_id != null
+                              ? `Último promedio generado por un viaje${ultimoRegistro.viaje?.remision ? `, remisión ${ultimoRegistro.viaje.remision}` : ''}`
+                              : 'Último promedio base registrado por el administrador'
+                          }
+                        >
                           <Calendar className="h-3.5 w-3.5" />
-                          {promedioLote?.updated_at ? formatearFecha(promedioLote.updated_at) : 'N/A'}
+                          {fechaUltimo ? formatearFecha(fechaUltimo) : 'N/A'}
+                          {ultimoRegistro?.viaje_id != null && (
+                            <span className="text-xs">
+                              · {Number(ultimoRegistro.promedio).toLocaleString('es-CO', { maximumFractionDigits: 2 })} kg/gajo de viaje
+                            </span>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>
