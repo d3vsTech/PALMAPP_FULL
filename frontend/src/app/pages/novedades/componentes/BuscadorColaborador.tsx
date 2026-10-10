@@ -13,6 +13,39 @@ import { colaboradoresApi, type ColaboradorSelectItem } from '../../../../api/co
 import type { ApiError } from '../../../../api/client';
 import { formatFecha } from '../tipos';
 
+/** Sin tildes y en minúsculas: "Martinez" encuentra a "Martínez". */
+const sinTildes = (t: string) =>
+  t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+const soloDigitos = (t: string) => t.replace(/\D/g, '');
+
+/**
+ * Filtra en el navegador lo que llegó del endpoint.
+ *
+ * El buscador manda `q` a `GET colaboradores/select`, pero hoy la respuesta
+ * llega sin filtrar: escribir un nombre no reducía la lista. Hasta que el
+ * endpoint lo respete, se filtra aquí sobre lo recibido.
+ *
+ * Cada palabra escrita debe aparecer en el nombre, así "william p" encuentra
+ * a "William Padilla" sin exigir el orden exacto. Si lo escrito son dígitos,
+ * se busca también dentro de la cédula.
+ */
+function filtrarLocal(
+  items: ColaboradorSelectItem[],
+  texto: string,
+): ColaboradorSelectItem[] {
+  const q = sinTildes(texto);
+  if (!q) return items;
+  const palabras = q.split(/\s+/).filter(Boolean);
+  const digitos = soloDigitos(texto);
+
+  return items.filter((c) => {
+    const nombre = sinTildes(c.nombre_completo);
+    if (palabras.every((w) => nombre.includes(w))) return true;
+    return digitos.length > 0 && soloDigitos(c.documento).includes(digitos);
+  });
+}
+
 interface Props {
   /** Acota el listado a quienes tenían contrato ese día. */
   fecha: string;
@@ -34,6 +67,13 @@ export function BuscadorColaborador({ fecha, seleccionadoId, nombreInicial, onSe
   const reqId = useRef(0);
 
   const elegido = opciones.find((c) => c.id === seleccionadoId) ?? null;
+
+  /*
+   * Con alguien ya elegido, `texto` es su nombre completo y filtrar dejaría
+   * la lista en una sola fila. En ese caso se muestra todo, que es lo útil
+   * para cambiar de persona.
+   */
+  const visibles = seleccionadoId != null ? opciones : filtrarLocal(opciones, texto);
 
   useEffect(() => {
     if (!abierto) return;
@@ -89,14 +129,14 @@ export function BuscadorColaborador({ fecha, seleccionadoId, nombreInicial, onSe
           <div className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border border-border bg-background shadow-lg">
             {error ? (
               <p className="px-4 py-3 text-sm text-destructive">{error}</p>
-            ) : opciones.length === 0 && !cargando ? (
+            ) : visibles.length === 0 && !cargando ? (
               <p className="px-4 py-3 text-sm text-muted-foreground">
                 {fecha
                   ? 'Nadie con contrato vigente en esa fecha coincide con la búsqueda'
                   : 'Sin resultados'}
               </p>
             ) : (
-              opciones.map((c) => (
+              visibles.map((c) => (
                 <button
                   key={c.id}
                   type="button"
