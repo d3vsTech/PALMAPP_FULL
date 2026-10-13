@@ -113,6 +113,7 @@ const MODULOS: Modulo[] = [
           { id: 'operaciones.eliminar', nombre: 'Eliminar', descripcion: 'Eliminar planillas' },
           { id: 'operaciones.aprobar',  nombre: 'Aprobar',  descripcion: 'Aprobar planillas' },
           { id: 'operaciones.importar', nombre: 'Importar', descripcion: 'Cargar jornales y cosechas históricos desde Excel' },
+          { id: 'operaciones.desaprobar', nombre: 'Devolver a borrador', descripcion: 'Devolver una planilla aprobada a borrador para corregirla' },
         ],
       },
       {
@@ -164,6 +165,7 @@ const MODULOS: Modulo[] = [
       { id: 'viajes.crear',    nombre: 'Crear',    descripcion: 'Registrar nuevos viajes' },
       { id: 'viajes.editar',   nombre: 'Editar',   descripcion: 'Modificar viajes' },
       { id: 'viajes.eliminar', nombre: 'Eliminar', descripcion: 'Eliminar viajes' },
+      { id: 'viajes.reabrir',  nombre: 'Reabrir',  descripcion: 'Reabrir un viaje finalizado para corregirlo' },
     ],
   },
   {

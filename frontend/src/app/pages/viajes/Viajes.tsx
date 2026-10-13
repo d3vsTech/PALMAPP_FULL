@@ -16,8 +16,12 @@ import {
 import {
   Plus, Truck, Package, MapPin, Scale, Eye, TrendingUp, CheckCircle, Clock,
   FileText, FileUp, Search, Calculator, Edit, Trash2, AlertTriangle, Info, Download,
+  RotateCcw,
 } from 'lucide-react';
 import { configuracionApi } from '../../../api/configuracion';
+import { useAuth } from '../../contexts/AuthContext';
+import { RevertirEstadoDialog } from '../../components/common/RevertirEstadoDialog';
+import { reversionApi } from '../../../api/reversionEstados';
 import { descargarRemision, type DatosRemisionEmpresa } from './remisionPdf';
 import {
   viajesApi, strField,
@@ -110,6 +114,12 @@ function getEstadoBadge(estado: EstadoViaje) {
 
 // ─── componente ───────────────────────────────────────────────────────────────
 export default function Viajes() {
+  const { hasPermiso } = useAuth();
+  /**
+   * §5.10 — El viaje que se está reabriendo. El contrato pide el botón en
+   * los dos sitios donde se ve un viaje finalizado: aquí y en el resumen.
+   */
+  const [viajeAReabrir, setViajeAReabrir] = useState<{ id: string; remision: string } | null>(null);
   const navigate = useNavigate();
 
   // Filtros de la tabla
@@ -686,14 +696,28 @@ export default function Viajes() {
                                   ) : (
                                     /* Finalizado: solo lectura. No hay
                                        eliminar porque ya está cerrado y
-                                       liquidado en nómina. */
-                                    <Button size="sm" variant="outline" asChild
-                                      className="hover:bg-primary/10 hover:text-primary hover:border-primary"
-                                      title="Visualizar">
-                                      <Link to={`/viajes/${viaje.id}`}>
-                                        <Eye className="h-4 w-4" />
-                                      </Link>
-                                    </Button>
+                                       liquidado en nómina. La única vuelta
+                                       atrás es reabrirlo (§5.10), con su
+                                       permiso aparte. */
+                                    <>
+                                      {hasPermiso('viajes.reabrir') && (
+                                        <Button
+                                          size="sm" variant="outline"
+                                          className="hover:bg-amber-500/10 hover:text-amber-700 hover:border-amber-500/30"
+                                          title="Reabrir viaje"
+                                          onClick={() => setViajeAReabrir({ id: viaje.id, remision: viaje.remisionId })}
+                                        >
+                                          <RotateCcw className="h-4 w-4" />
+                                        </Button>
+                                      )}
+                                      <Button size="sm" variant="outline" asChild
+                                        className="hover:bg-primary/10 hover:text-primary hover:border-primary"
+                                        title="Visualizar">
+                                        <Link to={`/viajes/${viaje.id}`}>
+                                          <Eye className="h-4 w-4" />
+                                        </Link>
+                                      </Button>
+                                    </>
                                   )}
                                 </div>
                               </td>
@@ -719,6 +743,26 @@ export default function Viajes() {
           </Card>
         </div>
       </div>
+
+      <RevertirEstadoDialog
+        abierto={viajeAReabrir !== null}
+        onCerrar={() => setViajeAReabrir(null)}
+        titulo={`Reabrir el viaje ${viajeAReabrir?.remision ?? ''}`}
+        descripcion="Vuelve a CREADO con sus cosechas enlazadas y los reconteos pendientes, para corregir el peso, un reconteo o una cosecha que no iba."
+        etiquetaAccion="Reabrir viaje"
+        efectos={[
+          'Los reconteos vuelven a pendiente; los gajos en viaje se conservan.',
+          'Se borra el promedio kg/gajo que este camión aportó al lote.',
+          'Los datos de la extractora y los documentos se conservan.',
+          'El desprendible deja de servirse hasta que vuelva a finalizar.',
+        ]}
+        verificar={async () => (await reversionApi.viaje.verificar(Number(viajeAReabrir!.id))).data}
+        confirmar={async (motivo) => {
+          const res = await reversionApi.viaje.reabrir(Number(viajeAReabrir!.id), motivo);
+          toast.success(res.message ?? 'Viaje reabierto');
+        }}
+        onHecho={() => { void cargarViajes(); void cargarIndicadores(); }}
+      />
     </div>
   );
 }

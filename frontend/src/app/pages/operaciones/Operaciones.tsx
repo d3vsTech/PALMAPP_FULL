@@ -17,9 +17,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
-import { Plus, Eye, FileText, Loader2, Trash2, Pencil, Check, AlertCircle, Upload } from 'lucide-react';
+import { Plus, Eye, FileText, Loader2, Trash2, Pencil, Check, AlertCircle, Upload, RotateCcw } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { AprobarRangoDialog } from './importar/AprobarRangoDialog';
+import { RevertirEstadoDialog } from '../../components/common/RevertirEstadoDialog';
+import { reversionApi } from '../../../api/reversionEstados';
 import StatusBadge from '../../components/common/StatusBadge';
 import { toast } from 'sonner';
 import {
@@ -38,6 +40,12 @@ export default function Operaciones() {
   /** Diálogo de aprobación en bloque (§13.1). Lo usan los cargues que se
    *  dejaron en borrador para revisarlos antes de aprobar. */
   const [aprobarRangoAbierto, setAprobarRangoAbierto] = useState(false);
+  /**
+   * La planilla que se está devolviendo a borrador (§7.3). Es la única salida
+   * de una planilla aprobada, y solo mientras ninguna nómina que cubra la
+   * fecha haya liquidado.
+   */
+  const [planillaADesaprobar, setPlanillaADesaprobar] = useState<Planilla | null>(null);
   const location = useLocation();
 
   // ── KPIs con filtro de período ─────────────────────────────────────────────
@@ -440,6 +448,18 @@ export default function Operaciones() {
                                 )}
                               </Button>
                             )}
+                            {/* §7.3 — Permiso aparte: `operaciones.aprobar` no
+                                lo incluye. Sin él no se pinta el botón. */}
+                            {planilla.estado === 'APROBADA' && hasPermiso('operaciones.desaprobar') && (
+                              <Button
+                                size="sm" variant="outline"
+                                className="hover:bg-amber-500/10 hover:text-amber-700 hover:border-amber-500/30"
+                                title="Devolver a borrador"
+                                onClick={() => setPlanillaADesaprobar(planilla)}
+                              >
+                                <RotateCcw className="h-4 w-4" />
+                              </Button>
+                            )}
                             <Button
                               size="sm" variant="outline"
                               className="hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
@@ -613,6 +633,25 @@ export default function Operaciones() {
         abierto={aprobarRangoAbierto}
         onCerrar={() => setAprobarRangoAbierto(false)}
         onAprobado={() => { void cargarLista(); void cargarIndicadores(); }}
+      />
+
+      <RevertirEstadoDialog
+        abierto={planillaADesaprobar !== null}
+        onCerrar={() => setPlanillaADesaprobar(null)}
+        titulo="Devolver la planilla a borrador"
+        descripcion="Vuelve a ser editable en el wizard. Mientras siga en borrador, ese día no cuenta como día operado para la nómina."
+        etiquetaAccion="Devolver a borrador"
+        efectos={[
+          'Las horas extra y ausencias aprobadas de la planilla vuelven a pendiente.',
+          'El día deja de verse en dashboard, insights, ajuste de gajos y viajes.',
+          'Al terminar las correcciones hay que volver a aprobarla.',
+        ]}
+        verificar={async () => (await reversionApi.planilla.verificar(planillaADesaprobar!.id)).data}
+        confirmar={async (motivo) => {
+          const res = await reversionApi.planilla.desaprobar(planillaADesaprobar!.id, motivo);
+          toast.success(res.message ?? 'Planilla devuelta a borrador');
+        }}
+        onHecho={() => { void cargarLista(); void cargarIndicadores(); }}
       />
     </div>
   );

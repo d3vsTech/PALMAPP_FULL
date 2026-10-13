@@ -539,6 +539,19 @@ export interface CosechaLibre {
   cuadrilla?: CuadrillaMiembroCosecha[];
 }
 
+/**
+ * Aviso de `POST /viajes/{id}/finalizar` (§5.10). No bloquea nada.
+ *
+ * `mensaje` es la clave que usa el backend; `message` viaja duplicada.
+ */
+export interface AvisoFinalizarViaje {
+  code: string;
+  mensaje?: string;
+  message?: string;
+  nominas?: Array<{ id: number; etiqueta: string | null; estado: string; cubre?: string[] }>;
+  fechas?: string[];
+}
+
 /** Respuesta de aprobar-reconteo */
 export interface AprobarReconteoResponse {
   detalle_id: number;
@@ -887,9 +900,15 @@ export const viajesApi = {
    *
    * Dispara cálculo HOMOGENEO/NO_HOMOGENEO solo si hay detalles + peso + gajos.
    * Si tiene detalles pero falta peso o gajos: 422 VIAJE_INCOMPLETO.
+   *
+   * §5.10 (2026-10-12) — la respuesta trae `advertencias[]`. La que importa es
+   * `NOMINA_LIQUIDADA_EN_FECHA`: una nómina que cubre la fecha del viaje o la
+   * de alguna cosecha que transporta **ya liquidó**, así que lo que pagó no
+   * incluye este camión. No bloquea; finalizar un viaje tardío de un período
+   * cerrado tiene que poder hacerse. Pero el que finaliza necesita enterarse.
    */
   finalizar: (id: number) =>
-    post<{ data: Viaje }>(`/viajes/${id}/finalizar`),
+    post<{ data: Viaje; advertencias?: AvisoFinalizarViaje[] }>(`/viajes/${id}/finalizar`),
 
   // ── Desprendible "Remisión de fruta al transporte" (§14) ────────────────
   //
@@ -1036,6 +1055,12 @@ export const ViajesErrorCodes = {
   DETALLE_NOT_FOUND: 'DETALLE_NOT_FOUND',
   /** 409 — transición desde estado incorrecto (ej. `finalizar` en CREADO). */
   VIAJE_ESTADO_INVALIDO: 'VIAJE_ESTADO_INVALIDO',
+  /**
+   * 409 (§5.10) — Reabrir con una nómina que cubre `fecha_viaje` o la fecha de
+   * alguna cosecha transportada y ya liquidó. Sin salida: no hay `forzar`.
+   * El cliente de la reversión vive en `api/reversionEstados.ts`.
+   */
+  VIAJE_EN_NOMINA_LIQUIDADA: 'VIAJE_EN_NOMINA_LIQUIDADA',
   /** 409 — PUT/DELETE/reconteo con `estado !== CREADO`. */
   VIAJE_NO_EDITABLE: 'VIAJE_NO_EDITABLE',
   /** 409 — intento de editar/eliminar un detalle con `reconteo_aprobado = true`. */

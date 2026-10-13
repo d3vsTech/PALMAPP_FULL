@@ -13,6 +13,7 @@ import {
   ArrowLeft, ArrowRight, Check, Truck, Leaf, Trash2, Edit, X,
   CheckCircle, Clock, FileText, Sparkles, Image as ImageIcon, Upload, Loader2,
   AlertTriangle, Download, Settings, Calendar, MapPin, User, Package, Weight, Save,
+  RotateCcw,
 } from 'lucide-react';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -24,6 +25,9 @@ import {
   type TransportadorSelect, type ExtractoraSelect,
 } from '../../../api/viajes';
 import { formatFecha, formatFechaHora, formatHora } from '../../utils/fecha';
+import { useAuth } from '../../contexts/AuthContext';
+import { RevertirEstadoDialog } from '../../components/common/RevertirEstadoDialog';
+import { reversionApi } from '../../../api/reversionEstados';
 import { configuracionApi } from '../../../api/configuracion';
 import { descargarRemision, type DatosRemisionEmpresa } from './remisionPdf';
 
@@ -97,6 +101,9 @@ export default function DetalleViaje() {
   // cambiar el transportador, igual que en el formulario de creación.
   const [guardandoEdicion, setGuardandoEdicion] = useState(false);
   const [descargandoPdf, setDescargandoPdf] = useState(false);
+  const { hasPermiso } = useAuth();
+  /** §5.10 — La única vuelta atrás de la máquina de estados del viaje. */
+  const [reabrirAbierto, setReabrirAbierto] = useState(false);
   const [descargandoRemision, setDescargandoRemision] = useState(false);
   /** Membrete de la finca; se pide una sola vez por sesión de pantalla. */
   const empresaRemision = useRef<DatosRemisionEmpresa | null>(null);
@@ -461,8 +468,17 @@ export default function DetalleViaje() {
 
       // 4b — finalizar (EN_VALIDACION → FINALIZADO)
       try {
-        await viajesApi.finalizar(Number(id));
+        const cierre = await viajesApi.finalizar(Number(id));
         toast.success('Viaje finalizado');
+        /*
+         * §5.10 — Si una nómina que cubre estas fechas ya liquidó, lo que pagó
+         * no incluye el promedio de este camión. No es un error y el viaje
+         * quedó cerrado, pero quien finaliza es el único que puede avisarle a
+         * quien liquida, así que el aviso se queda en pantalla un rato.
+         */
+        for (const aviso of cierre.advertencias ?? []) {
+          toast.warning(aviso.mensaje ?? aviso.message ?? aviso.code, { duration: 12000 });
+        }
         navigate('/viajes');
       } catch (e2: any) {
         const msg = String(e2?.message ?? '');
@@ -981,6 +997,19 @@ export default function DetalleViaje() {
                   </svg>
                   {generandoEnlace ? 'Generando enlace...' : 'Enviar por WhatsApp'}
                 </Button>
+                )}
+                {/* §5.10 — Permiso aparte: `viajes.editar` no lo incluye.
+                    Reabrir borra el promedio que este camión aportó, así que
+                    solo aparece con el viaje ya finalizado. */}
+                {estadoActual === 'Finalizado' && hasPermiso('viajes.reabrir') && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setReabrirAbierto(true)}
+                    className="w-full gap-2 border-amber-500/40 text-amber-700 hover:bg-amber-500/10 dark:text-amber-300"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Reabrir viaje
+                  </Button>
                 )}
                 {/* La remisión de entrega es el papel que lleva el
                     conductor, así que se imprime antes de salir. El
@@ -1643,6 +1672,26 @@ export default function DetalleViaje() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <RevertirEstadoDialog
+        abierto={reabrirAbierto}
+        onCerrar={() => setReabrirAbierto(false)}
+        titulo="Reabrir el viaje"
+        descripcion="Vuelve a CREADO con sus cosechas enlazadas y los reconteos pendientes, para corregir el peso, un reconteo o una cosecha que no iba."
+        etiquetaAccion="Reabrir viaje"
+        efectos={[
+          'Los reconteos vuelven a pendiente; los gajos en viaje se conservan.',
+          'Se borra el promedio kg/gajo que este camión aportó al lote.',
+          'Los datos de la extractora y los documentos se conservan.',
+          'El desprendible deja de servirse hasta que vuelva a finalizar.',
+        ]}
+        verificar={async () => (await reversionApi.viaje.verificar(Number(id))).data}
+        confirmar={async (motivo) => {
+          const res = await reversionApi.viaje.reabrir(Number(id), motivo);
+          toast.success(res.message ?? 'Viaje reabierto');
+        }}
+        onHecho={() => { void cargar(); }}
+      />
     </div>
   );
 }
