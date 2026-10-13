@@ -27,7 +27,7 @@ function Aviso({ aviso, grave }: { aviso: IncidenciaFila; grave: boolean }) {
 }
 
 export function AvisosDelCargue({ avisos }: { avisos: IncidenciaFila[] }) {
-  if (avisos.length === 0) return null;
+  if (!avisos || avisos.length === 0) return null;
 
   return (
     <div className="space-y-2">

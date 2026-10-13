@@ -78,7 +78,7 @@ function CeldaJornal({ fila }: { fila: FilaJornal }) {
       </td>
       <td className="px-3 py-2 align-top"><Ubicacion fila={fila} /></td>
       <td className="px-3 py-2 text-right align-top text-sm">
-        {fila.datos.cantidad_palmas ?? '—'}
+        {fila.datos?.cantidad_palmas ?? '—'}
       </td>
       <td className="px-3 py-2 text-right align-top">
         <p className="text-sm font-semibold">{fmtPesos(fila.calculo?.valor_total)}</p>
@@ -95,11 +95,11 @@ function CeldaCosecha({ fila }: { fila: FilaCosecha }) {
     <>
       <td className="px-3 py-2 align-top"><Personas personas={fila.cuadrilla} /></td>
       <td className="px-3 py-2 align-top"><Ubicacion fila={fila} /></td>
-      <td className="px-3 py-2 text-right align-top text-sm">{fila.cosecha.gajos ?? '—'}</td>
-      <td className="px-3 py-2 text-right align-top text-sm">{fila.cosecha.kilos ?? '—'}</td>
+      <td className="px-3 py-2 text-right align-top text-sm">{fila.cosecha?.gajos ?? '—'}</td>
+      <td className="px-3 py-2 text-right align-top text-sm">{fila.cosecha?.kilos ?? '—'}</td>
       <td className="px-3 py-2 text-right align-top">
         <p className="text-sm font-semibold">{fmtPesos(fila.calculo?.valor_total)}</p>
-        {!fila.liquidable.ok && (
+        {fila.liquidable?.ok === false && (
           <p className="text-xs text-amber-700 dark:text-amber-400">no liquidable</p>
         )}
       </td>

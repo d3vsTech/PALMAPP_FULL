@@ -213,7 +213,8 @@ export interface FilaJornal extends FilaBase {
   labor: LaborResuelta | null;
   actividad: CatalogoResuelto | null;
   insumo: CatalogoResuelto | null;
-  datos: DatosJornalFila;
+  /** Nulo en una fila con error: no se llegó a leer los campos libres. */
+  datos: DatosJornalFila | null;
   calculo: CalculoJornalFila | null;
   /** Solo en el 201 de importar. */
   jornal_id?: number;
@@ -222,15 +223,17 @@ export interface FilaJornal extends FilaBase {
 }
 
 export interface FilaCosecha extends FilaBase {
+  /** Nulo en una fila con error: no se llegó a leer gajos ni kilos. */
   cosecha: {
     gajos: number | null;
     kilos: string | null;
     referencia: string | null;
     observacion: string | null;
-  };
+  } | null;
   cuadrilla: PersonaFila[];
   calculo: CalculoCosechaFila | null;
-  liquidable: LiquidableCosecha;
+  /** Nulo mientras la fila no se pueda evaluar (error de celda). */
+  liquidable: LiquidableCosecha | null;
   /** Solo en el 201 de importar. */
   cosecha_id?: number;
   cuadrilla_ids?: Array<{ id: number; empleado_id: number | null; operario_id?: number | null; tercero_id?: number | null }>;

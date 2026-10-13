@@ -41,6 +41,31 @@ function tablaDe(e: unknown): ResultadoImportacionOperaciones | null {
   return (e as ErrorConCodigo).data ?? null;
 }
 
+/**
+ * Deja la respuesta en una forma que las pantallas puedan recorrer sin
+ * preguntar.
+ *
+ * El backend omite bloques enteros en las filas con error y, en el 422, la
+ * tabla puede llegar a medias. Validar aquí, una sola vez, evita que cada
+ * componente tenga que defenderse por su cuenta: una lista que falta se vuelve
+ * una lista vacía y la tabla se pinta igual.
+ */
+function normalizarResultado(
+  data: ResultadoImportacionOperaciones,
+): ResultadoImportacionOperaciones {
+  const resumen = data.resumen ?? ({} as ResultadoImportacionOperaciones['resumen']);
+  return {
+    ...data,
+    filas: data.filas ?? [],
+    planillas: data.planillas ?? [],
+    advertencias: data.advertencias ?? [],
+    resumen: {
+      ...resumen,
+      planillas: resumen.planillas ?? { total: 0, nuevas: 0, existentes: 0, aprobadas: 0 },
+    },
+  };
+}
+
 export interface ConflictoNomina {
   mensaje: string;
   /** Las nóminas abiertas que chocan, tal como las nombra el backend. */
@@ -88,7 +113,7 @@ export function useCargueOperaciones(alTerminar: () => void) {
       limpiarAnalisis();
       try {
         const res = await importarOperacionesApi.validar(file, tipoArchivo, estado);
-        setAnalisis(res.data);
+        setAnalisis(normalizarResultado(res.data));
         avisarSiEsLargo(res.data.resumen.filas);
       } catch (e) {
         // Un rechazo aquí es del archivo completo, no de una fila: no hay
@@ -195,7 +220,7 @@ function manejarFalloDeImportacion(
 ): void {
   const codigo = codigoDe(e);
   const tabla = tablaDe(e);
-  if (tabla) set.setAnalisis(tabla);
+  if (tabla) set.setAnalisis(normalizarResultado(tabla));
 
   if (codigo === Codigos.NOMINA_ABIERTA_EN_RANGO) {
     set.setConflicto(conflictoDesde(e, tabla));
