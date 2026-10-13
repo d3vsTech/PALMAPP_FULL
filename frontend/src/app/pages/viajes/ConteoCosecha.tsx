@@ -221,8 +221,10 @@ export default function ConteoCosecha() {
    * `GET /viajes/operaciones/{id}/cosechas` en lo que pinta la pantalla.
    *
    * Las dos respuestas traen las mismas llaves (§5.3.1), así que la lectura
-   * es una sola. `colaboradores[]` viene con los nombres ya resueltos por el
-   * backend y se usa cuando la cuadrilla no trae el nombre anidado.
+   * es una sola. Manda `colaboradores[]`: son los nombres ya resueltos por el
+   * backend con la regla del desprendible (§14.3), que para una cuadrilla de
+   * contratista nombra al operario y no al empleado. Armarlo aquí desde el
+   * objeto anidado daría otro nombre. El anidado queda de respaldo.
    */
   const leerCuadrilla = useCallback((c: {
     cuadrilla?: CuadrillaMiembroCosecha[];
@@ -238,17 +240,17 @@ export default function ConteoCosecha() {
     const nombresBackend = c?.colaboradores ?? [];
 
     (c?.cuadrilla ?? []).forEach((q, i) => {
-      // El backend ya resolvió los nombres en el mismo orden que la
-      // cuadrilla. Se usa ese si el objeto anidado no trae con qué armarlo.
-      const delBackend = nombresBackend[i] ?? '';
+      // `colaboradores[]` llega en el mismo orden que `cuadrilla[]`.
+      const delBackend = (nombresBackend[i] ?? '').trim();
       if (q.empleado_id) {
         empleadoIds.push(Number(q.empleado_id));
-        const nombre = `${q.empleado?.primer_nombre ?? ''} ${q.empleado?.primer_apellido ?? ''}`.trim()
-          || delBackend; // vacío → se resuelve con colaboradoresMap al pintar
+        const nombre = delBackend
+          || `${q.empleado?.primer_nombre ?? ''} ${q.empleado?.primer_apellido ?? ''}`.trim();
+        // Vacío se resuelve con colaboradoresMap al pintar.
         miembros.push({ tipo: 'EMP', id: Number(q.empleado_id), nombre });
       } else if (q.operario_id) {
-        const nombre = `${q.operario?.nombres ?? ''} ${q.operario?.apellidos ?? ''}`.trim()
-          || delBackend
+        const nombre = delBackend
+          || `${q.operario?.nombres ?? ''} ${q.operario?.apellidos ?? ''}`.trim()
           || `Operario ${q.operario_id}`;
         const terceroDelPayload = q.tercero?.razon_social || q.tercero?.nombre_completo || '';
         const terceroNombre = terceroDelPayload
