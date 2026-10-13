@@ -112,6 +112,7 @@ const MODULOS: Modulo[] = [
           { id: 'operaciones.editar',   nombre: 'Editar',   descripcion: 'Modificar planillas' },
           { id: 'operaciones.eliminar', nombre: 'Eliminar', descripcion: 'Eliminar planillas' },
           { id: 'operaciones.aprobar',  nombre: 'Aprobar',  descripcion: 'Aprobar planillas' },
+          { id: 'operaciones.importar', nombre: 'Importar', descripcion: 'Cargar jornales y cosechas históricos desde Excel' },
         ],
       },
       {

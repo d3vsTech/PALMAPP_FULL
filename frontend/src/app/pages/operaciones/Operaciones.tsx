@@ -17,7 +17,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
-import { Plus, Eye, FileText, Loader2, Trash2, Pencil, Check, AlertCircle } from 'lucide-react';
+import { Plus, Eye, FileText, Loader2, Trash2, Pencil, Check, AlertCircle, Upload } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import { AprobarRangoDialog } from './importar/AprobarRangoDialog';
 import StatusBadge from '../../components/common/StatusBadge';
 import { toast } from 'sonner';
 import {
@@ -32,6 +34,10 @@ const PER_PAGE = 50;
 
 export default function Operaciones() {
   const navigate = useNavigate();
+  const { hasPermiso } = useAuth();
+  /** Diálogo de aprobación en bloque (§13.1). Lo usan los cargues que se
+   *  dejaron en borrador para revisarlos antes de aprobar. */
+  const [aprobarRangoAbierto, setAprobarRangoAbierto] = useState(false);
   const location = useLocation();
 
   // ── KPIs con filtro de período ─────────────────────────────────────────────
@@ -213,13 +219,37 @@ export default function Operaciones() {
             Gestiona las labores diarias, planillas de cosecha y jornales
           </p>
         </div>
-        <Button
-          onClick={() => navigate('/operaciones/planilla/nueva')}
-          className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20"
-        >
-          <Plus className="h-5 w-5" />
-          Nueva Planilla del Día
-        </Button>
+        <div className="flex flex-wrap gap-3">
+          {/* El histórico de antes del sistema entra por archivo, no tarjeta
+              por tarjeta en el wizard (§13 API_OPERACIONES). */}
+          {hasPermiso('operaciones.aprobar') && (
+            <Button
+              variant="outline"
+              onClick={() => setAprobarRangoAbierto(true)}
+              className="gap-2"
+            >
+              <Check className="h-5 w-5" />
+              Aprobar por rango
+            </Button>
+          )}
+          {hasPermiso('operaciones.importar') && (
+            <Button
+              variant="outline"
+              onClick={() => navigate('/operaciones/importar')}
+              className="gap-2 border-2 border-primary text-primary hover:bg-primary/5"
+            >
+              <Upload className="h-5 w-5" />
+              Importar histórico
+            </Button>
+          )}
+          <Button
+            onClick={() => navigate('/operaciones/planilla/nueva')}
+            className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20"
+          >
+            <Plus className="h-5 w-5" />
+            Nueva Planilla del Día
+          </Button>
+        </div>
       </div>
 
       {/* KPIs */}
@@ -578,6 +608,12 @@ export default function Operaciones() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AprobarRangoDialog
+        abierto={aprobarRangoAbierto}
+        onCerrar={() => setAprobarRangoAbierto(false)}
+        onAprobado={() => { void cargarLista(); void cargarIndicadores(); }}
+      />
     </div>
   );
 }

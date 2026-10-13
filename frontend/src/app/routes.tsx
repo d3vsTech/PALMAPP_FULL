@@ -132,6 +132,7 @@ const NuevaLiquidacionFinal = lazyWithRetry(() => import('./pages/liquidaciones/
 const Operaciones = lazyWithRetry(() => import('./pages/operaciones/Operaciones'));
 const NuevaPlanillaWizard = lazyWithRetry(() => import('./pages/operaciones/NuevaPlanillaWizard'));
 const VerPlanilla = lazyWithRetry(() => import('./pages/operaciones/Verplanilla'));
+const ImportarOperacionesPage = lazyWithRetry(() => import('./pages/operaciones/ImportarOperacionesPage'));
 
 // Viajes
 const Viajes = lazyWithRetry(() => import('./pages/viajes/Viajes'));
@@ -355,6 +356,7 @@ export const router = createBrowserRouter([
       { path: 'operaciones/planilla/nueva',      element: P('operaciones.ver', <NuevaPlanillaWizard />) },
       { path: 'operaciones/planilla/editar/:id', element: P('operaciones.ver', <NuevaPlanillaWizard />) },
       { path: 'operaciones/planilla/:id',        element: P('operaciones.ver', <VerPlanilla />) },
+      { path: 'operaciones/importar',            element: P('operaciones.importar', <ImportarOperacionesPage />) },
 
       { path: 'novedades',                 element: P('novedades.ver', <NovedadesPage />) },
       { path: 'novedades/nueva',           element: P('novedades.ver', <NuevaNovedadPage />) },
