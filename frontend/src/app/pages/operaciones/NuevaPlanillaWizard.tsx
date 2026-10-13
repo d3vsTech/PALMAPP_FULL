@@ -3802,11 +3802,23 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                           <span className="text-xs text-muted-foreground ml-1">
                             · {c.novedad.tipo.nombre}
                           </span>
+                          {c.novedad.fuente === 'AUSENCIA' && (
+                            <a
+                              href={`/novedades?novedad=${c.novedad.id}&fuente=AUSENCIA`}
+                              className="ml-2 text-xs underline underline-offset-2"
+                            >
+                              revisar
+                            </a>
+                          )}
                         </li>
                       ))}
                     </ul>
+                    {/* PR-N8 (2026-10-12): dejó de ser una recomendación. Una
+                        novedad sin aprobar impide liquidar a ese colaborador y
+                        cerrar la nómina del período. */}
                     <p className="mt-2 text-xs text-amber-800 dark:text-amber-400">
-                      Apruébalas en Novedades antes de liquidar la nómina.
+                      Mientras sigan sin aprobar, la nómina no va a poder liquidar a esa gente
+                      ni cerrarse. Decídalas en Novedades.
                     </p>
                   </div>
                 )}

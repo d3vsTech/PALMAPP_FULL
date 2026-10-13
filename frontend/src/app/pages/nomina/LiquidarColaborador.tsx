@@ -40,6 +40,7 @@ import { DetalleAusencias } from '../../components/nomina/DetalleAusencias';
 import { FaltasInjustificadas } from '../../components/nomina/FaltasInjustificadas';
 import { avisarCierreAutomatico } from '../../utils/cierreAutomaticoNomina';
 import { DiasVacaciones } from '../../components/nomina/DiasVacaciones';
+import { BloqueosLiquidacion } from '../../components/nomina/BloqueosLiquidacion';
 import {
   nominaApi,
   PreviewLiquidacion,
@@ -375,6 +376,30 @@ export default function LiquidarColaborador() {
       .map((d) => d.prestamo_cuota_id as number),
   );
 
+  /**
+   * PR-N8: el preview anticipa el 409 del POST. Con esto el botón se apaga en
+   * vez de dejar que el usuario descubra el rechazo después de revisar toda
+   * la liquidación.
+   */
+  const hayBloqueos = (preview?.bloqueos?.length ?? 0) > 0;
+
+  /**
+   * Vuelve a pedir el preview para repintar los bloqueos.
+   *
+   * Solo el preview: el resumen de trabajo y los conceptos no cambian porque
+   * alguien haya registrado una novedad en otra pantalla.
+   */
+  const refrescarBloqueos = async () => {
+    if (!nominaEmpleadoId) return;
+    try {
+      const prev = await nominaApi.preview(nominaEmpleadoId);
+      setPreview(prev.data);
+    } catch {
+      // Si falla, el toast del 409 ya dijo lo que pasa; no hay nada más que
+      // mostrar y la pantalla sigue usable con los datos que ya tenía.
+    }
+  };
+
   const liquidar = async () => {
     if (!nominaEmpleadoId || !preview) return;
     const esOperario = preview.empleado.salario_tipo === null;
@@ -474,6 +499,15 @@ export default function LiquidarColaborador() {
         toast.error('Una de las cuotas de préstamo ya fue aplicada en otra nómina');
       } else if (e.code === NominaErrorCodes.PRESTAMO_CUOTA_EMPLEADO_MISMATCH) {
         toast.error('La cuota de préstamo no pertenece a este colaborador');
+      } else if (e.code === NominaErrorCodes.NOVEDADES_PENDIENTES_EN_PERIODO) {
+        // PR-N8 — El preview ya lo anticipa en `bloqueos[]`, así que llegar
+        // aquí significa que la novedad se registró mientras esta pantalla
+        // estaba abierta. Recargar el preview pinta el bloqueo y apaga el botón.
+        toast.error('Hay novedades sin aprobar que cruzan el período', {
+          duration: 10000,
+          description: e.message ?? 'Decídalas en Novedades y vuelva a intentar.',
+        });
+        void refrescarBloqueos();
       } else {
         toast.error(e.message ?? 'Error al liquidar');
       }
@@ -948,6 +982,7 @@ export default function LiquidarColaborador() {
           {/* §9.9 — Advertencias no bloqueantes del preview (calendario
               desactualizado, recargo desactualizado, descanso perdido).
               Se rederivan en cada re-liquidación así que no se congelan. */}
+          <BloqueosLiquidacion bloqueos={preview.bloqueos} />
           <AdvertenciasBanner items={preview.advertencias} size="sm" />
 
           {/* ── DEVENGADO ─────────────────────────────────────────────── */}
@@ -1567,7 +1602,8 @@ export default function LiquidarColaborador() {
             </Button>
             <Button
               onClick={liquidar}
-              disabled={enviando}
+              disabled={enviando || hayBloqueos}
+              title={hayBloqueos ? 'Hay novedades sin aprobar que cruzan el período' : undefined}
               className="h-12 text-base gap-2 bg-success hover:bg-success/90 text-white"
             >
               {enviando ? <Loader2 className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />}

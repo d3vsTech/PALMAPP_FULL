@@ -37,6 +37,13 @@ const CATALOGO: Record<string, DefinicionAdvertencia> = {
     titulo: 'Hay planillas del período sin aprobar',
     severidad: 'critica',
   },
+  // El promedio kg/gajo de un viaje sin finalizar todavía no existe, así que la
+  // cosecha se paga con el de otros camiones o con el baseline del lote: el
+  // cálculo cambia solo cuando alguien finalice ese viaje (API_VIAJES §5.10).
+  VIAJES_SIN_FINALIZAR_EN_EL_RANGO: {
+    titulo: 'Hay viajes del período sin finalizar',
+    severidad: 'critica',
+  },
   VACACIONES_CON_TRABAJO_REGISTRADO: {
     titulo: 'Trabajó en días que ya se pagaron como vacaciones',
     severidad: 'critica',

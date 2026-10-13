@@ -680,6 +680,15 @@ export default function NominaDetalle() {
         toast.error('Debes confirmar la validación de cosecha antes de cerrar');
       } else if (e.code === NominaErrorCodes.NOMINA_TERCERO_NO_LIQUIDADO) {
         toast.error('Hay terceros sin liquidar — calcula sus actas en "Liquidar Terceros"');
+      } else if (e.code === NominaErrorCodes.NOMINA_CON_NOVEDADES_PENDIENTES) {
+        // PR-N8 — La novedad se registró después de liquidar la fila, así que
+        // esa liquidación quedó vieja: no basta con aprobarla, hay que volver
+        // a liquidar a esa gente.
+        toast.error('Hay novedades sin aprobar que cruzan el período', {
+          duration: 12000,
+          description: e.message
+            ?? 'Apruebe o rechace las novedades en Novedades y vuelva a liquidar a esos colaboradores.',
+        });
       } else if (e.code === NominaErrorCodes.VACACIONES_DESACTUALIZADAS_EN_NOMINA) {
         // PR-L15 — Alguna fila liquidó un tramo que ya no coincide con la
         // vacación viva. Re-liquidar esas filas y volver a cerrar.

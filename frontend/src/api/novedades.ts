@@ -511,7 +511,16 @@ export const novedadesApi = {
       apiClient.post<{ message: string; data: AusenciaDetalle }>(
         `${BASE}/ausencias/${id}/rechazar`, { motivo_rechazo }, T),
 
-    /** §4.6 — Se puede adjuntar en cualquier estado. Reemplaza el anterior. */
+    /**
+     * §5.5 — Se puede adjuntar en cualquier estado. Reemplaza el anterior.
+     *
+     * PR-N8 (2026-10-12): sobre una ausencia PENDIENTE, subir el soporte **la
+     * aprueba** si quien lo sube es super admin o tiene `novedades.aprobar`.
+     * Con solo `novedades.editar` queda adjunta, sigue PENDIENTE y la
+     * respuesta trae `SOPORTE_SIN_APROBAR` en `advertencias[]`. La diferencia
+     * importa: una PENDIENTE bloquea liquidar y cerrar la nómina de ese
+     * colaborador (API_NOMINA §5.1).
+     */
     subirDocumento: (id: number, documento: File) => {
       const fd = new FormData();
       fd.append('documento', documento);
@@ -629,6 +638,8 @@ export const NovedadesErrorCodes = {
 /** Advertencias: informan, nunca bloquean. */
 export const ADVERTENCIA_NOVEDAD_LABEL: Record<string, string> = {
   SOPORTE_REQUERIDO: 'El motivo pide soporte. Adjúntelo después desde el detalle.',
+  /** PR-N8: se adjuntó el soporte pero la novedad sigue sin aprobar. */
+  SOPORTE_SIN_APROBAR: 'El soporte quedó adjunto, pero la novedad sigue pendiente de aprobación.',
   DIAS_EN_NOMINA_CERRADA: 'Hay días dentro de nóminas ya cerradas, que no se recalculan.',
   NOVEDAD_FUTURA: 'La novedad empieza en una fecha futura.',
   TRABAJO_REGISTRADO_EN_EL_RANGO: 'El colaborador tiene jornal o cuadrilla en esas fechas.',

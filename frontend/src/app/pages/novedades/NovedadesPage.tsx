@@ -52,6 +52,24 @@ export default function NovedadesPage() {
   const [cargando, setCargando] = useState(true);
   const [pagina, setPagina] = useState(1);
   const [verNovedad, setVerNovedad] = useState<NovedadFila | null>(null);
+  /**
+   * `?novedad=<id>` abre el detalle de esa fila apenas carga el listado.
+   *
+   * Lo usa el bloqueo de nómina (API_NOMINA §5.1): desde la pantalla de
+   * liquidación el liquidador llega directo a la novedad que lo frena, en vez
+   * de tener que buscarla entre todas. El id solo es único dentro de su
+   * fuente, así que el enlace manda también `?fuente=`, que ya es un filtro.
+   */
+  const novedadDeLaUrl = searchParams.get('novedad');
+  const [urlAtendida, setUrlAtendida] = useState(false);
+
+  /** Abre el detalle que pide la URL, una sola vez por visita. */
+  const abrirLaDeLaUrl = (lista: NovedadFila[]) => {
+    if (urlAtendida || !novedadDeLaUrl) return;
+    const buscada = lista.find((f) => String(f.id) === novedadDeLaUrl);
+    setUrlAtendida(true);
+    if (buscada) setVerNovedad(buscada);
+  };
 
   const [busqueda, setBusqueda] = useState('');
   const [categoria, setCategoria] = useState<string>(TODOS);
@@ -89,6 +107,7 @@ export default function NovedadesPage() {
         if (id !== reqId.current) return;
         setFilas(res.data ?? []);
         setMeta(res.meta);
+        abrirLaDeLaUrl(res.data ?? []);
       })
       .catch((err) => {
         if (id !== reqId.current) return;

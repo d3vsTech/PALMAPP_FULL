@@ -600,6 +600,50 @@ export interface PendientesAusenciasRich {
   impacto_estimado?: number;
 }
 
+/**
+ * Una ausencia PENDIENTE que impide liquidar (§5.1, PR-N8).
+ *
+ * `enlaces` trae la acción concreta: el liquidador no tiene que ir a buscarla
+ * al módulo de Novedades, decide desde aquí.
+ */
+export interface AusenciaBloqueante {
+  id: number;
+  tipo: string;
+  motivo: { id: number; nombre: string; color?: string | null } | null;
+  fecha_inicio: string;
+  fecha_fin: string;
+  dias_en_periodo: number;
+  origen: string;
+  operacion_id: number | null;
+  enlaces: { detalle: string; aprobar: string; rechazar: string };
+}
+
+/** Una solicitud de vacaciones PENDIENTE que impide liquidar (§5.1, PR-N8). */
+export interface VacacionBloqueante {
+  id: number;
+  numero_comprobante: string;
+  fecha_inicio: string;
+  fecha_fin: string;
+  dias_habiles: number;
+  dias_en_periodo: number;
+  enlaces: { detalle: string; liquidar: string; rechazar: string };
+}
+
+/**
+ * Lo que impedirá el POST de liquidar, anticipado por el preview.
+ *
+ * No es una advertencia: con la lista no vacía, el backend responde 409 y no
+ * persiste nada. No hay `forzar`: la decisión tiene dueño y es un clic.
+ */
+export interface BloqueoLiquidacion {
+  code: string;
+  mensaje?: string;
+  message?: string;
+  ausencias?: AusenciaBloqueante[];
+  vacaciones?: VacacionBloqueante[];
+  fechas?: string[];
+}
+
 export interface PendientesPorAprobar {
   horas_extra: number;
   ausencias: number | PendientesAusenciasRich;
@@ -686,6 +730,16 @@ export interface PreviewLiquidacion {
    * NO están incluidos en el cálculo actual). Solo empleados internos.
    */
   pendientes_por_aprobar?: PendientesPorAprobar;
+  /**
+   * §5.1 (PR-N8, 2026-10-12) — Lo que impedirá liquidar. Vacío cuando nada
+   * bloquea. Hoy el único código es `NOVEDADES_PENDIENTES_EN_PERIODO`.
+   *
+   * Es distinto de `pendientes_por_aprobar`: ese avisa del impacto y deja
+   * liquidar; este lo impide. Tampoco filtra `afecta_nomina`: una ausencia
+   * PENDIENTE con el flag en `false` también deja el día como falta mientras
+   * nadie la apruebe.
+   */
+  bloqueos?: BloqueoLiquidacion[];
   /**
    * §4.4 — Cosechas de ESTE colaborador dentro del período con gajos sin
    * cargar a ningún camión. `total_alta > 0` implica que se liquida DE MENOS.
@@ -2375,6 +2429,19 @@ export const NominaErrorCodes = {
    * diferencias; hay que re-liquidar esas filas y cerrar de nuevo.
    */
   VACACIONES_DESACTUALIZADAS_EN_NOMINA: 'VACACIONES_DESACTUALIZADAS_EN_NOMINA',
+  /**
+   * PR-N8 — Al liquidar: el colaborador tiene ausencias PENDIENTE de día
+   * completo o solicitudes de vacaciones PENDIENTE que cruzan el período.
+   * El preview lo anticipa en `bloqueos[]`. Sin `forzar`: hay que aprobar o
+   * rechazar la novedad y volver a liquidar.
+   */
+  NOVEDADES_PENDIENTES_EN_PERIODO: 'NOVEDADES_PENDIENTES_EN_PERIODO',
+  /**
+   * PR-N8 — Al cerrar: lo mismo, pero detectado sobre filas ya liquidadas
+   * (la novedad se registró después). Trae `colaboradores[]`; hay que
+   * decidirla y **volver a liquidar** a esa gente.
+   */
+  NOMINA_CON_NOVEDADES_PENDIENTES: 'NOMINA_CON_NOVEDADES_PENDIENTES',
   /** Intento de quitar un empleado ya liquidado. */
   EMPLEADO_LIQUIDADO: 'EMPLEADO_LIQUIDADO',
   /** Intento de pedir desprendible a un empleado aún PENDIENTE. */
