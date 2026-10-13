@@ -23,13 +23,15 @@ export const COLUMNAS_JORNALES: ColumnaPlantilla[] = [
   { nombre: 'descripcion' },
   { nombre: 'ubicacion' },
   { nombre: 'valor_total' },
+  { nombre: 'lluvia' },
+  { nombre: 'lluvia_mm' },
 ];
 
 export const FILAS_JORNALES = [
-  ['2025-03-04', '1012345678', '', '13 · Plateo', '', '', '3 · Lote 1 › Lote 1.1', '240', '', '', '', '', ''],
-  ['2025-03-04', '1012345678; 52000001', '', '13 · Plateo', '', '', '5 · Lote 2 › Lote 2.1', '300', '', '', '', '', ''],
-  ['2025-03-04', '1012345678', '', '15 · Fertilización', '', '', '5 · Lote 2 › Lote 2.1', '300', '5 · Urea 46%', '200', '', '', ''],
-  ['2025-03-04', '80000001', '2 · Cuadrillas del Sur', '13 · Plateo', '', '', '5 · Lote 2 › Lote 2.1', '400', '', '', '', '', ''],
+  ['2025-03-04', '1012345678', '', '13 · Plateo', '', '', '3 · Lote 1 › Lote 1.1', '240', '', '', '', '', '', 'SI', '12.5'],
+  ['2025-03-04', '1012345678; 52000001', '', '13 · Plateo', '', '', '5 · Lote 2 › Lote 2.1', '300', '', '', '', '', '', '', ''],
+  ['2025-03-04', '1012345678', '', '15 · Fertilización', '', '', '5 · Lote 2 › Lote 2.1', '300', '5 · Urea 46%', '200', '', '', '', '', ''],
+  ['2025-03-04', '80000001', '2 · Cuadrillas del Sur', '13 · Plateo', '', '', '5 · Lote 2 › Lote 2.1', '400', '', '', '', '', '', '', ''],
 ];
 
 export const COLUMNAS_COSECHAS: ColumnaPlantilla[] = [
@@ -43,12 +45,14 @@ export const COLUMNAS_COSECHAS: ColumnaPlantilla[] = [
   { nombre: 'valor_total' },
   { nombre: 'referencia' },
   { nombre: 'observacion' },
+  { nombre: 'lluvia' },
+  { nombre: 'lluvia_mm' },
 ];
 
 export const FILAS_COSECHAS = [
-  ['2025-03-04', '', '3 · Lote 1 › Lote 1.1', '120', '1800.5', '1012345678; 52000001', '', '', 'TQ-00912', ''],
-  ['2025-03-04', '', '5 · Lote 2 › Lote 2.1', '80', '', '52000003', '', '', '', ''],
-  ['2025-03-05', '', '3 · Lote 1 › Lote 1.1', '60', '900', '80000001', '900123456', '', 'TQ-00913', ''],
+  ['2025-03-04', '', '3 · Lote 1 › Lote 1.1', '120', '1800.5', '1012345678; 52000001', '', '', 'TQ-00912', '', 'NO', ''],
+  ['2025-03-04', '', '5 · Lote 2 › Lote 2.1', '80', '', '52000003', '', '', '', '', '', ''],
+  ['2025-03-05', '', '3 · Lote 1 › Lote 1.1', '60', '900', '80000001', '900123456', '', 'TQ-00913', '', '', ''],
 ];
 
 interface DefinicionPlantilla {

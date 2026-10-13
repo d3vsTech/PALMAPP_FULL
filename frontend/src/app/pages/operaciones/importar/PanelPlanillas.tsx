@@ -8,7 +8,7 @@
  * semana. Por eso el estado va con color y no como texto gris.
  */
 import { Badge } from '../../../components/ui/badge';
-import { CalendarDays } from 'lucide-react';
+import { CalendarDays, CloudRain } from 'lucide-react';
 import type { PlanillaDelCargue } from '../../../../api/importarOperaciones';
 import { formatFecha } from '../../../utils/fecha';
 
@@ -17,6 +17,15 @@ function BadgeEstado({ planilla }: { planilla: PlanillaDelCargue }) {
     return (
       <Badge variant="outline" className="border-border text-muted-foreground">
         Sigue en borrador
+      </Badge>
+    );
+  }
+  // 2026-10-13: una planilla ya aprobada dejó de ser error y recibe las filas.
+  // Es el caso normal al subir el segundo archivo del mismo mes.
+  if (!planilla.nueva && planilla.estado === 'APROBADA') {
+    return (
+      <Badge variant="outline" className="border-success/30 bg-success/10 text-success">
+        Ya aprobada, recibe filas
       </Badge>
     );
   }
@@ -34,6 +43,18 @@ function BadgeEstado({ planilla }: { planilla: PlanillaDelCargue }) {
   );
 }
 
+/** La lluvia del día, solo cuando el archivo la trajo. */
+function Lluvia({ planilla }: { planilla: PlanillaDelCargue }) {
+  if (planilla.hubo_lluvia !== true) return null;
+  const mm = planilla.cantidad_lluvia;
+  return (
+    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+      <CloudRain className="h-3.5 w-3.5" />
+      {mm ? `${mm} mm` : 'Llovió'}
+    </span>
+  );
+}
+
 function FilaPlanilla({ planilla }: { planilla: PlanillaDelCargue }) {
   const faltantes = planilla.faltantes?.colaboradores_faltantes?.length ?? 0;
 
@@ -44,13 +65,16 @@ function FilaPlanilla({ planilla }: { planilla: PlanillaDelCargue }) {
         <div className="min-w-0">
           <p className="truncate text-sm font-medium">{formatFecha(planilla.fecha)}</p>
           <p className="text-xs text-muted-foreground">
-            {planilla.nueva ? 'Planilla nueva' : `Ya existía (#${planilla.operacion_id})`}
+            {planilla.nueva
+              ? 'Planilla nueva'
+              : `Ya existía (#${planilla.operacion_id}${planilla.origen === 'IMPORTACION' ? ', de otra importación' : ''})`}
             {' · '}
             {planilla.filas} fila{planilla.filas === 1 ? '' : 's'}
           </p>
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
+        <Lluvia planilla={planilla} />
         {faltantes > 0 && (
           <span className="text-xs text-amber-700 dark:text-amber-400">
             {faltantes} sin registrar

@@ -180,6 +180,11 @@ export default function ImportarOperacionesPage() {
             <strong className="text-foreground">valor_total</strong> vacío se liquida con la tarifa
             de hoy. Con valor, se guarda el del archivo como histórico.
           </Regla>
+          <Regla n={5}>
+            <strong className="text-foreground">lluvia</strong> y{' '}
+            <strong className="text-foreground">lluvia_mm</strong> son del día, no de la fila:
+            basta ponerlas en una sola fila de esa fecha. Si unas dicen SI y otras NO, gana SI.
+          </Regla>
         </div>
       </PasoCard>
 
@@ -192,7 +197,8 @@ export default function ImportarOperacionesPage() {
         <p className="text-xs text-muted-foreground">
           Un período que se vaya a liquidar en el sistema se carga completo, con jornales, cosechas
           y novedades. Una planilla aprobada a medias descuenta el día y el dominical a quien no
-          aparezca en ella.
+          aparezca en ella. Por eso conviene subir primero un archivo y después el otro, los dos
+          aprobados: el segundo entra en las planillas que creó el primero.
         </p>
       </PasoCard>
 

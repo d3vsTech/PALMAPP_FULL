@@ -143,6 +143,19 @@ export interface ValorPorPersona {
   sync_uuid?: string;
 }
 
+/**
+ * La lluvia que declaró el archivo para una fecha (§13, 2026-10-13).
+ *
+ * No es un dato de la fila sino de la planilla: se resuelve juntando todas las
+ * filas del mismo día. Si unas dicen SI y otras NO, gana SI y el cargue avisa.
+ */
+export interface LluviaDelArchivo {
+  hubo: boolean | null;
+  mm: string | null;
+  filas_si: number[];
+  filas_no: number[];
+}
+
 /** Campos libres de una fila de jornales. */
 export interface DatosJornalFila {
   cantidad_palmas: number | null;
@@ -196,6 +209,8 @@ interface FilaBase {
   fila: number;
   estado: EstadoFilaOperacion;
   fecha: string | null;
+  /** Lo que esa fila dijo de la lluvia; la planilla resuelve entre todas. */
+  lluvia?: { hubo: boolean | null; mm: string | null };
   tercero: TerceroResuelto | null;
   lote: CatalogoResuelto | null;
   sublote: SubloteResuelto | null;
@@ -269,11 +284,20 @@ export interface PlanillaDelCargue {
   /** `null` mientras la planilla no exista: la crea `importar`. */
   operacion_id: number | null;
   estado: 'BORRADOR' | 'APROBADA' | null;
+  /** De dónde salió la planilla que ya existía. `null` si es nueva. */
+  origen?: 'MANUAL' | 'IMPORTACION' | null;
   nueva: boolean;
   estado_final: EstadoFinalPlanilla;
   filas: number;
   filas_ok: number;
-  /** Solo en el 201 y solo en las aprobadas. */
+  /** La lluvia con la que quedará la planilla tras el cargue. */
+  hubo_lluvia?: boolean | null;
+  cantidad_lluvia?: string | null;
+  /** Lo que el archivo propuso, con las filas que lo dijeron. */
+  lluvia_archivo?: LluviaDelArchivo;
+  /** Solo en el 201: la planilla existente recibió la lluvia del archivo. */
+  lluvia_actualizada?: boolean;
+  /** Solo en el 201 y solo en las que quedaron aprobadas. */
   faltantes?: FaltantesPlanilla | null;
   enlaces?: { wizard: string };
 }
@@ -289,7 +313,11 @@ export interface ResumenImportacionOperaciones {
     total: number;
     nuevas: number;
     existentes: number;
+    /** Ya estaban aprobadas antes del cargue. */
+    existentes_aprobadas?: number;
     aprobadas: number;
+    /** Ya aprobadas que recibieron filas y siguen aprobadas (2026-10-13). */
+    aprobadas_que_recibieron_filas?: number;
   };
   colaboradores: number;
   operarios: number;
@@ -318,6 +346,7 @@ export interface CargueOperaciones {
   omitidas: number;
   planillas_nuevas: number;
   planillas_aprobadas: number;
+  planillas_aprobadas_que_recibieron_filas?: number;
 }
 
 export interface ResultadoImportacionOperaciones {
@@ -481,6 +510,8 @@ export const ERROR_FILA_OPERACION_LABEL: Record<string, string> = {
   DESCRIPCION_O_ACTIVIDAD_REQUERIDA: 'Falta la actividad o la descripción',
   CAMPO_NO_APLICA: 'Esa columna no aplica a esta labor',
   PALMAS_INVALIDAS: 'El número de palmas no es válido',
+  LLUVIA_INVALIDA: 'La columna lluvia solo acepta SI o NO',
+  LLUVIA_MM_INVALIDA: 'Los milímetros de lluvia no son válidos',
   GRAMOS_INVALIDOS: 'Los gramos no son válidos',
   GAJOS_INVALIDOS: 'Los gajos no son válidos',
   KILOS_INVALIDOS: 'Los kilos no son válidos',
@@ -495,6 +526,9 @@ export const ERROR_FILA_OPERACION_LABEL: Record<string, string> = {
 export const ADVERTENCIA_OPERACION_LABEL: Record<string, string> = {
   PLANILLA_NUEVA: 'Se creará la planilla de ese día',
   PLANILLA_EXISTENTE_NO_APROBADA: 'La planilla ya existía en borrador',
+  PLANILLA_APROBADA_RECIBE_FILAS: 'La planilla ya estaba aprobada y recibe estas filas',
+  LLUVIA_INCONSISTENTE_EN_LA_FECHA: 'Unas filas dicen que llovió y otras que no',
+  LLUVIA_DIFIERE_DE_LA_PLANILLA: 'La lluvia del archivo no coincide con la planilla',
   PRECIO_ACTUAL_APLICADO: 'Se liquidó con la tarifa de hoy',
   VALOR_HISTORICO_APLICADO: 'Se guardó el valor del archivo',
   EMPLEADO_FIJO_VALOR_CERO: 'Es de salario fijo: su jornal queda en cero',
