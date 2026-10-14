@@ -26,7 +26,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
 import {
-  ArrowLeft, Plus, Search, DollarSign, User, Calendar, Loader2, Trash2,
+  ArrowLeft, Plus, Search, DollarSign, User, Calendar, Loader2, Paperclip, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -287,7 +287,16 @@ export default function Prestamos() {
                           <p className="font-semibold text-sm">{nombre}</p>
                           <p className="text-xs text-muted-foreground">CC {cedula}</p>
                         </td>
-                        <td className="p-4 text-sm text-muted-foreground">{p.concepto}</td>
+                        <td className="p-4 text-sm text-muted-foreground">
+                          <span className="inline-flex items-center gap-1.5">
+                            {p.concepto}
+                            {p.documento && (
+                              <span title={`Soporte: ${p.documento.nombre_archivo}`}>
+                                <Paperclip className="h-3.5 w-3.5 shrink-0 text-primary" />
+                              </span>
+                            )}
+                          </span>
+                        </td>
                         <td className="p-4 text-right text-sm font-medium">
                           ${total.toLocaleString('es-CO')}
                         </td>

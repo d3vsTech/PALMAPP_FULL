@@ -7,6 +7,7 @@
  *  - Calendario de cuotas (PENDIENTE / APLICADA) con fecha de aplicación.
  *  - Edición inline de `concepto` y `observaciones` (siempre permitido).
  *  - Cancelar (solo si VIGENTE — doc §6, PAGADO/CANCELADO devuelven 422).
+ *  - Soporte del préstamo: pagaré o autorización de descuento (§11).
  */
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
@@ -36,6 +37,7 @@ import {
 } from '../../../api/prestamos';
 import type { ApiError } from '../../../api/client';
 import { formatFecha } from '../../utils/fecha';
+import { SoportePrestamoCard } from '../../components/nomina/SoportePrestamoCard';
 
 function toNumber(v: string | number | null | undefined): number {
   if (v == null) return 0;
@@ -326,6 +328,14 @@ export default function PrestamoDetalle() {
           </div>
         </CardContent>
       </Card>
+
+      {/* El pagaré o la autorización de descuento (CST arts. 149-150). La
+          tarjeta se oculta sola mientras el backend no exponga el soporte. */}
+      <SoportePrestamoCard
+        prestamoId={prestamo.id}
+        documento={prestamo.documento}
+        onCambio={cargar}
+      />
 
       {/* Calendario de cuotas */}
       <Card className="border-border">

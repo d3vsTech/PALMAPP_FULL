@@ -107,7 +107,44 @@ export interface Prestamo {
   created_at?: string;
   /** Solo presente en `GET /prestamos/{id}`. Calendario ordenado por `numero_cuota`. */
   cuotas?: PrestamoCuota[];
+  /**
+   * Soporte del préstamo, o `null` si no se ha cargado. Llega tanto en el
+   * listado como en el detalle. Puede venir `undefined` en un backend anterior
+   * al deploy del soporte: ahí la UI no ofrece la carga.
+   */
+  documento?: DocumentoPrestamo | null;
 }
+
+/**
+ * Soporte del préstamo: el pagaré o la autorización de descuento por nómina
+ * (CST arts. 149-150), con su propia observación.
+ *
+ * El archivo no vive en `prestamos`: vive en el expediente del colaborador
+ * (categoría `PRESTAMOS`, tipo `SOPORTE_PRESTAMO`) y el préstamo solo guarda la
+ * FK. De ahí los tres enlaces: los dos primeros son el proxy del módulo, que
+ * funciona con permisos de nómina; `expediente` exige `colaboradores.ver`.
+ *
+ * `observacion` (singular) es la nota del documento, distinta de
+ * `observaciones` (plural) del préstamo.
+ */
+export interface DocumentoPrestamo {
+  id: number;
+  nombre_archivo: string;
+  mime_type: string;
+  archivo_tamano: number | null;
+  observacion: string | null;
+  subido_por: string | null;
+  subido_at: string | null;
+  /** Solo pdf, jpeg, png y webp se pueden abrir inline. */
+  previsualizable: boolean;
+  enlaces: { descargar: string; visualizar: string; expediente: string };
+}
+
+/** Lo que admite el soporte: igual que el de una novedad. */
+export const SOPORTE_PRESTAMO = {
+  MIMES: ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'doc', 'docx'],
+  MAX_KB: 10240,
+} as const;
 
 /** Cards superiores del listado (doc §1). */
 export interface IndicadoresPrestamos {
@@ -325,6 +362,48 @@ export const prestamosApi = {
       payload,
       T,
     ),
+
+  /**
+   * POST /prestamos/{id}/documento — sube, reemplaza o solo edita la nota.
+   *
+   * El archivo es obligatorio la **primera** vez; después se puede mandar solo
+   * `observacion` para corregir la nota sin volver a subir el PDF, y una
+   * `observacion` vacía la borra. Subir otro archivo **reemplaza** el anterior:
+   * un préstamo tiene un soporte, no varios.
+   *
+   * Permiso `nomina.editar`. Un préstamo CANCELADO responde 404.
+   */
+  subirDocumento: (id: number, archivo: File | null, observacion?: string | null) => {
+    const fd = new FormData();
+    if (archivo) fd.append('documento', archivo);
+    if (observacion !== undefined) fd.append('observacion', observacion ?? '');
+    return apiClient.postForm<{ data: Prestamo; message: string }>(
+      `/v1/tenant/prestamos/${id}/documento`,
+      fd,
+      T,
+    );
+  },
+
+  /**
+   * GET /prestamos/{id}/documento — descarga, o visualiza con `inline`.
+   *
+   * Es el proxy del módulo: sirve el archivo con permiso `nomina.ver`, sin
+   * exigir `colaboradores.ver`. `inline` sobre un doc o docx responde 415
+   * `MIME_NOT_PREVIEWABLE`; sin soporte, 404 `PRESTAMO_SIN_DOCUMENTO`.
+   */
+  descargarDocumento: (id: number, inline = false) =>
+    apiClient.getBlob(
+      `/v1/tenant/prestamos/${id}/documento${inline ? '?inline=1' : ''}`,
+      T,
+    ),
+
+  /**
+   * DELETE /prestamos/{id}/documento — borra el archivo del expediente y deja
+   * la FK en null. Cancelar el préstamo **no** borra el soporte: queda como
+   * evidencia en la ficha del colaborador.
+   */
+  eliminarDocumento: (id: number) =>
+    apiClient.delete<{ message: string }>(`/v1/tenant/prestamos/${id}/documento`, T),
 };
 
 // ─── Códigos de error específicos (doc §15) ───────────────────────────────────
@@ -338,6 +417,10 @@ export const PrestamoErrorCodes = {
   PRESTAMO_CUOTA_EMPLEADO_MISMATCH: 'PRESTAMO_CUOTA_EMPLEADO_MISMATCH',
   /** Intento de crear un préstamo para un operario de tercero (doc §0). */
   PRESTAMO_SOLO_COLABORADORES: 'PRESTAMO_SOLO_COLABORADORES',
+  /** GET o DELETE del soporte cuando no hay, o el archivo ya no está en disco. */
+  PRESTAMO_SIN_DOCUMENTO: 'PRESTAMO_SIN_DOCUMENTO',
+  /** `?inline=1` sobre un doc o docx: hay que descargarlo. */
+  MIME_NOT_PREVIEWABLE: 'MIME_NOT_PREVIEWABLE',
   /** Intento de registrar abono en préstamo CANCELADO o PAGADO (doc §8.2). */
   PRESTAMO_NO_VIGENTE: 'PRESTAMO_NO_VIGENTE',
   /** Todas las cuotas del préstamo ya fueron aplicadas (doc §8.2). */

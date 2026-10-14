@@ -124,6 +124,10 @@ export default function ColaboradorDetail() {
     { key: 'PERMISOS_LICENCIAS', label: 'Permisos, Licencias e Incapacidades' },
     { key: 'FINALIZACION_CONTRATO', label: 'Finalización de Contrato' },
     { key: 'DESPRENDIBLES', label: 'Desprendibles' },
+    // El pagaré o la autorización de descuento de un préstamo (API_COLABORADORES
+    // §7). Lo carga el módulo de Préstamos, pero el archivo vive aquí: sin esta
+    // pestaña quedaba guardado e invisible.
+    { key: 'PRESTAMOS', label: 'Préstamos y Adelantos' },
     { key: 'OTROS', label: 'Otros' },
   ];
 
