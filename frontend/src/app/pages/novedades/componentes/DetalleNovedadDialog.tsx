@@ -20,8 +20,8 @@ import {
   Dialog, DialogContent, DialogDescription, DialogTitle,
 } from '../../../components/ui/dialog';
 import {
-  AlertTriangle, ArrowUpRight, Calendar, Check, Download, FileSignature, Loader2,
-  Paperclip, Pencil, Receipt, Trash2, Upload, User, X,
+  AlertTriangle, ArrowUpRight, Calendar, Check, Download, Eye, FileSignature,
+  FileText, Loader2, Paperclip, Pencil, Receipt, Trash2, Upload, User, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -80,6 +80,13 @@ function Dato({ label, valor, icono }: { label: string; valor: string; icono?: b
       <p className="text-sm font-medium">{valor}</p>
     </div>
   );
+}
+
+/** Los bytes del backend, en algo que se lea de un vistazo. */
+function tamanoLegible(bytes: number | null | undefined): string {
+  if (!bytes) return '';
+  const mb = bytes / 1024 / 1024;
+  return mb >= 1 ? `${mb.toFixed(1)} MB` : `${Math.round(bytes / 1024)} KB`;
 }
 
 export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio }: Props) {
@@ -222,19 +229,29 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
     }
   };
 
-  /** El archivo que subió el usuario, no el acta generada. */
-  const bajarAdjunto = async () => {
+  /**
+   * El archivo que subió el usuario, no el acta generada.
+   *
+   * Con `inline` se abre en una pestaña; solo lo admiten pdf, jpeg, png y webp
+   * (`documento.previsualizable`), y por eso el botón "Ver" no sale siempre.
+   */
+  const bajarAdjunto = async (inline = false) => {
     if (!fila) return;
     try {
-      const blob = await novedadesApi.ausencias.descargarDocumento(fila.id);
+      const blob = await novedadesApi.ausencias.descargarDocumento(fila.id, inline);
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = detalle?.documento?.nombre_archivo ?? `soporte_novedad_${fila.id}`;
-      a.click();
-      URL.revokeObjectURL(url);
+      if (inline) {
+        window.open(url, '_blank', 'noopener');
+      } else {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = detalle?.documento?.nombre_archivo ?? `soporte_novedad_${fila.id}`;
+        a.click();
+      }
+      // La pestaña nueva necesita la URL viva un rato más que una descarga.
+      setTimeout(() => URL.revokeObjectURL(url), inline ? 60_000 : 0);
     } catch (err) {
-      toast.error((err as ApiError).message ?? 'No se pudo descargar el soporte');
+      toast.error((err as ApiError).message ?? 'No se pudo abrir el soporte');
     }
   };
 
@@ -388,7 +405,89 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
               </div>
             )}
 
-            {detalle?.editable.motivo_bloqueo && (
+            {/*
+              El soporte se ve, no se adivina. Antes era un botón "Adjunto" en
+              la fila de acciones, al lado del acta para firma y del botón de
+              subir: tres cosas distintas que parecían la misma. Aquí el archivo
+              se muestra con su nombre y su peso, y las acciones que le
+              corresponden quedan pegadas a él.
+            */}
+            {esAusencia && detalle && (
+              <div className="border-t border-border px-6 py-4">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Soporte adjunto
+                </p>
+                {detalle.documento ? (
+                  <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-muted/20 p-3">
+                    <FileText className="h-5 w-5 shrink-0 text-primary" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{detalle.documento.nombre_archivo}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {tamanoLegible(detalle.documento.archivo_tamano) || 'Archivo adjunto'}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {detalle.documento.previsualizable && (
+                        <Button size="sm" variant="outline" onClick={() => void bajarAdjunto(true)} className="gap-2">
+                          <Eye className="h-3.5 w-3.5" />
+                          Ver
+                        </Button>
+                      )}
+                      <Button size="sm" variant="outline" onClick={() => void bajarAdjunto(false)} className="gap-2">
+                        <Download className="h-3.5 w-3.5" />
+                        Descargar
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Paperclip className="h-4 w-4 shrink-0" />
+                    {detalle.motivo_ausencia.requiere_soporte
+                      ? 'Este motivo pide soporte y todavía no se ha adjuntado.'
+                      : 'Sin soporte adjunto.'}
+                  </p>
+                )}
+
+                {/* §4.6 — Se adjunta en cualquier estado que lo admita; en una
+                    PENDIENTE además aprueba si quien sube puede aprobar. */}
+                {detalle.editable.campos.includes('documento') && (
+                  <>
+                    <input
+                      ref={archivoRef}
+                      type="file"
+                      className="hidden"
+                      accept={init?.parametros.soporte.mimes.map((m) => `.${m}`).join(',')}
+                      onChange={(e) => {
+                        const archivo = e.target.files?.[0];
+                        e.target.value = '';
+                        if (archivo) void subirSoporte(archivo);
+                      }}
+                    />
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => archivoRef.current?.click()}
+                        disabled={cargando}
+                        className="gap-2"
+                      >
+                        {cargando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                        {detalle.documento ? 'Reemplazar soporte' : 'Subir soporte'}
+                      </Button>
+                      {fila.estado === 'PENDIENTE' && permisos?.puede_aprobar && (
+                        <span className="text-xs text-muted-foreground">
+                          Al adjuntar el certificado la novedad queda aprobada.
+                        </span>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* El formulario de edición trae su propio aviso, más explícito y
+                pegado a los campos: mostrar los dos decía lo mismo dos veces. */}
+            {detalle?.editable.motivo_bloqueo && accion !== 'editar' && (
               <div className="flex items-start gap-2 border-t border-border bg-muted/20 px-6 py-3 text-xs text-muted-foreground">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>
@@ -460,6 +559,9 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
             ) : (
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-6 py-4">
                 <div className="flex flex-wrap gap-2">
+                  {/* El acta que genera la finca para que el colaborador
+                      firme: no tiene nada que ver con el archivo adjunto, por
+                      eso el nombre dice que se genera. */}
                   {detalle && (
                     <Button
                       size="sm"
@@ -468,52 +570,10 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                       className="gap-2 border-primary/40 text-primary hover:border-primary hover:bg-primary/5"
                     >
                       <FileSignature className="h-3.5 w-3.5" />
-                      Descargar soporte para firma
+                      Generar acta para firma
                     </Button>
                   )}
-                  {fila.tiene_soporte && esAusencia && (
-                    <Button size="sm" variant="outline" onClick={bajarAdjunto} className="gap-2">
-                      <Download className="h-3.5 w-3.5" />
-                      Adjunto
-                    </Button>
-                  )}
-                  {/* §4.6 — El soporte se adjunta en cualquier estado que lo
-                      admita (`editable.campos`); en una PENDIENTE además
-                      aprueba si quien sube puede aprobar. */}
-                  {esAusencia && detalle?.editable.campos.includes('documento') && (
-                    <>
-                      <input
-                        ref={archivoRef}
-                        type="file"
-                        className="hidden"
-                        accept={init?.parametros.soporte.mimes.map((m) => `.${m}`).join(',')}
-                        onChange={(e) => {
-                          const archivo = e.target.files?.[0];
-                          e.target.value = '';
-                          if (archivo) void subirSoporte(archivo);
-                        }}
-                      />
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => archivoRef.current?.click()}
-                        disabled={cargando}
-                        className="gap-2"
-                        title={fila.estado === 'PENDIENTE' && permisos?.puede_aprobar
-                          ? 'Al adjuntar el certificado la novedad queda aprobada'
-                          : undefined}
-                      >
-                        {cargando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                        {fila.tiene_soporte ? 'Reemplazar soporte' : 'Subir soporte'}
-                      </Button>
-                    </>
-                  )}
-                  {!fila.tiene_soporte && detalle?.motivo_ausencia.requiere_soporte && (
-                    <span className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
-                      <Paperclip className="h-3.5 w-3.5" />
-                      Falta el soporte
-                    </span>
-                  )}
+
                   {/* Una terminación ya liquidada enlaza a su liquidación
                       final: es el documento que cierra el retiro. */}
                   {terminacion?.liquidacion && (
