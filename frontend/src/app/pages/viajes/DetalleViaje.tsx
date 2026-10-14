@@ -21,7 +21,7 @@ import {
 import { toast } from 'sonner';
 import {
   viajesApi, strField, empresasTransportadorasApi, extractorasApi, ViajesErrorCodes,
-  type Viaje, type EstadoViajeApi, type EstadoOcrDocumento,
+  type Viaje, type ViajeDetalle, type EstadoViajeApi, type EstadoOcrDocumento,
   type TransportadorSelect, type ExtractoraSelect,
 } from '../../../api/viajes';
 import { formatFecha, formatFechaHora, formatHora } from '../../utils/fecha';
@@ -57,6 +57,24 @@ interface DatosExtractora {
   pedunculoLargo: number;
   malFormado: number;
   observaciones: string;
+}
+
+/**
+ * Kilos que aportó un detalle, según §6.4 de API_VIAJES.
+ *
+ * No es `cosecha.peso_confirmado`: ese es el pesaje manual de la cosecha
+ * **entera**, casi siempre vacío, y cuando existe no corresponde a lo que
+ * llevó este camión si la cosecha se partió entre varios.
+ *
+ * El peso real sale de `gajos × promedio_aplicado`, y ese promedio lo congela
+ * el backend al finalizar el viaje. Antes de eso devuelve `null`, que no es lo
+ * mismo que cero: la fruta todavía no pasó por báscula.
+ */
+function pesoDelDetalle(d: ViajeDetalle): number | null {
+  const promedio = d.promedio_aplicado != null ? Number(d.promedio_aplicado) : null;
+  if (promedio === null || Number.isNaN(promedio)) return null;
+  const gajos = Number(d.gajos_en_viaje ?? d.cosecha?.gajos_reconteo ?? d.cosecha?.gajos_reportados ?? 0);
+  return gajos * promedio;
 }
 
 export default function DetalleViaje() {
@@ -575,13 +593,19 @@ export default function DetalleViaje() {
   // viene null el viaje se lleva todo lo disponible de esa cosecha.
   const filasCosecha = detalles.map((d) => ({
     id: d.id,
+    // §5.3.1 — la fecha de la planilla y los nombres ya vienen en el detalle
+    // del viaje, así que la tabla no necesita pedir nada aparte.
+    fecha: d.cosecha?.fecha ?? d.cosecha?.operacion?.fecha ?? null,
+    colaboradores: d.cosecha?.colaboradores ?? [],
     lote: d.cosecha?.lote?.nombre ?? '—',
     sublote: d.cosecha?.sublote?.nombre ?? '—',
     gajos: Number(d.gajos_en_viaje ?? d.cosecha?.gajos_reconteo ?? d.cosecha?.gajos_reportados ?? 0),
-    pesoKg: Number(d.cosecha?.peso_confirmado ?? 0),
+    pesoKg: pesoDelDetalle(d),
   }));
   const totalGajos = filasCosecha.reduce((s, f) => s + f.gajos, 0);
-  const totalKg    = filasCosecha.reduce((s, f) => s + f.pesoKg, 0);
+  /** Solo suma lo que ya tiene peso; `null` no cuenta como cero. */
+  const totalKg = filasCosecha.reduce((s, f) => s + (f.pesoKg ?? 0), 0);
+  const hayPesos = filasCosecha.some((f) => f.pesoKg !== null);
   const lotesSummary = [...new Set(filasCosecha.map((f) => f.lote))];
 
   // Peso definitivo: el reportado por la extractora cuando ya existe; si no,
@@ -868,14 +892,10 @@ export default function DetalleViaje() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-6 space-y-5">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="rounded-xl bg-primary/5 p-4 text-center">
                     <p className="text-2xl sm:text-3xl font-bold text-primary">{numFmt(totalGajos)}</p>
                     <p className="text-xs text-muted-foreground mt-1">Gajos Totales</p>
-                  </div>
-                  <div className="rounded-xl bg-primary/5 p-4 text-center">
-                    <p className="text-2xl sm:text-3xl font-bold text-primary">{(totalKg / 1000).toFixed(1)}t</p>
-                    <p className="text-xs text-muted-foreground mt-1">Toneladas</p>
                   </div>
                   <div className="rounded-xl bg-primary/5 p-4 text-center">
                     <p className="text-2xl sm:text-3xl font-bold text-primary">{lotesSummary.length}</p>
@@ -888,6 +908,8 @@ export default function DetalleViaje() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-primary/5 border-b border-border">
+                          <th className="text-left px-4 py-2.5 font-semibold text-foreground">Fecha Planilla</th>
+                          <th className="text-left px-4 py-2.5 font-semibold text-foreground">Colaborador(es)</th>
                           <th className="text-left px-4 py-2.5 font-semibold text-foreground">Lote</th>
                           <th className="text-left px-4 py-2.5 font-semibold text-foreground">Sublote</th>
                           <th className="text-right px-4 py-2.5 font-semibold text-foreground">Gajos</th>
@@ -897,18 +919,33 @@ export default function DetalleViaje() {
                       <tbody>
                         {filasCosecha.map((f, i) => (
                           <tr key={f.id} className={`border-b border-border last:border-0 ${i % 2 === 1 ? 'bg-muted/30' : ''}`}>
+                            <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">
+                              {formatFecha(f.fecha)}
+                            </td>
+                            <td
+                              className="px-4 py-2.5 text-foreground"
+                              title={f.colaboradores.join(', ')}
+                            >
+                              {f.colaboradores.length > 0 ? f.colaboradores.join(', ') : '—'}
+                            </td>
                             <td className="px-4 py-2.5 text-foreground">{f.lote}</td>
                             <td className="px-4 py-2.5 text-muted-foreground">{f.sublote}</td>
                             <td className="px-4 py-2.5 text-right tabular-nums">{numFmt(f.gajos)}</td>
-                            <td className="px-4 py-2.5 text-right tabular-nums">{numFmt(f.pesoKg, 2)}</td>
+                            <td className="px-4 py-2.5 text-right tabular-nums">
+                              {f.pesoKg === null
+                                ? <span className="text-muted-foreground">—</span>
+                                : numFmt(f.pesoKg, 2)}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
                       <tfoot>
                         <tr className="bg-primary text-white">
-                          <td colSpan={2} className="px-4 py-2.5 font-bold">Total</td>
+                          <td colSpan={4} className="px-4 py-2.5 font-bold">Total</td>
                           <td className="px-4 py-2.5 text-right font-bold tabular-nums">{numFmt(totalGajos)}</td>
-                          <td className="px-4 py-2.5 text-right font-bold tabular-nums">{numFmt(totalKg, 2)}</td>
+                          <td className="px-4 py-2.5 text-right font-bold tabular-nums">
+                            {hayPesos ? numFmt(totalKg, 2) : '—'}
+                          </td>
                         </tr>
                       </tfoot>
                     </table>

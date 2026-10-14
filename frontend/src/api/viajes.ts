@@ -174,6 +174,13 @@ export interface ViajeDetalle {
   cosecha_id: number;
   /** Gajos de esa cosecha que van en ESTE viaje. NULL = todos (sin split). */
   gajos_en_viaje?: number | null;
+  /**
+   * §2.5 — Promedio kg/gajo con el que se calculó el aporte de este detalle.
+   * Lo congela el backend **al finalizar** el viaje, así que es `null` mientras
+   * el viaje siga en CREADO o EN_VALIDACION: hasta la báscula no hay peso que
+   * repartir. El peso del detalle es `gajos × promedio_aplicado` (§6.4).
+   */
+  promedio_aplicado?: string | null;
   reconteo_aprobado: boolean;
   reconteo_aprobado_at?: string | null;
   reconteo_aprobado_por?: number | null;
