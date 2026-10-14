@@ -119,6 +119,13 @@ export default function NuevoPrestamo() {
     return () => document.removeEventListener('mousedown', fn);
   }, []);
 
+  /**
+   * Sin tope: la lista se recorre con el scroll del desplegable.
+   *
+   * Antes cortaba en los 8 primeros, así que al abrirla sin escribir nada el
+   * usuario llegaba hasta la E y creía que no estaban los demás. Buscar sigue
+   * siendo lo rápido, pero desplegar y bajar tiene que mostrarlos a todos.
+   */
   const colaboradoresFiltrados = sortByFirstName(
     colaboradores.filter((c) => {
       const q = busquedaColaborador.toLowerCase().trim();
@@ -128,7 +135,7 @@ export default function NuevoPrestamo() {
         (c.documento ?? '').toLowerCase().includes(q)
       );
     })
-  ).slice(0, 8);
+  );
 
   const seleccionar = (c: ColaboradorSelectItem) => {
     setEmpleadoId(c.id);
@@ -178,7 +185,7 @@ export default function NuevoPrestamo() {
 
     setGuardando(true);
     try {
-      await prestamosApi.crear({
+      const creado = await prestamosApi.crear({
         empleado_id: empleadoId,
         concepto: concepto.trim(),
         valor_total: total,
@@ -188,8 +195,13 @@ export default function NuevoPrestamo() {
         inicio_quincena: periodicidadTenant === 'QUINCENAL' ? inicioQuincena : null,
         observaciones: observaciones.trim() || null,
       });
-      toast.success('Préstamo creado — las cuotas se aplicarán en cada liquidación');
-      navigate('/nomina/prestamos');
+      toast.success('Préstamo creado — descargue el comprobante para firmarlo', {
+        description: 'Las cuotas se aplicarán en cada liquidación.',
+      });
+      // Al detalle, no al listado: lo primero que se hace con un préstamo
+      // recién creado es bajar el comprobante para que el colaborador lo
+      // firme, y ese botón está ahí.
+      navigate(`/nomina/prestamos/${creado.data.id}`);
     } catch (err) {
       const e = err as ApiError;
       if (e.code === PrestamoErrorCodes.PRESTAMO_SOLO_COLABORADORES) {

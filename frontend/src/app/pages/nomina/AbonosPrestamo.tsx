@@ -1,6 +1,6 @@
 /**
- * Abonos del Préstamo — pantalla que muestra el historial de abonos aplicados
- * a un préstamo y permite registrar abonos directos (transferencia, efectivo,
+ * Pagos del Préstamo — historial de las cuotas aplicadas a un préstamo y
+ * registro de un pago de cuota por fuera de la nómina (transferencia, efectivo,
  * cheque, etc.) que aplican la próxima cuota PENDIENTE.
  *
  * Conectada a:
@@ -30,16 +30,19 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
+import { Checkbox } from '../../components/ui/checkbox';
 import {
-  ArrowLeft, Plus, DollarSign, Calendar, CheckCircle2, Clock, Loader2,
+  ArrowLeft, Plus, DollarSign, Calendar, CheckCircle2, Clock, Download, Loader2,
 } from 'lucide-react';
 import {
   prestamosApi,
   PrestamoErrorCodes,
   type MedioPagoAbono,
   type HistorialAbonos,
+  type Prestamo,
   type AbonoPrestamo,
 } from '../../../api/prestamos';
+import { descargarComprobanteAbono } from './prestamoPdf';
 import type { ApiError } from '../../../api/client';
 import { formatThousands, parseCOP } from '../../components/lib/format';
 import { formatFecha } from '../../utils/fecha';
@@ -66,8 +69,20 @@ export default function AbonosPrestamo() {
   const navigate = useNavigate();
 
   const [historial, setHistorial] = useState<HistorialAbonos | null>(null);
+  /**
+   * El préstamo completo. El historial trae el resumen financiero pero no al
+   * colaborador, y el recibo de un abono lo necesita para la cabecera y para
+   * el bloque de firmas.
+   */
+  const [prestamo, setPrestamo] = useState<Prestamo | null>(null);
   const [cargando, setCargando] = useState(true);
   const [modalAbierto, setModalAbierto] = useState(false);
+  /**
+   * §8.3 — Pagar de una vez todas las cuotas que quedan, no solo la próxima.
+   * El valor no se envía: es la suma de los montos pendientes, y como la
+   * última cuota absorbe el residuo del redondeo el saldo cierra en cero.
+   */
+  const [saldarTodo, setSaldarTodo] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
   const [form, setForm] = useState<{
@@ -93,6 +108,13 @@ export default function AbonosPrestamo() {
     if (!prestamoId) return;
     const reqId = ++reqIdRef.current;
     setCargando(true);
+    // El detalle va en paralelo y no es crítico: si falla, el historial se
+    // pinta igual y lo único que se pierde es el botón del recibo.
+    prestamosApi
+      .ver(parseInt(prestamoId))
+      .then((res) => { if (reqId === reqIdRef.current) setPrestamo(res.data); })
+      .catch(() => { if (reqId === reqIdRef.current) setPrestamo(null); });
+
     prestamosApi
       .historialAbonos(parseInt(prestamoId))
       .then((res) => {
@@ -101,7 +123,7 @@ export default function AbonosPrestamo() {
       })
       .catch((err: ApiError) => {
         if (reqId !== reqIdRef.current) return;
-        toast.error(err.message ?? 'No se pudo cargar el historial de abonos');
+        toast.error(err.message ?? 'No se pudo cargar el historial de pagos');
       })
       .finally(() => {
         if (reqId === reqIdRef.current) setCargando(false);
@@ -117,7 +139,7 @@ export default function AbonosPrestamo() {
     return (
       <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground">
         <Loader2 className="h-5 w-5 animate-spin" />
-        Cargando abonos del préstamo...
+        Cargando pagos del préstamo...
       </div>
     );
   }
@@ -156,6 +178,7 @@ export default function AbonosPrestamo() {
         medio_pago: form.medioPago,
         referencia: form.referencia.trim() || null,
         nota: form.nota.trim() || null,
+        saldar: saldarTodo || undefined,
       });
       setHistorial(res.data);
       setForm({
@@ -165,16 +188,17 @@ export default function AbonosPrestamo() {
         referencia: '',
         nota: '',
       });
+      setSaldarTodo(false);
       setModalAbierto(false);
-      toast.success(res.message ?? 'Abono registrado');
+      toast.success(res.message ?? 'Pago registrado');
     } catch (err) {
       const e = err as ApiError;
       if (e.code === PrestamoErrorCodes.PRESTAMO_NO_VIGENTE) {
-        toast.error('El préstamo no está vigente. No se pueden registrar más abonos.');
+        toast.error('El préstamo no está vigente. No se pueden registrar más pagos.');
       } else if (e.code === PrestamoErrorCodes.PRESTAMO_SIN_CUOTAS_PENDIENTES) {
         toast.error('Todas las cuotas del préstamo ya fueron aplicadas.');
       } else {
-        toast.error(e.message ?? 'No se pudo registrar el abono');
+        toast.error(e.message ?? 'No se pudo registrar el pago');
       }
     } finally {
       setGuardando(false);
@@ -193,7 +217,7 @@ export default function AbonosPrestamo() {
         </Button>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-primary">Abonos del Préstamo</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-primary">Pagos del Préstamo</h1>
             <p className="text-muted-foreground mt-1">
               {p.concepto}
             </p>
@@ -204,7 +228,7 @@ export default function AbonosPrestamo() {
               className="bg-primary hover:bg-primary/90 gap-2"
             >
               <Plus className="h-4 w-4" />
-              Nuevo Abono
+              Registrar pago
             </Button>
           )}
         </div>
@@ -272,7 +296,7 @@ export default function AbonosPrestamo() {
               <CheckCircle2 className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Abonos realizados</p>
+              <p className="text-xs text-muted-foreground">Cuotas pagadas</p>
               <p className="text-xl font-bold">{abonos.length}</p>
             </div>
           </CardContent>
@@ -305,10 +329,10 @@ export default function AbonosPrestamo() {
         </Card>
       </div>
 
-      {/* Tabla de abonos */}
+      {/* Tabla de pagos */}
       <Card className="border-border">
         <CardHeader className="pb-0">
-          <CardTitle className="text-base">Historial de Abonos</CardTitle>
+          <CardTitle className="text-base">Historial de pagos</CardTitle>
         </CardHeader>
         <CardContent className="p-0 mt-4">
           <div className="overflow-x-auto">
@@ -316,18 +340,19 @@ export default function AbonosPrestamo() {
               <thead>
                 <tr className="border-b border-border bg-muted/30">
                   <th className="text-left p-4 text-xs font-semibold text-muted-foreground">Fecha</th>
-                  <th className="text-right p-4 text-xs font-semibold text-muted-foreground">Valor Abono</th>
+                  <th className="text-right p-4 text-xs font-semibold text-muted-foreground">Valor pagado</th>
                   <th className="text-left p-4 text-xs font-semibold text-muted-foreground">Medio de Pago</th>
                   <th className="text-left p-4 text-xs font-semibold text-muted-foreground">Referencia</th>
                   <th className="text-left p-4 text-xs font-semibold text-muted-foreground">Nota</th>
-                  <th className="text-right p-4 text-xs font-semibold text-muted-foreground">Saldo Tras Abono</th>
+                  <th className="text-right p-4 text-xs font-semibold text-muted-foreground">Saldo tras el pago</th>
+                  <th className="p-4"></th>
                 </tr>
               </thead>
               <tbody>
                 {abonos.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-muted-foreground">
-                      Sin abonos registrados aún.
+                    <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                      Sin pagos registrados aún.
                     </td>
                   </tr>
                 ) : (
@@ -372,6 +397,23 @@ export default function AbonosPrestamo() {
                           ${toNumber(a.saldo_tras_abono).toLocaleString('es-CO')}
                         </span>
                       </td>
+                      <td className="p-4 text-right">
+                        {/* El recibo de este pago, para entregárselo al
+                            colaborador. Sin el préstamo cargado no se puede
+                            armar la cabecera, así que el botón no sale. */}
+                        {prestamo && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => void descargarComprobanteAbono(prestamo, a)}
+                            className="gap-1.5 text-xs"
+                            title="Descargar el comprobante de este pago"
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                            Recibo
+                          </Button>
+                        )}
+                      </td>
                     </tr>
                   ))
                 )}
@@ -381,16 +423,19 @@ export default function AbonosPrestamo() {
         </CardContent>
       </Card>
 
-      {/* Modal nuevo abono */}
+      {/* Modal de pago de cuota */}
       <Dialog open={modalAbierto} onOpenChange={setModalAbierto}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <DollarSign className="h-5 w-5 text-primary" />
-              Registrar Nuevo Abono
+              Registrar pago de cuota
             </DialogTitle>
             <DialogDescription>
-              {p.concepto} · Se aplicará la próxima cuota pendiente (${cuota.toLocaleString('es-CO')})
+              {p.concepto}
+              {saldarTodo
+                ? ` · Se aplican las ${cuotasPendientes} cuotas pendientes ($${saldoPendiente.toLocaleString('es-CO')})`
+                : ` · Se aplica la próxima cuota pendiente del calendario ($${cuota.toLocaleString('es-CO')})`}
             </DialogDescription>
           </DialogHeader>
 
@@ -405,7 +450,7 @@ export default function AbonosPrestamo() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label>Fecha del abono</Label>
+                <Label>Fecha del pago</Label>
                 <Input
                   type="date"
                   value={form.fecha}
@@ -414,24 +459,26 @@ export default function AbonosPrestamo() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Valor del abono</Label>
+                <Label>{saldarTodo ? 'Valor a pagar' : 'Valor de la cuota'}</Label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
                   <Input
                     type="text"
                     inputMode="numeric"
-                    placeholder={cuota.toLocaleString('es-CO')}
+                    placeholder={(saldarTodo ? saldoPendiente : cuota).toLocaleString('es-CO')}
                     value={formatThousands(form.valor)}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, valor: parseCOP(e.target.value) }))
                     }
                     className="pl-7"
                     disabled
-                    title="El valor lo determina automáticamente el backend según la cuota"
+                    title="Es el valor de la próxima cuota pendiente del calendario"
                   />
                 </div>
                 <p className="text-[10px] text-muted-foreground">
-                  El backend aplica el monto de la cuota pendiente.
+                  {saldarTodo
+                    ? 'Es la suma de las cuotas pendientes.'
+                    : 'Se paga la cuota completa: el monto no se puede partir.'}
                 </p>
               </div>
             </div>
@@ -470,12 +517,29 @@ export default function AbonosPrestamo() {
                 Nota <span className="text-muted-foreground font-normal">(opcional)</span>
               </Label>
               <Input
-                placeholder="Observación sobre este abono..."
+                placeholder="Observación sobre este pago..."
                 value={form.nota}
                 onChange={(e) => setForm((f) => ({ ...f, nota: e.target.value }))}
                 maxLength={500}
               />
             </div>
+
+            {/* §8.3 — El colaborador consiguió el dinero y paga lo que
+                queda: se aplican todas las cuotas pendientes de una vez. */}
+            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3">
+              <Checkbox
+                checked={saldarTodo}
+                onCheckedChange={(v) => setSaldarTodo(v === true)}
+                className="mt-0.5"
+              />
+              <span className="text-sm">
+                <span className="font-medium">Saldar el préstamo completo</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  Paga las {cuotasPendientes} cuota{cuotasPendientes === 1 ? '' : 's'} que
+                  quedan y deja el préstamo en cero.
+                </span>
+              </span>
+            </label>
 
             {/* Vista previa */}
             <div className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm space-y-1">
@@ -484,13 +548,13 @@ export default function AbonosPrestamo() {
                 <span>${saldoPendiente.toLocaleString('es-CO')}</span>
               </div>
               <div className="flex justify-between text-destructive">
-                <span>— Abono</span>
-                <span>-${cuota.toLocaleString('es-CO')}</span>
+                <span>{saldarTodo ? '— Saldo completo' : '— Cuota'}</span>
+                <span>-${(saldarTodo ? saldoPendiente : cuota).toLocaleString('es-CO')}</span>
               </div>
               <div className="flex justify-between font-bold border-t border-border pt-1 mt-1">
                 <span>Saldo después</span>
-                <span className={saldoPendiente - cuota <= 0 ? 'text-success' : 'text-foreground'}>
-                  ${Math.max(0, saldoPendiente - cuota).toLocaleString('es-CO')}
+                <span className={saldarTodo || saldoPendiente - cuota <= 0 ? 'text-success' : 'text-foreground'}>
+                  ${saldarTodo ? 0 : Math.max(0, saldoPendiente - cuota).toLocaleString('es-CO')}
                 </span>
               </div>
             </div>
@@ -510,7 +574,7 @@ export default function AbonosPrestamo() {
               className="bg-primary hover:bg-primary/90 gap-2"
             >
               {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-              Registrar Abono
+              {saldarTodo ? 'Saldar préstamo' : 'Registrar pago'}
             </Button>
           </DialogFooter>
         </DialogContent>

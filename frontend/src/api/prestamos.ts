@@ -278,6 +278,15 @@ export interface RegistrarAbonoPayload {
   referencia?: string | null;
   /** Observación interna. Max 500. */
   nota?: string | null;
+  /**
+   * §8.3 — `true` aplica **todas** las cuotas pendientes de una vez, con la
+   * misma fecha, medio y referencia, y deja el préstamo PAGADO.
+   *
+   * No existe el abono parcial por monto libre: el modelo es por cuota, y el
+   * valor nunca se envía (es la suma de los montos pendientes). Como la última
+   * cuota absorbe el residuo del redondeo, el saldo cierra exacto en cero.
+   */
+  saldar?: boolean;
 }
 
 // ─── Endpoints ────────────────────────────────────────────────────────────────
@@ -352,7 +361,8 @@ export const prestamosApi = {
   /**
    * POST /prestamos/{id}/abonos — registra un abono DIRECTO (no proveniente
    * de nómina). El backend auto-aplica la próxima cuota PENDIENTE del
-   * calendario y devuelve resumen + historial actualizado (doc §8.2).
+   * calendario, o **todas** con `saldar: true` (§8.3), y devuelve resumen +
+   * historial actualizado (doc §8.2).
    *
    * Errores: 422 `PRESTAMO_NO_VIGENTE`, 422 `PRESTAMO_SIN_CUOTAS_PENDIENTES`.
    */

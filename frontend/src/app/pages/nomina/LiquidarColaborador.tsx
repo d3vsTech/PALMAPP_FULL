@@ -49,6 +49,7 @@ import {
   CategoriaResumenTrabajo,
   NominaErrorCodes,
   PrestamoCuotaPendiente,
+  PrestamoVigentePreview,
   type ValidacionCosechaDetalleColaborador,
 } from '../../../api/nomina';
 import type { ApiError } from '../../../api/client';
@@ -69,6 +70,13 @@ interface DeduccionLocal {
    * (doc §5.3). Al confirmar, el backend marca la cuota como APLICADA.
    */
   prestamo_cuota_id?: number;
+  /**
+   * Si la fila salda el préstamo completo en vez de una cuota. Viaja como
+   * `prestamo_id` + `saldar: true`, y el `valor` tiene que ser el
+   * `saldo_pendiente` exacto que trae el preview.
+   */
+  prestamo_id?: number;
+  saldar?: boolean;
 }
 
 /** Colores V.19 por labor — se usan en el header de cada categoría del
@@ -309,6 +317,46 @@ export default function LiquidarColaborador() {
     setDeducciones((prev) => prev.map((d, idx) => (idx === i ? { ...d, [campo]: valor } : d)));
 
   /**
+   * El concepto bajo el que entra un descuento de préstamo, en este orden:
+   * 1) DCTO_ADELANTO o subtipo PRESTAMO del catálogo del tenant;
+   * 2) el primer DEDUCCION_VOLUNTARIA disponible;
+   * 3) si el catálogo está vacío, se crea.
+   *
+   * El módulo de Préstamos maneja las cuotas, pero el backend de nómina exige
+   * `concepto_id` en cada deducción voluntaria (§5.3): se siembra solo para no
+   * dejar al liquidador atascado. Devuelve `null` si no se pudo resolver.
+   */
+  const resolverConceptoPrestamo = async (): Promise<NominaConcepto | null> => {
+    const existente = conceptos.find(
+      (c) => c.subtipo === 'PRESTAMO' || c.codigo === 'DCTO_ADELANTO',
+    ) ?? conceptos[0];
+    if (existente) return existente;
+
+    try {
+      const creado = await nominaApi.conceptos.crear({
+        codigo: 'DCTO_ADELANTO',
+        nombre: 'Descuento Adelantos / Préstamo',
+        tipo: 'DEDUCCION_VOLUNTARIA',
+        subtipo: 'PRESTAMO',
+        operacion: 'RESTA',
+        calculo: 'VALOR_FIJO',
+        aplica_a: 'AMBOS',
+        activo: true,
+      } as Partial<NominaConcepto>);
+      setConceptos((prev) => [...prev, creado.data]);
+      toast.success('Concepto "DCTO_ADELANTO" activado automáticamente');
+      return creado.data;
+    } catch (err) {
+      toast.error(
+        (err as ApiError).message
+          ?? 'No se pudo activar el concepto para préstamos. Ve a Configuración → Conceptos de nómina.',
+        { duration: 6000 },
+      );
+      return null;
+    }
+  };
+
+  /**
    * Aplica una cuota de préstamo pendiente como una nueva fila de deducciones
    * voluntarias. Pre-selecciona el concepto de subtipo PRESTAMO
    * (`DCTO_ADELANTO` sembrado por default) si existe en el catálogo del tenant.
@@ -319,48 +367,19 @@ export default function LiquidarColaborador() {
       toast.info('Esta cuota ya fue agregada a las deducciones');
       return;
     }
-    // Prioridad para el `concepto_id`:
-    // 1) DCTO_ADELANTO / subtipo=PRESTAMO del catálogo del tenant.
-    // 2) Primer concepto DEDUCCION_VOLUNTARIA disponible (fallback).
-    // 3) Si el catálogo está vacío o no tiene ninguno, lo creamos on-the-fly.
-    //    El módulo de Préstamos maneja las cuotas, pero el backend de nómina
-    //    exige `concepto_id` en cada deducción voluntaria (§5.3). Sembramos
-    //    automáticamente para no bloquear al liquidador.
-    let conceptoPrestamo: NominaConcepto | undefined = conceptos.find(
-      (c) => c.subtipo === 'PRESTAMO' || c.codigo === 'DCTO_ADELANTO',
-    ) ?? conceptos[0];
-
-    if (!conceptoPrestamo) {
-      try {
-        const creado = await nominaApi.conceptos.crear({
-          codigo: 'DCTO_ADELANTO',
-          nombre: 'Descuento Adelantos / Préstamo',
-          tipo: 'DEDUCCION_VOLUNTARIA',
-          subtipo: 'PRESTAMO',
-          operacion: 'RESTA',
-          calculo: 'VALOR_FIJO',
-          aplica_a: 'AMBOS',
-          activo: true,
-        } as Partial<NominaConcepto>);
-        conceptoPrestamo = creado.data;
-        // Refrescamos el catálogo local para que futuras cuotas y el UI lo vean.
-        setConceptos((prev) => [...prev, creado.data]);
-        toast.success('Concepto "DCTO_ADELANTO" activado automáticamente');
-      } catch (err) {
-        const e = err as ApiError;
-        toast.error(
-          e.message
-            ?? 'No se pudo activar el concepto para préstamos. Ve a Configuración → Conceptos de nómina.',
-          { duration: 6000 },
-        );
-        return;
-      }
+    // Saldar y pagar una cuota del mismo préstamo se contradicen: el saldo ya
+    // incluye esa cuota y el backend rechazaría el valor.
+    if (deducciones.some((d) => d.saldar && d.prestamo_id === cuota.prestamo_id)) {
+      toast.error('Ese préstamo ya se está saldando completo en esta liquidación');
+      return;
     }
+    const conceptoPrestamo = await resolverConceptoPrestamo();
+    if (!conceptoPrestamo) return;
 
     setDeducciones((prev) => [
       ...prev,
       {
-        concepto_id: conceptoPrestamo!.id,
+        concepto_id: conceptoPrestamo.id,
         valor: cuota.monto,
         observacion: `Cuota ${cuota.numero_cuota}/${cuota.total_cuotas} - ${cuota.concepto}`,
         prestamo_cuota_id: cuota.prestamo_cuota_id,
@@ -368,6 +387,50 @@ export default function LiquidarColaborador() {
     ]);
     toast.success(`Cuota ${cuota.numero_cuota}/${cuota.total_cuotas} agregada`);
   };
+
+  /**
+   * Descuenta todo el saldo del préstamo en un solo renglón (API_PRESTAMOS
+   * §7.2). El `valor` es el `saldo_pendiente` del preview, sin tocar: el
+   * backend lo compara exacto y responde `PRESTAMO_VALOR_NO_COINCIDE` si no
+   * cuadra.
+   */
+  const saldarPrestamo = async (p: PrestamoVigentePreview) => {
+    if (deducciones.some((d) => d.saldar && d.prestamo_id === p.prestamo_id)) {
+      toast.info('Ese préstamo ya se está saldando en esta liquidación');
+      return;
+    }
+    const cuotaDelMismo = deducciones.find(
+      (d) => d.prestamo_cuota_id != null
+        && (preview?.prestamos_pendientes ?? []).some(
+          (c) => c.prestamo_cuota_id === d.prestamo_cuota_id && c.prestamo_id === p.prestamo_id,
+        ),
+    );
+    if (cuotaDelMismo) {
+      toast.error('Quite primero la cuota de ese préstamo: el saldo ya la incluye');
+      return;
+    }
+    const concepto = await resolverConceptoPrestamo();
+    if (!concepto) return;
+
+    setDeducciones((prev) => [
+      ...prev,
+      {
+        concepto_id: concepto.id,
+        valor: p.saldo_pendiente,
+        observacion: `Saldo del préstamo - ${p.concepto}`,
+        prestamo_id: p.prestamo_id,
+        saldar: true,
+      },
+    ]);
+    toast.success(`Saldo de "${p.concepto}" agregado a las deducciones`);
+  };
+
+  /** Préstamos que ya se saldan en esta liquidación. */
+  const prestamosSaldados = new Set(
+    deducciones
+      .filter((d) => d.saldar && d.prestamo_id != null)
+      .map((d) => d.prestamo_id as number),
+  );
 
   /** IDs de cuotas ya agregadas — para deshabilitar el botón "Aplicar". */
   const cuotasAplicadas = new Set(
@@ -412,6 +475,7 @@ export default function LiquidarColaborador() {
       ? []
       : deducciones.filter((d) =>
           d.prestamo_cuota_id != null
+            || d.saldar
             || (d.concepto_id && d.valor > 0),
         );
     const bonificacionesEfectivas = esOperario
@@ -421,7 +485,9 @@ export default function LiquidarColaborador() {
       // Solo validamos ítems del usuario (sin `prestamo_cuota_id`): valor > 0
       // sin concepto, o concepto sin valor. Las cuotas de préstamo se
       // aplicaron desde el botón "Aplicar" y ya vienen con datos válidos.
-      const dedManuales = deducciones.filter((d) => d.prestamo_cuota_id == null);
+      const dedManuales = deducciones.filter(
+        (d) => d.prestamo_cuota_id == null && !d.saldar,
+      );
       if (dedManuales.some((d) => (d.concepto_id && d.valor <= 0)
         || (!d.concepto_id && d.valor > 0))) {
         toast.error('Completa el concepto y el valor en las deducciones agregadas');
@@ -434,7 +500,7 @@ export default function LiquidarColaborador() {
       }
       // Si hay cuotas de préstamo sin concepto asignado (el catálogo del
       // tenant no tiene DCTO_ADELANTO), avisamos con acción clara.
-      if (deducciones.some((d) => d.prestamo_cuota_id != null && !d.concepto_id)) {
+      if (deducciones.some((d) => (d.prestamo_cuota_id != null || d.saldar) && !d.concepto_id)) {
         toast.error(
           'Falta activar un concepto de deducción voluntaria (ej. DCTO_ADELANTO) en Configuración → Conceptos de nómina para aplicar la cuota de préstamo.',
           { duration: 6000 },
@@ -465,6 +531,10 @@ export default function LiquidarColaborador() {
               // el ID para que el backend marque la cuota como APLICADA
               // y actualice el saldo (doc §5.3 + §15).
               prestamo_cuota_id: d.prestamo_cuota_id,
+              // O el préstamo entero: todas sus cuotas pendientes bajo este
+              // mismo concepto. Los dos campos son excluyentes por ítem.
+              prestamo_id: d.prestamo_id,
+              saldar: d.saldar,
             })),
           };
       // Si vino ?reliquidar=1, usar PUT (re-liquidar). Si no, POST (liquidar).
@@ -497,8 +567,21 @@ export default function LiquidarColaborador() {
       const e = err as ApiError;
       if (e.code === NominaErrorCodes.PRESTAMO_CUOTA_NO_PENDIENTE) {
         toast.error('Una de las cuotas de préstamo ya fue aplicada en otra nómina');
-      } else if (e.code === NominaErrorCodes.PRESTAMO_CUOTA_EMPLEADO_MISMATCH) {
-        toast.error('La cuota de préstamo no pertenece a este colaborador');
+      } else if (e.code === NominaErrorCodes.PRESTAMO_CUOTA_EMPLEADO_MISMATCH
+        || e.code === NominaErrorCodes.PRESTAMO_EMPLEADO_MISMATCH) {
+        toast.error('El préstamo no pertenece a este colaborador');
+      } else if (e.code === NominaErrorCodes.PRESTAMO_NO_VIGENTE) {
+        toast.error('El préstamo ya no está vigente: se pagó o se canceló');
+      } else if (e.code === NominaErrorCodes.PRESTAMO_SIN_CUOTAS_PENDIENTES) {
+        toast.error('Ese préstamo ya no tiene cuotas pendientes');
+      } else if (e.code === NominaErrorCodes.PRESTAMO_VALOR_NO_COINCIDE) {
+        // El backend compara contra el monto exacto. Si llegamos aquí, el
+        // saldo cambió mientras la pantalla estaba abierta: recargar el
+        // preview trae los valores nuevos.
+        toast.error('El valor del préstamo cambió', {
+          duration: 9000,
+          description: e.message ?? 'Quite la fila y vuelva a agregarla con el valor actualizado.',
+        });
       } else if (e.code === NominaErrorCodes.NOVEDADES_PENDIENTES_EN_PERIODO) {
         // PR-N8 — El preview ya lo anticipa en `bloqueos[]`, así que llegar
         // aquí significa que la novedad se registró mientras esta pantalla
@@ -1286,6 +1369,49 @@ export default function LiquidarColaborador() {
                     </div>
                   );
                 })}
+                {/* Préstamos vigentes: lo que `prestamos_pendientes` no
+                    permite. Ahí solo está la cuota de ESTE período; aquí está
+                    el saldo completo, para cuando el colaborador se retira o
+                    pide que se lo descuenten todo de una vez. También sale el
+                    préstamo que no tiene cuota en el período. */}
+                {(preview.prestamos_vigentes ?? []).map((p) => {
+                  const yaSaldado = prestamosSaldados.has(p.prestamo_id);
+                  const cuotaEnElPeriodo = (preview.prestamos_pendientes ?? [])
+                    .some((c) => c.prestamo_id === p.prestamo_id);
+                  return (
+                    <div key={`vigente-${p.prestamo_id}`} className="border-b border-destructive/10 px-4 py-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                            {p.concepto}
+                          </p>
+                          <p className="mt-0.5 text-[10px] text-muted-foreground">
+                            {p.cuotas_pagadas}/{p.num_cuotas} cuotas pagadas
+                            {!cuotaEnElPeriodo && ' · sin cuota en este período'}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="text-right">
+                            <p className="text-[10px] text-muted-foreground">Saldo</p>
+                            <p className="font-semibold text-destructive">
+                              ${p.saldo_pendiente.toLocaleString('es-CO')}
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => saldarPrestamo(p)}
+                            disabled={yaSaldado || p.saldo_pendiente <= 0}
+                            className={yaSaldado ? 'h-7 border-success/50 text-success' : 'h-7'}
+                          >
+                            {yaSaldado ? 'Se salda' : 'Saldar todo'}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
                 {/* Deducciones voluntarias por concepto del catálogo. Cada
                     fila muestra un "+ Agregar" que crea una sub-fila con
                     valor + observación.
@@ -1341,7 +1467,7 @@ export default function LiquidarColaborador() {
                                   onChange={(e) => actualizarDeduccion(idx, 'valor', Number(e.target.value))}
                                   placeholder="Valor"
                                   className="h-8 text-sm"
-                                  disabled={!!d.prestamo_cuota_id}
+                                  disabled={!!d.prestamo_cuota_id || !!d.saldar}
                                 />
                               </div>
                               <div className="col-span-7">

@@ -16,6 +16,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/ca
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Textarea } from '../../components/ui/textarea';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '../../components/ui/select';
+import { formatThousands, parseCOP } from '../../components/lib/format';
 import { Badge } from '../../components/ui/badge';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -26,7 +30,7 @@ import {
   BreadcrumbPage, BreadcrumbSeparator,
 } from '../../components/ui/breadcrumb';
 import {
-  ArrowLeft, DollarSign, User, TrendingDown, Check, Loader2, Save, Trash2,
+  ArrowLeft, DollarSign, FileSignature, User, TrendingDown, Check, Loader2, Save, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -34,10 +38,12 @@ import {
   PrestamoErrorCodes,
   type Prestamo,
   type EstadoPrestamo,
+  type EditarPrestamoPayload,
 } from '../../../api/prestamos';
 import type { ApiError } from '../../../api/client';
 import { formatFecha } from '../../utils/fecha';
 import { SoportePrestamoCard } from '../../components/nomina/SoportePrestamoCard';
+import { descargarComprobantePrestamo } from './prestamoPdf';
 
 function toNumber(v: string | number | null | undefined): number {
   if (v == null) return 0;
@@ -46,6 +52,16 @@ function toNumber(v: string | number | null | undefined): number {
 }
 
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const ANIO_ACTUAL = new Date().getFullYear();
+
+/**
+ * Mientras nadie haya pagado una cuota, el monto y el calendario se pueden
+ * rehacer enteros. Con una cuota aplicada el backend responde
+ * `PRESTAMO_NO_EDITABLE` a cualquier campo financiero.
+ */
+function puedeEditarMontosDe(p: Prestamo): boolean {
+  return p.cuotas_pagadas === 0 && p.estado === 'VIGENTE';
+}
 
 function periodoCuota(anio: number, mes: number, quincena: number | null): string {
   const mesLabel = MESES[mes - 1] ?? String(mes);
@@ -73,6 +89,16 @@ export default function PrestamoDetalle() {
   // Formulario editable
   const [editConcepto, setEditConcepto] = useState('');
   const [editObservaciones, setEditObservaciones] = useState('');
+  /**
+   * Lo financiero solo viaja mientras `cuotas_pagadas` sea 0: con una cuota
+   * aplicada el backend responde `PRESTAMO_NO_EDITABLE`. Se guardan como texto
+   * porque vienen de inputs.
+   */
+  const [editValorTotal, setEditValorTotal] = useState('');
+  const [editNumCuotas, setEditNumCuotas] = useState('');
+  const [editAnio, setEditAnio] = useState('');
+  const [editMes, setEditMes] = useState('');
+  const [editQuincena, setEditQuincena] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [confirmarCancelar, setConfirmarCancelar] = useState(false);
   const [cancelando, setCancelando] = useState(false);
@@ -92,6 +118,11 @@ export default function PrestamoDetalle() {
         setPrestamo(res.data);
         setEditConcepto(res.data.concepto ?? '');
         setEditObservaciones(res.data.observaciones ?? '');
+        setEditValorTotal(String(Math.round(toNumber(res.data.valor_total))));
+        setEditNumCuotas(String(res.data.num_cuotas));
+        setEditAnio(String(res.data.inicio_anio));
+        setEditMes(String(res.data.inicio_mes));
+        setEditQuincena(res.data.inicio_quincena ? String(res.data.inicio_quincena) : '');
       })
       .catch((err: ApiError) => {
         if (reqId !== reqIdRef.current) return;
@@ -108,13 +139,33 @@ export default function PrestamoDetalle() {
   }, [prestamoId]);
 
   const guardarEdicion = async () => {
-    if (!prestamoId) return;
+    if (!prestamoId || !prestamo) return;
+
+    const payload: EditarPrestamoPayload = {
+      concepto: editConcepto.trim(),
+      observaciones: editObservaciones.trim() || null,
+    };
+
+    if (puedeEditarMontosDe(prestamo)) {
+      const total = parseFloat(editValorTotal) || 0;
+      const cuotas = parseInt(editNumCuotas) || 0;
+      if (total <= 0) return toast.error('El valor del préstamo debe ser mayor a cero');
+      if (cuotas < 1 || cuotas > 120) return toast.error('El número de cuotas va de 1 a 120');
+      if (prestamo.frecuencia === 'QUINCENAL' && !editQuincena) {
+        return toast.error('Selecciona la quincena de inicio');
+      }
+      payload.valor_total = total;
+      payload.num_cuotas = cuotas;
+      payload.inicio_anio = parseInt(editAnio);
+      payload.inicio_mes = parseInt(editMes);
+      // El backend deriva la frecuencia al crear: en un MENSUAL la quincena
+      // siempre va nula.
+      payload.inicio_quincena = prestamo.frecuencia === 'QUINCENAL' ? parseInt(editQuincena) : null;
+    }
+
     setGuardando(true);
     try {
-      await prestamosApi.editar(prestamoId, {
-        concepto: editConcepto.trim(),
-        observaciones: editObservaciones.trim() || null,
-      });
+      await prestamosApi.editar(prestamoId, payload);
       toast.success('Préstamo actualizado');
       navigate('/nomina/prestamos');
     } catch (err) {
@@ -170,6 +221,18 @@ export default function PrestamoDetalle() {
     ? Math.round((prestamo.cuotas_pagadas / prestamo.num_cuotas) * 100)
     : 0;
   const puedeCancelar = prestamo.estado === 'VIGENTE';
+  const puedeEditarMontos = puedeEditarMontosDe(prestamo);
+  /** Lo que quedaría al guardar: el backend reparte igual y la última absorbe el residuo. */
+  const cuotaRecalculada = (() => {
+    const total = parseFloat(editValorTotal) || 0;
+    const n = parseInt(editNumCuotas) || 0;
+    return n > 0 ? Math.floor(total / n) : 0;
+  })();
+  // El año del préstamo puede ser anterior al actual: sin él, el select se
+  // abriría sin la opción que ya tiene guardada.
+  const aniosDisponibles = Array.from(
+    new Set([prestamo.inicio_anio, ANIO_ACTUAL, ANIO_ACTUAL + 1]),
+  ).sort((a, b) => a - b);
 
   return (
     <div className="space-y-6">
@@ -208,16 +271,28 @@ export default function PrestamoDetalle() {
               {prestamo.empleado.nombre_completo} · CC {prestamo.empleado.documento} · {prestamo.empleado.cargo}
             </p>
           </div>
-          {puedeCancelar && (
+          <div className="flex flex-wrap gap-2">
+            {/* El pagaré con la autorización de descuento (CST arts. 149-150)
+                para imprimir, firmar y subir después como soporte. */}
             <Button
               variant="outline"
-              onClick={() => setConfirmarCancelar(true)}
-              className="gap-2 text-destructive hover:bg-destructive/10 hover:border-destructive/50"
+              onClick={() => void descargarComprobantePrestamo(prestamo)}
+              className="gap-2 border-primary/40 text-primary hover:border-primary hover:bg-primary/5"
             >
-              <Trash2 className="h-4 w-4" />
-              Cancelar préstamo
+              <FileSignature className="h-4 w-4" />
+              Comprobante para firma
             </Button>
-          )}
+            {puedeCancelar && (
+              <Button
+                variant="outline"
+                onClick={() => setConfirmarCancelar(true)}
+                className="gap-2 text-destructive hover:bg-destructive/10 hover:border-destructive/50"
+              >
+                <Trash2 className="h-4 w-4" />
+                Cancelar préstamo
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -307,6 +382,95 @@ export default function PrestamoDetalle() {
               placeholder="Ej: Préstamo personal"
             />
           </div>
+          {/* Mientras no se aplique ninguna cuota el calendario se rehace
+              entero, que es lo que el backend permite. Con una sola cuota
+              pagada esto desaparece y responde `PRESTAMO_NO_EDITABLE`. */}
+          {puedeEditarMontos && (
+            <div className="space-y-4 rounded-lg border border-border bg-muted/20 p-4">
+              <p className="text-xs text-muted-foreground">
+                Todavía no se ha aplicado ninguna cuota, así que el monto y el calendario
+                se pueden corregir. Al guardar se vuelven a generar todas las cuotas.
+              </p>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Valor del préstamo</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                    <Input
+                      inputMode="numeric"
+                      value={formatThousands(editValorTotal)}
+                      onChange={(e) => setEditValorTotal(parseCOP(e.target.value))}
+                      className="pl-7"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>
+                    {prestamo.frecuencia === 'QUINCENAL' ? 'Número de quincenas' : 'Número de meses'}
+                  </Label>
+                  <Input
+                    inputMode="numeric"
+                    value={editNumCuotas}
+                    onChange={(e) => setEditNumCuotas(e.target.value.replace(/\D/g, ''))}
+                    placeholder="Ej: 10"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="space-y-2">
+                  <Label>Año de inicio</Label>
+                  <Select value={editAnio} onValueChange={setEditAnio}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {aniosDisponibles.map((a) => (
+                        <SelectItem key={a} value={String(a)}>{a}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Mes de inicio</Label>
+                  <Select value={editMes} onValueChange={setEditMes}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {MESES.map((m, i) => (
+                        <SelectItem key={m} value={String(i + 1)}>{m}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {prestamo.frecuencia === 'QUINCENAL' && (
+                  <div className="space-y-2">
+                    <Label>Quincena</Label>
+                    <Select value={editQuincena} onValueChange={setEditQuincena}>
+                      <SelectTrigger><SelectValue placeholder="Elegir" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">1ª quincena (1-15)</SelectItem>
+                        <SelectItem value="2">2ª quincena (16-fin)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+
+              {cuotaRecalculada > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-background px-4 py-3 text-sm">
+                  <span className="text-muted-foreground">
+                    Cuota {prestamo.frecuencia === 'QUINCENAL' ? 'por quincena' : 'por mes'}
+                  </span>
+                  <span className="font-bold text-primary">
+                    ${cuotaRecalculada.toLocaleString('es-CO')}
+                  </span>
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                La última cuota absorbe el residuo del redondeo.
+              </p>
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label>Observaciones</Label>
             <Textarea

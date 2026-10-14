@@ -509,6 +509,34 @@ export interface ConceptoLegalPreview {
  * Al confirmar, pasa el `prestamo_cuota_id` en `deducciones_voluntarias[]`
  * y el backend marca la cuota como APLICADA + actualiza el saldo.
  */
+/**
+ * Un préstamo VIGENTE del colaborador, tenga o no cuota en este período
+ * (API_PRESTAMOS §7.1).
+ *
+ * Existe para las dos cosas que `prestamos_pendientes` no permite: **saldar**
+ * el préstamo completo (`saldo_pendiente` es el `valor` exacto que exige el
+ * backend) y **adelantar** una cuota futura (`proxima_cuota`).
+ */
+export interface PrestamoVigentePreview {
+  prestamo_id: number;
+  concepto: string;
+  valor_total: number;
+  /** Suma de los montos pendientes. Es el `valor` que hay que mandar al saldar. */
+  saldo_pendiente: number;
+  cuota_valor: number;
+  cuotas_pagadas: number;
+  num_cuotas: number;
+  cuotas_pendientes: number;
+  proxima_cuota: {
+    prestamo_cuota_id: number;
+    numero_cuota: number;
+    anio: number;
+    mes: number;
+    quincena: number | null;
+    monto: number;
+  } | null;
+}
+
 export interface PrestamoCuotaPendiente {
   prestamo_cuota_id: number;
   prestamo_id: number;
@@ -749,6 +777,11 @@ export interface PreviewLiquidacion {
    * Puede llegar vacío `[]`.
    */
   prestamos_pendientes?: PrestamoCuotaPendiente[];
+  /**
+   * §5.1 — Todo préstamo VIGENTE del colaborador, con su saldo y su próxima
+   * cuota. `[]` si no tiene. Solo colaboradores internos.
+   */
+  prestamos_vigentes?: PrestamoVigentePreview[];
   /**
    * Horas extras APROBADAS del empleado que están siendo incluidas en el
    * cálculo actual (doc §5.1). Permite mostrar el tipo real (HED, HEN, etc.)
@@ -1084,14 +1117,32 @@ export interface DeduccionVoluntariaInput {
   valor: number;
   observacion?: string;
   /**
-   * Vincula la deducción a una cuota de préstamo (doc §5.3 + §15). Si se
-   * envía, el backend marca `PrestamoCuota` como APLICADA y actualiza el
-   * saldo del préstamo. Cuando `cuotas_pagadas == num_cuotas`, el préstamo
-   * pasa a `estado=PAGADO` automáticamente.
+   * Vincula la deducción a **una cuota** de préstamo (doc §5.3 + §15). El
+   * backend la marca APLICADA y baja el saldo; si era la última, el préstamo
+   * queda PAGADO. La cuota no tiene que ser de este período: se puede
+   * adelantar una futura.
    *
-   * Errores posibles: `PRESTAMO_CUOTA_NO_PENDIENTE`, `PRESTAMO_CUOTA_EMPLEADO_MISMATCH`.
+   * ⚠ `valor` debe ser **exactamente** el `monto` de la cuota. Desde
+   * 2026-10-14 un valor distinto responde 422 `PRESTAMO_VALOR_NO_COINCIDE`:
+   * lo que se le descuenta al colaborador tiene que ser lo que baja el saldo.
+   * Un valor en 0 ya no "omite" la cuota en silencio; para omitirla no se
+   * envía.
+   *
+   * Errores: `PRESTAMO_CUOTA_NO_PENDIENTE`, `PRESTAMO_CUOTA_EMPLEADO_MISMATCH`,
+   * `PRESTAMO_NO_VIGENTE`, `PRESTAMO_VALOR_NO_COINCIDE`.
    */
   prestamo_cuota_id?: number;
+  /**
+   * Descuenta **todo el saldo** del préstamo en un solo renglón: todas sus
+   * cuotas pendientes pasan a APLICADA bajo este concepto y el préstamo queda
+   * PAGADO. Exige `saldar: true` y `valor` igual a
+   * `prestamos_vigentes[].saldo_pendiente`.
+   *
+   * Excluyente con `prestamo_cuota_id` en el mismo ítem.
+   */
+  prestamo_id?: number;
+  /** Obligatorio junto a `prestamo_id`; sin él el backend responde 422. */
+  saldar?: boolean;
 }
 
 export interface LiquidarPayload {
@@ -2584,6 +2635,17 @@ export const NominaErrorCodes = {
    * (doc §15).
    */
   PRESTAMO_CUOTA_EMPLEADO_MISMATCH: 'PRESTAMO_CUOTA_EMPLEADO_MISMATCH',
+  /** `prestamo_id` + `saldar` sobre un préstamo que no es del colaborador. */
+  PRESTAMO_EMPLEADO_MISMATCH: 'PRESTAMO_EMPLEADO_MISMATCH',
+  /** La cuota o el saldo son de un préstamo CANCELADO o PAGADO. */
+  PRESTAMO_NO_VIGENTE: 'PRESTAMO_NO_VIGENTE',
+  /** `saldar` sobre un préstamo que ya no tiene cuotas pendientes. */
+  PRESTAMO_SIN_CUOTAS_PENDIENTES: 'PRESTAMO_SIN_CUOTAS_PENDIENTES',
+  /**
+   * El `valor` enviado no es el monto de la cuota ni el saldo al saldar. La
+   * respuesta trae `esperado` y `recibido`.
+   */
+  PRESTAMO_VALOR_NO_COINCIDE: 'PRESTAMO_VALOR_NO_COINCIDE',
   /**
    * Intento de crear un préstamo para un operario de tercero — solo
    * colaboradores internos son elegibles (API_PRESTAMOS §0).

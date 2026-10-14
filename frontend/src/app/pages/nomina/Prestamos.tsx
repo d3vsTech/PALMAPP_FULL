@@ -26,7 +26,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
 import {
-  ArrowLeft, Plus, Search, DollarSign, User, Calendar, Loader2, Paperclip, Trash2,
+  ArrowLeft, Plus, Search, DollarSign, Eye, User, Calendar, Loader2, Paperclip, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -332,10 +332,20 @@ export default function Prestamos() {
                               variant="outline"
                               size="sm"
                               className="text-xs gap-1.5"
+                              onClick={() => navigate(`/nomina/prestamos/${p.id}`)}
+                              title="Ver el detalle, el calendario de cuotas y el soporte"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                              Ver
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-xs gap-1.5"
                               onClick={() => navigate(`/nomina/prestamos/${p.id}/abonos`)}
                             >
                               <DollarSign className="h-3.5 w-3.5" />
-                              Abonos
+                              Pagos
                             </Button>
                             {puedeCancelar && (
                               <Button
