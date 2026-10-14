@@ -130,10 +130,15 @@ export interface CierreAutomaticoNomina {
   vacaciones_pagadas?: VacacionPagadaEnCierre[];
   /** `COSECHA_GAJOS_SIN_DESPACHAR` del cierre (§4.4). */
   advertencia?: AdvertenciaGajosSinDespachar | null;
-  /** Solo con `VACACIONES_DESACTUALIZADAS_EN_NOMINA`. */
+  /**
+   * Con `VACACIONES_DESACTUALIZADAS_EN_NOMINA`, las filas a re-liquidar; con
+   * `NOMINA_CON_NOVEDADES_PENDIENTES` (PR-N8), los colaboradores que retienen
+   * el cierre. La liquidación sí quedó guardada: la nómina sigue EN_PROGRESO.
+   */
   detalle?: {
     nomina_empleado_ids?: number[];
     vacaciones?: Array<Record<string, unknown>>;
+    colaboradores?: ColaboradorConNovedadesPendientes[];
   } | null;
 }
 
@@ -630,6 +635,23 @@ export interface VacacionBloqueante {
 }
 
 /**
+ * Un colaborador con novedades sin aprobar que retienen el cierre (§6.1, D8.4).
+ *
+ * Aparece cuando la novedad se registró **después** de liquidar su fila: esa
+ * liquidación quedó desactualizada, así que aprobar la novedad no basta y hay
+ * que volver a liquidar a esa persona. Por eso trae `nomina_empleado_id`.
+ */
+export interface ColaboradorConNovedadesPendientes {
+  nomina_empleado_id: number;
+  empleado_id: number;
+  nombre_completo: string;
+  documento: string;
+  ausencias?: AusenciaBloqueante[];
+  vacaciones?: VacacionBloqueante[];
+  fechas?: string[];
+}
+
+/**
  * Lo que impedirá el POST de liquidar, anticipado por el preview.
  *
  * No es una advertencia: con la lista no vacía, el backend responde 409 y no
@@ -642,6 +664,21 @@ export interface BloqueoLiquidacion {
   ausencias?: AusenciaBloqueante[];
   vacaciones?: VacacionBloqueante[];
   fechas?: string[];
+}
+
+/**
+ * Lo que hoy impediría cerrar la nómina (§3.6 y §6.1).
+ *
+ * La mayoría son un `code` y un texto (`NOMINA_CON_PENDIENTES`,
+ * `NOMINA_VALIDACION_COSECHA_REQUERIDA`, `NOMINA_TERCERO_NO_LIQUIDADO`).
+ * `NOMINA_CON_NOVEDADES_PENDIENTES` (PR-N8) trae además `colaboradores[]`: sin
+ * esa lista el liquidador ve "hay novedades sin aprobar" y no sabe de quién.
+ */
+export interface BloqueoCierre {
+  code: string;
+  message: string;
+  mensaje?: string;
+  colaboradores?: ColaboradorConNovedadesPendientes[];
 }
 
 export interface PendientesPorAprobar {
@@ -1903,7 +1940,7 @@ export interface PasoCuatroChecklist {
    * No incluye `VACACIONES_DESACTUALIZADAS_EN_NOMINA`, que solo se detecta
    * dentro de la transacción del cierre.
    */
-  bloqueos_cierre?: Array<{ code: string; message: string }>;
+  bloqueos_cierre?: BloqueoCierre[];
   /**
    * §3.6 — Domingos y festivos del mes que NINGUNA nómina del tenant cubre.
    * Con cortes personalizados (§2.1) un domingo puede caer en el hueco entre

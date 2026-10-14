@@ -221,6 +221,7 @@ export default function NuevaNovedadPage() {
           borrador={borrador}
           categorias={init.categorias}
           estadoInicial={init.estado_inicial_ausencias}
+          estadoConSoporte={init.estado_inicial_con_soporte}
         />
       )}
 

@@ -14,7 +14,7 @@ import { Input } from '../../components/ui/input';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
-import { Loader2, Paperclip, Plus, Search, Upload, X } from 'lucide-react';
+import { AlertTriangle, Loader2, Paperclip, Plus, Search, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   novedadesApi,
@@ -80,12 +80,29 @@ export default function NovedadesPage() {
 
   const reqId = useRef(0);
 
+  /**
+   * PR-N8 (§3.9 punto 3) — Cuántas ausencias están PENDIENTE en toda la finca,
+   * sin importar los filtros de la tabla. Es la bandeja que hay que vaciar
+   * antes de liquidar la nómina, así que el número no puede depender de lo que
+   * el usuario esté filtrando. `null` mientras no se sabe.
+   */
+  const [pendientes, setPendientes] = useState<number | null>(null);
+
   useEffect(() => {
     novedadesApi
       .init()
       .then(setInit)
       .catch(() => { /* el listado funciona sin init; solo se ocultan los botones */ });
+    contarPendientes();
   }, []);
+
+  /** Pide solo el total: `per_page: 1` porque las filas no se usan. */
+  const contarPendientes = () => {
+    novedadesApi
+      .listar({ estado: 'PENDIENTE', fuente: 'AUSENCIA', page: 1, per_page: 1 })
+      .then((res) => setPendientes(res.meta?.total ?? 0))
+      .catch(() => setPendientes(null));
+  };
 
   const cargar = () => {
     const id = ++reqId.current;
@@ -181,6 +198,30 @@ export default function NovedadesPage() {
             </Card>
           ))}
         </div>
+      )}
+
+      {/* PR-N8 — Una ausencia sin aprobar impide liquidar a ese colaborador y
+          cerrar su nómina. El acceso directo deja la bandeja a un clic en vez
+          de a dos selects. */}
+      {pendientes !== null && pendientes > 0 && (
+        <button
+          type="button"
+          onClick={() => { setEstado('PENDIENTE'); setFuente('AUSENCIA'); }}
+          className="flex w-full items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left transition hover:border-amber-300 dark:border-amber-800/40 dark:bg-amber-950/20 dark:hover:border-amber-700"
+        >
+          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+              {pendientes} {pendientes === 1 ? 'novedad' : 'novedades'} pendiente{pendientes === 1 ? '' : 's'} de aprobar
+            </p>
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              Mientras sigan sin aprobar, la nómina no liquida a esos colaboradores ni se cierra.
+            </p>
+          </div>
+          <span className="shrink-0 text-xs font-medium text-amber-800 underline underline-offset-2 dark:text-amber-300">
+            Ver pendientes
+          </span>
+        </button>
       )}
 
       <div className="flex flex-wrap items-center gap-2">
@@ -380,7 +421,7 @@ export default function NovedadesPage() {
         permisos={init?.permisos ?? null}
         init={init}
         onCerrar={() => setVerNovedad(null)}
-        onCambio={cargar}
+        onCambio={() => { cargar(); contarPendientes(); }}
       />
     </div>
   );

@@ -19,6 +19,12 @@ interface Props {
   categorias: CategoriaInit[];
   /** Con qué estado nacerá la ausencia, de `init.estado_inicial_ausencias`. */
   estadoInicial: 'APROBADA' | 'PENDIENTE';
+  /**
+   * PR-N8 — Con qué estado nacería si se adjunta el certificado
+   * (`init.estado_inicial_con_soporte`). Solo vale `APROBADA` cuando el
+   * usuario puede aprobar.
+   */
+  estadoConSoporte?: 'APROBADA' | 'PENDIENTE';
 }
 
 function CajaFecha({ rotulo, valor }: { rotulo: string; valor: string }) {
@@ -39,7 +45,37 @@ function Dato({ rotulo, valor }: { rotulo: string; valor: string }) {
   );
 }
 
-export function PasoConfirmacion({ borrador, categorias, estadoInicial }: Props) {
+/**
+ * PR-N8 (§0 y §3) — El estado con el que nacerá la ausencia depende de dos
+ * cosas: si el Paso 2 adjuntó el certificado y si quien registra puede
+ * aprobar. `estado_inicial_con_soporte` ya resuelve la segunda.
+ */
+function quedaAprobada(
+  estadoInicial: 'APROBADA' | 'PENDIENTE',
+  conSoporte: 'APROBADA' | 'PENDIENTE' | undefined,
+  tieneSoporte: boolean,
+): boolean {
+  if (estadoInicial === 'APROBADA') return true;
+  return tieneSoporte && conSoporte === 'APROBADA';
+}
+
+function avisoEstadoInicial(
+  estadoInicial: 'APROBADA' | 'PENDIENTE',
+  conSoporte: 'APROBADA' | 'PENDIENTE' | undefined,
+  tieneSoporte: boolean,
+): string {
+  if (quedaAprobada(estadoInicial, conSoporte, tieneSoporte)) {
+    return tieneSoporte
+      ? 'La novedad quedará APROBADA de inmediato, porque adjuntaste el certificado.'
+      : 'La novedad quedará APROBADA de inmediato, porque tienes permiso para aprobar.';
+  }
+  if (conSoporte === 'APROBADA') {
+    return 'La novedad quedará PENDIENTE. Si vuelves al paso anterior y adjuntas el certificado, quedará APROBADA.';
+  }
+  return 'La novedad quedará PENDIENTE hasta que alguien con permiso la apruebe.';
+}
+
+export function PasoConfirmacion({ borrador, categorias, estadoInicial, estadoConSoporte }: Props) {
   const categoria = categorias.find((c) => c.codigo === borrador.categoria);
   const motivo = borrador.motivo;
   const ausencia = esAusencia(borrador);
@@ -219,11 +255,18 @@ export function PasoConfirmacion({ borrador, categorias, estadoInicial }: Props)
       {ausencia && (
         <div className="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
           <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-          <p className="text-sm text-muted-foreground">
-            {estadoInicial === 'APROBADA'
-              ? 'La novedad quedará APROBADA de inmediato, porque tienes permiso para aprobar.'
-              : 'La novedad quedará PENDIENTE hasta que alguien con permiso la apruebe.'}
-          </p>
+          <div className="text-sm text-muted-foreground">
+            <p>{avisoEstadoInicial(estadoInicial, estadoConSoporte, !!borrador.documento)}</p>
+            {/* §0 — Mientras siga PENDIENTE, la nómina no liquida a ese
+                colaborador ni se cierra. Es la consecuencia que el usuario
+                no ve hasta quince días después. */}
+            {!quedaAprobada(estadoInicial, estadoConSoporte, !!borrador.documento) && (
+              <p className="mt-1 text-xs">
+                Mientras esté pendiente, la nómina de ese período no podrá liquidar a este
+                colaborador ni cerrarse.
+              </p>
+            )}
+          </div>
         </div>
       )}
 

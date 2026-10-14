@@ -52,10 +52,12 @@ import {
 import { AdvertenciasBanner } from '../../components/nomina/AdvertenciasBanner';
 import StatusBadge from '../../components/common/StatusBadge';
 import { toast } from 'sonner';
+import { BloqueosCierre } from '../../components/nomina/BloqueosCierre';
 import {
   nominaApi, Nomina, NominaEmpleado, NominaTercero, Periodicidad,
   NominaErrorCodes, NominaTerceroActaDetalle, MetodoPagoTercero,
   DetalleLaboresOperario,
+  type BloqueoCierre,
 } from '../../../api/nomina';
 // `operacionesApi` y `PlanillaDetalle` se removieron tras el refactor a
 // endpoints dedicados de nómina (§7.4). El listado de terceros ya no
@@ -252,9 +254,7 @@ export default function NominaDetalle() {
    * junto al resto de la precarga y se muestra en el diálogo: sin esto el
    * usuario pulsa "Cerrar" y recibe un 409 sin saber qué le falta.
    */
-  const [bloqueosCierre, setBloqueosCierre] = useState<
-    Array<{ code: string; message: string }>
-  >([]);
+  const [bloqueosCierre, setBloqueosCierre] = useState<BloqueoCierre[]>([]);
   const [descansosHuerfanosPreCierre, setDescansosHuerfanosPreCierre] = useState<
     Array<{ fecha: string; tipo: 'DOMINICAL' | 'FESTIVO'; nombre: string }>
   >([]);
@@ -2226,20 +2226,7 @@ export default function NominaDetalle() {
           })()}
           {/* §3.6 — Lo que el backend va a rechazar. Con la lista vacía el
               cierre manual pasa; con algo aquí, el 409 ya está anunciado. */}
-          {bloqueosCierre.length > 0 && (
-            <div className="my-2 rounded-lg border-2 border-destructive/40 bg-destructive/5 p-3">
-              <p className="text-sm font-semibold text-destructive">
-                {bloqueosCierre.length === 1
-                  ? 'Hay algo que impide cerrar'
-                  : `Hay ${bloqueosCierre.length} cosas que impiden cerrar`}
-              </p>
-              <ul className="mt-2 space-y-1 text-xs text-destructive/90">
-                {bloqueosCierre.map((b) => (
-                  <li key={b.code}>{b.message}</li>
-                ))}
-              </ul>
-            </div>
-          )}
+          <BloqueosCierre bloqueos={bloqueosCierre} />
           <AlertDialogFooter>
             <AlertDialogCancel disabled={accionando}>Cancelar</AlertDialogCancel>
             <AlertDialogAction

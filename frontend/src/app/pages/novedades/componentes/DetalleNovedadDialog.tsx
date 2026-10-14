@@ -11,7 +11,7 @@
  * la traduce a la pantalla que corresponde (`rutaDelDetalle`). Navegar a ella
  * tal cual lleva a un 404.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '../../../components/ui/button';
 import { Badge } from '../../../components/ui/badge';
@@ -21,7 +21,7 @@ import {
 } from '../../../components/ui/dialog';
 import {
   AlertTriangle, ArrowUpRight, Calendar, Check, Download, FileSignature, Loader2,
-  Paperclip, Pencil, Receipt, Trash2, User, X,
+  Paperclip, Pencil, Receipt, Trash2, Upload, User, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -89,6 +89,8 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
   const [cargando, setCargando] = useState(false);
   const [accion, setAccion] = useState<'aprobar' | 'rechazar' | 'editar' | 'eliminar' | null>(null);
   const [motivoRechazo, setMotivoRechazo] = useState('');
+  /** El input de archivo vive oculto: el botón visible es el que se dispara. */
+  const archivoRef = useRef<HTMLInputElement>(null);
 
   const esAusencia = fila?.fuente === 'AUSENCIA';
   /*
@@ -141,6 +143,33 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
       onCerrar();
     } catch (err) {
       toast.error((err as ApiError).message ?? 'No se pudo aprobar');
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  /**
+   * §4.6 (PR-N8) — Subir el soporte **aprueba** la novedad si quien lo sube
+   * puede aprobar. Si no, queda adjunto y la respuesta avisa con
+   * `SOPORTE_SIN_APROBAR`: por eso el `message` del backend se muestra tal
+   * cual en vez de un texto propio, es el único que sabe cómo quedó.
+   */
+  const subirSoporte = async (archivo: File) => {
+    if (!fila) return;
+    const maxKb = init?.parametros.soporte.max_kb;
+    if (maxKb && archivo.size / 1024 > maxKb) {
+      toast.error(`El archivo pesa más de ${Math.round(maxKb / 1024)} MB`);
+      return;
+    }
+    setCargando(true);
+    try {
+      const res = await novedadesApi.ausencias.subirDocumento(fila.id, archivo);
+      toast.success(res.message ?? 'Soporte adjuntado');
+      for (const a of res.advertencias ?? []) toast.warning(a.mensaje ?? a.code, { duration: 7000 });
+      setDetalle(res.data);
+      onCambio();
+    } catch (err) {
+      toast.error((err as ApiError).message ?? 'No se pudo adjuntar el soporte');
     } finally {
       setCargando(false);
     }
@@ -447,6 +476,37 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                       <Download className="h-3.5 w-3.5" />
                       Adjunto
                     </Button>
+                  )}
+                  {/* §4.6 — El soporte se adjunta en cualquier estado que lo
+                      admita (`editable.campos`); en una PENDIENTE además
+                      aprueba si quien sube puede aprobar. */}
+                  {esAusencia && detalle?.editable.campos.includes('documento') && (
+                    <>
+                      <input
+                        ref={archivoRef}
+                        type="file"
+                        className="hidden"
+                        accept={init?.parametros.soporte.mimes.map((m) => `.${m}`).join(',')}
+                        onChange={(e) => {
+                          const archivo = e.target.files?.[0];
+                          e.target.value = '';
+                          if (archivo) void subirSoporte(archivo);
+                        }}
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => archivoRef.current?.click()}
+                        disabled={cargando}
+                        className="gap-2"
+                        title={fila.estado === 'PENDIENTE' && permisos?.puede_aprobar
+                          ? 'Al adjuntar el certificado la novedad queda aprobada'
+                          : undefined}
+                      >
+                        {cargando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                        {fila.tiene_soporte ? 'Reemplazar soporte' : 'Subir soporte'}
+                      </Button>
+                    </>
                   )}
                   {!fila.tiene_soporte && detalle?.motivo_ausencia.requiere_soporte && (
                     <span className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">

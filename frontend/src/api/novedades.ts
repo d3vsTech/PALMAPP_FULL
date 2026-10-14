@@ -231,6 +231,16 @@ export interface InitNovedades {
    * avisarlo antes de confirmar.
    */
   estado_inicial_ausencias: 'APROBADA' | 'PENDIENTE';
+  /**
+   * PR-N8 — Con qué estado nacería la misma ausencia **si el Paso 2 adjunta el
+   * certificado**. Es `APROBADA` solo cuando `permisos.puede_aprobar`.
+   *
+   * No es un duplicado del campo de arriba: desde PR-N8 `estado_inicial_ausencias`
+   * es siempre `PENDIENTE`, y esta clave es lo único que dice que adjuntar el
+   * soporte ahorra el paso de aprobación. Puede faltar en un backend anterior al
+   * deploy, así que es opcional.
+   */
+  estado_inicial_con_soporte?: 'APROBADA' | 'PENDIENTE';
 }
 
 // ─── Ausencias (§4) ──────────────────────────────────────────────────────────
