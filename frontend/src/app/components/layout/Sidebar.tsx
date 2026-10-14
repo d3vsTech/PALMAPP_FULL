@@ -65,7 +65,12 @@ const navItems: NavItem[] = [
     href: '/viajes',
     icon: Truck,
     roles: ['dueño', 'administrador', 'jefe_campo'],
-    permiso: 'remisiones.ver',
+    // El módulo se llamó "remisiones" y el permiso quedó con ese nombre aquí
+    // mucho después de que el backend pasara a `viajes.*`. Mientras un usuario
+    // conservara el permiso viejo se veía igual; al reguardar sus permisos
+    // desde la pantalla nueva, que solo manda `viajes.*`, el módulo le
+    // desaparecía.
+    permiso: 'viajes.ver',
   },
    {
     label: 'Pagos',
