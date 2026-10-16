@@ -166,6 +166,7 @@ const MODULOS: Modulo[] = [
       { id: 'viajes.editar',   nombre: 'Editar',   descripcion: 'Modificar viajes' },
       { id: 'viajes.eliminar', nombre: 'Eliminar', descripcion: 'Eliminar viajes' },
       { id: 'viajes.reabrir',  nombre: 'Reabrir',  descripcion: 'Reabrir un viaje finalizado para corregirlo' },
+      { id: 'viajes.importar', nombre: 'Importar', descripcion: 'Cargar viajes históricos desde Excel' },
     ],
   },
   {

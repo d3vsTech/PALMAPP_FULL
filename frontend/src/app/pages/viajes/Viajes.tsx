@@ -390,13 +390,26 @@ export default function Viajes() {
             Gestión de despachos de fruto hacia la extractora
           </p>
         </div>
-        <Button
-          onClick={() => navigate('/viajes/nuevo')}
-          className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20"
-        >
-          <Plus className="h-5 w-5" />
-          Nuevo Viaje
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* El cargue del histórico: los despachos de antes del sistema. Va
+              visible siempre, como el resto del módulo, y el backend es el que
+              decide con el permiso `viajes.importar`. */}
+          <Button
+            variant="outline"
+            onClick={() => navigate('/viajes/importar')}
+            className="gap-2"
+          >
+            <FileUp className="h-4 w-4" />
+            Importar histórico
+          </Button>
+          <Button
+            onClick={() => navigate('/viajes/nuevo')}
+            className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20"
+          >
+            <Plus className="h-5 w-5" />
+            Nuevo Viaje
+          </Button>
+        </div>
       </div>
 
 

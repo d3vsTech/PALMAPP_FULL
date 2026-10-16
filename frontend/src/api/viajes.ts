@@ -270,6 +270,13 @@ export interface Viaje {
   /** Soporte offline (§2.4, §7). LOCAL = creado offline pendiente de sync;
    *  SINCRONIZADO = ya replicado al servidor. */
   sync_estado?: 'LOCAL' | 'SINCRONIZADO';
+  /**
+   * De dónde salió el viaje (§15, 2026-10-14). `IMPORTACION` es un despacho
+   * histórico que entró por archivo: su `finalizado_at` es el momento del
+   * cargue, no el del cierre real, así que el timeline del detalle no cuenta
+   * nada ahí. Se corrige igual que uno manual, reabriéndolo.
+   */
+  origen?: 'MANUAL' | 'IMPORTACION';
   // Auditoría
   /** FK a `users` — quien creó el viaje (§2.4). */
   creado_por?: number | null;
@@ -1107,6 +1114,13 @@ export const ViajesErrorCodes = {
   ANTHROPIC_SIN_CONFIGURAR: 'ANTHROPIC_SIN_CONFIGURAR',
   /** 403 — `tenant_config.modulo_viajes = false`. */
   MODULO_DESHABILITADO: 'MODULO_DESHABILITADO',
+  /**
+   * 409 (§15) — una nómina abierta sin liquidar cubre la fecha de algún viaje
+   * del archivo o de alguna cosecha que transporta. Solo sale en la
+   * importación masiva; los demás códigos del cargue viven en
+   * `api/importarViajes.ts`.
+   */
+  NOMINA_ABIERTA_EN_RANGO: 'NOMINA_ABIERTA_EN_RANGO',
   /**
    * 403 — la ruta pública del desprendible: el enlace firmado venció o la
    * firma no es válida.
