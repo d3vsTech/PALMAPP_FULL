@@ -46,14 +46,28 @@ import { TabLoadingGate } from './TabLoadingGate';
 type ModoEdicion =
   | { kind: 'crear-palma' }
   | { kind: 'crear-finca' }
+  | { kind: 'crear-trabajo' }
   | { kind: 'editar'; labor: Labor };
 
 type FormState = {
   nombre: string;
   tipo_pago: TipoPagoLabor;
+  /** Solo en 'crear-trabajo': la labor fija bajo la que cuelga el trabajo. */
+  labor_id: number | null;
 };
 
-const FORM_VACIO: FormState = { nombre: '', tipo_pago: 'POR_PALMA' };
+const FORM_VACIO: FormState = { nombre: '', tipo_pago: 'POR_PALMA', labor_id: null };
+
+/**
+ * Las dos labores que admiten trabajos: SANIDAD y OTROS.
+ *
+ * Son las únicas con desplegable en la tarjeta y las únicas que en el wizard
+ * de Operaciones piden elegir un trabajo. Las demás fijas son la labor misma,
+ * y una custom de palma es una labor plana con su propio precio.
+ */
+function admiteTrabajos(labor: Labor): boolean {
+  return labor.es_sistema === true && (labor.tipo === 'SANIDAD' || labor.tipo === 'OTROS');
+}
 
 export function LaboresTab() {
   const [labores, setLabores] = useState<Labor[]>([]);
@@ -66,6 +80,12 @@ export function LaboresTab() {
    * tipo=null). Las demás no admiten actividades — no muestran chevron.
    */
   const [expandidas, setExpandidas] = useState<Set<number>>(new Set());
+  /**
+   * Sube de uno cada vez que se crea un trabajo desde el botón de arriba. Va
+   * en la `key` del panel: lo remonta y vuelve a pedir su lista, que si no se
+   * quedaría con la que cargó al abrirse.
+   */
+  const [versionTrabajos, setVersionTrabajos] = useState(0);
   const toggleExpandida = (id: number) =>
     setExpandidas((prev) => {
       const next = new Set(prev);
@@ -86,6 +106,7 @@ export function LaboresTab() {
   // Subconjuntos derivados.
   const laboresPalma = labores.filter((l) => l.categoria === 'PALMA');
   const laboresFinca = labores.filter((l) => l.categoria === 'FINCA');
+  const laboresConTrabajos = laboresPalma.filter(admiteTrabajos);
 
   // ── Modal ──────────────────────────────────────────────────────────────────
   const abrirNuevaPalma = () => {
@@ -95,15 +116,51 @@ export function LaboresTab() {
 
   const abrirNuevaFinca = () => {
     setModo({ kind: 'crear-finca' });
-    setFormData({ nombre: '', tipo_pago: 'JORNAL_FIJO' });
+    setFormData({ nombre: '', tipo_pago: 'JORNAL_FIJO', labor_id: null });
+  };
+
+  /** El atajo de arriba: crea el mismo trabajo que el desplegable de la labor. */
+  const abrirNuevoTrabajo = () => {
+    setModo({ kind: 'crear-trabajo' });
+    setFormData({
+      nombre: '',
+      tipo_pago: 'JORNAL_FIJO',
+      labor_id: laboresConTrabajos[0]?.id ?? null,
+    });
   };
 
   const abrirEditar = (labor: Labor) => {
     setModo({ kind: 'editar', labor });
-    setFormData({ nombre: labor.nombre, tipo_pago: labor.tipo_pago });
+    setFormData({ nombre: labor.nombre, tipo_pago: labor.tipo_pago, labor_id: null });
   };
 
   const cerrarModal = () => setModo(null);
+
+  /**
+   * Crea un trabajo bajo Sanidad u Otros. Es el mismo endpoint que usa el
+   * desplegable de la labor (§19), así que el trabajo queda igual: sin precio
+   * propio, heredando el de la labor hasta que se le ponga uno en Precios de
+   * Labores. Al terminar deja la labor abierta para que se vea dónde quedó.
+   */
+  const crearTrabajo = async (laborId: number) => {
+    try {
+      await configuracionApi.laborActividades.crear(laborId, {
+        nombre: formData.nombre.trim(),
+      });
+      setExpandidas((prev) => new Set(prev).add(laborId));
+      setVersionTrabajos((v) => v + 1);
+      toast.success('Trabajo creado');
+      cerrarModal();
+    } catch (e: any) {
+      if (e?.code === ConfiguracionErrorCodes.ACTIVIDAD_DUPLICADA) {
+        toast.error('Ya existe un trabajo con ese nombre en esa labor');
+      } else if (e?.code === ConfiguracionErrorCodes.LABOR_NO_ADMITE_ACTIVIDADES) {
+        toast.error('Esa labor no admite trabajos');
+      } else {
+        toast.error(e?.message ?? 'No se pudo crear el trabajo');
+      }
+    }
+  };
 
   // ── Save ───────────────────────────────────────────────────────────────────
   const handleSave = async () => {
@@ -111,6 +168,15 @@ export function LaboresTab() {
 
     if (!formData.nombre.trim() && modo.kind !== 'editar') {
       toast.error('El nombre de la labor es obligatorio');
+      return;
+    }
+
+    if (modo.kind === 'crear-trabajo') {
+      if (!formData.labor_id) {
+        toast.error('Elige la labor a la que pertenece el trabajo');
+        return;
+      }
+      await crearTrabajo(formData.labor_id);
       return;
     }
 
@@ -189,6 +255,7 @@ export function LaboresTab() {
   const editingFinca = modo?.kind === 'editar' && modo.labor.categoria === 'FINCA';
   const editingCosecha = modo?.kind === 'editar' && modo.labor.tipo === 'COSECHA';
   const creatingFinca = modo?.kind === 'crear-finca';
+  const creandoTrabajo = modo?.kind === 'crear-trabajo';
   const tipoPagoVisible = !creatingFinca && !editingFinca;
 
   return (
@@ -202,25 +269,60 @@ export function LaboresTab() {
                 ? `Editar ${modo.labor.nombre}`
                 : modo?.kind === 'crear-palma'
                   ? 'Nueva Labor de Palma'
-                  : 'Nueva Labor de Finca'}
+                  : creandoTrabajo
+                    ? 'Nueva Labor'
+                    : 'Nueva Labor de Finca'}
             </DialogTitle>
             <DialogDescription>
-              Define un tipo de trabajo de campo. Los precios se configuran en
-              "Nómina y Liquidaciones &gt; Precios Labores".
+              {creandoTrabajo
+                ? 'Queda dentro de Sanidad o de Otros, y desde ahí se elige al registrar la planilla en Operaciones.'
+                : 'Define un tipo de trabajo de campo. Los precios se configuran en "Nómina y Liquidaciones > Precios Labores".'}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
+            {creandoTrabajo && (
+              <div className="space-y-2">
+                <Label htmlFor="labor_padre">
+                  Tipo de labor <span className="text-destructive">*</span>
+                </Label>
+                <Select
+                  value={formData.labor_id ? String(formData.labor_id) : ''}
+                  onValueChange={(v) =>
+                    setFormData((prev) => ({ ...prev, labor_id: Number(v) }))
+                  }
+                >
+                  <SelectTrigger id="labor_padre">
+                    <SelectValue placeholder="Elige la labor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {laboresConTrabajos.map((l) => (
+                      <SelectItem key={l.id} value={String(l.id)}>
+                        {l.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Solo Sanidad y Otros reciben trabajos. Las demás labores son el
+                  trabajo en sí.
+                </p>
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label htmlFor="nombre">
-                Nombre de la Labor <span className="text-destructive">*</span>
+                {creandoTrabajo ? 'Nombre del trabajo' : 'Nombre de la Labor'}{' '}
+                <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="nombre"
                 placeholder={
-                  modo?.kind === 'crear-finca'
-                    ? 'Ej: Reparación de portón'
-                    : 'Ej: Resiembra, Repique'
+                  creandoTrabajo
+                    ? 'Ej: Censo de plagas, Tratamiento de PC'
+                    : modo?.kind === 'crear-finca'
+                      ? 'Ej: Reparación de portón'
+                      : 'Ej: Resiembra, Repique'
                 }
                 value={formData.nombre}
                 onChange={(e) =>
@@ -235,7 +337,7 @@ export function LaboresTab() {
               )}
             </div>
 
-            {tipoPagoVisible ? (
+            {creandoTrabajo ? null : tipoPagoVisible ? (
               <div className="space-y-2">
                 <Label htmlFor="tipo_pago">
                   Tipo de Pago <span className="text-destructive">*</span>
@@ -304,6 +406,14 @@ export function LaboresTab() {
                   Labores predefinidas del sistema — edita precio y tipo de pago.
                 </CardDescription>
               </div>
+              {/* Atajo al mismo "Nuevo trabajo" del desplegable de Sanidad y
+                  Otros, que son las únicas labores a las que se les agregan. */}
+              {laboresConTrabajos.length > 0 && (
+                <Button onClick={abrirNuevoTrabajo}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Nueva Labor
+                </Button>
+              )}
             </div>
           </CardHeader>
           <CardContent className="p-6">
@@ -334,9 +444,7 @@ export function LaboresTab() {
                   // SANIDAD y OTROS. Las labores custom que el admin cree NO
                   // muestran el panel — su propósito es ser labores planas con
                   // su propio precio y tipo_pago.
-                  const admiteActividades =
-                    labor.es_sistema === true &&
-                    (labor.tipo === 'SANIDAD' || labor.tipo === 'OTROS');
+                  const admiteActividades = admiteTrabajos(labor);
                   const expandida = expandidas.has(labor.id);
                   return (
                     <div
@@ -387,7 +495,11 @@ export function LaboresTab() {
                         </div>
                       </div>
                       {admiteActividades && expandida && (
-                        <LaborActividadesPanel laborId={labor.id} open={expandida} />
+                        <LaborActividadesPanel
+                          key={`${labor.id}-${versionTrabajos}`}
+                          laborId={labor.id}
+                          open={expandida}
+                        />
                       )}
                     </div>
                   );
