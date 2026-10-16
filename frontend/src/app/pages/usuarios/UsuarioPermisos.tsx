@@ -180,6 +180,9 @@ const MODULOS: Modulo[] = [
           { id: 'nomina.crear',    nombre: 'Crear',    descripcion: 'Crear nóminas' },
           { id: 'nomina.editar',   nombre: 'Editar',   descripcion: 'Modificar nóminas' },
           { id: 'nomina.eliminar', nombre: 'Eliminar', descripcion: 'Eliminar nóminas' },
+          { id: 'nomina.importar', nombre: 'Importar', descripcion: 'Cargar nóminas históricas desde Excel y borrar lo importado' },
+          { id: 'nomina.liquidar', nombre: 'Liquidar', descripcion: 'Liquidar empleados de la nómina' },
+          { id: 'nomina.cerrar',   nombre: 'Cerrar',   descripcion: 'Cerrar y procesar nómina' },
         ],
       },
       {
@@ -195,9 +198,12 @@ const MODULOS: Modulo[] = [
     id: 'liquidaciones',
     nombre: 'Liquidaciones',
     permisos: [
-      { id: 'nomina.liquidar', nombre: 'Liquidar', descripcion: 'Liquidar empleados de la nómina' },
-      { id: 'nomina.cerrar',   nombre: 'Cerrar',   descripcion: 'Cerrar y procesar nómina' },
-      { id: 'nomina.importar', nombre: 'Importar', descripcion: 'Cargar nóminas históricas desde Excel y borrar lo importado' },
+      { id: 'liquidaciones.ver',      nombre: 'Ver',      descripcion: 'Visualizar vacaciones, prima, cesantías y liquidaciones finales' },
+      { id: 'liquidaciones.crear',    nombre: 'Crear',    descripcion: 'Crear liquidaciones' },
+      { id: 'liquidaciones.editar',   nombre: 'Editar',   descripcion: 'Modificar liquidaciones y cargar los históricos desde Excel' },
+      { id: 'liquidaciones.eliminar', nombre: 'Eliminar', descripcion: 'Eliminar liquidaciones' },
+      { id: 'liquidaciones.liquidar', nombre: 'Liquidar', descripcion: 'Liquidar y aprobar el cálculo' },
+      { id: 'liquidaciones.pagar',    nombre: 'Pagar',    descripcion: 'Registrar el pago de la liquidación' },
     ],
   },
   {
