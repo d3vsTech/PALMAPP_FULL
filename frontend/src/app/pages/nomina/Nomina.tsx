@@ -27,7 +27,7 @@ import {
 } from '../../components/ui/select';
 import {
   Plus, FileText, Calculator, TrendingUp, TrendingDown, Eye, Search, Filter,
-  DollarSign, Receipt, Users, Building2, Check, Trash2, Pencil,
+  DollarSign, Receipt, Users, Building2, Check, Trash2, Pencil, FileUp,
 } from 'lucide-react';
 import StatusBadge from '../../components/common/StatusBadge';
 import { Badge } from '../../components/ui/badge';
@@ -173,7 +173,15 @@ export default function Nomina() {
       cargarNominas();
     } catch (err) {
       const e = err as ApiError;
-      if (e.code === NominaErrorCodes.NOMINA_CON_LIQUIDADOS) {
+      if (e.code === NominaErrorCodes.NOMINA_IMPORTADA_CONSUMIDA) {
+        // La cesantía o la prima que la usó conserva su copia del cálculo y
+        // no se recalcula nunca: hay que reabrirla o eliminarla primero.
+        toast.error('Una liquidación ya usó este período', {
+          duration: 9000,
+          description: e.message
+            ?? 'Reabre o elimina esa cesantía o prima antes de borrar la importación.',
+        });
+      } else if (e.code === NominaErrorCodes.NOMINA_CON_LIQUIDADOS) {
         toast.error('No se puede eliminar: hay colaboradores liquidados');
       } else if (e.code === NominaErrorCodes.NOMINA_CERRADA) {
         toast.error('No se puede eliminar una nómina cerrada');
@@ -318,6 +326,17 @@ export default function Nomina() {
           >
             <DollarSign className="h-5 w-5" />
             Préstamos
+          </Button>
+          {/* Los períodos que la finca pagó antes del sistema. Entra por
+              archivo y queda como nómina cerrada, con su desprendible. */}
+          <Button
+            onClick={() => navigate('/nomina/importar')}
+            size="lg"
+            variant="outline"
+            className="gap-2"
+          >
+            <FileUp className="h-5 w-5" />
+            Importar histórico
           </Button>
           <Button onClick={() => navigate('/nomina/nueva')} size="lg" className="gap-2">
             <Plus className="h-5 w-5" />
@@ -576,7 +595,20 @@ export default function Nomina() {
                             </div>
                           </td>
                           <td className="p-4">
-                            <StatusBadge status={n.estado as any} />
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <StatusBadge status={n.estado as any} />
+                              {/* §16 — Un período que se pagó antes del
+                                  sistema y entró por archivo. No se liquida ni
+                                  se cierra: ya está cerrado. */}
+                              {n.origen === 'IMPORTACION' && (
+                                <Badge
+                                  variant="outline"
+                                  className="border-border text-muted-foreground"
+                                >
+                                  Histórico
+                                </Badge>
+                              )}
+                            </div>
                           </td>
                           <td className="p-4 text-right">
                             <div className="flex flex-col items-end">
@@ -656,15 +688,33 @@ export default function Nomina() {
                                   )}
                                 </>
                               ) : (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => navigate(`/nomina/${n.id}`)}
-                                  className="hover:bg-primary/10 hover:text-primary hover:border-primary gap-1"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                  Ver
-                                </Button>
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => navigate(`/nomina/${n.id}`)}
+                                    className="hover:bg-primary/10 hover:text-primary hover:border-primary gap-1"
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                    Ver
+                                  </Button>
+                                  {/* §2.5 — Una importada sí se borra, para
+                                      deshacer un cargue; una del wizard, no. */}
+                                  {n.origen === 'IMPORTACION' && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setNominaAEliminar(n);
+                                      }}
+                                      className="text-destructive hover:bg-destructive/10 hover:text-destructive hover:border-destructive/50"
+                                      title="Eliminar importación"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                </>
                               )}
                             </div>
                           </td>

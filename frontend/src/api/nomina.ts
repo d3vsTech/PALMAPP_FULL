@@ -155,6 +155,15 @@ export interface Nomina {
   observacion?: string | null;
   /** §2.6 — etiqueta opcional para distinguir dos nóminas del mismo período. */
   etiqueta?: string | null;
+  /**
+   * §16 (2026-10-16) — De dónde salió la nómina. `IMPORTACION` es un período
+   * que el cliente pagó antes de usar el sistema y entró por archivo: nace
+   * CERRADA con sus filas LIQUIDADO y los valores del archivo como snapshot.
+   *
+   * En una importada no hay nada que liquidar, cerrar ni validar: la pantalla
+   * oculta esas acciones y ofrece "Eliminar importación" en su lugar.
+   */
+  origen?: 'MANUAL' | 'IMPORTACION';
   total_fijos: string;
   total_variables: string;
   total_bonificaciones: string;
@@ -398,6 +407,14 @@ export interface NominaEmpleado {
   total_bonificaciones: string;
   total_deducciones: string;
   total_neto: string;
+  /**
+   * §16 — Cómo se liquidó la cosecha de esa persona según el archivo del
+   * histórico: gajos pagados y kilos por gajo, con cuatro decimales. No entran
+   * a ninguna suma; el desprendible los imprime. `null` en toda nómina del
+   * sistema, que guarda ese detalle por cosecha en `nomina_cosecha_ref`.
+   */
+  gajos_liquidados?: string | null;
+  promedio_kg_gajo?: string | null;
   cargo_snapshot?: string | null;
   predio_snapshot?: string | null;
   salario_minimo_snapshot?: string | null;
@@ -1172,6 +1189,9 @@ export interface DesprendibleData {
     fecha_inicio: string;
     fecha_fin: string;
     estado: EstadoNomina;
+    /** §16 — `true` en una nómina que entró por el cargue del histórico. */
+    historico?: boolean;
+    origen?: 'MANUAL' | 'IMPORTACION';
   };
   liquidacion: {
     fecha: string;
@@ -1192,6 +1212,13 @@ export interface DesprendibleData {
      */
     dias_auxilio_transporte?: number | null;
     dias_ausencia_remunerados_con_auxilio?: number;
+    /**
+     * §16 — Cómo se pagó la cosecha en una nómina importada, tal como lo
+     * trajo el archivo. El PDF imprime "1.000 gajos × 14,8000 kg/gajo =
+     * 14.800,00 kg" bajo los devengados. `null` en una nómina del sistema,
+     * que arma su resumen de trabajo en vivo.
+     */
+    cosecha_historica?: { gajos: number; promedio_kg_gajo: number; kg: number } | null;
     total_devengado: number;
     total_bonificaciones: number;
     total_deducciones: number;
@@ -2504,6 +2531,13 @@ export const nominaApi = {
 export const NominaErrorCodes = {
   /** Ya existe una nómina con (tenant, año, mes, quincena). */
   NOMINA_DUPLICADA: 'NOMINA_DUPLICADA',
+  /**
+   * 409 (§2.5) — Borrar una nómina o una fila importada que una cesantía,
+   * unos intereses o una prima ya usaron como fuente. Trae `liquidaciones[]`.
+   * Esas liquidaciones no se recalculan nunca: hay que reabrirlas o
+   * eliminarlas antes.
+   */
+  NOMINA_IMPORTADA_CONSUMIDA: 'NOMINA_IMPORTADA_CONSUMIDA',
   /** Intento de mutar una nómina ya CERRADA. */
   NOMINA_CERRADA: 'NOMINA_CERRADA',
   /** Intento de editar/eliminar nómina con empleados ya LIQUIDADOS. */

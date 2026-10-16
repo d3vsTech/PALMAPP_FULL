@@ -230,6 +230,21 @@ export default function DesprendiblePago() {
                 {liquidacion.total_cosecha > 0 && (
                   <RowSmall label="Cosecha" value={fmt(liquidacion.total_cosecha)} />
                 )}
+                {/* §16 - En una nomina historica no hay planillas detras, asi
+                    que la unica traza de como se pago la cosecha es lo que
+                    trajo el archivo: los gajos y el promedio kg/gajo. */}
+                {liquidacion.cosecha_historica && (
+                  <p className="text-[10px] text-muted-foreground pl-1">
+                    {liquidacion.cosecha_historica.gajos.toLocaleString('es-CO')} gajos ×{' '}
+                    {liquidacion.cosecha_historica.promedio_kg_gajo.toLocaleString('es-CO', {
+                      minimumFractionDigits: 4,
+                    })}{' '}
+                    kg/gajo = {liquidacion.cosecha_historica.kg.toLocaleString('es-CO', {
+                      maximumFractionDigits: 2,
+                    })}{' '}
+                    kg
+                  </p>
+                )}
                 {(liquidacion.total_horas_extra + liquidacion.total_recargos) > 0 && (
                   <RowSmall
                     label="Extras (Horas/Domin)"

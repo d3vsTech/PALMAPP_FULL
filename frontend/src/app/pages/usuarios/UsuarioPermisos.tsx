@@ -197,6 +197,7 @@ const MODULOS: Modulo[] = [
     permisos: [
       { id: 'nomina.liquidar', nombre: 'Liquidar', descripcion: 'Liquidar empleados de la nómina' },
       { id: 'nomina.cerrar',   nombre: 'Cerrar',   descripcion: 'Cerrar y procesar nómina' },
+      { id: 'nomina.importar', nombre: 'Importar', descripcion: 'Cargar nóminas históricas desde Excel y borrar lo importado' },
     ],
   },
   {
