@@ -13,6 +13,16 @@ export interface ApiError {
   code?: string;
   errors?: Record<string, string[]>;
   status: number;
+  /**
+   * El resto del cuerpo del error, tal como lo mandó el backend.
+   *
+   * Varios endpoints no solo dicen qué falló: traen con qué trabajar. El 422
+   * de los cargues masivos devuelve en `data` la misma tabla fila por fila que
+   * el dry run, y el 409 de las guardas de nómina trae `nominas[]`, `fechas[]`
+   * y a quién afectan. Sin esto, la pantalla solo podría pintar el `message` y
+   * el usuario tendría que adivinar qué corregir.
+   */
+  data?: unknown;
 }
 
 export interface PaginatedResponse<T> {
@@ -88,7 +98,11 @@ function clearLocalSession(): void {
 async function parseError(response: Response): Promise<ApiError> {
   try {
     const data = await response.json();
+    // Se conserva el cuerpo completo: lo conocido queda tipado y lo demás
+    // sigue ahí para quien lo necesite. `status` va al final para que gane
+    // sobre un campo con el mismo nombre que venga del backend.
     return {
+      ...data,
       message: data.message ?? 'Error desconocido',
       code: data.code,
       errors: data.errors,
