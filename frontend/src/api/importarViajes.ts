@@ -156,7 +156,8 @@ export interface PromedioGeneradoLote {
 export interface CalculoViajeCargue {
   es_homogeneo: boolean;
   lotes: number[];
-  cantidad_gajos_total: number;
+  /** Null mientras alguna fila del viaje no resolvió su cosecha. */
+  cantidad_gajos_total: number | null;
   detalles: number;
   promedio_previsto: PromedioPrevistoLote[] | null;
   /** Solo en el 201. */
@@ -250,11 +251,15 @@ export interface CosechaDelCargue {
  * `gajos_restantes` llega `null` en la primera asignación: ahí no hay techo,
  * porque el reconteo del camión corrige hacia arriba lo que anotó la planilla.
  */
+/**
+ * En una fila con error el bloque llega a medias: el backend lo arma con lo
+ * que alcanzó a resolver, así que cualquier número puede venir en null.
+ */
 export interface ReconteoDeLaFila {
-  gajos_ya_asignados: number;
+  gajos_ya_asignados: number | null;
   gajos_restantes: number | null;
-  exceso: number;
-  nuevo_total: number;
+  exceso: number | null;
+  nuevo_total: number | null;
   reconteo_aprobado: boolean;
 }
 

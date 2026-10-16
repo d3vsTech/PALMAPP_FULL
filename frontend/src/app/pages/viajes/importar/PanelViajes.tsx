@@ -18,14 +18,8 @@ import {
   type ViajeDelCargue,
 } from '../../../../api/importarViajes';
 import { formatFecha } from '../../../utils/fecha';
+import { kg, miles } from './formato';
 import { TablaFilasViaje } from './TablaFilasViaje';
-
-function kg(valor: string | null): string {
-  if (valor === null) return '—';
-  const n = Number(valor);
-  if (Number.isNaN(n)) return '—';
-  return `${n.toLocaleString('es-CO', { maximumFractionDigits: 2 })} kg`;
-}
 
 function EstadoViaje({ viaje }: { viaje: ViajeDelCargue }) {
   if (viaje.estado === 'ERROR') {
@@ -91,7 +85,7 @@ function PromedioPrevisto({ calculo }: { calculo: CalculoViajeCargue | null }) {
         <p key={p.lote_id} className="text-sm">
           <span className="font-semibold">{p.promedio_kg_gajo}</span>{' '}
           <span className="text-muted-foreground">
-            en {p.lote ?? `lote ${p.lote_id}`} · {p.gajos.toLocaleString('es-CO')} gajos
+            en {p.lote ?? `lote ${p.lote_id}`} · {miles(p.gajos)} gajos
           </span>
         </p>
       ))}
@@ -147,8 +141,8 @@ function TarjetaViaje({ viaje, filas }: { viaje: ViajeDelCargue; filas: FilaViaj
           titulo="Peso de báscula"
           valor={kg(viaje.peso_viaje)}
           nota={
-            viaje.calculo
-              ? `${viaje.calculo.cantidad_gajos_total.toLocaleString('es-CO')} gajos`
+            viaje.calculo?.cantidad_gajos_total != null
+              ? `${miles(viaje.calculo.cantidad_gajos_total)} gajos`
               : null
           }
         />

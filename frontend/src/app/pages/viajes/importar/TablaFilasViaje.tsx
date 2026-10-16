@@ -16,6 +16,7 @@ import {
   type ReconteoDeLaFila,
 } from '../../../../api/importarViajes';
 import { formatFecha } from '../../../utils/fecha';
+import { miles } from './formato';
 
 const CABECERAS = ['Fila', 'Cosecha', 'Cuadrilla', 'Gajos', 'Reconteo que queda', 'Notas'];
 
@@ -70,10 +71,10 @@ function CeldaGajos({ fila }: { fila: FilaViajeCargue }) {
   }
   return (
     <div className="text-right">
-      <p className="text-sm font-semibold">{fila.gajos_en_viaje.toLocaleString('es-CO')}</p>
+      <p className="text-sm font-semibold">{miles(fila.gajos_en_viaje)}</p>
       {fila.cosecha?.gajos_reportados != null && (
         <p className="text-xs text-muted-foreground">
-          de {fila.cosecha.gajos_reportados.toLocaleString('es-CO')} en planilla
+          de {miles(fila.cosecha.gajos_reportados)} en planilla
         </p>
       )}
     </div>
@@ -85,13 +86,16 @@ function CeldaGajos({ fila }: { fila: FilaViajeCargue }) {
  * nómina paga, así que importa más que los gajos de la planilla.
  */
 function CeldaReconteo({ reconteo }: { reconteo: ReconteoDeLaFila | null }) {
-  if (!reconteo) return <span className="text-xs text-muted-foreground">—</span>;
+  if (!reconteo || reconteo.nuevo_total === null || reconteo.nuevo_total === undefined) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+  const yaAsignados = reconteo.gajos_ya_asignados ?? 0;
   return (
     <div className="text-right">
-      <p className="text-sm font-semibold">{reconteo.nuevo_total.toLocaleString('es-CO')}</p>
+      <p className="text-sm font-semibold">{miles(reconteo.nuevo_total)}</p>
       <p className="text-xs text-muted-foreground">
-        {reconteo.gajos_ya_asignados > 0
-          ? `${reconteo.gajos_ya_asignados.toLocaleString('es-CO')} ya iban en otro camión`
+        {yaAsignados > 0
+          ? `${miles(yaAsignados)} ya iban en otro camión`
           : reconteo.reconteo_aprobado
             ? 'queda aprobado'
             : 'queda pendiente'}
