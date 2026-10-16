@@ -98,7 +98,7 @@ const FILAS_EJEMPLO = [
 export default function CargaHistoricoCesantias() {
   const navigate = useNavigate();
   const { hasPermiso } = useAuth();
-  const puedeCargar = hasPermiso('liquidaciones.editar');
+  const puedeCargar = hasPermiso('liquidaciones.importar');
 
   const [anio, setAnio] = useState<number>(ANIOS[0] ?? new Date().getFullYear() - 1);
   const [archivo, setArchivo] = useState<File | null>(null);

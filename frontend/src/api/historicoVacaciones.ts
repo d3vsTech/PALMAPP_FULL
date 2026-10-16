@@ -32,8 +32,9 @@
  * art. 187-3, sale en el listado y en el comprobante, y no entra al saldo de
  * días, a la base de cesantías o prima, a la nómina ni a la liquidación final.
  *
- * Permisos: liquidaciones.ver (plantilla) y liquidaciones.editar (validar e
- * importar).
+ * Permisos: liquidaciones.importar para validar e importar; la plantilla
+ * también con liquidaciones.ver. El registro individual de una vacación
+ * histórica sigue con liquidaciones.editar.
  */
 import { apiClient } from './client';
 import type {

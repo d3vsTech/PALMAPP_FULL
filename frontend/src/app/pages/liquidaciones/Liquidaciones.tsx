@@ -4,6 +4,7 @@ import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import { Info, DollarSign, TrendingUp, Calendar, FileText, Briefcase, Upload, History } from 'lucide-react';
 import { InfoTooltip } from '../../components/common/InfoTooltip';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   Tooltip,
   TooltipContent,
@@ -58,7 +59,13 @@ function LiquidacionesContent() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabUrl = searchParams.get('tab');
   const activeTab = TABS.includes(tabUrl as typeof TABS[number]) ? tabUrl! : TAB_POR_DEFECTO;
-  const importar = IMPORTAR_POR_TAB[activeTab];
+  const { hasPermiso } = useAuth();
+  /**
+   * Cargar un histórico deja períodos cerrados y liquidaciones pagadas con los
+   * valores del archivo, así que el backend lo puso tras su propio permiso
+   * (API_LIQUIDACIONES v1.12). Sin él, el botón no lleva a ninguna parte.
+   */
+  const importar = hasPermiso('liquidaciones.importar') ? IMPORTAR_POR_TAB[activeTab] : null;
 
   // `replace` para no llenar el historial con un paso por cada pestaña abierta.
   const cambiarTab = (tab: string) => setSearchParams({ tab }, { replace: true });

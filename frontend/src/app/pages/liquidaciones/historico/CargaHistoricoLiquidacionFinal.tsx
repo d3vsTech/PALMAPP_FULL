@@ -131,7 +131,7 @@ const ENLACE_LABEL: Record<string, string> = {
 export default function CargaHistoricoLiquidacionFinal() {
   const navigate = useNavigate();
   const { hasPermiso } = useAuth();
-  const puedeCargar = hasPermiso('liquidaciones.editar');
+  const puedeCargar = hasPermiso('liquidaciones.importar');
 
   const [anio, setAnio] = useState<number>(ANIOS[0] ?? new Date().getFullYear());
   const [archivo, setArchivo] = useState<File | null>(null);

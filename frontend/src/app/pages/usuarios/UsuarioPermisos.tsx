@@ -204,6 +204,7 @@ const MODULOS: Modulo[] = [
       { id: 'liquidaciones.eliminar', nombre: 'Eliminar', descripcion: 'Eliminar liquidaciones' },
       { id: 'liquidaciones.liquidar', nombre: 'Liquidar', descripcion: 'Liquidar y aprobar el cálculo' },
       { id: 'liquidaciones.pagar',    nombre: 'Pagar',    descripcion: 'Registrar el pago de la liquidación' },
+      { id: 'liquidaciones.importar', nombre: 'Importar', descripcion: 'Cargar vacaciones, prima, cesantías y liquidaciones finales históricas desde Excel' },
     ],
   },
   {

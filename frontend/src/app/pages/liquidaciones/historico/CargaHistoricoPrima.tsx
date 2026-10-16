@@ -91,7 +91,7 @@ const FILAS_EJEMPLO = [
 export default function CargaHistoricoPrima() {
   const navigate = useNavigate();
   const { hasPermiso } = useAuth();
-  const puedeCargar = hasPermiso('liquidaciones.editar');
+  const puedeCargar = hasPermiso('liquidaciones.importar');
 
   const [seleccion, setSeleccion] = useState<OpcionSemestre | null>(SEMESTRES[0] ?? null);
   const [archivo, setArchivo] = useState<File | null>(null);

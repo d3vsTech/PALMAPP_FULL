@@ -13,7 +13,8 @@
  * están en `historicoComun.ts`. Aquí van las columnas propias del archivo de
  * cesantías: valor, fecha de consignación, fondo, intereses y su fecha.
  *
- * Permisos: liquidaciones.ver (plantilla) y liquidaciones.editar (validar e importar).
+ * Permisos: liquidaciones.importar para validar e importar; la plantilla
+ * también con liquidaciones.ver.
  */
 import { apiClient } from './client';
 import type { AdvertenciaLiquidacion, DescriptorPeriodo, TipoLiquidacion } from './liquidaciones';

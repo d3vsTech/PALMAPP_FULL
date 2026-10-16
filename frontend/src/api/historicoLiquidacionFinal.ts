@@ -32,9 +32,9 @@
  * como nombres de sus columnas obligatorias, así que sin prefijo un archivo
  * subido a la pantalla equivocada se cargaría como cesantías consignadas.
  *
- * Permisos: liquidaciones.ver (plantilla) y liquidaciones.editar (validar e
- * importar). Para corregir: eliminar la liquidación (`liquidaciones.eliminar`)
- * y volver a cargar, o recargar con `sobrescribir`.
+ * Permisos: liquidaciones.importar para validar e importar; la plantilla
+ * también con liquidaciones.ver. Para corregir: eliminar la liquidación
+ * (`liquidaciones.eliminar`) y volver a cargar, o recargar con `sobrescribir`.
  */
 import { apiClient } from './client';
 import type {

@@ -133,7 +133,7 @@ const fmtDias = (n: number | null | undefined) =>
 export default function CargaHistoricoVacacionesArchivo() {
   const navigate = useNavigate();
   const { hasPermiso } = useAuth();
-  const puedeCargar = hasPermiso('liquidaciones.editar');
+  const puedeCargar = hasPermiso('liquidaciones.importar');
 
   const [anio, setAnio] = useState<number>(ANIOS[0] ?? new Date().getFullYear());
   const [archivo, setArchivo] = useState<File | null>(null);

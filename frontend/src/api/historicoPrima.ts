@@ -20,7 +20,8 @@
  *
  * El flujo es el mismo de §12: validar sin guardar, importar todo o nada.
  *
- * Permisos: liquidaciones.ver (plantilla) y liquidaciones.editar (validar e importar).
+ * Permisos: liquidaciones.importar para validar e importar; la plantilla
+ * también con liquidaciones.ver.
  */
 import { apiClient } from './client';
 import type { AdvertenciaLiquidacion, DescriptorPeriodo } from './liquidaciones';
