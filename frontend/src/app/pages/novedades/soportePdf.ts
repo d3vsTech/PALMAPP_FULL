@@ -13,7 +13,7 @@ import {
   C, TABLE_ALT, pdfChip, pdfFooter, pdfHeader, pdfSectionTitle, pdfSignatureBlock,
 } from '../../lib/pdf/palmappPDF';
 import type { AusenciaDetalle } from '../../../api/novedades';
-import { etiquetaDias, formatFecha, formatHora, formatPorcentaje } from './tipos';
+import { etiquetaDias, formatFecha, formatHora } from './tipos';
 
 const MARGEN = 14;
 /** Debajo de esta Y ya no cabe el bloque de firmas: se abre página nueva. */
@@ -58,12 +58,9 @@ function filasDetalle(n: AusenciaDetalle): string[][] {
     filas.push(['Días de novedad', `${n.dias_calendario} ${etiquetaDias(n.dias_calendario)}`]);
   }
 
-  filas.push([
-    'Remuneración',
-    n.es_remunerada
-      ? `Remunerado · ${formatPorcentaje(n.porcentaje_pago)} del salario`
-      : 'No remunerado',
-  ]);
+  // Sin el porcentaje: el acta la firma el colaborador y el dato que le
+  // corresponde es si le pagan esos días, no con qué tasa se liquidan.
+  filas.push(['Remuneración', n.es_remunerada ? 'Remunerado' : 'No remunerado']);
   filas.push(['Afecta subsidio de transporte', n.afecta_auxilio_transporte ? 'Sí' : 'No']);
 
   if (n.entidad) filas.push(['Entidad', n.entidad]);

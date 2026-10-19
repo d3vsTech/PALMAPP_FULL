@@ -117,6 +117,7 @@ const InteresesDetalle = lazyWithRetry(() => import('./pages/liquidaciones/Inter
 const PrimaDetalle = lazyWithRetry(() => import('./pages/liquidaciones/PrimaDetalle'));
 const VacacionesDetalle = lazyWithRetry(() => import('./pages/liquidaciones/VacacionesDetalle'));
 const VacacionesHistorico = lazyWithRetry(() => import('./pages/liquidaciones/VacacionesHistorico'));
+const LaboratorioPdf = lazyWithRetry(() => import('./pages/dev/LaboratorioPdf'));
 const CargaHistoricoVacaciones = lazyWithRetry(() => import('./pages/liquidaciones/vacaciones/CargaHistoricoVacaciones'));
 const CargaHistoricoCesantias  = lazyWithRetry(() => import('./pages/liquidaciones/historico/CargaHistoricoCesantias'));
 const CargaHistoricoPrima      = lazyWithRetry(() => import('./pages/liquidaciones/historico/CargaHistoricoPrima'));
@@ -234,6 +235,16 @@ export const router = createBrowserRouter([
   { path: '/recuperar-password/reset-password', element: L(<RestablecerPassword />) },
   { path: '/seleccionar-finca',    element: L(<SeleccionarFinca />) },
   { path: '/sin-permisos',          element: <SinAcceso /> },
+
+  /**
+   * Banco de pruebas de los PDF que arma el navegador. Público y solo en
+   * desarrollo: los documentos no dependen del backend, pero las pantallas que
+   * los descargan sí exigen sesión, así que con la API caída no había forma de
+   * revisarlos. `import.meta.env.DEV` deja la ruta fuera del build.
+   */
+  ...(import.meta.env.DEV
+    ? [{ path: '/pdf-lab', element: L(<LaboratorioPdf />) }]
+    : []),
 
   // ─── Super Admin ──────────────────────────────────────────────────────────
   { path: '/super-admin/login',                element: L(<SuperAdminLogin />) },

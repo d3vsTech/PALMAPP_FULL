@@ -48,9 +48,19 @@ function cop(v: number | string | null | undefined): string {
   return `$${Math.round(n).toLocaleString('es-CO')}`;
 }
 
+/**
+ * El período del descuento escrito como lo diría alguien, no como lo guarda la
+ * base: "Q1" obligaba al colaborador a adivinar de qué quincena le hablan.
+ */
+function etiquetaPeriodo(anio: number, mes: number, quincena?: number | null): string {
+  const nombre = (MESES[mes - 1] ?? String(mes)).toLowerCase();
+  if (quincena === 1) return `Primera quincena de ${nombre} ${anio}`;
+  if (quincena === 2) return `Segunda quincena de ${nombre} ${anio}`;
+  return `Mes de ${nombre} ${anio}`;
+}
+
 function periodoCuota(c: PrestamoCuota): string {
-  const mes = MESES[c.mes - 1] ?? String(c.mes);
-  return `${mes} ${c.anio}${c.quincena ? ` · Q${c.quincena}` : ''}`;
+  return etiquetaPeriodo(c.anio, c.mes, c.quincena);
 }
 
 function primerNombre(p: Prestamo): string {
@@ -123,7 +133,7 @@ export async function descargarComprobantePrestamo(p: Prestamo): Promise<void> {
     ['Número de cuotas', String(p.num_cuotas)],
     ['Valor de cada cuota', cop(p.cuota_valor)],
     ['Frecuencia de descuento', p.frecuencia === 'QUINCENAL' ? 'Quincenal' : 'Mensual'],
-    ['Primera cuota', `${MESES[p.inicio_mes - 1] ?? p.inicio_mes} ${p.inicio_anio}${p.inicio_quincena ? ` · Q${p.inicio_quincena}` : ''}`],
+    ['Primera cuota', etiquetaPeriodo(p.inicio_anio, p.inicio_mes, p.inicio_quincena)],
     ['Última cuota', p.fecha_fin ? formatFecha(p.fecha_fin) : 'Por definir'],
     ['Saldo pendiente a la fecha', cop(p.saldo_pendiente)],
   ], y);
