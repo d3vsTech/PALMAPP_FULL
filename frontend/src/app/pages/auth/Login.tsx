@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { esDemasiadosIntentos, mensajeDeError, mensajeDeEspera } from '../../../api/errores';
 import { Link, useNavigate } from 'react-router';
 import { Button } from '../../components/ui/AppButton';
 import { Input } from '../../components/ui/AppInput';
@@ -25,7 +26,9 @@ export default function Login() {
       const redirectTo = await login(email, password);
       navigate(redirectTo, { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Credenciales inválidas. Verifica tu correo y contraseña.');
+      setError(esDemasiadosIntentos(err)
+        ? mensajeDeEspera(err)
+        : mensajeDeError(err, 'Credenciales inválidas. Verifica tu correo y contraseña.'));
     } finally {
       setLoading(false);
     }

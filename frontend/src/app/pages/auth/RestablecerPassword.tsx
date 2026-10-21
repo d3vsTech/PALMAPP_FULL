@@ -1,8 +1,9 @@
 import { useState } from 'react';
+import { esDemasiadosIntentos, mensajeDeError, mensajeDeEspera } from '../../../api/errores';
 import { Link, useSearchParams, useNavigate } from 'react-router';
 import { Lock, Eye, EyeOff, CheckCircle2, AlertCircle } from 'lucide-react';
 import { PalmappLogo } from '../../components/common/PalmappLogo';
-import { API_URL as BASE_URL } from '../../../api/env';
+import { authApi } from '../../../api/auth';
 
 export default function RestablecerPassword() {
   const [searchParams] = useSearchParams();
@@ -33,22 +34,18 @@ export default function RestablecerPassword() {
 
     setLoading(true);
     try {
-      const res = await fetch(`${BASE_URL}/v1/auth/reset-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({
-          token,
-          email,
-          password,
-          password_confirmation: passwordConfirmation,
-        }),
+      await authApi.resetPassword({
+        token,
+        email,
+        password,
+        password_confirmation: passwordConfirmation,
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((data as any)?.message || 'Error al restablecer la contraseña');
       setExito(true);
       setTimeout(() => navigate('/login'), 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al restablecer la contraseña');
+      setError(esDemasiadosIntentos(err)
+        ? mensajeDeEspera(err)
+        : mensajeDeError(err, 'No se pudo restablecer la contraseña'));
     } finally {
       setLoading(false);
     }

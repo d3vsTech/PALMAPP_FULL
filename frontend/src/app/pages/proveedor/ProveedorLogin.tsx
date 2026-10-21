@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { esDemasiadosIntentos, mensajeDeError, mensajeDeEspera } from '../../../api/errores';
 import { Link, useNavigate } from 'react-router';
 import { Button } from '../../components/ui/AppButton';
 import { Input } from '../../components/ui/AppInput';
@@ -63,7 +64,9 @@ export default function ProveedorLogin() {
       } else if (code === ProveedorAuthErrorCodes.NO_PROVEEDORES_ACTIVOS) {
         setError('No tienes proveedores activos asignados. Contacta al administrador.');
       } else {
-        setError(err instanceof Error ? err.message : 'No se pudo iniciar sesión.');
+        setError(esDemasiadosIntentos(err)
+          ? mensajeDeEspera(err)
+          : mensajeDeError(err, 'No se pudo iniciar sesión.'));
       }
     } finally {
       setLoading(false);

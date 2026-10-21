@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { mensajeDeError } from '../../../api/errores';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { Building2, ChevronRight, Loader2, LogOut } from 'lucide-react';
@@ -22,7 +23,7 @@ export default function SeleccionarFinca() {
       await selectFinca(tenantId);
       navigate('/', { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo seleccionar la finca');
+      setError(mensajeDeError(err, 'No se pudo seleccionar la finca'));
       setLoadingId(null);
     }
   };

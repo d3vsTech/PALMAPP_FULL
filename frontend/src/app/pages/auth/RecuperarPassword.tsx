@@ -1,8 +1,9 @@
 import { useState } from 'react';
+import { esDemasiadosIntentos, mensajeDeError, mensajeDeEspera } from '../../../api/errores';
 import { Link } from 'react-router';
 import { ArrowLeft, Mail, CheckCircle2 } from 'lucide-react';
 import { PalmappLogo } from '../../components/common/PalmappLogo';
-import { API_URL as BASE_URL } from '../../../api/env';
+import { authApi } from '../../../api/auth';
 
 export default function RecuperarPassword() {
   const [email, setEmail] = useState('');
@@ -15,16 +16,12 @@ export default function RecuperarPassword() {
     setError('');
     setLoading(true);
     try {
-      const res = await fetch(`${BASE_URL}/v1/auth/forgot-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((data as any)?.message || 'Error al enviar el correo');
+      await authApi.forgotPassword({ email });
       setEnviado(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al enviar el correo');
+      setError(esDemasiadosIntentos(err)
+        ? mensajeDeEspera(err)
+        : mensajeDeError(err, 'No se pudo enviar el correo'));
     } finally {
       setLoading(false);
     }

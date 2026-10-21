@@ -14,6 +14,12 @@ export interface ApiError {
   errors?: Record<string, string[]>;
   status: number;
   /**
+   * Segundos que el servidor pide esperar antes de volver a intentar. Llega en
+   * la cabecera `Retry-After` del 429 por demasiados intentos; el cuerpo no lo
+   * trae, así que se copia aquí para que la pantalla pueda decirlo.
+   */
+  retryAfter?: number;
+  /**
    * El resto del cuerpo del error, tal como lo mandó el backend.
    *
    * Varios endpoints no solo dicen qué falló: traen con qué trabajar. El 422
@@ -96,6 +102,9 @@ function clearLocalSession(): void {
 }
 
 async function parseError(response: Response): Promise<ApiError> {
+  const espera = Number(response.headers.get('Retry-After'));
+  const retryAfter = Number.isFinite(espera) && espera > 0 ? espera : undefined;
+
   try {
     const data = await response.json();
     // Se conserva el cuerpo completo: lo conocido queda tipado y lo demás
@@ -107,9 +116,10 @@ async function parseError(response: Response): Promise<ApiError> {
       code: data.code,
       errors: data.errors,
       status: response.status,
+      retryAfter,
     };
   } catch {
-    return { message: response.statusText, status: response.status };
+    return { message: response.statusText, status: response.status, retryAfter };
   }
 }
 
