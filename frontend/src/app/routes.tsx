@@ -8,6 +8,7 @@ import ProtectedRoute from './components/common/ProtectedRoute';
 import NotFound from './pages/errors/NotFound';
 import SinPermisos from './pages/errors/SinPermisos';
 import SinAcceso from './pages/errors/SinAcceso';
+import ErrorRuta from './pages/errors/ErrorRuta';
 
 /**
  * Variante de `React.lazy` que recarga la página cuando el chunk dinámico no
@@ -226,15 +227,25 @@ function P(permiso: string, node: React.ReactNode) {
   return <ProtectedRoute permiso={permiso}>{L(node)}</ProtectedRoute>;
 }
 
+/**
+ * Ruta suelta de primer nivel, como los login. No cuelga de ningún layout, así
+ * que necesita su propia pantalla de error: sin ella, un fallo ahí deja la
+ * página en blanco y sin salida. Las rutas hijas no la necesitan; heredan la
+ * de su árbol.
+ */
+function R(path: string, element: React.ReactNode) {
+  return { path, element, errorElement: <ErrorRuta /> };
+}
+
 export const router = createBrowserRouter([
   // ─── Auth finca ───────────────────────────────────────────────────────────
-  { path: '/login',                element: <Login /> },
-  { path: '/recuperar-password',   element: L(<RecuperarPassword />) },
-  { path: '/restablecer-password', element: L(<RestablecerPassword />) },
-  { path: '/reset-password',                    element: L(<RestablecerPassword />) },
-  { path: '/recuperar-password/reset-password', element: L(<RestablecerPassword />) },
-  { path: '/seleccionar-finca',    element: L(<SeleccionarFinca />) },
-  { path: '/sin-permisos',          element: <SinAcceso /> },
+  R('/login', <Login />),
+  R('/recuperar-password', L(<RecuperarPassword />)),
+  R('/restablecer-password', L(<RestablecerPassword />)),
+  R('/reset-password', L(<RestablecerPassword />)),
+  R('/recuperar-password/reset-password', L(<RestablecerPassword />)),
+  R('/seleccionar-finca', L(<SeleccionarFinca />)),
+  R('/sin-permisos', <SinAcceso />),
 
   /**
    * Banco de pruebas de los PDF que arma el navegador. Público y solo en
@@ -243,16 +254,17 @@ export const router = createBrowserRouter([
    * revisarlos. `import.meta.env.DEV` deja la ruta fuera del build.
    */
   ...(import.meta.env.DEV
-    ? [{ path: '/pdf-lab', element: L(<LaboratorioPdf />) }]
+    ? [R('/pdf-lab', L(<LaboratorioPdf />))]
     : []),
 
   // ─── Super Admin ──────────────────────────────────────────────────────────
-  { path: '/super-admin/login',                element: L(<SuperAdminLogin />) },
-  { path: '/super-admin/recuperar-password',   element: L(<RecuperarPasswordSuperAdmin />) },
-  { path: '/super-admin/restablecer-password', element: L(<RestablecerPasswordSuperAdmin />) },
+  R('/super-admin/login', L(<SuperAdminLogin />)),
+  R('/super-admin/recuperar-password', L(<RecuperarPasswordSuperAdmin />)),
+  R('/super-admin/restablecer-password', L(<RestablecerPasswordSuperAdmin />)),
   {
     path: '/super-admin',
     element: L(<SuperAdminLayout />),
+    errorElement: <ErrorRuta />,
     children: [
       { index: true,                          element: <Navigate to="/super-admin/dashboard" replace /> },
       { path: 'dashboard',                    element: L(<SuperAdminDashboard />) },
@@ -266,19 +278,20 @@ export const router = createBrowserRouter([
   },
 
   // ─── Proveedor (cuenta separada, login propio) ────────────────────────────
-  { path: '/proveedor/login',                  element: L(<ProveedorLogin />) },
-  { path: '/proveedor/seleccionar',            element: L(<SeleccionarProveedor />) },
-  { path: '/proveedor/recuperar-password',     element: L(<ProveedorRecuperarPassword />) },
-  { path: '/proveedor/restablecer-password',   element: L(<ProveedorRestablecerPassword />) },
-  { path: '/proveedor/reset-password',         element: L(<ProveedorRestablecerPassword />) },
+  R('/proveedor/login', L(<ProveedorLogin />)),
+  R('/proveedor/seleccionar', L(<SeleccionarProveedor />)),
+  R('/proveedor/recuperar-password', L(<ProveedorRecuperarPassword />)),
+  R('/proveedor/restablecer-password', L(<ProveedorRestablecerPassword />)),
+  R('/proveedor/reset-password', L(<ProveedorRestablecerPassword />)),
   // El backend a veces arma el link como {FRONTEND_PROVEEDOR_URL}/reset-password
   // donde FRONTEND_PROVEEDOR_URL = ".../proveedor/recuperar-password", lo que
   // termina apuntando aquí. Mismo render que /proveedor/reset-password.
-  { path: '/proveedor/recuperar-password/reset-password', element: L(<ProveedorRestablecerPassword />) },
-  { path: '/proveedor/configuracion-inicial', element: L(<ConfiguracionInicialWizard />) },
+  R('/proveedor/recuperar-password/reset-password', L(<ProveedorRestablecerPassword />)),
+  R('/proveedor/configuracion-inicial', L(<ConfiguracionInicialWizard />)),
   {
     path: '/proveedor',
     element: L(<ProveedorLayout />),
+    errorElement: <ErrorRuta />,
     children: [
       { index: true,                          element: <Navigate to="/proveedor/dashboard" replace /> },
       { path: 'dashboard',                    element: L(<ProveedorDashboard />) },
@@ -299,6 +312,7 @@ export const router = createBrowserRouter([
   {
     path: '/',
     element: <Root />,
+    errorElement: <ErrorRuta />,
     children: [
       { index: true, element: <ProtectedRoute permiso="dashboard.ver">{L(<Dashboard />)}</ProtectedRoute> },
 
