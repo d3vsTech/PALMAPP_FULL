@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { comoBoton } from '../../hooks/comoBoton';
 import { useNavigate, useParams, useLocation } from 'react-router';
 import { sortByFirstName } from '../../utils/personas';
 import { formatCOP } from '../../components/lib/format';
@@ -1683,11 +1684,11 @@ export default function NuevaNominaWizard() {
                                   className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors cursor-pointer ${
                                     index % 2 === 0 ? 'bg-background' : 'bg-muted/5'
                                   } ${isSelected ? 'bg-primary/5' : ''}`}
-                                  onClick={() =>
+                                  {...comoBoton(() =>
                                     isSelected
                                       ? quitarEmpleado(empleado.id)
-                                      : agregarEmpleado(empleado.id)
-                                  }
+                                      : agregarEmpleado(empleado.id),
+                                  )}
                                 >
                                   <td className="p-4" onClick={(e) => e.stopPropagation()}>
                                     <Checkbox
@@ -1904,7 +1905,7 @@ export default function NuevaNominaWizard() {
                                   className={`border-b border-border last:border-0 hover:bg-amber-50/40 dark:hover:bg-amber-950/10 transition-colors cursor-pointer ${
                                     idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'
                                   } ${todosSeleccionados ? 'bg-amber-50/60 dark:bg-amber-950/20' : ''}`}
-                                  onClick={toggleEmpresa}
+                                  {...comoBoton(toggleEmpresa)}
                                 >
                                   <td className="p-4" onClick={(e) => e.stopPropagation()}>
                                     <Checkbox

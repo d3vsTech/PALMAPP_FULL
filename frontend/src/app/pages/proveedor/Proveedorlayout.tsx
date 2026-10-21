@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useCerrarConEscape } from '../../hooks/useCerrarConEscape';
 import { Outlet, useNavigate, useLocation, Link } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
@@ -29,6 +30,8 @@ export default function ProveedorLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // El menú lateral de móvil solo se cerraba tocando el fondo.
+  useCerrarConEscape(sidebarOpen, () => setSidebarOpen(false));
 
   // Datos vivos de la sesión actual (proveedor seleccionado + usuario)
   const [proveedor, setProveedor] = useState(() => proveedorAuthStorage.getProveedor());
@@ -92,7 +95,7 @@ export default function ProveedorLayout() {
       {/* Sidebar para móvil */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="fixed inset-0 bg-background/80 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
+          <div aria-hidden="true" className="fixed inset-0 bg-background/80 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
           <div className="fixed inset-y-0 left-0 w-64 bg-card border-r border-border shadow-xl">
             <div className="flex h-full flex-col">
               {/* Header del sidebar móvil */}

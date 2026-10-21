@@ -12,6 +12,7 @@
  *  - El JSX visual proviene del diseño V.15 — sin cambios.
  */
 import React, { useEffect, useState } from 'react';
+import { comoBoton } from '../../hooks/comoBoton';
 import { useNavigate } from 'react-router';
 import { sortByFirstName } from '../../utils/personas';
 import { Button } from '../ui/button';
@@ -391,7 +392,7 @@ export function TercerosTab() {
                     {/* Fila del tercero */}
                     <div
                       className={`flex items-center gap-3 px-5 py-4 cursor-pointer transition-colors ${expandido ? 'bg-primary/5' : 'hover:bg-muted/30'}`}
-                      onClick={() => toggleExpandido(t.id)}
+                      {...comoBoton(() => toggleExpandido(t.id))}
                     >
                       <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
                         {esNatural ? <User className="h-5 w-5" /> : <Building2 className="h-5 w-5" />}

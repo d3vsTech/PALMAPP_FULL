@@ -7,6 +7,7 @@
  * propios endpoints.
  */
 import { useState } from 'react';
+import { comoBoton } from '../../../hooks/comoBoton';
 import { Card } from '../../../components/ui/card';
 import { Check, Info } from 'lucide-react';
 import type { CategoriaInit, CategoriaNovedad, MotivoNovedad } from '../../../../api/novedades';
@@ -105,7 +106,7 @@ export function PasoTipoNovedad({
                 return (
                   <tr
                     key={motivo.id}
-                    onClick={() => onSeleccionar(activa, motivo)}
+                    {...comoBoton(() => onSeleccionar(activa, motivo))}
                     className={`cursor-pointer transition-colors ${sel ? 'bg-primary/5' : 'bg-background hover:bg-muted/25'}`}
                   >
                     <td className="px-4 py-3.5 text-center">

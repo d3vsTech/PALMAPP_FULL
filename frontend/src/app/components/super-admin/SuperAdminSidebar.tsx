@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useCerrarConEscape } from '../../hooks/useCerrarConEscape';
 import { NavLink, useNavigate } from 'react-router';
 import {
   LayoutDashboard,
@@ -26,6 +27,8 @@ export default function SuperAdminSidebar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  // El menú lateral de móvil solo se cerraba tocando el fondo.
+  useCerrarConEscape(mobileOpen, () => setMobileOpen(false));
 
   const handleLogout = () => {
     logout();
@@ -141,6 +144,7 @@ export default function SuperAdminSidebar() {
       {mobileOpen && (
         <div className="fixed inset-0 z-50 md:hidden">
           <div
+            aria-hidden="true"
             className="absolute inset-0 bg-black/70 backdrop-blur-sm"
             onClick={() => setMobileOpen(false)}
           />

@@ -1,4 +1,5 @@
 import { Link, useLocation } from 'react-router';
+import { useCerrarConEscape } from '../../hooks/useCerrarConEscape';
 import { useAuth, esAdmin, UserRole } from '../../contexts/AuthContext';
 import { cn } from '../lib/utils';
 import { useState } from 'react';
@@ -132,6 +133,8 @@ export default function Sidebar() {
   const location = useLocation();
   const { user, hasPermiso } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  // El menú lateral de móvil solo se cerraba tocando el fondo.
+  useCerrarConEscape(mobileOpen, () => setMobileOpen(false));
 
   const filteredItems = navItems.filter(item => {
     // Admins ven todo — mismo criterio único (esAdmin) que rutas y permisos.
@@ -235,6 +238,7 @@ export default function Sidebar() {
         <div className="fixed inset-0 z-50 lg:hidden">
           {/* Overlay */}
           <div
+            aria-hidden="true"
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => setMobileOpen(false)}
           />

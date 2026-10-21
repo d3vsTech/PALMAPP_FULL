@@ -10,6 +10,7 @@
  * backend responde LIQUIDACION_DESACTUALIZADA y se recarga el paso 3.
  */
 import { useEffect, useRef, useState } from 'react';
+import { comoBoton } from '../../../hooks/comoBoton';
 import { useParams, Link, useNavigate } from 'react-router';
 import { Card, CardContent } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
@@ -693,7 +694,7 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
                         ? col.salario_base
                         : col.promedio_mensual_devengado;
                       return (
-                        <tr key={col.id} onClick={() => toggleMarcado(col.id)}
+                        <tr key={col.id} {...comoBoton(() => toggleMarcado(col.id))}
                           className={`border-b border-border last:border-0 cursor-pointer transition-colors ${sel ? 'bg-primary/5' : i % 2 === 0 ? 'bg-background hover:bg-muted/20' : 'bg-muted/5 hover:bg-muted/20'}`}>
                           <td className="p-4">
                             <Checkbox checked={sel} onCheckedChange={() => toggleMarcado(col.id)} onClick={e => e.stopPropagation()} />

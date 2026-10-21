@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { comoBoton } from '../../hooks/comoBoton';
 import { useNavigate } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
@@ -175,7 +176,7 @@ export default function Carrito() {
                       <div>
                         <h3
                           className="font-semibold text-foreground cursor-pointer hover:text-primary"
-                          onClick={() => navigate(`/market/productos/${item.producto.id}`)}
+                          {...comoBoton(() => navigate(`/market/productos/${item.producto.id}`))}
                         >
                           {item.producto.nombre}
                         </h3>

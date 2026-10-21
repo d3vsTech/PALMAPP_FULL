@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { comoBoton } from '../../hooks/comoBoton';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Plus, Edit, Trash2, ChevronDown } from 'lucide-react';
@@ -455,7 +456,7 @@ export function LaboresTab() {
                         className={`flex items-center justify-between p-4 hover:bg-muted/50 transition-colors ${
                           admiteActividades ? 'cursor-pointer' : ''
                         }`}
-                        onClick={() => admiteActividades && toggleExpandida(labor.id)}
+                        {...comoBoton(() => toggleExpandida(labor.id), admiteActividades)}
                       >
                         <div className="flex items-center gap-2 flex-1">
                           {admiteActividades && (

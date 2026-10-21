@@ -1,4 +1,5 @@
 import { AlertTriangle, Info, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { useCerrarConEscape } from '../../hooks/useCerrarConEscape';
 
 type VariantType = 'warning' | 'danger' | 'info' | 'success';
 
@@ -67,6 +68,10 @@ export default function ConfirmDialog({
   variant = 'warning',
   loading = false,
 }: ConfirmDialogProps) {
+  // Antes del `return null`: un hook no se puede llamar condicionalmente.
+  // Mientras guarda no se cierra, para no dejar la operación a medias.
+  useCerrarConEscape(open && !loading, onClose);
+
   if (!open) return null;
 
   const config = variantConfig[variant];
@@ -79,8 +84,10 @@ export default function ConfirmDialog({
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-      {/* Backdrop */}
+      {/* Fondo. Es un atajo del mouse: por teclado se sale con Escape, así que
+          para un lector de pantalla es decoración. */}
       <div
+        aria-hidden="true"
         className="absolute inset-0 bg-black/70 backdrop-blur-sm"
         onClick={() => { if (!loading) onClose(); }}
       />
@@ -139,13 +146,15 @@ interface AlertDialogProps {
 }
 
 export function AlertDialog({ open, onClose, title, description, variant = 'info' }: AlertDialogProps) {
+  useCerrarConEscape(open, onClose);
+
   if (!open) return null;
   const config = variantConfig[variant];
   const Icon = config.icon;
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div aria-hidden="true" className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
         <div className="p-6 text-center">
           <div className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border ${config.iconBg} ${config.iconBorder}`}>

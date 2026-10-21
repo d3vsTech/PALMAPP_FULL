@@ -8,6 +8,7 @@
  * §5.5 DELETE /lineas/{id}
  */
 import { useState, useEffect, useCallback, useRef, memo } from 'react';
+import { comoBoton } from '../../hooks/comoBoton';
 import { useParams, useNavigate, useLocation, Link } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
@@ -120,7 +121,7 @@ const PalmasSection = memo(({
               const sel = selIds.has(pid);
               return (
                 <div key={palma.id}
-                  onClick={() => enSel && onToggle(pid)}
+                  {...comoBoton(() => onToggle(pid), enSel)}
                   className={[
                     'relative group rounded-lg border-2 p-3 transition',
                     enSel ? 'cursor-pointer' : '',

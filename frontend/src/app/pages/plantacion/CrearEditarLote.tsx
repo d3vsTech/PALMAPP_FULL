@@ -6,6 +6,7 @@
  * §2.4 PUT  /lotes/{id} — semillas_ids reemplaza todas
  */
 import { useState, useEffect } from 'react';
+import { comoBoton } from '../../hooks/comoBoton';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
@@ -166,7 +167,7 @@ export default function CrearEditarLote() {
                             ? 'bg-success/10 border-success/50 shadow-sm'
                             : 'bg-background border-border/50 hover:border-border'
                         }`}
-                        onClick={() => toggleSemilla(Number(s.id), !semillasIds.includes(Number(s.id)))}
+                        {...comoBoton(() => toggleSemilla(Number(s.id), !semillasIds.includes(Number(s.id))))}
                       >
                         <Checkbox
                           id={`semilla-${s.id}`}
