@@ -140,7 +140,7 @@ export default function Login() {
                     className="pr-12"
                     required
                   />
-                  <button
+                  <button aria-label="Ocultar"
                     type="button"
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
                     onClick={() => setShowPassword(!showPassword)}

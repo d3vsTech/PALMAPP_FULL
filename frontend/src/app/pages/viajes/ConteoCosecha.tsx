@@ -733,7 +733,7 @@ export default function ConteoCosecha() {
                   const estaActiva = etapaActual === etapa.numero;
                   return (
                     <React.Fragment key={etapa.numero}>
-                      <button
+                      <button aria-label="Confirmar"
                         onClick={() => irAEtapa(etapa.numero)}
                         className={`flex flex-col items-center gap-2 ${estaActiva || estaCompleta ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
                         disabled={!estaActiva && !estaCompleta}

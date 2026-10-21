@@ -235,7 +235,7 @@ export default function Configuracion() {
 
                 return (
                   <div key={categoria.id}>
-                    <button
+                    <button aria-label="Desplegar"
                       onClick={() => {
                         if (tieneSubitems) {
                           toggleCategoria(categoria.id);

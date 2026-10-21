@@ -145,7 +145,7 @@ export default function UsuarioNuevoEditar() {
                     value={password}
                     onChange={e => { setPassword(e.target.value); setErrors(p => { const n = {...p}; delete n.password; return n; }); }}
                     className={`pr-10 ${errors.password ? 'border-destructive' : ''}`} />
-                  <button type="button" tabIndex={-1} onClick={() => setShowPassword(v => !v)}
+                  <button aria-label="Ocultar" type="button" tabIndex={-1} onClick={() => setShowPassword(v => !v)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -166,7 +166,7 @@ export default function UsuarioNuevoEditar() {
                       value={confirmPassword}
                       onChange={e => { setConfirmPassword(e.target.value); setErrors(p => { const n = {...p}; delete n.confirmPassword; return n; }); }}
                       className={`pr-10 ${errors.confirmPassword ? 'border-destructive' : ''}`} />
-                    <button type="button" tabIndex={-1} onClick={() => setShowConfirm(v => !v)}
+                    <button aria-label="Ocultar" type="button" tabIndex={-1} onClick={() => setShowConfirm(v => !v)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
                       {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>

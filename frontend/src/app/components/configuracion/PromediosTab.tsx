@@ -512,7 +512,7 @@ export function PromediosTab() {
                       </TableCell>
                       <TableCell>
                         {(historial.length > 0 || registros.length > 0) && (
-                          <button
+                          <button aria-label="Desplegar"
                             type="button"
                             onClick={(e) => toggleExpandido(lote.id, e)}
                             className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors px-1.5 py-1 rounded hover:bg-muted"

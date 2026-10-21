@@ -228,7 +228,7 @@ export default function MiPerfil() {
                   required
                   className="pl-10 pr-10"
                 />
-                <button type="button" onClick={() => setShowActual(v => !v)}
+                <button aria-label="Ocultar" type="button" onClick={() => setShowActual(v => !v)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                   {showActual ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
@@ -250,7 +250,7 @@ export default function MiPerfil() {
                     minLength={8}
                     className="pl-10 pr-10"
                   />
-                  <button type="button" onClick={() => setShowNueva(v => !v)}
+                  <button aria-label="Ocultar" type="button" onClick={() => setShowNueva(v => !v)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                     {showNueva ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -271,7 +271,7 @@ export default function MiPerfil() {
                     minLength={8}
                     className="pl-10"
                   />
-                  <button type="button" onClick={() => setShowNueva(v => !v)}
+                  <button aria-label="Ocultar" type="button" onClick={() => setShowNueva(v => !v)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                     {showNueva ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>

@@ -147,7 +147,7 @@ export default function RestablecerPasswordSuperAdmin() {
                     disabled={loading}
                     autoComplete="new-password"
                   />
-                  <button
+                  <button aria-label="Ocultar"
                     type="button"
                     onClick={() => setShowNewPassword(!showNewPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
@@ -188,7 +188,7 @@ export default function RestablecerPasswordSuperAdmin() {
                     disabled={loading}
                     autoComplete="new-password"
                   />
-                  <button
+                  <button aria-label="Ocultar"
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"

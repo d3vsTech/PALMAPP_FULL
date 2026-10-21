@@ -1638,7 +1638,7 @@ export default function NuevoPredioWizard() {
                   return (
                     <React.Fragment key={e.numero}>
                       {/* Círculo de etapa */}
-                      <button
+                      <button aria-label="Confirmar"
                         onClick={() => (editId || completa || activa) && setEtapa(e.numero)}
                         className={`flex flex-col items-center gap-2 ${
                           activa || completa || editId ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'

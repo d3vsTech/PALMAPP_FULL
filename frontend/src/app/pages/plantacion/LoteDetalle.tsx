@@ -146,7 +146,7 @@ const PalmasSection = memo(({
                     </div>
                   </div>
                   {!enSel && (
-                    <button
+                    <button aria-label="Eliminar"
                       onClick={() => onEliminar(pid, subId, lineaId, palmasKey, params)}
                       className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-lg hover:scale-110">
                       <Trash2 className="h-3 w-3" />

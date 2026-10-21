@@ -56,7 +56,7 @@ export default function Topbar() {
         <div className="flex items-center gap-4">
           {/* Menú de usuario */}
           <div className="relative" ref={dropdownRef}>
-            <button
+            <button aria-label="Desplegar"
               onClick={() => setDropdownOpen(!dropdownOpen)}
               className="flex items-center gap-2 rounded-xl bg-muted px-2 py-2 transition-colors hover:bg-muted/80 sm:gap-3 sm:px-4"
             >

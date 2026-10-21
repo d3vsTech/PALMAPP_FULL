@@ -697,7 +697,7 @@ export default function Fincas() {
 
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-2">
-                        <button
+                        <button aria-label="Ver"
                           onClick={() => void handleOpenDetail(finca.id)}
                           disabled={loadingDetailId === finca.id}
                           className="p-2 hover:bg-blue-500/10 text-blue-400 rounded-lg transition-colors disabled:opacity-50"
@@ -720,7 +720,7 @@ export default function Fincas() {
                           <Users className="w-4 h-4" />
                         </button>
 
-                        <button
+                        <button aria-label="Editar"
                           onClick={() => void handleOpenEdit(finca.id)}
                           disabled={loadingEditId === finca.id}
                           className="p-2 hover:bg-purple-500/10 text-purple-400 rounded-lg transition-colors disabled:opacity-50"
@@ -752,7 +752,7 @@ export default function Fincas() {
                           </button>
                         )}
 
-                        <button
+                        <button aria-label="Eliminar"
                           onClick={() => void handleDelete(finca)}
                           className="p-2 hover:bg-red-500/10 text-red-400 rounded-lg transition-colors"
                           title="Eliminar"

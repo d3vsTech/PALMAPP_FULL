@@ -62,7 +62,7 @@ export default function SeleccionarFinca() {
             </div>
           ) : (
             fincas.map((finca) => (
-              <button
+              <button aria-label="Siguiente"
                 key={finca.id}
                 onClick={() => handleSelect(finca.id)}
                 disabled={loadingId !== null}

@@ -1162,7 +1162,7 @@ export default function DetalleViaje() {
                   const estaActiva = etapaActual === etapa.numero;
                   return (
                     <React.Fragment key={etapa.numero}>
-                      <button
+                      <button aria-label="Confirmar"
                         onClick={() => irAEtapa(etapa.numero)}
                         /* Sin "Siguiente" en el pie, el círculo del stepper es
                            la única forma de llegar a la etapa de Cosecha. */

@@ -27,7 +27,7 @@ export function NotaColaboradoresExcluidos({
 
   return (
     <div className="rounded-lg border border-border bg-muted/30 p-3">
-      <button
+      <button aria-label="Contraer"
         type="button"
         onClick={() => setAbierta((v) => !v)}
         className="flex w-full items-start gap-2 text-left text-sm text-muted-foreground"

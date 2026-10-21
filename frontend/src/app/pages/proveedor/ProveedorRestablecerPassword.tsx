@@ -108,7 +108,7 @@ export default function ProveedorRestablecerPassword() {
                   required
                   className="w-full pl-10 pr-11 py-2.5 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 text-sm"
                 />
-                <button type="button" onClick={() => setShowPassword(v => !v)}
+                <button aria-label="Ocultar" type="button" onClick={() => setShowPassword(v => !v)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>

@@ -592,7 +592,7 @@ export default function LiquidarTerceroDetalle() {
             return (
               <div key={o.id} className="border-b border-border/60 last:border-0">
                 {/* Fila resumen operario — clickeable */}
-                <button
+                <button aria-label="Desplegar"
                   type="button"
                   className="w-full flex items-center justify-between px-5 py-3 hover:bg-muted/20 transition-colors text-left"
                   onClick={() => toggleExpandido(o.operario_id)}

@@ -56,7 +56,7 @@ export function CampoAdjunto({ etiqueta, ayuda, mimes, maxKb, archivo, onCambiar
           </button>
         </div>
       ) : (
-        <button
+        <button aria-label="Adjuntar"
           type="button"
           onClick={() => input.current?.click()}
           className="group flex w-full items-center gap-3 rounded-lg border-2 border-dashed border-border px-4 py-3 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5"

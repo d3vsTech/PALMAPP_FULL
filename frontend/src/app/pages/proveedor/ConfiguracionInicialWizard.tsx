@@ -155,7 +155,7 @@ export default function ConfiguracionInicialWizard() {
                   return (
                     <div key={etapa.numero} className="flex items-center flex-1">
                       {/* Círculo de etapa */}
-                      <button
+                      <button aria-label="Confirmar"
                         onClick={() => irAEtapa(etapa.numero)}
                         className="flex flex-col items-center gap-2 cursor-pointer"
                       >

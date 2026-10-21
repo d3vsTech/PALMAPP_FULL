@@ -2727,7 +2727,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                   return (
                     <div key={etapa.numero} className="flex items-center" style={{ flex: index < ETAPAS.length - 1 ? 1 : 'none' }}>
                       {/* Círculo de etapa */}
-                      <button
+                      <button aria-label="Confirmar"
                         onClick={() => irAEtapa(etapa.numero)}
                         className={`flex flex-col items-center gap-2 ${
                           navegable ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'

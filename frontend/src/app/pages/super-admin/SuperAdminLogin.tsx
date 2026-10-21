@@ -190,7 +190,7 @@ export default function SuperAdminLogin() {
                     required
                     autoComplete="current-password"
                   />
-                  <button
+                  <button aria-label="Ocultar"
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#9032F0] transition-colors z-10"

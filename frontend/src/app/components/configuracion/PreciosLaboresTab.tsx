@@ -975,7 +975,7 @@ export function PreciosLaboresTab() {
                                         />
                                         {/* Spinners. `onMouseDown preventDefault` evita que el input pierda foco. */}
                                         <div className="absolute right-1 top-1 bottom-1 flex flex-col opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                                          <button type="button" tabIndex={-1}
+                                          <button aria-label="Contraer" type="button" tabIndex={-1}
                                             onMouseDown={(e) => e.preventDefault()}
                                             onClick={() => setAbonoInputs((prev) => ({
                                               ...prev,
@@ -985,7 +985,7 @@ export function PreciosLaboresTab() {
                                           >
                                             <ChevronUp className="h-3 w-3" />
                                           </button>
-                                          <button type="button" tabIndex={-1}
+                                          <button aria-label="Desplegar" type="button" tabIndex={-1}
                                             onMouseDown={(e) => e.preventDefault()}
                                             onClick={() => setAbonoInputs((prev) => ({
                                               ...prev,
@@ -1012,7 +1012,7 @@ export function PreciosLaboresTab() {
                                           className="w-full pr-7"
                                         />
                                         <div className="absolute right-1 top-1 bottom-1 flex flex-col opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                                          <button type="button" tabIndex={-1}
+                                          <button aria-label="Contraer" type="button" tabIndex={-1}
                                             onMouseDown={(e) => e.preventDefault()}
                                             onClick={() => setAbonoInputs((prev) => ({
                                               ...prev,
@@ -1022,7 +1022,7 @@ export function PreciosLaboresTab() {
                                           >
                                             <ChevronUp className="h-3 w-3" />
                                           </button>
-                                          <button type="button" tabIndex={-1}
+                                          <button aria-label="Desplegar" type="button" tabIndex={-1}
                                             onMouseDown={(e) => e.preventDefault()}
                                             onClick={() => setAbonoInputs((prev) => ({
                                               ...prev,
@@ -1090,7 +1090,7 @@ export function PreciosLaboresTab() {
                                         className="w-full pr-7"
                                       />
                                       <div className="absolute right-1 top-1 bottom-1 flex flex-col opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                                        <button type="button" tabIndex={-1}
+                                        <button aria-label="Contraer" type="button" tabIndex={-1}
                                           onMouseDown={(e) => e.preventDefault()}
                                           onClick={() => setNuevosRangos((prev) =>
                                             prev.map((x) =>
@@ -1103,7 +1103,7 @@ export function PreciosLaboresTab() {
                                         >
                                           <ChevronUp className="h-3 w-3" />
                                         </button>
-                                        <button type="button" tabIndex={-1}
+                                        <button aria-label="Desplegar" type="button" tabIndex={-1}
                                           onMouseDown={(e) => e.preventDefault()}
                                           onClick={() => setNuevosRangos((prev) =>
                                             prev.map((x) =>
@@ -1137,7 +1137,7 @@ export function PreciosLaboresTab() {
                                         className="w-full pr-7"
                                       />
                                       <div className="absolute right-1 top-1 bottom-1 flex flex-col opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                                        <button type="button" tabIndex={-1}
+                                        <button aria-label="Contraer" type="button" tabIndex={-1}
                                           onMouseDown={(e) => e.preventDefault()}
                                           onClick={() => setNuevosRangos((prev) =>
                                             prev.map((x) =>
@@ -1150,7 +1150,7 @@ export function PreciosLaboresTab() {
                                         >
                                           <ChevronUp className="h-3 w-3" />
                                         </button>
-                                        <button type="button" tabIndex={-1}
+                                        <button aria-label="Desplegar" type="button" tabIndex={-1}
                                           onMouseDown={(e) => e.preventDefault()}
                                           onClick={() => setNuevosRangos((prev) =>
                                             prev.map((x) =>

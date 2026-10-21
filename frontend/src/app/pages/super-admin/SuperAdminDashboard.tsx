@@ -164,7 +164,7 @@ export default function SuperAdminDashboard() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <button
+          <button aria-label="Actualizar"
             onClick={() => void loadDashboard(true)}
             disabled={refreshing}
             className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white hover:bg-white/10 transition disabled:opacity-50"

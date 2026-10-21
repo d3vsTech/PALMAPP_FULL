@@ -404,7 +404,7 @@ export default function ProveedorConfiguracion() {
 
                   return (
                     <div key={etapa.numero} className="flex items-center flex-1">
-                      <button
+                      <button aria-label="Confirmar"
                         onClick={() => irAEtapa(etapa.numero)}
                         className="flex flex-col items-center gap-2 cursor-pointer"
                       >

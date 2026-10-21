@@ -987,7 +987,7 @@ export default function NuevoColaboradorWizard() {
                   return (
                     <React.Fragment key={etapa.numero}>
                       {/* Círculo de etapa */}
-                      <button
+                      <button aria-label="Confirmar"
                         onClick={() => irAEtapa(etapa.numero)}
                         className={`flex flex-col items-center gap-2 ${
                           estaActiva || estaCompleta || isEditMode ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
@@ -1059,7 +1059,7 @@ export default function NuevoColaboradorWizard() {
                           alt="Vista previa"
                           className="w-24 h-24 rounded-full object-cover border-2 border-border"
                         />
-                        <button
+                        <button aria-label="Eliminar"
                           type="button"
                           onClick={handleRemoveImage}
                           className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-1 hover:bg-destructive/90"

@@ -349,7 +349,7 @@ export default function UsuariosProveedor() {
       {/* Header */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-start gap-4">
-          <button
+          <button aria-label="Volver"
             onClick={() => navigate('/super-admin/proveedores')}
             className="mt-1 p-2 rounded-lg border border-white/10 bg-white/5 text-white hover:bg-white/10 transition flex-shrink-0"
           >
@@ -482,14 +482,14 @@ export default function UsuariosProveedor() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-2">
-                        <button
+                        <button aria-label="Ver"
                           onClick={() => setViewUser(u)}
                           className="p-2 rounded-lg text-blue-400 hover:bg-blue-500/10 transition-colors"
                           title="Ver datos del usuario"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        <button
+                        <button aria-label="Editar"
                           onClick={() => openEditModal(u)}
                           className="p-2 rounded-lg text-purple-400 hover:bg-purple-500/10 transition-colors"
                           title="Editar usuario"
@@ -503,7 +503,7 @@ export default function UsuariosProveedor() {
                         >
                           {u.estado ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                         </button>
-                        <button
+                        <button aria-label="Eliminar"
                           onClick={() => handleRemove(u)}
                           className="p-2 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors"
                           title="Desvincular del proveedor"

@@ -640,7 +640,7 @@ export default function Usuarios() {
 
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-2">
-                        <button
+                        <button aria-label="Ver"
                           onClick={() => void openModalWithDetail('view', usuario.id)}
                           className="p-2 rounded-lg text-cyan-400 hover:bg-cyan-500/10 transition-colors"
                           title="Ver detalle"
@@ -648,7 +648,7 @@ export default function Usuarios() {
                           <Eye className="w-4 h-4" />
                         </button>
 
-                        <button
+                        <button aria-label="Editar"
                           onClick={() => void openModalWithDetail('edit', usuario.id)}
                           className="p-2 rounded-lg text-purple-400 hover:bg-purple-500/10 transition-colors"
                           title="Editar"

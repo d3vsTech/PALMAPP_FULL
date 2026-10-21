@@ -104,7 +104,7 @@ export default function Planes() {
                   <div className="p-2 bg-white/10 rounded-lg">
                     <Package className="w-6 h-6 text-white" />
                   </div>
-                  <button className="p-2 hover:bg-white/10 rounded-lg transition-colors">
+                  <button aria-label="Editar" className="p-2 hover:bg-white/10 rounded-lg transition-colors">
                     <Edit2 className="w-4 h-4 text-white" />
                   </button>
                 </div>

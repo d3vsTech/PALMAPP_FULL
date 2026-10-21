@@ -224,7 +224,7 @@ export default function ProveedorLayout() {
               {/* Dropdown del usuario (réplica del Topbar de finca sin
                   "Cerrar sesión" — el logout vive en el footer del sidebar). */}
               <div className="relative" ref={dropdownRef}>
-                <button
+                <button aria-label="Desplegar"
                   onClick={() => setDropdownOpen(!dropdownOpen)}
                   className="flex items-center gap-3 px-3 py-2 rounded-xl bg-muted hover:bg-muted/80 transition-colors"
                 >

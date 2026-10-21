@@ -505,7 +505,7 @@ export default function UsuariosFinca() {
     <div className="p-4 md:p-8 space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-start gap-4">
-          <button
+          <button aria-label="Volver"
             onClick={() => navigate('/super-admin/fincas')}
             className="mt-1 p-2 rounded-lg border border-white/10 bg-white/5 text-white hover:bg-white/10 transition flex-shrink-0"
           >
@@ -671,7 +671,7 @@ export default function UsuariosFinca() {
 
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-2">
-                        <button
+                        <button aria-label="Ver"
                           onClick={() => setViewUser(user)}
                           className="p-2 rounded-lg text-blue-400 hover:bg-blue-500/10 transition-colors"
                           title="Ver datos del usuario"
@@ -679,7 +679,7 @@ export default function UsuariosFinca() {
                           <Eye className="w-4 h-4" />
                         </button>
 
-                        <button
+                        <button aria-label="Editar"
                           onClick={() => openEditModal(user)}
                           className="p-2 rounded-lg text-purple-400 hover:bg-purple-500/10 transition-colors"
                           title="Editar rol"
@@ -695,7 +695,7 @@ export default function UsuariosFinca() {
                           {user.estado ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                         </button>
 
-                        <button
+                        <button aria-label="Eliminar"
                           onClick={() => void handleRemove(user)}
                           className="p-2 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors"
                           title="Remover usuario de la finca"
