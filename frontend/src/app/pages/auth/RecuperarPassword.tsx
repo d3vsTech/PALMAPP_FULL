@@ -61,6 +61,7 @@ export default function RecuperarPassword() {
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input
+                  aria-label="tu@correo.com"
                   type="email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}

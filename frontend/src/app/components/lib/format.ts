@@ -12,6 +12,16 @@
  *   - "1.750.905"   → formato CO con miles → strip dots → 1750905
  */
 
+/**
+ * Los formateadores se arman una sola vez.
+ *
+ * `new Intl.NumberFormat` carga las reglas del idioma y es de lo más costoso
+ * del navegador; crearlo dentro de la función lo rehacía en cada celda de cada
+ * tabla. Una planilla con trescientas cifras lo construía trescientas veces.
+ */
+const SIN_DECIMALES = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 });
+const MILES = new Intl.NumberFormat('es-CO');
+
 /** Heurística: ¿el string parece un decimal del API ("200.00", "1750.5")? */
 function pareceDecimalApi(str: string): boolean {
   // Un único punto, seguido por 1-2 dígitos hasta el final. Los formatos CO
@@ -35,7 +45,7 @@ export function formatThousands(value: number | string | null | undefined): stri
     }
   }
   if (!Number.isFinite(num)) return '';
-  return new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(num);
+  return SIN_DECIMALES.format(num);
 }
 
 /** Formatea como peso colombiano para display. Prefijo `$`, sin decimales. */
@@ -82,9 +92,7 @@ export function formatDecimal(
   if (str.includes(',')) {
     const [ent, dec = ''] = str.split(',');
     const entNum = Number(ent.replace(/\./g, '').replace(/[^\d-]/g, ''));
-    const entFmt = Number.isFinite(entNum)
-      ? new Intl.NumberFormat('es-CO').format(entNum)
-      : '0';
+    const entFmt = Number.isFinite(entNum) ? MILES.format(entNum) : '0';
     const decLimpio = dec.replace(/[^\d]/g, '').slice(0, maxDecimals);
     return `${entFmt},${decLimpio}`;
   }
@@ -181,9 +189,7 @@ export function formatDecimalLive(text: string, maxDecimals = 3): string {
   }
 
   const intNum = integer ? Number(integer) : NaN;
-  const intFmt = Number.isFinite(intNum)
-    ? new Intl.NumberFormat('es-CO').format(intNum)
-    : '';
+  const intFmt = Number.isFinite(intNum) ? MILES.format(intNum) : '';
   const prefix = negativo ? '-' : '';
   if (hasDecimal) {
     return `${prefix}${intFmt || (integer === '' ? '' : '0')},${decimal}`;

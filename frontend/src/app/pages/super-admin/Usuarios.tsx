@@ -465,6 +465,7 @@ export default function Usuarios() {
           <div className="relative">
             <Search className="w-5 h-5 text-gray-500 absolute left-4 top-1/2 -translate-y-1/2" />
             <input
+              aria-label="Buscar por nombre o email..."
               type="text"
               value={searchTerm}
               onChange={(e) => {

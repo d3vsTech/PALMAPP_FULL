@@ -533,7 +533,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
 
   // Información General
-  const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
+  const [fecha, setFecha] = useState(() => new Date().toISOString().split('T')[0]);
 
   /**
    * PR-L8 — Misma lista de personas, marcando a quien tenga vacaciones que

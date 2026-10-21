@@ -31,8 +31,8 @@ export default function ProveedorLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Datos vivos de la sesión actual (proveedor seleccionado + usuario)
-  const [proveedor, setProveedor] = useState(proveedorAuthStorage.getProveedor());
-  const [user, setUser]           = useState(proveedorAuthStorage.getUser());
+  const [proveedor, setProveedor] = useState(() => proveedorAuthStorage.getProveedor());
+  const [user, setUser]           = useState(() => proveedorAuthStorage.getUser());
 
   // Si no hay sesión válida → mandar al login.
   useEffect(() => {

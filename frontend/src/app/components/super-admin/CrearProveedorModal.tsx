@@ -52,7 +52,7 @@ export default function CrearProveedorModal({
   isEdit = false,
   isSaving = false,
 }: CrearProveedorModalProps) {
-  const [formData, setFormData] = useState<ProveedorFormData>(buildFormData(proveedorData));
+  const [formData, setFormData] = useState<ProveedorFormData>(() => buildFormData(proveedorData));
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
   const [municipios, setMunicipios] = useState<Municipio[]>([]);
   const [loadingDepts, setLoadingDepts] = useState(false);
@@ -320,6 +320,7 @@ export default function CrearProveedorModal({
                   URL del logo
                 </label>
                 <input
+                  aria-label="https://..."
                   type="url"
                   maxLength={500}
                   value={formData.logo_url}

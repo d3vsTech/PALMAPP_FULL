@@ -136,6 +136,7 @@ export function PasoDetalles({ borrador, categorias, soporte, onCambiar }: Props
                 )}
               </Label>
               <Input
+                aria-label="15"
                 type="number" min={1} max={60} placeholder="15"
                 value={borrador.diasHabiles}
                 onChange={(e) => onCambiar({ diasHabiles: e.target.value, campoVacaciones: 'DIAS' })}
@@ -247,6 +248,7 @@ export function PasoDetalles({ borrador, categorias, soporte, onCambiar }: Props
             <div className="space-y-1.5">
               <Label>Entidad (EPS o ARL)</Label>
               <Input
+                aria-label="Ej: EPS SURA"
                 placeholder="Ej: EPS SURA"
                 maxLength={100}
                 value={borrador.entidad}
@@ -256,6 +258,7 @@ export function PasoDetalles({ borrador, categorias, soporte, onCambiar }: Props
             <div className="space-y-1.5">
               <Label>Número de radicado</Label>
               <Input
+                aria-label="Ej: INC-2026-0412"
                 placeholder="Ej: INC-2026-0412"
                 maxLength={50}
                 value={borrador.numeroRadicado}
@@ -298,6 +301,7 @@ export function PasoDetalles({ borrador, categorias, soporte, onCambiar }: Props
             Observaciones <span className="font-normal text-muted-foreground">(opcional)</span>
           </Label>
           <textarea
+            aria-label="Detalles adicionales sobre la novedad..."
             value={borrador.observacion}
             onChange={(e) => onCambiar({ observacion: e.target.value })}
             rows={3}

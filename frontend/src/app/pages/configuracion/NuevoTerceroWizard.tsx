@@ -559,7 +559,7 @@ export default function NuevoTerceroWizard() {
   const navigate = useNavigate();
   const [paso, setPaso] = useState(1);
   const [datos, setDatos] = useState<Partial<EmpresaTercero>>({ tipoPersona: 'Jurídica', estado: 'Activa' });
-  const [precios, setPrecios] = useState<PreciosLabores>(preciosVacios());
+  const [precios, setPrecios] = useState<PreciosLabores>(() => preciosVacios());
   const [operarios, setOperarios] = useState<Partial<ColaboradorTercero>[]>([]);
   const [guardando, setGuardando] = useState(false);
   /**

@@ -378,14 +378,16 @@ export function validarCoherenciaLiquidacion(
   return null;
 }
 
-// Helper para formatear moneda
+/** Se arma una sola vez: construirlo en cada llamada es de lo más costoso. */
+const PESOS = new Intl.NumberFormat('es-CO', {
+  style: 'currency',
+  currency: 'COP',
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+});
+
 function formatearMoneda(valor: number): string {
-  return new Intl.NumberFormat('es-CO', {
-    style: 'currency',
-    currency: 'COP',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(valor);
+  return PESOS.format(valor);
 }
 
 /**

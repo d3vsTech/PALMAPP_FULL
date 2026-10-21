@@ -419,6 +419,7 @@ export default function UsuariosProveedor() {
         <div className="relative">
           <Search className="w-5 h-5 text-gray-500 absolute left-4 top-1/2 -translate-y-1/2" />
           <input
+            aria-label="Buscar por nombre, email o rol..."
             type="text"
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
@@ -690,6 +691,7 @@ export default function UsuariosProveedor() {
                           <label className="block text-sm font-medium text-gray-300 mb-2">Contraseña *</label>
                           <div className="relative">
                             <input
+                              aria-label="Mínimo 8 caracteres"
                               type={showPassword ? 'text' : 'password'}
                               value={createForm.password}
                               onChange={e => setCreateForm(p => ({ ...p, password: e.target.value }))}
@@ -712,6 +714,7 @@ export default function UsuariosProveedor() {
                           <label className="block text-sm font-medium text-gray-300 mb-2">Confirmar contraseña *</label>
                           <div className="relative">
                             <input
+                              aria-label="Repite la contraseña"
                               type={showPassword ? 'text' : 'password'}
                               value={createForm.password_confirmation}
                               onChange={e => setCreateForm(p => ({ ...p, password_confirmation: e.target.value }))}
@@ -832,6 +835,7 @@ export default function UsuariosProveedor() {
                       </label>
                       <div className="relative">
                         <input
+                          aria-label="Dejar en blanco para no cambiar"
                           type={showPassword ? 'text' : 'password'}
                           value={editForm.password}
                           onChange={e => setEditForm(p => ({ ...p, password: e.target.value }))}
@@ -856,6 +860,7 @@ export default function UsuariosProveedor() {
                       </label>
                       <div className="relative">
                         <input
+                          aria-label="Repite la nueva contraseña"
                           type={showPassword ? 'text' : 'password'}
                           value={editForm.password_confirmation}
                           onChange={e => setEditForm(p => ({ ...p, password_confirmation: e.target.value }))}

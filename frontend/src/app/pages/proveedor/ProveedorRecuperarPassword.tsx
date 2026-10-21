@@ -77,6 +77,7 @@ export default function ProveedorRecuperarPassword() {
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input
+                  aria-label="proveedor@empresa.com"
                   type="email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}

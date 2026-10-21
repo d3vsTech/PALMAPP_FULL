@@ -23,7 +23,7 @@ import { buildImagenUrl } from '../../../api/proveedor';
 export default function SeleccionarProveedor() {
   const navigate = useNavigate();
   const [proveedores, setProveedores] = useState<ProveedorOpcion[]>([]);
-  const [user, setUser] = useState(proveedorAuthStorage.getUser());
+  const [user, setUser] = useState(() => proveedorAuthStorage.getUser());
   const [seleccionando, setSeleccionando] = useState<number | null>(null);
 
   useEffect(() => {

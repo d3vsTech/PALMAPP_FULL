@@ -74,7 +74,7 @@ export default function NovedadesPage() {
   const [busqueda, setBusqueda] = useState('');
   const [categoria, setCategoria] = useState<string>(TODOS);
   const [estado, setEstado] = useState<string>(TODOS);
-  const [fuente, setFuente] = useState<string>(searchParams.get('fuente') ?? TODOS);
+  const [fuente, setFuente] = useState<string>(() => searchParams.get('fuente') ?? TODOS);
   const [desde, setDesde] = useState('');
   const [hasta, setHasta] = useState('');
 
