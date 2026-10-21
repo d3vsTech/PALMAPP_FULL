@@ -122,7 +122,7 @@ const PalmasSection = memo(({
                 <div key={palma.id}
                   onClick={() => enSel && onToggle(pid)}
                   className={[
-                    'relative group rounded-lg border-2 p-3 transition-all',
+                    'relative group rounded-lg border-2 p-3 transition',
                     enSel ? 'cursor-pointer' : '',
                     sel ? 'ring-2 ring-primary ring-offset-2' : '',
                     palma.estado
@@ -671,7 +671,7 @@ export default function LoteDetalle() {
 
               return (
                 <AccordionItem key={sublote.id} value={subId}
-                  className="rounded-2xl border-0 bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-sm border border-border/50 shadow-lg hover:shadow-xl transition-all overflow-hidden">
+                  className="rounded-2xl border-0 bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-sm border border-border/50 shadow-lg hover:shadow-xl transition overflow-hidden">
                   <div className="relative">
                     <AccordionTrigger className="px-8 py-6 hover:no-underline relative z-10 [&>svg]:hidden">
                       <div className="flex w-full items-center gap-6 pr-20">

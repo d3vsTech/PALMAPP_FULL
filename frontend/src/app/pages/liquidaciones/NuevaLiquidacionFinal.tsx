@@ -270,7 +270,7 @@ export default function NuevaLiquidacionFinal() {
               <button
                 type="button"
                 onClick={() => setTipo('SIMULACION')}
-                className="rounded-lg border-2 border-border p-6 text-left transition-all hover:border-primary hover:shadow-md"
+                className="rounded-lg border-2 border-border p-6 text-left transition hover:border-primary hover:shadow-md"
               >
                 <div className="flex items-start gap-4">
                   <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
@@ -290,7 +290,7 @@ export default function NuevaLiquidacionFinal() {
                 type="button"
                 onClick={() => setTipo('FINAL')}
                 disabled={!puedeCrear}
-                className="rounded-lg border-2 border-border p-6 text-left transition-all hover:border-primary hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg border-2 border-border p-6 text-left transition hover:border-primary hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <div className="flex items-start gap-4">
                   <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-destructive/10">

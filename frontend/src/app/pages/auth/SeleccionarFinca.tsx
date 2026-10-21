@@ -66,7 +66,7 @@ export default function SeleccionarFinca() {
                 key={finca.id}
                 onClick={() => handleSelect(finca.id)}
                 disabled={loadingId !== null}
-                className="w-full flex items-center gap-4 p-4 rounded-xl border border-border bg-card hover:bg-accent hover:border-primary/30 transition-all text-left disabled:opacity-60 group"
+                className="w-full flex items-center gap-4 p-4 rounded-xl border border-border bg-card hover:bg-accent hover:border-primary/30 transition text-left disabled:opacity-60 group"
               >
                 {/* Logo de la finca. `logo_url` llega absoluto en cada item de
                     `tenants[]` del login (API_AUTH_FINCA §1) y es `null` cuando

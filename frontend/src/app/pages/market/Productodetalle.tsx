@@ -219,7 +219,7 @@ export default function ProductoDetalle() {
                           type="button"
                           onClick={() => setImagenActiva(i)}
                           onMouseEnter={() => setImagenActiva(i)}
-                          className={`h-14 w-14 shrink-0 rounded-md overflow-hidden border-2 transition-all bg-white ${
+                          className={`h-14 w-14 shrink-0 rounded-md overflow-hidden border-2 transition bg-white ${
                             activa
                               ? 'border-primary ring-1 ring-primary/30'
                               : 'border-border/60 hover:border-primary/60'

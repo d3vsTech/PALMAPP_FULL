@@ -32,7 +32,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
           min={isNumber && min === undefined ? 0 : min}
           onKeyDown={handleKeyDown}
           className={cn(
-            'w-full px-4 py-3 bg-input-background border-2 rounded-xl text-foreground placeholder:text-muted-foreground transition-all duration-200',
+            'w-full px-4 py-3 bg-input-background border-2 rounded-xl text-foreground placeholder:text-muted-foreground transition duration-200',
             'focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary',
             error ? 'border-destructive focus:border-destructive focus:ring-destructive/20' : 'border-input',
             className

@@ -302,7 +302,7 @@ export default function Proveedores() {
           {proveedoresFiltrados.map((proveedor) => (
             <Card
               key={proveedor.id}
-              className="border-border hover:shadow-lg transition-all cursor-pointer"
+              className="border-border hover:shadow-lg transition cursor-pointer"
               onClick={() => navigate(`/market/proveedor/${proveedor.id}`)}
             >
               <CardContent className="p-6 space-y-4">

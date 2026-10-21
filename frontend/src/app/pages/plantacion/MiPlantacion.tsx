@@ -228,7 +228,7 @@ export default function MiPlantacion() {
         {!loading && (
           <div className="space-y-3">
             {predios.map((predio) => (
-              <Card key={predio.id} className="border-border hover:border-primary/30 transition-all">
+              <Card key={predio.id} className="border-border hover:border-primary/30 transition">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3 flex-1 min-w-0">

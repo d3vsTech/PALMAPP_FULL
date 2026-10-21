@@ -102,7 +102,7 @@ export default function CrearSublote() {
               <span className="text-muted-foreground">{batch.progress}%</span>
             </div>
             <div className="w-full bg-muted rounded-full h-2">
-              <div className="bg-primary h-2 rounded-full transition-all duration-500"
+              <div className="bg-primary h-2 rounded-full transition duration-500"
                 style={{ width: `${batch.progress}%` }} />
             </div>
           </CardContent>

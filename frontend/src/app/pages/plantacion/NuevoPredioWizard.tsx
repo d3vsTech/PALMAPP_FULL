@@ -1263,7 +1263,7 @@ export default function NuevoPredioWizard() {
               <span className="font-semibold">{etapa} de {ETAPAS.length}</span>
             </div>
             <div className="h-2 bg-muted rounded-full overflow-hidden">
-              <div className="h-full bg-primary transition-all duration-300"
+              <div className="h-full bg-primary transition duration-300"
                 style={{ width: `${(etapa / ETAPAS.length) * 100}%` }} />
             </div>
           </div>
@@ -1447,7 +1447,7 @@ export default function NuevoPredioWizard() {
             <span className="font-semibold">{etapa} de {ETAPAS.length}</span>
           </div>
           <div className="h-2 bg-muted rounded-full overflow-hidden">
-            <div className="h-full bg-primary transition-all duration-300"
+            <div className="h-full bg-primary transition duration-300"
               style={{ width: `${(etapa / ETAPAS.length) * 100}%` }} />
           </div>
         </div>
@@ -1646,7 +1646,7 @@ export default function NuevoPredioWizard() {
                         disabled={!editId && !activa && !completa}
                       >
                         <div
-                          className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition-all ${
+                          className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition ${
                             completa
                               ? 'bg-primary border-primary text-white'
                               : activa
@@ -1675,7 +1675,7 @@ export default function NuevoPredioWizard() {
                       {idx < ETAPAS.length - 1 && (
                         <div className="flex-1 h-0.5 bg-border relative mx-4">
                           <div
-                            className={`absolute inset-0 bg-primary transition-all ${
+                            className={`absolute inset-0 bg-primary transition ${
                               completa ? 'w-full' : 'w-0'
                             }`}
                           />

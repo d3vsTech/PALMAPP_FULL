@@ -112,7 +112,7 @@ export default function ConfirmDialog({
           <button
             onClick={handleConfirm}
             disabled={loading}
-            className={`flex-1 rounded-xl py-2.5 text-sm font-semibold transition-all disabled:opacity-50 ${config.btnClass}`}
+            className={`flex-1 rounded-xl py-2.5 text-sm font-semibold transition disabled:opacity-50 ${config.btnClass}`}
           >
             {loading ? (
               <span className="inline-flex items-center justify-center gap-2">

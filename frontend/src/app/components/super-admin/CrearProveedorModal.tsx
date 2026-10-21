@@ -337,14 +337,14 @@ export default function CrearProveedorModal({
             type="button"
             onClick={onClose}
             disabled={isSaving}
-            className="px-5 py-2.5 rounded-lg border border-slate-600 bg-slate-800 text-white hover:bg-slate-700 transition-all disabled:opacity-50"
+            className="px-5 py-2.5 rounded-lg border border-slate-600 bg-slate-800 text-white hover:bg-slate-700 transition disabled:opacity-50"
           >
             Cancelar
           </button>
           <button
             type="submit"
             disabled={isSaving}
-            className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-[#9032F0] to-[#6506FF] hover:from-[#9032F0]/90 hover:to-[#6506FF]/90 text-white font-semibold shadow-lg shadow-[#9032F0]/30 transition-all disabled:opacity-50 flex items-center gap-2"
+            className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-[#9032F0] to-[#6506FF] hover:from-[#9032F0]/90 hover:to-[#6506FF]/90 text-white font-semibold shadow-lg shadow-[#9032F0]/30 transition disabled:opacity-50 flex items-center gap-2"
           >
             {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
             {isEdit ? 'Guardar cambios' : 'Crear proveedor'}

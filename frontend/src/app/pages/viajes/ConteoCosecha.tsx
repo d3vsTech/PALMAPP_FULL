@@ -738,7 +738,7 @@ export default function ConteoCosecha() {
                         className={`flex flex-col items-center gap-2 ${estaActiva || estaCompleta ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
                         disabled={!estaActiva && !estaCompleta}
                       >
-                        <div className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition-all ${
+                        <div className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition ${
                           estaCompleta ? 'bg-primary border-primary text-white'
                           : estaActiva ? 'bg-primary/10 border-primary text-primary'
                           : 'bg-muted border-border text-muted-foreground'
@@ -755,7 +755,7 @@ export default function ConteoCosecha() {
                       </button>
                       {index < ETAPAS.length - 1 && (
                         <div className="flex-1 h-0.5 bg-border relative mx-4">
-                          <div className={`absolute inset-0 bg-primary transition-all ${estaCompleta ? 'w-full' : 'w-0'}`} />
+                          <div className={`absolute inset-0 bg-primary transition-[width] ${estaCompleta ? 'w-full' : 'w-0'}`} />
                         </div>
                       )}
                     </React.Fragment>
@@ -1323,7 +1323,7 @@ export default function ConteoCosecha() {
                   </div>
                   <div className="h-2 bg-muted rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-primary transition-all duration-300"
+                      className="h-full bg-primary transition duration-300"
                       style={{ width: `${(etapaActual / ETAPAS.length) * 100}%` }}
                     />
                   </div>

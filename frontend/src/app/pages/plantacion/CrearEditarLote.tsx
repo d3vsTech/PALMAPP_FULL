@@ -161,7 +161,7 @@ export default function CrearEditarLote() {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-6 border rounded-xl bg-gradient-to-br from-muted/20 to-muted/5">
                     {semillasList.map(s => (
                       <div key={s.id}
-                        className={`flex items-center space-x-3 p-4 rounded-lg border-2 transition-all cursor-pointer hover:shadow-md ${
+                        className={`flex items-center space-x-3 p-4 rounded-lg border-2 transition cursor-pointer hover:shadow-md ${
                           semillasIds.includes(Number(s.id))
                             ? 'bg-success/10 border-success/50 shadow-sm'
                             : 'bg-background border-border/50 hover:border-border'

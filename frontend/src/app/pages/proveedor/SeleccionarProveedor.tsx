@@ -127,7 +127,7 @@ export default function SeleccionarProveedor() {
                   key={p.id}
                   onClick={() => handleSeleccionar(p)}
                   disabled={bloqueado || cargando}
-                  className={`group text-left rounded-2xl border border-border bg-card p-5 shadow-sm hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed ${cargando ? 'ring-2 ring-primary' : 'hover:border-primary/40 hover:bg-primary/5'}`}
+                  className={`group text-left rounded-2xl border border-border bg-card p-5 shadow-sm hover:shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed ${cargando ? 'ring-2 ring-primary' : 'hover:border-primary/40 hover:bg-primary/5'}`}
                 >
                   <div className="flex items-start gap-4">
                     {logo ? (

@@ -156,7 +156,7 @@ export function Paso1({ data, onChange }: { data: Partial<EmpresaTercero>; onCha
           <div className="flex rounded-xl border border-border overflow-hidden">
             {(['Jurídica', 'Natural'] as const).map(tipo => (
               <button key={tipo} type="button" onClick={() => set('tipoPersona', tipo)}
-                className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-all ${
+                className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition ${
                   data.tipoPersona === tipo ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:bg-muted'
                 }`}>
                 {tipo === 'Jurídica' ? <Building2 className="h-4 w-4" /> : <User className="h-4 w-4" />}
@@ -834,7 +834,7 @@ export default function NuevoTerceroWizard() {
                 {STEPS.map((s, i) => (
                   <React.Fragment key={s.num}>
                     <div className="flex flex-col items-center gap-2">
-                      <div className={`h-12 w-12 rounded-full border-2 flex items-center justify-center font-bold text-sm transition-all ${
+                      <div className={`h-12 w-12 rounded-full border-2 flex items-center justify-center font-bold text-sm transition ${
                         paso > s.num
                           ? 'bg-primary border-primary text-primary-foreground'
                           : paso === s.num
@@ -849,7 +849,7 @@ export default function NuevoTerceroWizard() {
                     </div>
                     {i < STEPS.length - 1 && (
                       <div className="flex-1 mx-3 h-0.5 bg-border overflow-hidden rounded-full">
-                        <div className={`h-full bg-primary transition-all duration-500 ${paso > s.num ? 'w-full' : 'w-0'}`} />
+                        <div className={`h-full bg-primary transition-[width] duration-500 ${paso > s.num ? 'w-full' : 'w-0'}`} />
                       </div>
                     )}
                   </React.Fragment>

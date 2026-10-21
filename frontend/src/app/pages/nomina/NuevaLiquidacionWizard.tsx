@@ -196,7 +196,7 @@ export default function NuevaLiquidacionWizard() {
       <div className="flex items-center justify-between relative">
         <div className="absolute top-6 left-0 right-0 h-0.5 bg-border -z-10" />
         <div
-          className="absolute top-6 left-0 h-0.5 bg-primary transition-all duration-500 -z-10"
+          className="absolute top-6 left-0 h-0.5 bg-primary transition-[width] duration-500 -z-10"
           style={{ width: `${((pasoActual - 1) / (pasos.length - 1)) * 100}%` }}
         />
 
@@ -208,7 +208,7 @@ export default function NuevaLiquidacionWizard() {
           return (
             <div key={paso.numero} className="flex flex-col items-center gap-2 bg-background px-4">
               <div
-                className={`h-12 w-12 rounded-full flex items-center justify-center border-2 transition-all ${
+                className={`h-12 w-12 rounded-full flex items-center justify-center border-2 transition ${
                   isCompleted
                     ? 'bg-primary border-primary'
                     : isCurrent
@@ -269,7 +269,7 @@ export default function NuevaLiquidacionWizard() {
                   return (
                     <Card
                       key={tipo.id}
-                      className={`cursor-pointer transition-all border-2 ${
+                      className={`cursor-pointer transition border-2 ${
                         isSelected
                           ? 'border-primary bg-primary/5'
                           : 'border-border hover:border-primary/50'
@@ -345,7 +345,7 @@ export default function NuevaLiquidacionWizard() {
                     return (
                       <Card
                         key={empleado.id}
-                        className={`cursor-pointer transition-all border-2 ${
+                        className={`cursor-pointer transition border-2 ${
                           isSelected
                             ? 'border-primary bg-primary/5'
                             : 'border-border hover:border-primary/50'

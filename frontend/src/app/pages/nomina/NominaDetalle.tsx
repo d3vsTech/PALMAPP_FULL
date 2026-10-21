@@ -1355,7 +1355,7 @@ export default function NominaDetalle() {
         <button
           type="button"
           onClick={() => setTabActivo('colaboradores')}
-          className={`relative flex items-center gap-4 rounded-xl border-2 px-5 py-4 text-left transition-all duration-200 ${
+          className={`relative flex items-center gap-4 rounded-xl border-2 px-5 py-4 text-left transition duration-200 ${
             tabActivo === 'colaboradores'
               ? 'border-primary bg-primary/5 shadow-sm'
               : 'border-border bg-card hover:border-primary/40 hover:bg-muted/40'
@@ -1383,7 +1383,7 @@ export default function NominaDetalle() {
         <button
           type="button"
           onClick={() => setTabActivo('terceros')}
-          className={`relative flex items-center gap-4 rounded-xl border-2 px-5 py-4 text-left transition-all duration-200 ${
+          className={`relative flex items-center gap-4 rounded-xl border-2 px-5 py-4 text-left transition duration-200 ${
             tabActivo === 'terceros'
               ? 'border-amber-500 bg-amber-50/60 dark:bg-amber-950/20 shadow-sm'
               : 'border-border bg-card hover:border-amber-400/40 hover:bg-muted/40'
@@ -1464,7 +1464,7 @@ export default function NominaDetalle() {
                   </p>
                   <div className="mt-2 h-1.5 w-full rounded-full bg-muted overflow-hidden">
                     <div
-                      className="h-full bg-success rounded-full transition-all duration-500"
+                      className="h-full bg-success rounded-full transition duration-500"
                       style={{ width: `${totalColabs ? (liquidados / totalColabs) * 100 : 0}%` }}
                     />
                   </div>
@@ -1517,7 +1517,7 @@ export default function NominaDetalle() {
                   </p>
                   <div className="mt-2 h-1.5 w-full rounded-full bg-muted overflow-hidden">
                     <div
-                      className="h-full bg-success rounded-full transition-all duration-500"
+                      className="h-full bg-success rounded-full transition duration-500"
                       style={{ width: `${tercerosAgrupados.length ? (empresasPagadas / tercerosAgrupados.length) * 100 : 0}%` }}
                     />
                   </div>

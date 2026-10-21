@@ -319,7 +319,7 @@ export default function Checkout() {
                 >
                   <div className="flex flex-col items-center gap-2">
                     <div
-                      className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition-all ${
+                      className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition ${
                         estaCompleta
                           ? 'bg-primary border-primary text-white'
                           : estaActiva
@@ -341,7 +341,7 @@ export default function Checkout() {
                   {index < 2 && (
                     <div className="flex-1 h-0.5 mx-3 bg-border relative min-w-[20px]">
                       <div
-                        className={`absolute inset-0 bg-primary transition-all ${
+                        className={`absolute inset-0 bg-primary transition ${
                           estaCompleta ? 'w-full' : 'w-0'
                         }`}
                       />
@@ -546,7 +546,7 @@ export default function Checkout() {
                   {METODOS_PAGO.map((metodo) => (
                     <Card
                       key={metodo.id}
-                      className={`cursor-pointer border-2 transition-all ${
+                      className={`cursor-pointer border-2 transition ${
                         metodoPago === metodo.id
                           ? 'border-primary bg-primary/5'
                           : 'border-border hover:border-primary/50'

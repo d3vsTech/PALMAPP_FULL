@@ -167,7 +167,7 @@ export default function SuperAdminDashboard() {
           <button
             onClick={() => void loadDashboard(true)}
             disabled={refreshing}
-            className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white hover:bg-white/10 transition-all disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white hover:bg-white/10 transition disabled:opacity-50"
           >
             {refreshing ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -192,7 +192,7 @@ export default function SuperAdminDashboard() {
       {/* KPIs Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
         {/* Total Fincas */}
-        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:border-[#9032F0]/50 transition-all duration-300 group relative overflow-hidden">
+        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:border-[#9032F0]/50 transition duration-300 group relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-[#9032F0]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           <div className="relative z-10">
             <div className="flex items-start justify-between mb-4">
@@ -209,7 +209,7 @@ export default function SuperAdminDashboard() {
         </div>
 
         {/* Fincas Activas */}
-        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:border-[#6506FF]/50 transition-all duration-300 group relative overflow-hidden">
+        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:border-[#6506FF]/50 transition duration-300 group relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-[#6506FF]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           <div className="relative z-10">
             <div className="flex items-start justify-between mb-4">
@@ -227,7 +227,7 @@ export default function SuperAdminDashboard() {
         </div>
 
         {/* Fincas Suspendidas */}
-        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:border-yellow-500/50 transition-all duration-300 group relative overflow-hidden">
+        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:border-yellow-500/50 transition duration-300 group relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           <div className="relative z-10">
             <div className="flex items-start justify-between mb-4">
@@ -244,7 +244,7 @@ export default function SuperAdminDashboard() {
         </div>
 
         {/* Fincas Inactivas */}
-        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:border-red-500/50 transition-all duration-300 group relative overflow-hidden">
+        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:border-red-500/50 transition duration-300 group relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           <div className="relative z-10">
             <div className="flex items-start justify-between mb-4">
@@ -261,7 +261,7 @@ export default function SuperAdminDashboard() {
         </div>
 
         {/* Usuarios Totales */}
-        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:border-[#9032F0]/50 transition-all duration-300 group relative overflow-hidden">
+        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:border-[#9032F0]/50 transition duration-300 group relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-[#9032F0]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           <div className="relative z-10">
             <div className="flex items-start justify-between mb-4">
@@ -278,7 +278,7 @@ export default function SuperAdminDashboard() {
         </div>
 
         {/* Super Admins */}
-        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:border-[#6506FF]/50 transition-all duration-300 group relative overflow-hidden">
+        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:border-[#6506FF]/50 transition duration-300 group relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-[#6506FF]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           <div className="relative z-10">
             <div className="flex items-start justify-between mb-4">
@@ -295,7 +295,7 @@ export default function SuperAdminDashboard() {
         </div>
 
         {/* Asignaciones */}
-        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:border-[#9032F0]/50 transition-all duration-300 group col-span-1 md:col-span-2 relative overflow-hidden">
+        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:border-[#9032F0]/50 transition duration-300 group col-span-1 md:col-span-2 relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-[#9032F0]/5 via-[#6506FF]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           <div className="relative z-10">
             <div className="flex items-start justify-between mb-4">
@@ -410,7 +410,7 @@ export default function SuperAdminDashboard() {
             {tenantsRecientes.map((tenant) => (
               <div
                 key={String(tenant.id)}
-                className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between rounded-xl border border-white/10 bg-black/20 p-4 hover:border-[#9032F0]/30 transition-all duration-200"
+                className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between rounded-xl border border-white/10 bg-black/20 p-4 hover:border-[#9032F0]/30 transition duration-200"
               >
                 <div>
                   <p className="text-white font-semibold">{tenant.nombre}</p>

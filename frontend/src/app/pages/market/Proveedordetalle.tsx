@@ -273,7 +273,7 @@ export default function ProveedorDetalle() {
             {proveedorData.productos.map((producto) => (
               <Card
                 key={producto.id}
-                className="border-border hover:shadow-lg transition-all cursor-pointer"
+                className="border-border hover:shadow-lg transition cursor-pointer"
                 onClick={() => navigate(`/market/producto/${producto.id}`)}
               >
                 <CardContent className="p-6 space-y-4">

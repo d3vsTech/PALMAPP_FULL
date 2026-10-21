@@ -39,7 +39,7 @@ export function KPICard({ title, value, icon: Icon, trend, trendValue, subtitle 
   };
 
   return (
-    <Card className="border-border hover:shadow-lg transition-all duration-300">
+    <Card className="border-border hover:shadow-lg transition duration-300">
       <CardContent className="p-6">
         <div className="flex items-start justify-between">
           <div className="flex-1">

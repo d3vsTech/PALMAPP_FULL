@@ -442,7 +442,7 @@ export default function UsuarioPermisos() {
                     className={`flex items-center gap-3 group ${sinPermisos ? 'cursor-default' : 'cursor-pointer'}`}
                   >
                     {!sinPermisos && (
-                      <div className={`h-5 w-5 rounded border-2 flex items-center justify-center transition-all ${
+                      <div className={`h-5 w-5 rounded border-2 flex items-center justify-center transition ${
                         todosModuloActivos(modulo)   ? 'border-primary bg-primary'
                         : algunoModuloActivo(modulo) ? 'border-primary bg-primary/50'
                         : 'border-border hover:border-primary/50'}`}>
@@ -544,7 +544,7 @@ function PermisoRow({
 }) {
   return (
     <div
-      className={`flex items-start gap-3 p-3 rounded-lg border transition-all ${
+      className={`flex items-start gap-3 p-3 rounded-lg border transition ${
         isActivo
           ? 'bg-primary/5 border-primary/20 hover:bg-primary/10'
           : 'border-border hover:border-primary/30'

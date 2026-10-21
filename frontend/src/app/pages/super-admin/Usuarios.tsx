@@ -429,7 +429,7 @@ export default function Usuarios() {
 
         <button
           onClick={openCreateModal}
-          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#9032F0] to-[#6506FF] px-5 py-3 text-white font-semibold hover:opacity-95 transition-all"
+          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#9032F0] to-[#6506FF] px-5 py-3 text-white font-semibold hover:opacity-95 transition"
         >
           <Plus className="w-4 h-4" />
           Crear usuario
@@ -686,7 +686,7 @@ export default function Usuarios() {
             <button
               onClick={() => setPage((prev) => Math.max(1, prev - 1))}
               disabled={page <= 1}
-              className="px-4 py-2 rounded-lg border border-white/10 bg-white/5 text-white hover:bg-white/10 transition-all disabled:opacity-40"
+              className="px-4 py-2 rounded-lg border border-white/10 bg-white/5 text-white hover:bg-white/10 transition disabled:opacity-40"
             >
               Anterior
             </button>
@@ -694,7 +694,7 @@ export default function Usuarios() {
             <button
               onClick={() => setPage((prev) => Math.min(lastPage, prev + 1))}
               disabled={page >= lastPage}
-              className="px-4 py-2 rounded-lg border border-white/10 bg-white/5 text-white hover:bg-white/10 transition-all disabled:opacity-40"
+              className="px-4 py-2 rounded-lg border border-white/10 bg-white/5 text-white hover:bg-white/10 transition disabled:opacity-40"
             >
               Siguiente
             </button>
@@ -1018,7 +1018,7 @@ export default function Usuarios() {
                         setSelectedUsuario(null);
                         setFormData(buildUserFormData());
                       }}
-                      className="px-5 py-3 rounded-xl border border-white/10 bg-white/5 text-white hover:bg-white/10 transition-all"
+                      className="px-5 py-3 rounded-xl border border-white/10 bg-white/5 text-white hover:bg-white/10 transition"
                     >
                       Cancelar
                     </button>
@@ -1026,7 +1026,7 @@ export default function Usuarios() {
                     <button
                       type="submit"
                       disabled={saving}
-                      className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-[#9032F0] to-[#6506FF] text-white font-semibold hover:opacity-95 transition-all disabled:opacity-50"
+                      className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-[#9032F0] to-[#6506FF] text-white font-semibold hover:opacity-95 transition disabled:opacity-50"
                     >
                       {saving ? (
                         <>
@@ -1055,7 +1055,7 @@ export default function Usuarios() {
                     setSelectedUsuario(null);
                     setFormData(buildUserFormData());
                   }}
-                  className="px-5 py-3 rounded-xl border border-white/10 bg-white/5 text-white hover:bg-white/10 transition-all"
+                  className="px-5 py-3 rounded-xl border border-white/10 bg-white/5 text-white hover:bg-white/10 transition"
                 >
                   Cerrar
                 </button>

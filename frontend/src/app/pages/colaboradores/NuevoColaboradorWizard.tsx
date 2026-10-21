@@ -995,7 +995,7 @@ export default function NuevoColaboradorWizard() {
                         disabled={!isEditMode && !estaActiva && !estaCompleta}
                       >
                         <div
-                          className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition-all ${
+                          className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition ${
                             estaCompleta
                               ? 'bg-primary border-primary text-white'
                               : estaActiva
@@ -1020,7 +1020,7 @@ export default function NuevoColaboradorWizard() {
                       {index < ETAPAS.length - 1 && (
                         <div className="flex-1 h-0.5 bg-border relative mx-4">
                           <div
-                            className={`absolute inset-0 bg-primary transition-all ${
+                            className={`absolute inset-0 bg-primary transition ${
                               estaCompleta ? 'w-full' : 'w-0'
                             }`}
                           />

@@ -438,7 +438,7 @@ export default function Viajes() {
         </div>
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {/* Total Viajes */}
-          <Card className="glass-subtle border-border hover:shadow-lg transition-all duration-300">
+          <Card className="glass-subtle border-border hover:shadow-lg transition duration-300">
             <CardContent className="p-6">
               <div className="flex-1">
                 <p className="text-sm font-medium text-muted-foreground mb-2">Total Viajes</p>
@@ -451,7 +451,7 @@ export default function Viajes() {
           </Card>
 
           {/* En Validación */}
-          <Card className="glass-subtle border-border hover:shadow-lg transition-all duration-300">
+          <Card className="glass-subtle border-border hover:shadow-lg transition duration-300">
             <CardContent className="p-6">
               <div className="flex-1">
                 <p className="text-sm font-medium text-muted-foreground mb-2">En Validación</p>
@@ -464,7 +464,7 @@ export default function Viajes() {
           </Card>
 
           {/* Finalizados */}
-          <Card className="glass-subtle border-border hover:shadow-lg transition-all duration-300">
+          <Card className="glass-subtle border-border hover:shadow-lg transition duration-300">
             <CardContent className="p-6">
               <div className="flex-1">
                 <p className="text-sm font-medium text-muted-foreground mb-2">Finalizados</p>
@@ -477,7 +477,7 @@ export default function Viajes() {
           </Card>
 
           {/* Kilogramos Totales */}
-          <Card className="glass-subtle border-border hover:shadow-lg transition-all duration-300">
+          <Card className="glass-subtle border-border hover:shadow-lg transition duration-300">
             <CardContent className="p-6">
               <div className="flex-1">
                 <p className="text-sm font-medium text-muted-foreground mb-2">Kilogramos Totales</p>

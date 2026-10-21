@@ -147,7 +147,7 @@ export default function Diagnosticos() {
         <button
           onClick={() => void cargarDiagnosticos()}
           disabled={cargando}
-          className="flex items-center gap-2 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#9032F0]/30 rounded-xl text-white transition-all duration-200 group disabled:opacity-50 self-start lg:self-auto"
+          className="flex items-center gap-2 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#9032F0]/30 rounded-xl text-white transition duration-200 group disabled:opacity-50 self-start lg:self-auto"
         >
           <RefreshCw className={`h-4 w-4 transition-transform ${cargando ? 'animate-spin' : 'group-hover:rotate-180'}`} />
           <span className="text-sm font-medium">Actualizar</span>
@@ -176,7 +176,7 @@ export default function Diagnosticos() {
           return (
             <div
               key={index}
-              className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:border-[#9032F0]/30 transition-all duration-300 group"
+              className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:border-[#9032F0]/30 transition duration-300 group"
             >
               {/* Header de la card */}
               <div className="flex items-center justify-between mb-5">

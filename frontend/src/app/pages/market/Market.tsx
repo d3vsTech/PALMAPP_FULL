@@ -265,7 +265,7 @@ export default function Market() {
                   return (
                     <Card
                       key={cat.slug}
-                      className={`cursor-pointer transition-all duration-300 border-2 ${
+                      className={`cursor-pointer transition duration-300 border-2 ${
                         isSelected
                           ? 'border-primary bg-primary/5 shadow-lg'
                           : 'border-border hover:border-primary/50 hover:shadow-md'
@@ -399,7 +399,7 @@ export default function Market() {
                 <Card
                   key={producto.id}
                   id={`prod-${producto.id}`}
-                  className="glass-subtle border-border hover:shadow-lg transition-all duration-300 overflow-hidden group cursor-pointer scroll-mt-24"
+                  className="glass-subtle border-border hover:shadow-lg transition duration-300 overflow-hidden group cursor-pointer scroll-mt-24"
                   onClick={() => verProducto(producto.id)}
                 >
                   <div className="aspect-square bg-muted relative overflow-hidden">
@@ -491,7 +491,7 @@ export default function Market() {
                 <Card
                   key={producto.id}
                   id={`prod-${producto.id}`}
-                  className="glass-subtle border-border hover:shadow-lg transition-all duration-300 cursor-pointer scroll-mt-24"
+                  className="glass-subtle border-border hover:shadow-lg transition duration-300 cursor-pointer scroll-mt-24"
                   onClick={() => verProducto(producto.id)}
                 >
                   <CardContent className="p-6">

@@ -99,7 +99,7 @@ export default function SuperAdminLogin() {
             </h3>
             {features.map((feature, index) => (
               <div key={index} className="flex items-start gap-4 group">
-                <div className="flex-shrink-0 w-12 h-12 bg-white/5 border border-white/10 rounded-xl flex items-center justify-center group-hover:bg-[#9032F0]/10 group-hover:border-[#9032F0]/30 transition-all duration-300">
+                <div className="flex-shrink-0 w-12 h-12 bg-white/5 border border-white/10 rounded-xl flex items-center justify-center group-hover:bg-[#9032F0]/10 group-hover:border-[#9032F0]/30 transition duration-300">
                   <feature.icon className="w-6 h-6 text-[#9032F0]" />
                 </div>
                 <div className="flex-1">
@@ -165,7 +165,7 @@ export default function SuperAdminLogin() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50 focus:border-[#9032F0]/50 transition-all backdrop-blur-sm"
+                    className="w-full pl-11 pr-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50 focus:border-[#9032F0]/50 transition backdrop-blur-sm"
                     placeholder="devs@d3vs.tech"
                     required
                     autoComplete="email"
@@ -185,7 +185,7 @@ export default function SuperAdminLogin() {
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-11 pr-12 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50 focus:border-[#9032F0]/50 transition-all backdrop-blur-sm"
+                    className="w-full pl-11 pr-12 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50 focus:border-[#9032F0]/50 transition backdrop-blur-sm"
                     placeholder="••••••••"
                     required
                     autoComplete="current-password"
@@ -204,7 +204,7 @@ export default function SuperAdminLogin() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full py-3.5 bg-gradient-to-r from-[#9032F0] to-[#6506FF] hover:from-[#9032F0]/90 hover:to-[#6506FF]/90 text-white font-bold rounded-xl transition-all duration-200 shadow-lg shadow-[#9032F0]/30 hover:shadow-[#9032F0]/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 group"
+                className="w-full py-3.5 bg-gradient-to-r from-[#9032F0] to-[#6506FF] hover:from-[#9032F0]/90 hover:to-[#6506FF]/90 text-white font-bold rounded-xl transition duration-200 shadow-lg shadow-[#9032F0]/30 hover:shadow-[#9032F0]/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 group"
               >
                 {isLoading ? (
                   <>

@@ -139,7 +139,7 @@ function LiquidacionesContent() {
             <TabsList className="h-auto w-full justify-start gap-2 overflow-x-auto bg-transparent p-0 sm:grid sm:grid-cols-5 sm:overflow-visible">
               <TabsTrigger
                 value="cesantias"
-                className="flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md h-12 py-0 transition-all duration-200 hover:bg-muted"
+                className="flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md h-12 py-0 transition duration-200 hover:bg-muted"
               >
                 <DollarSign className="h-4 w-4" />
                 <span>Cesantías</span>
@@ -147,28 +147,28 @@ function LiquidacionesContent() {
               </TabsTrigger>
               <TabsTrigger
                 value="intereses"
-                className="flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md h-12 py-0 transition-all duration-200 hover:bg-muted"
+                className="flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md h-12 py-0 transition duration-200 hover:bg-muted"
               >
                 <TrendingUp className="h-4 w-4" />
                 <span>Intereses</span>
               </TabsTrigger>
               <TabsTrigger
                 value="prima"
-                className="flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md h-12 py-0 transition-all duration-200 hover:bg-muted"
+                className="flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md h-12 py-0 transition duration-200 hover:bg-muted"
               >
                 <Briefcase className="h-4 w-4" />
                 <span>Prima</span>
               </TabsTrigger>
               <TabsTrigger
                 value="vacaciones"
-                className="flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md h-12 py-0 transition-all duration-200 hover:bg-muted"
+                className="flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md h-12 py-0 transition duration-200 hover:bg-muted"
               >
                 <Calendar className="h-4 w-4" />
                 <span>Vacaciones</span>
               </TabsTrigger>
               <TabsTrigger
                 value="liquidacion-final"
-                className="flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md h-12 py-0 transition-all duration-200 hover:bg-muted"
+                className="flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md h-12 py-0 transition duration-200 hover:bg-muted"
               >
                 <FileText className="h-4 w-4" />
                 <span>Liquidación</span>

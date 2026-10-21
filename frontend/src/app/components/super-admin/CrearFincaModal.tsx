@@ -437,7 +437,7 @@ export default function CrearFincaModal({
             type="button"
             onClick={onClose}
             disabled={isSaving}
-            className="px-5 py-3 rounded-xl border border-white/10 bg-white/5 text-white hover:bg-white/10 transition-all disabled:opacity-50"
+            className="px-5 py-3 rounded-xl border border-white/10 bg-white/5 text-white hover:bg-white/10 transition disabled:opacity-50"
           >
             Cancelar
           </button>
@@ -445,7 +445,7 @@ export default function CrearFincaModal({
           <button
             type="submit"
             disabled={isSaving}
-            className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-[#9032F0] to-[#6506FF] text-white font-semibold hover:opacity-95 transition-all disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-[#9032F0] to-[#6506FF] text-white font-semibold hover:opacity-95 transition disabled:opacity-50"
           >
             <Package className="w-4 h-4" />
             {isSaving

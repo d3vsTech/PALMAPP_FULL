@@ -365,7 +365,7 @@ export default function NuevoPrestamo() {
                   key={tipo}
                   type="button"
                   disabled
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-all ${
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition ${
                     periodicidadTenant === tipo
                       ? 'bg-primary text-primary-foreground'
                       : 'bg-background text-muted-foreground'

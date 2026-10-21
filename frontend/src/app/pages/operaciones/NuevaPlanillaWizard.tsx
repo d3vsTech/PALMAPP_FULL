@@ -2735,7 +2735,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         disabled={!navegable}
                       >
                         <div
-                          className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition-all ${
+                          className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition ${
                             estaCompleta
                               ? 'bg-primary border-primary text-white'
                               : estaActiva
@@ -2764,7 +2764,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                       {index < ETAPAS.length - 1 && (
                         <div className="flex-1 h-0.5 mx-3 bg-border relative min-w-[20px]">
                           <div
-                            className={`absolute inset-0 bg-primary transition-all ${
+                            className={`absolute inset-0 bg-primary transition ${
                               estaCompleta ? 'w-full' : 'w-0'
                             }`}
                           />
@@ -3137,7 +3137,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                   </div>
                   <div className="h-2 bg-muted rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-primary transition-all duration-300"
+                      className="h-full bg-primary transition duration-300"
                       style={{ width: `${(etapaActual / ETAPAS.length) * 100}%` }}
                     />
                   </div>

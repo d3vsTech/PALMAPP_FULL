@@ -1168,7 +1168,7 @@ export default function DetalleViaje() {
                            la única forma de llegar a la etapa de Cosecha. */
                         className={`flex flex-col items-center gap-2 cursor-pointer ${estaActiva || estaCompleta ? '' : 'opacity-50'}`}
                       >
-                        <div className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition-all ${
+                        <div className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition ${
                           estaCompleta ? 'bg-primary border-primary text-white'
                           : estaActiva ? 'bg-primary/10 border-primary text-primary'
                           : 'bg-muted border-border text-muted-foreground'
@@ -1183,7 +1183,7 @@ export default function DetalleViaje() {
                       </button>
                       {index < etapasDisponibles.length - 1 && (
                         <div className="flex-1 h-0.5 bg-border relative mx-4">
-                          <div className={`absolute inset-0 bg-primary transition-all ${estaCompleta ? 'w-full' : 'w-0'}`} />
+                          <div className={`absolute inset-0 bg-primary transition-[width] ${estaCompleta ? 'w-full' : 'w-0'}`} />
                         </div>
                       )}
                     </React.Fragment>

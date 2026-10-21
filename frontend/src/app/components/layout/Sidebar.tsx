@@ -165,7 +165,7 @@ export default function Sidebar() {
               to={item.href}
               onClick={() => setMobileOpen(false)}
               className={cn(
-                'group flex items-center gap-3 rounded-xl px-4 py-3 font-medium transition-all duration-200',
+                'group flex items-center gap-3 rounded-xl px-4 py-3 font-medium transition duration-200',
                 isActive
                   ? 'bg-primary text-primary-foreground shadow-md'
                   : 'text-foreground hover:bg-muted'

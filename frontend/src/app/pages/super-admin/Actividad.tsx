@@ -147,7 +147,7 @@ export default function Actividad() {
             <select
               value={filterAccion}
               onChange={(e) => { setPage(1); setFilterAccion(e.target.value); }}
-              className="w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all appearance-none cursor-pointer"
+              className="w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition appearance-none cursor-pointer"
             >
               <option value="todas">Todas las acciones</option>
               <option value="CREAR">Crear</option>
@@ -164,7 +164,7 @@ export default function Actividad() {
             <select
               value={filterModulo}
               onChange={(e) => { setPage(1); setFilterModulo(e.target.value); }}
-              className="w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all appearance-none cursor-pointer"
+              className="w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition appearance-none cursor-pointer"
             >
               <option value="todos">Todos los módulos</option>
               <option value="AUTH">Autenticación</option>
@@ -178,7 +178,7 @@ export default function Actividad() {
               type="date"
               value={fechaDesde}
               onChange={(e) => { setPage(1); setFechaDesde(e.target.value); }}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition"
               placeholder="Desde"
             />
           </div>
@@ -188,7 +188,7 @@ export default function Actividad() {
               type="date"
               value={fechaHasta}
               onChange={(e) => { setPage(1); setFechaHasta(e.target.value); }}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition"
               placeholder="Hasta"
             />
           </div>
@@ -273,14 +273,14 @@ export default function Actividad() {
           <button
             onClick={() => setPage((prev) => Math.max(1, prev - 1))}
             disabled={page <= 1}
-            className="px-4 py-2 rounded-lg border border-slate-600 bg-slate-800 text-white hover:bg-slate-700 transition-all disabled:opacity-40"
+            className="px-4 py-2 rounded-lg border border-slate-600 bg-slate-800 text-white hover:bg-slate-700 transition disabled:opacity-40"
           >
             Anterior
           </button>
           <button
             onClick={() => setPage((prev) => Math.min(lastPage, prev + 1))}
             disabled={page >= lastPage}
-            className="px-4 py-2 rounded-lg border border-slate-600 bg-slate-800 text-white hover:bg-slate-700 transition-all disabled:opacity-40"
+            className="px-4 py-2 rounded-lg border border-slate-600 bg-slate-800 text-white hover:bg-slate-700 transition disabled:opacity-40"
           >
             Siguiente
           </button>

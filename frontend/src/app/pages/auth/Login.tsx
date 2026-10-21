@@ -70,7 +70,7 @@ export default function Login() {
             ].map((feature, index) => (
               <div 
                 key={index}
-                className="flex items-center gap-3 p-4 rounded-xl bg-primary/5 border border-primary/10 hover:bg-primary/10 hover:border-primary/20 transition-all duration-300"
+                className="flex items-center gap-3 p-4 rounded-xl bg-primary/5 border border-primary/10 hover:bg-primary/10 hover:border-primary/20 transition duration-300"
               >
                 <div className="h-2 w-2 rounded-full bg-accent shadow-md" />
                 <p className="font-medium text-foreground">{feature}</p>

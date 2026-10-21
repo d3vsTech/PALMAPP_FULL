@@ -351,7 +351,7 @@ export default function UsuariosProveedor() {
         <div className="flex items-start gap-4">
           <button
             onClick={() => navigate('/super-admin/proveedores')}
-            className="mt-1 p-2 rounded-lg border border-white/10 bg-white/5 text-white hover:bg-white/10 transition-all flex-shrink-0"
+            className="mt-1 p-2 rounded-lg border border-white/10 bg-white/5 text-white hover:bg-white/10 transition flex-shrink-0"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
@@ -387,7 +387,7 @@ export default function UsuariosProveedor() {
 
         <button
           onClick={() => void openCreateModal()}
-          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#9032F0] to-[#6506FF] px-5 py-3 text-white font-semibold hover:opacity-95 transition-all"
+          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#9032F0] to-[#6506FF] px-5 py-3 text-white font-semibold hover:opacity-95 transition"
         >
           <UserPlus className="w-4 h-4" />
           Agregar usuario
@@ -640,7 +640,7 @@ export default function UsuariosProveedor() {
                     <button
                       type="button"
                       onClick={() => setAssignmentMode('new')}
-                      className={`flex-1 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                      className={`flex-1 px-4 py-2 rounded-lg text-sm font-semibold transition ${
                         assignmentMode === 'new'
                           ? 'bg-gradient-to-r from-[#9032F0] to-[#6506FF] text-white'
                           : 'text-gray-400 hover:text-white'
@@ -651,7 +651,7 @@ export default function UsuariosProveedor() {
                     <button
                       type="button"
                       onClick={() => setAssignmentMode('existing')}
-                      className={`flex-1 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                      className={`flex-1 px-4 py-2 rounded-lg text-sm font-semibold transition ${
                         assignmentMode === 'existing'
                           ? 'bg-gradient-to-r from-[#9032F0] to-[#6506FF] text-white'
                           : 'text-gray-400 hover:text-white'
@@ -785,14 +785,14 @@ export default function UsuariosProveedor() {
                     <button
                       type="button"
                       onClick={closeModal}
-                      className="px-5 py-3 rounded-xl border border-white/10 bg-white/5 text-white hover:bg-white/10 transition-all"
+                      className="px-5 py-3 rounded-xl border border-white/10 bg-white/5 text-white hover:bg-white/10 transition"
                     >
                       Cancelar
                     </button>
                     <button
                       type="submit"
                       disabled={saving}
-                      className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-[#9032F0] to-[#6506FF] text-white font-semibold hover:opacity-95 transition-all disabled:opacity-50"
+                      className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-[#9032F0] to-[#6506FF] text-white font-semibold hover:opacity-95 transition disabled:opacity-50"
                     >
                       {saving ? (
                         <><Loader2 className="w-4 h-4 animate-spin" /> Guardando...</>
@@ -911,14 +911,14 @@ export default function UsuariosProveedor() {
                     <button
                       type="button"
                       onClick={closeModal}
-                      className="px-5 py-3 rounded-xl border border-white/10 bg-white/5 text-white hover:bg-white/10 transition-all"
+                      className="px-5 py-3 rounded-xl border border-white/10 bg-white/5 text-white hover:bg-white/10 transition"
                     >
                       Cancelar
                     </button>
                     <button
                       type="submit"
                       disabled={saving}
-                      className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-[#9032F0] to-[#6506FF] text-white font-semibold hover:opacity-95 transition-all disabled:opacity-50"
+                      className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-[#9032F0] to-[#6506FF] text-white font-semibold hover:opacity-95 transition disabled:opacity-50"
                     >
                       {saving ? (
                         <><Loader2 className="w-4 h-4 animate-spin" /> Guardando...</>

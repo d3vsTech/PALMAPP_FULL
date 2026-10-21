@@ -351,7 +351,7 @@ export default function PrestamoDetalle() {
               </p>
               <div className="mt-2 h-1.5 w-full rounded-full bg-muted overflow-hidden">
                 <div
-                  className="h-full bg-success rounded-full transition-all duration-500"
+                  className="h-full bg-success rounded-full transition duration-500"
                   style={{ width: `${pctAvance}%` }}
                 />
               </div>

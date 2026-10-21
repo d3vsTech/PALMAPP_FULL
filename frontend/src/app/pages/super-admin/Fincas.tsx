@@ -534,7 +534,7 @@ export default function Fincas() {
           </button>
           <button
             onClick={handleOpenCreate}
-            className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium rounded-lg transition-all duration-200 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40"
+            className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium rounded-lg transition duration-200 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40"
           >
             <Plus className="w-5 h-5" />
             Crear nueva finca
@@ -575,7 +575,7 @@ export default function Fincas() {
                 setSearchTerm(e.target.value);
               }}
               placeholder="Buscar por nombre, NIT o razón social..."
-              className="w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
+              className="w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition"
             />
           </div>
 
@@ -587,7 +587,7 @@ export default function Fincas() {
                 setPage(1);
                 setFilterEstado(e.target.value as 'TODOS' | EstadoTenant);
               }}
-              className="pl-11 pr-10 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all appearance-none cursor-pointer"
+              className="pl-11 pr-10 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition appearance-none cursor-pointer"
             >
               <option value="TODOS">Todos los estados</option>
               <option value="ACTIVO">Activas</option>
@@ -779,7 +779,7 @@ export default function Fincas() {
             <button
               onClick={() => setPage((prev) => Math.max(1, prev - 1))}
               disabled={page <= 1}
-              className="px-4 py-2 rounded-lg border border-slate-600 bg-slate-800 text-white hover:bg-slate-700 transition-all disabled:opacity-40"
+              className="px-4 py-2 rounded-lg border border-slate-600 bg-slate-800 text-white hover:bg-slate-700 transition disabled:opacity-40"
             >
               Anterior
             </button>
@@ -787,7 +787,7 @@ export default function Fincas() {
             <button
               onClick={() => setPage((prev) => Math.min(lastPage, prev + 1))}
               disabled={page >= lastPage}
-              className="px-4 py-2 rounded-lg border border-slate-600 bg-slate-800 text-white hover:bg-slate-700 transition-all disabled:opacity-40"
+              className="px-4 py-2 rounded-lg border border-slate-600 bg-slate-800 text-white hover:bg-slate-700 transition disabled:opacity-40"
             >
               Siguiente
             </button>

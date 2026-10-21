@@ -289,7 +289,7 @@ export default function Operaciones() {
         </div>
 
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          <Card className="glass-subtle border-border hover:shadow-lg transition-all duration-300">
+          <Card className="glass-subtle border-border hover:shadow-lg transition duration-300">
             <CardContent className="p-6">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
@@ -305,7 +305,7 @@ export default function Operaciones() {
             </CardContent>
           </Card>
 
-          <Card className="glass-subtle border-border hover:shadow-lg transition-all duration-300">
+          <Card className="glass-subtle border-border hover:shadow-lg transition duration-300">
             <CardContent className="p-6">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
@@ -321,7 +321,7 @@ export default function Operaciones() {
             </CardContent>
           </Card>
 
-          <Card className="glass-subtle border-border hover:shadow-lg transition-all duration-300">
+          <Card className="glass-subtle border-border hover:shadow-lg transition duration-300">
             <CardContent className="p-6">
               <div className="flex items-start justify-between">
                 <div className="flex-1">

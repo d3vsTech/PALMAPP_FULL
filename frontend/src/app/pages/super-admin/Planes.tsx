@@ -94,7 +94,7 @@ export default function Planes() {
         {planesMock.map((plan) => (
           <div
             key={plan.id}
-            className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-xl overflow-hidden hover:border-slate-600 transition-all duration-300 group"
+            className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-xl overflow-hidden hover:border-slate-600 transition duration-300 group"
           >
             {/* Header del plan */}
             <div className={`bg-gradient-to-r ${plan.color} p-6 relative overflow-hidden`}>

@@ -86,7 +86,7 @@ export default function RecuperarPassword() {
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full pl-11 pr-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50 focus:border-[#9032F0]/50 transition-all backdrop-blur-sm"
+                      className="w-full pl-11 pr-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50 focus:border-[#9032F0]/50 transition backdrop-blur-sm"
                       placeholder="admin@palmapp.com"
                       required
                       autoComplete="email"
@@ -106,7 +106,7 @@ export default function RecuperarPassword() {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full py-3.5 bg-gradient-to-r from-[#9032F0] to-[#6506FF] hover:from-[#9032F0]/90 hover:to-[#6506FF]/90 text-white font-bold rounded-xl transition-all duration-200 shadow-lg shadow-[#9032F0]/30 hover:shadow-[#9032F0]/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 group"
+                  className="w-full py-3.5 bg-gradient-to-r from-[#9032F0] to-[#6506FF] hover:from-[#9032F0]/90 hover:to-[#6506FF]/90 text-white font-bold rounded-xl transition duration-200 shadow-lg shadow-[#9032F0]/30 hover:shadow-[#9032F0]/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 group"
                 >
                   {isLoading ? (
                     <>
@@ -167,7 +167,7 @@ export default function RecuperarPassword() {
                     setEmailEnviado(false);
                     setEmail('');
                   }}
-                  className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#9032F0]/30 rounded-xl text-white font-semibold transition-all duration-200"
+                  className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#9032F0]/30 rounded-xl text-white font-semibold transition duration-200"
                 >
                   Enviar a otro correo
                 </button>

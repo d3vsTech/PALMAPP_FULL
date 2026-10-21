@@ -160,7 +160,7 @@ export default function ConfiguracionInicialWizard() {
                         className="flex flex-col items-center gap-2 cursor-pointer"
                       >
                         <div
-                          className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition-all ${
+                          className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition ${
                             estaCompleta
                               ? 'bg-primary border-primary text-white'
                               : estaActiva
@@ -189,7 +189,7 @@ export default function ConfiguracionInicialWizard() {
                       {index < ETAPAS.length - 1 && (
                         <div className="flex-1 h-0.5 mx-2 bg-border relative">
                           <div
-                            className={`absolute inset-0 bg-primary transition-all ${
+                            className={`absolute inset-0 bg-primary transition ${
                               estaCompleta ? 'w-full' : 'w-0'
                             }`}
                           />
@@ -674,7 +674,7 @@ export default function ConfiguracionInicialWizard() {
                 </div>
                 <div className="h-2 bg-muted rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-primary transition-all duration-300"
+                    className="h-full bg-primary transition duration-300"
                     style={{ width: `${((etapaActual - 1) / ETAPAS.length) * 100}%` }}
                   />
                 </div>

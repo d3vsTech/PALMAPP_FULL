@@ -280,7 +280,7 @@ export default function AbonosPrestamo() {
             </div>
             <div className="h-2 rounded-full bg-muted overflow-hidden">
               <div
-                className="h-full bg-primary rounded-full transition-all"
+                className="h-full bg-primary rounded-full transition"
                 style={{ width: `${pct}%` }}
               />
             </div>

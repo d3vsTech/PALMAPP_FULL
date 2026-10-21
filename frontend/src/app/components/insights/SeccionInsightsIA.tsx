@@ -232,7 +232,7 @@ export function SeccionInsightsIA() {
             {estadoUi === 'generando' && (
               <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
                 <div
-                  className="bg-primary h-full transition-all duration-500"
+                  className="bg-primary h-full transition duration-500"
                   style={{ width: `${progreso}%` }}
                 />
               </div>

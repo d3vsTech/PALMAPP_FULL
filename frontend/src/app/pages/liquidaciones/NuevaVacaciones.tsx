@@ -762,7 +762,7 @@ export default function NuevaVacaciones() {
               </div>
               <div className="h-2.5 overflow-hidden rounded-full bg-border">
                 <div
-                  className={`h-full rounded-full transition-all ${
+                  className={`h-full rounded-full transition ${
                     excedeSaldo ? 'bg-destructive'
                       : totalPedido / maxDisfrute > 0.75 ? 'bg-amber-500'
                       : 'bg-success'

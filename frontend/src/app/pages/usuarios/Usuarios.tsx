@@ -151,7 +151,7 @@ export default function Usuarios() {
             { label: 'Usuarios Activos', value: resumen.activos, sub: 'activos' },
             { label: 'Usuarios Inactivos', value: resumen.inactivos, sub: 'inactivos' },
           ].map(({ label, value, sub }) => (
-            <Card key={label} className="border-border hover:shadow-lg transition-all duration-300">
+            <Card key={label} className="border-border hover:shadow-lg transition duration-300">
               <CardContent className="p-6">
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                   <div className="flex-1">

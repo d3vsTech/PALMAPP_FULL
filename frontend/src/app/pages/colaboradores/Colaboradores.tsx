@@ -158,7 +158,7 @@ export default function Colaboradores() {
             { label: 'Colaboradores Activos', value: activos, sub: 'activos'},
             { label: 'Colaboradores Inactivos', value: inactivos, sub: 'inactivos'},
           ].map(({ label, value, sub}) => (
-            <Card key={label} className="border-border hover:shadow-lg transition-all duration-300">
+            <Card key={label} className="border-border hover:shadow-lg transition duration-300">
               <CardContent className="p-6">
                 <p className="text-sm text-muted-foreground mb-2">{label}</p>
                 <div className="flex items-baseline gap-2">

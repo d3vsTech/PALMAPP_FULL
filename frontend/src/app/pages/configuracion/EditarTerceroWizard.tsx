@@ -627,7 +627,7 @@ export default function EditarTerceroWizard() {
                 {STEPS.map((s, i) => (
                   <React.Fragment key={s.num}>
                     <div className="flex flex-col items-center gap-2">
-                      <div className={`h-12 w-12 rounded-full border-2 flex items-center justify-center font-bold text-sm transition-all ${
+                      <div className={`h-12 w-12 rounded-full border-2 flex items-center justify-center font-bold text-sm transition ${
                         paso > s.num
                           ? 'bg-primary border-primary text-primary-foreground'
                           : paso === s.num
@@ -642,7 +642,7 @@ export default function EditarTerceroWizard() {
                     </div>
                     {i < STEPS.length - 1 && (
                       <div className="flex-1 mx-3 h-0.5 bg-border overflow-hidden rounded-full">
-                        <div className={`h-full bg-primary transition-all duration-500 ${paso > s.num ? 'w-full' : 'w-0'}`} />
+                        <div className={`h-full bg-primary transition-[width] duration-500 ${paso > s.num ? 'w-full' : 'w-0'}`} />
                       </div>
                     )}
                   </React.Fragment>
