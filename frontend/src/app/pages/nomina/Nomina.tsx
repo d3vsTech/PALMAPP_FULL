@@ -470,10 +470,10 @@ export default function Nomina() {
           </div>
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Buscar</label>
+              <label className="text-sm font-medium" htmlFor="nomina-buscar">Buscar</label>
               <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
+                <Input id="nomina-buscar"
                   placeholder="Buscar por período..."
                   value={filtroBusqueda}
                   onChange={(e) => setFiltroBusqueda(e.target.value)}

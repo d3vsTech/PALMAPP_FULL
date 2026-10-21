@@ -665,8 +665,8 @@ export default function UsuariosProveedor() {
                     <>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-2">Nombre *</label>
-                          <input
+                          <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="usuariospr-nombre">Nombre *</label>
+                          <input id="usuariospr-nombre"
                             type="text"
                             value={createForm.name}
                             onChange={e => setCreateForm(p => ({ ...p, name: e.target.value }))}
@@ -675,8 +675,8 @@ export default function UsuariosProveedor() {
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-2">Email *</label>
-                          <input
+                          <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="usuariospr-email">Email *</label>
+                          <input id="usuariospr-email"
                             type="email"
                             value={createForm.email}
                             onChange={e => setCreateForm(p => ({ ...p, email: e.target.value }))}
@@ -769,8 +769,8 @@ export default function UsuariosProveedor() {
                   )}
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Rol dentro del proveedor</label>
-                    <select
+                    <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="usuariospr-rol-dentro-del-proveedor">Rol dentro del proveedor</label>
+                    <select id="usuariospr-rol-dentro-del-proveedor"
                       value={createForm.rol}
                       onChange={e => setCreateForm(p => ({ ...p, rol: e.target.value as RolProveedorUser }))}
                       className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
@@ -806,8 +806,8 @@ export default function UsuariosProveedor() {
                 <form onSubmit={handleEditSubmit} className="space-y-5">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Nombre</label>
-                      <input
+                      <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="usuariospr-nombre-2">Nombre</label>
+                      <input id="usuariospr-nombre-2"
                         type="text"
                         value={editForm.name}
                         onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))}
@@ -815,8 +815,8 @@ export default function UsuariosProveedor() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Email</label>
-                      <input
+                      <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="usuariospr-email-2">Email</label>
+                      <input id="usuariospr-email-2"
                         type="email"
                         value={editForm.email}
                         onChange={e => setEditForm(p => ({ ...p, email: e.target.value }))}
@@ -885,8 +885,8 @@ export default function UsuariosProveedor() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Rol</label>
-                    <select
+                    <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="usuariospr-rol">Rol</label>
+                    <select id="usuariospr-rol"
                       value={editForm.rol}
                       onChange={e => setEditForm(p => ({ ...p, rol: e.target.value as RolProveedorUser }))}
                       className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"

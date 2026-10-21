@@ -340,8 +340,8 @@ export default function AjustesCosecha() {
             {/* Campo extra: Silenciar por N viajes (mantener) */}
             {opcion === 'MANTENIDO' && (
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-foreground">Silenciar por N viajes</label>
-                <input
+                <label className="text-sm font-semibold text-foreground" htmlFor="ajustescos-silenciar-por-n-viajes">Silenciar por N viajes</label>
+                <input id="ajustescos-silenciar-por-n-viajes"
                   type="number" step="0.001"
                   min={1}
                   max={20}
@@ -355,8 +355,8 @@ export default function AjustesCosecha() {
 
             {/* Motivo */}
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-foreground">Motivo del ajuste</label>
-              <textarea
+              <label className="text-sm font-semibold text-foreground" htmlFor="ajustescos-motivo-del-ajuste">Motivo del ajuste</label>
+              <textarea id="ajustescos-motivo-del-ajuste"
                 value={motivo}
                 onChange={(e) => setMotivo(e.target.value)}
                 placeholder="Explica por qué tomas esta decisión. Queda registrado en el historial."

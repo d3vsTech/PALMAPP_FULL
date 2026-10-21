@@ -209,10 +209,10 @@ export default function CrearFincaModal({
             </h3>
 
             <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="finca-tipo-de-persona">
                   Tipo de persona *
                 </label>
-                <select
+                <select id="finca-tipo-de-persona"
                   value={formData.tipo_persona}
                   onChange={(e) => updateField('tipo_persona', e.target.value as 'NATURAL' | 'JURIDICA')}
                   className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
@@ -225,10 +225,10 @@ export default function CrearFincaModal({
               
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="finca-nombre">
                   Nombre *
                 </label>
-                <input
+                <input id="finca-nombre"
                   type="text"
                   value={formData.nombre}
                   onChange={(e) => updateField('nombre', e.target.value)}
@@ -239,10 +239,10 @@ export default function CrearFincaModal({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="finca-nit">
                   NIT *
                 </label>
-                <input
+                <input id="finca-nit"
                   type="text"
                   value={formData.nit}
                   onChange={(e) => updateField('nit', e.target.value)}
@@ -253,10 +253,10 @@ export default function CrearFincaModal({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="finca-razon-social">
                   Razón social *
                 </label>
-                <input
+                <input id="finca-razon-social"
                   type="text"
                   value={formData.razon_social}
                   onChange={(e) => updateField('razon_social', e.target.value)}
@@ -267,10 +267,10 @@ export default function CrearFincaModal({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="finca-correo-de-contacto">
                   Correo de contacto *
                 </label>
-                <input
+                <input id="finca-correo-de-contacto"
                   type="email"
                   value={formData.correo_contacto}
                   onChange={(e) =>
@@ -283,10 +283,10 @@ export default function CrearFincaModal({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="finca-telefono">
                   Teléfono *
                 </label>
-                <input
+                <input id="finca-telefono"
                   type="text"
                   value={formData.telefono}
                   onChange={(e) => updateField('telefono', e.target.value)}
@@ -306,10 +306,10 @@ export default function CrearFincaModal({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="finca-direccion">
                   Dirección
                 </label>
-                <input
+                <input id="finca-direccion"
                   type="text"
                   value={formData.direccion}
                   onChange={(e) => updateField('direccion', e.target.value)}
@@ -319,10 +319,10 @@ export default function CrearFincaModal({
               </div>
 
              <div className="relative">
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="finca-departamento">
                   Departamento *
                 </label>
-                <input
+                <input id="finca-departamento"
                   type="text"
                   value={formData.departamento}
                   onChange={(e) => {
@@ -357,10 +357,10 @@ export default function CrearFincaModal({
               </div>
 
               <div className="relative">
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="finca-municipio">
                   Municipio *
                 </label>
-                <input
+                <input id="finca-municipio"
                   type="text"
                   value={formData.municipio}
                   onChange={(e) => {
@@ -403,10 +403,10 @@ export default function CrearFincaModal({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="finca-fecha-de-activacion">
                   Fecha de activación *
                 </label>
-                <input
+                <input id="finca-fecha-de-activacion"
                   type="date"
                   value={formData.fecha_activacion}
                   onChange={(e) => updateField('fecha_activacion', e.target.value)}
@@ -416,10 +416,10 @@ export default function CrearFincaModal({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="finca-fecha-de-suspension">
                   Fecha de suspensión *
                 </label>
-                <input
+                <input id="finca-fecha-de-suspension"
                   type="date"
                   value={formData.fecha_suspension}
                   onChange={(e) => updateField('fecha_suspension', e.target.value)}

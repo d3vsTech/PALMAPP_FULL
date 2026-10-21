@@ -837,10 +837,10 @@ export default function UsuariosFinca() {
                     <>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-2">
+                          <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="uf-nombre">
                             Nombre *
                           </label>
-                          <input
+                          <input id="uf-nombre"
                             type="text"
                             value={createForm.name}
                             onChange={(e) =>
@@ -855,10 +855,10 @@ export default function UsuariosFinca() {
                         </div>
 
                         <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-2">
+                          <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="uf-email">
                             Email *
                           </label>
-                          <input
+                          <input id="uf-email"
                             type="email"
                             value={createForm.email}
                             onChange={(e) =>
@@ -941,10 +941,10 @@ export default function UsuariosFinca() {
                   </>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="uf-rol-dentro-de-la-finca">
                       Rol dentro de la finca
                     </label>
-                    <select
+                    <select id="uf-rol-dentro-de-la-finca"
                       value={createForm.rol}
                       onChange={(e) =>
                         setCreateForm((prev) => ({
@@ -994,10 +994,10 @@ export default function UsuariosFinca() {
                 <form onSubmit={handleEditSubmit} className="space-y-5">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                      <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="uf-nombre-2">
                         Nombre
                       </label>
-                      <input
+                      <input id="uf-nombre-2"
                         type="text"
                         value={editForm.name}
                         onChange={(e) =>
@@ -1012,10 +1012,10 @@ export default function UsuariosFinca() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                      <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="uf-email-2">
                         Email
                       </label>
-                      <input
+                      <input id="uf-email-2"
                         type="email"
                         value={editForm.email}
                         onChange={(e) =>
@@ -1031,10 +1031,10 @@ export default function UsuariosFinca() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="uf-rol-dentro-de-la-finca-2">
                       Rol dentro de la finca
                     </label>
-                    <select
+                    <select id="uf-rol-dentro-de-la-finca-2"
                       value={editForm.rol}
                       onChange={(e) =>
                         setEditForm((prev) => ({

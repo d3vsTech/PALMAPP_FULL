@@ -451,8 +451,8 @@ export default function Pedidos() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-foreground">Motivo (opcional)</label>
-            <Textarea
+            <label className="text-xs font-medium text-foreground" htmlFor="pedidos-motivo-opcional">Motivo (opcional)</label>
+            <Textarea id="pedidos-motivo-opcional"
               value={motivoCancelacion}
               onChange={(e) => setMotivoCancelacion(e.target.value)}
               placeholder="Ej: Ya no necesito el pedido"

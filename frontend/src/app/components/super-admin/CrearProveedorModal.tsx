@@ -149,10 +149,10 @@ export default function CrearProveedorModal({
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                <label className="block text-sm font-medium text-slate-300 mb-1.5" htmlFor="prov-nombre-de-la-empresa-span-classname-text-red-400-span">
                   Nombre de la empresa <span className="text-red-400">*</span>
                 </label>
-                <input
+                <input id="prov-nombre-de-la-empresa-span-classname-text-red-400-span"
                   type="text"
                   required
                   maxLength={150}
@@ -164,8 +164,8 @@ export default function CrearProveedorModal({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1.5">NIT</label>
-                <input
+                <label className="block text-sm font-medium text-slate-300 mb-1.5" htmlFor="crearprove-nit">NIT</label>
+                <input id="crearprove-nit"
                   type="text"
                   maxLength={20}
                   value={formData.nit}
@@ -176,10 +176,10 @@ export default function CrearProveedorModal({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                <label className="block text-sm font-medium text-slate-300 mb-1.5" htmlFor="prov-telefono-span-classname-text-red-400-span">
                   Teléfono <span className="text-red-400">*</span>
                 </label>
-                <input
+                <input id="prov-telefono-span-classname-text-red-400-span"
                   type="tel"
                   required
                   maxLength={20}
@@ -191,10 +191,10 @@ export default function CrearProveedorModal({
               </div>
 
               <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                <label className="block text-sm font-medium text-slate-300 mb-1.5" htmlFor="prov-email-span-classname-text-red-400-span">
                   Email <span className="text-red-400">*</span>
                 </label>
-                <input
+                <input id="prov-email-span-classname-text-red-400-span"
                   type="email"
                   required
                   maxLength={150}
@@ -216,10 +216,10 @@ export default function CrearProveedorModal({
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                <label className="block text-sm font-medium text-slate-300 mb-1.5" htmlFor="prov-direccion-span-classname-text-red-400-span">
                   Dirección <span className="text-red-400">*</span>
                 </label>
-                <input
+                <input id="prov-direccion-span-classname-text-red-400-span"
                   type="text"
                   required
                   maxLength={255}
@@ -302,10 +302,10 @@ export default function CrearProveedorModal({
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                <label className="block text-sm font-medium text-slate-300 mb-1.5" htmlFor="prov-descripcion">
                   Descripción
                 </label>
-                <textarea
+                <textarea id="prov-descripcion"
                   rows={3}
                   value={formData.descripcion}
                   onChange={(e) => update('descripcion', e.target.value)}

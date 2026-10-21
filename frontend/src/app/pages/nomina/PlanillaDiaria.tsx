@@ -383,8 +383,8 @@ export default function PlanillaDiaria() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Fecha</label>
-                <Input
+                <label className="text-sm font-medium" htmlFor="planilladi-fecha">Fecha</label>
+                <Input id="planilladi-fecha"
                   type="date"
                   value={filtroFecha}
                   onChange={(e) => setFiltroFecha(e.target.value)}

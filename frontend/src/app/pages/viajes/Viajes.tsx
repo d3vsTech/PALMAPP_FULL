@@ -521,16 +521,16 @@ export default function Viajes() {
                   {/* Filtros */}
                   <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-6 p-4 bg-muted/30 rounded-lg border border-border">
                     <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">Remisión</label>
+                      <label className="text-xs font-medium text-muted-foreground" htmlFor="viajes-remision">Remisión</label>
                       <div className="relative">
                         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input placeholder="REM-2026-001" value={filtros.remision}
+                        <Input id="viajes-remision" placeholder="REM-2026-001" value={filtros.remision}
                           onChange={e => handleFiltroChange('remision', e.target.value)} className="pl-8 h-9" />
                       </div>
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">Fecha</label>
-                      <Input type="date" value={filtros.fecha}
+                      <label className="text-xs font-medium text-muted-foreground" htmlFor="viajes-fecha">Fecha</label>
+                      <Input id="viajes-fecha" type="date" value={filtros.fecha}
                         onChange={e => handleFiltroChange('fecha', e.target.value)} className="h-9" />
                     </div>
                     <div className="space-y-1.5">
@@ -551,26 +551,26 @@ export default function Viajes() {
                       </Select>
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">Vehículo</label>
+                      <label className="text-xs font-medium text-muted-foreground" htmlFor="viajes-vehiculo">Vehículo</label>
                       <div className="relative">
                         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input placeholder="ABC-123" value={filtros.vehiculo}
+                        <Input id="viajes-vehiculo" placeholder="ABC-123" value={filtros.vehiculo}
                           onChange={e => handleFiltroChange('vehiculo', e.target.value)} className="pl-8 h-9" />
                       </div>
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">Conductor</label>
+                      <label className="text-xs font-medium text-muted-foreground" htmlFor="viajes-conductor">Conductor</label>
                       <div className="relative">
                         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input placeholder="Nombre" value={filtros.conductor}
+                        <Input id="viajes-conductor" placeholder="Nombre" value={filtros.conductor}
                           onChange={e => handleFiltroChange('conductor', e.target.value)} className="pl-8 h-9" />
                       </div>
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">Extractora</label>
+                      <label className="text-xs font-medium text-muted-foreground" htmlFor="viajes-extractora">Extractora</label>
                       <div className="relative">
                         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input placeholder="Extractora" value={filtros.extractora}
+                        <Input id="viajes-extractora" placeholder="Extractora" value={filtros.extractora}
                           onChange={e => handleFiltroChange('extractora', e.target.value)} className="pl-8 h-9" />
                       </div>
                     </div>
