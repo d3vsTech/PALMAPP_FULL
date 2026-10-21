@@ -19,6 +19,7 @@ import {
 import { agroAgenteApi, buildAttachmentUrl } from '../../../api/agroAgente';
 import type { ChatMessage } from '../../../api/agroAgente';
 import { toast } from 'sonner';
+import { usePreviewUrls } from '../../hooks/usePreviewUrl';
 
 // ────────────────────────────────────────────────────────────
 // Tipos
@@ -125,6 +126,12 @@ export default function AgenteIA() {
   const [isTyping, setIsTyping] = useState(false);
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  /**
+   * Las miniaturas de lo que está por enviarse. Antes la URL se creaba en el
+   * render y se revocaba en `onLoad`, así que al repintar la imagen apuntaba a
+   * una URL ya muerta y desaparecía.
+   */
+  const previewUrls = usePreviewUrls(attachedFiles);
 
   // UI V5 state
   const [mostrarBusqueda, setMostrarBusqueda] = useState(false);
@@ -554,17 +561,15 @@ export default function AgenteIA() {
           <div className="max-w-3xl mx-auto px-4 py-2">
             <div className="flex flex-wrap gap-2">
               {attachedFiles.map((file, index) => {
-                const isImage = file.type.startsWith('image/');
-                const previewUrl = isImage ? URL.createObjectURL(file) : null;
+                const previewUrl = previewUrls[index];
                 return (
                   <div key={index} className="relative group flex items-center gap-2 p-1 bg-card rounded-lg border border-border">
-                    {isImage && previewUrl ? (
+                    {previewUrl ? (
                       <>
                         <img
                           src={previewUrl}
                           alt={file.name}
                           className="h-14 w-14 object-cover rounded-md"
-                          onLoad={() => URL.revokeObjectURL(previewUrl)}
                         />
                         <span className="text-xs truncate max-w-[100px] pr-5">{file.name}</span>
                       </>

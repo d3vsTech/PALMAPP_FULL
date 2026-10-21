@@ -13,6 +13,7 @@ import {
   ArrowLeft, Save, Plus, Trash2, Upload, Package, Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { usePreviewUrl } from '../../hooks/usePreviewUrl';
 import {
   proveedorApi, toNumber, buildImagenUrl,
   type CategoriaRefProv, type UnidadMedidaProv,
@@ -58,6 +59,11 @@ export default function EditarProducto() {
   const [activo, setActivo] = useState(true);
   const [precVolumen, setPrecVolumen] = useState<PrecioVolumenLocal[]>([]);
   const [imagenNueva, setImagenNueva] = useState<File | null>(null);
+  /**
+   * La vista previa de la imagen escogida. Se armaba en el render, así que
+   * cada repintado reservaba memoria nueva que nadie liberaba.
+   */
+  const previewImagen = usePreviewUrl(imagenNueva);
 
   const [enviando, setEnviando] = useState(false);
 
@@ -400,7 +406,7 @@ export default function EditarProducto() {
               <CardContent className="space-y-4">
                 <div className="aspect-square bg-muted rounded-lg flex items-center justify-center mb-4 overflow-hidden">
                   {imagenNueva ? (
-                    <img src={URL.createObjectURL(imagenNueva)} alt="" className="w-full h-full object-cover" />
+                    <img src={previewImagen ?? undefined} alt="" className="w-full h-full object-cover" />
                   ) : producto?.imagen_principal ? (
                     <img src={buildImagenUrl(producto.imagen_principal)} alt={producto.nombre} className="w-full h-full object-cover" />
                   ) : (

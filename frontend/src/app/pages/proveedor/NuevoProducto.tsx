@@ -13,6 +13,7 @@ import {
   ArrowLeft, Plus, Trash2, Upload, Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { usePreviewUrl } from '../../hooks/usePreviewUrl';
 import {
   proveedorApi,
   type ProductoCreatePayload, type CategoriaRefProv, type UnidadMedidaProv,
@@ -52,6 +53,11 @@ export default function NuevoProducto() {
   const [activo, setActivo] = useState(true);
   const [precVolumen, setPrecVolumen] = useState<PrecioVolumenLocal[]>([]);
   const [imagen, setImagen] = useState<File | null>(null);
+  /**
+   * La vista previa de la imagen escogida. Se armaba en el render, así que
+   * cada repintado reservaba memoria nueva que nadie liberaba.
+   */
+  const previewImagen = usePreviewUrl(imagen);
 
   const [enviando, setEnviando] = useState(false);
 
@@ -363,7 +369,7 @@ export default function NuevoProducto() {
                       {imagen ? (
                         <>
                           <img
-                            src={URL.createObjectURL(imagen)}
+                            src={previewImagen ?? undefined}
                             alt={imagen.name}
                             className="mx-auto mb-2 max-h-32 rounded"
                           />

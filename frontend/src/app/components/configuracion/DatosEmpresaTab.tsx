@@ -292,7 +292,12 @@ export function DatosEmpresaTab() {
       return;
     }
     setLogoFile(file);
-    setLogoPreview(URL.createObjectURL(file));
+    // Escoger otro logo sin quitar el anterior dejaba la vista previa vieja
+    // reservada en memoria hasta recargar la página.
+    setLogoPreview((previo) => {
+      if (previo) URL.revokeObjectURL(previo);
+      return URL.createObjectURL(file);
+    });
   };
 
   const quitarLogoPendiente = () => {
