@@ -2967,6 +2967,9 @@ export default function NuevaNominaWizard() {
 
             // Mapa lote_id → promedio efectivo actual (editado o del bundle).
             const promedioEfectivoActual = new Map<number, number>();
+            // El del bundle sin editar. Se guarda aquí para no recorrer la
+            // lista entera por cada cosecha de cada colaborador.
+            const promedioOriginal = new Map<number, number>();
             const nombreALoteId = new Map<string, number>();
             for (const p of bundleCosecha.promedios_por_lote) {
               const editado = promediosEditados[p.lote_id];
@@ -2974,6 +2977,7 @@ export default function NuevaNominaWizard() {
                 p.lote_id,
                 editado !== undefined && editado > 0 ? editado : p.promedio_efectivo,
               );
+              promedioOriginal.set(p.lote_id, p.promedio_efectivo);
               nombreALoteId.set(p.lote_nombre, p.lote_id);
             }
 
@@ -2989,8 +2993,7 @@ export default function NuevaNominaWizard() {
                   totalColabs += c.kg_trabajado;
                   continue;
                 }
-                const promOrig = bundleCosecha.promedios_por_lote
-                  .find((p) => p.lote_id === loteId)?.promedio_efectivo ?? 0;
+                const promOrig = promedioOriginal.get(loteId) ?? 0;
                 const promNuevo = promedioEfectivoActual.get(loteId) ?? promOrig;
                 if (promNuevo === promOrig) {
                   // Sin edición para este lote → usar el kg original tal cual.

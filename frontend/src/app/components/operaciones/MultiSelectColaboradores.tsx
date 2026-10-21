@@ -118,9 +118,12 @@ export function MultiSelectColaboradores({
    * Alterna todos los visibles. Deja fuera a los trabados: forzarlos es uno
    * por uno y a conciencia.
    */
+  /** Para no recorrer la lista de forzados por cada colaborador. */
+  const yaForzados = useMemo(() => new Set(forzados), [forzados]);
+
   const elegiblesVisibles = useMemo(
-    () => opciones.filter((o) => !motivoBloqueo(o) || forzados.includes(o.id)),
-    [opciones, forzados],
+    () => opciones.filter((o) => !motivoBloqueo(o) || yaForzados.has(o.id)),
+    [opciones, yaForzados],
   );
   const todosVisiblesMarcados =
     elegiblesVisibles.length > 0 && elegiblesVisibles.every((o) => seleccionadosSet.has(o.id));
@@ -215,7 +218,7 @@ export function MultiSelectColaboradores({
               // Ya seleccionado cuenta como destrabado: si viene de una
               // planilla guardada no se le puede quitar el check de golpe.
               const motivo = motivoBloqueo(col);
-              const bloqueado = !!motivo && !forzados.includes(col.id) && !checked;
+              const bloqueado = !!motivo && !yaForzados.has(col.id) && !checked;
               const confirmando = porForzar === col.id;
 
               return (

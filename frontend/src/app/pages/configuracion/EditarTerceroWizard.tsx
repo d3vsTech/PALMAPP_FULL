@@ -487,10 +487,14 @@ export default function EditarTerceroWizard() {
       // Buscamos el override existente en `bundle.labor_precios` y decidimos:
       //   precio > 0  → upsert
       //   precio == 0 + override existente → DELETE
+      // El índice se arma una vez: buscar dentro del bucle recorría la lista
+      // entera de precios por cada labor de finca.
+      const overridePorLabor = new Map(
+        bundle.labor_precios.map((lp) => [lp.labor_id, lp]),
+      );
+
       for (const f of precios.finca) {
-        const override = bundle.labor_precios.find(
-          (lp) => lp.labor_id === f.laborId,
-        );
+        const override = overridePorLabor.get(f.laborId);
         if (f.precio > 0) {
           const precioViejo = override ? Number(override.precio_palma) : null;
           if (precioViejo !== f.precio) {

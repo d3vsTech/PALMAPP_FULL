@@ -5,7 +5,7 @@
  * §2.3 POST /lotes — predio_id*, nombre*, fecha_siembra?, hectareas_sembradas?, semillas_ids?
  * §2.4 PUT  /lotes/{id} — semillas_ids reemplaza todas
  */
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { comoBoton } from '../../hooks/comoBoton';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Button } from '../../components/ui/button';
@@ -30,6 +30,8 @@ export default function CrearEditarLote() {
   const [hectareas, setHectareas]     = useState('');
   const [semillasList, setSemillas]   = useState<{ id: number; tipo: string; nombre: string }[]>([]);
   const [semillasIds, setSemillasIds] = useState<number[]>([]);
+  /** Para marcar la lista sin recorrer el arreglo por cada semilla. */
+  const semillasSeleccionadas = useMemo(() => new Set(semillasIds), [semillasIds]);
 
   useEffect(() => {
     lotesApi.semillas().then(r => setSemillas(r.data ?? [])).catch(() => {});
@@ -160,18 +162,20 @@ export default function CrearEditarLote() {
               ) : (
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-6 border rounded-xl bg-gradient-to-br from-muted/20 to-muted/5">
-                    {semillasList.map(s => (
+                    {semillasList.map(s => {
+                      const marcada = semillasSeleccionadas.has(Number(s.id));
+                      return (
                       <div key={s.id}
                         className={`flex items-center space-x-3 p-4 rounded-lg border-2 transition cursor-pointer hover:shadow-md ${
-                          semillasIds.includes(Number(s.id))
+                          marcada
                             ? 'bg-success/10 border-success/50 shadow-sm'
                             : 'bg-background border-border/50 hover:border-border'
                         }`}
-                        {...comoBoton(() => toggleSemilla(Number(s.id), !semillasIds.includes(Number(s.id))))}
+                        {...comoBoton(() => toggleSemilla(Number(s.id), !marcada))}
                       >
                         <Checkbox
                           id={`semilla-${s.id}`}
-                          checked={semillasIds.includes(Number(s.id))}
+                          checked={marcada}
                           onCheckedChange={checked => toggleSemilla(Number(s.id), checked as boolean)}
                         />
                         <label htmlFor={`semilla-${s.id}`} className="text-sm font-medium leading-none cursor-pointer flex-1">
@@ -179,7 +183,8 @@ export default function CrearEditarLote() {
                           <span className="text-xs text-muted-foreground font-normal">{s.tipo}</span>
                         </label>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                   {semillasIds.length > 0 && (
                     <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-success/10 border border-success/20">

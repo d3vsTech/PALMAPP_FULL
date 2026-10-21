@@ -607,9 +607,10 @@ export default function NuevoPredioWizard() {
       }
     }
     setLotes(prev => prev.filter(l => l.id !== id));
-    const subIds = sublotes.filter(s => s.loteId === id).map(s => s.id);
+    // Un Set: `includes` recorría la lista de sublotes por cada línea.
+    const subIds = new Set(sublotes.filter(s => s.loteId === id).map(s => s.id));
     setSublotes(prev => prev.filter(s => s.loteId !== id));
-    setLineas(prev => prev.filter(ln => !subIds.includes(ln.subloteId)));
+    setLineas(prev => prev.filter(ln => !subIds.has(ln.subloteId)));
   });
   const agregarSublote = async (loteId: string, nombre: string) => withProc('Creando sublote...', async () => {
     // Si estamos en modo edición y el lote tiene id real (no local "l-..."),
@@ -704,9 +705,11 @@ export default function NuevoPredioWizard() {
    */
   const agregarLinea = async (subloteId: string, cantidadAsignar: number = 0) =>
     withProc('Creando línea...', async (update) => {
-      const existentes = lineas.filter(ln => ln.subloteId === subloteId).map(ln => ln.numero);
+      const existentes = new Set(
+        lineas.filter(ln => ln.subloteId === subloteId).map(ln => ln.numero),
+      );
       let nuevoNumero = 1;
-      while (existentes.includes(nuevoNumero)) nuevoNumero++;
+      while (existentes.has(nuevoNumero)) nuevoNumero++;
 
       if (editId) {
         try {
