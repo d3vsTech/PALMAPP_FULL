@@ -286,17 +286,6 @@ export function SeccionInsightsIA() {
 
       {estadoUi === 'listo' && insight && !sinHallazgos && (
         <>
-          {/* Resumen ejecutivo */}
-          {insight.resumen_ejecutivo && (
-            <Card className="border-primary/30 bg-primary/5">
-              <CardContent className="p-5">
-                <p className="text-sm text-foreground leading-relaxed">
-                  {insight.resumen_ejecutivo}
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
           {/* Tabs por severidad */}
           {activas.length > 0 && (
             <div className="flex items-center gap-2 flex-wrap">
