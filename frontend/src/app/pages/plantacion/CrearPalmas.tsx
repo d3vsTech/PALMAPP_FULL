@@ -61,21 +61,25 @@ export default function CrearPalmas() {
     if (!subloteId) { toast.error('Sublote no especificado'); return; }
     setLoading(true);
     setBatch(null);
+    // Con el trabajo en segundo plano el botón sigue bloqueado hasta que
+    // `pollBatch` termine; en cualquier otra salida se libera aquí.
+    let enSegundoPlano = false;
     try {
       const body: any = { sublote_id: Number(subloteId), cantidad_palmas: cant };
       if (lineaId) body.linea_id = Number(lineaId);
       const res = await palmasApi.crear(body);
       if (res.async === true) {
+        enSegundoPlano = true;
         toast.info(`Creando ${cant.toLocaleString('es-CO')} palmas en segundo plano...`);
         pollBatch(res.batch_id);
       } else {
         toast.success(res.message ?? `${res.cantidad_creada} palmas creadas correctamente`);
-        setLoading(false);
         navigate(`/plantacion/lote/${loteId}`, { state: { openSubloteId: subloteId, recargar: true } });
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al crear palmas');
-      setLoading(false);
+    } finally {
+      if (!enSegundoPlano) setLoading(false);
     }
   };
 
