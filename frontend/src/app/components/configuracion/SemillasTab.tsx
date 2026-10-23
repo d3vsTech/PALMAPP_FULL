@@ -60,6 +60,25 @@ const SEMILLAS_DEFAULT: Array<{ tipo: TipoSemilla; nombre: string }> = [
 /** Clave de caché en sessionStorage para entrada instantánea. */
 const CACHE_KEY_SEMILLAS = 'palmapp_cfg_semillas_v1';
 
+/**
+ * Deja la lista en el estado y en la caché de la sesión.
+ *
+ * Antes el `sessionStorage.setItem` vivía dentro del actualizador de estado.
+ * React puede ejecutar esa función dos veces para comprobar que es pura, así
+ * que ahí no van efectos: se calcula la lista nueva, se guarda, y recién
+ * entonces se entrega al estado.
+ */
+function guardarSemillas(
+  setSemillas: React.Dispatch<React.SetStateAction<Semilla[]>>,
+  calcular: (previas: Semilla[]) => Semilla[],
+) {
+  setSemillas((previas) => {
+    const siguientes = calcular(previas);
+    try { sessionStorage.setItem(CACHE_KEY_SEMILLAS, JSON.stringify(siguientes)); } catch {}
+    return siguientes;
+  });
+}
+
 export function SemillasTab() {
   const hayCache = (() => {
     try {
@@ -165,18 +184,11 @@ export function SemillasTab() {
       const payload = { tipo: formData.tipo as TipoSemilla, nombre: formData.nombre.trim() };
       if (semillaEdit) {
         const res = await configuracionApi.semillas.editar(semillaEdit.id, payload);
-        setSemillas((prev) => {
-          const next = prev.map((s) => (s.id === semillaEdit.id ? res.data : s));
-          try { sessionStorage.setItem(CACHE_KEY_SEMILLAS, JSON.stringify(next)); } catch {}
-          return next;
-        });
+        guardarSemillas(setSemillas, (previas) =>
+          previas.map((s) => (s.id === semillaEdit.id ? res.data : s)));
       } else {
         const res = await configuracionApi.semillas.crear(payload);
-        setSemillas((prev) => {
-          const next = [...prev, res.data];
-          try { sessionStorage.setItem(CACHE_KEY_SEMILLAS, JSON.stringify(next)); } catch {}
-          return next;
-        });
+        guardarSemillas(setSemillas, (previas) => [...previas, res.data]);
       }
       setOpenModal(false);
     } catch (e: any) {
@@ -197,11 +209,7 @@ export function SemillasTab() {
       onConfirm: async () => {
         try {
           await configuracionApi.semillas.eliminar(id);
-          setSemillas((prev) => {
-            const next = prev.filter((s) => s.id !== id);
-            try { sessionStorage.setItem(CACHE_KEY_SEMILLAS, JSON.stringify(next)); } catch {}
-            return next;
-          });
+          guardarSemillas(setSemillas, (previas) => previas.filter((s) => s.id !== id));
         } catch (e: any) {
           if (e?.code === ConfiguracionErrorCodes.SEMILLA_CON_LOTES) {
             toast.error('No se puede eliminar: está asignada a uno o más lotes');

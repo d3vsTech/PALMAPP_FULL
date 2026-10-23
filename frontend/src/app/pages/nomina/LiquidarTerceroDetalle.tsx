@@ -385,6 +385,9 @@ export default function LiquidarTerceroDetalle() {
           try { win.print(); } catch { /* algunos navegadores lo bloquean */ }
         });
       }
+      // El acta queda reservada en memoria hasta que se recargue la página si
+      // nadie la suelta. Se le deja un minuto a la pestaña nueva para abrirla.
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (err) {
       const e = err as ApiError;
       toast.error(e.message ?? 'No se pudo abrir el PDF');
@@ -1052,8 +1055,8 @@ export default function LiquidarTerceroDetalle() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Valor *</Label>
-              <Input
+              <Label className="text-xs" htmlFor="liquidarte-valor">Valor *</Label>
+              <Input id="liquidarte-valor"
                 type="number"
                 min="0"
                 step="0.01"
@@ -1066,8 +1069,8 @@ export default function LiquidarTerceroDetalle() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Observación (opcional)</Label>
-              <Input
+              <Label className="text-xs" htmlFor="liquidarte-observacion-opcional">Observación (opcional)</Label>
+              <Input id="liquidarte-observacion-opcional"
                 placeholder="Ej: Herramienta extraviada"
                 value={nuevoDescuento.observacion}
                 onChange={(e) =>
