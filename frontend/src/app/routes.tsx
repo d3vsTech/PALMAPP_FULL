@@ -213,7 +213,7 @@ function PageLoader() {
 }
 
 /** Helper para envolver el elemento de una ruta lazy en un Suspense local. */
-function L(node: React.ReactNode) {
+function conSuspense(node: React.ReactNode) {
   return <Suspense fallback={<PageLoader />}>{node}</Suspense>;
 }
 
@@ -223,8 +223,8 @@ function L(node: React.ReactNode) {
  * quien no, cae en /403 aunque escriba la URL directa. Los permisos
  * granulares (crear/editar) los valida el backend en cada endpoint.
  */
-function P(permiso: string, node: React.ReactNode) {
-  return <ProtectedRoute permiso={permiso}>{L(node)}</ProtectedRoute>;
+function protegida(permiso: string, node: React.ReactNode) {
+  return <ProtectedRoute permiso={permiso}>{conSuspense(node)}</ProtectedRoute>;
 }
 
 /**
@@ -233,19 +233,19 @@ function P(permiso: string, node: React.ReactNode) {
  * página en blanco y sin salida. Las rutas hijas no la necesitan; heredan la
  * de su árbol.
  */
-function R(path: string, element: React.ReactNode) {
+function ruta(path: string, element: React.ReactNode) {
   return { path, element, errorElement: <ErrorRuta /> };
 }
 
 export const router = createBrowserRouter([
   // ─── Auth finca ───────────────────────────────────────────────────────────
-  R('/login', <Login />),
-  R('/recuperar-password', L(<RecuperarPassword />)),
-  R('/restablecer-password', L(<RestablecerPassword />)),
-  R('/reset-password', L(<RestablecerPassword />)),
-  R('/recuperar-password/reset-password', L(<RestablecerPassword />)),
-  R('/seleccionar-finca', L(<SeleccionarFinca />)),
-  R('/sin-permisos', <SinAcceso />),
+  ruta('/login', <Login />),
+  ruta('/recuperar-password', conSuspense(<RecuperarPassword />)),
+  ruta('/restablecer-password', conSuspense(<RestablecerPassword />)),
+  ruta('/reset-password', conSuspense(<RestablecerPassword />)),
+  ruta('/recuperar-password/reset-password', conSuspense(<RestablecerPassword />)),
+  ruta('/seleccionar-finca', conSuspense(<SeleccionarFinca />)),
+  ruta('/sin-permisos', <SinAcceso />),
 
   /**
    * Banco de pruebas de los PDF que arma el navegador. Público y solo en
@@ -254,57 +254,57 @@ export const router = createBrowserRouter([
    * revisarlos. `import.meta.env.DEV` deja la ruta fuera del build.
    */
   ...(import.meta.env.DEV
-    ? [R('/pdf-lab', L(<LaboratorioPdf />))]
+    ? [ruta('/pdf-lab', conSuspense(<LaboratorioPdf />))]
     : []),
 
   // ─── Super Admin ──────────────────────────────────────────────────────────
-  R('/super-admin/login', L(<SuperAdminLogin />)),
-  R('/super-admin/recuperar-password', L(<RecuperarPasswordSuperAdmin />)),
-  R('/super-admin/restablecer-password', L(<RestablecerPasswordSuperAdmin />)),
+  ruta('/super-admin/login', conSuspense(<SuperAdminLogin />)),
+  ruta('/super-admin/recuperar-password', conSuspense(<RecuperarPasswordSuperAdmin />)),
+  ruta('/super-admin/restablecer-password', conSuspense(<RestablecerPasswordSuperAdmin />)),
   {
     path: '/super-admin',
-    element: L(<SuperAdminLayout />),
+    element: conSuspense(<SuperAdminLayout />),
     errorElement: <ErrorRuta />,
     children: [
       { index: true,                          element: <Navigate to="/super-admin/dashboard" replace /> },
-      { path: 'dashboard',                    element: L(<SuperAdminDashboard />) },
-      { path: 'fincas',                       element: L(<Fincas />) },
-      { path: 'fincas/:tenantId/usuarios',    element: L(<UsuariosFinca />) },
-      { path: 'proveedores',                       element: L(<ProveedoresAdmin />) },
-      { path: 'proveedores/:proveedorId/usuarios', element: L(<UsuariosProveedor />) },
-      { path: 'actividad',                    element: L(<Actividad />) },
-      { path: 'diagnosticos',                 element: L(<Diagnosticos />) },
+      { path: 'dashboard',                    element: conSuspense(<SuperAdminDashboard />) },
+      { path: 'fincas',                       element: conSuspense(<Fincas />) },
+      { path: 'fincas/:tenantId/usuarios',    element: conSuspense(<UsuariosFinca />) },
+      { path: 'proveedores',                       element: conSuspense(<ProveedoresAdmin />) },
+      { path: 'proveedores/:proveedorId/usuarios', element: conSuspense(<UsuariosProveedor />) },
+      { path: 'actividad',                    element: conSuspense(<Actividad />) },
+      { path: 'diagnosticos',                 element: conSuspense(<Diagnosticos />) },
     ],
   },
 
   // ─── Proveedor (cuenta separada, login propio) ────────────────────────────
-  R('/proveedor/login', L(<ProveedorLogin />)),
-  R('/proveedor/seleccionar', L(<SeleccionarProveedor />)),
-  R('/proveedor/recuperar-password', L(<ProveedorRecuperarPassword />)),
-  R('/proveedor/restablecer-password', L(<ProveedorRestablecerPassword />)),
-  R('/proveedor/reset-password', L(<ProveedorRestablecerPassword />)),
+  ruta('/proveedor/login', conSuspense(<ProveedorLogin />)),
+  ruta('/proveedor/seleccionar', conSuspense(<SeleccionarProveedor />)),
+  ruta('/proveedor/recuperar-password', conSuspense(<ProveedorRecuperarPassword />)),
+  ruta('/proveedor/restablecer-password', conSuspense(<ProveedorRestablecerPassword />)),
+  ruta('/proveedor/reset-password', conSuspense(<ProveedorRestablecerPassword />)),
   // El backend a veces arma el link como {FRONTEND_PROVEEDOR_URL}/reset-password
   // donde FRONTEND_PROVEEDOR_URL = ".../proveedor/recuperar-password", lo que
   // termina apuntando aquí. Mismo render que /proveedor/reset-password.
-  R('/proveedor/recuperar-password/reset-password', L(<ProveedorRestablecerPassword />)),
-  R('/proveedor/configuracion-inicial', L(<ConfiguracionInicialWizard />)),
+  ruta('/proveedor/recuperar-password/reset-password', conSuspense(<ProveedorRestablecerPassword />)),
+  ruta('/proveedor/configuracion-inicial', conSuspense(<ConfiguracionInicialWizard />)),
   {
     path: '/proveedor',
-    element: L(<ProveedorLayout />),
+    element: conSuspense(<ProveedorLayout />),
     errorElement: <ErrorRuta />,
     children: [
       { index: true,                          element: <Navigate to="/proveedor/dashboard" replace /> },
-      { path: 'dashboard',                    element: L(<ProveedorDashboard />) },
-      { path: 'productos',                    element: L(<ProveedorProductos />) },
-      { path: 'productos/nuevo',              element: L(<NuevoProductoProv />) },
-      { path: 'productos/carga-masiva',       element: L(<CargaMasivaProductos />) },
-      { path: 'productos/editar/:id',         element: L(<EditarProductoProv />) },
-      { path: 'productos/:id',                element: L(<ProductoDetalleProv />) },
-      { path: 'pedidos',                      element: L(<ProveedorPedidos />) },
-      { path: 'pedidos/:id',                  element: L(<PedidoDetalleProv />) },
-      { path: 'estadisticas',                 element: L(<ProveedorEstadisticas />) },
-      { path: 'configuracion',                element: L(<ProveedorConfiguracion />) },
-      { path: 'perfil',                       element: L(<MiPerfilProveedor />) },
+      { path: 'dashboard',                    element: conSuspense(<ProveedorDashboard />) },
+      { path: 'productos',                    element: conSuspense(<ProveedorProductos />) },
+      { path: 'productos/nuevo',              element: conSuspense(<NuevoProductoProv />) },
+      { path: 'productos/carga-masiva',       element: conSuspense(<CargaMasivaProductos />) },
+      { path: 'productos/editar/:id',         element: conSuspense(<EditarProductoProv />) },
+      { path: 'productos/:id',                element: conSuspense(<ProductoDetalleProv />) },
+      { path: 'pedidos',                      element: conSuspense(<ProveedorPedidos />) },
+      { path: 'pedidos/:id',                  element: conSuspense(<PedidoDetalleProv />) },
+      { path: 'estadisticas',                 element: conSuspense(<ProveedorEstadisticas />) },
+      { path: 'configuracion',                element: conSuspense(<ProveedorConfiguracion />) },
+      { path: 'perfil',                       element: conSuspense(<MiPerfilProveedor />) },
     ],
   },
 
@@ -314,116 +314,116 @@ export const router = createBrowserRouter([
     element: <Root />,
     errorElement: <ErrorRuta />,
     children: [
-      { index: true, element: <ProtectedRoute permiso="dashboard.ver">{L(<Dashboard />)}</ProtectedRoute> },
+      { index: true, element: <ProtectedRoute permiso="dashboard.ver">{conSuspense(<Dashboard />)}</ProtectedRoute> },
 
-      { path: 'agente-ia', element: L(<AgenteIA />) },
+      { path: 'agente-ia', element: conSuspense(<AgenteIA />) },
 
-      { path: 'metricas/productividad-colaboradores', element: L(<ProductividadColaboradores />) },
-      { path: 'metricas/precios-cosecha',             element: L(<PreciosCosecha />) },
-      { path: 'metricas/promedios-lote',              element: L(<PromediosLote />) },
-      { path: 'metricas/estadisticas-generales',      element: L(<EstadisticasGenerales />) },
-      { path: 'metricas/comparativos-historicos',     element: L(<ComparativosHistoricos />) },
+      { path: 'metricas/productividad-colaboradores', element: conSuspense(<ProductividadColaboradores />) },
+      { path: 'metricas/precios-cosecha',             element: conSuspense(<PreciosCosecha />) },
+      { path: 'metricas/promedios-lote',              element: conSuspense(<PromediosLote />) },
+      { path: 'metricas/estadisticas-generales',      element: conSuspense(<EstadisticasGenerales />) },
+      { path: 'metricas/comparativos-historicos',     element: conSuspense(<ComparativosHistoricos />) },
 
-      { path: 'plantacion',               element: P('lotes.ver', <MiPlantacion />) },
-      { path: 'plantacion/predio/nuevo',  element: P('lotes.ver', <NuevoPredioWizard />) },
-      { path: 'plantacion/lote/nuevo',    element: P('lotes.ver', <CrearEditarLote />) },
-      { path: 'plantacion/lote/:id',      element: P('lotes.ver', <LoteDetalle />) },
-      { path: 'plantacion/sublote/nuevo', element: P('lotes.ver', <CrearSublote />) },
-      { path: 'plantacion/linea/nuevo',   element: P('lotes.ver', <CrearLinea />) },
-      { path: 'plantacion/palmas/nuevo',  element: P('lotes.ver', <CrearPalmas />) },
+      { path: 'plantacion',               element: protegida('lotes.ver', <MiPlantacion />) },
+      { path: 'plantacion/predio/nuevo',  element: protegida('lotes.ver', <NuevoPredioWizard />) },
+      { path: 'plantacion/lote/nuevo',    element: protegida('lotes.ver', <CrearEditarLote />) },
+      { path: 'plantacion/lote/:id',      element: protegida('lotes.ver', <LoteDetalle />) },
+      { path: 'plantacion/sublote/nuevo', element: protegida('lotes.ver', <CrearSublote />) },
+      { path: 'plantacion/linea/nuevo',   element: protegida('lotes.ver', <CrearLinea />) },
+      { path: 'plantacion/palmas/nuevo',  element: protegida('lotes.ver', <CrearPalmas />) },
 
-      { path: 'colaboradores',            element: P('colaboradores.ver', <Colaboradores />) },
-      { path: 'colaboradores/nuevo',      element: P('colaboradores.ver', <NuevoColaboradorWizard />) },
-      { path: 'colaboradores/importar',   element: P('colaboradores.crear', <ImportarColaboradores />) },
-      { path: 'colaboradores/editar/:id', element: P('colaboradores.ver', <NuevoColaboradorWizard />) },
-      { path: 'colaboradores/:id',        element: P('colaboradores.ver', <ColaboradorDetail />) },
+      { path: 'colaboradores',            element: protegida('colaboradores.ver', <Colaboradores />) },
+      { path: 'colaboradores/nuevo',      element: protegida('colaboradores.ver', <NuevoColaboradorWizard />) },
+      { path: 'colaboradores/importar',   element: protegida('colaboradores.crear', <ImportarColaboradores />) },
+      { path: 'colaboradores/editar/:id', element: protegida('colaboradores.ver', <NuevoColaboradorWizard />) },
+      { path: 'colaboradores/:id',        element: protegida('colaboradores.ver', <ColaboradorDetail />) },
 
-      { path: 'nomina',                     element: P('nomina.ver', <Nomina />) },
-      { path: 'nomina/nueva',               element: P('nomina.ver', <NuevaNominaWizard />) },
-      { path: 'nomina/:id/editar',          element: P('nomina.ver', <NuevaNominaWizard />) },
-      { path: 'nomina/prestamos',                       element: P('nomina.ver', <Prestamos />) },
-      { path: 'nomina/prestamos/:prestamoId/abonos',    element: P('nomina.ver', <AbonosPrestamo />) },
-      { path: 'nomina/prestamos/:id',                   element: P('nomina.ver', <PrestamoDetalle />) },
-      { path: 'nomina/nuevo-prestamo',                  element: P('nomina.ver', <NuevoPrestamo />) },
-      { path: 'nomina/importar',            element: P('nomina.ver', <ImportarNominasPage />) },
-      { path: 'nomina/planilla-diaria',     element: P('nomina.ver', <PlanillaDiaria />) },
-      { path: 'nomina/liquidacion/nueva',   element: P('nomina.ver', <NuevaLiquidacionWizard />) },
-      { path: 'nomina/:id',                 element: P('nomina.ver', <NominaDetalle />) },
-      { path: 'nomina/:nominaId/liquidar/:colaboradorId',     element: P('nomina.ver', <LiquidarColaborador />) },
-      { path: 'nomina/:nominaId/ver/:colaboradorId',          element: P('nomina.ver', <VerLiquidacion />) },
-      { path: 'nomina/:nominaId/desprendible/:colaboradorId', element: P('nomina.ver', <DesprendiblePago />) },
-      { path: 'nomina/:nominaId/liquidar-terceros',           element: P('nomina.ver', <LiquidarTerceros />) },
-      { path: 'nomina/:nominaId/tercero/:terceroId/liquidar', element: P('nomina.ver', <LiquidarTerceroDetalle />) },
+      { path: 'nomina',                     element: protegida('nomina.ver', <Nomina />) },
+      { path: 'nomina/nueva',               element: protegida('nomina.ver', <NuevaNominaWizard />) },
+      { path: 'nomina/:id/editar',          element: protegida('nomina.ver', <NuevaNominaWizard />) },
+      { path: 'nomina/prestamos',                       element: protegida('nomina.ver', <Prestamos />) },
+      { path: 'nomina/prestamos/:prestamoId/abonos',    element: protegida('nomina.ver', <AbonosPrestamo />) },
+      { path: 'nomina/prestamos/:id',                   element: protegida('nomina.ver', <PrestamoDetalle />) },
+      { path: 'nomina/nuevo-prestamo',                  element: protegida('nomina.ver', <NuevoPrestamo />) },
+      { path: 'nomina/importar',            element: protegida('nomina.ver', <ImportarNominasPage />) },
+      { path: 'nomina/planilla-diaria',     element: protegida('nomina.ver', <PlanillaDiaria />) },
+      { path: 'nomina/liquidacion/nueva',   element: protegida('nomina.ver', <NuevaLiquidacionWizard />) },
+      { path: 'nomina/:id',                 element: protegida('nomina.ver', <NominaDetalle />) },
+      { path: 'nomina/:nominaId/liquidar/:colaboradorId',     element: protegida('nomina.ver', <LiquidarColaborador />) },
+      { path: 'nomina/:nominaId/ver/:colaboradorId',          element: protegida('nomina.ver', <VerLiquidacion />) },
+      { path: 'nomina/:nominaId/desprendible/:colaboradorId', element: protegida('nomina.ver', <DesprendiblePago />) },
+      { path: 'nomina/:nominaId/liquidar-terceros',           element: protegida('nomina.ver', <LiquidarTerceros />) },
+      { path: 'nomina/:nominaId/tercero/:terceroId/liquidar', element: protegida('nomina.ver', <LiquidarTerceroDetalle />) },
 
       {
         path: 'liquidaciones',
-        element: <ProtectedRoute permiso="liquidaciones.ver">{L(<LiquidacionesLayout />)}</ProtectedRoute>,
+        element: <ProtectedRoute permiso="liquidaciones.ver">{conSuspense(<LiquidacionesLayout />)}</ProtectedRoute>,
         children: [
-          { index: true,                       element: L(<Liquidaciones />) },
-          { path: 'cesantias/nueva',           element: L(<NuevaCesantia />) },
-          { path: 'cesantias/:id',             element: L(<CesantiasDetalle />) },
-          { path: 'intereses/nueva',           element: L(<NuevaIntereses />) },
-          { path: 'intereses/:id',             element: L(<InteresesDetalle />) },
-          { path: 'prima/nueva',               element: L(<NuevaPrima />) },
-          { path: 'prima/:id',                 element: L(<PrimaDetalle />) },
-          { path: 'vacaciones/nueva',          element: L(<NuevaVacaciones />) },
-          { path: 'vacaciones/historico',      element: L(<VacacionesHistorico />) },
-          { path: 'vacaciones/carga-historico', element: L(<CargaHistoricoVacArchivo />) },
-          { path: 'vacaciones/carga-historico/manual', element: L(<CargaHistoricoVacaciones />) },
-          { path: 'cesantias/carga-historico', element: L(<CargaHistoricoCesantias />) },
-          { path: 'prima/carga-historico',     element: L(<CargaHistoricoPrima />) },
-          { path: 'finales/carga-historico',   element: L(<CargaHistoricoFinal />) },
-          { path: 'vacaciones/:id',            element: L(<VacacionesDetalle />) },
-          { path: 'liquidacion-final/nueva',   element: L(<NuevaLiquidacionFinal />) },
-          { path: 'liquidacion-final/:id/editar', element: L(<NuevaLiquidacionFinal />) },
-          { path: 'liquidacion-final/:id',     element: L(<LiquidacionFinalDetalle />) },
+          { index: true,                       element: conSuspense(<Liquidaciones />) },
+          { path: 'cesantias/nueva',           element: conSuspense(<NuevaCesantia />) },
+          { path: 'cesantias/:id',             element: conSuspense(<CesantiasDetalle />) },
+          { path: 'intereses/nueva',           element: conSuspense(<NuevaIntereses />) },
+          { path: 'intereses/:id',             element: conSuspense(<InteresesDetalle />) },
+          { path: 'prima/nueva',               element: conSuspense(<NuevaPrima />) },
+          { path: 'prima/:id',                 element: conSuspense(<PrimaDetalle />) },
+          { path: 'vacaciones/nueva',          element: conSuspense(<NuevaVacaciones />) },
+          { path: 'vacaciones/historico',      element: conSuspense(<VacacionesHistorico />) },
+          { path: 'vacaciones/carga-historico', element: conSuspense(<CargaHistoricoVacArchivo />) },
+          { path: 'vacaciones/carga-historico/manual', element: conSuspense(<CargaHistoricoVacaciones />) },
+          { path: 'cesantias/carga-historico', element: conSuspense(<CargaHistoricoCesantias />) },
+          { path: 'prima/carga-historico',     element: conSuspense(<CargaHistoricoPrima />) },
+          { path: 'finales/carga-historico',   element: conSuspense(<CargaHistoricoFinal />) },
+          { path: 'vacaciones/:id',            element: conSuspense(<VacacionesDetalle />) },
+          { path: 'liquidacion-final/nueva',   element: conSuspense(<NuevaLiquidacionFinal />) },
+          { path: 'liquidacion-final/:id/editar', element: conSuspense(<NuevaLiquidacionFinal />) },
+          { path: 'liquidacion-final/:id',     element: conSuspense(<LiquidacionFinalDetalle />) },
         ],
       },
 
-      { path: 'operaciones',                     element: P('operaciones.ver', <Operaciones />) },
-      { path: 'operaciones/planilla/nueva',      element: P('operaciones.ver', <NuevaPlanillaWizard />) },
-      { path: 'operaciones/planilla/editar/:id', element: P('operaciones.ver', <NuevaPlanillaWizard />) },
-      { path: 'operaciones/planilla/:id',        element: P('operaciones.ver', <VerPlanilla />) },
-      { path: 'operaciones/importar',            element: P('operaciones.importar', <ImportarOperacionesPage />) },
+      { path: 'operaciones',                     element: protegida('operaciones.ver', <Operaciones />) },
+      { path: 'operaciones/planilla/nueva',      element: protegida('operaciones.ver', <NuevaPlanillaWizard />) },
+      { path: 'operaciones/planilla/editar/:id', element: protegida('operaciones.ver', <NuevaPlanillaWizard />) },
+      { path: 'operaciones/planilla/:id',        element: protegida('operaciones.ver', <VerPlanilla />) },
+      { path: 'operaciones/importar',            element: protegida('operaciones.importar', <ImportarOperacionesPage />) },
 
-      { path: 'novedades',                 element: P('novedades.ver', <NovedadesPage />) },
-      { path: 'novedades/nueva',           element: P('novedades.ver', <NuevaNovedadPage />) },
-      { path: 'novedades/importar',        element: P('novedades.importar', <ImportarNovedadesPage />) },
+      { path: 'novedades',                 element: protegida('novedades.ver', <NovedadesPage />) },
+      { path: 'novedades/nueva',           element: protegida('novedades.ver', <NuevaNovedadPage />) },
+      { path: 'novedades/importar',        element: protegida('novedades.importar', <ImportarNovedadesPage />) },
 
-      { path: 'viajes',                    element: P('viajes.ver', <Viajes />) },
-      { path: 'viajes/ajustes-cosecha',    element: P('viajes.ver', <AjustesCosecha />) },
-      { path: 'viajes/nuevo',              element: P('viajes.ver', <NuevoEditarViaje />) },
-      { path: 'viajes/editar/:id',         element: P('viajes.ver', <NuevoEditarViaje />) },
-      { path: 'viajes/importar',           element: P('viajes.ver', <ImportarViajesPage />) },
-      { path: 'viajes/:id/conteo',         element: P('viajes.ver', <ConteoCosecha />) },
-      { path: 'viajes/:id',                element: P('viajes.ver', <DetalleViaje />) },
-      { path: 'remisiones',                element: P('viajes.ver', <Viajes />) },
-      { path: 'remisiones/:id',            element: P('viajes.ver', <DetalleViaje />) },
+      { path: 'viajes',                    element: protegida('viajes.ver', <Viajes />) },
+      { path: 'viajes/ajustes-cosecha',    element: protegida('viajes.ver', <AjustesCosecha />) },
+      { path: 'viajes/nuevo',              element: protegida('viajes.ver', <NuevoEditarViaje />) },
+      { path: 'viajes/editar/:id',         element: protegida('viajes.ver', <NuevoEditarViaje />) },
+      { path: 'viajes/importar',           element: protegida('viajes.ver', <ImportarViajesPage />) },
+      { path: 'viajes/:id/conteo',         element: protegida('viajes.ver', <ConteoCosecha />) },
+      { path: 'viajes/:id',                element: protegida('viajes.ver', <DetalleViaje />) },
+      { path: 'remisiones',                element: protegida('viajes.ver', <Viajes />) },
+      { path: 'remisiones/:id',            element: protegida('viajes.ver', <DetalleViaje />) },
 
-      { path: 'market',                  element: L(<Market />) },
-      { path: 'market/proveedores',      element: L(<Proveedores />) },
-      { path: 'market/proveedores/:id',  element: L(<ProveedorDetalle />) },
-      { path: 'market/productos/:id',    element: L(<ProductoDetalle />) },
-      { path: 'market/carrito',          element: L(<Carrito />) },
-      { path: 'market/checkout',         element: L(<Checkout />) },
-      { path: 'market/pedidos',                element: L(<Pedidos />) },
-      { path: 'market/pedidos/:id',            element: L(<PedidoDetalle />) },
+      { path: 'market',                  element: conSuspense(<Market />) },
+      { path: 'market/proveedores',      element: conSuspense(<Proveedores />) },
+      { path: 'market/proveedores/:id',  element: conSuspense(<ProveedorDetalle />) },
+      { path: 'market/productos/:id',    element: conSuspense(<ProductoDetalle />) },
+      { path: 'market/carrito',          element: conSuspense(<Carrito />) },
+      { path: 'market/checkout',         element: conSuspense(<Checkout />) },
+      { path: 'market/pedidos',                element: conSuspense(<Pedidos />) },
+      { path: 'market/pedidos/:id',            element: conSuspense(<PedidoDetalle />) },
 
-      { path: 'usuarios',              element: <ProtectedRoute permiso="usuarios.ver">{L(<Usuarios />)}</ProtectedRoute> },
-      { path: 'usuarios/nuevo',        element: <ProtectedRoute permiso="usuarios.crear">{L(<UsuarioNuevoEditar />)}</ProtectedRoute> },
-      { path: 'usuarios/editar/:id',   element: <ProtectedRoute permiso="usuarios.editar">{L(<UsuarioNuevoEditar />)}</ProtectedRoute> },
-      { path: 'usuarios/permisos/:id', element: <ProtectedRoute permiso="usuarios.editar_permisos">{L(<UsuarioPermisos />)}</ProtectedRoute> },
-      { path: 'usuarios/:id',          element: P('usuarios.ver', <UsuarioDetalle />) },
+      { path: 'usuarios',              element: <ProtectedRoute permiso="usuarios.ver">{conSuspense(<Usuarios />)}</ProtectedRoute> },
+      { path: 'usuarios/nuevo',        element: <ProtectedRoute permiso="usuarios.crear">{conSuspense(<UsuarioNuevoEditar />)}</ProtectedRoute> },
+      { path: 'usuarios/editar/:id',   element: <ProtectedRoute permiso="usuarios.editar">{conSuspense(<UsuarioNuevoEditar />)}</ProtectedRoute> },
+      { path: 'usuarios/permisos/:id', element: <ProtectedRoute permiso="usuarios.editar_permisos">{conSuspense(<UsuarioPermisos />)}</ProtectedRoute> },
+      { path: 'usuarios/:id',          element: protegida('usuarios.ver', <UsuarioDetalle />) },
 
-      { path: 'perfil',                          element: L(<MiPerfil />) },
-      { path: 'configuracion',                   element: <ProtectedRoute permiso="configuracion.editar">{L(<Configuracion />)}</ProtectedRoute> },
-      { path: 'configuracion/conceptos/nuevo',   element: <ProtectedRoute permiso="configuracion.editar">{L(<NuevoConceptoNomina />)}</ProtectedRoute> },
-      { path: 'configuracion/conceptos/editar',  element: <ProtectedRoute permiso="configuracion.editar">{L(<NuevoConceptoNomina />)}</ProtectedRoute> },
-      { path: 'configuracion/extractoras/nueva',     element: <ProtectedRoute permiso="configuracion.editar">{L(<NuevaExtractora />)}</ProtectedRoute> },
-      { path: 'configuracion/extractoras/editar/:id', element: <ProtectedRoute permiso="configuracion.editar">{L(<NuevaExtractora />)}</ProtectedRoute> },
-      { path: 'configuracion/terceros/nuevo',        element: <ProtectedRoute permiso="configuracion.editar">{L(<NuevoTerceroWizard />)}</ProtectedRoute> },
-      { path: 'configuracion/terceros/editar/:id',   element: <ProtectedRoute permiso="configuracion.editar">{L(<EditarTerceroWizard />)}</ProtectedRoute> },
-      { path: 'configuracion/festivos',              element: <ProtectedRoute permiso="configuracion.editar">{L(<CalendarioFestivos />)}</ProtectedRoute> },
+      { path: 'perfil',                          element: conSuspense(<MiPerfil />) },
+      { path: 'configuracion',                   element: <ProtectedRoute permiso="configuracion.editar">{conSuspense(<Configuracion />)}</ProtectedRoute> },
+      { path: 'configuracion/conceptos/nuevo',   element: <ProtectedRoute permiso="configuracion.editar">{conSuspense(<NuevoConceptoNomina />)}</ProtectedRoute> },
+      { path: 'configuracion/conceptos/editar',  element: <ProtectedRoute permiso="configuracion.editar">{conSuspense(<NuevoConceptoNomina />)}</ProtectedRoute> },
+      { path: 'configuracion/extractoras/nueva',     element: <ProtectedRoute permiso="configuracion.editar">{conSuspense(<NuevaExtractora />)}</ProtectedRoute> },
+      { path: 'configuracion/extractoras/editar/:id', element: <ProtectedRoute permiso="configuracion.editar">{conSuspense(<NuevaExtractora />)}</ProtectedRoute> },
+      { path: 'configuracion/terceros/nuevo',        element: <ProtectedRoute permiso="configuracion.editar">{conSuspense(<NuevoTerceroWizard />)}</ProtectedRoute> },
+      { path: 'configuracion/terceros/editar/:id',   element: <ProtectedRoute permiso="configuracion.editar">{conSuspense(<EditarTerceroWizard />)}</ProtectedRoute> },
+      { path: 'configuracion/festivos',              element: <ProtectedRoute permiso="configuracion.editar">{conSuspense(<CalendarioFestivos />)}</ProtectedRoute> },
       { path: 'maestros', element: <Navigate to="/configuracion" replace /> },
 
       { path: '403', element: <SinPermisos /> },
