@@ -178,7 +178,7 @@ export function PreciosLaboresTab() {
   /** Estado por rango guardado (keyed por id) — copia editable de los 3 campos.
    *  Se hidrata cuando entra `rangosAbono`. El PUT sale al presionar Guardar. */
   type RangoEditable = { gramos_min: string; gramos_max: string; precio_palma: string };
-  const [abonoInputs, setAbonoInputs] = useState<Record<number, RangoEditable>>(
+  const [abonoInputs, setAbonoInputs] = useState<Record<number, RangoEditable>>(() =>
     Object.fromEntries(
       (cached?.abono ?? []).map((r) => [
         r.id,
@@ -200,7 +200,7 @@ export function PreciosLaboresTab() {
 
   // Precios de Palma — labores fijas (es_sistema=true)
   const [preciosPalma, setPreciosPalma] = useState<Labor[]>(cached?.palma ?? []);
-  const [palmaInputs, setPalmaInputs] = useState<Record<number, string>>(
+  const [palmaInputs, setPalmaInputs] = useState<Record<number, string>>(() =>
     Object.fromEntries(
       (cached?.palma ?? []).map((p) => [p.id, p.precio_palma != null ? formatDecimal(p.precio_palma) : '']),
     ),
@@ -209,7 +209,7 @@ export function PreciosLaboresTab() {
   // Labores de Palma custom (es_sistema=false, tipo=null). El admin las crea
   // desde "Configuración → Operaciones → Trabajos / Labores".
   const [laboresPalmaCustom, setLaboresPalmaCustom] = useState<Labor[]>(cached?.palmaCustom ?? []);
-  const [palmaCustomInputs, setPalmaCustomInputs] = useState<Record<number, string>>(
+  const [palmaCustomInputs, setPalmaCustomInputs] = useState<Record<number, string>>(() =>
     Object.fromEntries(
       (cached?.palmaCustom ?? []).map((l) => [l.id, l.precio_palma != null ? formatDecimal(l.precio_palma) : '']),
     ),
@@ -217,7 +217,7 @@ export function PreciosLaboresTab() {
 
   // Labores de Finca (precio = precio_palma plano según §4 unificado)
   const [laboresFinca, setLaboresFinca] = useState<Labor[]>(cached?.finca ?? []);
-  const [laborInputs, setLaborInputs] = useState<Record<number, string>>(
+  const [laborInputs, setLaborInputs] = useState<Record<number, string>>(() =>
     Object.fromEntries(
       (cached?.finca ?? []).map((l) => [l.id, l.precio_palma != null ? formatDecimal(l.precio_palma) : '']),
     ),
@@ -231,7 +231,7 @@ export function PreciosLaboresTab() {
     cached?.actividades ?? {},
   );
   // Inputs inline de precio por actividad, keyed por actividad.id.
-  const [actividadInputs, setActividadInputs] = useState<Record<number, string>>(
+  const [actividadInputs, setActividadInputs] = useState<Record<number, string>>(() =>
     Object.fromEntries(
       Object.values(cached?.actividades ?? {}).flat().map((a) => [
         a.id,

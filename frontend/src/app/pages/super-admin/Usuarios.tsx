@@ -177,7 +177,7 @@ export default function Usuarios() {
   const [selectedUsuario, setSelectedUsuario] = useState<UsuarioGlobal | null>(
     null,
   );
-  const [formData, setFormData] = useState<UsuarioFormData>(
+  const [formData, setFormData] = useState<UsuarioFormData>(() =>
     buildUserFormData(),
   );
   // Confirmar contraseña + toggle de visibilidad

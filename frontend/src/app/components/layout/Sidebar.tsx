@@ -145,7 +145,9 @@ export default function Sidebar() {
     return true;
   });
 
-  const NavContent = () => (
+  // Un elemento, no un componente: definido aquí dentro, React lo veía
+  // nuevo en cada render y remontaba el menú entero.
+  const contenido = (
     <div className="flex h-full min-h-0 min-w-0 flex-col bg-card glass-subtle border-r border-border">
       {/* Logo y título */}
       <div className="flex h-20 shrink-0 items-center justify-center border-b border-border px-6">
@@ -230,7 +232,7 @@ export default function Sidebar() {
           `shrink-0` evita que el sidebar se comprima cuando el `main` se
           apreta (zoom del navegador o contenido con ancho intrínseco alto). */}
       <aside className="hidden w-72 shrink-0 flex-col bg-card lg:flex">
-        <NavContent />
+        {contenido}
       </aside>
 
       {/* Mobile / Tablet Menu — overlay + sidebar deslizable */}
@@ -245,7 +247,7 @@ export default function Sidebar() {
 
           {/* Sidebar */}
           <div className="absolute left-0 top-0 bottom-0 w-72 max-w-[85vw] animate-in slide-in-from-left duration-300">
-            <NavContent />
+            {contenido}
           </div>
         </div>
       )}

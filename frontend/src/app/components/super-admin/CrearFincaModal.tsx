@@ -73,7 +73,7 @@ export default function CrearFincaModal({
   isEdit = false,
   isSaving = false,
 }: CrearFincaModalProps) {
-  const [formData, setFormData] = useState<FincaFormData>(
+  const [formData, setFormData] = useState<FincaFormData>(() =>
     buildFormData(fincaData),
   );
   const { token } = useAuth();

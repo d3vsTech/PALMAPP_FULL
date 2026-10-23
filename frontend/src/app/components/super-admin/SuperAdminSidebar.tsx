@@ -35,7 +35,9 @@ export default function SuperAdminSidebar() {
     navigate('/super-admin/login');
   };
 
-  const SidebarContent = () => (
+  // Un elemento, no un componente: definido aquí dentro, React lo veía
+  // nuevo en cada render y remontaba el menú entero.
+  const contenido = (
     <>
       {/* Header con Logo Devs Technology */}
       <div className="p-6 border-b border-white/10 bg-gradient-to-b from-white/5 to-transparent">
@@ -127,7 +129,7 @@ export default function SuperAdminSidebar() {
     <>
       {/* Sidebar desktop (md+) — siempre visible */}
       <aside className="hidden md:flex fixed inset-y-0 left-0 w-72 bg-black border-r border-white/10 flex-col z-30">
-        <SidebarContent />
+        {contenido}
       </aside>
 
       {/* Botón hamburguesa mobile */}
@@ -149,7 +151,7 @@ export default function SuperAdminSidebar() {
             onClick={() => setMobileOpen(false)}
           />
           <aside className="absolute left-0 top-0 bottom-0 w-72 max-w-[85vw] bg-black border-r border-white/10 flex flex-col animate-in slide-in-from-left duration-300">
-            <SidebarContent />
+            {contenido}
           </aside>
         </div>
       )}
