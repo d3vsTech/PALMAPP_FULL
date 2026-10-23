@@ -91,8 +91,23 @@ async function http<T>(path: string, options: RequestInit = {}): Promise<T> {
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
+    // Un `Error` pelado perdía el código y el estado, y con eso la pantalla no
+    // podía distinguir una contraseña mala de un bloqueo por intentos. Se
+    // conserva la clase para quien compare con `instanceof` y se le cuelgan
+    // los datos que manda el backend.
     const msg = (data as any)?.message || res.statusText || 'Error del servidor';
-    throw new Error(msg);
+    const error = new Error(msg) as Error & {
+      status?: number;
+      code?: string;
+      retryAfter?: number;
+    };
+    error.status = res.status;
+    error.code = (data as any)?.code;
+
+    const espera = Number(res.headers.get('Retry-After'));
+    if (Number.isFinite(espera) && espera > 0) error.retryAfter = espera;
+
+    throw error;
   }
   return data as T;
 }
