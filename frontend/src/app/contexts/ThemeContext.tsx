@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
 
 type Theme = 'dark' | 'light';
 
@@ -26,8 +26,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     // setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
 
+  // Se arma una vez por cambio de tema, no en cada render del proveedor.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const valor = useMemo(() => ({ theme, setTheme, toggleTheme }), [theme]);
+
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
+    <ThemeContext.Provider value={valor}>
       {children}
     </ThemeContext.Provider>
   );

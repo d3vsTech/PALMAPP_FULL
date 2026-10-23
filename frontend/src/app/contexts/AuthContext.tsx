@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
 import { toast } from 'sonner';
 import { API_URL } from '../../api/env';
 
@@ -389,19 +389,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return user?.modulos?.[modulo] === true;
   };
 
+  /** Deja el usuario en el almacenamiento local; si no cabe, se sigue igual. */
+  function guardarUsuario(usuario: User) {
+    try { localStorage.setItem(USER_KEY, JSON.stringify(usuario)); }
+    catch { /* cuota llena */ }
+  }
+
   /**
    * Merge superficial sobre el usuario actual + sincronización con localStorage.
    * Usado por "Mi Perfil" tras un guardado exitoso para que el header lo refleje
    * sin recargar.
    */
   const updateUser = (patch: Partial<User>) => {
-    setUser(prev => {
-      if (!prev) return prev;
-      const merged = { ...prev, ...patch };
-      try { localStorage.setItem(USER_KEY, JSON.stringify(merged)); }
-      catch { /* cuota llena */ }
-      return merged;
-    });
+    // Fuera del actualizador: React puede ejecutar esa función dos veces para
+    // comprobar que es pura, y escribir en disco ahí es justo lo que no debe
+    // hacer. Se llama desde "Mi Perfil" tras guardar, una vez por vez.
+    if (!user) return;
+    const actualizado = { ...user, ...patch };
+    guardarUsuario(actualizado);
+    setUser(actualizado);
   };
 
   // ─── Value ────────────────────────────────────────────────────────────────
