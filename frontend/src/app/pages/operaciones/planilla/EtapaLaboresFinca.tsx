@@ -119,8 +119,8 @@ export function EtapaLaboresFinca({
                 </div>
                 {auxiliarEnEdicion.labor === 'Otro' && (
                   <div className="space-y-2 md:col-span-2">
-                    <Label>Especificar otra labor</Label>
-                    <Input
+                    <Label htmlFor="etapalabor-especificar-otra-labor">Especificar otra labor</Label>
+                    <Input id="etapalabor-especificar-otra-labor"
                       placeholder="Ingrese el tipo de labor"
                       value={auxiliarEnEdicion.otraLabor || ''}
                       onChange={(e) =>
@@ -130,8 +130,8 @@ export function EtapaLaboresFinca({
                   </div>
                 )}
                 <div className="space-y-2 md:col-span-2">
-                  <Label>Lugar</Label>
-                  <Input
+                  <Label htmlFor="etapalabor-lugar">Lugar</Label>
+                  <Input id="etapalabor-lugar"
                     placeholder="Ubicación"
                     value={auxiliarEnEdicion.lugar}
                     onChange={(e) =>

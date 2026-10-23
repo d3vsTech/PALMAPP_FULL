@@ -134,12 +134,12 @@ function FormOperario({
           <Input value={form.apellidos ?? ''} onChange={e => set('apellidos', e.target.value)} placeholder="Apellidos" />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">Cédula</Label>
-          <Input value={form.cedula ?? ''} onChange={e => set('cedula', e.target.value)} placeholder="Número de cédula" />
+          <Label className="text-xs" htmlFor="tercerosta-cedula">Cédula</Label>
+          <Input id="tercerosta-cedula" value={form.cedula ?? ''} onChange={e => set('cedula', e.target.value)} placeholder="Número de cédula" />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">Cargo</Label>
-          <Input value={form.cargo ?? ''} onChange={e => set('cargo', e.target.value)} placeholder="Cosechero, Podador..." />
+          <Label className="text-xs" htmlFor="tercerosta-cargo">Cargo</Label>
+          <Input id="tercerosta-cargo" value={form.cargo ?? ''} onChange={e => set('cargo', e.target.value)} placeholder="Cosechero, Podador..." />
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs flex items-center gap-1"><ShieldCheck className="h-3 w-3 text-primary" /> EPS</Label>

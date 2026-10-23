@@ -180,8 +180,8 @@ export function TabFertilizacion({
                                 </Select>
                               </div>
                               <div className="space-y-2">
-                                <Label>Número de Palmas</Label>
-                                <Input
+                                <Label htmlFor="tabfertili-numero-de-palmas">Número de Palmas</Label>
+                                <Input id="tabfertili-numero-de-palmas"
                                   type="number" step="0.001"
                                   placeholder="0"
                                   value={fertilizacionEnEdicion.palmas || ''}
@@ -217,8 +217,8 @@ export function TabFertilizacion({
                               </div>
                               {fertilizacionEnEdicion.tipoFertilizante === 'Otro' && (
                                 <div className="space-y-2">
-                                  <Label>Especificar otro fertilizante</Label>
-                                  <Input
+                                  <Label htmlFor="tabfertili-especificar-otro-fertilizante">Especificar otro fertilizante</Label>
+                                  <Input id="tabfertili-especificar-otro-fertilizante"
                                     placeholder="Ingrese el tipo de fertilizante"
                                     value={fertilizacionEnEdicion.otroFertilizante || ''}
                                     onChange={(e) => setFertilizacionEnEdicion({ ...fertilizacionEnEdicion, otroFertilizante: e.target.value })}
@@ -226,8 +226,8 @@ export function TabFertilizacion({
                                 </div>
                               )}
                               <div className="space-y-2">
-                                <Label>Cantidad (gramos)</Label>
-                                <Input
+                                <Label htmlFor="tabfertili-cantidad-gramos">Cantidad (gramos)</Label>
+                                <Input id="tabfertili-cantidad-gramos"
                                   type="number" step="0.001"
                                   placeholder="0"
                                   value={fertilizacionEnEdicion.cantidadGramos || ''}

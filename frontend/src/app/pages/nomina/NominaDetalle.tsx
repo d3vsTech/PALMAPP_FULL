@@ -2431,8 +2431,8 @@ export default function NominaDetalle() {
 
               {pagandoForm.metodo_pago === 'TRANSFERENCIA' && (
                 <div className="space-y-2">
-                  <Label>Referencia / N° de transferencia *</Label>
-                  <Input
+                  <Label htmlFor="nominadeta-referencia-n-de-transferencia">Referencia / N° de transferencia *</Label>
+                  <Input id="nominadeta-referencia-n-de-transferencia"
                     value={pagandoForm.referencia_pago}
                     onChange={(e) =>
                       setPagandoForm((prev) => ({ ...prev, referencia_pago: e.target.value }))
@@ -2448,8 +2448,8 @@ export default function NominaDetalle() {
               )}
 
               <div className="space-y-2">
-                <Label>N° orden de pago (opcional)</Label>
-                <Input
+                <Label htmlFor="nominadeta-n-orden-de-pago-opcional">N° orden de pago (opcional)</Label>
+                <Input id="nominadeta-n-orden-de-pago-opcional"
                   value={pagandoForm.orden_pago_numero}
                   onChange={(e) =>
                     setPagandoForm((prev) => ({ ...prev, orden_pago_numero: e.target.value }))
@@ -2459,8 +2459,8 @@ export default function NominaDetalle() {
               </div>
 
               <div className="space-y-2">
-                <Label>Observación (opcional)</Label>
-                <Input
+                <Label htmlFor="nominadeta-observacion-opcional">Observación (opcional)</Label>
+                <Input id="nominadeta-observacion-opcional"
                   value={pagandoForm.observacion}
                   onChange={(e) =>
                     setPagandoForm((prev) => ({ ...prev, observacion: e.target.value }))

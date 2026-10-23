@@ -546,17 +546,17 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div className="space-y-1.5">
-                <Label>Año</Label>
-                <Input value={periodo.anio} disabled className="bg-muted/30" />
+                <Label htmlFor="periodoliq-ano">Año</Label>
+                <Input id="periodoliq-ano" value={periodo.anio} disabled className="bg-muted/30" />
               </div>
               <div className="space-y-1.5">
-                <Label>Descripción</Label>
-                <Input value={periodo.descripcion} disabled className="bg-muted/30" />
+                <Label htmlFor="periodoliq-descripcion">Descripción</Label>
+                <Input id="periodoliq-descripcion" value={periodo.descripcion} disabled className="bg-muted/30" />
               </div>
               {esPrima && (
                 <div className="space-y-1.5">
-                  <Label>Semestre</Label>
-                  <Input
+                  <Label htmlFor="periodoliq-semestre">Semestre</Label>
+                  <Input id="periodoliq-semestre"
                     value={periodo.semestre === 1 ? '1° Semestre (ene – jun)' : '2° Semestre (jul – dic)'}
                     disabled
                     className="bg-muted/30"
@@ -564,23 +564,23 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
                 </div>
               )}
               <div className="space-y-1.5">
-                <Label>Fecha inicio</Label>
-                <Input type="date" value={periodo.fecha_inicio} disabled className="bg-muted/30" />
+                <Label htmlFor="periodoliq-fecha-inicio">Fecha inicio</Label>
+                <Input id="periodoliq-fecha-inicio" type="date" value={periodo.fecha_inicio} disabled className="bg-muted/30" />
               </div>
               <div className="space-y-1.5">
-                <Label>Fecha fin</Label>
-                <Input type="date" value={periodo.fecha_fin} disabled className="bg-muted/30" />
+                <Label htmlFor="periodoliq-fecha-fin">Fecha fin</Label>
+                <Input id="periodoliq-fecha-fin" type="date" value={periodo.fecha_fin} disabled className="bg-muted/30" />
               </div>
               {esIntereses && (
                 <div className="space-y-1.5">
-                  <Label>Tasa de interés</Label>
-                  <Input value="12% anual (Ley 52 de 1975, fija por ley)" disabled className="bg-muted/30" />
+                  <Label htmlFor="periodoliq-tasa-de-interes">Tasa de interés</Label>
+                  <Input id="periodoliq-tasa-de-interes" value="12% anual (Ley 52 de 1975, fija por ley)" disabled className="bg-muted/30" />
                 </div>
               )}
               {esIntereses && periodo.periodo_base && (
                 <div className="space-y-1.5">
-                  <Label>Cesantías base</Label>
-                  <Input value={`${periodo.periodo_base.descripcion} (${periodo.periodo_base.total_colaboradores} colaboradores)`} disabled className="bg-muted/30" />
+                  <Label htmlFor="periodoliq-cesantias-base">Cesantías base</Label>
+                  <Input id="periodoliq-cesantias-base" value={`${periodo.periodo_base.descripcion} (${periodo.periodo_base.total_colaboradores} colaboradores)`} disabled className="bg-muted/30" />
                 </div>
               )}
             </div>

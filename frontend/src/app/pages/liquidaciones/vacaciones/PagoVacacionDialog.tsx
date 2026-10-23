@@ -161,8 +161,8 @@ export default function PagoVacacionDialog({ vacacion, onCerrar, onPagada }: Pro
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label>Fecha de pago</Label>
-              <Input type="date" value={fechaPago} onChange={(e) => setFechaPago(e.target.value)} />
+              <Label htmlFor="pagovacaci-fecha-de-pago">Fecha de pago</Label>
+              <Input id="pagovacaci-fecha-de-pago" type="date" value={fechaPago} onChange={(e) => setFechaPago(e.target.value)} />
             </div>
             <div className="space-y-1.5">
               <Label>Método</Label>

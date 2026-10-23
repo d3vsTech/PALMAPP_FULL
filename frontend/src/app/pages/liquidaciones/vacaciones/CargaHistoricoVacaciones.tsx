@@ -475,8 +475,8 @@ export default function CargaHistoricoVacaciones() {
                 <CardContent className="space-y-5 p-5">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-1.5">
-                      <Label>Fecha inicio</Label>
-                      <Input
+                      <Label htmlFor="cargahisto-fecha-inicio">Fecha inicio</Label>
+                      <Input id="cargahisto-fecha-inicio"
                         type="date" max={HOY()} disabled={!puedeCargar}
                         value={form.fechaInicio}
                         onChange={(e) => set('fechaInicio', e.target.value)}
@@ -484,8 +484,8 @@ export default function CargaHistoricoVacaciones() {
                       <p className="text-xs text-muted-foreground">Primer día del disfrute real.</p>
                     </div>
                     <div className="space-y-1.5">
-                      <Label>Fecha fin</Label>
-                      <Input
+                      <Label htmlFor="cargahisto-fecha-fin">Fecha fin</Label>
+                      <Input id="cargahisto-fecha-fin"
                         type="date" max={HOY()} min={form.fechaInicio || undefined}
                         disabled={!puedeCargar}
                         value={form.fechaFin}
@@ -500,8 +500,8 @@ export default function CargaHistoricoVacaciones() {
 
                   <div className="grid gap-4 sm:grid-cols-3">
                     <div className="space-y-1.5">
-                      <Label>Días hábiles</Label>
-                      <Input
+                      <Label htmlFor="cargahisto-dias-habiles">Días hábiles</Label>
+                      <Input id="cargahisto-dias-habiles"
                         type="number" min={1} max={120} step={1} disabled={!puedeCargar}
                         value={form.diasHabiles}
                         onChange={(e) => set('diasHabiles', e.target.value)}
@@ -588,8 +588,8 @@ export default function CargaHistoricoVacaciones() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-1.5">
-            <Label>Motivo</Label>
-            <Textarea
+            <Label htmlFor="cargahisto-motivo">Motivo</Label>
+            <Textarea id="cargahisto-motivo"
               rows={3} placeholder="Error de digitación en las fechas."
               value={motivoAnulacion}
               onChange={(e) => setMotivoAnulacion(e.target.value)}

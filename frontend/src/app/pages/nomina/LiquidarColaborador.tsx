@@ -1564,8 +1564,8 @@ export default function LiquidarColaborador() {
                           </Select>
                         </div>
                         <div className="col-span-3">
-                          <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Valor</Label>
-                          <Input
+                          <Label className="text-[10px] uppercase tracking-wide text-muted-foreground" htmlFor="liquidarco-valor">Valor</Label>
+                          <Input id="liquidarco-valor"
                             type="number" step="0.001"
                             value={d.valor || ''}
                             onChange={(e) => actualizarDeduccion(idx, 'valor', Number(e.target.value))}
@@ -1574,8 +1574,8 @@ export default function LiquidarColaborador() {
                           />
                         </div>
                         <div className="col-span-4">
-                          <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Observación</Label>
-                          <Input
+                          <Label className="text-[10px] uppercase tracking-wide text-muted-foreground" htmlFor="liquidarco-observacion">Observación</Label>
+                          <Input id="liquidarco-observacion"
                             value={d.observacion}
                             onChange={(e) => actualizarDeduccion(idx, 'observacion', e.target.value)}
                             className="h-8 text-sm"

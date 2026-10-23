@@ -1724,13 +1724,13 @@ export default function NuevoPredioWizard() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Municipio</Label>
+                    <Label htmlFor="nuevopredi-municipio">Municipio</Label>
                     <Select
                       value={munSel || undefined}
                       onValueChange={setMunSel}
                       disabled={!deptoSel}
                     >
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger id="nuevopredi-municipio" className="w-full">
                         <SelectValue placeholder="Seleccionar..." />
                       </SelectTrigger>
                       <SelectContent>
@@ -2095,8 +2095,8 @@ export default function NuevoPredioWizard() {
                           className="bg-muted/10 border border-border rounded-lg p-4 space-y-3 scroll-mt-24"
                         >
                           <div className="space-y-2">
-                            <Label className="text-sm">Cantidad de palmas</Label>
-                            <Input
+                            <Label className="text-sm" htmlFor="nuevopredi-cantidad-de-palmas">Cantidad de palmas</Label>
+                            <Input id="nuevopredi-cantidad-de-palmas"
                               type="number" step="0.001"
                               placeholder="Ej: 50"
                               min="0"
@@ -2121,8 +2121,8 @@ export default function NuevoPredioWizard() {
                             )}
                           </div>
                           <div className="space-y-2">
-                            <Label className="text-sm">Línea</Label>
-                            <select
+                            <Label className="text-sm" htmlFor="nuevopredi-linea">Línea</Label>
+                            <select id="nuevopredi-linea"
                               value={lineaSel}
                               onChange={e => setCantPalmasForm(prev => ({ ...prev, [lineaField]: e.target.value }))}
                               className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
@@ -2278,8 +2278,8 @@ export default function NuevoPredioWizard() {
                         {editId && !tieneLineas && (
                           <div className="bg-muted/10 border border-border/50 rounded-lg p-4">
                             <div className="space-y-2">
-                              <Label className="text-sm font-medium">Número de palmas</Label>
-                              <Input
+                              <Label className="text-sm font-medium" htmlFor="nuevopredi-numero-de-palmas">Número de palmas</Label>
+                              <Input id="nuevopredi-numero-de-palmas"
                                 type="number" step="0.001"
                                 placeholder="Ej: 170"
                                 value={cantPalmasForm[sub.id] ?? String(sub.cantidadPalmas ?? '')}
@@ -2330,8 +2330,8 @@ export default function NuevoPredioWizard() {
                                 </div>
                               )}
                               <div className="space-y-2">
-                                <Label>Cantidad de palmas</Label>
-                                <Input
+                                <Label htmlFor="nuevopredi-cantidad-de-palmas-2">Cantidad de palmas</Label>
+                                <Input id="nuevopredi-cantidad-de-palmas-2"
                                   type="number" step="0.001"
                                   placeholder="Ej: 50"
                                   min="0"
@@ -2346,8 +2346,8 @@ export default function NuevoPredioWizard() {
                               </div>
                               {linSub.length > 0 && (
                                 <div className="space-y-2">
-                                  <Label>Línea (selecciona)</Label>
-                                  <select
+                                  <Label htmlFor="nuevopredi-linea-selecciona">Línea (selecciona)</Label>
+                                  <select id="nuevopredi-linea-selecciona"
                                     className="w-full h-10 px-3 rounded-md border border-input bg-background"
                                     value={cantPalmasForm[`linea_${sub.id}`] ?? ''}
                                     onChange={e => setCantPalmasForm(prev => ({ ...prev, [`linea_${sub.id}`]: e.target.value }))}
@@ -2620,8 +2620,8 @@ export default function NuevoPredioWizard() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-2 py-2">
-            <Label className="text-sm">Cantidad de palmas</Label>
-            <Input
+            <Label className="text-sm" htmlFor="nuevopredi-cantidad-de-palmas-3">Cantidad de palmas</Label>
+            <Input id="nuevopredi-cantidad-de-palmas-3"
               type="number" step="0.001"
               min={0}
               max={nuevaLineaPrompt?.disponibles ?? 0}
@@ -2707,16 +2707,16 @@ function FormLote({
       <h3 className="font-semibold text-lg">{isEditing ? 'Editar Lote' : 'Nuevo Lote'}</h3>
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label>Nombre del Lote *</Label>
-          <Input
+          <Label htmlFor="nuevopredi-nombre-del-lote">Nombre del Lote *</Label>
+          <Input id="nuevopredi-nombre-del-lote"
             placeholder="Ej: Lote Norte"
             value={nombre}
             onChange={e => setNombre(e.target.value)}
           />
         </div>
         <div className="space-y-2">
-          <Label>Fecha de Siembra</Label>
-          <Input
+          <Label htmlFor="nuevopredi-fecha-de-siembra">Fecha de Siembra</Label>
+          <Input id="nuevopredi-fecha-de-siembra"
             type="date"
             value={fecha}
             max={new Date().toISOString().split('T')[0]}
@@ -2724,8 +2724,8 @@ function FormLote({
           />
         </div>
         <div className="space-y-2">
-          <Label>Hectáreas Sembradas *</Label>
-          <Input
+          <Label htmlFor="nuevopredi-hectareas-sembradas">Hectáreas Sembradas *</Label>
+          <Input id="nuevopredi-hectareas-sembradas"
             type="number"
             placeholder="0"
             min={0}
@@ -2827,8 +2827,8 @@ function FormSublote({
   return (
     <div className="bg-muted/30 border border-border rounded-lg p-4 space-y-4">
       <div className="space-y-2">
-        <Label>Nombre del Sublote *</Label>
-        <Input
+        <Label htmlFor="nuevopredi-nombre-del-sublote">Nombre del Sublote *</Label>
+        <Input id="nuevopredi-nombre-del-sublote"
           placeholder="Ej: Sector A"
           value={nombre}
           onChange={e => setNombre(e.target.value)}

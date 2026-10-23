@@ -483,9 +483,9 @@ export default function Nomina() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Estado</label>
+              <label className="text-sm font-medium" htmlFor="nomina-estado">Estado</label>
               <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-                <SelectTrigger>
+                <SelectTrigger id="nomina-estado">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -498,9 +498,9 @@ export default function Nomina() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Mes</label>
+              <label className="text-sm font-medium" htmlFor="nomina-mes">Mes</label>
               <Select value={filtroMes} onValueChange={setFiltroMes}>
-                <SelectTrigger>
+                <SelectTrigger id="nomina-mes">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

@@ -125,8 +125,8 @@ export default function AnularVacacionDialog({ vacacion, modo, onCerrar, onAnula
 
         {!esPago && (
           <div className="space-y-1.5">
-            <Label>Motivo</Label>
-            <Textarea
+            <Label htmlFor="anularvaca-motivo">Motivo</Label>
+            <Textarea id="anularvaca-motivo"
               rows={3}
               placeholder={esSolicitud
                 ? 'Por qué se rechaza esta solicitud.'

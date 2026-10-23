@@ -152,9 +152,9 @@ export default function RegistrarPagoDialog({ periodoId, tipo, objetivo, onClose
             <Input id="fechaPago" type="date" max={hoy} value={fechaPago} onChange={(e) => setFechaPago(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label>Método</Label>
+            <Label htmlFor="registrarp-metodo">Método</Label>
             <Select value={metodoPago} onValueChange={setMetodoPago}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger id="registrarp-metodo"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {METODOS.map(m => (
                   <SelectItem key={m} value={m}>{m.charAt(0) + m.slice(1).toLowerCase()}</SelectItem>

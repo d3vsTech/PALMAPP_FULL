@@ -205,16 +205,16 @@ export function PasoDetalles({ borrador, categorias, soporte, onCambiar }: Props
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label className="text-xs font-normal text-muted-foreground">Hora inicio</Label>
-                <Input
+                <Label className="text-xs font-normal text-muted-foreground" htmlFor="pasodetall-hora-inicio">Hora inicio</Label>
+                <Input id="pasodetall-hora-inicio"
                   type="time"
                   value={borrador.horaInicio}
                   onChange={(e) => onCambiar({ horaInicio: e.target.value })}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-normal text-muted-foreground">Hora fin</Label>
-                <Input
+                <Label className="text-xs font-normal text-muted-foreground" htmlFor="pasodetall-hora-fin">Hora fin</Label>
+                <Input id="pasodetall-hora-fin"
                   type="time"
                   value={borrador.horaFin}
                   min={borrador.horaInicio}
@@ -246,8 +246,8 @@ export function PasoDetalles({ borrador, categorias, soporte, onCambiar }: Props
         {esIncapacidad(motivo) && (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>Entidad (EPS o ARL)</Label>
-              <Input
+              <Label htmlFor="pasodetall-entidad-eps-o-arl">Entidad (EPS o ARL)</Label>
+              <Input id="pasodetall-entidad-eps-o-arl"
                 aria-label="Ej: EPS SURA"
                 placeholder="Ej: EPS SURA"
                 maxLength={100}
@@ -256,8 +256,8 @@ export function PasoDetalles({ borrador, categorias, soporte, onCambiar }: Props
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Número de radicado</Label>
-              <Input
+              <Label htmlFor="pasodetall-numero-de-radicado">Número de radicado</Label>
+              <Input id="pasodetall-numero-de-radicado"
                 aria-label="Ej: INC-2026-0412"
                 placeholder="Ej: INC-2026-0412"
                 maxLength={50}

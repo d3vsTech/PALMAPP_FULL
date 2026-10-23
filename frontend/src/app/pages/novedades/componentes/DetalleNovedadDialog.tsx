@@ -530,8 +530,8 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
               </div>
             ) : accion === 'rechazar' ? (
               <div className="space-y-2 border-t border-border px-6 py-4">
-                <Label>Motivo del rechazo</Label>
-                <textarea
+                <Label htmlFor="detallenov-motivo-del-rechazo">Motivo del rechazo</Label>
+                <textarea id="detallenov-motivo-del-rechazo"
                   rows={3}
                   maxLength={500}
                   value={motivoRechazo}

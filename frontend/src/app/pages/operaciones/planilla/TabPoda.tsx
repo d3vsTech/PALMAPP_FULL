@@ -165,8 +165,8 @@ export function TabPoda({
                                 </Select>
                               </div>
                               <div className="space-y-2">
-                                <Label>Número de Palmas</Label>
-                                <Input
+                                <Label htmlFor="tabpoda-numero-de-palmas">Número de Palmas</Label>
+                                <Input id="tabpoda-numero-de-palmas"
                                   type="number" step="0.001"
                                   placeholder="0"
                                   value={podaEnEdicion.numeroPalmas || ''}

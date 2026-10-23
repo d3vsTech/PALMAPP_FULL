@@ -215,8 +215,8 @@ export function EditarNovedadForm({
 
         {puede('fecha_inicio') && (
           <div className="space-y-1.5">
-            <Label>Desde</Label>
-            <Input
+            <Label htmlFor="editarnove-desde">Desde</Label>
+            <Input id="editarnove-desde"
               type="date"
               value={form.fechaInicio}
               onChange={(e) => cambiar({ fechaInicio: e.target.value })}
@@ -226,8 +226,8 @@ export function EditarNovedadForm({
 
         {puede('fecha_fin') && (
           <div className="space-y-1.5">
-            <Label>Hasta</Label>
-            <Input
+            <Label htmlFor="editarnove-hasta">Hasta</Label>
+            <Input id="editarnove-hasta"
               type="date"
               value={form.fechaFin}
               min={form.fechaInicio || undefined}
@@ -240,9 +240,9 @@ export function EditarNovedadForm({
 
         {(puede('hora_inicio') || puede('hora_fin')) && (
           <div className="space-y-1.5 sm:col-span-2">
-            <Label>Horario</Label>
+            <Label htmlFor="editarnove-horario">Horario</Label>
             <div className="flex items-center gap-2">
-              <Input
+              <Input id="editarnove-horario"
                 type="time"
                 value={form.horaInicio}
                 disabled={!puede('hora_inicio') || !!form.fechaFin}
@@ -264,8 +264,8 @@ export function EditarNovedadForm({
 
         {puede('entidad') && (
           <div className="space-y-1.5">
-            <Label>Entidad</Label>
-            <Input
+            <Label htmlFor="editarnove-entidad">Entidad</Label>
+            <Input id="editarnove-entidad"
               value={form.entidad}
               placeholder="EPS o ARL que expidió"
               onChange={(e) => cambiar({ entidad: e.target.value })}
@@ -275,8 +275,8 @@ export function EditarNovedadForm({
 
         {puede('numero_radicado') && (
           <div className="space-y-1.5">
-            <Label>Número de radicado</Label>
-            <Input
+            <Label htmlFor="editarnove-numero-de-radicado">Número de radicado</Label>
+            <Input id="editarnove-numero-de-radicado"
               value={form.numeroRadicado}
               onChange={(e) => cambiar({ numeroRadicado: e.target.value })}
             />
@@ -285,8 +285,8 @@ export function EditarNovedadForm({
 
         {puede('porcentaje_pago') && (
           <div className="space-y-1.5">
-            <Label>Porcentaje de pago</Label>
-            <Input
+            <Label htmlFor="editarnove-porcentaje-de-pago">Porcentaje de pago</Label>
+            <Input id="editarnove-porcentaje-de-pago"
               type="number"
               min={0}
               max={100}
@@ -302,8 +302,8 @@ export function EditarNovedadForm({
 
         {puede('observacion') && (
           <div className="space-y-1.5 sm:col-span-2">
-            <Label>Observaciones</Label>
-            <textarea
+            <Label htmlFor="editarnove-observaciones">Observaciones</Label>
+            <textarea id="editarnove-observaciones"
               rows={3}
               maxLength={500}
               value={form.observacion}

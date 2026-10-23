@@ -784,24 +784,24 @@ export default function ConteoCosecha() {
                 <CardContent className="space-y-4">
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label>Fecha del Viaje</Label>
-                      <Input value={fechaFmt} disabled />
+                      <Label htmlFor="conteocose-fecha-del-viaje">Fecha del Viaje</Label>
+                      <Input id="conteocose-fecha-del-viaje" value={fechaFmt} disabled />
                     </div>
                     <div className="space-y-2">
-                      <Label>Placa del Vehículo</Label>
-                      <Input value={placa} disabled />
+                      <Label htmlFor="conteocose-placa-del-vehiculo">Placa del Vehículo</Label>
+                      <Input id="conteocose-placa-del-vehiculo" value={placa} disabled />
                     </div>
                     <div className="space-y-2">
-                      <Label>Conductor</Label>
-                      <Input value={conductor} disabled />
+                      <Label htmlFor="conteocose-conductor">Conductor</Label>
+                      <Input id="conteocose-conductor" value={conductor} disabled />
                     </div>
                     <div className="space-y-2">
-                      <Label>Transportador</Label>
-                      <Input value={transporte} disabled />
+                      <Label htmlFor="conteocose-transportador">Transportador</Label>
+                      <Input id="conteocose-transportador" value={transporte} disabled />
                     </div>
                     <div className="space-y-2">
-                      <Label>Extractora Destino</Label>
-                      <Input value={extractora} disabled />
+                      <Label htmlFor="conteocose-extractora-destino">Extractora Destino</Label>
+                      <Input id="conteocose-extractora-destino" value={extractora} disabled />
                     </div>
                     <div className="space-y-2">
                       <Label>Hora de Salida</Label>
@@ -916,13 +916,13 @@ export default function ConteoCosecha() {
 
                         {/* Cuadrilla Reconteo (= cosecha del backend) */}
                         <div className="space-y-2 md:col-span-2">
-                          <Label>Cuadrilla Reconteo</Label>
+                          <Label htmlFor="conteocose-cuadrilla-reconteo">Cuadrilla Reconteo</Label>
                           <Select
                             value={cosechaEnEdicion.cuadrillaReconteo}
                             onValueChange={handleCuadrillaChange}
                             disabled={!cosechaEnEdicion.planillaId || cargandoCosechas}
                           >
-                            <SelectTrigger>
+                            <SelectTrigger id="conteocose-cuadrilla-reconteo">
                               <SelectValue placeholder={
                                 !cosechaEnEdicion.planillaId
                                   ? 'Selecciona una planilla primero'
@@ -1057,20 +1057,20 @@ export default function ConteoCosecha() {
 
                         {/* Lote */}
                         <div className="space-y-2">
-                          <Label>Lote</Label>
-                          <Input value={cosechaEnEdicion.loteName || 'Sin lote'} disabled />
+                          <Label htmlFor="conteocose-lote">Lote</Label>
+                          <Input id="conteocose-lote" value={cosechaEnEdicion.loteName || 'Sin lote'} disabled />
                         </div>
 
                         {/* Sublote */}
                         <div className="space-y-2">
-                          <Label>Sublote</Label>
-                          <Input value={cosechaEnEdicion.subloteName || 'Sin sublote'} disabled />
+                          <Label htmlFor="conteocose-sublote">Sublote</Label>
+                          <Input id="conteocose-sublote" value={cosechaEnEdicion.subloteName || 'Sin sublote'} disabled />
                         </div>
 
                         {/* Gajos Reportados */}
                         <div className="space-y-2">
-                          <Label>Gajos Reportados</Label>
-                          <Input type="number" step="0.001" value={cosechaEnEdicion.gajos || ''} disabled />
+                          <Label htmlFor="conteocose-gajos-reportados">Gajos Reportados</Label>
+                          <Input id="conteocose-gajos-reportados" type="number" step="0.001" value={cosechaEnEdicion.gajos || ''} disabled />
                         </div>
 
                         {/* Gajos en Viaje — se persiste como
@@ -1080,8 +1080,8 @@ export default function ConteoCosecha() {
                             eso pasa el response incluye una `advertencia` pero
                             no bloquea la operación). */}
                         <div className="space-y-2">
-                          <Label>Gajos en Viaje</Label>
-                          <Input
+                          <Label htmlFor="conteocose-gajos-en-viaje">Gajos en Viaje</Label>
+                          <Input id="conteocose-gajos-en-viaje"
                             type="number" step="0.001"
                             placeholder="0"
                             min={0}
@@ -1109,8 +1109,8 @@ export default function ConteoCosecha() {
                             no sobre `gajos_reportados`, para reflejar los
                             splits ya asignados a otros viajes. */}
                         <div className="space-y-2">
-                          <Label>Gajos Pendientes por Enviar</Label>
-                          <Input
+                          <Label htmlFor="conteocose-gajos-pendientes-por-enviar">Gajos Pendientes por Enviar</Label>
+                          <Input id="conteocose-gajos-pendientes-por-enviar"
                             type="number" step="0.001"
                             value={Math.max(cosechaEnEdicion.gajosDisponibles - cosechaEnEdicion.gajosEnViaje, 0)}
                             disabled
@@ -1120,8 +1120,8 @@ export default function ConteoCosecha() {
 
                         {/* Peso en kg */}
                         <div className="space-y-2">
-                          <Label>Peso en kg (opcional)</Label>
-                          <Input
+                          <Label htmlFor="conteocose-peso-en-kg-opcional">Peso en kg (opcional)</Label>
+                          <Input id="conteocose-peso-en-kg-opcional"
                             type="number" step="0.001"
                             placeholder="0"
                             value={cosechaEnEdicion.pesoKg || ''}

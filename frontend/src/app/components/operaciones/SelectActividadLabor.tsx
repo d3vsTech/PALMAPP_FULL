@@ -106,8 +106,8 @@ export function SelectActividadLabor({
 
       {modoOtra && (
         <div className="space-y-2 mt-3">
-          <Label>Especificar otro trabajo</Label>
-          <Input
+          <Label htmlFor="selectacti-especificar-otro-trabajo">Especificar otro trabajo</Label>
+          <Input id="selectacti-especificar-otro-trabajo"
             autoFocus
             placeholder="Ingrese el tipo de trabajo"
             value={value}

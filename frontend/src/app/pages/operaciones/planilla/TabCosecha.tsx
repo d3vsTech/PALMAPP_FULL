@@ -168,8 +168,8 @@ export function TabCosecha({
                                 </Select>
                               </div>
                               <div className="space-y-2">
-                                <Label>Gajos Recogidos</Label>
-                                <Input
+                                <Label htmlFor="tabcosecha-gajos-recogidos">Gajos Recogidos</Label>
+                                <Input id="tabcosecha-gajos-recogidos"
                                   type="number" step="0.001"
                                   placeholder="0"
                                   value={cosechaEnEdicion.gajosRecogidos || ''}
@@ -179,8 +179,8 @@ export function TabCosecha({
                                 />
                               </div>
                               <div className="space-y-2">
-                                <Label>Kilos (opcional)</Label>
-                                <Input
+                                <Label htmlFor="tabcosecha-kilos-opcional">Kilos (opcional)</Label>
+                                <Input id="tabcosecha-kilos-opcional"
                                   type="number" step="0.001"
                                   placeholder="0"
                                   value={cosechaEnEdicion.kilos || ''}

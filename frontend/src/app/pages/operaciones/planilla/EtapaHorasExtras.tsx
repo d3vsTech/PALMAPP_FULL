@@ -144,8 +144,8 @@ export function EtapaHorasExtras({
               </div>
 
               <div className="space-y-2">
-                <Label>Número de Horas</Label>
-                <Input
+                <Label htmlFor="etapahoras-numero-de-horas">Número de Horas</Label>
+                <Input id="etapahoras-numero-de-horas"
                   type="number" step="0.001"
                   placeholder="0"
                   value={horaExtraEnEdicion.numeroHoras || ''}
@@ -159,8 +159,8 @@ export function EtapaHorasExtras({
               </div>
 
               <div className="space-y-2 md:col-span-2">
-                <Label>Observación</Label>
-                <Textarea
+                <Label htmlFor="etapahoras-observacion">Observación</Label>
+                <Textarea id="etapahoras-observacion"
                   placeholder="Observaciones sobre la hora extra..."
                   value={horaExtraEnEdicion.observacion}
                   onChange={(e) => {

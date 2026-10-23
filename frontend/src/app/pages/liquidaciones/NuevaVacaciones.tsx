@@ -1099,8 +1099,8 @@ export default function NuevaVacaciones() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-1.5">
-            <Label>Motivo</Label>
-            <Textarea
+            <Label htmlFor="nuevavacac-motivo">Motivo</Label>
+            <Textarea id="nuevavacac-motivo"
               rows={3} placeholder="Explica por qué se liquida con la información disponible."
               value={motivoForzado} onChange={(e) => setMotivoForzado(e.target.value)}
             />

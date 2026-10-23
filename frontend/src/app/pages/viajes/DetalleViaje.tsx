@@ -757,16 +757,16 @@ export default function DetalleViaje() {
                   <div className="space-y-5">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label>Fecha del Viaje</Label>
-                        <Input
+                        <Label htmlFor="detallevia-fecha-del-viaje">Fecha del Viaje</Label>
+                        <Input id="detallevia-fecha-del-viaje"
                           type="date"
                           value={datosViaje.fecha}
                           onChange={(e) => setDatosViaje({ ...datosViaje, fecha: e.target.value })}
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label>Hora de Salida</Label>
-                        <Input
+                        <Label htmlFor="detallevia-hora-de-salida">Hora de Salida</Label>
+                        <Input id="detallevia-hora-de-salida"
                           type="time"
                           value={datosViaje.horaSalida}
                           onChange={(e) => setDatosViaje({ ...datosViaje, horaSalida: e.target.value })}
@@ -776,9 +776,9 @@ export default function DetalleViaje() {
                         </p>
                       </div>
                       <div className="space-y-2">
-                        <Label>Transportador</Label>
+                        <Label htmlFor="detallevia-transportador">Transportador</Label>
                         <Select value={datosViaje.transportadorId} onValueChange={cambiarTransportador}>
-                          <SelectTrigger>
+                          <SelectTrigger id="detallevia-transportador">
                             <SelectValue placeholder="Seleccionar transportador..." />
                           </SelectTrigger>
                           <SelectContent>
@@ -809,12 +809,12 @@ export default function DetalleViaje() {
                         </Select>
                       </div>
                       <div className="space-y-2">
-                        <Label>Placa del Vehículo</Label>
-                        <Input value={datosViaje.placaVehiculo} disabled className="bg-muted" />
+                        <Label htmlFor="detallevia-placa-del-vehiculo">Placa del Vehículo</Label>
+                        <Input id="detallevia-placa-del-vehiculo" value={datosViaje.placaVehiculo} disabled className="bg-muted" />
                       </div>
                       <div className="space-y-2">
-                        <Label>Conductor</Label>
-                        <Input value={datosViaje.conductor} disabled className="bg-muted" />
+                        <Label htmlFor="detallevia-conductor">Conductor</Label>
+                        <Input id="detallevia-conductor" value={datosViaje.conductor} disabled className="bg-muted" />
                       </div>
                     </div>
 
@@ -1216,24 +1216,24 @@ export default function DetalleViaje() {
                       viaje en estado CREADO. */}
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label>Fecha del Viaje</Label>
-                      <Input type="date" value={fechaViaje} disabled />
+                      <Label htmlFor="detallevia-fecha-del-viaje-2">Fecha del Viaje</Label>
+                      <Input id="detallevia-fecha-del-viaje-2" type="date" value={fechaViaje} disabled />
                     </div>
                     <div className="space-y-2">
-                      <Label>Placa del Vehículo</Label>
-                      <Input value={placa} disabled />
+                      <Label htmlFor="detallevia-placa-del-vehiculo-2">Placa del Vehículo</Label>
+                      <Input id="detallevia-placa-del-vehiculo-2" value={placa} disabled />
                     </div>
                     <div className="space-y-2">
-                      <Label>Conductor</Label>
-                      <Input value={conductor} disabled />
+                      <Label htmlFor="detallevia-conductor-2">Conductor</Label>
+                      <Input id="detallevia-conductor-2" value={conductor} disabled />
                     </div>
                     <div className="space-y-2">
-                      <Label>Transportador</Label>
-                      <Input value={transporte} disabled />
+                      <Label htmlFor="detallevia-transportador">Transportador</Label>
+                      <Input id="detallevia-transportador" value={transporte} disabled />
                     </div>
                     <div className="space-y-2">
-                      <Label>Extractora Destino</Label>
-                      <Input value={extractora} disabled />
+                      <Label htmlFor="detallevia-extractora-destino">Extractora Destino</Label>
+                      <Input id="detallevia-extractora-destino" value={extractora} disabled />
                     </div>
                     <div className="space-y-2">
                       <Label>Hora de Salida</Label>
@@ -1287,16 +1287,16 @@ export default function DetalleViaje() {
                         <CardContent className="pt-6">
                           <div className="grid gap-4 md:grid-cols-2">
                             <div className="space-y-2">
-                              <Label>Lote</Label>
-                              <Input value={d.cosecha?.lote?.nombre ?? '—'} disabled />
+                              <Label htmlFor="detallevia-lote">Lote</Label>
+                              <Input id="detallevia-lote" value={d.cosecha?.lote?.nombre ?? '—'} disabled />
                             </div>
                             <div className="space-y-2">
-                              <Label>Sublote</Label>
-                              <Input value={d.cosecha?.sublote?.nombre ?? '—'} disabled />
+                              <Label htmlFor="detallevia-sublote">Sublote</Label>
+                              <Input id="detallevia-sublote" value={d.cosecha?.sublote?.nombre ?? '—'} disabled />
                             </div>
                             <div className="space-y-2">
-                              <Label>Número de Gajos</Label>
-                              <Input value={d.cosecha?.gajos_reportados ?? 0} disabled />
+                              <Label htmlFor="detallevia-numero-de-gajos">Número de Gajos</Label>
+                              <Input id="detallevia-numero-de-gajos" value={d.cosecha?.gajos_reportados ?? 0} disabled />
                             </div>
                             <div className="space-y-2">
                               <Label>Gajos en Viaje</Label>
@@ -1355,9 +1355,9 @@ export default function DetalleViaje() {
                     {estadoActual !== 'Finalizado' && (
                       <>
                         <div className="space-y-2">
-                          <Label>Imagen del Formulario</Label>
+                          <Label htmlFor="detallevia-imagen-del-formulario">Imagen del Formulario</Label>
                           <div className="flex flex-col gap-3">
-                            <Input type="file"
+                            <Input id="detallevia-imagen-del-formulario" type="file"
                               onChange={handleImagenFormularioChange}
                               accept="image/*,.pdf"
                               className="cursor-pointer"
@@ -1434,16 +1434,16 @@ export default function DetalleViaje() {
 
                         <div className="grid gap-4 md:grid-cols-2">
                           <div className="space-y-2">
-                            <Label>Número de Remisión</Label>
-                            <Input value={String(viaje?.numero_remision_extractora ?? '')} disabled />
+                            <Label htmlFor="detallevia-numero-de-remision">Número de Remisión</Label>
+                            <Input id="detallevia-numero-de-remision" value={String(viaje?.numero_remision_extractora ?? '')} disabled />
                           </div>
                           <div className="space-y-2">
-                            <Label>Fecha de Llegada</Label>
-                            <Input value={formatFecha(viaje?.fecha_llegada)} disabled />
+                            <Label htmlFor="detallevia-fecha-de-llegada">Fecha de Llegada</Label>
+                            <Input id="detallevia-fecha-de-llegada" value={formatFecha(viaje?.fecha_llegada)} disabled />
                           </div>
                           <div className="space-y-2">
-                            <Label>Hora de Llegada</Label>
-                            <Input value={formatHora(viaje?.hora_llegada)} disabled />
+                            <Label htmlFor="detallevia-hora-de-llegada">Hora de Llegada</Label>
+                            <Input id="detallevia-hora-de-llegada" value={formatHora(viaje?.hora_llegada)} disabled />
                           </div>
                           <div className="space-y-2">
                             <Label>Peso Recibido (kg)</Label>
@@ -1462,28 +1462,28 @@ export default function DetalleViaje() {
                             <Label className="text-sm font-semibold">Calificación de fruto (%)</Label>
                           </div>
                           <div className="space-y-2">
-                            <Label>Fruto verde</Label>
-                            <Input value={String(viaje?.fruto_verde ?? 0)} disabled />
+                            <Label htmlFor="detallevia-fruto-verde">Fruto verde</Label>
+                            <Input id="detallevia-fruto-verde" value={String(viaje?.fruto_verde ?? 0)} disabled />
                           </div>
                           <div className="space-y-2">
-                            <Label>Sobre maduro</Label>
-                            <Input value={String(viaje?.sobre_maduro ?? 0)} disabled />
+                            <Label htmlFor="detallevia-sobre-maduro">Sobre maduro</Label>
+                            <Input id="detallevia-sobre-maduro" value={String(viaje?.sobre_maduro ?? 0)} disabled />
                           </div>
                           <div className="space-y-2">
-                            <Label>Podrido</Label>
-                            <Input value={String(viaje?.podrido ?? 0)} disabled />
+                            <Label htmlFor="detallevia-podrido">Podrido</Label>
+                            <Input id="detallevia-podrido" value={String(viaje?.podrido ?? 0)} disabled />
                           </div>
                           <div className="space-y-2">
-                            <Label>Pedúnculo largo</Label>
-                            <Input value={String(viaje?.pedunculo_largo ?? 0)} disabled />
+                            <Label htmlFor="detallevia-pedunculo-largo">Pedúnculo largo</Label>
+                            <Input id="detallevia-pedunculo-largo" value={String(viaje?.pedunculo_largo ?? 0)} disabled />
                           </div>
                           <div className="space-y-2 md:col-span-2">
-                            <Label>Mal formado</Label>
-                            <Input value={String(viaje?.mal_formado ?? 0)} disabled />
+                            <Label htmlFor="detallevia-mal-formado">Mal formado</Label>
+                            <Input id="detallevia-mal-formado" value={String(viaje?.mal_formado ?? 0)} disabled />
                           </div>
                           <div className="space-y-2 md:col-span-2">
-                            <Label>Observaciones</Label>
-                            <Input value={String(viaje?.observaciones_extractora ?? '')} disabled />
+                            <Label htmlFor="detallevia-observaciones">Observaciones</Label>
+                            <Input id="detallevia-observaciones" value={String(viaje?.observaciones_extractora ?? '')} disabled />
                           </div>
                         </div>
                       </div>
@@ -1571,20 +1571,20 @@ export default function DetalleViaje() {
                       )}
                       <div className="grid gap-4 md:grid-cols-2">
                         <div className="space-y-2">
-                          <Label>Número de Remisión</Label>
-                          <Input value={datosExtractora.numeroRemision}
+                          <Label htmlFor="detallevia-numero-de-remision-2">Número de Remisión</Label>
+                          <Input id="detallevia-numero-de-remision-2" value={datosExtractora.numeroRemision}
                             onChange={(e) => setDatosExtractora({ ...datosExtractora, numeroRemision: e.target.value })}
                             disabled={procesandoIA || estadoActual === 'Finalizado'} />
                         </div>
                         <div className="space-y-2">
-                          <Label>Fecha de Llegada</Label>
-                          <Input type="date" value={datosExtractora.fechaLlegada}
+                          <Label htmlFor="detallevia-fecha-de-llegada-2">Fecha de Llegada</Label>
+                          <Input id="detallevia-fecha-de-llegada-2" type="date" value={datosExtractora.fechaLlegada}
                             onChange={(e) => setDatosExtractora({ ...datosExtractora, fechaLlegada: e.target.value })}
                             disabled={procesandoIA || estadoActual === 'Finalizado'} />
                         </div>
                         <div className="space-y-2">
-                          <Label>Hora de Llegada</Label>
-                          <Input type="time" value={datosExtractora.horaLlegada}
+                          <Label htmlFor="detallevia-hora-de-llegada-2">Hora de Llegada</Label>
+                          <Input id="detallevia-hora-de-llegada-2" type="time" value={datosExtractora.horaLlegada}
                             onChange={(e) => setDatosExtractora({ ...datosExtractora, horaLlegada: e.target.value })}
                             disabled={procesandoIA || estadoActual === 'Finalizado'} />
                         </div>
@@ -1606,38 +1606,38 @@ export default function DetalleViaje() {
                           </p>
                         </div>
                         <div className="space-y-2">
-                          <Label>Fruto verde</Label>
-                          <Input type="number" step="0.01" max={100} value={datosExtractora.frutoVerde}
+                          <Label htmlFor="detallevia-fruto-verde-2">Fruto verde</Label>
+                          <Input id="detallevia-fruto-verde-2" type="number" step="0.01" max={100} value={datosExtractora.frutoVerde}
                             onChange={(e) => setDatosExtractora({ ...datosExtractora, frutoVerde: parseFloat(e.target.value) || 0 })}
                             disabled={procesandoIA || estadoActual === 'Finalizado'} />
                         </div>
                         <div className="space-y-2">
-                          <Label>Sobre maduro</Label>
-                          <Input type="number" step="0.01" max={100} value={datosExtractora.sobreMaduro}
+                          <Label htmlFor="detallevia-sobre-maduro-2">Sobre maduro</Label>
+                          <Input id="detallevia-sobre-maduro-2" type="number" step="0.01" max={100} value={datosExtractora.sobreMaduro}
                             onChange={(e) => setDatosExtractora({ ...datosExtractora, sobreMaduro: parseFloat(e.target.value) || 0 })}
                             disabled={procesandoIA || estadoActual === 'Finalizado'} />
                         </div>
                         <div className="space-y-2">
-                          <Label>Podrido</Label>
-                          <Input type="number" step="0.01" max={100} value={datosExtractora.podrido}
+                          <Label htmlFor="detallevia-podrido-2">Podrido</Label>
+                          <Input id="detallevia-podrido-2" type="number" step="0.01" max={100} value={datosExtractora.podrido}
                             onChange={(e) => setDatosExtractora({ ...datosExtractora, podrido: parseFloat(e.target.value) || 0 })}
                             disabled={procesandoIA || estadoActual === 'Finalizado'} />
                         </div>
                         <div className="space-y-2">
-                          <Label>Pedúnculo largo</Label>
-                          <Input type="number" step="0.01" max={100} value={datosExtractora.pedunculoLargo}
+                          <Label htmlFor="detallevia-pedunculo-largo-2">Pedúnculo largo</Label>
+                          <Input id="detallevia-pedunculo-largo-2" type="number" step="0.01" max={100} value={datosExtractora.pedunculoLargo}
                             onChange={(e) => setDatosExtractora({ ...datosExtractora, pedunculoLargo: parseFloat(e.target.value) || 0 })}
                             disabled={procesandoIA || estadoActual === 'Finalizado'} />
                         </div>
                         <div className="space-y-2 md:col-span-2">
-                          <Label>Mal formado</Label>
-                          <Input type="number" step="0.01" max={100} value={datosExtractora.malFormado}
+                          <Label htmlFor="detallevia-mal-formado-2">Mal formado</Label>
+                          <Input id="detallevia-mal-formado-2" type="number" step="0.01" max={100} value={datosExtractora.malFormado}
                             onChange={(e) => setDatosExtractora({ ...datosExtractora, malFormado: parseFloat(e.target.value) || 0 })}
                             disabled={procesandoIA || estadoActual === 'Finalizado'} />
                         </div>
                         <div className="space-y-2 md:col-span-2">
-                          <Label>Observaciones</Label>
-                          <Input value={datosExtractora.observaciones}
+                          <Label htmlFor="detallevia-observaciones-2">Observaciones</Label>
+                          <Input id="detallevia-observaciones-2" value={datosExtractora.observaciones}
                             onChange={(e) => setDatosExtractora({ ...datosExtractora, observaciones: e.target.value })}
                             disabled={procesandoIA || estadoActual === 'Finalizado'}
                             placeholder="Observaciones adicionales..." />

@@ -355,8 +355,8 @@ export default function EditarProducto() {
                     <div key={index} className="flex items-center gap-3">
                       <div className="flex-1 grid gap-3 sm:grid-cols-2">
                         <div className="space-y-2">
-                          <Label className="text-xs">Cantidad mínima</Label>
-                          <Input
+                          <Label className="text-xs" htmlFor="editarprod-cantidad-minima">Cantidad mínima</Label>
+                          <Input id="editarprod-cantidad-minima"
                             type="number" step="0.001"
                             placeholder="0"
                             value={pv.cantidad_minima}

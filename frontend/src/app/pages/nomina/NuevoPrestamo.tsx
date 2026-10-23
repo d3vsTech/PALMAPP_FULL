@@ -531,8 +531,8 @@ export default function NuevoPrestamo() {
 
           {/* Observaciones */}
           <div className="space-y-2">
-            <Label className="font-semibold">Observaciones (opcional)</Label>
-            <Textarea
+            <Label className="font-semibold" htmlFor="nuevoprest-observaciones-opcional">Observaciones (opcional)</Label>
+            <Textarea id="nuevoprest-observaciones-opcional"
               placeholder="Aprobado por gerencia, motivo del préstamo, etc."
               value={observaciones}
               onChange={(e) => setObservaciones(e.target.value)}

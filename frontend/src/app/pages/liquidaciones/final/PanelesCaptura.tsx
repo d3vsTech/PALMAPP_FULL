@@ -77,8 +77,8 @@ export function PanelDevengadosManuales({
 
             {d.codigo === 'SALARIO_PENDIENTE' && (
               <div className="space-y-1.5">
-                <Label className="text-xs">Días</Label>
-                <Input
+                <Label className="text-xs" htmlFor="panelescap-dias">Días</Label>
+                <Input id="panelescap-dias"
                   type="number"
                   value={d.dias}
                   onChange={(e) => onEditar(d.key, 'dias', e.target.value)}
@@ -89,8 +89,8 @@ export function PanelDevengadosManuales({
             )}
 
             <div className="space-y-1.5">
-              <Label className="text-xs">Valor</Label>
-              <Input
+              <Label className="text-xs" htmlFor="panelescap-valor">Valor</Label>
+              <Input id="panelescap-valor"
                 type="number"
                 value={d.valor}
                 onChange={(e) => onEditar(d.key, 'valor', e.target.value)}
@@ -262,8 +262,8 @@ export function PanelDeducciones({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Motivo</Label>
-                <Input
+                <Label className="text-xs" htmlFor="panelescap-motivo">Motivo</Label>
+                <Input id="panelescap-motivo"
                   value={o.motivo}
                   onChange={(e) => onEditarOtra(o.key, 'motivo', e.target.value)}
                   className="h-9"

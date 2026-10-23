@@ -563,8 +563,8 @@ export default function LiquidarTerceros() {
 
               {pagandoForm.metodo_pago === 'TRANSFERENCIA' && (
                 <div className="space-y-2">
-                  <Label>Referencia / N° de transferencia *</Label>
-                  <Input
+                  <Label htmlFor="liquidarte-referencia-n-de-transferencia">Referencia / N° de transferencia *</Label>
+                  <Input id="liquidarte-referencia-n-de-transferencia"
                     value={pagandoForm.referencia_pago}
                     onChange={(e) =>
                       setPagandoForm((prev) => ({ ...prev, referencia_pago: e.target.value }))
@@ -580,8 +580,8 @@ export default function LiquidarTerceros() {
               )}
 
               <div className="space-y-2">
-                <Label>N° orden de pago (opcional)</Label>
-                <Input
+                <Label htmlFor="liquidarte-n-orden-de-pago-opcional">N° orden de pago (opcional)</Label>
+                <Input id="liquidarte-n-orden-de-pago-opcional"
                   value={pagandoForm.orden_pago_numero}
                   onChange={(e) =>
                     setPagandoForm((prev) => ({ ...prev, orden_pago_numero: e.target.value }))
@@ -591,8 +591,8 @@ export default function LiquidarTerceros() {
               </div>
 
               <div className="space-y-2">
-                <Label>Observación (opcional)</Label>
-                <Input
+                <Label htmlFor="liquidarte-observacion-opcional">Observación (opcional)</Label>
+                <Input id="liquidarte-observacion-opcional"
                   value={pagandoForm.observacion}
                   onChange={(e) =>
                     setPagandoForm((prev) => ({ ...prev, observacion: e.target.value }))

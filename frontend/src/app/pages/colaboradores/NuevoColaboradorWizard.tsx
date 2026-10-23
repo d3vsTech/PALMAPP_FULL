@@ -1128,22 +1128,22 @@ export default function NuevoColaboradorWizard() {
                   </div>
                   <div className="grid gap-6 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label>Correo Electrónico</Label>
-                      <Input type="email" placeholder="juan@email.com" value={formData.correo} onChange={e => handleInputChange('correo', e.target.value)} />
+                      <Label htmlFor="nuevocolab-correo-electronico">Correo Electrónico</Label>
+                      <Input id="nuevocolab-correo-electronico" type="email" placeholder="juan@email.com" value={formData.correo} onChange={e => handleInputChange('correo', e.target.value)} />
                     </div>
                     <div className="space-y-2">
-                      <Label>Teléfono</Label>
-                      <Input placeholder="3001234567" value={formData.telefono} onChange={e => handleInputChange('telefono', e.target.value)} />
+                      <Label htmlFor="nuevocolab-telefono">Teléfono</Label>
+                      <Input id="nuevocolab-telefono" placeholder="3001234567" value={formData.telefono} onChange={e => handleInputChange('telefono', e.target.value)} />
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label>Dirección</Label>
-                    <Input placeholder="Calle 45 #12-30" value={formData.direccion} onChange={e => handleInputChange('direccion', e.target.value)} />
+                    <Label htmlFor="nuevocolab-direccion">Dirección</Label>
+                    <Input id="nuevocolab-direccion" placeholder="Calle 45 #12-30" value={formData.direccion} onChange={e => handleInputChange('direccion', e.target.value)} />
                   </div>
                   <div className="grid gap-6 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label>Departamento</Label>
-                      <select
+                      <Label htmlFor="nuevocolab-departamento">Departamento</Label>
+                      <select id="nuevocolab-departamento"
                         value={deptoSel}
                         onChange={e => {
                           setDeptoSel(e.target.value);
@@ -1161,8 +1161,8 @@ export default function NuevoColaboradorWizard() {
                       </select>
                     </div>
                     <div className="space-y-2">
-                      <Label>Municipio</Label>
-                      <select
+                      <Label htmlFor="nuevocolab-municipio">Municipio</Label>
+                      <select id="nuevocolab-municipio"
                         value={formData.municipio}
                         onChange={e => handleInputChange('municipio', e.target.value)}
                         disabled={!deptoSel}
@@ -1182,12 +1182,12 @@ export default function NuevoColaboradorWizard() {
                   <p className="text-sm font-semibold">Contacto de emergencia</p>
                   <div className="grid gap-6 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label>Nombre</Label>
-                      <Input placeholder="Ej: María López" value={formData.contactoEmergenciaNombre} onChange={e => handleInputChange('contactoEmergenciaNombre', e.target.value)} />
+                      <Label htmlFor="nuevocolab-nombre">Nombre</Label>
+                      <Input id="nuevocolab-nombre" placeholder="Ej: María López" value={formData.contactoEmergenciaNombre} onChange={e => handleInputChange('contactoEmergenciaNombre', e.target.value)} />
                     </div>
                     <div className="space-y-2">
-                      <Label>Teléfono</Label>
-                      <Input placeholder="3109876543" value={formData.contactoEmergenciaTelefono} onChange={e => handleInputChange('contactoEmergenciaTelefono', e.target.value)} />
+                      <Label htmlFor="nuevocolab-telefono-2">Teléfono</Label>
+                      <Input id="nuevocolab-telefono-2" placeholder="3109876543" value={formData.contactoEmergenciaTelefono} onChange={e => handleInputChange('contactoEmergenciaTelefono', e.target.value)} />
                     </div>
                   </div>
                 </div>
@@ -1234,8 +1234,8 @@ export default function NuevoColaboradorWizard() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label>Lugar de Expedición</Label>
-                  <Input placeholder="Ej: Bucaramanga" value={formData.lugarExpedicion} onChange={e => handleInputChange('lugarExpedicion', e.target.value)} />
+                  <Label htmlFor="nuevocolab-lugar-de-expedicion">Lugar de Expedición</Label>
+                  <Input id="nuevocolab-lugar-de-expedicion" placeholder="Ej: Bucaramanga" value={formData.lugarExpedicion} onChange={e => handleInputChange('lugarExpedicion', e.target.value)} />
                 </div>
               </CardContent>
             </Card>
@@ -1643,8 +1643,8 @@ export default function NuevoColaboradorWizard() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Caja de Compensación</Label>
-                  <Input placeholder="Ej: Cafam" value={formData.cajaCompensacion} onChange={e => handleInputChange('cajaCompensacion', e.target.value)} />
+                  <Label htmlFor="nuevocolab-caja-de-compensacion">Caja de Compensación</Label>
+                  <Input id="nuevocolab-caja-de-compensacion" placeholder="Ej: Cafam" value={formData.cajaCompensacion} onChange={e => handleInputChange('cajaCompensacion', e.target.value)} />
                 </div>
 
               </CardContent>
@@ -1728,8 +1728,8 @@ export default function NuevoColaboradorWizard() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Número de Cuenta</Label>
-                  <Input placeholder="Ej: 04512345678" value={formData.numeroCuenta} onChange={e => handleInputChange('numeroCuenta', e.target.value)} />
+                  <Label htmlFor="nuevocolab-numero-de-cuenta">Número de Cuenta</Label>
+                  <Input id="nuevocolab-numero-de-cuenta" placeholder="Ej: 04512345678" value={formData.numeroCuenta} onChange={e => handleInputChange('numeroCuenta', e.target.value)} />
                 </div>
               </CardContent>
             </Card>

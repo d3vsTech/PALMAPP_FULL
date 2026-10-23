@@ -178,8 +178,8 @@ export function SoportePrestamoCard({ prestamoId, documento, onCambio }: Props) 
         )}
 
         <div>
-          <Label>Observación del documento</Label>
-          <Textarea
+          <Label htmlFor="soportepre-observacion-del-documento">Observación del documento</Label>
+          <Textarea id="soportepre-observacion-del-documento"
             value={nota}
             onChange={(e) => setNota(e.target.value)}
             maxLength={500}

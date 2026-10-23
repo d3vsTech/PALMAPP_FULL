@@ -348,9 +348,9 @@ export default function PlanillaDiaria() {
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Colaborador</label>
+                <label className="text-sm font-medium" htmlFor="planilladi-colaborador">Colaborador</label>
                 <Select value={filtroColaborador} onValueChange={setFiltroColaborador}>
-                  <SelectTrigger>
+                  <SelectTrigger id="planilladi-colaborador">
                     <SelectValue placeholder="Todos los colaboradores" />
                   </SelectTrigger>
                   <SelectContent>
@@ -371,9 +371,9 @@ export default function PlanillaDiaria() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Lote</label>
+                <label className="text-sm font-medium" htmlFor="planilladi-lote">Lote</label>
                 <Select value={filtroLote} onValueChange={setFiltroLote}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="planilladi-lote"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todos">Todos los lotes</SelectItem>
                     {lotes.map((lote) => (

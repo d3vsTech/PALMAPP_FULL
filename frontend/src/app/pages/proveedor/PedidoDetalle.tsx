@@ -716,8 +716,8 @@ export default function PedidoDetalleProveedor() {
             </div>
 
             <div className="space-y-2">
-              <Label>Nota (opcional)</Label>
-              <Textarea
+              <Label htmlFor="pedidodeta-nota-opcional">Nota (opcional)</Label>
+              <Textarea id="pedidodeta-nota-opcional"
                 placeholder="Agregar observaciones sobre el cambio de estado..."
                 value={notaEstado}
                 onChange={(e) => setNotaEstado(e.target.value)}

@@ -375,8 +375,8 @@ export default function PrestamoDetalle() {
             </div>
           )}
           <div className="space-y-2">
-            <Label>Concepto</Label>
-            <Input
+            <Label htmlFor="prestamode-concepto">Concepto</Label>
+            <Input id="prestamode-concepto"
               value={editConcepto}
               onChange={(e) => setEditConcepto(e.target.value)}
               placeholder="Ej: Préstamo personal"
@@ -420,9 +420,9 @@ export default function PrestamoDetalle() {
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div className="space-y-2">
-                  <Label>Año de inicio</Label>
+                  <Label htmlFor="prestamode-ano-de-inicio">Año de inicio</Label>
                   <Select value={editAnio} onValueChange={setEditAnio}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="prestamode-ano-de-inicio"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {aniosDisponibles.map((a) => (
                         <SelectItem key={a} value={String(a)}>{a}</SelectItem>
@@ -431,9 +431,9 @@ export default function PrestamoDetalle() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Mes de inicio</Label>
+                  <Label htmlFor="prestamode-mes-de-inicio">Mes de inicio</Label>
                   <Select value={editMes} onValueChange={setEditMes}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="prestamode-mes-de-inicio"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {MESES.map((m, i) => (
                         <SelectItem key={m} value={String(i + 1)}>{m}</SelectItem>
@@ -443,9 +443,9 @@ export default function PrestamoDetalle() {
                 </div>
                 {prestamo.frecuencia === 'QUINCENAL' && (
                   <div className="space-y-2">
-                    <Label>Quincena</Label>
+                    <Label htmlFor="prestamode-quincena">Quincena</Label>
                     <Select value={editQuincena} onValueChange={setEditQuincena}>
-                      <SelectTrigger><SelectValue placeholder="Elegir" /></SelectTrigger>
+                      <SelectTrigger id="prestamode-quincena"><SelectValue placeholder="Elegir" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="1">1ª quincena (1-15)</SelectItem>
                         <SelectItem value="2">2ª quincena (16-fin)</SelectItem>
@@ -472,8 +472,8 @@ export default function PrestamoDetalle() {
           )}
 
           <div className="space-y-2">
-            <Label>Observaciones</Label>
-            <Textarea
+            <Label htmlFor="prestamode-observaciones">Observaciones</Label>
+            <Textarea id="prestamode-observaciones"
               value={editObservaciones}
               onChange={(e) => setEditObservaciones(e.target.value)}
               rows={3}

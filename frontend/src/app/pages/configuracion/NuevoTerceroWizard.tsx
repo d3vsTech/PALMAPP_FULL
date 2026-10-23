@@ -179,8 +179,8 @@ export function Paso1({ data, onChange }: { data: Partial<EmpresaTercero>; onCha
           </div>
           {esNatural && (
             <div className="space-y-2">
-              <Label>Nombre Comercial</Label>
-              <Input
+              <Label htmlFor="nuevoterce-nombre-comercial">Nombre Comercial</Label>
+              <Input id="nuevoterce-nombre-comercial"
                 value={data.nombreComercial ?? ''}
                 onChange={e => set('nombreComercial', e.target.value)}
                 placeholder="Opcional"
@@ -189,17 +189,17 @@ export function Paso1({ data, onChange }: { data: Partial<EmpresaTercero>; onCha
           )}
           {!esNatural && (
             <div className="space-y-2">
-              <Label>Representante Legal</Label>
-              <Input value={data.contacto ?? ''} onChange={e => set('contacto', e.target.value)} placeholder="Nombre del representante" />
+              <Label htmlFor="nuevoterce-representante-legal">Representante Legal</Label>
+              <Input id="nuevoterce-representante-legal" value={data.contacto ?? ''} onChange={e => set('contacto', e.target.value)} placeholder="Nombre del representante" />
             </div>
           )}
           <div className="space-y-2">
-            <Label>Teléfono</Label>
-            <Input value={data.telefono ?? ''} onChange={e => set('telefono', e.target.value)} placeholder="3001234567" />
+            <Label htmlFor="nuevoterce-telefono">Teléfono</Label>
+            <Input id="nuevoterce-telefono" value={data.telefono ?? ''} onChange={e => set('telefono', e.target.value)} placeholder="3001234567" />
           </div>
           <div className="space-y-2">
-            <Label>Correo electrónico</Label>
-            <Input
+            <Label htmlFor="nuevoterce-correo-electronico">Correo electrónico</Label>
+            <Input id="nuevoterce-correo-electronico"
               type="email"
               value={data.email ?? ''}
               onChange={e => set('email', e.target.value)}
@@ -500,12 +500,12 @@ export function Paso3({
                 <Input value={nuevo.apellidos ?? ''} onChange={e => setNuevo(p => ({ ...p, apellidos: e.target.value }))} placeholder="Apellidos" />
               </div>
               <div className="space-y-2">
-                <Label>Cédula</Label>
-                <Input value={nuevo.documento ?? ''} onChange={e => setNuevo(p => ({ ...p, documento: e.target.value }))} placeholder="Número de cédula" />
+                <Label htmlFor="nuevoterce-cedula">Cédula</Label>
+                <Input id="nuevoterce-cedula" value={nuevo.documento ?? ''} onChange={e => setNuevo(p => ({ ...p, documento: e.target.value }))} placeholder="Número de cédula" />
               </div>
               <div className="space-y-2">
-                <Label>Cargo</Label>
-                <Input value={nuevo.cargo ?? ''} onChange={e => setNuevo(p => ({ ...p, cargo: e.target.value }))} placeholder="Cosechero, Podador..." />
+                <Label htmlFor="nuevoterce-cargo">Cargo</Label>
+                <Input id="nuevoterce-cargo" value={nuevo.cargo ?? ''} onChange={e => setNuevo(p => ({ ...p, cargo: e.target.value }))} placeholder="Cosechero, Podador..." />
               </div>
               <div className="space-y-2">
                 <Label className="flex items-center gap-1"><ShieldCheck className="h-3.5 w-3.5 text-primary" /> EPS</Label>

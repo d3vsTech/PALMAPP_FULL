@@ -326,9 +326,9 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
               </div>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Estado</label>
+              <label className="text-sm font-medium" htmlFor="tabperiodo-estado">Estado</label>
               <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger id="tabperiodo-estado"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos</SelectItem>
                   <SelectItem value="BORRADOR">Borrador</SelectItem>
@@ -338,9 +338,9 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
             </div>
             {esPrima && (
               <div className="space-y-2">
-                <label className="text-sm font-medium">Semestre</label>
+                <label className="text-sm font-medium" htmlFor="tabperiodo-semestre">Semestre</label>
                 <Select value={filtroSemestre} onValueChange={setFiltroSemestre}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="tabperiodo-semestre"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todos">Todos</SelectItem>
                     <SelectItem value="1">1° Semestre (ene – jun)</SelectItem>

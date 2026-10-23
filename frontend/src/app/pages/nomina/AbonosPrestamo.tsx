@@ -450,8 +450,8 @@ export default function AbonosPrestamo() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label>Fecha del pago</Label>
-                <Input
+                <Label htmlFor="abonospres-fecha-del-pago">Fecha del pago</Label>
+                <Input id="abonospres-fecha-del-pago"
                   type="date"
                   value={form.fecha}
                   max={new Date().toISOString().split('T')[0]}
