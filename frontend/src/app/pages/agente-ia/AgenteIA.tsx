@@ -664,9 +664,13 @@ export default function AgenteIA() {
                 )}
 
                 <input ref={fileInputImageRef} type="file" multiple onChange={(e) => handleFileChange(e, 'Imagen')}    className="hidden" accept="image/*" />
+                  aria-label="Seleccionar archivo"
                 <input ref={fileInputVideoRef} type="file"          onChange={(e) => handleFileChange(e, 'Video')}     className="hidden" accept="video/*" />
+                  aria-label="Seleccionar archivo"
                 <input ref={fileInputDocRef}   type="file"          onChange={(e) => handleFileChange(e, 'Documento')} className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx" />
+                  aria-label="Seleccionar archivo"
                 <input ref={fileInputFileRef}  type="file"          onChange={(e) => handleFileChange(e, 'Archivo')}   className="hidden" />
+                  aria-label="Seleccionar archivo"
               </div>
 
               {/* Cámara */}
@@ -679,6 +683,7 @@ export default function AgenteIA() {
                 <Camera className="h-5 w-5 text-muted-foreground" />
               </Button>
               <input
+                aria-label="Seleccionar archivo"
                 ref={fileInputCameraRef}
                 type="file"
                 onChange={handleCameraChange}

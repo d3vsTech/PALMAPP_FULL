@@ -131,11 +131,11 @@ export default function Login() {
 
               {/* Campo Contraseña */}
               <div className="space-y-2">
-                <label className="block font-medium text-foreground">
+                <label className="block font-medium text-foreground" htmlFor="login-contrasena">
                   Contraseña
                 </label>
                 <div className="relative">
-                  <Input
+                  <Input id="login-contrasena"
                     type={showPassword ? 'text' : 'password'}
                     placeholder="••••••••"
                     value={password}

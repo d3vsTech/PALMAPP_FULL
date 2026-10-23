@@ -377,6 +377,7 @@ export default function CargaMasivaProductos() {
                 <>
                   <div className="border-2 border-dashed border-border rounded-lg p-12 text-center hover:border-primary/50 transition-colors">
                     <input
+                      aria-label="Seleccionar archivo"
                       ref={inputFileRef}
                       type="file"
                       id="archivo-zip"

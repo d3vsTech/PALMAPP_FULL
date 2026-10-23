@@ -351,6 +351,7 @@ export default function Nomina() {
           <div className="flex items-center justify-between mb-5">
             <p className="text-sm font-semibold text-foreground">Resumen de pagos</p>
             <select
+              aria-label="Periodo kpi"
               value={periodoKpi}
               onChange={(e) => setPeriodoKpi(e.target.value)}
               className="text-sm border border-border rounded-lg px-3 py-1.5 bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"

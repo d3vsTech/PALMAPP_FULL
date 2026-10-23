@@ -297,10 +297,10 @@ export function PasoDetalles({ borrador, categorias, soporte, onCambiar }: Props
         />
 
         <div className="space-y-1.5">
-          <Label>
+          <Label htmlFor="pasodetall-observaciones-span-classname-font-normal-text-muted-foreground-opcional-span">
             Observaciones <span className="font-normal text-muted-foreground">(opcional)</span>
           </Label>
-          <textarea
+          <textarea id="pasodetall-observaciones-span-classname-font-normal-text-muted-foreground-opcional-span"
             aria-label="Detalles adicionales sobre la novedad..."
             value={borrador.observacion}
             onChange={(e) => onCambiar({ observacion: e.target.value })}

@@ -174,11 +174,11 @@ export default function ProveedorLogin() {
 
               {/* Campo Contraseña */}
               <div className="space-y-2">
-                <label className="block font-medium text-foreground">
+                <label className="block font-medium text-foreground" htmlFor="proveedorl-contrasena">
                   Contraseña
                 </label>
                 <div className="relative">
-                  <Input
+                  <Input id="proveedorl-contrasena"
                     type={showPassword ? 'text' : 'password'}
                     placeholder="••••••••"
                     value={password}

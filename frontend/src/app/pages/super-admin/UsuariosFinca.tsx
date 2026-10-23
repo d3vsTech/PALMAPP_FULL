@@ -1055,11 +1055,11 @@ export default function UsuariosFinca() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                      <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="usuariosfi-nueva-contrasena-opcional">
                         Nueva contraseña (opcional)
                       </label>
                       <div className="relative">
-                        <input
+                        <input id="usuariosfi-nueva-contrasena-opcional"
                           type={showPassword ? 'text' : 'password'}
                           value={editForm.password}
                           onChange={(e) =>
@@ -1084,11 +1084,11 @@ export default function UsuariosFinca() {
                       </div>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                      <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="usuariosfi-confirmar-contrasena">
                         Confirmar contraseña
                       </label>
                       <div className="relative">
-                        <input
+                        <input id="usuariosfi-confirmar-contrasena"
                           type={showPassword ? 'text' : 'password'}
                           value={editForm.password_confirmation}
                           onChange={(e) =>

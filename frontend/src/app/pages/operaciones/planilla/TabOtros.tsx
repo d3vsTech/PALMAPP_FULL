@@ -221,10 +221,10 @@ export function TabOtros({
                                   hay una labor escogida. */}
                               {otrosEnEdicion.laborOtrosTipoPago === 'POR_PALMA' && (
                                 <div className="space-y-2">
-                                  <Label>
+                                  <Label htmlFor="tabotros-numero-de-palmas-span-classname-text-destructive-span">
                                     Número de Palmas <span className="text-destructive">*</span>
                                   </Label>
-                                  <Input
+                                  <Input id="tabotros-numero-de-palmas-span-classname-text-destructive-span"
                                     type="number" step="0.001"
                                     placeholder="0"
                                     value={otrosEnEdicion.numeroPalmas ?? ''}

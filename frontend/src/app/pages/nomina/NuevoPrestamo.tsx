@@ -247,12 +247,12 @@ export default function NuevoPrestamo() {
 
           {/* Colaborador */}
           <div className="space-y-2">
-            <Label className="font-semibold">
+            <Label className="font-semibold" htmlFor="nuevoprest-colaborador-span-classname-text-destructive-span">
               Colaborador <span className="text-destructive">*</span>
             </Label>
             <div className="relative" ref={searchRef}>
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
+              <Input id="nuevoprest-colaborador-span-classname-text-destructive-span"
                 placeholder="Buscar por nombre o cédula..."
                 value={busquedaColaborador}
                 onChange={(e) => {

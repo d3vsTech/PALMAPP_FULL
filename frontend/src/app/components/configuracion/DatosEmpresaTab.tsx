@@ -405,6 +405,7 @@ export function DatosEmpresaTab() {
             <div className="space-y-3">
               {/* El input real va oculto: el botón es el control visible. */}
               <input
+                aria-label="Seleccionar archivo"
                 id="logo"
                 ref={logoInputRef}
                 type="file"

@@ -416,6 +416,7 @@ export default function EditarProducto() {
                 <div className="space-y-2">
                   <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer">
                     <input
+                      aria-label="Seleccionar archivo"
                       type="file"
                       id="imagen-upload"
                       accept="image/*"

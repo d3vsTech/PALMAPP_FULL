@@ -63,10 +63,10 @@ export function PanelDevengadosManuales({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             {d.codigo === 'OTRO_DEVENGADO' && (
               <div className="space-y-1.5">
-                <Label className="text-xs">
+                <Label className="text-xs" htmlFor="panelescap-nombre-span-classname-text-destructive-span">
                   Nombre <span className="text-destructive">*</span>
                 </Label>
-                <Input
+                <Input id="panelescap-nombre-span-classname-text-destructive-span"
                   value={d.nombre}
                   onChange={(e) => onEditar(d.key, 'nombre', e.target.value)}
                   placeholder="Bonificación de retiro"
@@ -100,10 +100,10 @@ export function PanelDevengadosManuales({
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">
+              <Label className="text-xs" htmlFor="panelescap-motivo-span-classname-text-destructive-span">
                 Motivo <span className="text-destructive">*</span>
               </Label>
-              <Input
+              <Input id="panelescap-motivo-span-classname-text-destructive-span"
                 value={d.motivo}
                 onChange={(e) => onEditar(d.key, 'motivo', e.target.value)}
                 placeholder="Por qué se paga aquí"
@@ -240,10 +240,10 @@ export function PanelDeducciones({
           <div key={o.key} className="space-y-3 rounded-lg border border-border p-3">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">
+                <Label className="text-xs" htmlFor="panelescap-concepto-span-classname-text-destructive-span">
                   Concepto <span className="text-destructive">*</span>
                 </Label>
-                <Input
+                <Input id="panelescap-concepto-span-classname-text-destructive-span"
                   value={o.nombre}
                   onChange={(e) => onEditarOtra(o.key, 'nombre', e.target.value)}
                   placeholder="Dotación no devuelta"
@@ -251,10 +251,10 @@ export function PanelDeducciones({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">
+                <Label className="text-xs" htmlFor="panelescap-valor-span-classname-text-destructive-span">
                   Valor <span className="text-destructive">*</span>
                 </Label>
-                <Input
+                <Input id="panelescap-valor-span-classname-text-destructive-span"
                   type="number"
                   value={o.valor}
                   onChange={(e) => onEditarOtra(o.key, 'valor', e.target.value)}

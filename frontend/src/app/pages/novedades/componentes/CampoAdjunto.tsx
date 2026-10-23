@@ -33,6 +33,7 @@ export function CampoAdjunto({ etiqueta, ayuda, mimes, maxKb, archivo, onCambiar
         <span className="ml-1 text-xs font-normal text-muted-foreground">(opcional)</span>
       </Label>
       <input
+        aria-label="Seleccionar archivo"
         ref={input}
         type="file"
         className="hidden"

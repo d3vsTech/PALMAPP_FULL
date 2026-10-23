@@ -406,10 +406,10 @@ export default function PrestamoDetalle() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label>
+                  <Label htmlFor="prestamode-prestamo-frecuencia-quincenal-numero-de-quincenas-numero-de-meses">
                     {prestamo.frecuencia === 'QUINCENAL' ? 'Número de quincenas' : 'Número de meses'}
                   </Label>
-                  <Input
+                  <Input id="prestamode-prestamo-frecuencia-quincenal-numero-de-quincenas-numero-de-meses"
                     inputMode="numeric"
                     value={editNumCuotas}
                     onChange={(e) => setEditNumCuotas(e.target.value.replace(/\D/g, ''))}

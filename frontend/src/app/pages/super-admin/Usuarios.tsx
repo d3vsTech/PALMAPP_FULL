@@ -480,6 +480,7 @@ export default function Usuarios() {
           <div className="relative">
             <Filter className="w-5 h-5 text-gray-500 absolute left-4 top-1/2 -translate-y-1/2" />
             <select
+              aria-label="Ected status"
               value={selectedStatus}
               onChange={(e) => {
                 setPage(1);
@@ -502,6 +503,7 @@ export default function Usuarios() {
           <div className="relative">
             <Filter className="w-5 h-5 text-gray-500 absolute left-4 top-1/2 -translate-y-1/2" />
             <select
+              aria-label="Ected super admin"
               value={selectedSuperAdmin}
               onChange={(e) => {
                 setPage(1);
@@ -835,10 +837,10 @@ export default function Usuarios() {
                 <form onSubmit={handleSaveUser} className="space-y-5">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                      <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="usuarios-nombre">
                         Nombre *
                       </label>
-                      <input
+                      <input id="usuarios-nombre"
                         type="text"
                         value={formData.name}
                         onChange={(e) =>
@@ -854,10 +856,10 @@ export default function Usuarios() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                      <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="usuarios-email">
                         Email *
                       </label>
-                      <input
+                      <input id="usuarios-email"
                         type="email"
                         value={formData.email}
                         onChange={(e) =>

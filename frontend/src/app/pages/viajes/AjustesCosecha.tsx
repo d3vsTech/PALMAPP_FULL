@@ -308,6 +308,7 @@ export default function AjustesCosecha() {
                   <>
                     <div className="relative">
                       <select
+                        aria-label="Viaje destino"
                         value={viajeDestino}
                         onChange={(e) => setViajeDestino(e.target.value)}
                         disabled={enviando}

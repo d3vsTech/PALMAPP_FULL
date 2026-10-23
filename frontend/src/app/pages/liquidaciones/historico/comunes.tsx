@@ -107,6 +107,7 @@ export function SelectorArchivo({
   return (
     <>
       <input ref={inputRef} type="file" accept={accept} className="hidden" onChange={onElegir} />
+        aria-label="Seleccionar archivo"
 
       {!archivo ? (
         <Button
@@ -230,6 +231,7 @@ export function ZonaArchivo({
   return (
     <>
       <input
+        aria-label="Seleccionar archivo"
         ref={inputRef}
         type="file"
         accept={accept}

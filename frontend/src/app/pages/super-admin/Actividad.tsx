@@ -145,6 +145,7 @@ export default function Actividad() {
           <div className="relative">
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
             <select
+              aria-label="Filter accion"
               value={filterAccion}
               onChange={(e) => { setPage(1); setFilterAccion(e.target.value); }}
               className="w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition appearance-none cursor-pointer"
@@ -162,6 +163,7 @@ export default function Actividad() {
           <div className="relative">
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
             <select
+              aria-label="Filter modulo"
               value={filterModulo}
               onChange={(e) => { setPage(1); setFilterModulo(e.target.value); }}
               className="w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition appearance-none cursor-pointer"

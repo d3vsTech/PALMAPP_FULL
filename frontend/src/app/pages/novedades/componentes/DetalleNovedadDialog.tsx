@@ -453,6 +453,7 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                 {detalle.editable.campos.includes('documento') && (
                   <>
                     <input
+                      aria-label="Seleccionar archivo"
                       ref={archivoRef}
                       type="file"
                       className="hidden"

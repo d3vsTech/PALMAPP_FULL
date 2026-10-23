@@ -323,6 +323,7 @@ export default function ImportarColaboradores() {
 
         {/* input file oculto, lo dispara el botón "Seleccionar archivo" */}
         <input
+          aria-label="Seleccionar archivo"
           ref={fileInputRef}
           type="file"
           accept=".xlsx,.xls"

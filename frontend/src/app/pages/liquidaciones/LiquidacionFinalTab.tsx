@@ -174,6 +174,7 @@ export default function LiquidacionFinalTab() {
         </div>
 
         <select
+          aria-label="Estado"
           value={estado}
           onChange={(e) => {
             setEstado(e.target.value as EstadoLiquidacionFinal | '');
@@ -189,6 +190,7 @@ export default function LiquidacionFinalTab() {
         </select>
 
         <select
+          aria-label="Motivo retiro"
           value={motivoRetiro}
           onChange={(e) => {
             setMotivoRetiro(e.target.value as MotivoRetiroCodigo | '');

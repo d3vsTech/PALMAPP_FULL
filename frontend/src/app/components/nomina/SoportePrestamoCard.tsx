@@ -131,6 +131,7 @@ export function SoportePrestamoCard({ prestamoId, documento, onCambio }: Props) 
       </CardHeader>
       <CardContent className="space-y-4">
         <input
+          aria-label="Seleccionar archivo"
           ref={archivoRef}
           type="file"
           className="hidden"

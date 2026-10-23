@@ -754,6 +754,7 @@ export default function UsuariosProveedor() {
                         )}
                       </label>
                       <select
+                        aria-label="User id"
                         value={createForm.user_id}
                         onChange={e => setCreateForm(p => ({ ...p, user_id: e.target.value }))}
                         className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
@@ -830,11 +831,11 @@ export default function UsuariosProveedor() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                      <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="usuariospr-nueva-contrasena-opcional">
                         Nueva contraseña (opcional)
                       </label>
                       <div className="relative">
-                        <input
+                        <input id="usuariospr-nueva-contrasena-opcional"
                           aria-label="Dejar en blanco para no cambiar"
                           type={showPassword ? 'text' : 'password'}
                           value={editForm.password}
@@ -855,11 +856,11 @@ export default function UsuariosProveedor() {
                       </div>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                      <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="usuariospr-confirmar-contrasena">
                         Confirmar contraseña
                       </label>
                       <div className="relative">
-                        <input
+                        <input id="usuariospr-confirmar-contrasena"
                           aria-label="Repite la nueva contraseña"
                           type={showPassword ? 'text' : 'password'}
                           value={editForm.password_confirmation}

@@ -231,11 +231,11 @@ export default function CrearProveedorModal({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                <label className="block text-sm font-medium text-slate-300 mb-1.5" htmlFor="crearprove-departamento-span-classname-text-red-400-span">
                   Departamento <span className="text-red-400">*</span>
                 </label>
                 <div className="relative">
-                  <select
+                  <select id="crearprove-departamento-span-classname-text-red-400-span"
                     required
                     disabled={loadingDepts}
                     value={formData.departamento}
@@ -261,11 +261,11 @@ export default function CrearProveedorModal({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                <label className="block text-sm font-medium text-slate-300 mb-1.5" htmlFor="crearprove-ciudad-span-classname-text-red-400-span">
                   Ciudad <span className="text-red-400">*</span>
                 </label>
                 <div className="relative">
-                  <select
+                  <select id="crearprove-ciudad-span-classname-text-red-400-span"
                     required
                     disabled={!formData.departamento || loadingMunis}
                     value={formData.ciudad}

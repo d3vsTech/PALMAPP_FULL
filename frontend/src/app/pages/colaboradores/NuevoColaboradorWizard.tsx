@@ -1076,6 +1076,7 @@ export default function NuevoColaboradorWizard() {
                     )}
                     <div>
                       <input
+                        aria-label="Seleccionar archivo"
                         type="file"
                         id="foto"
                         accept="image/jpeg,image/png,image/webp,image/gif"
@@ -1537,6 +1538,7 @@ export default function NuevoColaboradorWizard() {
                         ) : (
                           <div>
                             <input
+                              aria-label="Seleccionar archivo"
                               type="file"
                               id="upload-soporte-finalizacion"
                               className="hidden"
@@ -1802,6 +1804,7 @@ export default function NuevoColaboradorWizard() {
                                     ) : (
                                       <div>
                                         <input type="file" id={`up-${catKey}-${tipo}`} className="hidden"
+                                          aria-label="Seleccionar archivo"
                                           accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx"
                                           onChange={e => handleSubirDocumento(catKey, tipo, e)} />
                                         <Button size="sm" variant="outline" disabled={uploadingDoc}
@@ -1828,6 +1831,7 @@ export default function NuevoColaboradorWizard() {
                                         Puedes subir múltiples documentos a esta categoría
                                       </p>
                                       <input type="file" id={inputId} className="hidden"
+                                        aria-label="Seleccionar archivo"
                                         accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx"
                                         onChange={e => handleSubirDocumento(catKey, tipoDefault, e)} />
                                       <Button size="sm" disabled={uploadingDoc}

@@ -311,6 +311,7 @@ export default function Proveedores() {
           <div className="relative">
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
             <select
+              aria-label="Filter estado"
               value={filterEstado}
               onChange={(e) => { setPage(1); setFilterEstado(e.target.value as any); }}
               className="pl-11 pr-10 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50 focus:border-[#9032F0]/50 appearance-none cursor-pointer"

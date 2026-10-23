@@ -501,10 +501,10 @@ export default function AbonosPrestamo() {
             </div>
 
             <div className="space-y-1.5">
-              <Label>
+              <Label htmlFor="abonospres-referencia-comprobante-span-classname-text-muted-foreground-font-normal-opcional-span">
                 Referencia / Comprobante <span className="text-muted-foreground font-normal">(opcional)</span>
               </Label>
-              <Input
+              <Input id="abonospres-referencia-comprobante-span-classname-text-muted-foreground-font-normal-opcional-span"
                 placeholder="Ej: TRF-20260713, Cheque 001234..."
                 value={form.referencia}
                 onChange={(e) => setForm((f) => ({ ...f, referencia: e.target.value }))}
@@ -513,10 +513,10 @@ export default function AbonosPrestamo() {
             </div>
 
             <div className="space-y-1.5">
-              <Label>
+              <Label htmlFor="abonospres-nota-span-classname-text-muted-foreground-font-normal-opcional-span">
                 Nota <span className="text-muted-foreground font-normal">(opcional)</span>
               </Label>
-              <Input
+              <Input id="abonospres-nota-span-classname-text-muted-foreground-font-normal-opcional-span"
                 placeholder="Observación sobre este pago..."
                 value={form.nota}
                 onChange={(e) => setForm((f) => ({ ...f, nota: e.target.value }))}
