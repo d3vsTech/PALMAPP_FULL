@@ -11,6 +11,7 @@
  *   3. RESULTADO → stats y filas con error con descarga CSV.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { comoBoton } from '../../hooks/comoBoton';
 import { useNavigate } from 'react-router';
 import * as XLSX from 'xlsx';
 import { Card, CardContent } from '../../components/ui/card';
@@ -100,10 +101,8 @@ export default function ImportarColaboradores() {
   );
 
   // ── Picker de archivo (botón "Seleccionar archivo" en la fase intro) ───────
-  const onArchivoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0] ?? null;
-    e.target.value = ''; // permite re-elegir el mismo
-    if (!f) return;
+  /** Valida y acepta el archivo, venga del botón o de arrastrarlo. */
+  const tomarArchivo = (f: File) => {
     if (!/\.(xlsx|xls)$/i.test(f.name)) {
       toast.error('El archivo debe ser .xlsx o .xls');
       return;
@@ -114,6 +113,12 @@ export default function ImportarColaboradores() {
     }
     setFile(f);
     setFase('preview');
+  };
+
+  const onArchivoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] ?? null;
+    e.target.value = ''; // permite re-elegir el mismo
+    if (f) tomarArchivo(f);
   };
 
   // ── Descargar plantilla Excel ──────────────────────────────────────────────
@@ -335,6 +340,7 @@ export default function ImportarColaboradores() {
           <VistaIntro
             onDescargarPlantilla={descargarPlantilla}
             onSeleccionarArchivo={() => fileInputRef.current?.click()}
+            onSoltarArchivo={tomarArchivo}
             onCancelar={cerrar}
           />
         )}
@@ -366,52 +372,178 @@ export default function ImportarColaboradores() {
 // ────────────────────────────────────────────────────────────────────────────────
 // Vista: intro — descargar plantilla + seleccionar archivo
 // ────────────────────────────────────────────────────────────────────────────────
+/**
+ * Las columnas de la plantilla, en el mismo orden del archivo, con una fila de
+ * ejemplo por cada una.
+ *
+ * Están todas a propósito: el usuario llena el Excel fuera de la aplicación y
+ * necesita ver qué se espera en cada celda, sobre todo el formato de las
+ * fechas y los valores que admiten modalidad de pago o tipo de cuenta. La
+ * tabla se desplaza de lado para recorrerlas.
+ */
+const COLUMNAS_PLANTILLA = [
+  'Primer Nombre', 'Segundo Nombre', 'Primer Apellido', 'Segundo Apellido',
+  'Tipo Documento', 'Número Documento', 'Fecha Nacimiento', 'Fecha Expedición',
+  'Lugar Expedición', 'Cargo', 'Modalidad Pago', 'Salario Base',
+  'Fecha Ingreso', 'Fecha Retiro', 'EPS', 'Fondo Pensión', 'ARL',
+  'Caja Compensación', 'Talla Camisa', 'Talla Pantalón', 'Talla Calzado',
+  'Tipo Cuenta', 'Entidad Bancaria', 'Número Cuenta', 'Correo Electrónico',
+  'Teléfono', 'Dirección', 'Municipio', 'Departamento',
+  'Contacto Emergencia', 'Teléfono Emergencia',
+];
+
+const EJEMPLO_PLANTILLA = [
+  [
+    'Carlos', 'Alberto', 'Rodríguez', 'García', 'CC', '1001234567',
+    '1990-05-14', '2008-06-20', 'Villavicencio', 'Cosechero', 'PRODUCCION',
+    '1750905', '2024-01-15', '', 'Sanitas', 'Porvenir', 'Sura',
+    'Cafam', 'M', '32', '41', 'AHORROS', 'Bancolombia', '12345678901',
+    'carlos.rodriguez@correo.com', '3105550101', 'Km 12 vía Acacías',
+    'Villavicencio', 'Meta', 'Ana García', '3109998877',
+  ],
+  [
+    'María', 'Fernanda', 'González', 'López', 'CC', '1009876543',
+    '1995-11-02', '2013-12-05', 'Acacías', 'Operaria', 'FIJO',
+    '1750905', '2025-03-01', '', 'Nueva EPS', 'Colfondos', 'Positiva',
+    'Cofrem', 'S', '10', '37', 'AHORROS', 'Davivienda', '98765432100',
+    'maria.gonzalez@correo.com', '3112224455', 'Calle 8 # 4-20',
+    'Acacías', 'Meta', 'Pedro López', '3114445566',
+  ],
+  [
+    'Juan', '', 'Pérez', 'Torres', 'CC', '1011223344',
+    '1988-02-28', '2006-03-15', 'Granada', 'Supervisor', 'FIJO',
+    '2200000', '2023-08-10', '2026-04-30', 'Sura', 'Protección', 'Sura',
+    'Cafam', 'L', '34', '42', 'CORRIENTE', 'BBVA', '55512345678',
+    'juan.perez@correo.com', '3123334444', 'Vereda El Triunfo',
+    'Granada', 'Meta', 'Luz Torres', '3126667788',
+  ],
+];
+
+/** El número del paso, como en los demás cargues del sistema. */
+function Paso({ n, titulo, descripcion, accion }: {
+  n: number;
+  titulo: string;
+  descripcion: string;
+  accion?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <div className="flex items-center gap-3">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">
+          {n}
+        </div>
+        <div>
+          <p className="text-base font-semibold text-foreground">{titulo}</p>
+          <p className="text-sm text-muted-foreground">{descripcion}</p>
+        </div>
+      </div>
+      {accion}
+    </div>
+  );
+}
+
 function VistaIntro({
-  onDescargarPlantilla, onSeleccionarArchivo, onCancelar,
+  onDescargarPlantilla, onSeleccionarArchivo, onSoltarArchivo, onCancelar,
 }: {
   onDescargarPlantilla: () => void;
   onSeleccionarArchivo: () => void;
+  onSoltarArchivo: (archivo: File) => void;
   onCancelar: () => void;
 }) {
+  const [arrastrando, setArrastrando] = useState(false);
+
+  const alSoltar = (e: React.DragEvent) => {
+    e.preventDefault();
+    setArrastrando(false);
+    const archivo = e.dataTransfer.files?.[0];
+    if (archivo) onSoltarArchivo(archivo);
+  };
+
   return (
     <>
-      {/* Dos pasos en paralelo: la plantilla a la izquierda, el archivo a la
-          derecha. En pantalla angosta se apilan. */}
-      <div className="grid gap-4 p-6 md:grid-cols-2">
-        {/* Paso 1: descargar la plantilla */}
-        <div className="flex flex-col justify-between gap-4 rounded-xl border border-border bg-muted/30 p-4">
-          <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-              <FileText className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold">¿No tienes una plantilla?</p>
-              <p className="text-sm text-muted-foreground">
-                Descárgala con el formato correcto y llena una fila por colaborador.
-              </p>
-            </div>
+      <div className="space-y-6 p-6">
+        {/* Paso 1: la plantilla, con lo que trae por dentro */}
+        <div className="rounded-xl border border-border p-5">
+          <Paso
+            n={1}
+            titulo="Descarga la plantilla"
+            descripcion="Usa esta plantilla para preparar tus datos correctamente"
+            accion={
+              <Button variant="outline" onClick={onDescargarPlantilla} className="shrink-0 gap-2">
+                <Download className="h-4 w-4" /> Descargar plantilla
+              </Button>
+            }
+          />
+
+          <div className="mt-4 overflow-auto rounded-lg border border-border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-primary/5">
+                  {COLUMNAS_PLANTILLA.map((col) => (
+                    <th key={col} className="whitespace-nowrap px-4 py-2.5 text-left font-semibold text-foreground">
+                      {col}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {EJEMPLO_PLANTILLA.map((fila) => (
+                  <tr key={fila[5]} className="border-b border-border last:border-0 hover:bg-muted/30">
+                    {fila.map((celda, i) => (
+                      <td key={COLUMNAS_PLANTILLA[i]} className="whitespace-nowrap px-4 py-2.5 text-muted-foreground">
+                        {celda || '—'}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          <Button variant="outline" onClick={onDescargarPlantilla} className="w-full gap-2">
-            <Download className="h-4 w-4" /> Descargar plantilla
-          </Button>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {COLUMNAS_PLANTILLA.length} columnas. Solo el documento y los nombres son
+            obligatorios; lo demás se completa después desde la ficha. Formatos
+            aceptados: <span className="font-medium">.xlsx, .xls</span>
+          </p>
         </div>
 
-        {/* Paso 2: elegir el archivo */}
-        <div className="flex flex-col justify-between gap-4 rounded-xl border border-dashed border-border p-4">
-          <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-              <Upload className="h-5 w-5 text-primary" />
+        {/* Paso 2: el archivo */}
+        <div className="rounded-xl border border-border p-5">
+          <Paso
+            n={2}
+            titulo="Carga tu archivo"
+            descripcion="Arrastra el archivo o haz clic para seleccionarlo"
+          />
+
+          <div
+            onDrop={alSoltar}
+            onDragOver={(e) => { e.preventDefault(); setArrastrando(true); }}
+            onDragLeave={() => setArrastrando(false)}
+            {...comoBoton(onSeleccionarArchivo)}
+            className={`mt-4 flex cursor-pointer flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed p-12 transition-colors ${
+              arrastrando
+                ? 'border-primary bg-primary/5'
+                : 'border-border hover:border-primary/50 hover:bg-muted/30'
+            }`}
+          >
+            <div className={`flex h-16 w-16 items-center justify-center rounded-2xl transition-colors ${
+              arrastrando ? 'bg-primary/10' : 'bg-muted'
+            }`}>
+              <Upload className={`h-8 w-8 transition-colors ${
+                arrastrando ? 'text-primary' : 'text-muted-foreground'
+              }`} />
             </div>
-            <div>
-              <p className="text-sm font-semibold">Ya tienes el archivo</p>
-              <p className="text-sm text-muted-foreground">
-                Formatos .xlsx o .xls. Antes de guardar nada podrá revisar la lista.
+            <div className="text-center">
+              <p className="font-semibold text-foreground">
+                {arrastrando ? 'Suelta el archivo aquí' : 'Arrastra tu archivo aquí'}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                o <span className="font-medium text-primary">haz clic para seleccionar</span>
               </p>
             </div>
+            <span className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
+              .xlsx · .xls
+            </span>
           </div>
-          <Button onClick={onSeleccionarArchivo} className="w-full gap-2">
-            <Upload className="h-4 w-4" /> Seleccionar archivo
-          </Button>
         </div>
       </div>
 
