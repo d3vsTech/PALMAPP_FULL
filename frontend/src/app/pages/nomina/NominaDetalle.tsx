@@ -21,8 +21,6 @@
  *  - Endpoint para exportar la nómina a Excel/PDF.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { useParams, Link, useNavigate } from 'react-router';
 import { comparePersonaByFirstName } from '../../utils/personas';
 import { Button } from '../../components/ui/button';
@@ -59,6 +57,7 @@ import {
   DetalleLaboresOperario,
   type BloqueoCierre,
 } from '../../../api/nomina';
+import { mensajeDeError } from '../../../api/errores';
 // `operacionesApi` y `PlanillaDetalle` se removieron tras el refactor a
 // endpoints dedicados de nómina (§7.4). El listado de terceros ya no
 // consulta el módulo de planillas para armar el desglose.
@@ -218,6 +217,17 @@ function consolidarDesdeDetalles(detalles: DetalleLaboresOperario[]): CategoriaL
   });
 
   return cats.filter((c) => c.filas.length > 0);
+}
+
+/**
+ * El contratista al que pertenece un operario.
+ *
+ * `tercero_id` viene plano en unas respuestas y anidado bajo `operario.tercero`
+ * en otras. Leer solo el plano dejaba al operario huérfano: su grupo quedaba
+ * sin desglose de labores y el encabezado caía al respaldo "Tercero #8".
+ */
+function idDeTercero(emp: NominaEmpleado): number | null {
+  return emp.tercero_id ?? emp.operario?.tercero?.id ?? null;
 }
 
 export default function NominaDetalle() {
@@ -518,7 +528,7 @@ export default function NominaDetalle() {
     const opsPorTercero = terceros
       .map((t) => {
         const ops = empleados
-          .filter((e) => e.tercero_id === t.tercero_id && e.operario_id != null)
+          .filter((e) => idDeTercero(e) === t.tercero_id && e.operario_id != null)
           .map((e) => e.operario_id!)
           .sort((a, b) => a - b);
         return `${t.tercero_id}:${ops.join(',')}`;
@@ -554,7 +564,7 @@ export default function NominaDetalle() {
       await Promise.all(
         terceros.map(async (t) => {
           const operariosDelTercero = empleados
-            .filter((e) => e.tercero_id === t.tercero_id && e.operario_id != null)
+            .filter((e) => idDeTercero(e) === t.tercero_id && e.operario_id != null)
             .map((e) => e.operario_id!);
           if (operariosDelTercero.length === 0) return;
 
@@ -832,205 +842,31 @@ export default function NominaDetalle() {
   };
 
   /**
-   * Genera el comprobante de pago del tercero EN EL CLIENTE con jsPDF.
-   * NO usa `GET /acta/pdf` del backend porque ese endpoint lee
-   * `nomina_tercero.total_a_transferir` que llega en 0 (bug documentado del
-   * motor de acta). Aquí reutilizamos el desglose consolidado desde las
-   * planillas (`consolidarPorTercero`) que sí trae los valores correctos.
+   * Comprobante del contratista. Lo arma el backend (§7.8); aquí solo se
+   * baja el blob. Antes el front dibujaba su propio PDF con jsPDF y quedaban
+   * dos documentos distintos para lo mismo.
    */
-  const descargarPdfTercero = (terceroId: number, razonSocial: string) => {
-    if (!nomina) return;
-    const grupo = tercerosAgrupados.find((g) => g.tercero_id === terceroId);
-    if (!grupo) return toast.error('No se encontró el tercero');
-    const det = detallesTerceros.get(terceroId);
-    const categorias = consolidarPorTercero(grupo.operarios);
-    const totalEstimado = categorias.reduce((s, c) => s + c.subtotal, 0);
-    const totalActa = toNumber(grupo.acta?.total_a_transferir);
-    const total = totalActa > 0 ? totalActa : totalEstimado;
-
-    const doc = new jsPDF({ unit: 'pt', format: 'letter' });
-    const width = doc.internal.pageSize.getWidth();
-    const marginX = 40;
-    let y = 50;
-
-    // ── Header: razón social + comprobante ─────────────────────────────
-    doc.setTextColor(30, 86, 49); // verde primary
-    doc.setFontSize(20);
-    doc.setFont('helvetica', 'bold');
-    doc.text(razonSocial, marginX, y);
-
-    doc.setTextColor(120);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    y += 16;
-    const nit = det?.tercero.nit ?? det?.tercero.cedula ?? '—';
-    doc.text(`NIT: ${nit}`, marginX, y);
-    if (det?.tercero.telefono) {
-      y += 12;
-      doc.text(`Tel: ${det.tercero.telefono}`, marginX, y);
+  const [generandoActa, setGenerandoActa] = useState<number | null>(null);
+  const generarComprobanteTercero = async (terceroId: number, nombre: string) => {
+    if (!nominaId || !nomina) return;
+    setGenerandoActa(terceroId);
+    try {
+      const blob = await nominaApi.terceros.actaPdf(nominaId, terceroId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const q = nomina.quincena ? `_Q${nomina.quincena}` : '';
+      const mes = String(nomina.mes).padStart(2, '0');
+      a.download = `acta_${nombre.replace(/\s+/g, '_')}_${nomina.anio}_${mes}${q}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error(mensajeDeError(err, 'No se pudo generar el comprobante'));
+    } finally {
+      setGenerandoActa(null);
     }
-
-    // Bloque comprobante en la esquina derecha
-    const comprobanteId = `COMP-N${nomina.id}-ET${terceroId}`;
-    doc.setDrawColor(30, 86, 49);
-    doc.setLineWidth(1);
-    doc.roundedRect(width - marginX - 200, 40, 200, 40, 4, 4);
-    doc.setTextColor(120);
-    doc.setFontSize(8);
-    doc.text('COMPROBANTE DE PAGO', width - marginX - 190, 55);
-    doc.setTextColor(0);
-    doc.setFontSize(13);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`No. ${comprobanteId}`, width - marginX - 190, 72);
-
-    y = 100;
-    doc.setDrawColor(30, 86, 49);
-    doc.setLineWidth(1.5);
-    doc.line(marginX, y, width - marginX, y);
-    y += 20;
-
-    // ── Período + Fecha de pago ────────────────────────────────────────
-    const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-    const periodoTexto = `${MESES[(nomina.mes ?? 1) - 1]} ${nomina.anio}`
-      + (nomina.tipo_pago_snapshot === 'QUINCENAL' && nomina.quincena
-        ? ` – ${nomina.quincena === 1 ? 'Primera' : 'Segunda'} quincena`
-        : '');
-    const fechaPago = grupo.acta?.pagado_at ? fmtFecha(grupo.acta.pagado_at.slice(0, 10)) : fmtFecha(new Date().toISOString().slice(0, 10));
-
-    doc.setDrawColor(220);
-    doc.setLineWidth(0.5);
-    doc.roundedRect(marginX, y, (width - 2 * marginX - 10) / 2, 45, 3, 3);
-    doc.roundedRect(marginX + (width - 2 * marginX - 10) / 2 + 10, y, (width - 2 * marginX - 10) / 2, 45, 3, 3);
-
-    doc.setTextColor(120); doc.setFontSize(7); doc.setFont('helvetica', 'normal');
-    doc.text('PERÍODO', marginX + 10, y + 15);
-    doc.text('FECHA DE PAGO', marginX + (width - 2 * marginX - 10) / 2 + 20, y + 15);
-    doc.setTextColor(0); doc.setFontSize(11); doc.setFont('helvetica', 'bold');
-    doc.text(periodoTexto, marginX + 10, y + 33);
-    doc.text(fechaPago, marginX + (width - 2 * marginX - 10) / 2 + 20, y + 33);
-
-    y += 60;
-
-    // ── Señores (beneficiario) ─────────────────────────────────────────
-    doc.setTextColor(0); doc.setFontSize(9); doc.setFont('helvetica', 'bold');
-    doc.text('SEÑORES (BENEFICIARIO)', marginX, y);
-    y += 8;
-
-    const halfW = (width - 2 * marginX - 10) / 2;
-    doc.setDrawColor(220);
-    doc.roundedRect(marginX, y, halfW, 40, 3, 3);
-    doc.roundedRect(marginX + halfW + 10, y, halfW, 40, 3, 3);
-    doc.setTextColor(120); doc.setFontSize(7); doc.setFont('helvetica', 'normal');
-    doc.text('EMPRESA / RAZÓN SOCIAL', marginX + 8, y + 14);
-    doc.text('NIT', marginX + halfW + 18, y + 14);
-    doc.setTextColor(0); doc.setFontSize(10); doc.setFont('helvetica', 'bold');
-    doc.text(razonSocial, marginX + 8, y + 30);
-    doc.text(nit, marginX + halfW + 18, y + 30);
-    y += 45;
-
-    if (det?.tercero.representante || det?.tercero.telefono) {
-      doc.roundedRect(marginX, y, halfW, 40, 3, 3);
-      doc.roundedRect(marginX + halfW + 10, y, halfW, 40, 3, 3);
-      doc.setTextColor(120); doc.setFontSize(7); doc.setFont('helvetica', 'normal');
-      doc.text('CONTACTO', marginX + 8, y + 14);
-      doc.text('TELÉFONO', marginX + halfW + 18, y + 14);
-      doc.setTextColor(0); doc.setFontSize(10); doc.setFont('helvetica', 'bold');
-      doc.text(det?.tercero.representante ?? '—', marginX + 8, y + 30);
-      doc.text(det?.tercero.telefono ?? '—', marginX + halfW + 18, y + 30);
-      y += 55;
-    } else {
-      y += 15;
-    }
-
-    // ── Detalle por labor/lote ──────────────────────────────────────────
-    doc.setTextColor(0); doc.setFontSize(9); doc.setFont('helvetica', 'bold');
-    doc.text('DETALLE POR LABOR', marginX, y);
-    y += 6;
-
-    const rows: any[] = [];
-    categorias.forEach((cat) => {
-      // Fila título categoría
-      rows.push([
-        {
-          content: cat.titulo,
-          colSpan: 7,
-          styles: { fontStyle: 'bold', fillColor: [245, 245, 245], textColor: [30, 86, 49] },
-        },
-      ]);
-      cat.filas.forEach((f) => {
-        rows.push([
-          f.lote,
-          f.sublote,
-          `${f.cantidad.toLocaleString('es-CO')} ${f.unidad}`,
-          f.promedio_kg && f.promedio_kg > 0 ? f.promedio_kg.toFixed(4) : '—',
-          f.peso_kg && f.peso_kg > 0 ? f.peso_kg.toLocaleString('es-CO') : '—',
-          `$${f.precio.toLocaleString('es-CO')} ${f.precio_unidad}`,
-          `$${f.total.toLocaleString('es-CO')}`,
-        ]);
-      });
-      // Subtotal categoría
-      rows.push([
-        {
-          content: `Subtotal ${cat.titulo.charAt(0) + cat.titulo.slice(1).toLowerCase()}`,
-          colSpan: 6,
-          styles: { halign: 'right', fontStyle: 'bold', fillColor: [250, 250, 250] },
-        },
-        {
-          content: `$${cat.subtotal.toLocaleString('es-CO')}`,
-          styles: { halign: 'right', fontStyle: 'bold', fillColor: [250, 250, 250], textColor: [30, 86, 49] },
-        },
-      ]);
-    });
-
-    autoTable(doc, {
-      startY: y + 4,
-      head: [['Lote', 'Sublote', 'Cantidad', 'Prom.', 'Peso (kg)', 'Precio Unit.', 'Total']],
-      body: rows,
-      theme: 'grid',
-      styles: { fontSize: 8, cellPadding: 4 },
-      headStyles: { fillColor: [30, 86, 49], textColor: 255, fontStyle: 'bold' },
-      columnStyles: {
-        2: { halign: 'right' },
-        3: { halign: 'right' },
-        4: { halign: 'right' },
-        5: { halign: 'right' },
-        6: { halign: 'right' },
-      },
-      margin: { left: marginX, right: marginX },
-    });
-
-    let finalY = (doc as any).lastAutoTable.finalY + 15;
-
-    // ── Total a pagar ──────────────────────────────────────────────────
-    doc.setFillColor(30, 86, 49);
-    doc.rect(marginX, finalY, width - 2 * marginX, 32, 'F');
-    doc.setTextColor(255); doc.setFontSize(11); doc.setFont('helvetica', 'bold');
-    doc.text(`TOTAL ORDEN DE PAGO A ${razonSocial.toUpperCase()}`, marginX + 10, finalY + 20);
-    doc.setFontSize(13);
-    doc.text(`$${total.toLocaleString('es-CO')}`, width - marginX - 10, finalY + 20, { align: 'right' });
-    finalY += 45;
-
-    // ── Firmas ──────────────────────────────────────────────────────────
-    doc.setDrawColor(180);
-    doc.setLineWidth(0.5);
-    const firmaW = (width - 2 * marginX - 40) / 2;
-    doc.line(marginX + 20, finalY + 40, marginX + 20 + firmaW, finalY + 40);
-    doc.line(marginX + firmaW + 60, finalY + 40, marginX + firmaW * 2 + 60, finalY + 40);
-    doc.setTextColor(120); doc.setFontSize(8); doc.setFont('helvetica', 'normal');
-    doc.text('ELABORADO POR', marginX + 20 + firmaW / 2, finalY + 55, { align: 'center' });
-    doc.text('RECIBIDO POR', marginX + firmaW + 60 + firmaW / 2, finalY + 55, { align: 'center' });
-
-    // ── Footer ──────────────────────────────────────────────────────────
-    doc.setTextColor(150); doc.setFontSize(7);
-    doc.text(
-      `PalmApp · Nómina #${nomina.id} · Comprobante ${comprobanteId}`,
-      width / 2,
-      doc.internal.pageSize.getHeight() - 30,
-      { align: 'center' },
-    );
-
-    doc.save(`comprobante_${razonSocial.replace(/\s+/g, '_')}_N${nomina.id}.pdf`);
-    toast.success('Comprobante descargado');
   };
 
   const eliminarNomina = async () => {
@@ -1093,14 +929,20 @@ export default function NominaDetalle() {
   const tercerosAgrupados: TerceroAgrupado[] = (() => {
     const map = new Map<number, TerceroAgrupado>();
     empleadosOperarios.forEach((emp) => {
-      const tid = emp.tercero_id ?? emp.operario?.tercero?.id ?? 0;
+      const tid = idDeTercero(emp);
       if (!tid) return;
       if (!map.has(tid)) {
+        const acta = terceros.find((t) => t.tercero_id === tid);
+        // El nombre llega por dos vías y no siempre por la misma. El acta es
+        // la fuente que sí lo trae siempre; el `#id` queda de último recurso.
         map.set(tid, {
           tercero_id: tid,
-          tercero_nombre: emp.operario?.tercero?.razon_social ?? `Tercero #${tid}`,
+          tercero_nombre:
+            emp.operario?.tercero?.razon_social
+            ?? acta?.tercero_nombre
+            ?? `Tercero #${tid}`,
           operarios: [],
-          acta: terceros.find((t) => t.tercero_id === tid),
+          acta,
         });
       }
       map.get(tid)!.operarios.push(emp);
@@ -1142,19 +984,15 @@ export default function NominaDetalle() {
   /**
    * Desglose por labor/lote/sublote para un tercero — LEE del mapa
    * `detallesPorTercero` que se llena una vez desde los endpoints dedicados
-   * (§7.4). Mantiene la firma `(operariosDelTercero)` para no tocar los 4
-   * sitios de llamada; el `tercero_id` se infiere del primer operario.
+   * (§7.4). Recibe el id del contratista directo: inferirlo del primer
+   * operario fallaba cuando ese operario traía el tercero anidado.
    *
    * El código antiguo que hacía el consolidado desde `planillasPeriodo` fue
    * removido — el backend ya devuelve los totales por lote/labor. Ver el
    * refactor de rendimiento (N+1 → 2-3 requests) más arriba en el useEffect.
    */
-  const consolidarPorTercero = (operariosDelTercero: NominaEmpleado[]): CategoriaLabor[] => {
-    if (operariosDelTercero.length === 0) return [];
-    const terceroId = operariosDelTercero[0].tercero_id;
-    if (terceroId == null) return [];
-    return detallesPorTercero.get(terceroId) ?? [];
-  };
+  const consolidarPorTercero = (terceroId: number): CategoriaLabor[] =>
+    detallesPorTercero.get(terceroId) ?? [];
   // (código legacy del consolidado desde `planillasPeriodo` eliminado tras
   // el refactor a los endpoints dedicados §7.4)
 
@@ -1563,7 +1401,7 @@ export default function NominaDetalle() {
               const calculada = acta != null;
               const nit = detalle?.tercero.nit ?? detalle?.tercero.cedula ?? null;
               const representante = detalle?.tercero.representante ?? null;
-              const categorias = consolidarPorTercero(grupo.operarios);
+              const categorias = consolidarPorTercero(grupo.tercero_id);
               const totalEstimado = categorias.reduce((s, c) => s + c.subtotal, 0);
               // Si el acta ya fue calculada usamos ese total, PERO si el
               // backend lo dejó en 0 (bug: `valor_calculado` de la cuadrilla
@@ -1607,50 +1445,33 @@ export default function NominaDetalle() {
                       }`}>
                         {pagado ? 'Pagado' : calculada ? 'Pendiente' : 'Sin calcular'}
                       </Badge>
-                      {pagado ? (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="gap-1.5"
-                            onClick={() => navigate(
-                              `/nomina/${nominaId}/tercero/${grupo.tercero_id}/liquidar`,
-                              { state: { totalEstimado: total, categorias } },
-                            )}
-                          >
-                            <FileText className="h-3.5 w-3.5" />
-                            Ver detalle
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="gap-1.5"
-                            onClick={() => descargarPdfTercero(grupo.tercero_id, grupo.tercero_nombre)}
-                          >
-                            <Printer className="h-3.5 w-3.5" />
-                            Generar Comprobante
-                          </Button>
-                        </>
-                      ) : calculada && (
+                      {calculada && !pagado && (
                         <Button
                           size="sm"
                           className="bg-primary hover:bg-primary/90 gap-1.5"
                           onClick={() => navigate(
                             `/nomina/${nominaId}/tercero/${grupo.tercero_id}/liquidar`,
-                            {
-                              state: {
-                                // Pasamos el total ya calculado desde el
-                                // desglose de labores para evitar el 0 del
-                                // acta cuando el motor del backend no lo
-                                // calculó bien (bug conocido).
-                                totalEstimado: total,
-                                categorias,
-                              },
-                            },
+                            { state: { totalEstimado: total, categorias } },
                           )}
                         >
                           <FileText className="h-3.5 w-3.5" />
                           Liquidar
+                        </Button>
+                      )}
+                      {calculada && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5"
+                          disabled={generandoActa === grupo.tercero_id}
+                          onClick={() =>
+                            generarComprobanteTercero(grupo.tercero_id, grupo.tercero_nombre)
+                          }
+                        >
+                          <Printer className="h-3.5 w-3.5" />
+                          {generandoActa === grupo.tercero_id
+                            ? 'Generando...'
+                            : 'Generar Comprobante'}
                         </Button>
                       )}
                     </div>
@@ -1839,7 +1660,7 @@ export default function NominaDetalle() {
                 <p className="text-2xl font-bold text-amber-700">
                   ${tercerosAgrupados
                     .reduce((s, g) => {
-                      const cats = consolidarPorTercero(g.operarios);
+                      const cats = consolidarPorTercero(g.tercero_id);
                       const est = cats.reduce((a, c) => a + c.subtotal, 0);
                       const actaTot = toNumber(g.acta?.total_a_transferir);
                       return s + (actaTot > 0 ? actaTot : est);
