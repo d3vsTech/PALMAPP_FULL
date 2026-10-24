@@ -188,7 +188,9 @@ export function PasoDetalles({ borrador, categorias, soporte, onCambiar }: Props
                 onChange={(e) => onCambiar({ fechaFin: e.target.value })}
               />
               <p className="text-xs text-muted-foreground">
-                {parcial ? 'Una novedad con horario es de un solo día.' : 'Vacío = un solo día.'}
+                {parcial
+                  ? 'Con horario la novedad cubre un solo día.'
+                  : 'Déjelo en blanco si la novedad es de un solo día.'}
               </p>
             </div>
           </div>

@@ -183,7 +183,7 @@ export function EtapaFinalizacion({
                     onChange={(e) => setHastaAusente(e.target.value)}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Vacío = solo el día de la planilla
+                    Déjelo en blanco si la ausencia es solo del día de la planilla.
                   </p>
                 </div>
                 <div className="space-y-2">

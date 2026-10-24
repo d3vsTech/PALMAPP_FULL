@@ -234,7 +234,9 @@ export function EditarNovedadForm({
               disabled={esParcial}
               onChange={(e) => cambiar({ fechaFin: e.target.value })}
             />
-            <p className="text-xs text-muted-foreground">Vacío = un solo día</p>
+            <p className="text-xs text-muted-foreground">
+              Déjelo en blanco si la novedad es de un solo día.
+            </p>
           </div>
         )}
 
