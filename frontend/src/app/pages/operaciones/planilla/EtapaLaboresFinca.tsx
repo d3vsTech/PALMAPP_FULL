@@ -3,22 +3,18 @@
  * Extraída de NuevaPlanillaWizard.tsx tal cual; el estado vive en el padre
  * y llega por props. JSX sin cambios.
  */
+import { useMemo } from 'react';
 import { Button } from '../../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Input } from '../../../components/ui/input';
 import { Label } from '../../../components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../../../components/ui/select';
 import { Plus, Trash2, Pencil, X, Save } from 'lucide-react';
 import type { TrabajoAuxiliar, ColaboradorWizard } from './tipos';
 import { etiquetaVacaciones } from './vacacionesPlanilla';
 import { etiquetaNovedad } from './novedadesPlanilla';
 import { MultiSelectColaboradores } from '../../../components/operaciones/MultiSelectColaboradores';
+import { ColaboradorChip } from './ColaboradorChip';
+import { SelectorBuscable } from '../../../components/operaciones/SelectorBuscable';
 
 interface Props {
   trabajosAuxiliares: TrabajoAuxiliar[];
@@ -46,7 +42,17 @@ export function EtapaLaboresFinca({
   editarAuxiliar,
   eliminarAuxiliar,
   setFormRef,
-}: Props) {  return (
+}: Props) {
+  // "Otro" cierra la lista: es la salida para lo que no está parametrizado.
+  const opcionesLabor = useMemo(
+    () => [
+      ...laboresLista.map((labor) => ({ valor: labor, etiqueta: labor })),
+      { valor: 'Otro', etiqueta: 'Otro' },
+    ],
+    [laboresLista],
+  );
+
+  return (
     <Card className="border-border">
       <CardHeader>
         <div className="flex items-center justify-between">
@@ -85,37 +91,59 @@ export function EtapaLaboresFinca({
                       setAuxiliarEnEdicion({ ...auxiliarEnEdicion, colaboradores: nuevos })
                     }
                   />
+                  {/* El selector solo decía "1 colaborador seleccionado": había
+                      que abrirlo para saber quién era. Las fichas los muestran
+                      igual que en las labores de palma, con su botón de quitar. */}
+                  {(auxiliarEnEdicion.colaboradores ?? []).length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {(auxiliarEnEdicion.colaboradores ?? []).map((colId) => {
+                        const col = colaboradores.find((c) => c.id === colId);
+                        if (!col) return null;
+                        return (
+                          <span key={colId} className="inline-flex items-center gap-1">
+                            <ColaboradorChip col={col} />
+                            <button
+                              type="button"
+                              aria-label={`Quitar a ${col.nombres} ${col.apellidos}`}
+                              onClick={() => setAuxiliarEnEdicion({
+                                ...auxiliarEnEdicion,
+                                colaboradores: (auxiliarEnEdicion.colaboradores ?? [])
+                                  .filter((id) => id !== colId),
+                              })}
+                              className="rounded-sm p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
-                  <Label>Labor</Label>
-                  <Select
-                    value={auxiliarEnEdicion.labor}
-                    onValueChange={(value) =>
+                  <Label htmlFor="etapalabor-labor">Labor</Label>
+                  {/* Con la lista de labores paramétricas ya larga, el
+                      desplegable obligaba a bajar hasta encontrarla. Este trae
+                      buscador: se escribe el nombre y filtra. */}
+                  <SelectorBuscable
+                    id="etapalabor-labor"
+                    opciones={opcionesLabor}
+                    valor={auxiliarEnEdicion.labor}
+                    onChange={(value) =>
                       setAuxiliarEnEdicion({
                         ...auxiliarEnEdicion,
                         labor: value,
                         otraLabor: value !== 'Otro' ? '' : auxiliarEnEdicion.otraLabor,
                       })
                     }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar labor" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {laboresLista.length === 0 ? (
-                        <SelectItem value="__sin_labores__" disabled>
-                          No hay labores configuradas
-                        </SelectItem>
-                      ) : (
-                        laboresLista.map((labor) => (
-                          <SelectItem key={labor} value={labor}>
-                            {labor}
-                          </SelectItem>
-                        ))
-                      )}
-                      <SelectItem value="Otro">Otro</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    marcador="Seleccionar labor"
+                    marcadorBusqueda="Buscar labor..."
+                    sinResultados={
+                      laboresLista.length === 0
+                        ? 'No hay labores configuradas'
+                        : 'Sin coincidencias'
+                    }
+                  />
                 </div>
                 {auxiliarEnEdicion.labor === 'Otro' && (
                   <div className="space-y-2 md:col-span-2">
