@@ -80,6 +80,30 @@ function viaProxy(url: string): string {
 let _logoEmpresaEnCurso: Promise<void> | null = null;
 
 /**
+ * El logo que la sesión ya trae.
+ *
+ * `login`, `select-tenant` y `/me` devuelven `fincaActual.logo_url` absoluto,
+ * así que casi siempre está a mano sin pedir nada. Es el camino bueno: pedirlo
+ * a `/configuracion/info-empresa` exige permiso sobre configuración, y un
+ * usuario de nómina no lo tiene — ahí el logo de la finca nunca llegaba y
+ * todos sus PDF salían con el de Palmapp.
+ */
+function logoDeLaSesion(): string | null | undefined {
+  try {
+    const crudo = localStorage.getItem('palmapp_user');
+    if (!crudo) return undefined;
+    const usuario = JSON.parse(crudo) as { fincaActual?: { logo_url?: string | null } };
+    // Una sesión vieja puede no traer el campo. Eso no es "sin logo": se
+    // deja que decida la API, para no borrar un logo que sí existe.
+    if (!usuario.fincaActual || !('logo_url' in usuario.fincaActual)) return undefined;
+    return usuario.fincaActual.logo_url ?? null;
+  } catch {
+    // Sesión a medio escribir o JSON corrupto: se pide por la API.
+    return undefined;
+  }
+}
+
+/**
  * Deja el logo de la finca en el almacenamiento local, que es de donde lo lee
  * `pdfHeader`. Hay que llamarlo (y esperarlo) antes de armar cualquier PDF: si
  * no, el documento sale solo con el logo de Palmapp.
@@ -93,17 +117,28 @@ let _logoEmpresaEnCurso: Promise<void> | null = null;
  */
 export async function asegurarLogoEmpresa(logoUrl?: string | null): Promise<void> {
   if (logoUrl === undefined) {
+    const deSesion = logoDeLaSesion();
+    if (deSesion !== undefined) return asegurarLogoEmpresa(deSesion);
+
+    // Solo se consulta la API cuando la sesión no dice nada. Un fallo no se
+    // guarda: con el backend caído, el siguiente PDF vuelve a intentarlo.
     _logoEmpresaEnCurso ??= (async () => {
       try {
         const res = await configuracionApi.infoEmpresa.obtener();
         await asegurarLogoEmpresa(res.data.logo_url);
       } catch {
-        // Sin permiso sobre configuración, o la finca no tiene logo cargado.
+        _logoEmpresaEnCurso = null;
       }
     })();
     return _logoEmpresaEnCurso;
   }
-  if (!logoUrl) return;
+  // La finca no tiene logo. Se borra el guardado: si no, al cambiar de finca
+  // los PDF seguían saliendo con el logo de la anterior.
+  if (!logoUrl) {
+    localStorage.removeItem(CLAVE_LOGO);
+    localStorage.removeItem(CLAVE_LOGO_URL);
+    return;
+  }
   try {
     if (localStorage.getItem(CLAVE_LOGO) && localStorage.getItem(CLAVE_LOGO_URL) === logoUrl) {
       return;
