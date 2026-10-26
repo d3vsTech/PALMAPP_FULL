@@ -587,6 +587,36 @@ export interface DetalleHoraExtraPreview {
 }
 
 /**
+ * Un tramo del escalón legal de una incapacidad EPS (doc §9.6, 2026-10-26).
+ *
+ * Los días de un mismo evento no se pagan todos igual: los dos primeros van
+ * al 100 % y los paga el empleador, del 3 al 90 aplica la tasa de la novedad
+ * (66,67 % legal) y del 91 en adelante baja al 50 %. Cada corrida de días
+ * con la misma tasa es un tramo.
+ */
+export interface TramoIncapacidad {
+  tramo: 'EMPLEADOR' | 'EPS' | 'EPS_PROLONGADA';
+  /** Posición del día dentro del evento completo, no dentro del período. */
+  posicion_desde: number;
+  posicion_hasta: number;
+  fecha_desde: string;
+  fecha_hasta: string;
+  dias: number;
+  porcentaje: number;
+  /** El día sin la tasa aplicada. */
+  valor_dia: number;
+  /** Lo que se paga por día, ya con la tasa y, si aplicó, con el piso. */
+  valor_dia_pagado: number;
+  /**
+   * El tramo tocó el piso del SMLV diario (Sentencia C-543/2007): ningún día
+   * de incapacidad se paga por debajo de `SMLV/30`. Quien gana el mínimo
+   * cobra el 100 % incluso en el tramo del 66,67 %.
+   */
+  piso_smlv: boolean;
+  valor: number;
+}
+
+/**
  * Item del detalle de ausencias que aparece en el preview de liquidación
  * (doc §5.1). Solo colaboradores internos. Cada entrada corresponde a una
  * ausencia APROBADA que afecta al empleado en el rango de la nómina.
@@ -626,6 +656,31 @@ export interface DetalleAusenciaPreview {
    * `afecta_auxilio_transporte` es true, y `dias_en_rango` cuando es false.
    */
   dias_con_auxilio?: number;
+
+  // ── Escalón de la incapacidad EPS (doc §9.6, 2026-10-26) ────────────────
+  /**
+   * Lo realmente pagado como porcentaje del día, promediado sobre el tramo
+   * que cae en este período. Es lo que debe salir en la columna "% pago":
+   * `porcentaje_pago` es la tasa de la novedad, y en una incapacidad de uno
+   * o dos días dice 66,67 mientras se paga el 100. `null` si `valor_dia` es 0.
+   */
+  porcentaje_efectivo?: number | null;
+  /** El día del colaborador, antes de aplicar la tasa. */
+  valor_dia?: number;
+  /** Días del evento completo, no solo los de este período. */
+  dias_evento?: number;
+  /** Dónde cae el tramo de este período dentro del evento. */
+  posicion_desde?: number;
+  posicion_hasta?: number;
+  dias_empleador?: number;
+  dias_eps?: number;
+  /** Días del 91 en adelante, al 50 % (CST art. 227). */
+  dias_eps_prolongada?: number;
+  piso_smlv_aplicado?: boolean;
+  /** Una entrada por corrida de días con la misma tasa. */
+  tramos?: TramoIncapacidad[];
+  /** Frase lista para pintar debajo de la línea; la arma el backend. */
+  resumen?: string | null;
 }
 
 /**
@@ -980,6 +1035,20 @@ export interface PreviewLiquidacion {
        * hay que corregir la planilla o anular y re-liquidar las vacaciones.
        */
       | 'VACACIONES_CON_TRABAJO_REGISTRADO'
+      /**
+       * 2026-10-26 — Un evento de incapacidad EPS pasó del día 180 dentro
+       * del período. Ahí cambia el pagador: ya no es la EPS sino el fondo
+       * de pensiones. La nómina sigue liquidando al 50 % (CST art. 227) y
+       * pide confirmar el trámite. `fechas` trae el inicio del evento y el
+       * último día dentro del período. No bloquea (doc §9.6).
+       */
+      | 'INCAPACIDAD_EPS_SUPERA_180_DIAS'
+      /**
+       * Dos incapacidades EPS separadas por 1 a 3 días. Si son el mismo
+       * evento médico registrado en tramos, cada tramo reinicia los 2 días
+       * al 100 % y se liquida de más: conviene consolidarlo en una sola.
+       */
+      | 'INCAPACIDAD_EPS_POSIBLE_FRAGMENTACION'
       | string;
     mensaje?: string;
     /**

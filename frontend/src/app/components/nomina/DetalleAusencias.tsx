@@ -16,6 +16,21 @@
  * Si `items` es undefined o vacío no renderiza nada.
  */
 
+/** Un tramo del escalón legal de una incapacidad EPS (doc §9.6). */
+export interface TramoIncapacidad {
+  tramo: 'EMPLEADOR' | 'EPS' | 'EPS_PROLONGADA' | string;
+  posicion_desde: number;
+  posicion_hasta: number;
+  fecha_desde: string;
+  fecha_hasta: string;
+  dias: number;
+  porcentaje: number;
+  valor_dia: number;
+  valor_dia_pagado: number;
+  piso_smlv: boolean;
+  valor: number;
+}
+
 export interface AusenciaItem {
   id?: number;
   /** Constante del modelo: INCAPACIDAD_EPS, AUSENCIA_INJUSTIFICADA, etc. */
@@ -47,6 +62,16 @@ export interface AusenciaItem {
   afecta_auxilio_transporte?: boolean;
   /** PR-N6 — Días de la fila que conservan el auxilio. */
   dias_con_auxilio?: number;
+  /**
+   * §9.6 (2026-10-26) — El escalón de una incapacidad EPS. Lo manda el
+   * preview; el desprendible no.
+   */
+  porcentaje_efectivo?: number | null;
+  valor_dia?: number;
+  dias_evento?: number;
+  piso_smlv_aplicado?: boolean;
+  tramos?: TramoIncapacidad[];
+  resumen?: string | null;
 }
 
 interface Props {
@@ -71,6 +96,55 @@ function rangoFechas(a: AusenciaItem): string {
   const desde = String(a.fecha_inicio).slice(0, 10);
   const hasta = String(a.fecha_fin).slice(0, 10);
   return desde === hasta ? desde : `${desde} — ${hasta}`;
+}
+
+/** "EPS" en vez de "EPS_PROLONGADA" ocupa menos y dice lo mismo en la fila. */
+const ROTULO_TRAMO: Record<string, string> = {
+  EMPLEADOR: 'Empleador',
+  EPS: 'EPS',
+  EPS_PROLONGADA: 'EPS (día 91+)',
+};
+
+/**
+ * El escalón de una incapacidad EPS, tramo por tramo.
+ *
+ * Los días de un mismo evento no valen igual: los dos primeros al 100 % y a
+ * cargo del empleador, del 3 al 90 al 66,67 %, del 91 en adelante al 50 %.
+ * Sin este desglose la línea dice "66,67 %" y paga el 100, que es justo lo
+ * que hacía dudar del cálculo en las incapacidades de uno o dos días.
+ */
+function TablaTramos({
+  tramos,
+  formatMoney,
+}: {
+  tramos: TramoIncapacidad[];
+  formatMoney: (n: number) => string;
+}) {
+  return (
+    <div className="mt-1 space-y-1 border-l-2 border-border pl-3">
+      {tramos.map((t, i) => (
+        <div key={i} className="flex flex-wrap items-baseline gap-x-2 text-[10px] text-muted-foreground">
+          <span className="font-mono">
+            {t.posicion_desde === t.posicion_hasta
+              ? `día ${t.posicion_desde}`
+              : `días ${t.posicion_desde}-${t.posicion_hasta}`}
+          </span>
+          <span>·</span>
+          <span>{ROTULO_TRAMO[t.tramo] ?? t.tramo}</span>
+          <span>·</span>
+          <span>{t.porcentaje}%</span>
+          <span>·</span>
+          <span>{formatMoney(t.valor_dia_pagado)}/día</span>
+          {t.piso_smlv && (
+            <span className="rounded bg-amber-100 px-1 font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+              piso SMLV
+            </span>
+          )}
+          <span className="ml-auto font-semibold text-foreground">{formatMoney(t.valor)}</span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function DetalleAusencias({ items, formatMoney, variant = 'default', titulo }: Props) {
@@ -111,6 +185,17 @@ export function DetalleAusencias({ items, formatMoney, variant = 'default', titu
             : null;
           const valor = Number(a.valor_calculado ?? 0);
           const tramos = a.ausencia_ids?.length ?? 0;
+          // El escalón solo llega en el preview, y solo en las EPS.
+          const escalon = !isCompact && (a.tramos?.length ?? 0) > 0 ? a.tramos! : null;
+          /*
+           * La tasa de la novedad y la que de verdad se pagó no coinciden en
+           * una incapacidad corta: el 100 % de los dos primeros días no
+           * depende de lo que diga el motivo. Se muestran las dos cuando
+           * difieren, porque la del motivo es la que el usuario registró.
+           */
+          const efectivo = a.porcentaje_efectivo;
+          const mostrarEfectivo =
+            efectivo != null && Math.abs(efectivo - Number(a.porcentaje_pago)) >= 0.01;
 
           return (
             <div
@@ -141,6 +226,19 @@ export function DetalleAusencias({ items, formatMoney, variant = 'default', titu
                     {tramos} tramos en un solo evento
                   </span>
                 )}
+                {/* La frase la arma el backend con el evento completo, que
+                    puede haber empezado en la quincena anterior. */}
+                {!isCompact && a.resumen && (
+                  <span className="block text-[10px] leading-snug text-muted-foreground">
+                    {a.resumen}
+                  </span>
+                )}
+                {mostrarEfectivo && (
+                  <span className="block text-[10px] text-muted-foreground">
+                    {a.porcentaje_pago}% de la novedad · {efectivo}% pagado
+                  </span>
+                )}
+                {escalon && <TablaTramos tramos={escalon} formatMoney={formatMoney} />}
                 {/* PR-N6 — Conservar el auxilio esos días cambia la cifra
                     del subsidio, así que se dice en la fila que lo causa. */}
                 {a.afecta_auxilio_transporte === false && (
