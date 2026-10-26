@@ -1227,8 +1227,14 @@ export interface DesprendibleData {
     deducciones: {
       codigo: string;
       nombre: string;
-      porcentaje?: number;
-      base?: number;
+      /**
+       * Solo SALUD, PENSIÓN y FSP calculadas por el motor los traen. En una
+       * deducción manual y en toda nómina importada llegan en `null` (doc
+       * §6.2), y entonces el paréntesis no se imprime: lo contrario daba
+       * "(null% sobre $0)" en pantalla.
+       */
+      porcentaje?: number | null;
+      base?: number | null;
       valor: number;
       es_manual: boolean;
       observacion?: string;
@@ -1724,6 +1730,15 @@ export interface NominaTerceroActaResumen {
   total_cosecha: number;
   total_bruto: number;
   total_a_transferir: number;
+  /**
+   * El acta pasó por `POST /liquidar`. Con `false` la fila es la que se
+   * pre-hidrató al agregar operarios y **sus ceros no son reales**: no hay
+   * que pintarlos como total, y pagar o imprimir responde 409
+   * `ACTA_NO_CALCULADA` (doc §7.1). `undefined` = backend anterior a
+   * 2026-10-24.
+   */
+  calculada?: boolean;
+  calculada_at?: string | null;
   estado_pago: EstadoPagoTercero;
   orden_pago_numero: string | null;
   metodo_pago: MetodoPagoTercero | null;
@@ -1736,6 +1751,8 @@ export interface NominaTerceroActaResumenGlobal {
   pendiente: number;
   pagado: number;
   contratistas: number;
+  /** Actas que nunca pasaron por `POST /liquidar` (doc §7.1). */
+  sin_calcular?: number;
 }
 
 /** Detalle del acta (doc §7.2 - `GET /nominas/{id}/terceros/{tercero}`). */
@@ -1774,6 +1791,9 @@ export interface NominaTerceroActaDetalle {
     total_descuentos: number;
     /** total_bruto − total_descuentos. Puede ser negativo si los descuentos exceden. */
     total_a_transferir: number;
+    /** Ver `NominaTerceroActaResumen.calculada` (doc §7.2). */
+    calculada?: boolean;
+    calculada_at?: string | null;
     /** Descuentos aplicados AL ACTA del contratista (API v2, doc §7.5). */
     descuentos: DescuentoOperarioActa[];
     estado_pago: EstadoPagoTercero;

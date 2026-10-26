@@ -1398,17 +1398,18 @@ export default function NominaDetalle() {
               const acta = grupo.acta;
               const detalle = detallesTerceros.get(grupo.tercero_id);
               const pagado = acta?.estado_pago === 'PAGADO';
-              const calculada = acta != null;
+              // La fila del acta existe desde que se agregan los operarios,
+              // así que su presencia no dice nada: lo que cuenta es si pasó
+              // por `POST /liquidar` (doc §7.1).
+              const calculada = acta?.calculada === true;
               const nit = detalle?.tercero.nit ?? detalle?.tercero.cedula ?? null;
               const representante = detalle?.tercero.representante ?? null;
               const categorias = consolidarPorTercero(grupo.tercero_id);
+              // El desglose se calcula en vivo desde las planillas (§7.4) y no
+              // es el acta. Sirve de referencia antes de liquidar, rotulado
+              // como estimado; el total que se paga sale siempre del acta.
               const totalEstimado = categorias.reduce((s, c) => s + c.subtotal, 0);
-              // Si el acta ya fue calculada usamos ese total, PERO si el
-              // backend lo dejó en 0 (bug: `valor_calculado` de la cuadrilla
-              // llega null) caemos al estimado sumando los subtotales de la
-              // tabla desglosada.
-              const totalActa = toNumber(acta?.total_a_transferir);
-              const total = calculada && totalActa > 0 ? totalActa : totalEstimado;
+              const total = toNumber(acta?.total_a_transferir);
               return (
                 <Card key={grupo.tercero_id} className="border-border overflow-hidden">
                   {/* Header acta */}
@@ -1430,11 +1431,19 @@ export default function NominaDetalle() {
                     <div className="flex items-center gap-4">
                       <div className="text-right">
                         <p className="text-xs text-muted-foreground">
-                          {calculada ? 'Total a pagar' : 'Estimado'}
+                          {calculada ? 'Total a pagar' : 'Estimado del desglose'}
                         </p>
-                        <p className="text-xl font-bold text-foreground">
-                          {total > 0 ? `$${total.toLocaleString('es-CO')}` : '—'}
-                        </p>
+                        {calculada ? (
+                          <p className="text-xl font-bold text-foreground">
+                            ${total.toLocaleString('es-CO')}
+                          </p>
+                        ) : (
+                          <p className="text-xl font-bold text-muted-foreground">
+                            {totalEstimado > 0
+                              ? `~$${totalEstimado.toLocaleString('es-CO')}`
+                              : '—'}
+                          </p>
+                        )}
                       </div>
                       <Badge className={`text-xs ${
                         pagado
@@ -1443,37 +1452,44 @@ export default function NominaDetalle() {
                             ? 'bg-amber-500/10 text-amber-700 border-amber-300'
                             : 'bg-muted text-muted-foreground border-border'
                       }`}>
-                        {pagado ? 'Pagado' : calculada ? 'Pendiente' : 'Sin calcular'}
+                        {pagado ? 'Pagado' : calculada ? 'Pendiente' : 'Sin liquidar'}
                       </Badge>
-                      {calculada && !pagado && (
+                      {!pagado && (
                         <Button
                           size="sm"
                           className="bg-primary hover:bg-primary/90 gap-1.5"
                           onClick={() => navigate(
                             `/nomina/${nominaId}/tercero/${grupo.tercero_id}/liquidar`,
-                            { state: { totalEstimado: total, categorias } },
+                            { state: { totalEstimado, categorias } },
                           )}
                         >
                           <FileText className="h-3.5 w-3.5" />
-                          Liquidar
+                          {calculada ? 'Ver acta' : 'Liquidar'}
                         </Button>
                       )}
-                      {calculada && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="gap-1.5"
-                          disabled={generandoActa === grupo.tercero_id}
-                          onClick={() =>
-                            generarComprobanteTercero(grupo.tercero_id, grupo.tercero_nombre)
-                          }
-                        >
-                          <Printer className="h-3.5 w-3.5" />
-                          {generandoActa === grupo.tercero_id
-                            ? 'Generando...'
-                            : 'Generar Comprobante'}
-                        </Button>
-                      )}
+                      {/* El comprobante sale del acta: sin liquidar, el
+                          backend responde 409 y no hay nada que imprimir.
+                          Queda a la vista pero deshabilitado, para que se
+                          entienda qué falta. */}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5"
+                        disabled={!calculada || generandoActa === grupo.tercero_id}
+                        title={
+                          calculada
+                            ? undefined
+                            : 'Liquide el acta para poder generar el comprobante'
+                        }
+                        onClick={() =>
+                          generarComprobanteTercero(grupo.tercero_id, grupo.tercero_nombre)
+                        }
+                      >
+                        <Printer className="h-3.5 w-3.5" />
+                        {generandoActa === grupo.tercero_id
+                          ? 'Generando...'
+                          : 'Generar Comprobante'}
+                      </Button>
                     </div>
                   </div>
 
@@ -1659,12 +1675,7 @@ export default function NominaDetalle() {
                 </p>
                 <p className="text-2xl font-bold text-amber-700">
                   ${tercerosAgrupados
-                    .reduce((s, g) => {
-                      const cats = consolidarPorTercero(g.tercero_id);
-                      const est = cats.reduce((a, c) => a + c.subtotal, 0);
-                      const actaTot = toNumber(g.acta?.total_a_transferir);
-                      return s + (actaTot > 0 ? actaTot : est);
-                    }, 0)
+                    .reduce((s, g) => s + toNumber(g.acta?.total_a_transferir), 0)
                     .toLocaleString('es-CO')}
                 </p>
               </div>

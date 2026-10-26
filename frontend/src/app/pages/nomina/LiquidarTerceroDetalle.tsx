@@ -109,6 +109,16 @@ function metaDeLabor(nombreLabor: string): LaborMeta {
 // Aliases legacy usados en el JSX del desglose.
 const LABOR_META_PALMA = LABOR_META_COSECHA;
 
+/** El acta sin liquidar no tiene comprobante que imprimir (doc §7.8). */
+function avisarErrorDeActa(err: unknown, respaldo: string): void {
+  const e = err as ApiError;
+  if (e?.code === NominaErrorCodes.ACTA_NO_CALCULADA) {
+    toast.error('Liquide el acta antes de generar el comprobante');
+    return;
+  }
+  toast.error(e?.message ?? respaldo);
+}
+
 export default function LiquidarTerceroDetalle() {
   const { nominaId: nominaIdParam, terceroId: terceroIdParam } = useParams();
   const navigate = useNavigate();
@@ -340,6 +350,9 @@ export default function LiquidarTerceroDetalle() {
       const e = err as ApiError;
       if (e.code === NominaErrorCodes.ACTA_TERCERO_YA_PAGADA) {
         toast.error('El acta ya fue pagada');
+      } else if (e.code === NominaErrorCodes.ACTA_NO_CALCULADA) {
+        toast.error('Liquide el acta antes de registrar el pago');
+        cargarActa();
       } else if (e.code === NominaErrorCodes.PERMISSION_DENIED) {
         toast.error('No tienes el permiso "nomina.pagar-tercero"');
       } else {
@@ -367,8 +380,7 @@ export default function LiquidarTerceroDetalle() {
       a.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
-      const e = err as ApiError;
-      toast.error(e.message ?? 'No se pudo descargar el PDF');
+      avisarErrorDeActa(err, 'No se pudo descargar el PDF');
     } finally {
       setDescargandoPdf(false);
     }
@@ -389,8 +401,7 @@ export default function LiquidarTerceroDetalle() {
       // nadie la suelta. Se le deja un minuto a la pestaña nueva para abrirla.
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (err) {
-      const e = err as ApiError;
-      toast.error(e.message ?? 'No se pudo abrir el PDF');
+      avisarErrorDeActa(err, 'No se pudo abrir el PDF');
     }
   };
 
@@ -472,6 +483,13 @@ export default function LiquidarTerceroDetalle() {
   const nominaCerrada = detalle.nomina.estado === 'CERRADA';
   const puedeEditar = !nominaCerrada && !estaPagada;
   const totalEmpresa = toNumber(detalle.acta.total_a_transferir);
+  /*
+   * El acta nace en ceros al agregar los operarios y solo `POST /liquidar`
+   * la calcula (doc §7.1). Sin eso, el total no es real: pagar o imprimir
+   * responde 409 y el comprobante saldría en $0. Los descuentos sí se
+   * pueden registrar antes, y conviene hacerlo (§7.3).
+   */
+  const sinLiquidar = detalle.acta.calculada === false;
 
   return (
     <div className="space-y-6">
@@ -537,27 +555,70 @@ export default function LiquidarTerceroDetalle() {
           </div>
           <div className="flex items-center gap-3">
             <div className="text-right">
-              <p className="text-xs text-muted-foreground">Total a pagar</p>
-              <p className="text-xl font-bold text-foreground">
-                ${totalEmpresa.toLocaleString('es-CO')}
+              <p className="text-xs text-muted-foreground">
+                {sinLiquidar ? 'Sin liquidar' : 'Total a pagar'}
+              </p>
+              <p className={`text-xl font-bold ${sinLiquidar ? 'text-muted-foreground' : 'text-foreground'}`}>
+                {sinLiquidar ? '—' : `$${totalEmpresa.toLocaleString('es-CO')}`}
               </p>
             </div>
             <Badge className={`text-xs ${
               estaPagada
                 ? 'bg-[#1E5631]/10 text-[#1E5631] border-[#1E5631]/20'
-                : 'bg-amber-500/10 text-amber-700 border-amber-300'
+                : sinLiquidar
+                  ? 'bg-muted text-muted-foreground border-border'
+                  : 'bg-amber-500/10 text-amber-700 border-amber-300'
             }`}>
-              {estaPagada ? 'Liquidado' : 'Pendiente'}
+              {estaPagada ? 'Liquidado' : sinLiquidar ? 'Sin liquidar' : 'Pendiente'}
             </Badge>
-            {!estaPagada ? (
+            {sinLiquidar ? (
               <Button
                 size="sm"
                 className="bg-primary hover:bg-primary/90 gap-1.5"
-                onClick={() => setModalPagoAbierto(true)}
+                onClick={calcularActa}
+                disabled={calculandoActa}
               >
-                <FileText className="h-3.5 w-3.5" />
-                Liquidar
+                {calculandoActa ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Liquidando...
+                  </>
+                ) : (
+                  <>
+                    <FileText className="h-3.5 w-3.5" />
+                    Liquidar acta
+                  </>
+                )}
               </Button>
+            ) : !estaPagada ? (
+              <>
+                {/* El desglose de abajo se calcula en vivo; el acta solo
+                    cambia al volver a liquidarla. */}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5"
+                  onClick={calcularActa}
+                  disabled={calculandoActa}
+                >
+                  {calculandoActa ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Recalculando...
+                    </>
+                  ) : (
+                    'Recalcular'
+                  )}
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-primary hover:bg-primary/90 gap-1.5"
+                  onClick={() => setModalPagoAbierto(true)}
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  Registrar pago
+                </Button>
+              </>
             ) : (
               <Button
                 variant="outline"
@@ -571,6 +632,22 @@ export default function LiquidarTerceroDetalle() {
             )}
           </div>
         </div>
+
+        {sinLiquidar && (
+          <div className="mx-5 mt-4 rounded-lg border border-amber-300 bg-amber-50/70 px-4 py-3 dark:bg-amber-950/20">
+            <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+              El acta todavía no está liquidada
+            </p>
+            <p className="mt-1 text-xs text-amber-800/90 dark:text-amber-300/80">
+              Las cifras de abajo salen de las planillas del período y sirven
+              de referencia. El acta sigue en ceros hasta que la liquide, y
+              hasta entonces no se puede registrar el pago ni generar el
+              comprobante. Registre primero los descuentos: después de
+              liquidar, si era lo último pendiente, la nómina se cierra y ya
+              no los admite.
+            </p>
+          </div>
+        )}
 
         {/* Lista de operarios */}
         {detalle.operarios.length === 0 ? (

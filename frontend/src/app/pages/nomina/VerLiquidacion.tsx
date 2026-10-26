@@ -316,7 +316,7 @@ export default function VerLiquidacion() {
                   key={i}
                   label={
                     d.nombre +
-                    (d.porcentaje !== undefined && d.base !== undefined
+                    (d.porcentaje != null && d.base != null
                       ? ` (${d.porcentaje}% sobre ${fmt(d.base)})`
                       : '') +
                     (d.observacion ? ` — ${d.observacion}` : '')
