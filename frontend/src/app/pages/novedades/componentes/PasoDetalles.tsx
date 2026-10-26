@@ -21,7 +21,7 @@ import {
 } from '../borrador';
 import type { CategoriaInit } from '../../../../api/novedades';
 import {
-  calcularDias, esIncapacidad, etiquetaDias, formatHora, formatPorcentaje,
+  calcularDias, entidadDeLaFicha, esIncapacidad, etiquetaDias, formatHora, formatPorcentaje,
 } from '../tipos';
 
 const CLASE_TEXTAREA =
@@ -71,11 +71,24 @@ export function PasoDetalles({ borrador, categorias, soporte, onCambiar }: Props
                   {motivo.afecta_auxilio_transporte ? 'descuenta auxilio' : 'conserva el auxilio'}
                 </span>
               </div>
-            ) : (
+            ) : null}
+            {/* El porcentaje del motivo cubre un solo tramo del escalón legal.
+                Sin decirlo, quien registra una incapacidad larga la parte en
+                dos para aplicar el 50 % a mano, y la nómina lo haría dos
+                veces (API_NOMINA §9.6). */}
+            {motivo?.tipo_base === 'INCAPACIDAD_EPS' ? (
+              <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                Ese porcentaje aplica del día 3 al 90. La nómina paga los dos
+                primeros días al 100 % por cuenta de la empresa y baja al 50 %
+                del día 91 en adelante, sin bajar nunca del mínimo diario.
+                Registre la incapacidad completa: no hay que partirla.
+              </p>
+            ) : null}
+            {!motivo ? (
               <p className="text-sm text-muted-foreground">
                 {vacaciones ? 'Queda pendiente hasta que Liquidaciones la apruebe' : 'Registra el retiro del colaborador'}
               </p>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -83,7 +96,21 @@ export function PasoDetalles({ borrador, categorias, soporte, onCambiar }: Props
           fecha={borrador.fechaInicio}
           seleccionadoId={borrador.colaboradorId}
           nombreInicial={borrador.colaboradorNombre}
-          onSeleccionar={(colaboradorId, colaboradorNombre) => onCambiar({ colaboradorId, colaboradorNombre })}
+          onSeleccionar={(colaboradorId, colaboradorNombre, colaborador) =>
+            onCambiar({
+              colaboradorId,
+              colaboradorNombre,
+              /*
+               * En una incapacidad la entidad casi siempre es la afiliación
+               * de la ficha, y tenerla que copiar a mano es un paso de más
+               * donde además se escribe mal. Queda editable: hay traslados
+               * que todavía no se reflejan en la ficha.
+               */
+              ...(esIncapacidad(motivo) && !borrador.entidad.trim()
+                ? { entidad: entidadDeLaFicha(colaborador, motivo) }
+                : {}),
+            })
+          }
         />
 
         {/* ── Fechas ────────────────────────────────────────────────────── */}

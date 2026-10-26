@@ -219,7 +219,12 @@ export interface ColaboradorSelectParams {
   estado?: boolean;
   modalidad_pago?: ModalidadPago;
   predio_id?: number;
-  /** Busca por nombre o documento (API_NOVEDADES §9). */
+  /**
+   * Nombre o cédula (≤ 100). Desde 2026-10-26 el backend lo aplica de verdad:
+   * parte el texto por espacios y exige **cada palabra** en alguna de las
+   * cuatro columnas de nombre o en el documento, sin importar el orden.
+   * Antes se aceptaba y se ignoraba, y la lista llegaba entera.
+   */
   q?: string;
   /**
    * `YYYY-MM-DD` (2026-09-23). Devuelve solo a quienes tienen un contrato que
@@ -239,6 +244,16 @@ export interface ColaboradorSelectItem {
   nombre_completo: string;
   documento: string;
   modalidad_pago: ModalidadPago;
+  /**
+   * Afiliaciones de la ficha (2026-10-26), con o sin `fecha`. `null` cuando
+   * la ficha no las tiene.
+   *
+   * Con esto el Paso 2 de Novedades rellena "Entidad (EPS o ARL)" sin pedir
+   * `GET /colaboradores/{id}`, que exige `colaboradores.ver`: quien solo
+   * tiene `novedades.crear` no lo podría llamar.
+   */
+  eps?: string | null;
+  arl?: string | null;
   /**
    * PR-N3. Solo se resuelve cuando se envía `fecha`; sin ella es `null` para
    * todos. Marca al colaborador en el selector, no lo bloquea: una parcial no

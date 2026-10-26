@@ -20,15 +20,15 @@ const sinTildes = (t: string) =>
 const soloDigitos = (t: string) => t.replace(/\D/g, '');
 
 /**
- * Filtra en el navegador lo que llegó del endpoint.
+ * Afina en el navegador lo que llegó del endpoint.
  *
- * El buscador manda `q` a `GET colaboradores/select`, pero hoy la respuesta
- * llega sin filtrar: escribir un nombre no reducía la lista. Hasta que el
- * endpoint lo respete, se filtra aquí sobre lo recibido.
+ * Desde 2026-10-26 el backend sí aplica `q`, así que esto ya no es el filtro
+ * principal. Se queda porque su `ILIKE` distingue las tildes: quien escribe
+ * "perez" buscando a "Pérez" no lo encuentra del lado del servidor. Aquí el
+ * texto va sin tildes, y la cédula se compara solo por dígitos.
  *
  * Cada palabra escrita debe aparecer en el nombre, así "william p" encuentra
- * a "William Padilla" sin exigir el orden exacto. Si lo escrito son dígitos,
- * se busca también dentro de la cédula.
+ * a "William Padilla" sin exigir el orden exacto.
  */
 function filtrarLocal(
   items: ColaboradorSelectItem[],
@@ -51,7 +51,12 @@ interface Props {
   fecha: string;
   seleccionadoId: number | null;
   nombreInicial: string;
-  onSeleccionar: (id: number | null, nombre: string) => void;
+  /** `colaborador` es `null` al limpiar la selección. */
+  onSeleccionar: (
+    id: number | null,
+    nombre: string,
+    colaborador: ColaboradorSelectItem | null,
+  ) => void;
 }
 
 export function BuscadorColaborador({ fecha, seleccionadoId, nombreInicial, onSeleccionar }: Props) {
@@ -99,7 +104,7 @@ export function BuscadorColaborador({ fecha, seleccionadoId, nombreInicial, onSe
 
   const elegir = (c: ColaboradorSelectItem) => {
     if (cierre.current) clearTimeout(cierre.current);
-    onSeleccionar(c.id, c.nombre_completo);
+    onSeleccionar(c.id, c.nombre_completo, c);
     setTexto(c.nombre_completo);
     setAbierto(false);
   };
@@ -115,7 +120,7 @@ export function BuscadorColaborador({ fecha, seleccionadoId, nombreInicial, onSe
           value={texto}
           onChange={(e) => {
             setTexto(e.target.value);
-            onSeleccionar(null, '');
+            onSeleccionar(null, '', null);
             setAbierto(true);
           }}
           onFocus={() => setAbierto(true)}

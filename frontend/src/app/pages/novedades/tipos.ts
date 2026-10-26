@@ -51,6 +51,25 @@ export function esIncapacidad(motivo: MotivoNovedad | null): boolean {
   return motivo?.tipo_base === 'INCAPACIDAD_EPS' || motivo?.tipo_base === 'INCAPACIDAD_ARL';
 }
 
+/**
+ * La EPS o la ARL de la ficha, según el motivo de la incapacidad.
+ *
+ * `GET colaboradores/select` las trae desde 2026-10-26 (API_COLABORADORES §0),
+ * así que el Paso 2 puede rellenar "Entidad" sin una segunda petición y sin
+ * exigir `colaboradores.ver` a quien solo registra novedades. Devuelve `''`
+ * cuando el motivo no es una incapacidad o la ficha no tiene la afiliación:
+ * el campo queda vacío y se escribe a mano.
+ */
+export function entidadDeLaFicha(
+  colaborador: { eps?: string | null; arl?: string | null } | null,
+  motivo: MotivoNovedad | null,
+): string {
+  if (!colaborador) return '';
+  if (motivo?.tipo_base === 'INCAPACIDAD_EPS') return colaborador.eps ?? '';
+  if (motivo?.tipo_base === 'INCAPACIDAD_ARL') return colaborador.arl ?? '';
+  return '';
+}
+
 /** `"66.67"` → `"66.67%"`. Las terminaciones no tienen porcentaje. */
 export function formatPorcentaje(valor: string | number | null): string {
   if (valor === null || valor === undefined || valor === '') return '—';
