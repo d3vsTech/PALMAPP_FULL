@@ -63,17 +63,43 @@ const CLAVE_LOGO_URL = 'palmapp_empresa_logo_url';
 const HOST_BACKEND = String(import.meta.env.VITE_API_URL ?? '').replace(/\/api\/?$/, '');
 
 /**
- * Nginx sirve `/storage` sin cabeceras CORS, así que `fetch` contra la URL
- * absoluta del logo se bloquea y el PDF salía solo con el logo de Palmapp.
+ * Por dónde intentar bajar el logo, en orden.
  *
- * Se pide por `/backend-files`, que es el mismo origen del frontend: lo
- * reescribe el proxy de Vite en dev y el de `public/_redirects` en Netlify.
- * Un `<img src>` no necesita esto (mostrar una imagen de otro origen siempre
- * se permite); leer sus bytes, sí.
+ * El backend sirve `/storage` sin cabeceras CORS, así que `fetch` contra la
+ * URL absoluta lo bloquea el navegador. Un `<img src>` no tiene ese problema
+ * (mostrar una imagen de otro origen siempre se permite), pero jsPDF necesita
+ * los bytes, y leerlos sí lo exige.
+ *
+ * De ahí `/backend-files`, del mismo origen: lo reescribe el proxy de Vite en
+ * dev y el de `public/_redirects` en Netlify. Pero el despliegue de nginx no
+ * lo tiene, y ahí responde 404 — por eso en producción el logo nunca llegaba
+ * y todos los PDF del front salían con el de Palmapp.
+ *
+ * Se intentan los dos: el proxy primero y la URL directa después. Cualquiera
+ * de los dos que responda sirve, y el PDF deja de depender de una regla de
+ * servidor que puede no estar.
  */
-function viaProxy(url: string): string {
-  if (!HOST_BACKEND || !url.startsWith(HOST_BACKEND)) return url;
-  return `/backend-files${url.slice(HOST_BACKEND.length)}`;
+function rutasDelLogo(url: string): string[] {
+  if (!HOST_BACKEND || !url.startsWith(HOST_BACKEND)) return [url];
+  return [`/backend-files${url.slice(HOST_BACKEND.length)}`, url];
+}
+
+/** La primera ruta que devuelva una imagen. `null` si ninguna responde. */
+async function bajarLogo(url: string): Promise<Blob | null> {
+  for (const ruta of rutasDelLogo(url)) {
+    try {
+      const res = await fetch(ruta);
+      if (!res.ok) continue;
+      const blob = await res.blob();
+      // El catch-all de React Router responde 200 con el index.html, así que
+      // un 200 no basta: hay que mirar qué llegó.
+      if (!blob.type.startsWith('image/')) continue;
+      return blob;
+    } catch {
+      // Red caída o CORS: se prueba la siguiente ruta.
+    }
+  }
+  return null;
 }
 
 /** Una sola consulta por sesión, aunque se bajen varios PDF seguidos. */
@@ -143,9 +169,8 @@ export async function asegurarLogoEmpresa(logoUrl?: string | null): Promise<void
     if (localStorage.getItem(CLAVE_LOGO) && localStorage.getItem(CLAVE_LOGO_URL) === logoUrl) {
       return;
     }
-    const res = await fetch(viaProxy(logoUrl));
-    if (!res.ok) return;
-    const blob = await res.blob();
+    const blob = await bajarLogo(logoUrl);
+    if (!blob) return;
     const base64 = await new Promise<string>((resolve, reject) => {
       const lector = new FileReader();
       lector.onload = () => resolve(String(lector.result));
