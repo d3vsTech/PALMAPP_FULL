@@ -4,8 +4,8 @@
  *
  * Backend:
  *   URL configurable vía `VITE_AGRO_AGENTE_URL` en el .env (ver `api/env.ts`).
- *   En dev sin override, usa el proxy de Vite `/agro-agente/api`. En prod
- *   HTTPS usa el proxy `/agro-api` definido en `public/_redirects`.
+ *   Sin override usa `/agro-api` del propio origen: en prod lo resuelve el
+ *   nginx del portal y en dev el proxy de Vite (`vite.config.ts`).
  *
  * Auth:
  *   Reutiliza el JWT que ya tiene el usuario en localStorage bajo la clave
@@ -21,23 +21,22 @@ import { AGRO_AGENTE_URL } from './env';
 
 // URL base del backend del Agente IA (FastAPI).
 // Prioridad:
-//   1. `VITE_AGRO_AGENTE_URL` del .env (si está definida).
-//   2. En HTTPS (Netlify) → `/agro-api/*` proxeado por `public/_redirects`
-//      para evitar el bloqueo de Mixed Content sobre HTTP del agente.
-//   3. En HTTP local (dev) → proxy de Vite `/agro-agente` definido en
-//      `vite.config.ts`. NUNCA hardcodear la IP del servidor del agente —
-//      si necesitás un host distinto, agregalo al .env.
-const _isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
-const AGRO_API = AGRO_AGENTE_URL || (_isHttps ? '/agro-api' : '/agro-agente/api');
+//   1. `VITE_AGRO_AGENTE_URL` del .env (si está definida; ej. un agente local).
+//   2. `/agro-api`, relativa al propio origen. En producción la resuelve el
+//      nginx del portal (mismas reglas que `public/_redirects`) y en dev el
+//      proxy de Vite (`VITE_AGRO_AGENTE_TARGET` en `vite.config.ts`). Así el
+//      navegador nunca pide el agente por HTTP directo (Mixed Content) y no
+//      hace falta hardcodear su host — si necesitás otro, agregalo al .env.
+const AGRO_API = AGRO_AGENTE_URL || '/agro-api';
 
 /**
- * Prefijo para los adjuntos del chat. En HTTPS pasa por el proxy de Netlify
- * (`/agro-uploads/*`); en HTTP local apunta directo al host de FastAPI.
+ * Prefijo para los adjuntos del chat. Misma lógica que `AGRO_API`: con
+ * override apunta a `{host}/uploads`; sin override, `/agro-uploads` del
+ * propio origen (nginx del portal en prod, proxy de Vite en dev).
  */
-const AGRO_UPLOADS =
-  AGRO_API === '/agro-api'
-    ? '/agro-uploads'
-    : AGRO_API.replace(/\/api\/?$/, '') + '/uploads';
+const AGRO_UPLOADS = AGRO_AGENTE_URL
+  ? AGRO_AGENTE_URL.replace(/\/api\/?$/, '') + '/uploads'
+  : '/agro-uploads';
 
 /** Convierte attachment_url relativa (ej. /uploads/chat/abc.jpg) en URL absoluta. */
 export function buildAttachmentUrl(attachmentUrl?: string | null): string | null {

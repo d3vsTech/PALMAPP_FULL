@@ -106,8 +106,7 @@ export function SelectorArchivo({
 }: PropsSelector) {
   return (
     <>
-      <input ref={inputRef} type="file" accept={accept} className="hidden" onChange={onElegir} />
-        aria-label="Seleccionar archivo"
+      <input ref={inputRef} type="file" accept={accept} className="hidden" onChange={onElegir} aria-label="Seleccionar archivo" />
 
       {!archivo ? (
         <Button

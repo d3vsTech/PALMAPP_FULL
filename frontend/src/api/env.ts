@@ -54,14 +54,13 @@ export const API_URL = stripTrailingSlash(readEnv('VITE_API_URL', { required: tr
 export const APP_URL = stripTrailingSlash(readEnv('VITE_APP_URL', { required: false }));
 
 /**
- * URL del backend FastAPI del Agente IA. Por defecto (sin override) usamos
- * rutas relativas:
- *   - En HTTPS (Netlify): `/agro-api` que `public/_redirects` proxea al
- *     backend HTTP del agente para evitar Mixed Content.
- *   - En HTTP local: el proxy de Vite (`/agro-agente` en vite.config.ts)
- *     se encarga.
+ * URL del backend FastAPI del Agente IA. Por defecto (sin override) el
+ * cliente usa rutas relativas al propio origen (`/agro-api`, `/agro-uploads`):
+ *   - En producción las resuelve el nginx del portal (mismas reglas que
+ *     `public/_redirects`).
+ *   - En dev las resuelve el proxy de Vite (`VITE_AGRO_AGENTE_TARGET`).
  * Si está definida `VITE_AGRO_AGENTE_URL` se respeta tal cual (útil para
- * apuntar a un agente desplegado en otro host).
+ * apuntar a un agente corriendo en otro host, p. ej. uno local).
  */
 const AGRO_RAW = readEnv('VITE_AGRO_AGENTE_URL', { required: false });
 export const AGRO_AGENTE_URL = AGRO_RAW

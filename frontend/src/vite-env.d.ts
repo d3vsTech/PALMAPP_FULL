@@ -7,7 +7,7 @@ interface ImportMetaEnv {
   readonly VITE_APP_URL?: string;
   /** Override de la URL del agente IA (FastAPI). */
   readonly VITE_AGRO_AGENTE_URL?: string;
-  /** Target del proxy Vite para /agro-api y /agro-agente. */
+  /** Host al que el proxy de Vite reenvía /agro-api y /agro-uploads (solo dev). */
   readonly VITE_AGRO_AGENTE_TARGET?: string;
 }
 

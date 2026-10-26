@@ -663,14 +663,10 @@ export default function AgenteIA() {
                   </div>
                 )}
 
-                <input ref={fileInputImageRef} type="file" multiple onChange={(e) => handleFileChange(e, 'Imagen')}    className="hidden" accept="image/*" />
-                  aria-label="Seleccionar archivo"
-                <input ref={fileInputVideoRef} type="file"          onChange={(e) => handleFileChange(e, 'Video')}     className="hidden" accept="video/*" />
-                  aria-label="Seleccionar archivo"
-                <input ref={fileInputDocRef}   type="file"          onChange={(e) => handleFileChange(e, 'Documento')} className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx" />
-                  aria-label="Seleccionar archivo"
-                <input ref={fileInputFileRef}  type="file"          onChange={(e) => handleFileChange(e, 'Archivo')}   className="hidden" />
-                  aria-label="Seleccionar archivo"
+                <input ref={fileInputImageRef} type="file" multiple onChange={(e) => handleFileChange(e, 'Imagen')}    className="hidden" accept="image/*" aria-label="Seleccionar imagen" />
+                <input ref={fileInputVideoRef} type="file"          onChange={(e) => handleFileChange(e, 'Video')}     className="hidden" accept="video/*" aria-label="Seleccionar video" />
+                <input ref={fileInputDocRef}   type="file"          onChange={(e) => handleFileChange(e, 'Documento')} className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx" aria-label="Seleccionar documento" />
+                <input ref={fileInputFileRef}  type="file"          onChange={(e) => handleFileChange(e, 'Archivo')}   className="hidden" aria-label="Seleccionar archivo" />
               </div>
 
               {/* Cámara */}
