@@ -20,6 +20,8 @@ import { agroAgenteApi, buildAttachmentUrl } from '../../../api/agroAgente';
 import type { ChatMessage } from '../../../api/agroAgente';
 import { toast } from 'sonner';
 import { usePreviewUrls } from '../../hooks/usePreviewUrl';
+import { renderMarkdownChat } from './markdownChat';
+import type { RenderTexto } from './markdownChat';
 
 // ────────────────────────────────────────────────────────────
 // Tipos
@@ -90,32 +92,6 @@ function messageFromBackend(m: any): Message {
 // (Bloques de extracción de URLs, deep-scan, persistencia local y fileToAttachment
 //  fueron eliminados: el backend ahora retorna attachment_url + mime en cada
 //  ChatMessage. El render usa esos campos directamente — ver messageFromBackend.)
-
-// ────────────────────────────────────────────────────────────
-// Markdown inline parser
-// Convención: tanto `**texto**` como `*texto*` se renderizan en negrita
-// (el bot envía nombres de productos con un solo asterisco al final).
-// ────────────────────────────────────────────────────────────
-const renderInline = (text: string): (string | JSX.Element)[] => {
-  const parts: (string | JSX.Element)[] = [];
-  const regex = /(\*\*([^*]+?)\*\*|__([^_]+?)__|\*([^*\n]+?)\*|_([^_\n]+?)_)/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  let keyIdx = 0;
-  while ((match = regex.exec(text)) !== null) {
-    if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
-    // Cualquier captura (doble o sencilla) la mostramos en negrita.
-    const contenido = match[2] ?? match[3] ?? match[4] ?? match[5];
-    if (contenido !== undefined) {
-      parts.push(
-        <strong key={`b${keyIdx++}`} className="font-semibold">{contenido}</strong>,
-      );
-    }
-    lastIndex = match.index + match[0].length;
-  }
-  if (lastIndex < text.length) parts.push(text.slice(lastIndex));
-  return parts.length > 0 ? parts : [text];
-};
 
 // ────────────────────────────────────────────────────────────
 // Componente principal
@@ -232,25 +208,31 @@ export default function AgenteIA() {
     setIndiceResultadoActual((prev) => prev === 0 ? resultadosBusqueda.length - 1 : prev - 1);
   };
 
-  const resaltarTexto = (texto: string, indice: number): JSX.Element => {
-    if (!terminoBusqueda.trim() || !resultadosBusqueda.includes(indice)) {
-      return <>{renderInline(texto)}</>;
-    }
-    const partes = texto.split(new RegExp(`(${terminoBusqueda})`, 'gi'));
+  /**
+   * Cómo pintar un trozo de texto llano del mensaje `indice`. Solo marca las
+   * coincidencias de la búsqueda; el formato lo pone quien lo llama, y por
+   * eso el resaltado funciona también dentro de una lista o una tabla.
+   * `undefined` cuando ese mensaje no es resultado de la búsqueda.
+   */
+  const resaltadorDe = (indice: number): RenderTexto | undefined => {
+    if (!terminoBusqueda.trim() || !resultadosBusqueda.includes(indice)) return undefined;
     const esResultadoActual = resultadosBusqueda[indiceResultadoActual] === indice;
-    return (
-      <>
-        {partes.map((parte, i) =>
-          parte.toLowerCase() === terminoBusqueda.toLowerCase() ? (
-            <mark key={i} className={`${esResultadoActual ? 'bg-accent text-white' : 'bg-yellow-200 dark:bg-yellow-800'} rounded px-0.5`}>
-              {parte}
-            </mark>
-          ) : (
-            <span key={i}>{renderInline(parte)}</span>
-          )
-        )}
-      </>
-    );
+    return (texto: string) => {
+      const partes = texto.split(new RegExp(`(${terminoBusqueda})`, 'gi'));
+      return (
+        <>
+          {partes.map((parte, i) =>
+            parte.toLowerCase() === terminoBusqueda.toLowerCase() ? (
+              <mark key={i} className={`${esResultadoActual ? 'bg-accent text-white' : 'bg-yellow-200 dark:bg-yellow-800'} rounded px-0.5`}>
+                {parte}
+              </mark>
+            ) : (
+              <span key={i}>{parte}</span>
+            )
+          )}
+        </>
+      );
+    };
   };
 
   // ── Enviar mensaje ──
@@ -530,8 +512,7 @@ export default function AgenteIA() {
                 <MessageBubble
                   key={message.id}
                   message={message}
-                  index={index}
-                  resaltarTexto={resaltarTexto}
+                  resaltar={resaltadorDe(index)}
                 />
               ))}
 
@@ -742,12 +723,11 @@ export default function AgenteIA() {
 // ────────────────────────────────────────────────────────────
 function MessageBubble({
   message,
-  index,
-  resaltarTexto,
+  resaltar,
 }: {
   message: Message;
-  index: number;
-  resaltarTexto: (texto: string, indice: number) => JSX.Element;
+  /** Marca las coincidencias de la búsqueda, o `undefined` si no hay. */
+  resaltar?: RenderTexto;
 }) {
   const isUser = message.role === 'user';
   const att = message.attachment;
@@ -802,10 +782,17 @@ function MessageBubble({
             </div>
           )}
 
-          {/* Texto del mensaje */}
+          {/* Texto del mensaje. El del asistente llega en Markdown; el del
+              usuario se muestra tal cual lo escribió. */}
           {tieneTexto && (
-            <div className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">
-              {resaltarTexto(message.content, index)}
+            <div className="text-[15px] leading-relaxed break-words">
+              {isUser ? (
+                <span className="whitespace-pre-wrap">
+                  {resaltar ? resaltar(message.content) : message.content}
+                </span>
+              ) : (
+                renderMarkdownChat(message.content, resaltar)
+              )}
             </div>
           )}
         </div>
