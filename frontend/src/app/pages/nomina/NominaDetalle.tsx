@@ -1430,29 +1430,17 @@ export default function NominaDetalle() {
                     </div>
                     <div className="flex items-center gap-4">
                       <div className="text-right">
-                        <p className="text-xs text-muted-foreground">
-                          {calculada ? 'Total a pagar' : 'Estimado del desglose'}
+                        <p className="text-xs text-muted-foreground">Total a pagar</p>
+                        <p className="text-xl font-bold text-foreground">
+                          ${(calculada ? total : totalEstimado).toLocaleString('es-CO')}
                         </p>
-                        {calculada ? (
-                          <p className="text-xl font-bold text-foreground">
-                            ${total.toLocaleString('es-CO')}
-                          </p>
-                        ) : (
-                          <p className="text-xl font-bold text-muted-foreground">
-                            {totalEstimado > 0
-                              ? `~$${totalEstimado.toLocaleString('es-CO')}`
-                              : '—'}
-                          </p>
-                        )}
                       </div>
                       <Badge className={`text-xs ${
                         pagado
                           ? 'bg-success/10 text-success border-success/20'
-                          : calculada
-                            ? 'bg-amber-500/10 text-amber-700 border-amber-300'
-                            : 'bg-muted text-muted-foreground border-border'
+                          : 'bg-amber-500/10 text-amber-700 border-amber-300'
                       }`}>
-                        {pagado ? 'Pagado' : calculada ? 'Pendiente' : 'Sin liquidar'}
+                        {pagado ? 'Pagado' : 'Pendiente'}
                       </Badge>
                       {!pagado && (
                         <Button
@@ -1467,29 +1455,24 @@ export default function NominaDetalle() {
                           {calculada ? 'Ver acta' : 'Liquidar'}
                         </Button>
                       )}
-                      {/* El comprobante sale del acta: sin liquidar, el
-                          backend responde 409 y no hay nada que imprimir.
-                          Queda a la vista pero deshabilitado, para que se
-                          entienda qué falta. */}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1.5"
-                        disabled={!calculada || generandoActa === grupo.tercero_id}
-                        title={
-                          calculada
-                            ? undefined
-                            : 'Liquide el acta para poder generar el comprobante'
-                        }
-                        onClick={() =>
-                          generarComprobanteTercero(grupo.tercero_id, grupo.tercero_nombre)
-                        }
-                      >
-                        <Printer className="h-3.5 w-3.5" />
-                        {generandoActa === grupo.tercero_id
-                          ? 'Generando...'
-                          : 'Generar Comprobante'}
-                      </Button>
+                      {/* El comprobante sale del acta: sin liquidar no hay
+                          nada que imprimir y el backend responde 409. */}
+                      {calculada && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5"
+                          disabled={generandoActa === grupo.tercero_id}
+                          onClick={() =>
+                            generarComprobanteTercero(grupo.tercero_id, grupo.tercero_nombre)
+                          }
+                        >
+                          <Printer className="h-3.5 w-3.5" />
+                          {generandoActa === grupo.tercero_id
+                            ? 'Generando...'
+                            : 'Generar Comprobante'}
+                        </Button>
+                      )}
                     </div>
                   </div>
 

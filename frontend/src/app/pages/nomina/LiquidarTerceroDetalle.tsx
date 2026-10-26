@@ -233,6 +233,37 @@ export default function LiquidarTerceroDetalle() {
   }, []);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
+  /**
+   * Desglose de un operario (doc §7.4). Se pide una sola vez por operario y
+   * queda cacheado: alimenta tanto el acordeón como el estimado que se
+   * muestra mientras el acta sigue sin liquidar.
+   */
+  const cargarDesglose = async (operarioId: number, avisar: boolean) => {
+    if (!nominaId || !terceroId) return;
+    if (desglosePorOperario.has(operarioId)) return;
+    setDesglosePorOperario((prev) => new Map(prev).set(operarioId, 'cargando'));
+    try {
+      const res = await nominaApi.terceros.detalleOperario(nominaId, terceroId, operarioId);
+      setDesglosePorOperario((prev) => new Map(prev).set(operarioId, res.data));
+    } catch (err) {
+      const e = err as ApiError;
+      if (avisar) toast.error(e.message ?? 'No se pudo cargar el desglose del operario');
+      setDesglosePorOperario((prev) => new Map(prev).set(operarioId, 'error'));
+    }
+  };
+
+  /*
+   * El acta nace en ceros y solo `POST /liquidar` la llena, así que sin este
+   * desglose la pantalla mostraría $0 en todas las cifras aunque el período
+   * tenga trabajo. Se precarga en silencio: un fallo aquí no es un error que
+   * el usuario deba ver, solo deja la fila sin estimado.
+   */
+  useEffect(() => {
+    if (!detalle) return;
+    detalle.operarios.forEach((o) => { void cargarDesglose(o.operario_id, false); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detalle?.acta.id, detalle?.operarios.length]);
+
   const toggleExpandido = async (operarioId: number) => {
     setExpandidos((prev) => {
       const next = new Set(prev);
@@ -243,18 +274,7 @@ export default function LiquidarTerceroDetalle() {
       }
       return next;
     });
-    // Cargar el desglose la primera vez que se expande.
-    if (!nominaId || !terceroId) return;
-    if (desglosePorOperario.has(operarioId)) return;
-    setDesglosePorOperario((prev) => new Map(prev).set(operarioId, 'cargando'));
-    try {
-      const res = await nominaApi.terceros.detalleOperario(nominaId, terceroId, operarioId);
-      setDesglosePorOperario((prev) => new Map(prev).set(operarioId, res.data));
-    } catch (err) {
-      const e = err as ApiError;
-      toast.error(e.message ?? 'No se pudo cargar el desglose del operario');
-      setDesglosePorOperario((prev) => new Map(prev).set(operarioId, 'error'));
-    }
+    await cargarDesglose(operarioId, true);
   };
 
   const abrirModalDescuento = (_operarioId: number | null, terceroNombre: string) => {
@@ -482,14 +502,41 @@ export default function LiquidarTerceroDetalle() {
   const estaPagada = detalle.acta.estado_pago === 'PAGADO';
   const nominaCerrada = detalle.nomina.estado === 'CERRADA';
   const puedeEditar = !nominaCerrada && !estaPagada;
-  const totalEmpresa = toNumber(detalle.acta.total_a_transferir);
   /*
    * El acta nace en ceros al agregar los operarios y solo `POST /liquidar`
    * la calcula (doc §7.1). Sin eso, el total no es real: pagar o imprimir
    * responde 409 y el comprobante saldría en $0. Los descuentos sí se
    * pueden registrar antes, y conviene hacerlo (§7.3).
+   *
+   * Un backend anterior a 2026-10-24 no manda `calculada`; ahí se cae a la
+   * vieja señal de "todo en cero", que es lo que había antes del campo.
    */
-  const sinLiquidar = detalle.acta.calculada === false;
+  const sinLiquidar = detalle.acta.calculada != null
+    ? detalle.acta.calculada === false
+    : toNumber(detalle.acta.total_bruto) === 0 && toNumber(detalle.acta.total_dias) === 0;
+
+  /*
+   * Lo que el período dice que vale el trabajo de cada operario, calculado en
+   * vivo desde las planillas (§7.4). No es el acta: sirve para que la
+   * pantalla no muestre $0 donde hay seis millones de poda, y desaparece en
+   * cuanto el acta se liquida.
+   */
+  const estimadoPorOperario = new Map<number, number>();
+  for (const [operarioId, desglose] of desglosePorOperario) {
+    if (desglose === 'cargando' || desglose === 'error') continue;
+    const cosecha = desglose.cosecha.reduce((acc, c) => acc + c.total, 0);
+    const jornales = desglose.jornales.reduce((acc, j) => acc + j.total, 0);
+    estimadoPorOperario.set(operarioId, cosecha + jornales);
+  }
+  const estimadoBruto = detalle.operarios.reduce(
+    (acc, o) => acc + (estimadoPorOperario.get(o.operario_id) ?? 0),
+    0,
+  );
+  const estimadoEmpresa = estimadoBruto - toNumber(detalle.acta.total_descuentos);
+
+  const totalEmpresa = sinLiquidar
+    ? estimadoEmpresa
+    : toNumber(detalle.acta.total_a_transferir);
 
   return (
     <div className="space-y-6">
@@ -555,21 +602,17 @@ export default function LiquidarTerceroDetalle() {
           </div>
           <div className="flex items-center gap-3">
             <div className="text-right">
-              <p className="text-xs text-muted-foreground">
-                {sinLiquidar ? 'Sin liquidar' : 'Total a pagar'}
-              </p>
-              <p className={`text-xl font-bold ${sinLiquidar ? 'text-muted-foreground' : 'text-foreground'}`}>
-                {sinLiquidar ? '—' : `$${totalEmpresa.toLocaleString('es-CO')}`}
+              <p className="text-xs text-muted-foreground">Total a pagar</p>
+              <p className="text-xl font-bold text-foreground">
+                ${totalEmpresa.toLocaleString('es-CO')}
               </p>
             </div>
             <Badge className={`text-xs ${
               estaPagada
                 ? 'bg-[#1E5631]/10 text-[#1E5631] border-[#1E5631]/20'
-                : sinLiquidar
-                  ? 'bg-muted text-muted-foreground border-border'
-                  : 'bg-amber-500/10 text-amber-700 border-amber-300'
+                : 'bg-amber-500/10 text-amber-700 border-amber-300'
             }`}>
-              {estaPagada ? 'Liquidado' : sinLiquidar ? 'Sin liquidar' : 'Pendiente'}
+              {estaPagada ? 'Liquidado' : 'Pendiente'}
             </Badge>
             {sinLiquidar ? (
               <Button
@@ -633,22 +676,6 @@ export default function LiquidarTerceroDetalle() {
           </div>
         </div>
 
-        {sinLiquidar && (
-          <div className="mx-5 mt-4 rounded-lg border border-amber-300 bg-amber-50/70 px-4 py-3 dark:bg-amber-950/20">
-            <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
-              El acta todavía no está liquidada
-            </p>
-            <p className="mt-1 text-xs text-amber-800/90 dark:text-amber-300/80">
-              Las cifras de abajo salen de las planillas del período y sirven
-              de referencia. El acta sigue en ceros hasta que la liquide, y
-              hasta entonces no se puede registrar el pago ni generar el
-              comprobante. Registre primero los descuentos: después de
-              liquidar, si era lo último pendiente, la nómina se cierra y ya
-              no los admite.
-            </p>
-          </div>
-        )}
-
         {/* Lista de operarios */}
         {detalle.operarios.length === 0 ? (
           <div className="py-10 text-center text-sm text-muted-foreground">
@@ -664,11 +691,32 @@ export default function LiquidarTerceroDetalle() {
               .map((p) => p.charAt(0))
               .join('')
               .toUpperCase() || '?';
-            const totalJornales = toNumber(o.total_jornales);
-            const totalCosecha = toNumber(o.total_cosecha);
-            const totalDescuentos = toNumber(o.total_descuentos);
-            const subtotal = toNumber(o.subtotal);
             const desglose = desglosePorOperario.get(o.operario_id);
+            const vivo = desglose === 'cargando' || desglose === 'error' ? null : desglose;
+            // Sin liquidar, la línea del acta está en ceros: se muestra lo que
+            // dicen las planillas para que la cifra signifique algo.
+            const totalJornales = sinLiquidar && vivo
+              ? vivo.jornales.reduce((acc, j) => acc + j.total, 0)
+              : toNumber(o.total_jornales);
+            const totalCosecha = sinLiquidar && vivo
+              ? vivo.cosecha.reduce((acc, c) => acc + c.total, 0)
+              : toNumber(o.total_cosecha);
+            const totalDescuentos = toNumber(o.total_descuentos);
+            const subtotal = sinLiquidar
+              ? estimadoPorOperario.get(o.operario_id) ?? 0
+              : toNumber(o.subtotal);
+            /*
+             * `labores_realizadas` es un snapshot que escribe `POST /liquidar`,
+             * así que antes de liquidar llega vacío y la fila quedaba sin
+             * chips. Mientras tanto salen del desglose en vivo.
+             */
+            const labores = (o.labores_realizadas ?? []).length > 0 || !vivo
+              ? (o.labores_realizadas ?? [])
+              : [
+                  ...(vivo.cosecha.length > 0 ? ['Cosecha'] : []),
+                  ...new Set(vivo.jornales.map((j) =>
+                    j.categoria === 'FINCA' ? 'Trabajos de finca' : j.labor_nombre)),
+                ];
             return (
               <div key={o.id} className="border-b border-border/60 last:border-0">
                 {/* Fila resumen operario — clickeable */}
@@ -691,7 +739,7 @@ export default function LiquidarTerceroDetalle() {
                   <div className="flex items-center gap-4">
                     {/* Chips de labores realizadas — color por labor (V.19) */}
                     <div className="flex gap-2 flex-wrap justify-end max-w-md">
-                      {(o.labores_realizadas ?? []).map((labor, idx) => {
+                      {labores.map((labor, idx) => {
                         const meta = metaDeLabor(labor);
                         return (
                           <span
