@@ -85,10 +85,13 @@ export function renderInlineChat(texto: string, resaltar?: RenderTexto): ReactNo
 
   let desde = 0;
   let n = 0;
-  TOKENS.lastIndex = 0;
+  // Copia propia del regex: `lastIndex` vive en el objeto, y la recursión de
+  // los enlaces lo dejaba en 0 sobre el compartido, con lo que el barrido
+  // volvía al inicio y encontraba el mismo enlace una y otra vez.
+  const tokens = new RegExp(TOKENS.source, TOKENS.flags);
   let m: RegExpExecArray | null;
 
-  while ((m = TOKENS.exec(texto)) !== null) {
+  while ((m = tokens.exec(texto)) !== null) {
     if (m.index > desde) llano(texto.slice(desde, m.index), `t${n++}`);
     desde = m.index + m[0].length;
 
