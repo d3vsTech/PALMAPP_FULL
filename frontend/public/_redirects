@@ -1,3 +1,8 @@
+# NOTA: hoy `portal.palmapp.com.co` lo sirve nginx en el VPS de Hostinger
+# (31.97.7.50, el mismo del agente) con estas mismas reglas; este archivo solo
+# tiene efecto si el build se despliega en Netlify. Mantenerlo en sincronía
+# con el server block del portal.
+#
 # Proxy de Netlify hacia el backend HTTP de AgroAgente.
 # Evita el bloqueo de "Mixed Content" cuando el sitio se sirve por HTTPS.
 # El frontend llama a `/agro-api/*` y `/agro-uploads/*` (mismo origen HTTPS)

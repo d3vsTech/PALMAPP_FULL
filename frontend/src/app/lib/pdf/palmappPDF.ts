@@ -11,17 +11,43 @@ import palmappIsotipoSrc from '../../../assets/90f63474a4a0ddb51ea409c23fa86e2b4
 import palmappLogoSrc from '../../../assets/adf2cc8f5c11d4595840726d8165f5dc63d3cec0.png';
 
 // Pre-cargar isotipo para uso en PDF (inyección sincrónica vía HTMLImageElement)
-let _isotipo: HTMLImageElement | null = null;
-let _logoComplete: HTMLImageElement | null = null;
+let _isotipo: HTMLCanvasElement | null = null;
+let _logoComplete: HTMLCanvasElement | null = null;
 
-function _preload(src: string, setter: (img: HTMLImageElement) => void) {
-  const img = new Image();
-  img.onload = () => setter(img);
-  img.src = src;
-  if (img.complete) setter(img);
+/**
+ * Ancho máximo, en píxeles, con el que se incrusta la marca de Palmapp.
+ *
+ * Los PNG vienen en resolución de imprenta (el logo mide 5544×1900) y jsPDF
+ * guarda los píxeles tal cual si no se le pide comprimir: cada PDF que caía al
+ * logo de Palmapp pesaba 40 MB. Para una cabecera de 20 mm de alto, 900 px de
+ * ancho sobran incluso impresa.
+ */
+const ANCHO_MAX_MARCA = 900;
+
+/** La imagen copiada a un lienzo, reducida si viene más ancha que `anchoMax`. */
+function _aLienzo(img: HTMLImageElement, anchoMax: number): HTMLCanvasElement | null {
+  const escala = Math.min(1, anchoMax / img.naturalWidth);
+  const lienzo = document.createElement('canvas');
+  lienzo.width = Math.max(1, Math.round(img.naturalWidth * escala));
+  lienzo.height = Math.max(1, Math.round(img.naturalHeight * escala));
+  const ctx = lienzo.getContext('2d');
+  if (!ctx) return null;
+  ctx.drawImage(img, 0, 0, lienzo.width, lienzo.height);
+  return lienzo;
 }
-_preload(palmappIsotipoSrc, (img) => { _isotipo = img; });
-_preload(palmappLogoSrc,    (img) => { _logoComplete = img; });
+
+function _preload(src: string, setter: (lienzo: HTMLCanvasElement) => void) {
+  const img = new Image();
+  const listo = () => {
+    const lienzo = _aLienzo(img, ANCHO_MAX_MARCA);
+    if (lienzo) setter(lienzo);
+  };
+  img.onload = listo;
+  img.src = src;
+  if (img.complete && img.naturalWidth > 0) listo();
+}
+_preload(palmappIsotipoSrc, (lienzo) => { _isotipo = lienzo; });
+_preload(palmappLogoSrc,    (lienzo) => { _logoComplete = lienzo; });
 
 // ── Paleta de colores ─────────────────────────────────────────────────────────
 export const C = {
@@ -231,7 +257,8 @@ export function pdfHeader(doc: jsPDF, docTitle: string, docSubtitle?: string): n
       const escala = Math.min(imgMaxW / props.width, contH / props.height);
       const w = props.width * escala;
       const h = props.height * escala;
-      doc.addImage(logoFinca, contX, contY + (contH - h) / 2, w, h);
+      // `FAST`: un PNG con transparencia se guarda sin comprimir si no se pide.
+      doc.addImage(logoFinca, contX, contY + (contH - h) / 2, w, h, undefined, 'FAST');
       logoPintado = true;
     } catch { /* formato que jsPDF no reconoce: cae al logo de Palmapp */ }
   }
@@ -242,19 +269,19 @@ export function pdfHeader(doc: jsPDF, docTitle: string, docSubtitle?: string): n
   }
 
   if (!logoPintado && _logoComplete) {
-    const ratio = _logoComplete.naturalWidth / _logoComplete.naturalHeight;
+    const ratio = _logoComplete.width / _logoComplete.height;
     const w = Math.min(imgH * ratio, imgMaxW);
     try {
-      doc.addImage(_logoComplete, 'PNG', imgX, imgY, w, imgH);
+      doc.addImage(_logoComplete, 'PNG', imgX, imgY, w, imgH, undefined, 'FAST');
       logoPintado = true;
     } catch { /* se intenta con el isotipo */ }
   }
 
   if (!logoPintado && _isotipo) {
-    const ratio = _isotipo.naturalWidth / _isotipo.naturalHeight;
+    const ratio = _isotipo.width / _isotipo.height;
     const isoW = imgH * ratio;
     try {
-      doc.addImage(_isotipo, 'PNG', imgX, imgY, isoW, imgH);
+      doc.addImage(_isotipo, 'PNG', imgX, imgY, isoW, imgH, undefined, 'FAST');
       doc.setTextColor(...C.primary);
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
