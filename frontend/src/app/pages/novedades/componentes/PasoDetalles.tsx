@@ -5,6 +5,7 @@
  * una solicitud de vacaciones pide días hábiles o fecha fin, y una terminación
  * pide la causa del catálogo de retiro.
  */
+import { useRef } from 'react';
 import { Card, CardContent } from '../../../components/ui/card';
 import { Badge } from '../../../components/ui/badge';
 import { Input } from '../../../components/ui/input';
@@ -43,6 +44,14 @@ export function PasoDetalles({ borrador, categorias, soporte, onCambiar }: Props
   const terminacion = esTerminacion(borrador);
   const parcial = esParcial(borrador);
   const motivo = borrador.motivo;
+
+  /*
+   * La entidad se rellena sola desde la ficha, pero queda editable. Aquí se
+   * guarda lo último que puso el formulario: si el campo sigue igual, al
+   * cambiar de colaborador se reemplaza por la afiliación del nuevo; si el
+   * usuario lo corrigió a mano, se respeta.
+   */
+  const entidadAutomatica = useRef('');
 
   const motivosRetiro = categorias.find((c) => c.codigo === 'TERMINACION_CONTRATO')?.motivos_retiro ?? [];
   const dias = calcularDias(borrador.fechaInicio, borrador.fechaFin || borrador.fechaInicio);
@@ -96,21 +105,24 @@ export function PasoDetalles({ borrador, categorias, soporte, onCambiar }: Props
           fecha={borrador.fechaInicio}
           seleccionadoId={borrador.colaboradorId}
           nombreInicial={borrador.colaboradorNombre}
-          onSeleccionar={(colaboradorId, colaboradorNombre, colaborador) =>
-            onCambiar({
-              colaboradorId,
-              colaboradorNombre,
-              /*
-               * En una incapacidad la entidad casi siempre es la afiliación
-               * de la ficha, y tenerla que copiar a mano es un paso de más
-               * donde además se escribe mal. Queda editable: hay traslados
-               * que todavía no se reflejan en la ficha.
-               */
-              ...(esIncapacidad(motivo) && !borrador.entidad.trim()
-                ? { entidad: entidadDeLaFicha(colaborador, motivo) }
-                : {}),
-            })
-          }
+          onSeleccionar={(colaboradorId, colaboradorNombre, colaborador) => {
+            const cambios: Partial<BorradorNovedad> = { colaboradorId, colaboradorNombre };
+            /*
+             * En una incapacidad la entidad casi siempre es la afiliación de
+             * la ficha, y tenerla que copiar a mano es un paso de más donde
+             * además se escribe mal. Queda editable: hay traslados que
+             * todavía no se reflejan en la ficha.
+             */
+            const escritoAMano =
+              borrador.entidad.trim() !== '' &&
+              borrador.entidad.trim() !== entidadAutomatica.current.trim();
+            if (esIncapacidad(motivo) && !escritoAMano) {
+              const entidad = entidadDeLaFicha(colaborador, motivo);
+              entidadAutomatica.current = entidad;
+              cambios.entidad = entidad;
+            }
+            onCambiar(cambios);
+          }}
         />
 
         {/* ── Fechas ────────────────────────────────────────────────────── */}

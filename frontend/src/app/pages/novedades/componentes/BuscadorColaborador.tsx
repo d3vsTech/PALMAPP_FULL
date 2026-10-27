@@ -74,10 +74,13 @@ export function BuscadorColaborador({ fecha, seleccionadoId, nombreInicial, onSe
   const elegido = opciones.find((c) => c.id === seleccionadoId) ?? null;
 
   /*
-   * Con alguien ya elegido, `texto` es su nombre completo y filtrar dejaría
-   * la lista en una sola fila. En ese caso se muestra todo, que es lo útil
-   * para cambiar de persona.
+   * Con alguien ya elegido, `texto` es su nombre completo. Si eso viaja como
+   * `q`, el backend devuelve una sola fila y el desplegable solo muestra a
+   * quien ya estaba puesto: para cambiar de persona había que borrar el
+   * nombre a mano. Con alguien elegido no se busca nada y sale la lista
+   * completa; en cuanto se escribe, la selección se suelta y `q` vuelve.
    */
+  const consulta = seleccionadoId != null ? '' : texto.trim();
   const visibles = seleccionadoId != null ? opciones : filtrarLocal(opciones, texto);
 
   useEffect(() => {
@@ -86,7 +89,7 @@ export function BuscadorColaborador({ fecha, seleccionadoId, nombreInicial, onSe
     setCargando(true);
     const t = setTimeout(() => {
       colaboradoresApi
-        .selectListado({ q: texto.trim() || undefined, fecha: fecha || undefined })
+        .selectListado({ q: consulta || undefined, fecha: fecha || undefined })
         .then((res) => {
           if (id !== reqId.current) return;
           setOpciones(res.data ?? []);
@@ -98,9 +101,9 @@ export function BuscadorColaborador({ fecha, seleccionadoId, nombreInicial, onSe
           setError((err as ApiError).message ?? 'No se pudo cargar la lista');
         })
         .finally(() => { if (id === reqId.current) setCargando(false); });
-    }, texto ? 300 : 0);
+    }, consulta ? 300 : 0);
     return () => clearTimeout(t);
-  }, [texto, fecha, abierto]);
+  }, [consulta, fecha, abierto]);
 
   const elegir = (c: ColaboradorSelectItem) => {
     if (cierre.current) clearTimeout(cierre.current);
@@ -123,7 +126,13 @@ export function BuscadorColaborador({ fecha, seleccionadoId, nombreInicial, onSe
             onSeleccionar(null, '', null);
             setAbierto(true);
           }}
-          onFocus={() => setAbierto(true)}
+          onFocus={(e) => {
+            setAbierto(true);
+            // Con el nombre ya puesto, escribir debería reemplazarlo y no
+            // pegarse al final: se deja seleccionado para que la primera
+            // tecla lo sustituya.
+            if (seleccionadoId != null) e.currentTarget.select();
+          }}
           onBlur={() => { cierre.current = setTimeout(() => setAbierto(false), 150); }}
         />
         {cargando && (
