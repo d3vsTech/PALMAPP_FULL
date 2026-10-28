@@ -11,17 +11,18 @@
  * cae al logo de Palmapp sin romper nada.
  *
  * La ruta es `/pdf-lab`, pública y solo en desarrollo (ver `routes.tsx`).
- * El comprobante de pago a tercero no está: vive dentro de `NominaDetalle` y
- * habría que extraerlo antes de poder invocarlo desde aquí.
+ *
+ * Quedan dos documentos. El 2026-10-27 el backend se llevó el comprobante de
+ * préstamo y el soporte de novedad, que ahora salen con el membrete de la
+ * empresa desde la API y no se pueden probar sin sesión. El comprobante de pago
+ * a tercero tampoco está: vive dentro de `NominaDetalle`.
  */
 import { useState } from 'react';
-import { FileSignature, FileText, Receipt, Truck } from 'lucide-react';
+import { FileText, Receipt, Truck } from 'lucide-react';
 import { Button } from '../../components/ui/button';
-import { descargarComprobanteAbono, descargarComprobantePrestamo } from '../nomina/prestamoPdf';
-import { descargarSoporte } from '../novedades/soportePdf';
+import { descargarComprobanteAbono } from '../nomina/prestamoPdf';
 import { descargarRemision } from '../viajes/remisionPdf';
 import type { AbonoPrestamo, Prestamo } from '../../../api/prestamos';
-import type { AusenciaDetalle } from '../../../api/novedades';
 import type { DatosRemisionEmpresa, DatosRemisionViaje } from '../viajes/remisionPdf';
 
 // ── Datos de ejemplo ─────────────────────────────────────────────────────────
@@ -76,87 +77,6 @@ const ABONO: AbonoPrestamo = {
   registrado_por: 'Esteban Bohórquez',
 };
 
-const NOVEDAD: AusenciaDetalle = {
-  id: 144,
-  operacion_id: null,
-  empleado_id: 7,
-  motivo_ausencia_id: 2,
-  origen: 'NOVEDADES',
-  tipo: 'INCAPACIDAD_EPS',
-  fecha_inicio: '2026-03-04',
-  fecha_fin: '2026-03-10',
-  hora_inicio: null,
-  hora_fin: null,
-  dias_calendario: 7,
-  es_remunerada: true,
-  afecta_nomina: true,
-  porcentaje_pago: '66.67',
-  afecta_auxilio_transporte: true,
-  motivo: null,
-  observacion:
-    'Incapacidad por lumbalgia. El colaborador entrega el certificado el 5 de marzo y se '
-    + 'radica ante la EPS el mismo día.',
-  entidad: 'Sanitas EPS',
-  numero_radicado: 'INC-88213',
-  estado: 'APROBADA',
-  aprobado_at: '2026-03-04T08:30:00-05:00',
-  aprobado_por_id: 1,
-  creado_por_id: 1,
-  nomina_id: null,
-  categoria: 'INCAPACIDADES',
-  parcial: false,
-  horario: null,
-  empleado: { ...COLABORADOR, modalidad_pago: 'PRODUCCION' },
-  motivo_ausencia: {
-    id: 2,
-    nombre: 'Incapacidad EPS',
-    tipo_base: 'INCAPACIDAD_EPS',
-    es_remunerada: true,
-    porcentaje_pago_default: '66.67',
-    afecta_auxilio_transporte: true,
-    afecta_nomina: true,
-    requiere_soporte: true,
-    color: '#2563eb',
-    condicion: null,
-    norma_legal: 'Decreto 780 de 2016',
-  },
-  operacion: null,
-  nomina: null,
-  aprobado_por: { id: 1, name: 'Esteban Bohórquez' },
-  creado_por: { id: 1, name: 'Esteban Bohórquez' },
-  documento: null,
-  editable: { campos: [], motivo_bloqueo: 'ESTADO_APROBADA', puede_eliminar: false, nominas_cerradas: [] },
-  enlaces: { detalle: null, colaborador: '/colaboradores/7', operacion: null, nomina: null },
-};
-
-/** Una novedad parcial: cambia dos filas de la tabla del acta. */
-const NOVEDAD_PARCIAL: AusenciaDetalle = {
-  ...NOVEDAD,
-  id: 145,
-  tipo: 'PERMISO_REMUNERADO',
-  categoria: 'PERMISOS_LICENCIAS',
-  fecha_inicio: '2026-03-18',
-  fecha_fin: '2026-03-18',
-  hora_inicio: '08:00',
-  hora_fin: '11:30',
-  dias_calendario: 0,
-  parcial: true,
-  porcentaje_pago: '100.00',
-  afecta_auxilio_transporte: false,
-  entidad: null,
-  numero_radicado: null,
-  observacion: 'Cita médica en Villavicencio. Regresa a la finca al mediodía.',
-  motivo_ausencia: {
-    ...NOVEDAD.motivo_ausencia,
-    id: 6,
-    nombre: 'Permiso remunerado',
-    tipo_base: 'PERMISO_REMUNERADO',
-    porcentaje_pago_default: '100.00',
-    afecta_auxilio_transporte: false,
-    requiere_soporte: false,
-  },
-};
-
 const VIAJE: DatosRemisionViaje = {
   remision: 'V-0458',
   fecha: '2026-03-05',
@@ -199,17 +119,6 @@ interface Documento {
 
 const DOCUMENTOS: Documento[] = [
   {
-    id: 'prestamo',
-    titulo: 'Préstamo a colaborador',
-    archivo: 'pages/nomina/prestamoPdf.ts',
-    pantalla: 'Pagos → Préstamos → detalle · "Comprobante para firma"',
-    descripcion:
-      'El pagaré con la autorización de descuento por nómina y el calendario de cuotas. '
-      + 'Con seis cuotas las firmas se van a una segunda página.',
-    icono: FileSignature,
-    generar: () => descargarComprobantePrestamo(PRESTAMO),
-  },
-  {
     id: 'abono',
     titulo: 'Comprobante de pago de cuota',
     archivo: 'pages/nomina/prestamoPdf.ts',
@@ -217,26 +126,6 @@ const DOCUMENTOS: Documento[] = [
     descripcion: 'El recibo de una cuota, con el saldo que queda después de ella.',
     icono: Receipt,
     generar: () => descargarComprobanteAbono(PRESTAMO, ABONO),
-  },
-  {
-    id: 'novedad',
-    titulo: 'Soporte de novedad laboral',
-    archivo: 'pages/novedades/soportePdf.ts',
-    pantalla: 'Novedades → detalle · "Generar acta para firma"',
-    descripcion: 'El acta que firma el colaborador. Incapacidad de siete días, remunerada al 66,67%.',
-    icono: FileText,
-    generar: () => descargarSoporte(NOVEDAD),
-  },
-  {
-    id: 'novedad-parcial',
-    titulo: 'Soporte de novedad parcial',
-    archivo: 'pages/novedades/soportePdf.ts',
-    pantalla: 'La misma pantalla, con una novedad por horas',
-    descripcion:
-      'La variante por horas: en vez de fecha fin y días, la tabla muestra el horario y la '
-      + 'nota de que no cuenta como día de ausencia.',
-    icono: FileText,
-    generar: () => descargarSoporte(NOVEDAD_PARCIAL),
   },
   {
     id: 'remision',

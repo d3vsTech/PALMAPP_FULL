@@ -1,5 +1,5 @@
 /**
- * API — Novedades (API_NOVEDADES.md v1.5, PR-N1..N7, 2026-10-01)
+ * API — Novedades (API_NOVEDADES.md v1.9, 2026-10-27)
  * Base: /api/v1/tenant/novedades
  *
  * Novedades no es una tabla: `GET novedades` es la unión de tres fuentes que
@@ -17,6 +17,8 @@
  *     e informativa. No cuenta en nómina ni cubre el día en la planilla.
  *  3. **Las vacaciones y las terminaciones no son motivos de ausencia.** No
  *     salen en `categorias[].motivos[]` y tienen sus propios endpoints.
+ *  4. **El acta de firma la arma el backend** desde el 2026-10-27
+ *     (`ausencias.comprobantePdf`, §4.7). El front ya no la genera.
  */
 import { apiClient } from './client';
 import type { ModoPagoVacacion } from './vacaciones';
@@ -311,6 +313,74 @@ export interface AusenciaDetalle {
   enlaces: EnlacesNovedad & { nomina: string | null };
 }
 
+/**
+ * El soporte de novedad laboral que firman el empleador y el colaborador (§4.7).
+ *
+ * No es el soporte adjunto (`DocumentoNovedad`): ese es el certificado de la
+ * EPS o la carta que la finca escanea y sube. Este es el formato que la finca
+ * imprime para que las dos partes lo firmen.
+ *
+ * Hasta el 2026-10-27 lo armaba el front con jsPDF. Ahora lo emite el backend
+ * con el membrete y el logo de la empresa. Existe en **todo estado**: una
+ * PENDIENTE sale con un aviso ámbar y una RECHAZADA con uno rojo y su motivo.
+ */
+export interface ComprobanteNovedad {
+  id: number;
+  /** `NOV-{id}`. */
+  numero: string;
+  titulo: string;
+  estado: EstadoAusencia;
+  estado_label: string;
+  categoria: CategoriaNovedad;
+  categoria_label: string;
+  origen: OrigenAusencia;
+  origen_label: string;
+  empleado: {
+    id: number;
+    nombre_completo: string;
+    tipo_documento: string | null;
+    documento: string;
+    /** El documento con su tipo delante: "C.C. 1098765432". */
+    documento_label: string;
+    cargo: string | null;
+  };
+  novedad: {
+    tipo: TipoBaseAusencia;
+    /** Etiqueta del `tipo_base`: "Suspensión disciplinaria". */
+    tipo_label: string;
+    /** Nombre del motivo paramétrico, o el tipo si no hay. */
+    motivo: string;
+    fecha_inicio: string;
+    fecha_fin: string;
+    dias_calendario: number;
+    /** "3 días", "1 día" o el horario completo si es parcial. */
+    dias_label: string;
+    parcial: boolean;
+    hora_inicio: string | null;
+    hora_fin: string | null;
+    es_remunerada: boolean;
+    porcentaje_pago: number | string;
+    /** "No remunerada", "Remunerada (100 %)", "Remunerada al 66,67 %". */
+    remuneracion_label: string;
+    afecta_nomina: boolean;
+    afecta_auxilio_transporte: boolean;
+    entidad: string | null;
+    numero_radicado: string | null;
+    observacion: string | null;
+  };
+  registro: { fecha: string; fecha_humana: string; registrado_por: string | null };
+  /** Solo en APROBADA y LIQUIDADA. */
+  aprobacion: { fecha: string; fecha_humana: string; aprobado_por: string | null } | null;
+  /** Solo en RECHAZADA. */
+  rechazo: { motivo: string | null; rechazado_por: string | null } | null;
+  /** La nómina que ya la liquidó, si la hay. */
+  nomina: { id: number; etiqueta: string } | null;
+  /** El soporte adjunto (§4.6), si lo hay. */
+  documento: DocumentoNovedad | null;
+  generado_el: string;
+  filename: string;
+}
+
 export interface CrearAusenciaPayload {
   empleado_id: number;
   motivo_ausencia_id: number;
@@ -538,6 +608,28 @@ export const novedadesApi = {
     },
     descargarDocumento: (id: number, inline = false) =>
       apiClient.getBlob(`${BASE}/ausencias/${id}/documento${inline ? '?inline=1' : ''}`, T),
+
+    /**
+     * §4.7 - El mismo contenido del PDF de firma, en JSON.
+     *
+     * Útil para previsualizarlo sin descargar el archivo. Lo que se firma es
+     * `comprobantePdf`.
+     */
+    comprobante: (id: number) =>
+      apiClient.get<{ data: ComprobanteNovedad }>(`${BASE}/ausencias/${id}/comprobante`, T),
+
+    /**
+     * §4.7 - El soporte de novedad laboral para imprimir y firmar.
+     *
+     * Existe en cualquier estado: PENDIENTE sale con un aviso ámbar y
+     * RECHAZADA con uno rojo y el motivo. No se comparte por WhatsApp, se
+     * firma en la finca. `inline` lo abre en el visor en vez de descargarlo.
+     */
+    comprobantePdf: (id: number, inline = false) =>
+      apiClient.getBlob(
+        `${BASE}/ausencias/${id}/comprobante/pdf${inline ? '?inline=1' : ''}`,
+        T,
+      ),
   },
 
   vacaciones: {

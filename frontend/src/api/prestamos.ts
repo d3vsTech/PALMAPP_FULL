@@ -8,6 +8,10 @@
  * (`PreviewLiquidacion.prestamos_pendientes[]`). El liquidador decide en cada
  * quincena si aplica o no el descuento pasando `prestamo_cuota_id` en
  * `deducciones_voluntarias` (ver §5.3).
+ *
+ * El comprobante que firma el colaborador lo emite el backend desde el
+ * 2026-10-27 (§12): antes lo armaba el navegador y el logo de la finca no
+ * siempre llegaba. El recibo del abono sigue siendo del front.
  */
 
 import { apiClient, PaginatedResponse } from './client';
@@ -289,6 +293,100 @@ export interface RegistrarAbonoPayload {
   saldar?: boolean;
 }
 
+// ─── Comprobante de préstamo / adelanto (doc §12) ─────────────────────────────
+
+/**
+ * El papel que el colaborador firma al recibir el dinero.
+ *
+ * Hasta el 2026-10-27 lo armaba el front con jsPDF. Ahora lo emite el backend
+ * con el membrete y el logo de la empresa, que es lo que faltaba: el logo se
+ * leía del navegador y en producción no siempre llegaba.
+ *
+ * No es el soporte adjunto (`DocumentoPrestamo`): ese es este mismo papel ya
+ * firmado y escaneado, que la finca sube después.
+ */
+export interface ComprobantePrestamoCuota {
+  numero_cuota: number;
+  anio: number;
+  mes: number;
+  /** `null` en los préstamos MENSUAL. */
+  quincena: number | null;
+  /** "1ª quincena de enero de 2026" o "enero de 2026". */
+  periodo_label: string;
+  monto: number | string;
+  estado: EstadoCuota;
+  estado_label: string;
+  /** Fecha del abono. Solo en las APLICADAS. */
+  fecha: string | null;
+  medio_pago: MedioPagoAbono | null;
+  medio_pago_label: string | null;
+  referencia: string | null;
+}
+
+/** Primer o último periodo de descuento del calendario. */
+export interface PeriodoComprobantePrestamo {
+  anio?: number;
+  mes?: number;
+  quincena?: number | null;
+  /** Día 1 o 16 de la quincena, o fin de mes. */
+  fecha: string | null;
+  etiqueta: string;
+}
+
+export interface ComprobantePrestamo {
+  id: number;
+  /** `PRE-{id}`. */
+  numero_comprobante: string;
+  titulo: string;
+  estado: EstadoPrestamo;
+  estado_label: string;
+  empleado: {
+    id: number;
+    nombre_completo: string;
+    tipo_documento: string | null;
+    documento: string;
+    /** El documento con su tipo delante: "C.C. 1098765432". */
+    documento_label: string;
+    cargo: string | null;
+  };
+  concepto: string;
+  valor_total: number | string;
+  /** "UN MILLÓN QUINIENTOS MIL PESOS M/CTE". */
+  valor_en_letras: string;
+  frecuencia: FrecuenciaPrestamo;
+  frecuencia_label: string;
+  plan: {
+    cuota_valor: number | string;
+    num_cuotas: number;
+    inicio: PeriodoComprobantePrestamo;
+    fin: PeriodoComprobantePrestamo;
+  };
+  avance: {
+    cuotas_pagadas: number;
+    cuotas_pendientes: number;
+    /** `valor_total - saldo_pendiente`. */
+    total_abonado: number | string;
+    saldo_pendiente: number | string;
+    /** "4/10". */
+    avance: string;
+  };
+  /** El calendario completo, en orden. */
+  cuotas: ComprobantePrestamoCuota[];
+  observaciones: string | null;
+  /** El soporte adjunto, si lo hay. */
+  documento: DocumentoPrestamo | null;
+  registro: { fecha: string; fecha_humana: string; registrado_por: string | null };
+  generado_el: string;
+  filename: string;
+}
+
+/** Lo que devuelve `comprobanteWhatsapp`. La URL vive 7 días. */
+export interface EnlaceComprobantePrestamo {
+  url: string;
+  filename: string;
+  expires_at: string;
+}
+
 // ─── Endpoints ────────────────────────────────────────────────────────────────
 
 export const prestamosApi = {
@@ -413,7 +511,48 @@ export const prestamosApi = {
    * evidencia en la ficha del colaborador.
    */
   eliminarDocumento: (id: number) =>
-    apiClient.delete<{ message: string }>(`/v1/tenant/prestamos/${id}/documento`, T),
+    apiClient.delete<{ message: string }>(`/v1/tenant/préstamos/${id}/documento`, T),
+
+  /**
+   * GET /préstamos/{id}/comprobante - el mismo contenido del PDF, en JSON.
+   *
+   * Sirve para previsualizarlo en pantalla sin descargar el archivo. El PDF
+   * es la fuente: lo que se firma es `comprobantePdf`.
+   */
+  comprobante: (id: number) =>
+    apiClient.get<{ data: ComprobantePrestamo }>(
+      `/v1/tenant/préstamos/${id}/comprobante`,
+      T,
+    ),
+
+  /**
+   * GET /préstamos/{id}/comprobante/pdf - el pagaré con el membrete de la finca.
+   *
+   * Se puede pedir en cualquier momento de la vida del préstamo, VIGENTE o
+   * PAGADO: refleja el avance real. Un préstamo CANCELADO está soft-deleted y
+   * responde 404 `PRESTAMO_NO_ENCONTRADO`. `inline` lo abre en el visor en vez
+   * de forzar la descarga, que es lo que quiere el botón "Imprimir".
+   */
+  comprobantePdf: (id: number, inline = false) =>
+    apiClient.getBlob(
+      `/v1/tenant/préstamos/${id}/comprobante/pdf${inline ? '?inline=1' : ''}`,
+      T,
+    ),
+
+  /**
+   * POST /préstamos/{id}/comprobante/whatsapp - devuelve **solo** la URL
+   * firmada (7 días) a la ruta pública del PDF.
+   *
+   * El backend no arma el mensaje ni conoce el teléfono: el front abre
+   * `https://wa.me/?text=` + `encodeURIComponent(url)` y el usuario elige el
+   * contacto. Quien tenga el enlace mientras viva puede abrirlo.
+   */
+  comprobanteWhatsapp: (id: number) =>
+    apiClient.post<{ data: EnlaceComprobantePrestamo }>(
+      `/v1/tenant/préstamos/${id}/comprobante/whatsapp`,
+      {},
+      T,
+    ),
 };
 
 // ─── Códigos de error específicos (doc §15) ───────────────────────────────────
@@ -435,6 +574,12 @@ export const PrestamoErrorCodes = {
   PRESTAMO_NO_VIGENTE: 'PRESTAMO_NO_VIGENTE',
   /** Todas las cuotas del préstamo ya fueron aplicadas (doc §8.2). */
   PRESTAMO_SIN_CUOTAS_PENDIENTES: 'PRESTAMO_SIN_CUOTAS_PENDIENTES',
+  /** El préstamo es de otro tenant, o está CANCELADO (doc §0 y §12.1). */
+  PRESTAMO_NO_ENCONTRADO: 'PRESTAMO_NO_ENCONTRADO',
+  /** Ruta pública del comprobante: la firma fue alterada o ya venció (§12.4). */
+  ENLACE_INVALIDO_O_VENCIDO: 'ENLACE_INVALIDO_O_VENCIDO',
+  /** Ruta pública del comprobante: el préstamo se borró o se canceló (§12.4). */
+  DOCUMENTO_NO_DISPONIBLE: 'DOCUMENTO_NO_DISPONIBLE',
 } as const;
 
 export type PrestamoErrorCode =

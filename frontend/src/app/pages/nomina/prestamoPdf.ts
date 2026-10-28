@@ -1,18 +1,13 @@
 /**
- * Documentos imprimibles de un préstamo, para entregarle al colaborador.
+ * Recibo del pago de una cuota del préstamo.
  *
- * Son dos y no hay que confundirlos con el **soporte adjunto** del préstamo
- * (ese es el papel firmado que la finca escanea y sube):
+ * Se arma en el navegador con los bloques de `lib/pdf/palmappPDF`. No hay
+ * endpoint de backend para este recibo: el 2026-10-27 el backend se llevó el
+ * comprobante del préstamo (el pagaré, API_PRESTAMOS §12, hoy en
+ * `prestamosApi.comprobantePdf`), pero no el del abono.
  *
- *  1. `descargarComprobantePrestamo` — el pagaré con la autorización de
- *     descuento por nómina (CST arts. 149-150) y el calendario completo de
- *     cuotas. Es el que se imprime, se firma y después se sube como soporte.
- *  2. `descargarComprobanteAbono` — el recibo del pago de una cuota, con el
- *     saldo que queda después de él.
- *
- * Los dos se arman en el navegador con los bloques de `lib/pdf/palmappPDF`,
- * para que salgan con la misma cabecera, pie y firmas que el resto de
- * descargables. No hay endpoint de backend para esto.
+ * No confundirlo con el **soporte adjunto** del préstamo, que es el pagaré ya
+ * firmado y escaneado que la finca sube.
  */
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -20,23 +15,12 @@ import {
   asegurarLogoEmpresa,
   C, TABLE_ALT, pdfChip, pdfFooter, pdfHeader, pdfSectionTitle, pdfSignatureBlock,
 } from '../../lib/pdf/palmappPDF';
-import type { AbonoPrestamo, Prestamo, PrestamoCuota } from '../../../api/prestamos';
+import type { AbonoPrestamo, Prestamo } from '../../../api/prestamos';
 import { formatFecha } from '../../utils/fecha';
 
 const MARGEN = 14;
 /** Debajo de esta Y ya no cabe el bloque de firmas: se abre página nueva. */
 const Y_MINIMA_FIRMAS = 215;
-
-const MESES = [
-  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
-];
-
-const NOTA_AUTORIZACION =
-  'El colaborador autoriza expresamente al empleador a descontar de su salario las cuotas ' +
-  'relacionadas en este documento, en los términos de los artículos 149 y 150 del Código ' +
-  'Sustantivo del Trabajo. Ambas partes declaran estar de acuerdo con el valor, el número de ' +
-  'cuotas y las fechas aquí consignadas.';
 
 const NOTA_RECIBO =
   'Este documento certifica el pago relacionado y el saldo pendiente a la fecha de su emisión. ' +
@@ -46,21 +30,6 @@ const NOTA_RECIBO =
 function cop(v: number | string | null | undefined): string {
   const n = typeof v === 'number' ? v : parseFloat(String(v ?? 0)) || 0;
   return `$${Math.round(n).toLocaleString('es-CO')}`;
-}
-
-/**
- * El período del descuento escrito como lo diría alguien, no como lo guarda la
- * base: "Q1" obligaba al colaborador a adivinar de qué quincena le hablan.
- */
-function etiquetaPeriodo(anio: number, mes: number, quincena?: number | null): string {
-  const nombre = (MESES[mes - 1] ?? String(mes)).toLowerCase();
-  if (quincena === 1) return `Primera quincena de ${nombre} ${anio}`;
-  if (quincena === 2) return `Segunda quincena de ${nombre} ${anio}`;
-  return `Mes de ${nombre} ${anio}`;
-}
-
-function periodoCuota(c: PrestamoCuota): string {
-  return etiquetaPeriodo(c.anio, c.mes, c.quincena);
 }
 
 function primerNombre(p: Prestamo): string {
@@ -108,83 +77,6 @@ function bloqueColaborador(doc: jsPDF, p: Prestamo, y: number): number {
   yy = filaDato(doc, 'Nombre completo', p.empleado.nombre_completo, yy);
   yy = filaDato(doc, 'No. de documento', p.empleado.documento, yy);
   return filaDato(doc, 'Cargo', p.empleado.cargo || 'Sin cargo', yy) + 4;
-}
-
-/**
- * Pagaré y autorización de descuento, con el calendario de cuotas.
- *
- * Se entrega al colaborador para que lo firme: es el papel que después se
- * escanea y se sube como soporte del préstamo.
- */
-export async function descargarComprobantePrestamo(p: Prestamo): Promise<void> {
-  // El logo de la finca vive en localStorage y hay que traerlo antes de pintar
-  // la cabecera; si no, sale solo el logo de Palmapp.
-  await asegurarLogoEmpresa();
-  const doc = new jsPDF();
-  const anchoPagina = pdfHeader(doc, 'PRÉSTAMO A COLABORADOR', p.concepto);
-
-  let y = 48;
-  y = pdfChip(doc, p.concepto, `Desde ${MESES[p.inicio_mes - 1] ?? p.inicio_mes} ${p.inicio_anio}`, y) + 6;
-  y = bloqueColaborador(doc, p, y);
-
-  y = pdfSectionTitle(doc, 'CONDICIONES DEL PRÉSTAMO', y);
-  y = tablaDatos(doc, [
-    ['Valor del préstamo', cop(p.valor_total)],
-    ['Número de cuotas', String(p.num_cuotas)],
-    ['Valor de cada cuota', cop(p.cuota_valor)],
-    ['Frecuencia de descuento', p.frecuencia === 'QUINCENAL' ? 'Quincenal' : 'Mensual'],
-    ['Primera cuota', etiquetaPeriodo(p.inicio_anio, p.inicio_mes, p.inicio_quincena)],
-    ['Última cuota', p.fecha_fin ? formatFecha(p.fecha_fin) : 'Por definir'],
-    ['Saldo pendiente a la fecha', cop(p.saldo_pendiente)],
-  ], y);
-
-  const cuotas = p.cuotas ?? [];
-  if (cuotas.length > 0) {
-    y = pdfSectionTitle(doc, 'CALENDARIO DE CUOTAS', y);
-    autoTable(doc, {
-      startY: y,
-      head: [['#', 'Período', 'Valor', 'Estado', 'Aplicada el']],
-      body: cuotas.map((c) => [
-        String(c.numero_cuota),
-        periodoCuota(c),
-        cop(c.monto),
-        c.estado === 'APLICADA' ? 'Aplicada' : 'Pendiente',
-        c.aplicada_at ? formatFecha(c.aplicada_at.slice(0, 10)) : '—',
-      ]),
-      theme: 'striped',
-      styles: { fontSize: 8.5, cellPadding: 2.5, textColor: C.darkText },
-      headStyles: { fillColor: C.primary, textColor: [255, 255, 255], fontStyle: 'bold' },
-      columnStyles: { 0: { halign: 'center', cellWidth: 12 }, 2: { halign: 'right' } },
-      alternateRowStyles: TABLE_ALT,
-      margin: { left: MARGEN, right: MARGEN },
-    });
-    y = finDeTabla(doc) + 10;
-  }
-
-  if (p.observaciones) {
-    y = pdfSectionTitle(doc, 'OBSERVACIONES', y);
-    doc.setTextColor(...C.darkText);
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    const lineas = doc.splitTextToSize(p.observaciones, anchoPagina - MARGEN * 2);
-    doc.text(lineas, MARGEN, y);
-    y += lineas.length * 5 + 10;
-  }
-
-  if (y > Y_MINIMA_FIRMAS) {
-    doc.addPage();
-    y = 20;
-  }
-  y = pdfSectionTitle(doc, 'FIRMAS DE ACEPTACIÓN', y);
-  pdfSignatureBlock(
-    doc,
-    { titulo: 'EMPLEADOR' },
-    { titulo: 'COLABORADOR', nombre: p.empleado.nombre_completo, cedula: p.empleado.documento },
-    y,
-  );
-
-  pdfFooter(doc, NOTA_AUTORIZACION);
-  doc.save(`prestamo_${primerNombre(p)}_${p.id}.pdf`);
 }
 
 /** Recibo del pago de una cuota, con el saldo que queda después de él. */

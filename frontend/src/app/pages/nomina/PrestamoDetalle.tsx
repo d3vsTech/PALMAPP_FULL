@@ -31,6 +31,7 @@ import {
 } from '../../components/ui/breadcrumb';
 import {
   ArrowLeft, DollarSign, FileSignature, User, TrendingDown, Check, Loader2, Save, Trash2,
+  Share2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -43,7 +44,6 @@ import {
 import type { ApiError } from '../../../api/client';
 import { formatFecha } from '../../utils/fecha';
 import { SoportePrestamoCard } from '../../components/nomina/SoportePrestamoCard';
-import { descargarComprobantePrestamo } from './prestamoPdf';
 
 function toNumber(v: string | number | null | undefined): number {
   if (v == null) return 0;
@@ -100,6 +100,8 @@ export default function PrestamoDetalle() {
   const [editMes, setEditMes] = useState('');
   const [editQuincena, setEditQuincena] = useState('');
   const [guardando, setGuardando] = useState(false);
+  const [descargandoComprobante, setDescargandoComprobante] = useState(false);
+  const [compartiendo, setCompartiendo] = useState(false);
   const [confirmarCancelar, setConfirmarCancelar] = useState(false);
   const [cancelando, setCancelando] = useState(false);
 
@@ -196,6 +198,60 @@ export default function PrestamoDetalle() {
     }
   };
 
+  /**
+   * Descarga el comprobante que arma el backend (doc §12).
+   *
+   * Antes se generaba aquí con jsPDF. El logo de la finca se bajaba desde el
+   * navegador y en producción no siempre llegaba, así que el papel que firma
+   * el colaborador salía con el logo equivocado. El backend lo emite con el
+   * membrete de la empresa, igual que el resto de los documentos.
+   */
+  const descargarComprobante = async () => {
+    if (!prestamoId) return;
+    setDescargandoComprobante(true);
+    try {
+      const blob = await prestamosApi.comprobantePdf(prestamoId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const doc = prestamo?.empleado.documento ?? prestamoId;
+      a.download = `comprobante_prestamo_${doc}_PRE-${prestamoId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      const e = err as ApiError;
+      toast.error(e.message ?? 'No se pudo descargar el comprobante');
+    } finally {
+      setDescargandoComprobante(false);
+    }
+  };
+
+  /**
+   * El backend solo devuelve la URL firmada, que vive siete días; el mensaje
+   * y el contacto los pone el usuario en WhatsApp (doc §12.4).
+   */
+  const compartirComprobante = async () => {
+    if (!prestamoId) return;
+    setCompartiendo(true);
+    try {
+      const res = await prestamosApi.comprobanteWhatsapp(prestamoId);
+      const nombre = prestamo?.empleado.nombre_completo ?? 'Colaborador';
+      const texto =
+        `Hola ${nombre}, adjunto el comprobante de tu ${prestamo?.concepto ?? 'préstamo'}.`
+        + `
+
+Descarga el PDF: ${res.data.url}`;
+      window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank');
+    } catch (err) {
+      const e = err as ApiError;
+      toast.error(e.message ?? 'No se pudo generar el enlace para compartir');
+    } finally {
+      setCompartiendo(false);
+    }
+  };
+
   if (cargando) {
     return (
       <div className="flex items-center justify-center py-20 gap-2 text-muted-foreground">
@@ -221,6 +277,9 @@ export default function PrestamoDetalle() {
     ? Math.round((prestamo.cuotas_pagadas / prestamo.num_cuotas) * 100)
     : 0;
   const puedeCancelar = prestamo.estado === 'VIGENTE';
+  // Un préstamo CANCELADO está soft-deleted: el backend responde 404 a su
+  // comprobante (doc §12.1). No se ofrece un botón que solo puede fallar.
+  const hayComprobante = prestamo.estado !== 'CANCELADO';
   const puedeEditarMontos = puedeEditarMontosDe(prestamo);
   /** Lo que quedaría al guardar: el backend reparte igual y la última absorbe el residuo. */
   const cuotaRecalculada = (() => {
@@ -273,15 +332,32 @@ export default function PrestamoDetalle() {
           </div>
           <div className="flex flex-wrap gap-2">
             {/* El pagaré con la autorización de descuento (CST arts. 149-150)
-                para imprimir, firmar y subir después como soporte. */}
-            <Button
-              variant="outline"
-              onClick={() => void descargarComprobantePrestamo(prestamo)}
-              className="gap-2 border-primary/40 text-primary hover:border-primary hover:bg-primary/5"
-            >
-              <FileSignature className="h-4 w-4" />
-              Comprobante para firma
-            </Button>
+                para imprimir, firmar y subir después como soporte. Lo arma el
+                backend con el membrete de la finca. */}
+            {hayComprobante && (<>
+              <Button
+                variant="outline"
+                onClick={() => void descargarComprobante()}
+                disabled={descargandoComprobante}
+                className="gap-2 border-primary/40 text-primary hover:border-primary hover:bg-primary/5"
+              >
+                {descargandoComprobante
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : <FileSignature className="h-4 w-4" />}
+                Comprobante para firma
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => void compartirComprobante()}
+                disabled={compartiendo}
+                className="gap-2"
+              >
+                {compartiendo
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : <Share2 className="h-4 w-4" />}
+                Enviar por WhatsApp
+              </Button>
+            </>)}
             {puedeCancelar && (
               <Button
                 variant="outline"

@@ -30,7 +30,6 @@ import {
   type TerminacionData,
 } from '../../../../api/novedades';
 import type { ApiError } from '../../../../api/client';
-import { descargarSoporte } from '../soportePdf';
 import { EditarNovedadForm } from './EditarNovedadForm';
 import {
   ESTADO_BADGE, ESTADO_LABEL, ORIGEN_LABEL, etiquetaDias,
@@ -96,6 +95,7 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
   const [cargando, setCargando] = useState(false);
   const [accion, setAccion] = useState<'aprobar' | 'rechazar' | 'editar' | 'eliminar' | null>(null);
   const [motivoRechazo, setMotivoRechazo] = useState('');
+  const [bajandoActa, setBajandoActa] = useState(false);
   /** El input de archivo vive oculto: el botón visible es el que se dispara. */
   const archivoRef = useRef<HTMLInputElement>(null);
 
@@ -252,6 +252,36 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
       setTimeout(() => URL.revokeObjectURL(url), inline ? 60_000 : 0);
     } catch (err) {
       toast.error((err as ApiError).message ?? 'No se pudo abrir el soporte');
+    }
+  };
+
+  /**
+   * El acta que firman la finca y el colaborador (API_NOVEDADES §4.7).
+   *
+   * No es el adjunto de `bajarAdjunto`: ese es el certificado que la finca
+   * escanea. Hasta el 2026-10-27 esta acta se armaba aquí con jsPDF, y el logo
+   * de la finca se bajaba desde el navegador. Ahora la emite el backend con el
+   * membrete de la empresa. Sale en cualquier estado: una PENDIENTE lleva un
+   * aviso ámbar y una RECHAZADA uno rojo con el motivo.
+   */
+  const bajarActa = async () => {
+    if (!fila) return;
+    setBajandoActa(true);
+    try {
+      const blob = await novedadesApi.ausencias.comprobantePdf(fila.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const doc = detalle?.empleado.documento ?? fila.id;
+      a.download = `soporte_novedad_${doc}_${fila.fecha_inicio}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error((err as ApiError).message ?? 'No se pudo generar el acta');
+    } finally {
+      setBajandoActa(false);
     }
   };
 
@@ -567,10 +597,13 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => descargarSoporte(detalle)}
+                      onClick={() => void bajarActa()}
+                      disabled={bajandoActa}
                       className="gap-2 border-primary/40 text-primary hover:border-primary hover:bg-primary/5"
                     >
-                      <FileSignature className="h-3.5 w-3.5" />
+                      {bajandoActa
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        : <FileSignature className="h-3.5 w-3.5" />}
                       Generar acta para firma
                     </Button>
                   )}
