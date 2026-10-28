@@ -511,22 +511,22 @@ export const prestamosApi = {
    * evidencia en la ficha del colaborador.
    */
   eliminarDocumento: (id: number) =>
-    apiClient.delete<{ message: string }>(`/v1/tenant/préstamos/${id}/documento`, T),
+    apiClient.delete<{ message: string }>(`/v1/tenant/prestamos/${id}/documento`, T),
 
   /**
-   * GET /préstamos/{id}/comprobante - el mismo contenido del PDF, en JSON.
+   * GET /prestamos/{id}/comprobante - el mismo contenido del PDF, en JSON.
    *
    * Sirve para previsualizarlo en pantalla sin descargar el archivo. El PDF
    * es la fuente: lo que se firma es `comprobantePdf`.
    */
   comprobante: (id: number) =>
     apiClient.get<{ data: ComprobantePrestamo }>(
-      `/v1/tenant/préstamos/${id}/comprobante`,
+      `/v1/tenant/prestamos/${id}/comprobante`,
       T,
     ),
 
   /**
-   * GET /préstamos/{id}/comprobante/pdf - el pagaré con el membrete de la finca.
+   * GET /prestamos/{id}/comprobante/pdf - el pagaré con el membrete de la finca.
    *
    * Se puede pedir en cualquier momento de la vida del préstamo, VIGENTE o
    * PAGADO: refleja el avance real. Un préstamo CANCELADO está soft-deleted y
@@ -535,12 +535,12 @@ export const prestamosApi = {
    */
   comprobantePdf: (id: number, inline = false) =>
     apiClient.getBlob(
-      `/v1/tenant/préstamos/${id}/comprobante/pdf${inline ? '?inline=1' : ''}`,
+      `/v1/tenant/prestamos/${id}/comprobante/pdf${inline ? '?inline=1' : ''}`,
       T,
     ),
 
   /**
-   * POST /préstamos/{id}/comprobante/whatsapp - devuelve **solo** la URL
+   * POST /prestamos/{id}/comprobante/whatsapp - devuelve **solo** la URL
    * firmada (7 días) a la ruta pública del PDF.
    *
    * El backend no arma el mensaje ni conoce el teléfono: el front abre
@@ -549,7 +549,7 @@ export const prestamosApi = {
    */
   comprobanteWhatsapp: (id: number) =>
     apiClient.post<{ data: EnlaceComprobantePrestamo }>(
-      `/v1/tenant/préstamos/${id}/comprobante/whatsapp`,
+      `/v1/tenant/prestamos/${id}/comprobante/whatsapp`,
       {},
       T,
     ),
