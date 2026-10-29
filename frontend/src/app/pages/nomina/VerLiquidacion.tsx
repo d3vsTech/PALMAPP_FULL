@@ -27,6 +27,7 @@ import { toast } from 'sonner';
 import { nominaApi, type DesprendibleData } from '../../../api/nomina';
 import { nombreArchivoDesprendible } from './DesprendiblePago';
 import type { ApiError } from '../../../api/client';
+import { imprimirPdf } from '../../lib/pdf/imprimirPdf';
 
 function getIniciales(nombre: string): string {
   const partes = nombre.trim().split(' ').filter(Boolean);
@@ -81,12 +82,19 @@ export default function VerLiquidacion() {
       .finally(() => setCargando(false));
   }, [nominaEmpleadoId]);
 
-  /** El PDF lo genera el backend, con el membrete de la finca (§6.3). */
-  const descargarPdf = async () => {
+  /**
+   * El PDF lo genera el backend, con el membrete de la finca (§6.3). El mismo
+   * archivo se guarda o se manda a la impresora según `accion`.
+   */
+  const pedirPdf = async (accion: 'descargar' | 'imprimir') => {
     if (!nominaEmpleadoId || !data) return;
     setDescargando(true);
     try {
       const blob = await nominaApi.desprendiblePdf(nominaEmpleadoId);
+      if (accion === 'imprimir') {
+        imprimirPdf(blob);
+        return;
+      }
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -97,7 +105,7 @@ export default function VerLiquidacion() {
       URL.revokeObjectURL(url);
     } catch (err) {
       const e = err as ApiError;
-      toast.error(e.message ?? 'Error al descargar el desprendible');
+      toast.error(e.message ?? 'Error al obtener el desprendible');
     } finally {
       setDescargando(false);
     }
@@ -394,7 +402,13 @@ export default function VerLiquidacion() {
           <Check className="h-5 w-5" />
           Aceptar
         </Button>
-        <Button variant="outline" size="lg" onClick={() => window.print()} className="gap-2">
+        <Button
+          variant="outline"
+          size="lg"
+          onClick={() => void pedirPdf('imprimir')}
+          disabled={descargando}
+          className="gap-2"
+        >
           <Printer className="h-5 w-5" />
           Imprimir
         </Button>
@@ -411,7 +425,7 @@ export default function VerLiquidacion() {
         <Button
           variant="outline"
           size="lg"
-          onClick={descargarPdf}
+          onClick={() => void pedirPdf('descargar')}
           disabled={descargando}
           className="gap-2"
         >

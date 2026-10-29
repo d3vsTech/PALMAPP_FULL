@@ -5,6 +5,11 @@ interface ResumenLiquidacionProps {
   onVolver: () => void;
   onAceptar: () => void;
   onDescargarPDF: () => void;
+  /**
+   * Imprimir tiene que bajar el PDF del backend, igual que descargar:
+   * `window.print()` sacaba el HTML de la pantalla con menú y botones.
+   */
+  onImprimir: () => void;
   onCompartirWhatsApp: () => void;
   children: React.ReactNode;
 }
@@ -13,6 +18,7 @@ export default function ResumenLiquidacion({
   onVolver,
   onAceptar,
   onDescargarPDF,
+  onImprimir,
   onCompartirWhatsApp,
   children,
 }: ResumenLiquidacionProps) {
@@ -41,7 +47,7 @@ export default function ResumenLiquidacion({
             Aceptar
           </Button>
           <Button
-            onClick={() => window.print()}
+            onClick={onImprimir}
             variant="outline"
             className="gap-2"
             size="lg"

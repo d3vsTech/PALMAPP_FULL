@@ -32,6 +32,7 @@ import {
 import type { ApiError } from '../../../../api/client';
 import { formatFecha } from '../../../utils/fecha';
 import { fmtCOP, descargarBlob, nombrePdf, semestreLabel, TEXTOS_PERIODO, type TipoPeriodoDetalle } from './textos';
+import { imprimirPdf } from '../../../lib/pdf/imprimirPdf';
 import RegistrarPagoDialog, { type ObjetivoPago } from './RegistrarPagoDialog';
 import DesprendibleFilaCard from './DesprendibleFilaCard';
 
@@ -132,15 +133,24 @@ export default function VistaPeriodoCerrado({ periodo, tipo, onReload }: Props) 
     }
   };
 
-  const descargarPdfPeriodo = async () => {
+  /**
+   * El soporte del período, para guardar o para imprimir. Es el mismo archivo
+   * en los dos casos: imprimir el HTML de la pantalla sacaba el menú y los
+   * botones en vez del documento.
+   */
+  const pedirPdfPeriodo = async (accion: 'descargar' | 'imprimir') => {
     setDescargandoPeriodo(true);
     try {
       const blob = await liquidacionesApi.desprendiblesPeriodoPdf(periodo.id);
+      if (accion === 'imprimir') {
+        imprimirPdf(blob);
+        return;
+      }
       descargarBlob(blob, nombrePdf(tipo, { periodoId: periodo.id }, periodo.anio, periodo.semestre));
       toast.success('Soporte descargado correctamente');
     } catch (err) {
       const e = err as ApiError;
-      toast.error(e.message ?? 'No se pudo descargar el soporte del período');
+      toast.error(e.message ?? 'No se pudo obtener el soporte del período');
     } finally {
       setDescargandoPeriodo(false);
     }
@@ -255,11 +265,21 @@ export default function VistaPeriodoCerrado({ periodo, tipo, onReload }: Props) 
 
       {/* Acciones del período */}
       <div className="flex gap-3 justify-end flex-wrap print:hidden">
-        <Button variant="outline" onClick={() => window.print()} className="gap-2">
+        <Button
+          variant="outline"
+          onClick={() => void pedirPdfPeriodo('imprimir')}
+          disabled={descargandoPeriodo}
+          className="gap-2"
+        >
           <Printer className="h-4 w-4" />
           Imprimir
         </Button>
-        <Button variant="outline" onClick={descargarPdfPeriodo} disabled={descargandoPeriodo} className="gap-2">
+        <Button
+          variant="outline"
+          onClick={() => void pedirPdfPeriodo('descargar')}
+          disabled={descargandoPeriodo}
+          className="gap-2"
+        >
           {descargandoPeriodo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
           Descargar Soporte PDF
         </Button>

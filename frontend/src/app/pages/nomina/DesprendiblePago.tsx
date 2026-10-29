@@ -26,6 +26,7 @@ import { DetalleDescansos } from '../../components/nomina/DetalleDescansos';
 import { DetalleAusencias } from '../../components/nomina/DetalleAusencias';
 import { FaltasInjustificadas } from '../../components/nomina/FaltasInjustificadas';
 import { DiasVacaciones } from '../../components/nomina/DiasVacaciones';
+import { imprimirPdf } from '../../lib/pdf/imprimirPdf';
 
 function fmt(n: number): string {
   return `$${n.toLocaleString('es-CO')}`;
@@ -71,11 +72,15 @@ export default function DesprendiblePago() {
    * PDF que se descarga distinto del que se comparte por WhatsApp, que
    * siempre apuntó al del backend.
    */
-  const descargarPdf = async () => {
+  const pedirPdf = async (accion: 'descargar' | 'imprimir') => {
     if (!nominaEmpleadoId || !data) return;
     setDescargando(true);
     try {
       const blob = await nominaApi.desprendiblePdf(nominaEmpleadoId);
+      if (accion === 'imprimir') {
+        imprimirPdf(blob);
+        return;
+      }
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -86,7 +91,7 @@ export default function DesprendiblePago() {
       URL.revokeObjectURL(url);
     } catch (err) {
       const e = err as ApiError;
-      toast.error(e.message ?? 'Error al descargar el desprendible');
+      toast.error(e.message ?? 'Error al obtener el desprendible');
     } finally {
       setDescargando(false);
     }
@@ -436,7 +441,13 @@ export default function DesprendiblePago() {
           <Check className="h-5 w-5" />
           Aceptar
         </Button>
-        <Button onClick={() => window.print()} variant="outline" size="lg" className="gap-2">
+        <Button
+          onClick={() => void pedirPdf('imprimir')}
+          disabled={descargando}
+          variant="outline"
+          size="lg"
+          className="gap-2"
+        >
           <Printer className="h-5 w-5" />
           Imprimir
         </Button>
@@ -451,7 +462,7 @@ export default function DesprendiblePago() {
           WhatsApp
         </Button>
         <Button
-          onClick={descargarPdf}
+          onClick={() => void pedirPdf('descargar')}
           disabled={descargando}
           variant="outline"
           size="lg"

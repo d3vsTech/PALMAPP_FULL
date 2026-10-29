@@ -30,6 +30,7 @@ import {
   ESTADO_VACACION_BADGE, ESTADO_VACACION_LABEL, MODO_PAGO_BADGE, ORIGEN_LABEL,
   descargarBlob, fmtCOP, fmtDias, getIniciales,
 } from './vacaciones/comunes';
+import { imprimirPdf } from '../../lib/pdf/imprimirPdf';
 import PagoVacacionDialog from './vacaciones/PagoVacacionDialog';
 import AnularVacacionDialog, { type ModoAnulacion } from './vacaciones/AnularVacacionDialog';
 
@@ -75,15 +76,23 @@ export default function VacacionesDetalle() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vacacionId]);
 
-  const descargarPdf = async () => {
+  /**
+   * El mismo PDF sirve para bajar y para imprimir: `accion` decide si se
+   * guarda como archivo o si va al diálogo de impresión.
+   */
+  const pedirPdf = async (accion: 'descargar' | 'imprimir') => {
     if (!item) return;
     setDescargando(true);
     try {
       const blob = await vacacionesApi.comprobantePdf(item.id);
+      if (accion === 'imprimir') {
+        imprimirPdf(blob);
+        return;
+      }
       descargarBlob(blob, `vacaciones_${item.empleado.documento}_${item.numero_comprobante}.pdf`);
     } catch (err) {
       const e = err as ApiError;
-      toast.error(e.message ?? 'No se pudo descargar el comprobante');
+      toast.error(e.message ?? 'No se pudo obtener el comprobante');
     } finally {
       setDescargando(false);
     }
@@ -169,11 +178,21 @@ export default function VacacionesDetalle() {
         </div>
 
         <div className="flex flex-wrap gap-2 print:hidden">
-          <Button variant="outline" onClick={() => window.print()} className="gap-2">
+          <Button
+            variant="outline"
+            onClick={() => void pedirPdf('imprimir')}
+            disabled={descargando}
+            className="gap-2"
+          >
             <Printer className="h-4 w-4" />
             Imprimir
           </Button>
-          <Button variant="outline" onClick={descargarPdf} disabled={descargando} className="gap-2">
+          <Button
+            variant="outline"
+            onClick={() => void pedirPdf('descargar')}
+            disabled={descargando}
+            className="gap-2"
+          >
             {descargando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
             Descargar PDF
           </Button>
