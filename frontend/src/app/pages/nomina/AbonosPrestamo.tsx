@@ -64,6 +64,13 @@ function toNumber(v: string | number | null | undefined): number {
 
 const fmtFecha = (s: string): string => formatFecha(s, { day: '2-digit', month: 'short', year: 'numeric' });
 
+/**
+ * El recibo del abono no se entrega todavía: la finca no lo pide. El botón
+ * queda escondido detrás de esta bandera en vez de borrarse, porque el PDF ya
+ * está hecho y encenderlo es volver a poner `true`.
+ */
+const RECIBO_DE_ABONO_VISIBLE = false;
+
 export default function AbonosPrestamo() {
   const { prestamoId } = useParams();
   const navigate = useNavigate();
@@ -345,13 +352,13 @@ export default function AbonosPrestamo() {
                   <th className="text-left p-4 text-xs font-semibold text-muted-foreground">Referencia</th>
                   <th className="text-left p-4 text-xs font-semibold text-muted-foreground">Nota</th>
                   <th className="text-right p-4 text-xs font-semibold text-muted-foreground">Saldo tras el pago</th>
-                  <th className="p-4"></th>
+                  {RECIBO_DE_ABONO_VISIBLE && <th className="p-4"></th>}
                 </tr>
               </thead>
               <tbody>
                 {abonos.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                    <td colSpan={RECIBO_DE_ABONO_VISIBLE ? 7 : 6} className="p-8 text-center text-muted-foreground">
                       Sin pagos registrados aún.
                     </td>
                   </tr>
@@ -397,7 +404,7 @@ export default function AbonosPrestamo() {
                           ${toNumber(a.saldo_tras_abono).toLocaleString('es-CO')}
                         </span>
                       </td>
-                      <td className="p-4 text-right">
+                      {RECIBO_DE_ABONO_VISIBLE && <td className="p-4 text-right">
                         {/* El recibo de este pago, para entregárselo al
                             colaborador. Sin el préstamo cargado no se puede
                             armar la cabecera, así que el botón no sale. */}
@@ -413,7 +420,7 @@ export default function AbonosPrestamo() {
                             Recibo
                           </Button>
                         )}
-                      </td>
+                      </td>}
                     </tr>
                   ))
                 )}
