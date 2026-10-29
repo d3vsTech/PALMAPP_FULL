@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { toast } from 'sonner';
@@ -18,11 +18,9 @@ import {
   FileText, FileUp, Search, Calculator, Edit, Trash2, AlertTriangle, Info, Download,
   RotateCcw,
 } from 'lucide-react';
-import { configuracionApi } from '../../../api/configuracion';
 import { useAuth } from '../../contexts/AuthContext';
 import { RevertirEstadoDialog } from '../../components/common/RevertirEstadoDialog';
 import { reversionApi } from '../../../api/reversionEstados';
-import { descargarRemision, type DatosRemisionEmpresa } from './remisionPdf';
 import {
   viajesApi, strField,
   type Viaje, type EstadoViajeApi, type IndicadoresViajes,
@@ -140,53 +138,25 @@ export default function Viajes() {
 
   // Diálogos de confirmación
   /**
-   * Membrete de la finca para la remisión impresa. Se pide la primera vez que
-   * alguien descarga y se queda en memoria: no cambia entre descargas y no
-   * tiene por qué costar una petición en cada carga del listado.
+   * Remisión de salida (§14.6): el papel que lleva el conductor. Lo arma el
+   * backend con el membrete de la finca desde el 2026-10-28.
    */
-  const empresaRemision = useRef<DatosRemisionEmpresa | null>(null);
   const [descargando, setDescargando] = useState<string | null>(null);
 
   const descargarRemisionViaje = async (viaje: ViajeUI) => {
     setDescargando(viaje.id);
     try {
-      if (!empresaRemision.current) {
-        try {
-          const res = await configuracionApi.infoEmpresa.obtener();
-          empresaRemision.current = {
-            nombre: res.data.nombre,
-            razonSocial: res.data.razon_social,
-            nombreComercial: res.data.nombre_comercial,
-            tipoPersona: res.data.tipo_persona,
-            nit: res.data.nit,
-            direccion: res.data.direccion,
-            municipio: res.data.municipio,
-            departamento: res.data.departamento,
-            telefono: res.data.telefono,
-            telefonoFijo: res.data.telefono_fijo,
-            representante: res.data.representante_nombre,
-            logoUrl: res.data.logo_url,
-          };
-        } catch {
-          // Sin los datos de la finca la remisión sale igual, solo sin
-          // membrete: es preferible a no poder imprimirla.
-          empresaRemision.current = {};
-        }
-      }
-      await descargarRemision({
-        remision: viaje.remisionId,
-        fecha: viaje.fecha,
-        horaSalida: viaje.horaSalida,
-        extractora: viaje.extractora,
-        extractoraUbicacion: viaje.extractoraUbicacion,
-        transportador: viaje.transportador,
-        conductor: viaje.conductor,
-        placaVehiculo: viaje.placaVehiculo,
-        gajosEstimados: viaje.gajosEstimados,
-        observaciones: viaje.observaciones,
-      }, empresaRemision.current);
-    } catch {
-      toast.error('No se pudo generar la remisión');
+      const blob = await viajesApi.remisionSalidaPdf(Number(viaje.id));
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `remision_salida_${viaje.remisionId}_${viaje.fecha}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast.error(e?.message ?? 'No se pudo generar la remisión');
     } finally {
       setDescargando(null);
     }

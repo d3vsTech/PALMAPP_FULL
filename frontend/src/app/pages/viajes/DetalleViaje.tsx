@@ -28,8 +28,6 @@ import { formatFecha, formatFechaHora, formatHora } from '../../utils/fecha';
 import { useAuth } from '../../contexts/AuthContext';
 import { RevertirEstadoDialog } from '../../components/common/RevertirEstadoDialog';
 import { reversionApi } from '../../../api/reversionEstados';
-import { configuracionApi } from '../../../api/configuracion';
-import { descargarRemision, type DatosRemisionEmpresa } from './remisionPdf';
 
 // ─── tipos UI (3 estados compactos) ───────────────────────────────────────────
 export type EstadoViaje = 'Creado' | 'En Validación' | 'Finalizado';
@@ -123,8 +121,6 @@ export default function DetalleViaje() {
   /** §5.10 — La única vuelta atrás de la máquina de estados del viaje. */
   const [reabrirAbierto, setReabrirAbierto] = useState(false);
   const [descargandoRemision, setDescargandoRemision] = useState(false);
-  /** Membrete de la finca; se pide una sola vez por sesión de pantalla. */
-  const empresaRemision = useRef<DatosRemisionEmpresa | null>(null);
   const [generandoEnlace, setGenerandoEnlace] = useState(false);
   const [datosViaje, setDatosViaje] = useState({
     fecha: '', horaSalida: '', transportadorId: '', extractoraId: '',
@@ -621,51 +617,26 @@ export default function DetalleViaje() {
   const puedeDesprendible = estadoActual === 'Finalizado';
 
   /**
-   * Remisión de entrega (estado CREADO). La arma el front porque el
-   * desprendible del backend exige el viaje finalizado: en CREADO responde
-   * 409 `VIAJE_ESTADO_INVALIDO`.
+   * Remisión de salida (§14.6). La arma el backend con el membrete de la
+   * finca desde el 2026-10-28; antes la dibujaba el navegador con jsPDF. No
+   * exige estado: es el papel que acompaña al camión desde que sale.
    */
   const descargarRemisionEntrega = async () => {
-    if (!viaje) return;
+    if (!id) return;
     setDescargandoRemision(true);
     try {
-      if (!empresaRemision.current) {
-        try {
-          const res = await configuracionApi.infoEmpresa.obtener();
-          empresaRemision.current = {
-            nombre: res.data.nombre,
-            razonSocial: res.data.razon_social,
-            nombreComercial: res.data.nombre_comercial,
-            tipoPersona: res.data.tipo_persona,
-            nit: res.data.nit,
-            direccion: res.data.direccion,
-            municipio: res.data.municipio,
-            departamento: res.data.departamento,
-            telefono: res.data.telefono,
-            telefonoFijo: res.data.telefono_fijo,
-            representante: res.data.representante_nombre,
-            logoUrl: res.data.logo_url,
-          };
-        } catch {
-          // Sin membrete la remisión sirve igual; no poder imprimirla, no.
-          empresaRemision.current = {};
-        }
-      }
-      await descargarRemision({
-        remision: remisionId,
-        fecha: viaje.fecha_viaje,
-        horaSalida: (viaje.hora_salida ?? '').slice(0, 5),
-        extractora: strField(viaje.extractora),
-        extractoraUbicacion: viaje.extractora?.ubicacion ?? '',
-        transportador: strField(viaje.empresa),
-        conductor: viaje.nombre_conductor,
-        placaVehiculo: viaje.placa_vehiculo,
-        gajosEstimados: viaje.cantidad_gajos_total ?? undefined,
-        observaciones: viaje.observaciones ?? undefined,
-      }, empresaRemision.current);
+      const blob = await viajesApi.remisionSalidaPdf(Number(id));
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `remision_salida_${remisionId}_${fechaViaje}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
       toast.success('Remisión descargada');
-    } catch {
-      toast.error('No se pudo generar la remisión');
+    } catch (e: any) {
+      toast.error(e?.message ?? 'No se pudo generar la remisión');
     } finally {
       setDescargandoRemision(false);
     }

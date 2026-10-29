@@ -12,18 +12,17 @@
  *
  * La ruta es `/pdf-lab`, pública y solo en desarrollo (ver `routes.tsx`).
  *
- * Quedan dos documentos. El 2026-10-27 el backend se llevó el comprobante de
- * préstamo y el soporte de novedad, que ahora salen con el membrete de la
- * empresa desde la API y no se pueden probar sin sesión. El comprobante de pago
- * a tercero tampoco está: vive dentro de `NominaDetalle`.
+ * Queda uno solo. El backend se llevó el comprobante de préstamo y el soporte
+ * de novedad el 2026-10-27, y la remisión de salida del viaje el 2026-10-28:
+ * los tres salen con el membrete de la empresa desde la API y no se pueden
+ * probar sin sesión. El comprobante de pago a tercero tampoco está: vive
+ * dentro de `NominaDetalle`.
  */
 import { useState } from 'react';
-import { FileText, Receipt, Truck } from 'lucide-react';
+import { FileText, Receipt } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { descargarComprobanteAbono } from '../nomina/prestamoPdf';
-import { descargarRemision } from '../viajes/remisionPdf';
 import type { AbonoPrestamo, Prestamo } from '../../../api/prestamos';
-import type { DatosRemisionEmpresa, DatosRemisionViaje } from '../viajes/remisionPdf';
 
 // ── Datos de ejemplo ─────────────────────────────────────────────────────────
 
@@ -77,34 +76,6 @@ const ABONO: AbonoPrestamo = {
   registrado_por: 'Esteban Bohórquez',
 };
 
-const VIAJE: DatosRemisionViaje = {
-  remision: 'V-0458',
-  fecha: '2026-03-05',
-  horaSalida: '05:45',
-  extractora: 'AGROINDUSTRIAS DEL SUR DEL CESAR S.A.S.',
-  extractoraUbicacion: 'Km 32 vía San Alberto',
-  transportador: 'Transportes del Llano',
-  conductor: 'Jordan Miguel Blanco Toloza',
-  placaVehiculo: 'JFF319',
-  gajosEstimados: 600,
-  observaciones: 'Fruto de los lotes Marsella y Siembra 2012.',
-};
-
-const EMPRESA: DatosRemisionEmpresa = {
-  nombre: 'Palmas del Llano',
-  razonSocial: 'Palmas del Llano S.A.S.',
-  nombreComercial: 'Palmas del Llano',
-  tipoPersona: 'JURIDICA',
-  nit: '900.123.456-7',
-  direccion: 'Km 12 vía Acacías',
-  municipio: 'Villavicencio',
-  departamento: 'Meta',
-  telefono: '310 555 0101',
-  telefonoFijo: '8 672 4410',
-  representante: 'Javier Bohórquez Peña',
-  logoUrl: null,
-};
-
 // ── Catálogo de la pantalla ──────────────────────────────────────────────────
 
 interface Documento {
@@ -126,17 +97,6 @@ const DOCUMENTOS: Documento[] = [
     descripcion: 'El recibo de una cuota, con el saldo que queda después de ella.',
     icono: Receipt,
     generar: () => descargarComprobanteAbono(PRESTAMO, ABONO),
-  },
-  {
-    id: 'remision',
-    titulo: 'Remisión de entrega',
-    archivo: 'pages/viajes/remisionPdf.ts',
-    pantalla: 'Viajes → detalle en estado CREADO · "Descargar Remisión"',
-    descripcion:
-      'El papel que lleva el conductor. Reproduce la rejilla del talonario, con las casillas '
-      + 'que se llenan a mano en blanco.',
-    icono: Truck,
-    generar: () => descargarRemision(VIAJE, EMPRESA),
   },
 ];
 

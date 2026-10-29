@@ -374,6 +374,42 @@ export interface ViajeDesprendible {
   filename: string;
 }
 
+// --- Remisión de salida (§14.6) ---------------------------------------
+
+/**
+ * El papel sencillo que acompaña al camión desde que el viaje se crea.
+ *
+ * No es el desprendible de arriba: ese solo existe en FINALIZADO y lleva la
+ * carga por lote y la recepción en la extractora. Este sale en cualquier
+ * estado con lo que se sabe al despachar, y el peso dice "Pendiente" mientras
+ * la extractora no lo reporte. Hasta el 2026-10-28 lo armaba el navegador.
+ */
+export interface ViajeRemisionSalida {
+  id: number;
+  titulo: string;
+  remision: string;
+  estado: EstadoViajeApi;
+  estado_label: string;
+  fecha_viaje: string;
+  /** `null` cuando el viaje se creó sin hora. */
+  hora_salida: string | null;
+  placa_vehiculo: string;
+  nombre_conductor: string;
+  transportador: string;
+  extractora: { razon_social: string; ubicacion: string | null };
+  /** Nombres únicos de los lotes de las cosechas enlazadas; `[]` sin cosechas. */
+  lotes: string[];
+  /** Los mismos nombres ya unidos, o `null` si no hay cosechas. */
+  lotes_texto: string | null;
+  /** Misma regla que el desprendible: `gajos_en_viaje ?? reconteo ?? reportados`. */
+  gajos_estimados: number;
+  /** `peso_viaje` con 4 decimales, o `null` mientras la extractora no lo reporte. */
+  peso_estimado_kg: string | null;
+  observaciones: string | null;
+  generado_el: string;
+  filename: string;
+}
+
 /** Respuesta de los endpoints `/whatsapp`: solo la URL firmada (D7). */
 export interface EnlaceDesprendible {
   /** Enlace firmado de 7 días a la ruta pública del PDF (abre sin sesión). */
@@ -952,6 +988,27 @@ export const viajesApi = {
    */
   desprendibleWhatsapp: (id: number) =>
     post<{ data: EnlaceDesprendible }>(`/viajes/${id}/desprendible/whatsapp`),
+
+  // -- Remisión de salida (§14.6) ----------------------------------
+  //
+  // Mismo permiso `viajes.ver`, pero **sin** restricción de estado: es el
+  // documento que sale con el camión, así que existe desde CREADO. El PDF lo
+  // arma el backend con el membrete de la finca.
+
+  /** GET /viajes/{id}/remision — misma estructura que el PDF, en JSON. */
+  remisionSalida: (id: number) =>
+    get<{ data: ViajeRemisionSalida }>(`/viajes/${id}/remision`),
+
+  /** GET /viajes/{id}/remision/pdf — descarga el PDF. */
+  remisionSalidaPdf: (id: number, inline = false) =>
+    apiClient.getBlob(
+      `/v1/tenant/viajes/${id}/remision/pdf${inline ? '?inline=1' : ''}`,
+      true,
+    ),
+
+  /** POST /viajes/{id}/remision/whatsapp — solo la URL firmada (7 días). */
+  remisionSalidaWhatsapp: (id: number) =>
+    post<{ data: EnlaceDesprendible }>(`/viajes/${id}/remision/whatsapp`),
 
   // ── OCR del formulario de extractora ────────────────────────────────────
 

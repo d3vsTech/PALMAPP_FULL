@@ -617,7 +617,14 @@ export const liquidacionesApi = {
   desprendiblePdf: (filaId: number) =>
     apiClient.getBlob(`${FILAS}/${filaId}/desprendible/pdf`, T),
 
-  /** §6.3 — PDF del período CERRADA: una página por colaborador. */
+  /**
+   * §6.3 — PDF del período CERRADA.
+   *
+   * Desde el 2026-10-28 es **una tabla** con todos los colaboradores y el
+   * marco legal al pie, no un desprendible por colaborador y por página: es
+   * el documento del empleador y el contador. El comprobante individual
+   * sigue en `desprendiblePdf`.
+   */
   desprendiblesPeriodoPdf: (id: number) =>
     apiClient.getBlob(`${BASE}/${id}/desprendibles/pdf`, T),
 };
