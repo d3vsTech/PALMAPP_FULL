@@ -279,15 +279,13 @@ export function TabOtros({
                                 </div>
 
                                 {/* Lote/Sublote */}
-                                <div className="flex items-center gap-3">
-                                  <div>
-                                    <h4 className="font-semibold text-sm">{trabajo.nombre || 'Sin nombre'}</h4>
-                                    <p className="text-xs text-muted-foreground">{lote?.nombre || 'Sin lote'} - {sublote?.nombre || 'Sin sublote'}</p>
-                                  </div>
+                                <div className="w-44 shrink-0">
+                                  <h4 className="font-semibold text-sm truncate">{trabajo.nombre || 'Sin nombre'}</h4>
+                                  <p className="text-xs text-muted-foreground truncate">{lote?.nombre || 'Sin lote'} - {sublote?.nombre || 'Sin sublote'}</p>
                                 </div>
 
                                 {/* Labor realizada */}
-                                <div className="text-right shrink-0 max-w-xs">
+                                <div className="w-40 shrink-0 text-right">
                                   <p className="text-xs text-muted-foreground">Labor</p>
                                   <p className="font-semibold text-sm truncate">{trabajo.laborRealizada || 'Sin descripción'}</p>
                                 </div>

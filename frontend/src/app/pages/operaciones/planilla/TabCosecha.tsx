@@ -230,28 +230,27 @@ export function TabCosecha({
                                 </div>
 
                                 {/* Lote/Sublote */}
-                                <div className="flex items-center gap-3">
-                                  <div>
-                                    <h4 className="font-semibold text-sm">{lote?.nombre || 'Lote no especificado'}</h4>
-                                    <p className="text-xs text-muted-foreground">
-                                      {sublote?.nombre || 'Sublote no especificado'}
-                                    </p>
-                                  </div>
+                                <div className="w-36 shrink-0">
+                                  <h4 className="font-semibold text-sm truncate">{lote?.nombre || 'Lote no especificado'}</h4>
+                                  <p className="text-xs text-muted-foreground truncate">{sublote?.nombre || 'Sublote no especificado'}</p>
                                 </div>
 
                                 {/* Gajos */}
-                                <div className="text-right shrink-0">
+                                <div className="w-20 shrink-0 text-right">
                                   <p className="text-xs text-muted-foreground">Gajos</p>
                                   <p className="font-bold text-lg">{trabajo.gajosRecogidos}</p>
                                 </div>
 
-                                {/* Kilos (si existe) */}
-                                {trabajo.kilos > 0 && (
-                                  <div className="text-right shrink-0">
-                                    <p className="text-xs text-muted-foreground">Kilos</p>
-                                    <p className="font-semibold">{trabajo.kilos}</p>
-                                  </div>
-                                )}
+                                {/* Kilos. La columna se reserva siempre: si una fila la
+                                    trae y la otra no, los gajos dejan de estar a la par. */}
+                                <div className="w-20 shrink-0 text-right">
+                                  {trabajo.kilos > 0 && (
+                                    <>
+                                      <p className="text-xs text-muted-foreground">Kilos</p>
+                                      <p className="font-semibold">{trabajo.kilos}</p>
+                                    </>
+                                  )}
+                                </div>
 
                                 {/* Botones acción */}
                                 <div className="flex items-center gap-1 shrink-0">

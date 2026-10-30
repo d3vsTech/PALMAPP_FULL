@@ -211,13 +211,11 @@ export function TabPoda({
                                     <p className="text-xs text-muted-foreground">Sin colaboradores</p>
                                   )}
                                 </div>
-                                <div className="flex items-center gap-3">
-                                  <div>
-                                    <h4 className="font-semibold text-sm">{lote?.nombre || 'Lote no especificado'}</h4>
-                                    <p className="text-xs text-muted-foreground">{sublote?.nombre || 'Sublote no especificado'}</p>
-                                  </div>
+                                <div className="w-36 shrink-0">
+                                  <h4 className="font-semibold text-sm truncate">{lote?.nombre || 'Lote no especificado'}</h4>
+                                  <p className="text-xs text-muted-foreground truncate">{sublote?.nombre || 'Sublote no especificado'}</p>
                                 </div>
-                                <div className="text-right shrink-0">
+                                <div className="w-20 shrink-0 text-right">
                                   <p className="text-xs text-muted-foreground">Palmas</p>
                                   <p className="font-bold text-lg">{trabajo.numeroPalmas}</p>
                                 </div>

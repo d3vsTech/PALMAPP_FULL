@@ -22,7 +22,7 @@ import {
   type MetaNovedades, type NovedadFila,
 } from '../../../api/novedades';
 import type { ApiError } from '../../../api/client';
-import { ESTADO_BADGE, ESTADO_LABEL, ORIGEN_LABEL, formatFecha } from './tipos';
+import { ESTADO_BADGE, ESTADO_LABEL, formatFecha } from './tipos';
 import { DetalleNovedadDialog } from './componentes/DetalleNovedadDialog';
 
 const TODOS = 'todos';
@@ -339,14 +339,7 @@ export default function NovedadesPage() {
                           className="h-2 w-2 shrink-0 rounded-full"
                           style={{ backgroundColor: n.tipo.color ?? '#9ca3af' }}
                         />
-                        <div className="min-w-0">
-                          <Badge variant="outline" className="text-xs">{n.tipo.nombre}</Badge>
-                          <p className="mt-0.5 text-xs text-muted-foreground">
-                            {ORIGEN_LABEL[n.origen] ?? n.origen}
-                            {n.parcial && n.horario && ` · ${n.horario}`}
-                            {n.tiene_soporte && ' · con soporte'}
-                          </p>
-                        </div>
+                        <Badge variant="outline" className="text-xs">{n.tipo.nombre}</Badge>
                         {n.tiene_soporte && <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
                       </div>
                     </td>

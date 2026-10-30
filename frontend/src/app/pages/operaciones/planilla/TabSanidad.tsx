@@ -237,15 +237,13 @@ export function TabSanidad({
                                 </div>
 
                                 {/* Lote/Sublote */}
-                                <div className="flex items-center gap-3">
-                                  <div>
-                                    <h4 className="font-semibold text-sm">{lote?.nombre || 'Sin lote'}</h4>
-                                    <p className="text-xs text-muted-foreground">{sublote?.nombre || 'Sin sublote'}</p>
-                                  </div>
+                                <div className="w-36 shrink-0">
+                                  <h4 className="font-semibold text-sm truncate">{lote?.nombre || 'Sin lote'}</h4>
+                                  <p className="text-xs text-muted-foreground truncate">{sublote?.nombre || 'Sin sublote'}</p>
                                 </div>
 
                                 {/* Trabajo realizado */}
-                                <div className="text-right shrink-0 max-w-xs">
+                                <div className="w-40 shrink-0 text-right">
                                   <p className="text-xs text-muted-foreground">Trabajo</p>
                                   <p className="font-semibold text-sm truncate">{trabajo.trabajoRealizado || 'Sin descripción'}</p>
                                 </div>
