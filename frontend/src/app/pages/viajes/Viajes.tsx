@@ -22,9 +22,14 @@ import { useAuth } from '../../contexts/AuthContext';
 import { RevertirEstadoDialog } from '../../components/common/RevertirEstadoDialog';
 import { reversionApi } from '../../../api/reversionEstados';
 import {
-  viajesApi, strField,
+  viajesApi, extractorasApi, strField,
   type Viaje, type EstadoViajeApi, type IndicadoresViajes,
+  type IndicadoresParams, type QuincenaViajes,
+  type ExtractoraSelect, type ListarViajesParams,
 } from '../../../api/viajes';
+import {
+  SelectorAnio, SelectorMes, finDeMes, mesDeHoy,
+} from '../../components/common/SelectorMes';
 
 // ─── tipos UI ─────────────────────────────────────────────────────────────────
 export type EstadoViaje = 'Creado' | 'En Validación' | 'Finalizado';
@@ -35,6 +40,15 @@ const ESTADO_API_TO_UI: Record<EstadoViajeApi, EstadoViaje> = {
   EN_VALIDACION: 'En Validación',
   FINALIZADO:    'Finalizado',
 };
+
+/** El filtro manda el código que entiende el backend, no la etiqueta de la UI. */
+const ESTADO_UI_TO_API: Record<EstadoViaje, EstadoViajeApi> = {
+  'Creado':        'CREADO',
+  'En Validación': 'EN_VALIDACION',
+  'Finalizado':    'FINALIZADO',
+};
+
+const PER_PAGE = 25;
 
 interface ViajeUI {
   id: string;
@@ -127,12 +141,21 @@ export default function Viajes() {
   });
 
   // Periodo KPI
-  const [periodoKPI,    setPeriodoKPI]    = useState<'semanal' | 'quincenal' | 'mensual' | 'personalizado'>('mensual');
+  const [periodoKPI,    setPeriodoKPI]    = useState<'quincenal' | 'mensual' | 'anual' | 'personalizado'>('mensual');
   const [fechaInicioKPI, setFechaInicioKPI] = useState('');
   const [fechaFinKPI,    setFechaFinKPI]    = useState('');
+  const [mesKPI,        setMesKPI]        = useState(mesDeHoy());
+  const [quincenaKPI,   setQuincenaKPI]   = useState<QuincenaViajes>(
+    new Date().getDate() <= 15 ? 1 : 2,
+  );
+  const [anioKPI,       setAnioKPI]       = useState(new Date().getFullYear());
 
   // Datos
   const [viajes, setViajes] = useState<ViajeUI[]>([]);
+  const [totalLista, setTotalLista] = useState(0);
+  const [ultimaPagina, setUltimaPagina] = useState(1);
+  const [pagina, setPagina] = useState(1);
+  const [extractoras, setExtractoras] = useState<ExtractoraSelect[]>([]);
   const [indicadoresApi, setIndicadoresApi] = useState<IndicadoresViajes | null>(null);
   const [loadingList, setLoadingList] = useState(true);
 
@@ -170,35 +193,61 @@ export default function Viajes() {
     setFiltros(prev => ({ ...prev, [key]: value }));
 
   // ── carga listado ──────────────────────────────────────────────────────────
+  // Los campos de texto se escriben letra por letra: sin esta espera, cada
+  // tecla saldría al backend.
+  const [filtrosAplicados, setFiltrosAplicados] = useState(filtros);
+  useEffect(() => {
+    const t = setTimeout(() => setFiltrosAplicados(filtros), 500);
+    return () => clearTimeout(t);
+  }, [filtros]);
+
+  // Al cambiar un filtro, la página 3 del resultado anterior no significa nada.
+  useEffect(() => { setPagina(1); }, [filtrosAplicados]);
+
   const cargarViajes = useCallback(async () => {
     setLoadingList(true);
     try {
-      const res = await viajesApi.listar({ per_page: 100 });
+      const f = filtrosAplicados;
+      const params: ListarViajesParams = { per_page: PER_PAGE, page: pagina };
+      if (f.remision)   params.remision = f.remision;
+      if (f.fecha)      params.fecha = f.fecha;
+      if (f.estado)     params.estado = ESTADO_UI_TO_API[f.estado as EstadoViaje];
+      if (f.vehiculo)   params.vehiculo = f.vehiculo;
+      if (f.conductor)  params.conductor = f.conductor;
+      if (f.extractora) params.extractora_id = Number(f.extractora);
+      const res = await viajesApi.listar(params);
       setViajes((res.data ?? []).map(mapViaje));
+      setTotalLista(res.meta?.total ?? (res.data ?? []).length);
+      setUltimaPagina(res.meta?.last_page ?? 1);
     } catch (e) { console.warn('listar viajes error', e); }
     finally { setLoadingList(false); }
-  }, []);
+  }, [filtrosAplicados, pagina]);
 
   useEffect(() => { cargarViajes(); }, [cargarViajes]);
+
+  // El backend filtra la extractora por id, así que el campo de texto no servía.
+  useEffect(() => {
+    extractorasApi.select()
+      .then((r) => setExtractoras(r.data ?? []))
+      .catch((e) => console.warn('extractoras select error', e));
+  }, []);
 
   // ── carga indicadores ──────────────────────────────────────────────────────
   const cargarIndicadores = useCallback(async () => {
     setLoadingKPI(true);
     try {
-      const params: Record<string, string> = {
-        periodo: periodoKPI === 'semanal' ? 'SEMANAL'
-               : periodoKPI === 'quincenal' ? 'QUINCENAL'
-               : periodoKPI === 'mensual' ? 'MENSUAL' : 'CUSTOM',
-      };
-      if (periodoKPI === 'personalizado') {
-        if (fechaInicioKPI) params.desde = fechaInicioKPI;
-        if (fechaFinKPI) params.hasta = fechaFinKPI;
-      }
-      const res = await viajesApi.indicadores(params as any);
+      // Cada ancla aplica a un solo período, así que se manda la suya y nada
+      // más (API_VIAJES.md 5.9). El rango a la medida va en desde / hasta.
+      const params: IndicadoresParams =
+        periodoKPI === 'quincenal' ? { periodo: 'QUINCENAL', mes: mesKPI, quincena: quincenaKPI }
+        : periodoKPI === 'mensual' ? { periodo: 'MENSUAL', mes: mesKPI }
+        : periodoKPI === 'anual'   ? { periodo: 'ANUAL', anio: anioKPI }
+        : { periodo: 'CUSTOM', desde: fechaInicioKPI || undefined, hasta: fechaFinKPI || undefined };
+      const res = await viajesApi.indicadores(params);
       setIndicadoresApi(res.data);
     } catch (e) { console.warn('indicadores error', e); }
     finally { setLoadingKPI(false); }
-  }, [periodoKPI, fechaInicioKPI, fechaFinKPI]);
+  }, [periodoKPI, fechaInicioKPI, fechaFinKPI, mesKPI, quincenaKPI, anioKPI]);
 
   useEffect(() => { cargarIndicadores(); }, [cargarIndicadores]);
 
@@ -243,34 +292,28 @@ export default function Viajes() {
   };
 
   // ── filtros ────────────────────────────────────────────────────────────────
-  const lower = (s: string) => s.toLowerCase();
-  const viajesFiltrados = viajes.filter((viaje) => {
-    return (
-      lower(viaje.remisionId).includes(lower(filtros.remision)) &&
-      viaje.fecha.includes(filtros.fecha) &&
-      (filtros.estado === '' || viaje.estado === filtros.estado) &&
-      lower(viaje.placaVehiculo).includes(lower(filtros.vehiculo)) &&
-      lower(viaje.conductor).includes(lower(filtros.conductor)) &&
-      lower(viaje.extractora).includes(lower(filtros.extractora))
-    );
-  });
+  // Los filtros los resuelve `GET /viajes`: la tabla pinta la página que
+  // llegó, sin volver a filtrar sobre un recorte.
+  const viajesFiltrados = viajes;
 
   // ── KPIs por período (cliente) — fallback si la API no responde ────────────
   const obtenerRangoFechas = () => {
-    const hoy = new Date();
-    let inicio: Date;
-    let fin: Date = hoy;
-    switch (periodoKPI) {
-      case 'semanal':       inicio = new Date(hoy); inicio.setDate(hoy.getDate() - 7); break;
-      case 'quincenal':     inicio = new Date(hoy); inicio.setDate(hoy.getDate() - 15); break;
-      case 'mensual':       inicio = new Date(hoy); inicio.setMonth(hoy.getMonth() - 1); break;
-      case 'personalizado':
-        if (fechaInicioKPI && fechaFinKPI) { inicio = new Date(fechaInicioKPI); fin = new Date(fechaFinKPI); }
-        else { inicio = new Date(hoy); inicio.setMonth(hoy.getMonth() - 1); }
-        break;
-      default: inicio = new Date(hoy); inicio.setMonth(hoy.getMonth() - 1);
+    if (periodoKPI === 'anual') {
+      return { inicio: new Date(anioKPI, 0, 1), fin: new Date(anioKPI, 11, 31) };
     }
-    return { inicio, fin };
+    if (periodoKPI === 'personalizado') {
+      const hoy = new Date();
+      return {
+        inicio: fechaInicioKPI ? new Date(fechaInicioKPI) : hoy,
+        fin: fechaFinKPI ? new Date(fechaFinKPI) : hoy,
+      };
+    }
+    const esQ1 = periodoKPI === 'quincenal' && quincenaKPI === 1;
+    const esQ2 = periodoKPI === 'quincenal' && quincenaKPI === 2;
+    return {
+      inicio: new Date(esQ2 ? `${mesKPI}-16` : `${mesKPI}-01`),
+      fin: new Date(esQ1 ? `${mesKPI}-15` : finDeMes(mesKPI)),
+    };
   };
   const { inicio, fin } = obtenerRangoFechas();
   const viajesPorPeriodo = viajes.filter(v => {
@@ -389,15 +432,32 @@ export default function Viajes() {
           <h2 className="text-2xl font-bold text-foreground">Indicadores Principales</h2>
           <div className="flex flex-wrap items-center gap-3">
             <Label className="text-sm font-medium">Período:</Label>
-            <Select value={periodoKPI} onValueChange={(value: any) => setPeriodoKPI(value)}>
+            <Select value={periodoKPI}
+              onValueChange={(v) => setPeriodoKPI(v as typeof periodoKPI)}>
               <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="semanal">Semanal</SelectItem>
                 <SelectItem value="quincenal">Quincenal</SelectItem>
                 <SelectItem value="mensual">Mensual</SelectItem>
+                <SelectItem value="anual">Anual</SelectItem>
                 <SelectItem value="personalizado">Personalizado</SelectItem>
               </SelectContent>
             </Select>
+            {(periodoKPI === 'mensual' || periodoKPI === 'quincenal') && (
+              <SelectorMes valor={mesKPI} onChange={setMesKPI} />
+            )}
+            {periodoKPI === 'anual' && (
+              <SelectorAnio valor={anioKPI} onChange={setAnioKPI} />
+            )}
+            {periodoKPI === 'quincenal' && (
+              <Select value={String(quincenaKPI)}
+                onValueChange={(v) => setQuincenaKPI(Number(v) as QuincenaViajes)}>
+                <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">Del 1 al 15</SelectItem>
+                  <SelectItem value="2">Del 16 al fin de mes</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
             {periodoKPI === 'personalizado' && (
               <>
                 <Input type="date" value={fechaInicioKPI} onChange={e => setFechaInicioKPI(e.target.value)} className="w-40" placeholder="Fecha inicio" />
@@ -538,11 +598,18 @@ export default function Viajes() {
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-muted-foreground" htmlFor="viajes-extractora">Extractora</label>
-                      <div className="relative">
-                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input id="viajes-extractora" placeholder="Extractora" value={filtros.extractora}
-                          onChange={e => handleFiltroChange('extractora', e.target.value)} className="pl-8 h-9" />
-                      </div>
+                      <Select
+                        value={filtros.extractora || '__todas__'}
+                        onValueChange={(v) => handleFiltroChange('extractora', v === '__todas__' ? '' : v)}
+                      >
+                        <SelectTrigger id="viajes-extractora" className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__todas__">Todas</SelectItem>
+                          {extractoras.map((e) => (
+                            <SelectItem key={e.id} value={String(e.id)}>{e.razon_social}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
 
@@ -713,11 +780,30 @@ export default function Viajes() {
 
                   {/* Contador de resultados */}
                   {viajesFiltrados.length > 0 && (
-                    <div className="flex items-center justify-between text-sm text-muted-foreground px-2">
+                    <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground px-2">
                       <p>
                         Mostrando <span className="font-medium text-foreground">{viajesFiltrados.length}</span> de{' '}
-                        <span className="font-medium text-foreground">{viajes.length}</span> viajes
+                        <span className="font-medium text-foreground">{totalLista}</span> viajes
                       </p>
+                      {ultimaPagina > 1 && (
+                        <div className="flex items-center gap-2">
+                          <span>Página {pagina} de {ultimaPagina}</span>
+                          <Button
+                            size="sm" variant="outline"
+                            disabled={loadingList || pagina <= 1}
+                            onClick={() => setPagina((p) => p - 1)}
+                          >
+                            Anteriores
+                          </Button>
+                          <Button
+                            size="sm" variant="outline"
+                            disabled={loadingList || pagina >= ultimaPagina}
+                            onClick={() => setPagina((p) => p + 1)}
+                          >
+                            Siguientes
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

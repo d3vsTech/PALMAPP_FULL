@@ -149,7 +149,31 @@ export interface Indicadores {
   total_planillas: number;
 }
 
-export type Periodo = 'semanal' | 'quincenal' | 'mensual' | 'personalizado';
+/** Los cinco que admite el endpoint (API_OPERACIONES.md 2.2.1). */
+export type Periodo = 'semanal' | 'quincenal' | 'mensual' | 'anual' | 'personalizado';
+
+/** La quincena del mes: `1` es del 1 al 15; `2`, del 16 al último día. */
+export type Quincena = 1 | 2;
+
+/**
+ * Parámetros de `GET /operaciones/indicadores`.
+ *
+ * Las anclas son opcionales y cada una aplica a un periodo: sin ellas, el
+ * backend resuelve el periodo sobre hoy, como siempre. Una que no aplica se
+ * ignora sin validar.
+ */
+export interface ParamsIndicadores {
+  periodo?: Periodo;
+  /** `YYYY-MM`. Fija el mes en `mensual` y `quincenal`. */
+  mes?: string;
+  /** Solo en `quincenal`. */
+  quincena?: Quincena;
+  /** Solo en `anual`. */
+  anio?: number;
+  /** Los dos, y solo en `personalizado`. */
+  fecha_desde?: string;
+  fecha_hasta?: string;
+}
 
 /**
  * Response de `GET /operaciones/{id}/cobertura` (§7.1).
@@ -938,8 +962,10 @@ export const operacionesApi = {
         : `${BASE}/operaciones/wizard-init${fecha ? `?fecha=${encodeURIComponent(fecha)}` : ''}`
     ),
 
-  indicadores: (params: { periodo?: Periodo; fecha_desde?: string; fecha_hasta?: string } = {}) =>
-    requestConToken<{ data: Indicadores }>(`${BASE}/operaciones/indicadores${qs(params)}`),
+  indicadores: (params: ParamsIndicadores = {}) =>
+    requestConToken<{ data: Indicadores }>(
+      `${BASE}/operaciones/indicadores${qs(params as Record<string, unknown>)}`,
+    ),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

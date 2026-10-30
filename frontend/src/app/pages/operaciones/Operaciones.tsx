@@ -17,22 +17,55 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
-import { Plus, Eye, FileText, Loader2, Trash2, Pencil, Check, AlertCircle, Upload, RotateCcw } from 'lucide-react';
+import { Plus, Eye, FileText, Loader2, Trash2, Pencil, Check,
+  AlertCircle, Upload, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { AprobarRangoDialog } from './importar/AprobarRangoDialog';
 import { RevertirEstadoDialog } from '../../components/common/RevertirEstadoDialog';
 import { reversionApi } from '../../../api/reversionEstados';
 import StatusBadge from '../../components/common/StatusBadge';
+import {
+  SelectorAnio, SelectorMes, finDeMes, mesDeHoy,
+} from '../../components/common/SelectorMes';
 import { toast } from 'sonner';
 import {
   operacionesApi,
   type Planilla, type Indicadores, type Periodo as PeriodoIndicadores, type EstadoPlanilla,
-  type CoberturaPlanilla,
+  type CoberturaPlanilla, type PaginatedMeta,
+  type ParamsIndicadores, type Quincena,
 } from '../../../api/operaciones';
 import { formatCOP } from '../../components/lib/format';
 import { formatFecha } from '../../utils/fecha';
 
 const PER_PAGE = 50;
+
+/** Lo que el usuario escogió en los controles de al lado del selector. */
+interface OpcionesPeriodo {
+  /** Mes elegido para mensual y quincenal, en formato `YYYY-MM`. */
+  mes: string;
+  quincena: Quincena;
+  /** Año elegido para anual. */
+  anio: number;
+  desde: string;
+  hasta: string;
+}
+
+/**
+ * Arma los parámetros del endpoint según lo que haya elegido el usuario.
+ *
+ * El backend resuelve los cinco períodos y acepta las anclas; cada una solo
+ * aplica a su período y las demás se ignoran, así que se mandan por separado
+ * en vez de acompañar a todas (API_OPERACIONES.md 2.2.1).
+ */
+function paramsDelPeriodo(periodo: PeriodoIndicadores, o: OpcionesPeriodo): ParamsIndicadores {
+  if (periodo === 'mensual') return { periodo, mes: o.mes };
+  if (periodo === 'quincenal') return { periodo, mes: o.mes, quincena: o.quincena };
+  if (periodo === 'anual') return { periodo, anio: o.anio };
+  if (periodo === 'personalizado') {
+    return { periodo, fecha_desde: o.desde, fecha_hasta: o.hasta };
+  }
+  return { periodo };
+}
 
 export default function Operaciones() {
   const navigate = useNavigate();
@@ -52,30 +85,49 @@ export default function Operaciones() {
   const [periodoKPI, setPeriodoKPI] = useState<PeriodoIndicadores>('mensual');
   const [fechaInicioKPI, setFechaInicioKPI] = useState('');
   const [fechaFinKPI, setFechaFinKPI] = useState('');
+  const [mesKPI, setMesKPI] = useState(mesDeHoy());
+  const [quincenaKPI, setQuincenaKPI] = useState<Quincena>(
+    new Date().getDate() <= 15 ? 1 : 2,
+  );
+  const [anioKPI, setAnioKPI] = useState(new Date().getFullYear());
   const [indicadores, setIndicadores] = useState<Indicadores | null>(null);
   const [cargandoIndicadores, setCargandoIndicadores] = useState(false);
 
   const cargarIndicadores = useCallback(async () => {
     if (periodoKPI === 'personalizado' && (!fechaInicioKPI || !fechaFinKPI)) return;
+    // El input de mes se puede dejar en blanco; sin mes no hay rango que pedir.
+    if ((periodoKPI === 'mensual' || periodoKPI === 'quincenal') && !mesKPI) return;
     setCargandoIndicadores(true);
     try {
-      const res = await operacionesApi.indicadores({
-        periodo: periodoKPI,
-        fecha_desde: periodoKPI === 'personalizado' ? fechaInicioKPI : undefined,
-        fecha_hasta: periodoKPI === 'personalizado' ? fechaFinKPI : undefined,
-      });
+      const res = await operacionesApi.indicadores(
+        paramsDelPeriodo(periodoKPI, {
+          mes: mesKPI,
+          quincena: quincenaKPI,
+          anio: anioKPI,
+          desde: fechaInicioKPI,
+          hasta: fechaFinKPI,
+        }),
+      );
       setIndicadores(res.data);
     } catch (e: any) {
       toast.error(e?.message ?? 'Error al cargar indicadores');
     } finally {
       setCargandoIndicadores(false);
     }
-  }, [periodoKPI, fechaInicioKPI, fechaFinKPI]);
+  }, [periodoKPI, fechaInicioKPI, fechaFinKPI, mesKPI, quincenaKPI, anioKPI]);
 
   useEffect(() => { cargarIndicadores(); }, [cargarIndicadores]);
 
+  // El backend resuelve que fechas cubre cada periodo y las devuelve en
+  // `indicadores.periodo`. La lista se cuelga de ese mismo rango para no
+  // mostrar un recorte distinto al que cuentan las tarjetas de arriba.
+  const desdeLista = indicadores?.periodo.fecha_desde;
+  const hastaLista = indicadores?.periodo.fecha_hasta;
+
   // ── Listado de planillas ───────────────────────────────────────────────────
   const [planillas, setPlanillas] = useState<Planilla[]>([]);
+  const [metaLista, setMetaLista] = useState<PaginatedMeta | null>(null);
+  const [paginaLista, setPaginaLista] = useState(1);
   const [cargandoLista, setCargandoLista] = useState(true);
 
   // ── Eliminación de planilla ────────────────────────────────────────────────
@@ -159,14 +211,24 @@ export default function Operaciones() {
   const cargarLista = useCallback(async () => {
     setCargandoLista(true);
     try {
-      const res = await operacionesApi.listar({ per_page: PER_PAGE, page: 1 });
+      const res = await operacionesApi.listar({
+        per_page: PER_PAGE,
+        page: paginaLista,
+        fecha_desde: desdeLista,
+        fecha_hasta: hastaLista,
+      });
       setPlanillas(res.data);
+      setMetaLista(res.meta);
     } catch (e: any) {
       toast.error(e?.message ?? 'Error al cargar planillas');
     } finally {
       setCargandoLista(false);
     }
-  }, []);
+  }, [paginaLista, desdeLista, hastaLista]);
+
+  // Al mover el periodo, seguir parado en la pagina 5 del rango anterior
+  // deja la lista vacia sin explicacion. Se vuelve al principio.
+  useEffect(() => { setPaginaLista(1); }, [desdeLista, hastaLista]);
 
   // Refresca cuando el usuario navega a `/operaciones`. `location.key`
   // cambia en cada navegación (aunque sea al mismo path), así que al volver
@@ -262,19 +324,35 @@ export default function Operaciones() {
 
       {/* KPIs */}
       <div>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <h2 className="text-2xl font-bold text-foreground">Indicadores Principales</h2>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-3">
             <Label className="text-sm font-medium">Período:</Label>
-            <Select value={periodoKPI} onValueChange={(value: any) => setPeriodoKPI(value)}>
+            <Select value={periodoKPI} onValueChange={(v) => setPeriodoKPI(v as PeriodoIndicadores)}>
               <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="semanal">Semanal</SelectItem>
                 <SelectItem value="quincenal">Quincenal</SelectItem>
                 <SelectItem value="mensual">Mensual</SelectItem>
+                <SelectItem value="anual">Anual</SelectItem>
                 <SelectItem value="personalizado">Personalizado</SelectItem>
               </SelectContent>
             </Select>
+            {(periodoKPI === 'mensual' || periodoKPI === 'quincenal') && (
+              <SelectorMes valor={mesKPI} onChange={setMesKPI} />
+            )}
+            {periodoKPI === 'anual' && (
+              <SelectorAnio valor={anioKPI} onChange={setAnioKPI} />
+            )}
+            {periodoKPI === 'quincenal' && (
+              <Select value={String(quincenaKPI)}
+                onValueChange={(v) => setQuincenaKPI(Number(v) as Quincena)}>
+                <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">Del 1 al 15</SelectItem>
+                  <SelectItem value="2">Del 16 al fin de mes</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
             {periodoKPI === 'personalizado' && (
               <>
                 <Input type="date" value={fechaInicioKPI}
@@ -342,8 +420,12 @@ export default function Operaciones() {
       {/* Lista de planillas */}
       <div>
         <div className="mb-6">
-          <h2 className="text-2xl font-bold mb-2">Planillas Recientes</h2>
-          <p className="text-muted-foreground">Registro de operaciones diarias por fecha</p>
+          <h2 className="text-2xl font-bold mb-2">Planillas del período</h2>
+          <p className="text-muted-foreground">
+            {metaLista && desdeLista && hastaLista
+              ? `${metaLista.total} planilla(s) entre ${formatearFecha(desdeLista)} y ${formatearFecha(hastaLista)}`
+              : 'Registro de operaciones diarias por fecha'}
+          </p>
         </div>
 
         {cargandoLista ? (
@@ -476,6 +558,31 @@ export default function Operaciones() {
                   </tbody>
                 </table>
               </div>
+              {metaLista && metaLista.last_page > 1 && (
+                <div className="flex items-center justify-between gap-4 border-t border-border p-4">
+                  <p className="text-sm text-muted-foreground">
+                    Página {metaLista.current_page} de {metaLista.last_page}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm" variant="outline"
+                      disabled={cargandoLista || metaLista.current_page <= 1}
+                      onClick={() => setPaginaLista((p) => p - 1)}
+                    >
+                      <ChevronLeft className="mr-1 h-4 w-4" />
+                      Anteriores
+                    </Button>
+                    <Button
+                      size="sm" variant="outline"
+                      disabled={cargandoLista || metaLista.current_page >= metaLista.last_page}
+                      onClick={() => setPaginaLista((p) => p + 1)}
+                    >
+                      Siguientes
+                      <ChevronRight className="ml-1 h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}

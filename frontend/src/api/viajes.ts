@@ -641,8 +641,30 @@ export interface ListarViajesParams {
 }
 
 /** Parámetros de indicadores */
+/** Los cinco que admite el endpoint (API_VIAJES.md 5.9). */
+export type PeriodoViajes = 'MENSUAL' | 'QUINCENAL' | 'SEMANAL' | 'ANUAL' | 'CUSTOM';
+
+/** La quincena del mes: `1` es del 1 al 15; `2`, del 16 al último día. */
+export type QuincenaViajes = 1 | 2;
+
+/**
+ * Parámetros de `GET /viajes/indicadores`.
+ *
+ * Las anclas son opcionales y cada una aplica a un período: sin ellas, el
+ * backend resuelve el período en curso cortado en hoy, como siempre. Una que
+ * no aplica se ignora sin validar. Ojo con los nombres: aquí el rango a la
+ * medida va en `desde` / `hasta`, no en `fecha_desde` / `fecha_hasta` como en
+ * operaciones.
+ */
 export interface IndicadoresParams {
-  periodo?: 'MENSUAL' | 'SEMANAL' | 'ANUAL' | 'CUSTOM';
+  periodo?: PeriodoViajes;
+  /** `YYYY-MM`. Fija el mes en `MENSUAL` y `QUINCENAL`. */
+  mes?: string;
+  /** Solo en `QUINCENAL`. */
+  quincena?: QuincenaViajes;
+  /** Solo en `ANUAL`. */
+  anio?: number;
+  /** Los dos, y solo en `CUSTOM`. */
   desde?: string;
   hasta?: string;
 }
