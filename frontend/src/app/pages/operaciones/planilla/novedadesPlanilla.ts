@@ -23,13 +23,22 @@ function diaMes(iso: string): string {
   return mes ? `${partes[2]}-${mes}` : String(iso);
 }
 
-/** "Incapacidad EPS del 05-ene al 22-ene (Pendiente)". */
-export function etiquetaNovedad(n: NovedadEnPlanilla): string {
+/** "2026-01-05" → "05-ene", para mostrar fechas sueltas. */
+export function fechaCorta(iso: string): string {
+  return diaMes(iso);
+}
+
+/** "del 05-ene al 22-ene", o "el 05-ene" si es de un solo día. */
+export function rangoNovedad(n: NovedadEnPlanilla): string {
   const rango = n.fechaInicio === n.fechaFin
     ? `el ${diaMes(n.fechaInicio)}`
     : `del ${diaMes(n.fechaInicio)} al ${diaMes(n.fechaFin)}`;
-  const cola = n.horario ? ` ${n.horario}` : '';
-  return `${n.tipo} ${rango}${cola}`;
+  return n.horario ? `${rango} ${n.horario}` : rango;
+}
+
+/** "Incapacidad EPS del 05-ene al 22-ene". */
+export function etiquetaNovedad(n: NovedadEnPlanilla): string {
+  return `${n.tipo} ${rangoNovedad(n)}`;
 }
 
 function aLocal(n: NovedadVigente): NovedadEnPlanilla {

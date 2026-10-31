@@ -20,9 +20,14 @@ function diaMes(iso: string): string {
   return mes ? `${partes[2]}-${mes}` : String(iso);
 }
 
+/** "del 05-ene al 22-ene (VAC-1)". */
+export function rangoVacaciones(v: VacacionEnPlanilla): string {
+  return `del ${diaMes(v.fechaInicio)} al ${diaMes(v.fechaFin)} (${v.comprobante})`;
+}
+
 /** "De vacaciones del 05-ene al 22-ene (VAC-1)". */
 export function etiquetaVacaciones(v: VacacionEnPlanilla): string {
-  return `De vacaciones del ${diaMes(v.fechaInicio)} al ${diaMes(v.fechaFin)} (${v.comprobante})`;
+  return `De vacaciones ${rangoVacaciones(v)}`;
 }
 
 /**

@@ -18,8 +18,8 @@ import { Input } from '../../../components/ui/input';
 import { Plus, Trash2, ClipboardList, Info } from 'lucide-react';
 import type { AusenteRegistro, ColaboradorWizard } from './tipos';
 import { opcionesSeleccionables } from './vinculacionPlanilla';
-import { etiquetaVacaciones } from './vacacionesPlanilla';
-import { etiquetaNovedad } from './novedadesPlanilla';
+import { etiquetaVacaciones, rangoVacaciones } from './vacacionesPlanilla';
+import { etiquetaNovedad, fechaCorta, rangoNovedad } from './novedadesPlanilla';
 
 interface Props {
   modoLectura: boolean;
@@ -46,6 +46,46 @@ interface Props {
   eliminarAusente: (id: string) => void;
 }
 
+/** Una novedad que ya vive en el sistema y cubre la fecha de la planilla. */
+interface NovedadPrevia {
+  id: string;
+  nombre: string;
+  motivo: string;
+  periodo: string;
+}
+
+/**
+ * Las vacaciones y novedades que el backend ya trae para la fecha.
+ *
+ * Van en la misma tabla de ausentes, pero solo de lectura: no se crearon
+ * aquí y desde aquí tampoco se borran. Sin esto la tabla decía que no había
+ * ausentes mientras el select mostraba media cuadrilla incapacitada.
+ */
+function novedadesPrevias(colaboradores: ColaboradorWizard[]): NovedadPrevia[] {
+  const filas: NovedadPrevia[] = [];
+  colaboradores.forEach((c) => {
+    const nombre = `${c.nombres} ${c.apellidos}`;
+    if (c.enVacaciones) {
+      filas.push({
+        id: `vac-${c.id}`,
+        nombre,
+        motivo: 'Vacaciones',
+        periodo: rangoVacaciones(c.enVacaciones),
+      });
+      return;
+    }
+    if (c.novedadVigente) {
+      filas.push({
+        id: `nov-${c.id}`,
+        nombre,
+        motivo: c.novedadVigente.tipo,
+        periodo: rangoNovedad(c.novedadVigente),
+      });
+    }
+  });
+  return filas;
+}
+
 export function EtapaFinalizacion({
   modoLectura,
   observaciones,
@@ -69,6 +109,9 @@ export function EtapaFinalizacion({
   agregarAusente,
   eliminarAusente,
 }: Props) {
+  const previas = novedadesPrevias(colaboradores);
+  const hayFilas = ausentes.length > 0 || previas.length > 0;
+
   return (
     <Card className="border-border">
       <CardHeader>
@@ -171,7 +214,7 @@ export function EtapaFinalizacion({
               {/* PR-N3 — "Hasta" y "Horario". Antes solo existía la fecha de
                   la planilla, así que una incapacidad de 10 días se guardaba
                   como un día y volvía a pedirse en cada planilla siguiente. */}
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid items-start gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_auto]">
                 <div className="space-y-2">
                   <Label htmlFor="hastaAusente">Hasta</Label>
                   <Input
@@ -192,14 +235,16 @@ export function EtapaFinalizacion({
                     <Input
                       id="horaInicioAusente"
                       type="time"
+                      className="min-w-0 flex-1"
                       value={horaInicioAusente}
                       disabled={!!hastaAusente}
                       onChange={(e) => setHoraInicioAusente(e.target.value)}
                     />
-                    <span className="text-sm text-muted-foreground">a</span>
+                    <span className="shrink-0 text-sm text-muted-foreground">a</span>
                     <Input
                       aria-label="Hora de fin"
                       type="time"
+                      className="min-w-0 flex-1"
                       value={horaFinAusente}
                       disabled={!!hastaAusente}
                       onChange={(e) => setHoraFinAusente(e.target.value)}
@@ -207,12 +252,13 @@ export function EtapaFinalizacion({
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label>&nbsp;</Label>
+                  {/* La etiqueta en blanco deja el boton a la altura de los campos. */}
+                  <Label className="hidden md:block">&nbsp;</Label>
                   <Button
                     type="button"
                     onClick={agregarAusente}
                     disabled={!colaboradorAusenteSeleccionado || !motivoAusenteSeleccionado}
-                    className="w-full gap-2"
+                    className="w-full gap-2 md:w-auto md:px-6"
                   >
                     <Plus className="h-4 w-4" />
                     Agregar
@@ -232,15 +278,15 @@ export function EtapaFinalizacion({
             </>
           )}
 
-          {ausentes.length > 0 && (
+          {hayFilas && (
             <div className="border border-border rounded-lg overflow-x-auto">
               <table className="w-full min-w-[640px]">
                 <thead className="bg-muted/50">
                   <tr>
                     <th className="text-left p-3 text-sm font-semibold">Colaborador</th>
-                    <th className="text-left p-3 text-sm font-semibold">Motivo</th>
-                    <th className="text-left p-3 text-sm font-semibold">Periodo</th>
-                    <th className="text-right p-3 text-sm font-semibold">Acciones</th>
+                    <th className="w-44 text-left p-3 text-sm font-semibold">Motivo</th>
+                    <th className="w-56 text-left p-3 text-sm font-semibold">Periodo</th>
+                    <th className="w-32 text-right p-3 text-sm font-semibold">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -267,15 +313,15 @@ export function EtapaFinalizacion({
                     const periodo = ausente.horaInicio && ausente.horaFin
                       ? `${ausente.horaInicio} a ${ausente.horaFin}`
                       : ausente.fechaFin && ausente.fechaFin !== fecha
-                        ? `${fecha} al ${ausente.fechaFin}`
-                        : fecha || 'Un día';
+                        ? `del ${fechaCorta(fecha)} al ${fechaCorta(ausente.fechaFin)}`
+                        : fecha ? `el ${fechaCorta(fecha)}` : 'Un día';
                     return (
                       <tr key={ausente.id} className="border-t border-border">
                         <td className="p-3 text-sm">
                           {col ? `${col.nombres} ${col.apellidos}` : '-'}
                         </td>
                         <td className="p-3 text-sm">{motivoMostrar}</td>
-                        <td className="p-3 text-sm">
+                        <td className="p-3 text-sm whitespace-nowrap">
                           {periodo}
                           {ausente.horaInicio && (
                             <span className="ml-2 rounded-full bg-sky-100 px-2 py-0.5 text-xs text-sky-800 dark:bg-sky-950/40 dark:text-sky-300">
@@ -296,12 +342,27 @@ export function EtapaFinalizacion({
                       </tr>
                     );
                   })}
+
+                  {previas.map((previa) => (
+                    <tr key={previa.id} className="border-t border-border bg-muted/20">
+                      <td className="p-3 text-sm">{previa.nombre}</td>
+                      <td className="p-3 text-sm">{previa.motivo}</td>
+                      <td className="p-3 text-sm whitespace-nowrap text-muted-foreground">
+                        {previa.periodo}
+                      </td>
+                      <td className="p-3 text-right">
+                        <span className="whitespace-nowrap rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                          Ya registrada
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
           )}
 
-          {ausentes.length === 0 && (
+          {!hayFilas && (
             <div className="text-center py-8 text-muted-foreground border border-dashed border-border rounded-lg">
               <p className="text-sm">No hay ausentes registrados</p>
             </div>
