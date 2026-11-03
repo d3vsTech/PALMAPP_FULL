@@ -1,27 +1,69 @@
-import palmappLogoComplete from '../../../assets/adf2cc8f5c11d4595840726d8165f5dc63d3cec0.png';
-import palmappIsotipo from '../../../assets/90f63474a4a0ddb51ea409c23fa86e2b485ee0b8.png';
+import { HORIZONTAL, ISOTIPO, LEMA, PALABRA, VERTICAL } from './palmappMarca';
+
+type Variante = 'complete' | 'isotipo' | 'wordmark' | 'vertical';
+/**
+ * color: verde oscuro y verde claro de la marca (en modo oscuro las hojas y el texto pasan a crema).
+ * blanco: para fondos oscuros (hojas y texto blancos, rombo verde claro).
+ * mono: un solo color, el del texto que lo rodea (currentColor).
+ */
+type Tono = 'color' | 'blanco' | 'mono';
 
 interface PalmappLogoProps {
-  variant?: 'complete' | 'isotipo';
+  variant?: Variante;
+  tono?: Tono;
+  /** Solo en la versión vertical: muestra "Gestión inteligente para palmicultores". */
+  conLema?: boolean;
   className?: string;
   alt?: string;
 }
 
-export function PalmappLogo({ variant = 'complete', className = '', alt = 'Palmapp' }: PalmappLogoProps) {
-  const src = variant === 'complete' ? palmappLogoComplete : palmappIsotipo;
-  
+const COLORES: Record<Tono, { hojas: string; rombo: string; texto: string }> = {
+  color: { hojas: 'var(--logo-oscuro)', rombo: 'var(--logo-claro)', texto: 'var(--logo-oscuro)' },
+  blanco: { hojas: '#FFFFFF', rombo: 'var(--logo-claro)', texto: '#FFFFFF' },
+  mono: { hojas: 'currentColor', rombo: 'currentColor', texto: 'currentColor' },
+};
+
+/** Logo de PalmApp en vector: nítido a cualquier tamaño. */
+export function PalmappLogo({ variant = 'complete', tono = 'color', conLema = true, className = '', alt = 'PalmApp' }: PalmappLogoProps) {
+  const c = COLORES[tono];
+  const a11y = alt ? { role: 'img', 'aria-label': alt } : { 'aria-hidden': true };
+  const simbolo = (
+    <>
+      <path fill={c.hojas} d={ISOTIPO.hojas} />
+      <path fill={c.rombo} d={ISOTIPO.rombo} />
+    </>
+  );
+
+  if (variant === 'isotipo') {
+    return (
+      <svg viewBox={ISOTIPO.viewBox} className={className} {...a11y}>
+        {simbolo}
+      </svg>
+    );
+  }
+
+  if (variant === 'wordmark') {
+    return (
+      <svg viewBox={PALABRA.viewBox} className={className} {...a11y}>
+        <path fill={c.texto} d={PALABRA.d} />
+      </svg>
+    );
+  }
+
+  if (variant === 'vertical') {
+    return (
+      <svg viewBox={VERTICAL.viewBox} className={className} {...a11y}>
+        <g transform={VERTICAL.iso}>{simbolo}</g>
+        <path transform={VERTICAL.palabra} fill={c.texto} d={PALABRA.d} />
+        {conLema && <path transform={VERTICAL.lema} fill={c.texto} d={LEMA.d} />}
+      </svg>
+    );
+  }
+
   return (
-    <img 
-      src={src} 
-      alt={alt} 
-      className={className}
-      onError={(e) => {
-        console.error('Error loading Palmapp logo:', {
-          src,
-          variant,
-          error: e
-        });
-      }}
-    />
+    <svg viewBox={HORIZONTAL.viewBox} className={className} {...a11y}>
+      <g transform={HORIZONTAL.iso}>{simbolo}</g>
+      <path transform={HORIZONTAL.palabra} fill={c.texto} d={PALABRA.d} />
+    </svg>
   );
 }

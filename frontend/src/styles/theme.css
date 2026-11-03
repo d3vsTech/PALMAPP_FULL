@@ -2,125 +2,146 @@
 
 :root {
   --font-size: 16px;
-  
-  /* PALMAPP - Paleta Agrícola Profesional */
-  /* Fondo blanco limpio */
-  --background: #F8F9FA;
-  --foreground: #212529;
-  
-  /* Cards con blanco puro */
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-heading: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* Marco verde de marca y hoja clara de contenido */
+  --frame: #0F2116;
+  --logo-oscuro: #0F3D2E;
+  --logo-claro: #7BA05B;
+  --background: #F7F8F5;
+  --foreground: #18221B;
   --card: #FFFFFF;
-  --card-foreground: #212529;
+  --card-foreground: #18221B;
   --popover: #FFFFFF;
-  --popover-foreground: #212529;
-  
-  /* Verde Primario - Verde Bosque Profundo (Profesional) */
-  --primary: #1E5631;
+  --popover-foreground: #18221B;
+
+  /* Acción principal: verde casi negro con acento lima */
+  --primary: #1D4A2C;
+  --primary-hover: #163B23;
   --primary-foreground: #FFFFFF;
-  
-  /* Verde Secundario - Verde Vibrante (Acento positivo) */
-  --secondary: #F8F9FA;
-  --secondary-foreground: #212529;
-  --accent: #A4C639;
-  --accent-foreground: #FFFFFF;
-  
-  /* Terracota/Tierra - Para advertencias y atención */
-  --warning: #C19A6B;
-  --warning-foreground: #FFFFFF;
-  
-  /* Estados adicionales */
-  --success: #A4C639;
+  --primary-soft: #E7F1E5;
+  --action: #0F2116;
+  --action-hover: #1D4A2C;
+
+  --accent: #B5D44B;
+  --accent-foreground: #0F2116;
+  --secondary: #F0F2EE;
+  --secondary-foreground: #18221B;
+
+  /* Estados: tono legible como texto y tinte suave como fondo */
+  --success: #25692F;
   --success-foreground: #FFFFFF;
-  --destructive: #DC3545;
+  --success-soft: #E7F4E3;
+  --warning: #94600F;
+  --warning-foreground: #FFFFFF;
+  --warning-soft: #FFF2DC;
+  --destructive: #B42318;
   --destructive-foreground: #FFFFFF;
-  --info: #0D6EFD;
+  --destructive-soft: #FCE8E8;
+  --info: #2B5FA6;
   --info-foreground: #FFFFFF;
-  
-  /* Muted y borders */
-  --muted: #E9ECEF;
-  --muted-foreground: #6C757D;
-  --border: #DEE2E6;
-  --input: #DEE2E6;
+  --info-soft: #E5EEFA;
+
+  /* Neutros */
+  --muted: #F0F2EE;
+  --muted-strong: #E4E8E2;
+  --muted-foreground: #6B766E;
+  --border: #E8EBE6;
+  --input: #E1E5DF;
   --input-background: #FFFFFF;
-  --switch-background: #DEE2E6;
-  --ring: #1E5631;
-  
-  /* Charts con paleta agrícola */
-  --chart-1: #1E5631;
-  --chart-2: #A4C639;
+  --switch-background: #D9DED6;
+  --ring: #1D4A2C;
+
+  /* Gráficas */
+  --chart-1: #1D4A2C;
+  --chart-2: #9DBF35;
   --chart-3: #C19A6B;
-  --chart-4: #6C757D;
-  --chart-5: #28A745;
-  
-  /* Border radius generoso para estilo moderno */
-  --radius: 1rem;
-  
-  /* Sidebar limpia y profesional */
-  --sidebar: #FFFFFF;
-  --sidebar-foreground: #212529;
-  --sidebar-primary: #1E5631;
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #F8F9FA;
-  --sidebar-accent-foreground: #212529;
-  --sidebar-border: #DEE2E6;
-  --sidebar-ring: #1E5631;
-  
-  /* Tipografía - Pesos generosos */
-  --font-weight-medium: 600;
+  --chart-4: #5E8C6A;
+  --chart-5: #2B5FA6;
+
+  --radius: 0.75rem;
+
+  /* Menú lateral sobre el marco */
+  --sidebar: #0F2116;
+  --sidebar-foreground: #B9CBBE;
+  --sidebar-primary: #B5D44B;
+  --sidebar-primary-foreground: #0F2116;
+  --sidebar-accent: rgba(181, 212, 75, 0.14);
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: rgba(255, 255, 255, 0.07);
+  --sidebar-ring: #B5D44B;
+
   --font-weight-normal: 400;
+  --font-weight-medium: 600;
   --font-weight-bold: 700;
 }
 
 .dark {
-  /* Mantenemos dark mode para otras secciones si es necesario */
-  --background: #0a0a0a;
-  --foreground: #fafafa;
-  --card: #141414;
-  --card-foreground: #fafafa;
-  --popover: #141414;
-  --popover-foreground: #fafafa;
-  
-  --primary: #22c55e;
-  --primary-foreground: #0a0a0a;
-  --secondary: #1f1f1f;
-  --secondary-foreground: #fafafa;
-  --muted: #1f1f1f;
-  --muted-foreground: #a1a1aa;
-  --accent: #fb923c;
-  --accent-foreground: #0a0a0a;
-  --destructive: #f87171;
-  --destructive-foreground: #0a0a0a;
-  
-  --success: #22c55e;
-  --success-foreground: #0a0a0a;
-  --warning: #fbbf24;
-  --warning-foreground: #0a0a0a;
-  --info: #60a5fa;
-  --info-foreground: #0a0a0a;
-  
-  --border: #27272a;
-  --input: #27272a;
-  --input-background: #141414;
-  --switch-background: #27272a;
-  --ring: #22c55e;
-  
-  --chart-1: #22c55e;
-  --chart-2: #a3e635;
-  --chart-3: #fb923c;
-  --chart-4: #60a5fa;
-  --chart-5: #facc15;
-  
-  --sidebar: #0f0f0f;
-  --sidebar-foreground: #fafafa;
-  --sidebar-primary: #22c55e;
-  --sidebar-primary-foreground: #0a0a0a;
-  --sidebar-accent: #1f1f1f;
-  --sidebar-accent-foreground: #fafafa;
-  --sidebar-border: #27272a;
-  --sidebar-ring: #22c55e;
+  --frame: #070F0A;
+  --logo-oscuro: #F7F6F2;
+  --logo-claro: #7BA05B;
+  --background: #111A14;
+  --foreground: #EDF1EC;
+  --card: #18231C;
+  --card-foreground: #EDF1EC;
+  --popover: #18231C;
+  --popover-foreground: #EDF1EC;
+
+  --primary: #8CC79A;
+  --primary-hover: #A3D4AE;
+  --primary-foreground: #0F2116;
+  --primary-soft: #1D3324;
+  --action: #B5D44B;
+  --action-hover: #C6E06A;
+
+  --accent: #B5D44B;
+  --accent-foreground: #0F2116;
+  --secondary: #202C24;
+  --secondary-foreground: #EDF1EC;
+
+  --success: #79C886;
+  --success-foreground: #0F2116;
+  --success-soft: #1B3120;
+  --warning: #E7AE5A;
+  --warning-foreground: #0F2116;
+  --warning-soft: #33271A;
+  --destructive: #F28B82;
+  --destructive-foreground: #0F2116;
+  --destructive-soft: #3A1F1F;
+  --info: #8DB8EE;
+  --info-foreground: #0F2116;
+  --info-soft: #1A2A40;
+
+  --muted: #202C24;
+  --muted-strong: #2A382F;
+  --muted-foreground: #9AA99E;
+  --border: #26332B;
+  --input: #2F3D34;
+  --input-background: #18231C;
+  --switch-background: #2F3D34;
+  --ring: #8CC79A;
+
+  --chart-1: #8CC79A;
+  --chart-2: #B5D44B;
+  --chart-3: #D4A878;
+  --chart-4: #6FA37C;
+  --chart-5: #8DB8EE;
+
+  --sidebar: #070F0A;
+  --sidebar-foreground: #A9BBAE;
+  --sidebar-primary: #B5D44B;
+  --sidebar-primary-foreground: #0F2116;
+  --sidebar-accent: rgba(181, 212, 75, 0.12);
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --sidebar-ring: #B5D44B;
 }
 
 @theme inline {
+  --font-sans: var(--font-body);
+  --font-heading: var(--font-heading);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -128,23 +149,33 @@
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-soft: var(--primary-soft);
+  --color-action: var(--action);
+  --color-action-hover: var(--action-hover);
+  --color-frame: var(--frame);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
+  --color-muted-strong: var(--muted-strong);
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
-  
+  --color-destructive-soft: var(--destructive-soft);
+
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
+  --color-success-soft: var(--success-soft);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
+  --color-warning-soft: var(--warning-soft);
   --color-info: var(--info);
   --color-info-foreground: var(--info-foreground);
-  
+  --color-info-soft: var(--info-soft);
+
   --color-border: var(--border);
   --color-input: var(--input);
   --color-input-background: var(--input-background);
@@ -155,14 +186,14 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
-  
-  /* Border radius - esquinas muy redondeadas (16px base) */
-  --radius-sm: 0.75rem;
-  --radius-md: 1rem;
-  --radius-lg: 1rem;
-  --radius-xl: 1.25rem;
-  --radius-2xl: 1.5rem;
-  
+
+  /* Radios: 8 / 10 / 12 / 16 / 20 px */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -178,300 +209,573 @@
     @apply border-border outline-ring/50;
   }
 
-  body {
-    @apply bg-background text-foreground antialiased;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-  }
-
-  /**
-  * Tipografía clara y legible para usuarios no-tecnológicos
-  * Sistema de jerarquía visual mejorado con 5 niveles
-  */
-
   html {
     font-size: var(--font-size);
   }
 
-  /* Nivel 1: Títulos principales de página */
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-body);
+    font-feature-settings: 'cv11', 'ss01';
+  }
+
+  /* Jerarquía: los títulos van en tinta oscura; el verde queda para acciones y estados */
+  h1, h2, h3, h4, h5 {
+    font-family: var(--font-heading);
+    color: var(--foreground);
+  }
+
   h1 {
-    font-size: 2.25rem; /* 36px */
-    font-weight: var(--font-weight-bold);
-    line-height: 1.2;
-    letter-spacing: -0.02em;
-    color: var(--primary);
+    font-size: 1.875rem;
+    font-weight: 800;
+    line-height: 1.15;
+    letter-spacing: -0.025em;
   }
 
-  /* Nivel 2: Títulos de sección */
   h2 {
-    font-size: 1.75rem; /* 28px */
-    font-weight: var(--font-weight-bold);
-    line-height: 1.25;
-    letter-spacing: -0.01em;
-    color: var(--primary);
-  }
-
-  /* Nivel 3: Subtítulos importantes */
-  h3 {
-    font-size: 1.375rem; /* 22px */
-    font-weight: var(--font-weight-medium);
+    font-size: 1.1875rem;
+    font-weight: 700;
     line-height: 1.3;
-    color: var(--primary);
+    letter-spacing: -0.01em;
   }
 
-  /* Nivel 4: Subtítulos de tarjetas */
+  h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.35;
+  }
+
   h4 {
-    font-size: 1.125rem; /* 18px */
-    font-weight: var(--font-weight-medium);
+    font-size: 0.9375rem;
+    font-weight: 700;
     line-height: 1.4;
-    color: var(--primary);
   }
 
-  /* Nivel 5: Títulos pequeños */
   h5 {
-    font-size: 1rem; /* 16px */
-    font-weight: var(--font-weight-medium);
-    line-height: 1.5;
-    color: var(--primary);
+    font-size: 0.875rem;
+    font-weight: 700;
+    line-height: 1.4;
   }
 
-  /* Texto normal */
   p {
-    font-size: 0.9375rem; /* 15px */
+    font-size: 0.9375rem;
     font-weight: var(--font-weight-normal);
-    line-height: 1.6;
-    color: var(--foreground);
+    line-height: 1.55;
   }
 
-  /* Texto secundario/descriptivo */
   .text-secondary {
-    font-size: 0.875rem; /* 14px */
-    font-weight: var(--font-weight-normal);
+    font-size: 0.875rem;
     line-height: 1.5;
     color: var(--muted-foreground);
   }
 
-  /* Texto pequeño */
   small, .text-small {
-    font-size: 0.8125rem; /* 13px */
-    font-weight: var(--font-weight-normal);
+    font-size: 0.8125rem;
     line-height: 1.4;
     color: var(--muted-foreground);
   }
 
-  /* Labels con mejor contraste */
   label {
-    font-size: 0.875rem; /* 14px */
-    font-weight: var(--font-weight-medium);
+    font-size: 0.875rem;
+    font-weight: 500;
     line-height: 1.5;
     color: var(--foreground);
   }
 
-  /* Botones */
   button {
-    font-size: 0.9375rem; /* 15px */
-    font-weight: var(--font-weight-medium);
+    font-size: 0.9375rem;
+    font-weight: 500;
     line-height: 1.5;
   }
 
-  /* Inputs */
   input, textarea, select {
-    font-size: 0.9375rem; /* 15px */
+    font-size: 0.9375rem;
     font-weight: var(--font-weight-normal);
     line-height: 1.5;
   }
 
-  /* Clases de utilidad para jerarquía */
+  /* Cifras grandes (KPI) en Manrope con números tabulares */
+  .text-display,
+  .text-4xl.font-bold,
+  .text-3xl.font-bold,
+  .text-2xl.font-bold,
+  .text-xl.font-bold,
+  .text-lg.font-bold {
+    font-family: var(--font-heading);
+    font-variant-numeric: tabular-nums;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+  }
+
   .text-display {
-    font-size: 3rem; /* 48px - Para números grandes en KPIs */
-    font-weight: var(--font-weight-bold);
+    font-size: 2.75rem;
+    font-weight: 800;
     line-height: 1;
-    letter-spacing: -0.02em;
   }
 
   .text-lead {
-    font-size: 1.125rem; /* 18px - Para texto introductorio */
-    font-weight: var(--font-weight-normal);
+    font-size: 0.9375rem;
     line-height: 1.6;
     color: var(--muted-foreground);
   }
+
+  table {
+    font-variant-numeric: tabular-nums;
+  }
 }
 
-/* Componentes Modernos con Glassmorphism Sutil */
 @layer components {
-  /* Cards con sombras suaves pero definidas */
   .card-palmapp {
-    @apply bg-card border border-border rounded-2xl shadow-sm hover:shadow-md transition duration-300;
+    @apply bg-card border border-border rounded-xl;
   }
-  
-  /* Glassmorphism muy sutil para paneles fijos */
+
   .glass-subtle {
     @apply bg-card border border-border;
   }
-  
+
   .glass-panel {
-    @apply bg-card/90 backdrop-blur-md border border-border;
+    @apply bg-card border border-border;
   }
-  
-  /* Efecto de elevación al hover */
+
   .card-hover-lift {
-    @apply hover:shadow-lg hover:-translate-y-0.5 transition duration-300;
+    @apply hover:border-muted-strong hover:shadow-sm transition-shadow duration-200;
   }
-  
-  /* Animaciones de Accordion - IMPORTANTE */
+
   .animate-accordion-down {
     animation: accordion-down 0.2s ease-out;
   }
-  
+
   .animate-accordion-up {
     animation: accordion-up 0.2s ease-out;
   }
-  
-  /* Micro-interacciones para botones */
-  @keyframes button-press {
-    0% { transform: scale(1); }
-    50% { transform: scale(0.97); }
-    100% { transform: scale(1); }
-  }
-  
+
   .btn-press-effect:active {
-    animation: button-press 150ms ease-out;
+    transform: translateY(1px);
   }
-  
-  /* Iconos con línea gruesa y esquinas redondeadas - se aplica via lucide-react */
+
   .icon-palmapp {
-    stroke-width: 2.5;
+    stroke-width: 2;
     stroke-linecap: round;
     stroke-linejoin: round;
   }
-  
-  /* Grid pattern sutil para fondos (opcional) */
+
   .grid-pattern-subtle {
-    background-image: 
-      linear-gradient(to right, rgba(30, 86, 49, 0.03) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(30, 86, 49, 0.03) 1px, transparent 1px);
-    background-size: 60px 60px;
+    background-image: none;
   }
-  
-  /* Estados de badge/tag claros */
+
+  .metric-label {
+    @apply text-sm font-medium text-muted-foreground;
+  }
+
+  .metric-value {
+    @apply text-3xl font-bold text-foreground;
+  }
+
   .badge-success {
-    @apply bg-success/10 text-success border border-success/20 px-3 py-1 rounded-full text-sm font-medium;
+    @apply bg-success-soft text-success border border-success/15 px-2.5 py-0.5 rounded-md text-xs font-medium;
   }
-  
+
   .badge-warning {
-    @apply bg-warning/10 text-warning border border-warning/20 px-3 py-1 rounded-full text-sm font-medium;
+    @apply bg-warning-soft text-warning border border-warning/15 px-2.5 py-0.5 rounded-md text-xs font-medium;
   }
-  
+
   .badge-info {
-    @apply bg-info/10 text-info border border-info/20 px-3 py-1 rounded-full text-sm font-medium;
+    @apply bg-info-soft text-info border border-info/15 px-2.5 py-0.5 rounded-md text-xs font-medium;
   }
-  
-  /* Separadores sutiles */
+
   .divider-subtle {
-    @apply border-t border-border/50;
+    @apply border-t border-border;
   }
-  
-  /* Tooltip style */
+
   .tooltip-palmapp {
-    @apply bg-foreground text-background px-3 py-1.5 rounded-lg text-sm font-medium shadow-lg;
+    @apply bg-foreground text-background px-3 py-1.5 rounded-md text-sm font-medium shadow-md;
   }
-  
-  /* Custom Scrollbar - Diseño moderno y limpio */
+
   .custom-scrollbar {
     scrollbar-width: thin;
-    scrollbar-color: rgba(30, 86, 49, 0.2) transparent;
+    scrollbar-color: rgba(22, 35, 27, 0.18) transparent;
   }
-  
+
   .custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
+    width: 8px;
   }
-  
+
   .custom-scrollbar::-webkit-scrollbar-track {
     background: transparent;
-    border-radius: 10px;
   }
-  
+
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(30, 86, 49, 0.2);
-    border-radius: 10px;
-    transition: background 0.2s ease;
+    background: rgba(22, 35, 27, 0.18);
+    border-radius: 8px;
   }
-  
+
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: rgba(30, 86, 49, 0.35);
+    background: rgba(22, 35, 27, 0.3);
   }
-  
-  .custom-scrollbar::-webkit-scrollbar-thumb:active {
-    background: rgba(30, 86, 49, 0.5);
-  }
-  
-  /* Ocultar scrollbar pero mantener funcionalidad */
+
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
-  
+
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
 }
 
-/* Transiciones de página suaves */
 @keyframes slide-in-right {
-  from {
-    opacity: 0;
-    transform: translateX(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
 @keyframes slide-out-left {
-  from {
-    opacity: 1;
-    transform: translateX(0);
-  }
-  to {
-    opacity: 0;
-    transform: translateX(-30px);
-  }
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(-16px); }
 }
 
 @keyframes accordion-down {
-  from {
-    height: 0;
-  }
-  to {
-    height: var(--radix-accordion-content-height);
-  }
+  from { height: 0; }
+  to { height: var(--radix-accordion-content-height); }
 }
 
 @keyframes accordion-up {
-  from {
-    height: var(--radix-accordion-content-height);
-  }
-  to {
-    height: 0;
-  }
+  from { height: var(--radix-accordion-content-height); }
+  to { height: 0; }
 }
 
 .page-transition-enter {
-  animation: slide-in-right 300ms ease-out;
+  animation: slide-in-right 200ms ease-out;
 }
 
 .page-transition-exit {
-  animation: slide-out-left 300ms ease-out;
+  animation: slide-out-left 200ms ease-out;
 }
 
-/* Estilos para impresión */
+
+/* ---------- Movimiento y detalles de interacción ---------- */
+@keyframes palmapp-fundido {
+  from { opacity: 0; }
+}
+@keyframes palmapp-entrar {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Cada pantalla entra con un fundido corto */
+/* Solo "backwards": si el transform se queda al terminar, los paneles fijos dejan de pegarse a la ventana. */
+.pagina-entra {
+  animation: palmapp-entrar 260ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+
+/* Los bloques de la pantalla aparecen escalonados */
+.pagina-entra > * > * {
+  animation: palmapp-entrar 340ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+.pagina-entra > * > *:nth-child(2) { animation-delay: 40ms; }
+.pagina-entra > * > *:nth-child(3) { animation-delay: 80ms; }
+.pagina-entra > * > *:nth-child(4) { animation-delay: 120ms; }
+.pagina-entra > * > *:nth-child(n + 5) { animation-delay: 160ms; }
+
+/* Respuesta táctil en botones y enlaces */
+button:not(:disabled), a[href], [role="button"] {
+  transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+  transition-duration: 150ms;
+}
+button:not(:disabled):active, [role="button"]:active {
+  transform: translateY(1px);
+}
+
+/* Acciones de fila: los íconos de editar, ver, descargar o eliminar siempre se ven, más tenues,
+   y toman su color completo al pasar por la fila o al llegar con el teclado. */
+@media (hover: hover) and (pointer: fine) {
+  tbody tr td:last-child :is(button, a):has(> svg:only-child) {
+    opacity: 0.6;
+    transition: opacity 150ms ease;
+  }
+  tbody tr:hover td:last-child :is(button, a):has(> svg:only-child),
+  tbody tr:focus-within td:last-child :is(button, a):has(> svg:only-child) {
+    opacity: 1;
+  }
+}
+tbody tr { transition: background-color 150ms ease; }
+
+/* Gráficas: textos de ejes discretos y barras que responden al cursor */
+.recharts-cartesian-axis-tick-value { font-family: var(--font-body); }
+.recharts-bar-rectangle path { transition: opacity 150ms ease; }
+.recharts-bar-rectangles:hover .recharts-bar-rectangle path { opacity: 0.55; }
+.recharts-bar-rectangles:hover .recharts-bar-rectangle:hover path { opacity: 1; }
+.recharts-label-list text { font-family: var(--font-heading); }
+
+@media (prefers-reduced-motion: reduce) {
+  .pagina-entra, .pagina-entra > * > * { animation: none; }
+  button:not(:disabled):active, [role="button"]:active { transform: none; }
+}
+
+
+/* ---------- Tour guiado (driver.js) con el estilo de PalmApp ---------- */
+.driver-popover.palmapp-tour {
+  background: var(--popover);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 18px 18px 14px;
+  max-width: 340px;
+  box-shadow: 0 18px 48px rgba(15, 33, 22, 0.22);
+  font-family: var(--font-body);
+}
+.driver-popover.palmapp-tour .driver-popover-title {
+  font-family: var(--font-heading);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--foreground);
+  padding-right: 22px;
+}
+.driver-popover.palmapp-tour .driver-popover-description {
+  margin-top: 6px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--muted-foreground);
+}
+.driver-popover.palmapp-tour .driver-popover-close-btn {
+  color: var(--muted-foreground);
+  width: 32px;
+  height: 32px;
+  top: 8px;
+  right: 8px;
+  border-radius: 8px;
+}
+.driver-popover.palmapp-tour .driver-popover-close-btn:hover { background: var(--muted); color: var(--foreground); }
+.driver-popover.palmapp-tour .driver-popover-footer { margin-top: 16px; align-items: center; gap: 8px; }
+.driver-popover.palmapp-tour .driver-popover-progress-text { font-size: 12.5px; color: var(--muted-foreground); }
+.driver-popover.palmapp-tour .driver-popover-navigation-btns { gap: 6px; }
+.driver-popover.palmapp-tour .driver-popover-footer button {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  text-shadow: none;
+  border-radius: 10px;
+  padding: 7px 12px;
+  border: 1px solid var(--input);
+  background: var(--card);
+  color: var(--foreground);
+  line-height: 1.2;
+}
+.driver-popover.palmapp-tour .driver-popover-footer button:hover { background: var(--muted); }
+.driver-popover.palmapp-tour .driver-popover-footer .driver-popover-next-btn {
+  background: var(--action);
+  border-color: var(--action);
+  color: #fff;
+}
+.driver-popover.palmapp-tour .driver-popover-footer .driver-popover-next-btn:hover { background: var(--action-hover); }
+.dark .driver-popover.palmapp-tour .driver-popover-footer .driver-popover-next-btn { color: var(--accent-foreground); }
+.driver-popover.palmapp-tour .driver-popover-arrow-side-left.driver-popover-arrow { border-left-color: var(--popover); }
+.driver-popover.palmapp-tour .driver-popover-arrow-side-right.driver-popover-arrow { border-right-color: var(--popover); }
+.driver-popover.palmapp-tour .driver-popover-arrow-side-top.driver-popover-arrow { border-top-color: var(--popover); }
+.driver-popover.palmapp-tour .driver-popover-arrow-side-bottom.driver-popover-arrow { border-bottom-color: var(--popover); }
+
+/* ---------- Vista de app: pantallas de menos de 768 px ---------- */
+html, body { overscroll-behavior-y: none; }
+button, a, [role="button"] { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+
+@media screen and (max-width: 767.98px) {
+  /* Entrada de pantalla solo con fundido: mover el contenido deja un instante mal ubicados los botones flotantes */
+  .pagina-entra, .pagina-entra > * > * { animation-name: palmapp-fundido; }
+
+  /* Con menos de 16 px el iPhone acerca la pantalla al escribir */
+  input:not([type="checkbox"]):not([type="radio"]), select, textarea { font-size: 16px; }
+
+  /* Las tablas pasan a tarjetas. Las etiquetas las pone lib/tablasMovil.ts */
+  table[data-tarjetas] { display: block; width: 100%; min-width: 0 !important; }
+  table[data-tarjetas] > thead { display: none; }
+  table[data-tarjetas] > :is(tbody, tfoot) { display: block; }
+  table[data-tarjetas] > :is(tbody, tfoot) > tr {
+    display: block;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  table[data-tarjetas] > :is(tbody, tfoot) > tr:last-child { border-bottom: 0; }
+  table[data-tarjetas] > :is(tbody, tfoot) > tr > :is(td, th):not(.hidden) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    min-width: 0 !important;
+    width: auto !important;
+    padding: 0.25rem 0 !important;
+    text-align: right;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+  }
+  table[data-tarjetas] > :is(tbody, tfoot) > tr > :is(td, th):not(.hidden)::before {
+    content: attr(data-etiqueta);
+    flex-shrink: 0;
+    max-width: 45%;
+    font-size: 0.8125rem;
+    font-weight: 400;
+    text-align: left;
+    color: var(--muted-foreground);
+  }
+  /* La primera columna es el título de la tarjeta */
+  table[data-tarjetas] > tbody > tr > :is(td, th):first-child:not(.hidden):not(.celda-seleccion) {
+    display: block;
+    font-weight: 600;
+    text-align: left;
+  }
+  table[data-tarjetas] > tbody > tr > :is(td, th):first-child::before { display: none; }
+  /* Sin título de columna: acciones de la fila, o un mensaje que ocupa toda la tabla */
+  table[data-tarjetas] > :is(tbody, tfoot) > tr > :is(td, th)[data-etiqueta=""]::before { display: none; }
+  table[data-tarjetas] > :is(tbody, tfoot) > tr > :is(td, th)[data-etiqueta=""]:not(:first-child) { justify-content: flex-end; }
+  table[data-tarjetas] > :is(tbody, tfoot) > tr > :is(td, th)[colspan]:not([colspan="1"]) { display: block; text-align: center; }
+  /* Acciones de la fila con tamaño para el dedo */
+  table[data-tarjetas] td :is(button, a):has(> svg:only-child) { min-width: 2.75rem; min-height: 2.75rem; }
+
+  /* Una columna de cuadrícula no se estira por contenido ancho, como una fila deslizable */
+  .grid > * { min-width: 0; }
+
+  /* Tarjeta sin encabezado: su contenido no queda pegado al borde superior */
+  [data-slot="card"] > [data-slot="card-content"]:first-child:not([class*="p-"]):not([class*="pt-"]):not([class*="py-"]) { padding-top: 1.25rem; }
+
+  /* Tablas que no pasan a tarjetas: la primera columna queda fija al deslizar */
+  table:not([data-tarjetas]) > :is(tbody, tfoot) > tr > :first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--card);
+  }
+  table:not([data-tarjetas]) > thead > tr > :first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: color-mix(in srgb, var(--muted) 60%, var(--card));
+  }
+  /* La barra de desplazamiento solo se deja en las tablas, donde ayuda a notar que hay más */
+  [class*="overflow-x-auto"]:not(:has(table)) { scrollbar-width: none; }
+
+  /* Encabezado: los botones secundarios se deslizan en una fila */
+  .acciones-pagina:not(:has(> [role="group"])) {
+    flex-wrap: nowrap;
+    margin-inline: -1.25rem;
+    padding-inline: 1.25rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .acciones-pagina::-webkit-scrollbar { display: none; }
+  .acciones-pagina > * { flex-shrink: 0; }
+  /* La acción de crear flota sobre el menú inferior, al alcance del pulgar */
+  .acciones-pagina > :is(button[class*="bg-action"], a[class*="bg-action"], a:has(> button[class*="bg-action"])):has(.lucide-plus):last-child {
+    position: fixed;
+    right: 1rem;
+    bottom: calc(4.75rem + env(safe-area-inset-bottom));
+    z-index: 30;
+    border-radius: 999px;
+    box-shadow: 0 8px 24px rgb(15 33 22 / 0.28);
+  }
+  .acciones-pagina > :is(button[class*="bg-action"], a[class*="bg-action"]):has(.lucide-plus):last-child,
+  .acciones-pagina > a:last-child > button[class*="bg-action"]:has(.lucide-plus) {
+    height: 3rem;
+    padding-inline: 1.25rem;
+    border-radius: 999px;
+  }
+
+  /* Formularios: los botones quedan fijos abajo y se reparten el ancho */
+  .barra-acciones {
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+    flex-direction: row;
+    margin: 0 -1.25rem;
+    padding: 0.75rem 1.25rem calc(0.75rem + env(safe-area-inset-bottom));
+    background: var(--background);
+    border-top: 1px solid var(--border);
+  }
+  /* Si la barra es lo último de la pantalla, nada queda debajo de ella */
+  .pagina-entra:has(.barra-acciones):not(:has(.grid .barra-acciones)) { padding-bottom: 0; }
+  .barra-acciones > * { flex: 1 1 0; min-width: 0; }
+  /* Dentro de una tarjeta llega hasta sus bordes */
+  [data-slot="card-content"] .barra-acciones { margin-inline: -1.5rem; }
+  .barra-acciones > div { display: flex; }
+  .barra-acciones button { width: 100%; height: 2.75rem; padding-inline: 0.5rem; }
+  /* Solo las flechas conservan su ícono: el texto necesita el espacio */
+  .barra-acciones button:not(:has(.lucide-arrow-left, .lucide-arrow-right)) svg { display: none; }
+
+  /* Tarjeta con selección: el círculo a la izquierda y el nombre como título */
+  table[data-tarjetas] > tbody > tr:has(> .celda-seleccion) { padding-left: 2.75rem; position: relative; }
+  table[data-tarjetas] > tbody > tr > .celda-seleccion {
+    position: absolute;
+    top: 50%;
+    left: 1rem;
+    padding: 0 !important;
+    transform: translateY(-50%);
+  }
+  table[data-tarjetas] > tbody > tr > .celda-seleccion + td { display: block; font-weight: 600; text-align: left; }
+  table[data-tarjetas] > tbody > tr > .celda-seleccion + td::before { display: none; }
+
+  /* Un solo ícono de acción: en la esquina. La tarjeta completa abre el detalle. */
+  table[data-tarjetas] > tbody > tr:has(> [data-accion-unica]) { position: relative; }
+  table[data-tarjetas] > tbody > tr:has(> [data-accion-unica]) > :first-child { padding-right: 2.75rem !important; }
+  table[data-tarjetas] > tbody > tr > [data-accion-unica] {
+    position: absolute;
+    top: 0.25rem;
+    right: 0.25rem;
+    padding: 0 !important;
+  }
+}
+
 @media print {
   @page {
     size: letter;
     margin: 0.5cm;
   }
 
+  :root {
+    --background: #ffffff;
+    --foreground: #111111;
+    --card: #ffffff;
+    --card-foreground: #111111;
+    --primary: #111111;
+    --primary-foreground: #ffffff;
+    --secondary: #ffffff;
+    --secondary-foreground: #111111;
+    --muted: #f2f3f4;
+    --muted-foreground: #555555;
+    --border: #999999;
+  }
+
   body {
-    background: white;
+    background: white !important;
+    color: #111111 !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  *,
+  *::before,
+  *::after {
+    background-image: none !important;
+    color: #111111 !important;
+    border-color: #c9c9c9 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  [class*="bg-primary"],
+  [class*="bg-success"],
+  [class*="bg-destructive"],
+  [class*="bg-warning"],
+  [class*="bg-info"],
+  [class*="bg-muted"] {
+    background-color: #f1f2f3 !important;
+  }
+
+  [class*="bg-card"],
+  [class*="bg-background"],
+  [class*="bg-white"] {
+    background-color: #ffffff !important;
+  }
+
+  thead tr,
+  tfoot tr {
+    background-color: #f1f2f3 !important;
   }
 }
