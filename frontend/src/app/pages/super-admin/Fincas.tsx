@@ -1,28 +1,30 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
-  Building2,
-  Plus,
-  Edit2,
-  Trash2,
-  Pause,
-  Play,
-  Search,
-  Filter,
-  Users,
-  RefreshCw,
-  Loader2,
-  Eye,
-  X,
+  Building2, Eye, Loader2, Pause, Pencil, Play, Plus, RefreshCw, Search, Trash2, Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../contexts/AuthContext';
 import { requestConToken } from '../../../api/request';
 import { formatFecha } from '../../utils/fecha';
+import { Button } from '../../components/ui/button';
+import { Badge } from '../../components/ui/badge';
+import { Card } from '../../components/ui/card';
+import { Input } from '../../components/ui/input';
+import {
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
+} from '../../components/ui/dialog';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '../../components/ui/select';
+import PageHeader from '../../components/common/PageHeader';
+import StatStrip from '../../components/common/StatStrip';
+import EmptyState from '../../components/common/EmptyState';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import CrearFincaModal, {
   type FincaFormData,
 } from '../../components/super-admin/CrearFincaModal';
+import { num } from '../../lib/formato';
 
 type EstadoTenant = 'ACTIVO' | 'INACTIVO' | 'SUSPENDIDO';
 
@@ -46,12 +48,7 @@ interface FincaItem {
 
 interface DashboardStatsResponse {
   data?: {
-    tenants?: {
-      total?: number;
-      activos?: number;
-      suspendidos?: number;
-      inactivos?: number;
-    };
+    tenants?: { total?: number; activos?: number; suspendidos?: number; inactivos?: number };
   };
 }
 
@@ -60,67 +57,63 @@ interface LaravelPagination<T> {
   current_page?: number;
   last_page?: number;
   total?: number;
-  meta?: {
-    current_page?: number;
-    last_page?: number;
-    total?: number;
-  };
+  meta?: { current_page?: number; last_page?: number; total?: number };
 }
 
 interface TenantDetailResponse {
-  data?: any;
+  data?: Record<string, unknown>;
   modulos?: Record<string, unknown>;
   config_nomina?: Record<string, unknown>;
 }
 
-const PAGE_SIZE = 10;
+const POR_PAGINA = 10;
 
-function toNumber(value: unknown, fallback = 0) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
+const VARIANTE_ESTADO: Record<EstadoTenant, 'success' | 'warning' | 'destructive'> = {
+  ACTIVO: 'success',
+  SUSPENDIDO: 'warning',
+  INACTIVO: 'destructive',
+};
+
+function aNumero(valor: unknown, porDefecto = 0) {
+  const n = Number(valor);
+  return Number.isFinite(n) ? n : porDefecto;
 }
 
-function normalizeEstado(value: unknown): EstadoTenant {
-  const normalized = String(value ?? 'ACTIVO').trim().toUpperCase();
-
-  if (normalized === 'SUSPENDIDO' || normalized === 'INACTIVO') {
-    return normalized;
-  }
-
+function normalizarEstado(valor: unknown): EstadoTenant {
+  const v = String(valor ?? 'ACTIVO').trim().toUpperCase();
+  if (v === 'SUSPENDIDO' || v === 'INACTIVO') return v;
   return 'ACTIVO';
 }
 
-/**
- * Formatea una fecha del backend (YYYY-MM-DD o ISO completo) al formato DD/MM/YYYY.
- * Si la fecha es inválida o vacía, devuelve "—".
- */
-const formatearFecha = (raw?: string | null): string => formatFecha(raw, { day: '2-digit', month: '2-digit', year: 'numeric' });
+/** Fecha del backend (YYYY-MM-DD o ISO) a DD/MM/YYYY. Vacía o inválida da "—". */
+const formatearFecha = (raw?: string | null): string =>
+  formatFecha(raw, { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-function normalizeTenant(raw: any): FincaItem {
+function normalizarTenant(raw: Record<string, unknown> | undefined): FincaItem {
+  const r = raw ?? {};
   return {
-    id: toNumber(raw?.id),
-    tipoPersona: String(raw?.tipo_persona ?? 'NATURAL'),
-    nombre: String(raw?.nombre ?? ''),
-    nit: String(raw?.nit ?? ''),
-    razonSocial: String(raw?.razon_social ?? ''),
-    correoContacto: String(raw?.correo_contacto ?? ''),
-    telefono: String(raw?.telefono ?? ''),
-    direccion: String(raw?.direccion ?? ''),
-    departamento: String(raw?.departamento ?? ''),
-    municipio: String(raw?.municipio ?? ''),
-    estado: normalizeEstado(raw?.estado ?? raw?.status),
-    fechaActivacion: String(raw?.fecha_activacion ?? ''),
-    fechaSuspension: String(raw?.fecha_suspension ?? ''),
-    totalUsuarios: toNumber(raw?.total_usuarios, 0),
-    totalEmpleados: toNumber(raw?.total_empleados, 0),
+    id: aNumero(r.id),
+    tipoPersona: String(r.tipo_persona ?? 'NATURAL'),
+    nombre: String(r.nombre ?? ''),
+    nit: String(r.nit ?? ''),
+    razonSocial: String(r.razon_social ?? ''),
+    correoContacto: String(r.correo_contacto ?? ''),
+    telefono: String(r.telefono ?? ''),
+    direccion: String(r.direccion ?? ''),
+    departamento: String(r.departamento ?? ''),
+    municipio: String(r.municipio ?? ''),
+    estado: normalizarEstado(r.estado ?? r.status),
+    fechaActivacion: String(r.fecha_activacion ?? ''),
+    fechaSuspension: String(r.fecha_suspension ?? ''),
+    totalUsuarios: aNumero(r.total_usuarios, 0),
+    totalEmpleados: aNumero(r.total_empleados, 0),
   };
 }
 
-function fincaToFormData(finca: FincaItem | null): FincaFormData | null {
+function fincaAFormulario(finca: FincaItem | null): FincaFormData | null {
   if (!finca) return null;
-
   return {
-    tipo_persona: (finca as any).tipoPersona || 'NATURAL',
+    tipo_persona: finca.tipoPersona === 'JURIDICA' ? 'JURIDICA' : 'NATURAL',
     nombre: finca.nombre,
     nit: finca.nit,
     razon_social: finca.razonSocial,
@@ -134,57 +127,40 @@ function fincaToFormData(finca: FincaItem | null): FincaFormData | null {
   };
 }
 
-function buildTenantPayload(formData: FincaFormData) {
+function armarPayload(form: FincaFormData) {
   const payload: Record<string, unknown> = {
-    tipo_persona: formData.tipo_persona,
-    nombre: formData.nombre.trim(),
+    tipo_persona: form.tipo_persona,
+    nombre: form.nombre.trim(),
   };
 
-  const optionalStrings: Record<string, string> = {
-    nit: formData.nit.trim(),
-    razon_social: formData.razon_social.trim(),
-    correo_contacto: formData.correo_contacto.trim(),
-    telefono: formData.telefono.trim(),
-    direccion: formData.direccion.trim(),
-    departamento: formData.departamento.trim(),
-    municipio: formData.municipio.trim(),
-    fecha_activacion: formData.fecha_activacion ? formData.fecha_activacion.split('-').reverse().join('/') : '',
-    fecha_suspension: formData.fecha_suspension ? formData.fecha_suspension.split('-').reverse().join('/') : '',
+  // El backend espera las fechas en DD/MM/YYYY, no en el ISO del input.
+  const opcionales: Record<string, string> = {
+    nit: form.nit.trim(),
+    razon_social: form.razon_social.trim(),
+    correo_contacto: form.correo_contacto.trim(),
+    telefono: form.telefono.trim(),
+    direccion: form.direccion.trim(),
+    departamento: form.departamento.trim(),
+    municipio: form.municipio.trim(),
+    fecha_activacion: form.fecha_activacion ? form.fecha_activacion.split('-').reverse().join('/') : '',
+    fecha_suspension: form.fecha_suspension ? form.fecha_suspension.split('-').reverse().join('/') : '',
   };
 
-  Object.entries(optionalStrings).forEach(([key, value]) => {
-    if (value) {
-      payload[key] = value;
-    }
+  Object.entries(opcionales).forEach(([clave, valor]) => {
+    if (valor) payload[clave] = valor;
   });
 
   return payload;
 }
 
-function getEstadoClasses(estado: EstadoTenant) {
-  switch (estado) {
-    case 'ACTIVO':
-      return 'border-green-500/20 bg-green-500/10 text-green-400';
-    case 'SUSPENDIDO':
-      return 'border-yellow-500/20 bg-yellow-500/10 text-yellow-400';
-    case 'INACTIVO':
-      return 'border-red-500/20 bg-red-500/10 text-red-400';
-    default:
-      return 'border-slate-700 bg-slate-800 text-slate-300';
-  }
-}
-
-function getEstadoDot(estado: EstadoTenant) {
-  switch (estado) {
-    case 'ACTIVO':
-      return 'bg-green-400';
-    case 'SUSPENDIDO':
-      return 'bg-yellow-400';
-    case 'INACTIVO':
-      return 'bg-red-400';
-    default:
-      return 'bg-slate-400';
-  }
+/** Un dato del detalle. */
+function Dato({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[13px] font-medium text-muted-foreground">{label}</dt>
+      <dd className="mt-0.5 break-words text-sm text-foreground">{children}</dd>
+    </div>
+  );
 }
 
 export default function Fincas() {
@@ -193,33 +169,24 @@ export default function Fincas() {
 
   const [fincas, setFincas] = useState<FincaItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingEditId, setLoadingEditId] = useState<number | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [cargandoEdicionId, setCargandoEdicionId] = useState<number | null>(null);
+  const [cargandoDetalleId, setCargandoDetalleId] = useState<number | null>(null);
+  const [guardando, setGuardando] = useState(false);
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterEstado, setFilterEstado] = useState<'TODOS' | EstadoTenant>(
-    'TODOS',
-  );
+  const [busqueda, setBusqueda] = useState('');
+  const [filtroEstado, setFiltroEstado] = useState<'TODOS' | EstadoTenant>('TODOS');
 
-  const [page, setPage] = useState(1);
-  const [lastPage, setLastPage] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
+  const [pagina, setPagina] = useState(1);
+  const [ultimaPagina, setUltimaPagina] = useState(1);
+  const [total, setTotal] = useState(0);
 
-  const [stats, setStats] = useState({
-    total: 0,
-    activos: 0,
-    suspendidos: 0,
-    inactivos: 0,
-  });
+  const [resumen, setResumen] = useState({ total: 0, activos: 0, suspendidos: 0, inactivos: 0 });
 
-  const [showModal, setShowModal] = useState(false);
-  const [selectedFinca, setSelectedFinca] = useState<FincaItem | null>(null);
-  const [showDetailModal, setShowDetailModal] = useState(false);
-  const [detailFinca, setDetailFinca] = useState<FincaItem | null>(null);
-  const [loadingDetailId, setLoadingDetailId] = useState<number | null>(null);
+  const [modalAbierto, setModalAbierto] = useState(false);
+  const [seleccionada, setSeleccionada] = useState<FincaItem | null>(null);
+  const [detalle, setDetalle] = useState<FincaItem | null>(null);
 
-  // Confirm dialog state
-  const [confirmDialog, setConfirmDialog] = useState<{
+  const [confirmacion, setConfirmacion] = useState<{
     open: boolean;
     title: string;
     description: string;
@@ -227,205 +194,155 @@ export default function Fincas() {
     onConfirm: () => Promise<void>;
   }>({ open: false, title: '', description: '', variant: 'warning', onConfirm: async () => {} });
 
-  const showConfirm = (
+  const pedirConfirmacion = (
     title: string,
     description: string,
     variant: 'warning' | 'danger',
     onConfirm: () => Promise<void>,
-  ) => {
-    setConfirmDialog({ open: true, title, description, variant, onConfirm });
-  };
+  ) => setConfirmacion({ open: true, title, description, variant, onConfirm });
 
-  const closeConfirm = () =>
-    setConfirmDialog((prev) => ({ ...prev, open: false }));
+  const cerrarConfirmacion = () => setConfirmacion((prev) => ({ ...prev, open: false }));
 
-  const handleOpenDetail = async (tenantId: number) => {
+  const abrirDetalle = async (tenantId: number) => {
     if (!token) return;
-
-    setLoadingDetailId(tenantId);
-
+    setCargandoDetalleId(tenantId);
     try {
-      const result = await requestConToken<TenantDetailResponse>(
+      const res = await requestConToken<TenantDetailResponse>(
         `/api/v1/admin/tenants/${tenantId}`,
         { method: 'GET' },
         token,
       );
-
-      const tenant = normalizeTenant(result.data ?? {});
-      setDetailFinca(tenant);
-      setShowDetailModal(true);
+      setDetalle(normalizarTenant(res.data));
     } catch (error) {
       console.error(error);
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : 'No se pudo cargar el detalle de la finca',
-      );
+      toast.error(error instanceof Error ? error.message : 'No se pudo cargar el detalle de la finca');
     } finally {
-      setLoadingDetailId(null);
+      setCargandoDetalleId(null);
     }
   };
 
-  const loadStats = useCallback(async () => {
+  const cargarResumen = useCallback(async () => {
     if (!token) return;
-
     try {
-      const result = await requestConToken<DashboardStatsResponse>(
+      const res = await requestConToken<DashboardStatsResponse>(
         '/api/v1/admin/dashboard',
         { method: 'GET' },
         token,
       );
-
-      setStats({
-        total: toNumber(result.data?.tenants?.total, 0),
-        activos: toNumber(result.data?.tenants?.activos, 0),
-        suspendidos: toNumber(result.data?.tenants?.suspendidos, 0),
-        inactivos: toNumber(result.data?.tenants?.inactivos, 0),
+      setResumen({
+        total: aNumero(res.data?.tenants?.total, 0),
+        activos: aNumero(res.data?.tenants?.activos, 0),
+        suspendidos: aNumero(res.data?.tenants?.suspendidos, 0),
+        inactivos: aNumero(res.data?.tenants?.inactivos, 0),
       });
     } catch (error) {
-      console.error('Error cargando estadísticas de fincas:', error);
+      console.error('Error cargando el resumen de fincas:', error);
     }
   }, [token]);
 
-  const loadFincas = useCallback(async () => {
+  const cargarFincas = useCallback(async () => {
     if (!token) return;
-
     setLoading(true);
-
     try {
       const params = new URLSearchParams();
-
-      if (searchTerm.trim()) params.set('search', searchTerm.trim());
-      if (filterEstado !== 'TODOS') params.set('estado', filterEstado);
-
+      if (busqueda.trim()) params.set('search', busqueda.trim());
+      if (filtroEstado !== 'TODOS') params.set('estado', filtroEstado);
       params.set('sort_by', 'nombre');
       params.set('sort_dir', 'asc');
-      params.set('per_page', String(PAGE_SIZE));
-      params.set('page', String(page));
+      params.set('per_page', String(POR_PAGINA));
+      params.set('page', String(pagina));
 
-      const result = await requestConToken<LaravelPagination<any>>(
+      const res = await requestConToken<LaravelPagination<Record<string, unknown>>>(
         `/api/v1/admin/tenants?${params.toString()}`,
         { method: 'GET' },
         token,
       );
 
-      const items = Array.isArray(result.data) ? result.data : [];
-
-      setFincas(items.map(normalizeTenant));
-      setLastPage(toNumber(result.last_page ?? result.meta?.last_page, 1));
-      setTotalItems(toNumber(result.total ?? result.meta?.total, items.length));
+      const items = Array.isArray(res.data) ? res.data : [];
+      setFincas(items.map(normalizarTenant));
+      setUltimaPagina(aNumero(res.last_page ?? res.meta?.last_page, 1));
+      setTotal(aNumero(res.total ?? res.meta?.total, items.length));
     } catch (error) {
       console.error(error);
-      toast.error(
-        error instanceof Error ? error.message : 'No se pudieron cargar las fincas',
-      );
+      toast.error(error instanceof Error ? error.message : 'No se pudieron cargar las fincas');
       setFincas([]);
-      setLastPage(1);
-      setTotalItems(0);
+      setUltimaPagina(1);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
-  }, [filterEstado, page, searchTerm, token]);
+  }, [filtroEstado, pagina, busqueda, token]);
+
+  useEffect(() => { void cargarResumen(); }, [cargarResumen]);
 
   useEffect(() => {
-    void loadStats();
-  }, [loadStats]);
+    const t = window.setTimeout(() => { void cargarFincas(); }, 250);
+    return () => window.clearTimeout(t);
+  }, [cargarFincas]);
 
-  useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      void loadFincas();
-    }, 250);
-
-    return () => window.clearTimeout(timeout);
-  }, [loadFincas]);
-
-  const handleRefresh = async () => {
-    await Promise.all([loadStats(), loadFincas()]);
+  const recargar = async () => {
+    await Promise.all([cargarResumen(), cargarFincas()]);
     toast.success('Listado de fincas actualizado');
   };
 
-  const handleOpenCreate = () => {
-    setSelectedFinca(null);
-    setShowModal(true);
+  const abrirCrear = () => {
+    setSeleccionada(null);
+    setModalAbierto(true);
   };
 
-  const handleOpenEdit = async (tenantId: number) => {
+  const abrirEditar = async (tenantId: number) => {
     if (!token) return;
-
-    setLoadingEditId(tenantId);
-
+    setCargandoEdicionId(tenantId);
     try {
-      const result = await requestConToken<TenantDetailResponse>(
+      const res = await requestConToken<TenantDetailResponse>(
         `/api/v1/admin/tenants/${tenantId}`,
         { method: 'GET' },
         token,
       );
-
-      const tenant = normalizeTenant(result.data ?? {});
-
-      setSelectedFinca(tenant);
-      setShowModal(true);
+      setSeleccionada(normalizarTenant(res.data));
+      setModalAbierto(true);
     } catch (error) {
       console.error(error);
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : 'No se pudo cargar el detalle de la finca',
-      );
+      toast.error(error instanceof Error ? error.message : 'No se pudo cargar el detalle de la finca');
     } finally {
-      setLoadingEditId(null);
+      setCargandoEdicionId(null);
     }
   };
 
-  const handleSaveFinca = async (formData: FincaFormData) => {
+  const guardar = async (form: FincaFormData) => {
     if (!token) return;
-
-    setSaving(true);
-
+    setGuardando(true);
     try {
-      const payload = buildTenantPayload(formData);
+      const payload = armarPayload(form);
 
-      if (selectedFinca) {
-        const result = await requestConToken<{ message?: string }>(
-          `/api/v1/admin/tenants/${selectedFinca.id}`,
-          {
-            method: 'PUT',
-            body: JSON.stringify(payload),
-          },
+      if (seleccionada) {
+        const res = await requestConToken<{ message?: string }>(
+          `/api/v1/admin/tenants/${seleccionada.id}`,
+          { method: 'PUT', body: JSON.stringify(payload) },
           token,
         );
-
-        toast.success(result.message ?? 'Finca actualizada correctamente');
+        toast.success(res.message ?? 'Finca actualizada correctamente');
       } else {
-        const result = await requestConToken<{ message?: string }>(
+        const res = await requestConToken<{ message?: string }>(
           '/api/v1/admin/tenants',
-          {
-            method: 'POST',
-            body: JSON.stringify(payload),
-          },
+          { method: 'POST', body: JSON.stringify(payload) },
           token,
         );
-
-        toast.success(result.message ?? 'Finca creada correctamente');
+        toast.success(res.message ?? 'Finca creada correctamente');
       }
 
-      setShowModal(false);
-      setSelectedFinca(null);
-
-      await Promise.all([loadStats(), loadFincas()]);
+      setModalAbierto(false);
+      setSeleccionada(null);
+      await Promise.all([cargarResumen(), cargarFincas()]);
     } catch (error) {
       console.error(error);
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : 'No se pudo guardar la finca',
-      );
+      toast.error(error instanceof Error ? error.message : 'No se pudo guardar la finca');
     } finally {
-      setSaving(false);
+      setGuardando(false);
     }
   };
 
-  const handleToggle = async (finca: FincaItem) => {
+  const alternarEstado = (finca: FincaItem) => {
     if (!token) return;
 
     if (finca.estado === 'INACTIVO') {
@@ -435,332 +352,281 @@ export default function Fincas() {
 
     const accion = finca.estado === 'ACTIVO' ? 'suspender' : 'activar';
 
-    showConfirm(
-      `${accion.charAt(0).toUpperCase() + accion.slice(1)} finca`,
+    pedirConfirmacion(
+      `${accion.charAt(0).toUpperCase()}${accion.slice(1)} finca`,
       `¿Seguro que deseas ${accion} la finca "${finca.nombre}"?`,
-      finca.estado === 'ACTIVO' ? 'warning' : 'success' as any,
+      'warning',
       async () => {
-        const result = await requestConToken<{ message?: string }>(
+        const res = await requestConToken<{ message?: string }>(
           `/api/v1/admin/tenants/${finca.id}/toggle`,
           { method: 'PATCH' },
           token,
         );
-        toast.success(result.message ?? 'Estado de la finca actualizado');
-        closeConfirm();
-        await Promise.all([loadStats(), loadFincas()]);
+        toast.success(res.message ?? 'Estado de la finca actualizado');
+        cerrarConfirmacion();
+        await Promise.all([cargarResumen(), cargarFincas()]);
       },
     );
   };
 
-  /** Ejecuta el DELETE con manejo robusto de errores y soporte de `?force=1`
-   *  cuando el backend bloquea por datos relacionados (409). */
-  const ejecutarDelete = async (finca: FincaItem, force = false): Promise<void> => {
+  /**
+   * Ejecuta el DELETE. Si el backend responde 409, la finca tiene datos
+   * relacionados y se ofrece el borrado en cascada con `?force=1`.
+   */
+  const ejecutarBorrado = async (finca: FincaItem, forzar = false): Promise<void> => {
     try {
-      const result = await requestConToken<{ message?: string }>(
-        `/api/v1/admin/tenants/${finca.id}${force ? '?force=1' : ''}`,
+      const res = await requestConToken<{ message?: string }>(
+        `/api/v1/admin/tenants/${finca.id}${forzar ? '?force=1' : ''}`,
         { method: 'DELETE' },
         token,
       );
-      toast.success(result.message ?? 'Finca eliminada correctamente');
-      closeConfirm();
-      if (page > 1 && fincas.length === 1) {
-        setPage((prev) => Math.max(1, prev - 1));
-        await loadStats();
+      toast.success(res.message ?? 'Finca eliminada correctamente');
+      cerrarConfirmacion();
+      if (pagina > 1 && fincas.length === 1) {
+        setPagina((prev) => Math.max(1, prev - 1));
+        await cargarResumen();
       } else {
-        await Promise.all([loadStats(), loadFincas()]);
+        await Promise.all([cargarResumen(), cargarFincas()]);
       }
-    } catch (e: any) {
-      const status = e?.status as number | undefined;
-      const code = e?.code as string | undefined;
-      const msg = e?.message as string | undefined;
+    } catch (e) {
+      const err = e as { status?: number; code?: string; message?: string; errors?: Record<string, string[]> };
 
-      // 409 → la finca tiene datos relacionados (usuarios, colaboradores, etc.).
-      // Ofrecemos eliminación forzada en cascada si el usuario la confirma.
-      if (status === 409 && !force) {
-        closeConfirm();
-        showConfirm(
+      if (err.status === 409 && !forzar) {
+        cerrarConfirmacion();
+        pedirConfirmacion(
           'Eliminar finca con sus datos',
-          `${msg ?? 'La finca tiene datos relacionados (usuarios, colaboradores, nóminas, etc.).'} ¿Eliminar la finca con TODOS sus datos asociados? Esta acción no se puede deshacer.`,
+          `${err.message ?? 'La finca tiene datos relacionados (usuarios, colaboradores, nóminas, etc.).'} ¿Eliminar la finca con TODOS sus datos asociados? Esta acción no se puede deshacer.`,
           'danger',
-          () => ejecutarDelete(finca, true),
+          () => ejecutarBorrado(finca, true),
         );
         return;
       }
 
-      if (status === 403) {
+      if (err.status === 403) {
         toast.error('No tienes permiso para eliminar fincas.');
-      } else if (status === 404) {
+      } else if (err.status === 404) {
         toast.error('La finca ya no existe.');
-        closeConfirm();
-        await Promise.all([loadStats(), loadFincas()]);
-      } else if (e?.errors) {
-        const primero = Object.values(e.errors).flat()[0];
-        toast.error(typeof primero === 'string' ? primero : (msg ?? 'Error de validación'));
+        cerrarConfirmacion();
+        await Promise.all([cargarResumen(), cargarFincas()]);
+      } else if (err.errors) {
+        const primero = Object.values(err.errors).flat()[0];
+        toast.error(typeof primero === 'string' ? primero : (err.message ?? 'Error de validación'));
       } else {
-        toast.error(msg ?? `No se pudo eliminar la finca${code ? ` (${code})` : ''}`);
+        toast.error(err.message ?? `No se pudo eliminar la finca${err.code ? ` (${err.code})` : ''}`);
       }
     }
   };
 
-  const handleDelete = (finca: FincaItem) => {
+  const eliminar = (finca: FincaItem) => {
     if (!token) return;
-
-    showConfirm(
+    pedirConfirmacion(
       'Eliminar finca',
       `¿Seguro que deseas eliminar "${finca.nombre}"? Esta acción no se puede deshacer.`,
       'danger',
-      () => ejecutarDelete(finca, false),
+      () => ejecutarBorrado(finca, false),
     );
   };
 
-  const showingFrom = totalItems === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
-  const showingTo = Math.min(page * PAGE_SIZE, totalItems);
+  const hayFiltros = busqueda.trim() !== '' || filtroEstado !== 'TODOS';
+  const desde = total === 0 ? 0 : (pagina - 1) * POR_PAGINA + 1;
+  const hasta = Math.min(pagina * POR_PAGINA, total);
 
   return (
-    <div className="p-4 md:p-8 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Gestión de Fincas</h1>
-          <p className="text-sm md:text-base text-slate-400">Administra todos los clientes del sistema</p>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Super admin"
+        title="Fincas"
+        description="Todas las fincas clientes de la plataforma."
+        actions={
+          <>
+            <Button variant="outline" onClick={() => void recargar()} disabled={loading}>
+              <RefreshCw className="h-4 w-4" strokeWidth={2} />
+              Recargar
+            </Button>
+            <Button onClick={abrirCrear}>
+              <Plus className="h-4 w-4" strokeWidth={2} />
+              Nueva finca
+            </Button>
+          </>
+        }
+      />
+
+      <StatStrip
+        items={[
+          { label: 'Fincas', value: num(resumen.total), note: 'registradas en la plataforma' },
+          { label: 'Activas', value: num(resumen.activos) },
+          { label: 'Suspendidas', value: num(resumen.suspendidos) },
+          { label: 'Inactivas', value: num(resumen.inactivos) },
+        ]}
+      />
+
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={2} />
+          <Input
+            aria-label="Buscar fincas"
+            value={busqueda}
+            onChange={(e) => { setPagina(1); setBusqueda(e.target.value); }}
+            placeholder="Buscar por nombre, NIT o razón social"
+            className="pl-9"
+          />
         </div>
-        <div className="flex flex-wrap gap-3">
-          <button
-            onClick={handleRefresh}
-            className="flex items-center gap-2 px-4 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Recargar
-          </button>
-          <button
-            onClick={handleOpenCreate}
-            className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium rounded-lg transition duration-200 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40"
-          >
-            <Plus className="w-5 h-5" />
-            Crear nueva finca
-          </button>
-        </div>
+        <Select
+          value={filtroEstado}
+          onValueChange={(v) => { setPagina(1); setFiltroEstado(v as 'TODOS' | EstadoTenant); }}
+        >
+          <SelectTrigger aria-label="Estado" className="sm:w-52"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="TODOS">Todos los estados</SelectItem>
+            <SelectItem value="ACTIVO">Activas</SelectItem>
+            <SelectItem value="SUSPENDIDO">Suspendidas</SelectItem>
+            <SelectItem value="INACTIVO">Inactivas</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-lg p-4">
-          <p className="text-sm text-slate-400 mb-1">Total</p>
-          <p className="text-2xl font-bold text-white">{stats.total}</p>
-        </div>
-        <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-green-500/20 rounded-lg p-4">
-          <p className="text-sm text-slate-400 mb-1">Activas</p>
-          <p className="text-2xl font-bold text-green-400">{stats.activos}</p>
-        </div>
-        <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-yellow-500/20 rounded-lg p-4">
-          <p className="text-sm text-slate-400 mb-1">Suspendidas</p>
-          <p className="text-2xl font-bold text-yellow-400">{stats.suspendidos}</p>
-        </div>
-        <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-red-500/20 rounded-lg p-4">
-          <p className="text-sm text-slate-400 mb-1">Inactivas</p>
-          <p className="text-2xl font-bold text-red-400">{stats.inactivos}</p>
-        </div>
-      </div>
-
-      {/* Filters & Search */}
-      <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-xl p-6">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <input
-              aria-label="Buscar por nombre, NIT o razón social..."
-              type="text"
-              value={searchTerm}
-              onChange={(e) => {
-                setPage(1);
-                setSearchTerm(e.target.value);
-              }}
-              placeholder="Buscar por nombre, NIT o razón social..."
-              className="w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition"
-            />
-          </div>
-
-          <div className="relative">
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <select
-              aria-label="Filter estado"
-              value={filterEstado}
-              onChange={(e) => {
-                setPage(1);
-                setFilterEstado(e.target.value as 'TODOS' | EstadoTenant);
-              }}
-              className="pl-11 pr-10 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition appearance-none cursor-pointer"
-            >
-              <option value="TODOS">Todos los estados</option>
-              <option value="ACTIVO">Activas</option>
-              <option value="SUSPENDIDO">Suspendidas</option>
-              <option value="INACTIVO">Inactivas</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-xl overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700">
-          <p className="text-sm text-slate-400">
-            Mostrando{' '}
-            <span className="text-white font-semibold">
-              {showingFrom}-{showingTo}
-            </span>{' '}
-            de <span className="text-white font-semibold">{totalItems}</span>{' '}
-            fincas
+      <Card className="gap-0 overflow-hidden">
+        <div className="px-5 py-3.5">
+          <p className="text-sm text-muted-foreground">
+            Mostrando <span className="font-medium text-foreground">{desde}-{hasta}</span> de{' '}
+            <span className="font-medium text-foreground">{num(total)}</span> fincas
           </p>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px]">
-            <thead>
-              <tr className="border-b border-slate-700">
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-300">Finca</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-300">Contacto</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-300">Ubicación</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-300">Estado</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-300">Activación</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-300">Suspensión</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-300">Usuarios</th>
-                <th className="text-right px-6 py-4 text-sm font-semibold text-slate-300">Acciones</th>
+        <div className="overflow-x-auto border-t border-border">
+          <table className="w-full min-w-[1000px] text-sm">
+            <thead className="bg-muted/60 text-[13px] text-muted-foreground">
+              <tr>
+                <th className="px-5 py-2.5 text-left font-semibold">Finca</th>
+                <th className="px-4 py-2.5 text-left font-semibold">Contacto</th>
+                <th className="px-4 py-2.5 text-left font-semibold">Ubicación</th>
+                <th className="px-4 py-2.5 text-left font-semibold">Estado</th>
+                <th className="px-4 py-2.5 text-right font-semibold">Activación</th>
+                <th className="px-4 py-2.5 text-right font-semibold">Usuarios</th>
+                <th className="px-5 py-2.5 text-right font-semibold">Acciones</th>
               </tr>
             </thead>
-
-            <tbody>
+            <tbody className="divide-y divide-border">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-14 text-center">
-                    <div className="inline-flex items-center gap-3 text-slate-400">
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Cargando fincas...
-                    </div>
+                  <td colSpan={7} className="px-5 py-14 text-center">
+                    <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Cargando fincas…
+                    </span>
                   </td>
                 </tr>
               ) : fincas.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-14 text-center">
-                    <Building2 className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-                    <p className="text-slate-400">No se encontraron fincas</p>
+                  <td colSpan={7} className="p-0">
+                    <EmptyState
+                      title="No se encontraron fincas"
+                      description={hayFiltros
+                        ? 'Ninguna finca coincide con la búsqueda.'
+                        : 'Todavía no hay fincas registradas en la plataforma.'}
+                      action={hayFiltros
+                        ? { label: 'Quitar filtros', onClick: () => { setBusqueda(''); setFiltroEstado('TODOS'); setPagina(1); } }
+                        : { label: 'Nueva finca', onClick: abrirCrear }}
+                    />
                   </td>
                 </tr>
               ) : (
                 fincas.map((finca) => (
-                  <tr
-                    key={finca.id}
-                    className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors"
-                  >
-                    <td className="px-6 py-4">
+                  <tr key={finca.id} className="transition-colors hover:bg-muted/40">
+                    <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-lg flex items-center justify-center border border-blue-500/30">
-                          <Building2 className="w-5 h-5 text-blue-400" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-white">{finca.nombre}</p>
-                          <p className="text-xs text-slate-400">ID: {finca.id}</p>
-                          <p className="text-xs text-slate-500">NIT: {finca.nit || '—'}</p>
-                        </div>
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                          <Building2 className="h-4 w-4" strokeWidth={2} />
+                        </span>
+                        <span className="min-w-0">
+                          <button
+                            type="button"
+                            onClick={() => void abrirDetalle(finca.id)}
+                            disabled={cargandoDetalleId === finca.id}
+                            className="block truncate text-left font-semibold text-foreground hover:text-primary hover:underline"
+                          >
+                            {finca.nombre || 'Sin nombre'}
+                          </button>
+                          <span className="block text-xs text-muted-foreground">
+                            ID {finca.id} · NIT {finca.nit || '—'}
+                          </span>
+                        </span>
                       </div>
                     </td>
 
-                    <td className="px-6 py-4">
-                      <p className="text-sm text-slate-300">{finca.correoContacto || '—'}</p>
-                      <p className="text-xs text-slate-500 mt-1">{finca.telefono || 'Sin teléfono'}</p>
+                    <td className="px-4 py-3">
+                      <span className="block text-foreground">{finca.correoContacto || '—'}</span>
+                      <span className="block text-xs text-muted-foreground">{finca.telefono || 'Sin teléfono'}</span>
                     </td>
 
-                    <td className="px-6 py-4">
-                      <p className="text-sm text-slate-300">
-                        {finca.municipio || '—'}
-                        {finca.departamento ? `, ${finca.departamento}` : ''}
-                      </p>
-                      <p className="text-xs text-slate-500 mt-1">{finca.direccion || 'Sin dirección'}</p>
-                    </td>
-
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium border rounded-full ${getEstadoClasses(finca.estado)}`}>
-                        <div className={`w-1.5 h-1.5 rounded-full ${getEstadoDot(finca.estado)}`}></div>
-                        {finca.estado}
+                    <td className="px-4 py-3">
+                      <span className="block text-foreground">
+                        {finca.municipio || '—'}{finca.departamento ? `, ${finca.departamento}` : ''}
                       </span>
+                      <span className="block text-xs text-muted-foreground">{finca.direccion || 'Sin dirección'}</span>
                     </td>
 
-                    <td className="px-6 py-4">
-                      <p className="text-sm text-slate-300">{formatearFecha(finca.fechaActivacion)}</p>
+                    <td className="px-4 py-3">
+                      <Badge variant={VARIANTE_ESTADO[finca.estado]} className="capitalize">
+                        {finca.estado.toLowerCase()}
+                      </Badge>
                     </td>
 
-                    <td className="px-6 py-4">
-                      <p className="text-sm text-slate-300">{formatearFecha(finca.fechaSuspension)}</p>
+                    <td className="whitespace-nowrap px-4 py-3 text-right text-muted-foreground">
+                      {formatearFecha(finca.fechaActivacion)}
+                      {finca.fechaSuspension && (
+                        <span className="block text-xs">Suspende {formatearFecha(finca.fechaSuspension)}</span>
+                      )}
                     </td>
 
-                    <td className="px-6 py-4">
-                      <p className="text-sm text-slate-300">{finca.totalUsuarios || 0} asignados</p>
-                      <p className="text-xs text-slate-500 mt-1">{finca.totalEmpleados || 0} empleados</p>
+                    <td className="px-4 py-3 text-right">
+                      <span className="block text-foreground">{num(finca.totalUsuarios)}</span>
+                      <span className="block text-xs text-muted-foreground">{num(finca.totalEmpleados)} empleados</span>
                     </td>
 
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-2">
-                        <button aria-label="Ver"
-                          onClick={() => void handleOpenDetail(finca.id)}
-                          disabled={loadingDetailId === finca.id}
-                          className="p-2 hover:bg-blue-500/10 text-blue-400 rounded-lg transition-colors disabled:opacity-50"
-                          title="Ver detalle"
+                    <td className="px-5 py-3">
+                      <div className="flex items-center justify-end gap-0.5 text-muted-foreground">
+                        <Button
+                          variant="ghost" size="icon" title="Ver detalle"
+                          onClick={() => void abrirDetalle(finca.id)}
+                          disabled={cargandoDetalleId === finca.id}
                         >
-                          {loadingDetailId === finca.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Eye className="w-4 h-4" />
-                          )}
-                        </button>
-
-                        <button
-                          onClick={() =>
-                            navigate(`/super-admin/fincas/${finca.id}/usuarios`)
-                          }
-                          className="p-2 hover:bg-cyan-500/10 text-cyan-400 rounded-lg transition-colors"
-                          title="Usuarios por finca"
+                          {cargandoDetalleId === finca.id
+                            ? <Loader2 className="h-4 w-4 animate-spin" />
+                            : <Eye className="h-4 w-4" strokeWidth={2} />}
+                        </Button>
+                        <Button
+                          variant="ghost" size="icon" title="Usuarios de la finca"
+                          onClick={() => navigate(`/super-admin/fincas/${finca.id}/usuarios`)}
                         >
-                          <Users className="w-4 h-4" />
-                        </button>
-
-                        <button aria-label="Editar"
-                          onClick={() => void handleOpenEdit(finca.id)}
-                          disabled={loadingEditId === finca.id}
-                          className="p-2 hover:bg-purple-500/10 text-purple-400 rounded-lg transition-colors disabled:opacity-50"
-                          title="Editar"
+                          <Users className="h-4 w-4" strokeWidth={2} />
+                        </Button>
+                        <Button
+                          variant="ghost" size="icon" title="Editar"
+                          onClick={() => void abrirEditar(finca.id)}
+                          disabled={cargandoEdicionId === finca.id}
                         >
-                          {loadingEditId === finca.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Edit2 className="w-4 h-4" />
-                          )}
-                        </button>
-
-                        {finca.estado === 'ACTIVO' ? (
-                          <button
-                            onClick={() => void handleToggle(finca)}
-                            className="p-2 hover:bg-yellow-500/10 text-yellow-400 rounded-lg transition-colors"
-                            title="Suspender"
-                          >
-                            <Pause className="w-4 h-4" />
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => void handleToggle(finca)}
-                            disabled={finca.estado === 'INACTIVO'}
-                            className="p-2 hover:bg-green-500/10 text-green-400 rounded-lg transition-colors disabled:opacity-40"
-                            title="Activar"
-                          >
-                            <Play className="w-4 h-4" />
-                          </button>
-                        )}
-
-                        <button aria-label="Eliminar"
-                          onClick={() => void handleDelete(finca)}
-                          className="p-2 hover:bg-red-500/10 text-red-400 rounded-lg transition-colors"
-                          title="Eliminar"
+                          {cargandoEdicionId === finca.id
+                            ? <Loader2 className="h-4 w-4 animate-spin" />
+                            : <Pencil className="h-4 w-4" strokeWidth={2} />}
+                        </Button>
+                        <Button
+                          variant="ghost" size="icon"
+                          title={finca.estado === 'ACTIVO' ? 'Suspender' : 'Activar'}
+                          onClick={() => alternarEstado(finca)}
+                          disabled={finca.estado === 'INACTIVO'}
                         >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                          {finca.estado === 'ACTIVO'
+                            ? <Pause className="h-4 w-4" strokeWidth={2} />
+                            : <Play className="h-4 w-4" strokeWidth={2} />}
+                        </Button>
+                        <Button
+                          variant="ghost" size="icon" title="Eliminar"
+                          className="hover:text-destructive"
+                          onClick={() => eliminar(finca)}
+                        >
+                          <Trash2 className="h-4 w-4" strokeWidth={2} />
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -770,164 +636,106 @@ export default function Fincas() {
           </table>
         </div>
 
-        {/* Pagination */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-700">
-          <p className="text-sm text-slate-400">
-            Página <span className="text-white font-semibold">{page}</span> de{' '}
-            <span className="text-white font-semibold">{lastPage}</span>
-          </p>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-              disabled={page <= 1}
-              className="px-4 py-2 rounded-lg border border-slate-600 bg-slate-800 text-white hover:bg-slate-700 transition disabled:opacity-40"
-            >
-              Anterior
-            </button>
-
-            <button
-              onClick={() => setPage((prev) => Math.min(lastPage, prev + 1))}
-              disabled={page >= lastPage}
-              className="px-4 py-2 rounded-lg border border-slate-600 bg-slate-800 text-white hover:bg-slate-700 transition disabled:opacity-40"
-            >
-              Siguiente
-            </button>
+        {ultimaPagina > 1 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3">
+            <p className="text-sm text-muted-foreground">Página {pagina} de {ultimaPagina}</p>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm" variant="outline"
+                disabled={loading || pagina <= 1}
+                onClick={() => setPagina((p) => Math.max(1, p - 1))}
+              >
+                Anteriores
+              </Button>
+              <Button
+                size="sm" variant="outline"
+                disabled={loading || pagina >= ultimaPagina}
+                onClick={() => setPagina((p) => Math.min(ultimaPagina, p + 1))}
+              >
+                Siguientes
+              </Button>
+            </div>
           </div>
-        </div>
-      </div>
+        )}
+      </Card>
 
-      {/* Modal Crear/Editar */}
       <CrearFincaModal
-        isOpen={showModal}
+        isOpen={modalAbierto}
         onClose={() => {
-          if (saving) return;
-          setShowModal(false);
-          setSelectedFinca(null);
+          if (guardando) return;
+          setModalAbierto(false);
+          setSeleccionada(null);
         }}
-        onSave={handleSaveFinca}
-        fincaData={fincaToFormData(selectedFinca)}
-        isEdit={Boolean(selectedFinca)}
-        isSaving={saving}
+        onSave={guardar}
+        fincaData={fincaAFormulario(seleccionada)}
+        isEdit={Boolean(seleccionada)}
+        isSaving={guardando}
       />
 
       <ConfirmDialog
-        open={confirmDialog.open}
-        onClose={closeConfirm}
-        onConfirm={confirmDialog.onConfirm}
-        title={confirmDialog.title}
-        description={confirmDialog.description}
-        variant={confirmDialog.variant}
+        open={confirmacion.open}
+        onClose={cerrarConfirmacion}
+        onConfirm={confirmacion.onConfirm}
+        title={confirmacion.title}
+        description={confirmacion.description}
+        variant={confirmacion.variant}
       />
 
-      {/* Modal de detalle */}
-      {showDetailModal && detailFinca && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-700 bg-gradient-to-r from-blue-600 to-purple-600">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-white/10 rounded-lg">
-                  <Building2 className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-white">{detailFinca.nombre}</h2>
-                  <p className="text-sm text-white/80">Detalle de la finca</p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setShowDetailModal(false);
-                  setDetailFinca(null);
-                }}
-                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5 text-white" />
-              </button>
+      <Dialog open={detalle !== null} onOpenChange={(abierto) => !abierto && setDetalle(null)}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{detalle?.nombre || 'Finca'}</DialogTitle>
+            <DialogDescription>Detalle de la finca</DialogDescription>
+          </DialogHeader>
+
+          {detalle && (
+            <div className="max-h-[70vh] space-y-5 overflow-y-auto custom-scrollbar">
+              <section className="rounded-lg bg-muted/60 px-4 py-3.5">
+                <h4 className="mb-3">Información general</h4>
+                <dl className="grid gap-3 sm:grid-cols-2">
+                  <Dato label="Nombre">{detalle.nombre || '—'}</Dato>
+                  <Dato label="NIT">{detalle.nit || '—'}</Dato>
+                  <Dato label="Razón social">{detalle.razonSocial || '—'}</Dato>
+                  <Dato label="Estado">
+                    <Badge variant={VARIANTE_ESTADO[detalle.estado]} className="capitalize">
+                      {detalle.estado.toLowerCase()}
+                    </Badge>
+                  </Dato>
+                </dl>
+              </section>
+
+              <section className="rounded-lg bg-muted/60 px-4 py-3.5">
+                <h4 className="mb-3">Contacto</h4>
+                <dl className="grid gap-3 sm:grid-cols-2">
+                  <Dato label="Correo">{detalle.correoContacto || '—'}</Dato>
+                  <Dato label="Teléfono">{detalle.telefono || '—'}</Dato>
+                </dl>
+              </section>
+
+              <section className="rounded-lg bg-muted/60 px-4 py-3.5">
+                <h4 className="mb-3">Ubicación</h4>
+                <dl className="grid gap-3 sm:grid-cols-2">
+                  <Dato label="Departamento">{detalle.departamento || '—'}</Dato>
+                  <Dato label="Municipio">{detalle.municipio || '—'}</Dato>
+                  <div className="sm:col-span-2">
+                    <Dato label="Dirección">{detalle.direccion || '—'}</Dato>
+                  </div>
+                </dl>
+              </section>
+
+              <section className="rounded-lg bg-muted/60 px-4 py-3.5">
+                <h4 className="mb-3">Fechas y usuarios</h4>
+                <dl className="grid gap-3 sm:grid-cols-2">
+                  <Dato label="Fecha de activación">{formatearFecha(detalle.fechaActivacion)}</Dato>
+                  <Dato label="Fecha de suspensión">{formatearFecha(detalle.fechaSuspension)}</Dato>
+                  <Dato label="Usuarios asignados">{num(detalle.totalUsuarios)}</Dato>
+                  <Dato label="Empleados">{num(detalle.totalEmpleados)}</Dato>
+                </dl>
+              </section>
             </div>
-
-            <div className="overflow-y-auto max-h-[calc(85vh-80px)] p-6 space-y-6">
-              <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-5">
-                <h3 className="text-sm font-semibold text-slate-400 mb-3">Información General</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs text-slate-500">Nombre</p>
-                    <p className="text-white">{detailFinca.nombre || '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500">NIT</p>
-                    <p className="text-white">{detailFinca.nit || '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500">Razón Social</p>
-                    <p className="text-white">{detailFinca.razonSocial || '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500">Estado</p>
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium border rounded-full ${getEstadoClasses(detailFinca.estado)}`}>
-                      <div className={`w-1.5 h-1.5 rounded-full ${getEstadoDot(detailFinca.estado)}`}></div>
-                      {detailFinca.estado}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-5">
-                <h3 className="text-sm font-semibold text-slate-400 mb-3">Contacto</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs text-slate-500">Correo</p>
-                    <p className="text-white">{detailFinca.correoContacto || '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500">Teléfono</p>
-                    <p className="text-white">{detailFinca.telefono || '—'}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-5">
-                <h3 className="text-sm font-semibold text-slate-400 mb-3">Ubicación</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs text-slate-500">Departamento</p>
-                    <p className="text-white">{detailFinca.departamento || '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500">Municipio</p>
-                    <p className="text-white">{detailFinca.municipio || '—'}</p>
-                  </div>
-                  <div className="col-span-2">
-                    <p className="text-xs text-slate-500">Dirección</p>
-                    <p className="text-white">{detailFinca.direccion || '—'}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-5">
-                <h3 className="text-sm font-semibold text-slate-400 mb-3">Fechas y Usuarios</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs text-slate-500">Fecha Activación</p>
-                    <p className="text-white">{formatearFecha(detailFinca.fechaActivacion)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500">Fecha Suspensión</p>
-                    <p className="text-white">{formatearFecha(detailFinca.fechaSuspension)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500">Usuarios Asignados</p>
-                    <p className="text-white">{detailFinca.totalUsuarios}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500">Empleados</p>
-                    <p className="text-white">{detailFinca.totalEmpleados}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

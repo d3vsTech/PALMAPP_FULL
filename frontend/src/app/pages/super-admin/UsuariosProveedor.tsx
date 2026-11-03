@@ -1,5 +1,5 @@
 /**
- * Pantalla "Usuarios por Proveedor" (super admin).
+ * "Usuarios por proveedor" del super admin.
  *
  * Endpoints:
  *   GET    /api/v1/admin/market/proveedores/{id}
@@ -8,21 +8,16 @@
  *   PUT    /api/v1/admin/market/proveedores/{id}/usuarios/{userId}
  *   DELETE /api/v1/admin/market/proveedores/{id}/usuarios/{userId}
  *
- * Modos del modal de creación:
- *   - "new":       crea un User nuevo y lo vincula al proveedor.
- *   - "existing":  asigna un User global ya existente al proveedor.
+ * El modal de creación trabaja de dos formas: crea un usuario nuevo y lo
+ * vincula, o asigna uno que ya existe en el sistema.
  *
- * Reglas:
- *   - Roles permitidos: ADMIN | OPERADOR.
- *   - 409 USER_ALREADY_ASSIGNED si el user ya está activo en el proveedor.
- *   - 200 con mensaje "Usuario reactivado..." si el pivot existía desactivado.
+ * Reglas del backend: los roles son ADMIN y OPERADOR; responde 409
+ * USER_ALREADY_ASSIGNED si el usuario ya está activo en el proveedor, y 200
+ * con "Usuario reactivado…" si la vinculación existía desactivada.
  */
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { useNavigate, useParams } from 'react-router';
-import {
-  ArrowLeft, Users, Plus, Search, Edit2, Trash2, Shield, Check, X,
-  Loader2, UserPlus, Pause, Play, Store, Eye, EyeOff,
-} from 'lucide-react';
+import { useParams } from 'react-router';
+import { Eye, Loader2, Pause, Pencil, Play, Plus, Search, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   marketProveedoresAdminApi,
@@ -33,11 +28,27 @@ import {
 } from '../../../api/marketProveedoresAdmin';
 import { requestConToken } from '../../../api/request';
 import { formatFechaHora } from '../../utils/fecha';
+import { Button } from '../../components/ui/button';
+import { Badge } from '../../components/ui/badge';
+import { Card } from '../../components/ui/card';
+import { Input } from '../../components/ui/input';
+import { Label } from '../../components/ui/label';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '../../components/ui/dialog';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '../../components/ui/select';
+import PageHeader from '../../components/common/PageHeader';
+import StatStrip from '../../components/common/StatStrip';
+import EmptyState from '../../components/common/EmptyState';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import PasswordField from '../auth/PasswordField';
+import { num } from '../../lib/formato';
 
 const ROLES: RolProveedorUser[] = ['ADMIN', 'OPERADOR'];
 
-const EMPTY_CREATE_FORM = {
+const FORM_CREAR_VACIO = {
   user_id: '',
   email: '',
   name: '',
@@ -46,7 +57,7 @@ const EMPTY_CREATE_FORM = {
   rol: 'ADMIN' as RolProveedorUser,
 };
 
-const EMPTY_EDIT_FORM = {
+const FORM_EDITAR_VACIO = {
   name: '',
   email: '',
   password: '',
@@ -61,91 +72,85 @@ interface GlobalUserOption {
   email: string;
 }
 
-
-function getAssignmentStatusClasses(active: boolean) {
-  return active
-    ? 'border-green-500/30 bg-green-500/10 text-green-400'
-    : 'border-red-500/30 bg-red-500/10 text-red-400';
+/** Un dato del detalle. */
+function Dato({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[13px] font-medium text-muted-foreground">{label}</dt>
+      <dd className="mt-0.5 break-words text-sm text-foreground">{children}</dd>
+    </div>
+  );
 }
 
 export default function UsuariosProveedor() {
-  const navigate = useNavigate();
   const { proveedorId } = useParams();
   const id = Number(proveedorId);
 
   const [proveedor, setProveedor] = useState<ProveedorAdmin | null>(null);
-  const [proveedorLoading, setProveedorLoading] = useState(true);
+  const [usuarios, setUsuarios] = useState<ProveedorUser[]>([]);
+  const [cargandoUsuarios, setCargandoUsuarios] = useState(true);
+  const [busqueda, setBusqueda] = useState('');
 
-  const [users, setUsers] = useState<ProveedorUser[]>([]);
-  const [usersLoading, setUsersLoading] = useState(true);
+  const [modalAbierto, setModalAbierto] = useState(false);
+  const [modo, setModo] = useState<'crear' | 'editar'>('crear');
+  const [origenAsignacion, setOrigenAsignacion] = useState<'nuevo' | 'existente'>('nuevo');
+  const [guardando, setGuardando] = useState(false);
 
-  const [searchTerm, setSearchTerm] = useState('');
+  const [seleccionado, setSeleccionado] = useState<ProveedorUser | null>(null);
+  const [detalle, setDetalle] = useState<ProveedorUser | null>(null);
+  const [formCrear, setFormCrear] = useState(FORM_CREAR_VACIO);
+  const [formEditar, setFormEditar] = useState(FORM_EDITAR_VACIO);
 
-  const [showModal, setShowModal] = useState(false);
-  const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
-  const [assignmentMode, setAssignmentMode] = useState<'new' | 'existing'>('new');
-  const [saving, setSaving] = useState(false);
+  const [usuariosGlobales, setUsuariosGlobales] = useState<GlobalUserOption[]>([]);
+  const [cargandoGlobales, setCargandoGlobales] = useState(false);
 
-  const [selectedUser, setSelectedUser] = useState<ProveedorUser | null>(null);
-  /** Usuario abierto en el modal "Ver detalle" (solo lectura). null = cerrado. */
-  const [viewUser, setViewUser] = useState<ProveedorUser | null>(null);
-  const [createForm, setCreateForm] = useState(EMPTY_CREATE_FORM);
-  const [editForm, setEditForm] = useState(EMPTY_EDIT_FORM);
-  const [showPassword, setShowPassword] = useState(false);
-
-  const [globalUsers, setGlobalUsers] = useState<GlobalUserOption[]>([]);
-  const [loadingGlobalUsers, setLoadingGlobalUsers] = useState(false);
-
-  const [confirmDialog, setConfirmDialog] = useState<{
+  const [confirmacion, setConfirmacion] = useState<{
     open: boolean; title: string; description: string;
     variant: 'warning' | 'danger'; onConfirm: () => Promise<void>;
   }>({ open: false, title: '', description: '', variant: 'warning', onConfirm: async () => {} });
 
-  const showConfirm = (
+  const pedirConfirmacion = (
     title: string, description: string,
     variant: 'warning' | 'danger', onConfirm: () => Promise<void>,
-  ) => setConfirmDialog({ open: true, title, description, variant, onConfirm });
-  const closeConfirm = () => setConfirmDialog(prev => ({ ...prev, open: false }));
+  ) => setConfirmacion({ open: true, title, description, variant, onConfirm });
 
-  // ── Cargas iniciales ─────────────────────────────────────────────────────
-  const loadProveedor = useCallback(async () => {
+  const cerrarConfirmacion = () => setConfirmacion((prev) => ({ ...prev, open: false }));
+
+  const cargarProveedor = useCallback(async () => {
     if (!Number.isFinite(id)) return;
-    setProveedorLoading(true);
     try {
       const res = await marketProveedoresAdminApi.ver(id);
       setProveedor(res.data);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'No se pudo cargar el proveedor');
-    } finally {
-      setProveedorLoading(false);
     }
   }, [id]);
 
-  const loadUsers = useCallback(async () => {
+  const cargarUsuarios = useCallback(async () => {
     if (!Number.isFinite(id)) return;
-    setUsersLoading(true);
+    setCargandoUsuarios(true);
     try {
       const res = await marketProveedoresAdminApi.listarUsuarios(id);
-      setUsers(res.data ?? []);
+      setUsuarios(res.data ?? []);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'No se pudieron cargar los usuarios');
-      setUsers([]);
+      setUsuarios([]);
     } finally {
-      setUsersLoading(false);
+      setCargandoUsuarios(false);
     }
   }, [id]);
 
-  const loadGlobalUsers = useCallback(async () => {
-    setLoadingGlobalUsers(true);
+  const cargarUsuariosGlobales = useCallback(async () => {
+    setCargandoGlobales(true);
     try {
-      // Reusa endpoint global del super admin.
-      const res = await requestConToken<{ data?: any[] }>(
+      // Reusa el endpoint global del super admin.
+      const res = await requestConToken<{ data?: Record<string, unknown>[] }>(
         '/api/v1/admin/users?per_page=100&status=true',
         { method: 'GET' },
         localStorage.getItem('palmapp_token'),
       );
       const items = Array.isArray(res.data) ? res.data : [];
-      setGlobalUsers(items.map(it => ({
+      setUsuariosGlobales(items.map((it) => ({
         id: Number(it?.id ?? 0),
         name: String(it?.name ?? ''),
         email: String(it?.email ?? ''),
@@ -153,164 +158,161 @@ export default function UsuariosProveedor() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'No se pudieron cargar los usuarios globales');
     } finally {
-      setLoadingGlobalUsers(false);
+      setCargandoGlobales(false);
     }
   }, []);
 
   useEffect(() => {
-    void loadProveedor();
-    void loadUsers();
-  }, [loadProveedor, loadUsers]);
+    void cargarProveedor();
+    void cargarUsuarios();
+  }, [cargarProveedor, cargarUsuarios]);
 
-  // ── Modal helpers ────────────────────────────────────────────────────────
-  const openCreateModal = async () => {
-    setModalMode('create');
-    setAssignmentMode('new');
-    setCreateForm(EMPTY_CREATE_FORM);
-    setSelectedUser(null);
-    setShowPassword(false);
-    setShowModal(true);
-    await loadGlobalUsers();
+  const abrirCrear = async () => {
+    setModo('crear');
+    setOrigenAsignacion('nuevo');
+    setFormCrear(FORM_CREAR_VACIO);
+    setSeleccionado(null);
+    setModalAbierto(true);
+    await cargarUsuariosGlobales();
   };
 
-  const openEditModal = (user: ProveedorUser) => {
-    setModalMode('edit');
-    setSelectedUser(user);
-    setEditForm({
-      name: user.name,
-      email: user.email,
+  const abrirEditar = (usuario: ProveedorUser) => {
+    setModo('editar');
+    setSeleccionado(usuario);
+    setFormEditar({
+      name: usuario.name,
+      email: usuario.email,
       password: '',
       password_confirmation: '',
-      rol: (user.rol as RolProveedorUser) ?? 'ADMIN',
-      estado: user.estado,
+      rol: (usuario.rol as RolProveedorUser) ?? 'ADMIN',
+      estado: usuario.estado,
     });
-    setShowPassword(false);
-    setShowModal(true);
+    setModalAbierto(true);
   };
 
-  const closeModal = () => {
-    if (saving) return;
-    setShowModal(false);
-    setSelectedUser(null);
-    setCreateForm(EMPTY_CREATE_FORM);
-    setEditForm(EMPTY_EDIT_FORM);
+  const cerrarModal = () => {
+    if (guardando) return;
+    setModalAbierto(false);
+    setSeleccionado(null);
+    setFormCrear(FORM_CREAR_VACIO);
+    setFormEditar(FORM_EDITAR_VACIO);
   };
 
-  // ── Filtro + métricas ────────────────────────────────────────────────────
-  const filtered = users.filter(u => {
-    const t = searchTerm.trim().toLowerCase();
-    if (!t) return true;
+  const filtrados = usuarios.filter((u) => {
+    const termino = busqueda.trim().toLowerCase();
+    if (!termino) return true;
     return (
-      u.name.toLowerCase().includes(t) ||
-      u.email.toLowerCase().includes(t) ||
-      String(u.rol).toLowerCase().includes(t)
+      u.name.toLowerCase().includes(termino) ||
+      u.email.toLowerCase().includes(termino) ||
+      String(u.rol).toLowerCase().includes(termino)
     );
   });
 
-  const totalActivos = users.filter(u => u.estado).length;
-  const totalInactivos = users.length - totalActivos;
-  const totalGlobalInactive = users.filter(u => !u.status).length;
+  const activos = usuarios.filter((u) => u.estado).length;
+  const inactivos = usuarios.length - activos;
+  const globalesInactivos = usuarios.filter((u) => !u.status).length;
 
-  // ── Handlers ─────────────────────────────────────────────────────────────
-  const handleCreateSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  const crear = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!Number.isFinite(id)) return;
 
     let payload: Record<string, unknown>;
 
-    if (assignmentMode === 'existing') {
-      if (!createForm.user_id) {
+    if (origenAsignacion === 'existente') {
+      if (!formCrear.user_id) {
         toast.error('Selecciona un usuario existente');
         return;
       }
-      payload = { user_id: Number(createForm.user_id), rol: createForm.rol };
+      payload = { user_id: Number(formCrear.user_id), rol: formCrear.rol };
     } else {
-      if (!createForm.name.trim() || !createForm.email.trim() || !createForm.password.trim()) {
-        toast.error('Completa nombre, email y contraseña');
+      if (!formCrear.name.trim() || !formCrear.email.trim() || !formCrear.password.trim()) {
+        toast.error('Completa nombre, correo y contraseña');
         return;
       }
-      if (createForm.password.trim().length < 8) {
+      if (formCrear.password.trim().length < 8) {
         toast.error('La contraseña debe tener al menos 8 caracteres');
         return;
       }
-      if (createForm.password !== createForm.password_confirmation) {
+      if (formCrear.password !== formCrear.password_confirmation) {
         toast.error('Las contraseñas no coinciden. Escríbela igual en ambos campos.');
         return;
       }
       payload = {
-        name: createForm.name.trim(),
-        email: createForm.email.trim(),
-        password: createForm.password.trim(),
-        rol: createForm.rol,
+        name: formCrear.name.trim(),
+        email: formCrear.email.trim(),
+        password: formCrear.password.trim(),
+        rol: formCrear.rol,
       };
     }
 
-    setSaving(true);
+    setGuardando(true);
     try {
       const res = await marketProveedoresAdminApi.crearUsuario(id, payload);
       toast.success(res.message ?? 'Usuario vinculado al proveedor');
-      closeModal();
-      await loadUsers();
-    } catch (err: any) {
-      if (err?.code === MarketProveedoresErrorCodes.USER_ALREADY_ASSIGNED) {
-        toast.error(err.message ?? 'El usuario ya está asignado a este proveedor');
+      cerrarModal();
+      await cargarUsuarios();
+    } catch (err) {
+      const code = (err as { code?: string })?.code;
+      if (code === MarketProveedoresErrorCodes.USER_ALREADY_ASSIGNED) {
+        toast.error((err as { message?: string }).message ?? 'El usuario ya está asignado a este proveedor');
       } else {
         toast.error(err instanceof Error ? err.message : 'No se pudo agregar el usuario');
       }
     } finally {
-      setSaving(false);
+      setGuardando(false);
     }
   };
 
-  const handleEditSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  const editar = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!Number.isFinite(id) || !selectedUser) return;
+    if (!Number.isFinite(id) || !seleccionado) return;
 
     const payload: Record<string, unknown> = {
-      name: editForm.name.trim(),
-      email: editForm.email.trim(),
-      rol: editForm.rol,
-      estado: editForm.estado,
+      name: formEditar.name.trim(),
+      email: formEditar.email.trim(),
+      rol: formEditar.rol,
+      estado: formEditar.estado,
     };
-    if (editForm.password.trim()) {
-      if (editForm.password.trim().length < 8) {
+
+    if (formEditar.password.trim()) {
+      if (formEditar.password.trim().length < 8) {
         toast.error('La contraseña debe tener al menos 8 caracteres');
         return;
       }
-      if (editForm.password !== editForm.password_confirmation) {
+      if (formEditar.password !== formEditar.password_confirmation) {
         toast.error('Las contraseñas no coinciden. Escríbela igual en ambos campos.');
         return;
       }
-      payload.password = editForm.password.trim();
+      payload.password = formEditar.password.trim();
     }
 
-    setSaving(true);
+    setGuardando(true);
     try {
-      const res = await marketProveedoresAdminApi.actualizarUsuario(id, selectedUser.id, payload);
+      const res = await marketProveedoresAdminApi.actualizarUsuario(id, seleccionado.id, payload);
       toast.success(res.message ?? 'Usuario actualizado');
-      closeModal();
-      await loadUsers();
+      cerrarModal();
+      await cargarUsuarios();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'No se pudo actualizar el usuario');
     } finally {
-      setSaving(false);
+      setGuardando(false);
     }
   };
 
-  const handleToggleEstado = (user: ProveedorUser) => {
-    const accion = user.estado ? 'desactivar' : 'activar';
-    showConfirm(
+  const alternarEstado = (usuario: ProveedorUser) => {
+    const accion = usuario.estado ? 'desactivar' : 'activar';
+    pedirConfirmacion(
       `${accion[0].toUpperCase()}${accion.slice(1)} usuario`,
-      `¿Seguro que deseas ${accion} a "${user.name}" en este proveedor?`,
+      `¿Seguro que deseas ${accion} a "${usuario.name}" en este proveedor?`,
       'warning',
       async () => {
         try {
-          const res = await marketProveedoresAdminApi.actualizarUsuario(id, user.id, {
-            estado: !user.estado,
+          const res = await marketProveedoresAdminApi.actualizarUsuario(id, usuario.id, {
+            estado: !usuario.estado,
           });
           toast.success(res.message ?? `Usuario ${accion}do`);
-          closeConfirm();
-          await loadUsers();
+          cerrarConfirmacion();
+          await cargarUsuarios();
         } catch (err) {
           toast.error(err instanceof Error ? err.message : 'No se pudo cambiar el estado');
         }
@@ -318,17 +320,17 @@ export default function UsuariosProveedor() {
     );
   };
 
-  const handleRemove = (user: ProveedorUser) => {
-    showConfirm(
+  const remover = (usuario: ProveedorUser) => {
+    pedirConfirmacion(
       'Remover usuario',
-      `¿Seguro que deseas desvincular a "${user.name}" del proveedor?`,
+      `¿Seguro que deseas desvincular a "${usuario.name}" del proveedor?`,
       'danger',
       async () => {
         try {
-          const res = await marketProveedoresAdminApi.eliminarUsuario(id, user.id);
+          const res = await marketProveedoresAdminApi.eliminarUsuario(id, usuario.id);
           toast.success(res.message ?? 'Usuario desvinculado');
-          closeConfirm();
-          await loadUsers();
+          cerrarConfirmacion();
+          await cargarUsuarios();
         } catch (err) {
           toast.error(err instanceof Error ? err.message : 'No se pudo desvincular');
         }
@@ -338,179 +340,139 @@ export default function UsuariosProveedor() {
 
   if (!Number.isFinite(id)) {
     return (
-      <div className="p-4 md:p-8">
-        <p className="text-red-400">Proveedor inválido.</p>
+      <div className="space-y-6">
+        <PageHeader eyebrow="Super admin" title="Usuarios del proveedor" backTo="/super-admin/proveedores" />
+        <p className="text-sm text-destructive">El proveedor indicado no es válido.</p>
       </div>
     );
   }
 
   return (
-    <div className="p-4 md:p-8 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-start gap-4">
-          <button aria-label="Volver"
-            onClick={() => navigate('/super-admin/proveedores')}
-            className="mt-1 p-2 rounded-lg border border-white/10 bg-white/5 text-white hover:bg-white/10 transition flex-shrink-0"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">
-              Usuarios por Proveedor
-            </h1>
-            {proveedorLoading ? (
-              <p className="text-gray-400">Cargando proveedor...</p>
-            ) : (
-              <div className="flex flex-wrap items-center gap-2 text-sm">
-                <Store className="w-4 h-4 text-[#9032F0]" />
-                <span className="text-white font-semibold">
-                  {proveedor?.nombre_empresa || 'Proveedor'}
-                </span>
-                {proveedor?.nit && (
-                  <>
-                    <span className="text-gray-500">•</span>
-                    <span className="text-gray-400">NIT: {proveedor.nit}</span>
-                  </>
-                )}
-                <span className="text-gray-500">•</span>
-                <span className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-gray-300">
-                  {proveedor?.email}
-                </span>
-                <span className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-gray-300 capitalize">
-                  {proveedor?.estado || '—'}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow={proveedor ? `Proveedor · NIT ${proveedor.nit || '—'}` : 'Super admin'}
+        title={proveedor?.nombre_empresa ? `Usuarios de ${proveedor.nombre_empresa}` : 'Usuarios del proveedor'}
+        description="Quién tiene acceso al portal de este proveedor y con qué rol."
+        backTo="/super-admin/proveedores"
+        actions={
+          <Button onClick={() => void abrirCrear()}>
+            <Plus className="h-4 w-4" strokeWidth={2} />
+            Agregar usuario
+          </Button>
+        }
+      />
 
-        <button
-          onClick={() => void openCreateModal()}
-          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#9032F0] to-[#6506FF] px-5 py-3 text-white font-semibold hover:opacity-95 transition"
-        >
-          <UserPlus className="w-4 h-4" />
-          Agregar usuario
-        </button>
+      <StatStrip
+        loading={cargandoUsuarios}
+        items={[
+          { label: 'Usuarios vinculados', value: num(usuarios.length), note: 'con acceso al portal' },
+          { label: 'Vinculaciones activas', value: num(activos) },
+          { label: 'Vinculaciones inactivas', value: num(inactivos) },
+          { label: 'Cuentas inactivas', value: num(globalesInactivos), note: 'desactivadas en todo el sistema' },
+        ]}
+      />
+
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={2} />
+        <Input
+          aria-label="Buscar usuarios"
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+          placeholder="Buscar por nombre, correo o rol"
+          className="pl-9"
+        />
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-          <p className="text-sm text-gray-400 mb-1">Total asignados</p>
-          <p className="text-2xl sm:text-3xl font-bold text-white">{users.length}</p>
-        </div>
-        <div className="rounded-2xl border border-green-500/20 bg-green-500/5 p-5">
-          <p className="text-sm text-gray-400 mb-1">Asignaciones activas</p>
-          <p className="text-2xl sm:text-3xl font-bold text-green-400">{totalActivos}</p>
-        </div>
-        <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-5">
-          <p className="text-sm text-gray-400 mb-1">Asignaciones inactivas</p>
-          <p className="text-2xl sm:text-3xl font-bold text-red-400">{totalInactivos}</p>
-        </div>
-        <div className="rounded-2xl border border-yellow-500/20 bg-yellow-500/5 p-5">
-          <p className="text-sm text-gray-400 mb-1">Globales inactivos</p>
-          <p className="text-2xl sm:text-3xl font-bold text-yellow-300">{totalGlobalInactive}</p>
-        </div>
-      </div>
-
-      {/* Buscador */}
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-        <div className="relative">
-          <Search className="w-5 h-5 text-gray-500 absolute left-4 top-1/2 -translate-y-1/2" />
-          <input
-            aria-label="Buscar por nombre, email o rol..."
-            type="text"
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            placeholder="Buscar por nombre, email o rol..."
-            className="w-full rounded-xl border border-white/10 bg-black/30 pl-12 pr-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
-          />
-        </div>
-      </div>
-
-      {/* Tabla */}
-      <div className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
+      <Card className="gap-0 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px]">
-            <thead>
-              <tr className="border-b border-white/10 text-left">
-                <th className="px-6 py-4 text-sm font-semibold text-gray-400">Usuario</th>
-                <th className="px-6 py-4 text-sm font-semibold text-gray-400">Rol</th>
-                <th className="px-6 py-4 text-sm font-semibold text-gray-400">Asignación</th>
-                <th className="px-6 py-4 text-sm font-semibold text-gray-400">Asignado</th>
-                <th className="px-6 py-4 text-sm font-semibold text-gray-400 text-right">Acciones</th>
+          <table className="w-full min-w-[860px] text-sm">
+            <thead className="bg-muted/60 text-[13px] text-muted-foreground">
+              <tr>
+                <th className="px-5 py-2.5 text-left font-semibold">Usuario</th>
+                <th className="px-4 py-2.5 text-left font-semibold">Rol</th>
+                <th className="px-4 py-2.5 text-left font-semibold">Vinculación</th>
+                <th className="px-4 py-2.5 text-left font-semibold">Cuenta</th>
+                <th className="px-4 py-2.5 text-right font-semibold">Vinculado</th>
+                <th className="px-5 py-2.5 text-right font-semibold">Acciones</th>
               </tr>
             </thead>
-            <tbody>
-              {usersLoading ? (
+            <tbody className="divide-y divide-border">
+              {cargandoUsuarios ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-14 text-center">
-                    <div className="inline-flex items-center gap-3 text-gray-400">
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Cargando usuarios del proveedor...
-                    </div>
+                  <td colSpan={6} className="px-5 py-14 text-center">
+                    <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Cargando usuarios…
+                    </span>
                   </td>
                 </tr>
-              ) : filtered.length === 0 ? (
+              ) : filtrados.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-14 text-center">
-                    <Users className="w-10 h-10 text-gray-600 mx-auto mb-3" />
-                    <p className="text-gray-400">No hay usuarios asignados a este proveedor</p>
+                  <td colSpan={6} className="p-0">
+                    <EmptyState
+                      title="No hay usuarios para mostrar"
+                      description={busqueda.trim()
+                        ? 'Ningún usuario coincide con la búsqueda.'
+                        : 'Este proveedor todavía no tiene usuarios vinculados.'}
+                      action={busqueda.trim()
+                        ? { label: 'Quitar búsqueda', onClick: () => setBusqueda('') }
+                        : { label: 'Agregar usuario', onClick: () => void abrirCrear() }}
+                    />
                   </td>
                 </tr>
               ) : (
-                filtered.map(u => (
-                  <tr key={u.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                    <td className="px-6 py-4">
-                      <p className="text-white font-semibold">{u.name}</p>
-                      <p className="text-sm text-gray-400 mt-1">{u.email}</p>
+                filtrados.map((usuario) => (
+                  <tr key={usuario.id} className="transition-colors hover:bg-muted/40">
+                    <td className="px-5 py-3">
+                      <button
+                        type="button"
+                        onClick={() => setDetalle(usuario)}
+                        className="block text-left font-semibold text-foreground hover:text-primary hover:underline"
+                      >
+                        {usuario.name || 'Sin nombre'}
+                      </button>
+                      <span className="block text-xs text-muted-foreground">{usuario.email}</span>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className="inline-flex items-center gap-1.5 rounded-lg border border-[#9032F0]/30 bg-[#9032F0]/10 px-3 py-1 text-xs font-semibold text-[#c79cff]">
-                        <Shield className="w-3 h-3" />
-                        {u.rol}
-                      </span>
+                    <td className="px-4 py-3">
+                      <Badge variant="secondary">{usuario.rol}</Badge>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1 text-xs font-semibold ${getAssignmentStatusClasses(u.estado)}`}>
-                        {u.estado ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
-                        {u.estado ? 'Activa' : 'Inactiva'}
-                      </span>
+                    <td className="px-4 py-3">
+                      <Badge variant={usuario.estado ? 'success' : 'destructive'}>
+                        {usuario.estado ? 'Activa' : 'Inactiva'}
+                      </Badge>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm text-gray-300">{formatFechaHora(u.asignado_at)}</span>
+                    <td className="px-4 py-3">
+                      <Badge variant={usuario.status ? 'info' : 'warning'}>
+                        {usuario.status ? 'Habilitada' : 'Deshabilitada'}
+                      </Badge>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-2">
-                        <button aria-label="Ver"
-                          onClick={() => setViewUser(u)}
-                          className="p-2 rounded-lg text-blue-400 hover:bg-blue-500/10 transition-colors"
-                          title="Ver datos del usuario"
+                    <td className="whitespace-nowrap px-4 py-3 text-right text-muted-foreground">
+                      {usuario.asignado_at ? formatFechaHora(usuario.asignado_at) : '—'}
+                    </td>
+                    <td className="px-5 py-3">
+                      <div className="flex items-center justify-end gap-0.5 text-muted-foreground">
+                        <Button variant="ghost" size="icon" title="Ver detalle" onClick={() => setDetalle(usuario)}>
+                          <Eye className="h-4 w-4" strokeWidth={2} />
+                        </Button>
+                        <Button variant="ghost" size="icon" title="Editar" onClick={() => abrirEditar(usuario)}>
+                          <Pencil className="h-4 w-4" strokeWidth={2} />
+                        </Button>
+                        <Button
+                          variant="ghost" size="icon"
+                          title={usuario.estado ? 'Desactivar en este proveedor' : 'Activar en este proveedor'}
+                          onClick={() => alternarEstado(usuario)}
                         >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button aria-label="Editar"
-                          onClick={() => openEditModal(u)}
-                          className="p-2 rounded-lg text-purple-400 hover:bg-purple-500/10 transition-colors"
-                          title="Editar usuario"
+                          {usuario.estado
+                            ? <Pause className="h-4 w-4" strokeWidth={2} />
+                            : <Play className="h-4 w-4" strokeWidth={2} />}
+                        </Button>
+                        <Button
+                          variant="ghost" size="icon" title="Desvincular del proveedor"
+                          className="hover:text-destructive"
+                          onClick={() => remover(usuario)}
                         >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleToggleEstado(u)}
-                          className={`p-2 rounded-lg transition-colors ${u.estado ? 'text-yellow-400 hover:bg-yellow-500/10' : 'text-green-400 hover:bg-green-500/10'}`}
-                          title={u.estado ? 'Desactivar' : 'Activar'}
-                        >
-                          {u.estado ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                        </button>
-                        <button aria-label="Eliminar"
-                          onClick={() => handleRemove(u)}
-                          className="p-2 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors"
-                          title="Desvincular del proveedor"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                          <Trash2 className="h-4 w-4" strokeWidth={2} />
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -519,434 +481,232 @@ export default function UsuariosProveedor() {
             </tbody>
           </table>
         </div>
-      </div>
+      </Card>
 
-      {/* Modal "Ver datos" — solo lectura. Las contraseñas NO se muestran nunca
-          (guardadas hasheadas en backend, irreversible). Si el super admin
-          necesita acceso de emergencia, debe usar "Editar" para establecer una
-          nueva clave temporal. */}
-      {viewUser && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-[#0a0a0a] overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-white/10">
-              <div>
-                <h2 className="text-2xl font-bold text-white">Datos del usuario</h2>
-                <p className="text-sm text-gray-400 mt-1">{viewUser.email}</p>
+      <Dialog open={modalAbierto} onOpenChange={(abierto) => !abierto && cerrarModal()}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{modo === 'crear' ? 'Agregar usuario' : 'Editar usuario'}</DialogTitle>
+            <DialogDescription>
+              {modo === 'crear'
+                ? 'Vincula un usuario que ya existe o crea uno nuevo para este proveedor.'
+                : 'Cambia los datos del usuario y su acceso al portal.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {modo === 'crear' ? (
+            <form onSubmit={crear} className="space-y-4">
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant={origenAsignacion === 'nuevo' ? 'default' : 'outline'}
+                  onClick={() => setOrigenAsignacion('nuevo')}
+                >
+                  Usuario nuevo
+                </Button>
+                <Button
+                  type="button"
+                  variant={origenAsignacion === 'existente' ? 'default' : 'outline'}
+                  onClick={() => setOrigenAsignacion('existente')}
+                >
+                  Usuario existente
+                </Button>
               </div>
-              <button
-                onClick={() => setViewUser(null)}
-                className="p-2 rounded-lg text-gray-400 hover:bg-white/5 transition-colors"
-                title="Cerrar"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
 
-            <div className="px-6 py-5 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">ID</p>
-                  <p className="text-white font-mono text-sm">{viewUser.id}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Rol</p>
-                  <span className="inline-flex items-center gap-1.5 rounded-lg border border-[#9032F0]/30 bg-[#9032F0]/10 px-3 py-1 text-xs font-semibold text-[#c79cff]">
-                    <Shield className="w-3 h-3" />
-                    {viewUser.rol}
-                  </span>
-                </div>
-                <div className="sm:col-span-2">
-                  <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Nombre</p>
-                  <p className="text-white">{viewUser.name || '—'}</p>
-                </div>
-                <div className="sm:col-span-2">
-                  <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Email</p>
-                  <p className="text-white break-all">{viewUser.email || '—'}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Estado en proveedor</p>
-                  <span
-                    className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1 text-xs font-semibold ${getAssignmentStatusClasses(viewUser.estado)}`}
+              {origenAsignacion === 'existente' ? (
+                <div className="space-y-2">
+                  <Label htmlFor="proveedor-usuario-existente">Usuario</Label>
+                  <Select
+                    value={formCrear.user_id}
+                    onValueChange={(v) => setFormCrear((f) => ({ ...f, user_id: v }))}
                   >
-                    {viewUser.estado ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
-                    {viewUser.estado ? 'Activo' : 'Inactivo'}
-                  </span>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Asignado</p>
-                  <p className="text-sm text-gray-300">{formatFechaHora(viewUser.asignado_at)}</p>
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4">
-                <p className="text-sm font-semibold text-yellow-300 mb-1">
-                  Contraseña no visible
-                </p>
-                <p className="text-xs text-yellow-200/80 leading-relaxed">
-                  Las contraseñas se guardan cifradas (hash) y no pueden recuperarse
-                  por seguridad. Si el usuario perdió acceso, abre "Editar usuario"
-                  y establece una contraseña temporal nueva.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-white/10">
-              <button
-                onClick={() => setViewUser(null)}
-                className="px-4 py-2 rounded-lg text-gray-300 hover:bg-white/5 transition-colors"
-              >
-                Cerrar
-              </button>
-              <button
-                onClick={() => {
-                  const u = viewUser;
-                  setViewUser(null);
-                  openEditModal(u);
-                }}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#9032F0] hover:bg-[#7b27d4] text-white font-semibold transition-colors"
-              >
-                <Edit2 className="w-4 h-4" />
-                Editar / cambiar contraseña
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Crear / Editar */}
-      {showModal && (
-        <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-2xl rounded-2xl border border-white/10 bg-[#0a0a0a] overflow-hidden max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-white/10 shrink-0">
-              <div>
-                <h2 className="text-2xl font-bold text-white">
-                  {modalMode === 'create' ? 'Agregar usuario al proveedor' : 'Editar usuario'}
-                </h2>
-                <p className="text-sm text-gray-400 mt-1">
-                  {modalMode === 'create'
-                    ? 'Crea un usuario nuevo o asigna uno existente del sistema'
-                    : 'Modifica datos, rol o estado de la asignación'}
-                </p>
-              </div>
-              <button onClick={closeModal} className="p-2 rounded-lg text-gray-400 hover:bg-white/10 hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-6 overflow-y-auto">
-              {modalMode === 'create' ? (
-                <form onSubmit={handleCreateSubmit} className="space-y-5">
-                  {/* Switcher */}
-                  <div className="flex gap-2 rounded-xl border border-white/10 bg-black/30 p-1">
-                    <button
-                      type="button"
-                      onClick={() => setAssignmentMode('new')}
-                      className={`flex-1 px-4 py-2 rounded-lg text-sm font-semibold transition ${
-                        assignmentMode === 'new'
-                          ? 'bg-gradient-to-r from-[#9032F0] to-[#6506FF] text-white'
-                          : 'text-gray-400 hover:text-white'
-                      }`}
-                    >
-                      Crear usuario nuevo
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAssignmentMode('existing')}
-                      className={`flex-1 px-4 py-2 rounded-lg text-sm font-semibold transition ${
-                        assignmentMode === 'existing'
-                          ? 'bg-gradient-to-r from-[#9032F0] to-[#6506FF] text-white'
-                          : 'text-gray-400 hover:text-white'
-                      }`}
-                    >
-                      Asignar usuario existente
-                    </button>
-                  </div>
-
-                  {assignmentMode === 'new' ? (
-                    <>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="usuariospr-nombre">Nombre *</label>
-                          <input id="usuariospr-nombre"
-                            type="text"
-                            value={createForm.name}
-                            onChange={e => setCreateForm(p => ({ ...p, name: e.target.value }))}
-                            className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
-                            placeholder="Nombre completo"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="usuariospr-email">Email *</label>
-                          <input id="usuariospr-email"
-                            type="email"
-                            value={createForm.email}
-                            onChange={e => setCreateForm(p => ({ ...p, email: e.target.value }))}
-                            className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
-                            placeholder="usuario@correo.com"
-                          />
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-2">Contraseña *</label>
-                          <div className="relative">
-                            <input
-                              aria-label="Mínimo 8 caracteres"
-                              type={showPassword ? 'text' : 'password'}
-                              value={createForm.password}
-                              onChange={e => setCreateForm(p => ({ ...p, password: e.target.value }))}
-                              className="w-full rounded-xl border border-white/10 bg-black/30 pl-4 pr-11 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
-                              placeholder="Mínimo 8 caracteres"
-                              autoComplete="new-password"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowPassword(v => !v)}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
-                              tabIndex={-1}
-                              aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                            >
-                              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                            </button>
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-2">Confirmar contraseña *</label>
-                          <div className="relative">
-                            <input
-                              aria-label="Repite la contraseña"
-                              type={showPassword ? 'text' : 'password'}
-                              value={createForm.password_confirmation}
-                              onChange={e => setCreateForm(p => ({ ...p, password_confirmation: e.target.value }))}
-                              className={`w-full rounded-xl border bg-black/30 pl-4 pr-11 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-colors ${
-                                createForm.password_confirmation && createForm.password && createForm.password_confirmation !== createForm.password
-                                  ? 'border-red-500/40 focus:ring-red-500/50'
-                                  : 'border-white/10 focus:ring-[#9032F0]/50'
-                              }`}
-                              placeholder="Repite la contraseña"
-                              autoComplete="new-password"
-                              disabled={!createForm.password.trim()}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowPassword(v => !v)}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
-                              tabIndex={-1}
-                              aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                            >
-                              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                            </button>
-                          </div>
-                          {createForm.password_confirmation && createForm.password && createForm.password_confirmation !== createForm.password && (
-                            <p className="mt-1 text-xs text-red-400">Las contraseñas no coinciden</p>
-                          )}
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Usuario existente *
-                        {loadingGlobalUsers && (
-                          <span className="ml-2 inline-flex items-center gap-1 text-xs text-gray-500">
-                            <Loader2 className="w-3 h-3 animate-spin" /> Cargando...
-                          </span>
-                        )}
-                      </label>
-                      <select
-                        aria-label="User id"
-                        value={createForm.user_id}
-                        onChange={e => setCreateForm(p => ({ ...p, user_id: e.target.value }))}
-                        className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
-                      >
-                        <option value="" className="bg-[#111]">Selecciona un usuario</option>
-                        {globalUsers.map(u => (
-                          <option key={u.id} value={u.id} className="bg-[#111]">
-                            {u.name} ({u.email})
-                          </option>
-                        ))}
-                      </select>
-                      <p className="mt-2 text-xs text-gray-500">
-                        Si el usuario ya pertenece a este proveedor verás un error.
-                      </p>
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="usuariospr-rol-dentro-del-proveedor">Rol dentro del proveedor</label>
-                    <select id="usuariospr-rol-dentro-del-proveedor"
-                      value={createForm.rol}
-                      onChange={e => setCreateForm(p => ({ ...p, rol: e.target.value as RolProveedorUser }))}
-                      className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
-                    >
-                      {ROLES.map(r => (
-                        <option key={r} value={r} className="bg-[#111]">{r}</option>
+                    <SelectTrigger id="proveedor-usuario-existente">
+                      <SelectValue placeholder={cargandoGlobales ? 'Cargando usuarios…' : 'Selecciona un usuario'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {usuariosGlobales.map((u) => (
+                        <SelectItem key={u.id} value={String(u.id)}>
+                          {u.name} · {u.email}
+                        </SelectItem>
                       ))}
-                    </select>
-                  </div>
-
-                  <div className="flex items-center justify-end gap-3 pt-2">
-                    <button
-                      type="button"
-                      onClick={closeModal}
-                      className="px-5 py-3 rounded-xl border border-white/10 bg-white/5 text-white hover:bg-white/10 transition"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={saving}
-                      className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-[#9032F0] to-[#6506FF] text-white font-semibold hover:opacity-95 transition disabled:opacity-50"
-                    >
-                      {saving ? (
-                        <><Loader2 className="w-4 h-4 animate-spin" /> Guardando...</>
-                      ) : (
-                        <><Plus className="w-4 h-4" /> Agregar usuario</>
-                      )}
-                    </button>
-                  </div>
-                </form>
+                    </SelectContent>
+                  </Select>
+                </div>
               ) : (
-                <form onSubmit={handleEditSubmit} className="space-y-5">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="usuariospr-nombre-2">Nombre</label>
-                      <input id="usuariospr-nombre-2"
-                        type="text"
-                        value={editForm.name}
-                        onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))}
-                        className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="usuariospr-email-2">Email</label>
-                      <input id="usuariospr-email-2"
-                        type="email"
-                        value={editForm.email}
-                        onChange={e => setEditForm(p => ({ ...p, email: e.target.value }))}
-                        className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="usuariospr-nueva-contrasena-opcional">
-                        Nueva contraseña (opcional)
-                      </label>
-                      <div className="relative">
-                        <input id="usuariospr-nueva-contrasena-opcional"
-                          aria-label="Dejar en blanco para no cambiar"
-                          type={showPassword ? 'text' : 'password'}
-                          value={editForm.password}
-                          onChange={e => setEditForm(p => ({ ...p, password: e.target.value }))}
-                          className="w-full rounded-xl border border-white/10 bg-black/30 pl-4 pr-11 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
-                          placeholder="Dejar en blanco para no cambiar"
-                          autoComplete="new-password"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(v => !v)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
-                          tabIndex={-1}
-                          aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                        >
-                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="usuariospr-confirmar-contrasena">
-                        Confirmar contraseña
-                      </label>
-                      <div className="relative">
-                        <input id="usuariospr-confirmar-contrasena"
-                          aria-label="Repite la nueva contraseña"
-                          type={showPassword ? 'text' : 'password'}
-                          value={editForm.password_confirmation}
-                          onChange={e => setEditForm(p => ({ ...p, password_confirmation: e.target.value }))}
-                          className={`w-full rounded-xl border bg-black/30 pl-4 pr-11 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-colors ${
-                            editForm.password_confirmation && editForm.password && editForm.password_confirmation !== editForm.password
-                              ? 'border-red-500/40 focus:ring-red-500/50'
-                              : 'border-white/10 focus:ring-[#9032F0]/50'
-                          }`}
-                          placeholder="Repite la nueva contraseña"
-                          autoComplete="new-password"
-                          disabled={!editForm.password.trim()}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(v => !v)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
-                          tabIndex={-1}
-                          aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                        >
-                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                      {editForm.password_confirmation && editForm.password && editForm.password_confirmation !== editForm.password && (
-                        <p className="mt-1 text-xs text-red-400">Las contraseñas no coinciden</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="usuariospr-rol">Rol</label>
-                    <select id="usuariospr-rol"
-                      value={editForm.rol}
-                      onChange={e => setEditForm(p => ({ ...p, rol: e.target.value as RolProveedorUser }))}
-                      className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
-                    >
-                      {ROLES.map(r => (
-                        <option key={r} value={r} className="bg-[#111]">{r}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/30 px-4 py-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={editForm.estado}
-                      onChange={e => setEditForm(p => ({ ...p, estado: e.target.checked }))}
-                      className="h-4 w-4"
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="proveedor-usuario-nombre">Nombre</Label>
+                    <Input
+                      id="proveedor-usuario-nombre"
+                      value={formCrear.name}
+                      onChange={(e) => setFormCrear((f) => ({ ...f, name: e.target.value }))}
+                      placeholder="Nombre completo"
                     />
-                    <span className="text-sm text-gray-200">Asignación activa</span>
-                  </label>
-
-                  <div className="flex items-center justify-end gap-3 pt-2">
-                    <button
-                      type="button"
-                      onClick={closeModal}
-                      className="px-5 py-3 rounded-xl border border-white/10 bg-white/5 text-white hover:bg-white/10 transition"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={saving}
-                      className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-[#9032F0] to-[#6506FF] text-white font-semibold hover:opacity-95 transition disabled:opacity-50"
-                    >
-                      {saving ? (
-                        <><Loader2 className="w-4 h-4 animate-spin" /> Guardando...</>
-                      ) : (
-                        <><Edit2 className="w-4 h-4" /> Guardar cambios</>
-                      )}
-                    </button>
                   </div>
-                </form>
+                  <div className="space-y-2">
+                    <Label htmlFor="proveedor-usuario-correo">Correo electrónico</Label>
+                    <Input
+                      id="proveedor-usuario-correo"
+                      type="email"
+                      value={formCrear.email}
+                      onChange={(e) => setFormCrear((f) => ({ ...f, email: e.target.value }))}
+                      placeholder="usuario@correo.com"
+                    />
+                  </div>
+                  <PasswordField
+                    id="proveedor-usuario-password"
+                    label="Contraseña"
+                    value={formCrear.password}
+                    onChange={(v) => setFormCrear((f) => ({ ...f, password: v }))}
+                    placeholder="Mínimo 8 caracteres"
+                    autoComplete="new-password"
+                  />
+                  <PasswordField
+                    id="proveedor-usuario-password-confirmacion"
+                    label="Confirmar contraseña"
+                    value={formCrear.password_confirmation}
+                    onChange={(v) => setFormCrear((f) => ({ ...f, password_confirmation: v }))}
+                    placeholder="Repite la contraseña"
+                    autoComplete="new-password"
+                  />
+                </>
               )}
-            </div>
-          </div>
-        </div>
-      )}
+
+              <div className="space-y-2">
+                <Label htmlFor="proveedor-usuario-rol">Rol en el proveedor</Label>
+                <Select
+                  value={formCrear.rol}
+                  onValueChange={(v) => setFormCrear((f) => ({ ...f, rol: v as RolProveedorUser }))}
+                >
+                  <SelectTrigger id="proveedor-usuario-rol"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {ROLES.map((rol) => <SelectItem key={rol} value={rol}>{rol}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={cerrarModal} disabled={guardando}>
+                  Cancelar
+                </Button>
+                <Button type="submit" isLoading={guardando}>Guardar</Button>
+              </DialogFooter>
+            </form>
+          ) : (
+            <form onSubmit={editar} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="proveedor-editar-nombre">Nombre</Label>
+                <Input
+                  id="proveedor-editar-nombre"
+                  value={formEditar.name}
+                  onChange={(e) => setFormEditar((f) => ({ ...f, name: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="proveedor-editar-correo">Correo electrónico</Label>
+                <Input
+                  id="proveedor-editar-correo"
+                  type="email"
+                  value={formEditar.email}
+                  onChange={(e) => setFormEditar((f) => ({ ...f, email: e.target.value }))}
+                />
+              </div>
+
+              <PasswordField
+                id="proveedor-editar-password"
+                label="Contraseña nueva"
+                value={formEditar.password}
+                onChange={(v) => setFormEditar((f) => ({ ...f, password: v }))}
+                placeholder="Déjala vacía para no cambiarla"
+                autoComplete="new-password"
+              />
+              {formEditar.password.trim() !== '' && (
+                <PasswordField
+                  id="proveedor-editar-password-confirmacion"
+                  label="Confirmar contraseña"
+                  value={formEditar.password_confirmation}
+                  onChange={(v) => setFormEditar((f) => ({ ...f, password_confirmation: v }))}
+                  placeholder="Repite la contraseña"
+                  autoComplete="new-password"
+                />
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="proveedor-editar-rol">Rol en el proveedor</Label>
+                <Select
+                  value={formEditar.rol}
+                  onValueChange={(v) => setFormEditar((f) => ({ ...f, rol: v as RolProveedorUser }))}
+                >
+                  <SelectTrigger id="proveedor-editar-rol"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {ROLES.map((rol) => <SelectItem key={rol} value={rol}>{rol}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="proveedor-editar-estado">Vinculación</Label>
+                <Select
+                  value={formEditar.estado ? 'activa' : 'inactiva'}
+                  onValueChange={(v) => setFormEditar((f) => ({ ...f, estado: v === 'activa' }))}
+                >
+                  <SelectTrigger id="proveedor-editar-estado"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="activa">Activa</SelectItem>
+                    <SelectItem value="inactiva">Inactiva</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={cerrarModal} disabled={guardando}>
+                  Cancelar
+                </Button>
+                <Button type="submit" isLoading={guardando}>Guardar cambios</Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={detalle !== null} onOpenChange={(abierto) => !abierto && setDetalle(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{detalle?.name || 'Usuario'}</DialogTitle>
+            <DialogDescription>{detalle?.email}</DialogDescription>
+          </DialogHeader>
+
+          {detalle && (
+            <dl className="grid gap-3 sm:grid-cols-2">
+              <Dato label="ID">{detalle.id}</Dato>
+              <Dato label="Rol"><Badge variant="secondary">{detalle.rol}</Badge></Dato>
+              <Dato label="Vinculación">
+                <Badge variant={detalle.estado ? 'success' : 'destructive'}>
+                  {detalle.estado ? 'Activa' : 'Inactiva'}
+                </Badge>
+              </Dato>
+              <Dato label="Cuenta">
+                <Badge variant={detalle.status ? 'info' : 'warning'}>
+                  {detalle.status ? 'Habilitada' : 'Deshabilitada'}
+                </Badge>
+              </Dato>
+              <div className="sm:col-span-2">
+                <Dato label="Vinculado">
+                  {detalle.asignado_at ? formatFechaHora(detalle.asignado_at) : '—'}
+                </Dato>
+              </div>
+            </dl>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
-        open={confirmDialog.open}
-        title={confirmDialog.title}
-        description={confirmDialog.description}
-        variant={confirmDialog.variant}
-        onConfirm={confirmDialog.onConfirm}
-        onClose={closeConfirm}
+        open={confirmacion.open}
+        onClose={cerrarConfirmacion}
+        onConfirm={confirmacion.onConfirm}
+        title={confirmacion.title}
+        description={confirmacion.description}
+        variant={confirmacion.variant}
       />
     </div>
   );

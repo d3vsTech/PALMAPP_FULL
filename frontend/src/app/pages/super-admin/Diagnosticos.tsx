@@ -1,234 +1,196 @@
-import {
-  Settings,
-  Server,
-  Database,
-  HardDrive,
-  Zap,
-  Activity,
-  CheckCircle,
-  AlertTriangle,
-  RefreshCw,
-  Globe,
-  Code,
-  Cpu,
-} from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { Activity, AlertCircle, Code, Database, HardDrive, Loader2, RefreshCw, Server, Zap } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { fetchConToken } from '../../../api/request';
+import { Button } from '../../components/ui/button';
+import { Badge } from '../../components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import PageHeader from '../../components/common/PageHeader';
+
+/** Lo que devuelve `GET /api/v1/admin/diagnostics`. Todo llega ya formateado. */
+interface Diagnostico {
+  aplicacion?: { nombre?: string; laravel?: string; entorno?: string; timezone?: string };
+  servidor?: { hostname?: string; sistema_operativo?: string; servidor_web?: string; tiempo_actividad?: string };
+  php?: { version?: string; memoria_limite?: string; memoria_uso_actual?: string; extensiones_cargadas?: string | number };
+  disco?: { total?: string; usado?: string; libre?: string; uso_porcentaje?: string };
+  base_datos?: { driver?: string; version?: string; peso_mb?: string; peso?: string; tablas?: string | number; conexion?: string };
+  cache?: { driver?: string; estado?: string };
+}
+
+type Dato = { label: string; valor: string | number | undefined };
 
 export default function Diagnosticos() {
   const { token } = useAuth();
-  const [datos, setDatos] = useState<any>(null);
+  const [datos, setDatos] = useState<Diagnostico | null>(null);
   const [loading, setLoading] = useState(true);
-  const [cargando, setCargando] = useState(false);
-  const [ultimaActualizacion, setUltimaActualizacion] = useState(new Date());
+  const [recargando, setRecargando] = useState(false);
+  const [error, setError] = useState('');
+  const [actualizado, setActualizado] = useState<Date | null>(null);
 
-  const cargarDiagnosticos = async () => {
+  const cargar = useCallback(async () => {
     if (!token) return;
-
-    setCargando(true);
-
+    setRecargando(true);
+    setError('');
     try {
       const respuesta = await fetchConToken('/api/v1/admin/diagnostics', token);
       const resultado = await respuesta.json();
-
-      if (respuesta.ok) {
-        setDatos(resultado.data);
-        setUltimaActualizacion(new Date());
-      }
-    } catch (error) {
-      console.error('Error al cargar diagnósticos:', error);
+      if (!respuesta.ok) throw new Error(resultado?.message ?? 'El servidor no respondió los diagnósticos');
+      setDatos(resultado.data);
+      setActualizado(new Date());
+    } catch (err) {
+      console.error('Error al cargar diagnósticos:', err);
+      setError(err instanceof Error ? err.message : 'No se pudieron cargar los diagnósticos');
     } finally {
       setLoading(false);
-      setCargando(false);
+      setRecargando(false);
     }
-  };
-
-  useEffect(() => {
-    cargarDiagnosticos();
   }, [token]);
 
-  const diagnosticos = [
+  useEffect(() => {
+    void cargar();
+  }, [cargar]);
+
+  const bloques: { titulo: string; icono: typeof Code; datos: Dato[] }[] = [
     {
       titulo: 'Aplicación',
       icono: Code,
-      colorIcono: 'text-[#9032F0]',
-      bgIcono: 'from-[#9032F0]/20 to-[#6506FF]/10',
-      borderIcono: 'border-[#9032F0]/30',
       datos: [
-        { label: 'Nombre', valor: datos?.aplicacion?.nombre ?? 'Cargando...' },
-        { label: 'Versión Laravel', valor: datos?.aplicacion?.laravel ?? 'Cargando...' },
-        { label: 'Entorno', valor: datos?.aplicacion?.entorno ?? 'Cargando...' },
-        { label: 'Zona Horaria', valor: datos?.aplicacion?.timezone ?? 'Cargando...' },
+        { label: 'Nombre', valor: datos?.aplicacion?.nombre },
+        { label: 'Versión de Laravel', valor: datos?.aplicacion?.laravel },
+        { label: 'Entorno', valor: datos?.aplicacion?.entorno },
+        { label: 'Zona horaria', valor: datos?.aplicacion?.timezone },
       ],
     },
     {
       titulo: 'Servidor',
       icono: Server,
-      colorIcono: 'text-blue-400',
-      bgIcono: 'from-blue-500/20 to-blue-600/10',
-      borderIcono: 'border-blue-500/30',
       datos: [
-        { label: 'Hostname', valor: datos?.servidor?.hostname ?? 'Cargando...' },
-        { label: 'Sistema Operativo', valor: datos?.servidor?.sistema_operativo ?? 'Cargando...' },
-        { label: 'Servidor Web', valor: datos?.servidor?.servidor_web ?? 'Cargando...' },
-        { label: 'Uptime', valor: datos?.servidor?.tiempo_actividad ?? 'Cargando...' },
+        { label: 'Hostname', valor: datos?.servidor?.hostname },
+        { label: 'Sistema operativo', valor: datos?.servidor?.sistema_operativo },
+        { label: 'Servidor web', valor: datos?.servidor?.servidor_web },
+        { label: 'Tiempo encendido', valor: datos?.servidor?.tiempo_actividad },
       ],
     },
     {
       titulo: 'PHP',
       icono: Zap,
-      colorIcono: 'text-purple-400',
-      bgIcono: 'from-purple-500/20 to-purple-600/10',
-      borderIcono: 'border-purple-500/30',
       datos: [
-        { label: 'Versión', valor: datos?.php?.version ?? 'Cargando...' },
-        { label: 'Memoria Límite', valor: datos?.php?.memoria_limite ?? 'Cargando...' },
-        { label: 'Memoria en Uso', valor: datos?.php?.memoria_uso_actual ?? 'Cargando...' },
-        { label: 'Extensiones Activas', valor: datos?.php?.extensiones_cargadas ?? 'Cargando...' },
+        { label: 'Versión', valor: datos?.php?.version },
+        { label: 'Límite de memoria', valor: datos?.php?.memoria_limite },
+        { label: 'Memoria en uso', valor: datos?.php?.memoria_uso_actual },
+        { label: 'Extensiones activas', valor: datos?.php?.extensiones_cargadas },
       ],
     },
     {
       titulo: 'Disco',
       icono: HardDrive,
-      colorIcono: 'text-yellow-400',
-      bgIcono: 'from-yellow-500/20 to-yellow-600/10',
-      borderIcono: 'border-yellow-500/30',
       datos: [
-        { label: 'Total', valor: datos?.disco?.total ?? 'Cargando...' },
-        { label: 'Usado', valor: datos?.disco?.usado ?? 'Cargando...' },
-        { label: 'Libre', valor: datos?.disco?.libre ?? 'Cargando...' },
-        { label: 'Uso', valor: datos?.disco?.uso_porcentaje ?? 'Cargando...' },
+        { label: 'Total', valor: datos?.disco?.total },
+        { label: 'Usado', valor: datos?.disco?.usado },
+        { label: 'Libre', valor: datos?.disco?.libre },
+        { label: 'Porcentaje de uso', valor: datos?.disco?.uso_porcentaje },
       ],
     },
     {
-      titulo: 'Base de Datos',
+      titulo: 'Base de datos',
       icono: Database,
-      colorIcono: 'text-green-400',
-      bgIcono: 'from-green-500/20 to-green-600/10',
-      borderIcono: 'border-green-500/30',
       datos: [
-        { label: 'Driver', valor: datos?.base_datos?.driver ?? 'Cargando...' },
-        { label: 'Versión', valor: datos?.base_datos?.version ?? 'Cargando...' },
-        { label: 'Peso Total', valor: datos?.base_datos?.peso_mb ?? datos?.base_datos?.peso ?? 'Cargando...' },
-        { label: 'Total Tablas', valor: datos?.base_datos?.tablas ?? 'Cargando...' },
-        { label: 'Conexión', valor: datos?.base_datos?.conexion ?? 'Cargando...' },
+        { label: 'Motor', valor: datos?.base_datos?.driver },
+        { label: 'Versión', valor: datos?.base_datos?.version },
+        { label: 'Peso total', valor: datos?.base_datos?.peso_mb ?? datos?.base_datos?.peso },
+        { label: 'Tablas', valor: datos?.base_datos?.tablas },
+        { label: 'Conexión', valor: datos?.base_datos?.conexion },
       ],
     },
     {
-      titulo: 'Cache',
+      titulo: 'Caché',
       icono: Activity,
-      colorIcono: 'text-cyan-400',
-      bgIcono: 'from-cyan-500/20 to-cyan-600/10',
-      borderIcono: 'border-cyan-500/30',
       datos: [
-        { label: 'Driver', valor: datos?.cache?.driver ?? 'Cargando...' },
-        { label: 'Estado', valor: datos?.cache?.estado ?? 'Cargando...' },
+        { label: 'Motor', valor: datos?.cache?.driver },
+        { label: 'Estado', valor: datos?.cache?.estado },
       ],
     },
   ];
 
   return (
-    <div className="p-4 md:p-8 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2.5 bg-gradient-to-br from-[#9032F0]/20 to-[#6506FF]/20 border border-[#9032F0]/30 rounded-xl flex-shrink-0">
-              <Settings className="h-6 w-6 text-[#9032F0]" />
-            </div>
-            <h1 className="text-2xl md:text-3xl font-bold text-white">Diagnósticos del Sistema</h1>
-          </div>
-          <p className="text-sm md:text-base text-slate-400">
-            Información del servidor y estado del sistema en tiempo real
-          </p>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Super admin"
+        title="Diagnósticos del sistema"
+        description="Estado del servidor y de la aplicación en este momento."
+        actions={
+          <Button variant="outline" onClick={() => void cargar()} disabled={recargando}>
+            {recargando
+              ? <Loader2 className="h-4 w-4 animate-spin" />
+              : <RefreshCw className="h-4 w-4" strokeWidth={2} />}
+            Actualizar
+          </Button>
+        }
+      />
+
+      {error && (
+        <div role="alert" className="flex items-start gap-2.5 rounded-lg border border-destructive/20 bg-destructive-soft px-3 py-2.5">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" strokeWidth={2} />
+          <p className="text-sm text-destructive">{error}</p>
         </div>
+      )}
 
-        <button
-          onClick={() => void cargarDiagnosticos()}
-          disabled={cargando}
-          className="flex items-center gap-2 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#9032F0]/30 rounded-xl text-white transition duration-200 group disabled:opacity-50 self-start lg:self-auto"
-        >
-          <RefreshCw className={`h-4 w-4 transition-transform ${cargando ? 'animate-spin' : 'group-hover:rotate-180'}`} />
-          <span className="text-sm font-medium">Actualizar</span>
-        </button>
-      </div>
-
-      {/* Última actualización */}
-      <div className="flex items-center gap-2 text-xs text-slate-500">
-        <Globe className="h-3.5 w-3.5" />
-        <span>
-          Última actualización: {ultimaActualizacion.toLocaleString('es-CO', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
+      {actualizado && (
+        <p className="text-[13px] text-muted-foreground">
+          Última lectura: {actualizado.toLocaleString('es-CO', {
+            day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
           })}
-        </span>
-      </div>
+        </p>
+      )}
 
-      {/* Grid de diagnósticos */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {diagnosticos.map((diagnostico, index) => {
-          const Icono = diagnostico.icono;
-
+      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+        {bloques.map((bloque) => {
+          const Icono = bloque.icono;
+          // Sin datos no se puede afirmar que el bloque esté bien.
+          const responde = bloque.datos.some((d) => d.valor !== undefined && d.valor !== null && d.valor !== '');
           return (
-            <div
-              key={index}
-              className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:border-[#9032F0]/30 transition duration-300 group"
-            >
-              {/* Header de la card */}
-              <div className="flex items-center justify-between mb-5">
-                <div className="flex items-center gap-3">
-                  <div className={`p-2.5 bg-gradient-to-br ${diagnostico.bgIcono} border ${diagnostico.borderIcono} rounded-xl`}>
-                    <Icono className={`h-5 w-5 ${diagnostico.colorIcono}`} />
-                  </div>
-                  <h3 className="text-lg font-bold text-white">{diagnostico.titulo}</h3>
-                </div>
-
-                {/* Badge de estado */}
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold bg-green-500/10 border-green-500/30 text-green-400">
-                  <CheckCircle className="h-4 w-4" />
-                  <span>OK</span>
-                </div>
-              </div>
-
-              {/* Datos */}
-              <div className="space-y-3">
-                {diagnostico.datos.map((dato, idx) => (
-                  <div key={idx} className="flex justify-between items-start gap-3 text-sm">
-                    <span className="text-slate-400 font-medium flex-shrink-0">
-                      {dato.label}:
-                    </span>
-                    <span className="text-white font-semibold text-right break-all">
-                      {dato.valor}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <Card key={bloque.titulo} className="gap-4">
+              <CardHeader className="flex flex-row items-center justify-between gap-3">
+                <CardTitle className="flex items-center gap-2.5">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                    <Icono className="h-4 w-4" strokeWidth={2} />
+                  </span>
+                  {bloque.titulo}
+                </CardTitle>
+                {loading
+                  ? <Badge variant="secondary">Leyendo</Badge>
+                  : responde
+                    ? <Badge variant="success">Responde</Badge>
+                    : <Badge variant="warning">Sin datos</Badge>}
+              </CardHeader>
+              <CardContent>
+                <dl className="space-y-2.5 text-sm">
+                  {bloque.datos.map((dato) => (
+                    <div key={dato.label} className="flex items-start justify-between gap-3">
+                      <dt className="shrink-0 text-muted-foreground">{dato.label}</dt>
+                      <dd className="break-all text-right font-semibold text-foreground">
+                        {loading ? '…' : (dato.valor ?? '—')}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </CardContent>
+            </Card>
           );
         })}
       </div>
 
-      {/* Info footer */}
-      <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-xl p-5">
-        <div className="flex items-start gap-3">
-          <div className="p-2 bg-[#9032F0]/10 border border-[#9032F0]/30 rounded-lg flex-shrink-0">
-            <Cpu className="h-5 w-5 text-[#9032F0]" />
-          </div>
-          <div className="flex-1">
-            <h4 className="text-sm font-semibold text-white mb-1">
-              Monitoreo en Tiempo Real
-            </h4>
-            <p className="text-sm text-slate-400 leading-relaxed">
-              Este panel muestra el estado actual del sistema. Los datos se actualizan cada vez que se recarga la página.
-              Para un monitoreo continuo, utilice el botón Actualizar.
-            </p>
-          </div>
-        </div>
-      </div>
+      <Card className="gap-2">
+        <CardHeader>
+          <CardTitle>Cómo se lee esta pantalla</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            Los datos corresponden al momento de la última lectura, no se actualizan solos.
+            Usa el botón Actualizar cuando necesites el estado del momento.
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 }

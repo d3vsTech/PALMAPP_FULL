@@ -1,13 +1,16 @@
-import { useEffect, useState, type FormEvent, useCallback } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '../../contexts/AuthContext';
 import { fetchConToken } from '../../../api/request';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
 import {
-  X,
-  Building2,
-  MapPin,
-  Package,
-} from 'lucide-react';
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '../ui/dialog';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '../ui/select';
 
 interface Departamento {
   codigo: string;
@@ -42,7 +45,7 @@ interface CrearFincaModalProps {
   isSaving?: boolean;
 }
 
-const EMPTY_FORM: FincaFormData = {
+const FORM_VACIO: FincaFormData = {
   tipo_persona: 'NATURAL',
   nombre: '',
   nit: '',
@@ -56,13 +59,68 @@ const EMPTY_FORM: FincaFormData = {
   fecha_suspension: '',
 };
 
-function buildFormData(
-  fincaData?: Partial<FincaFormData> | null,
-): FincaFormData {
-  return {
-    ...EMPTY_FORM,
-    ...fincaData,
-  };
+function armarFormulario(fincaData?: Partial<FincaFormData> | null): FincaFormData {
+  return { ...FORM_VACIO, ...fincaData };
+}
+
+/**
+ * Buscador con lista desplegable.
+ *
+ * Departamento y municipio no caben en un `Select`: son 33 y cientos de
+ * opciones. El campo filtra mientras se escribe y la lista propone.
+ */
+function BuscadorLista({
+  id,
+  label,
+  valor,
+  opciones,
+  placeholder,
+  disabled,
+  onEscribir,
+  onElegir,
+}: {
+  id: string;
+  label: string;
+  valor: string;
+  opciones: { codigo: string; nombre: string }[];
+  placeholder: string;
+  disabled?: boolean;
+  onEscribir: (texto: string) => void;
+  onElegir: (nombre: string) => void;
+}) {
+  const [abierta, setAbierta] = useState(false);
+  const filtradas = opciones.filter((o) => o.nombre.toLowerCase().includes(valor.toLowerCase()));
+
+  return (
+    <div className="relative space-y-2">
+      <Label htmlFor={id}>{label}</Label>
+      <Input
+        id={id}
+        value={valor}
+        disabled={disabled}
+        placeholder={placeholder}
+        autoComplete="off"
+        onFocus={() => setAbierta(true)}
+        // El clic en una opción llega antes que el blur gracias al retraso.
+        onBlur={() => window.setTimeout(() => setAbierta(false), 120)}
+        onChange={(e) => { onEscribir(e.target.value); setAbierta(true); }}
+      />
+      {abierta && filtradas.length > 0 && (
+        <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto custom-scrollbar rounded-[10px] border border-border bg-popover shadow-md">
+          {filtradas.map((opcion) => (
+            <button
+              key={opcion.codigo}
+              type="button"
+              onClick={() => { onElegir(opcion.nombre); setAbierta(false); }}
+              className="w-full px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted"
+            >
+              {opcion.nombre}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function CrearFincaModal({
@@ -73,91 +131,76 @@ export default function CrearFincaModal({
   isEdit = false,
   isSaving = false,
 }: CrearFincaModalProps) {
-  const [formData, setFormData] = useState<FincaFormData>(() =>
-    buildFormData(fincaData),
-  );
   const { token } = useAuth();
+  const [formData, setFormData] = useState<FincaFormData>(() => armarFormulario(fincaData));
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
   const [municipios, setMunicipios] = useState<Municipio[]>([]);
-  const [loadingDepts, setLoadingDepts] = useState(false);
-  const [loadingMunis, setLoadingMunis] = useState(false);
-  const [showDeptList, setShowDeptList] = useState(false);
-  const [showMuniList, setShowMuniList] = useState(false);
+  const [cargandoDeptos, setCargandoDeptos] = useState(false);
+  const [cargandoMunicipios, setCargandoMunicipios] = useState(false);
 
-  // Cargar departamentos al abrir el modal
   useEffect(() => {
     if (!isOpen || !token) return;
 
-    const cargarDepartamentos = async () => {
-      setLoadingDepts(true);
+    const cargar = async () => {
+      setCargandoDeptos(true);
       try {
         const respuesta = await fetchConToken('/api/v1/auth/departamentos', token);
         const resultado = await respuesta.json();
-        if (respuesta.ok) {
-          setDepartamentos(resultado.data || []);
-        }
+        if (respuesta.ok) setDepartamentos(resultado.data || []);
       } catch (error) {
         console.error('Error al cargar departamentos:', error);
       } finally {
-        setLoadingDepts(false);
+        setCargandoDeptos(false);
       }
     };
 
-    cargarDepartamentos();
+    void cargar();
   }, [isOpen, token]);
 
-  // Cargar municipios cuando cambia el departamento
+  // Los municipios dependen del departamento elegido.
   useEffect(() => {
     if (!formData.departamento || !token) {
       setMunicipios([]);
       return;
     }
 
-    // Buscar el código del departamento seleccionado
-    const dept = departamentos.find(d => d.nombre === formData.departamento);
-    if (!dept) return;
+    const depto = departamentos.find((d) => d.nombre === formData.departamento);
+    if (!depto) return;
 
-    const cargarMunicipios = async () => {
-      setLoadingMunis(true);
+    const cargar = async () => {
+      setCargandoMunicipios(true);
       try {
-        const respuesta = await fetchConToken(`/api/v1/auth/departamentos/${dept.codigo}/municipios`, token);
+        const respuesta = await fetchConToken(
+          `/api/v1/auth/departamentos/${depto.codigo}/municipios`,
+          token,
+        );
         const resultado = await respuesta.json();
-        if (respuesta.ok) {
-          setMunicipios(resultado.data || []);
-        }
+        if (respuesta.ok) setMunicipios(resultado.data || []);
       } catch (error) {
         console.error('Error al cargar municipios:', error);
       } finally {
-        setLoadingMunis(false);
+        setCargandoMunicipios(false);
       }
     };
 
-    cargarMunicipios();
+    void cargar();
   }, [formData.departamento, token, departamentos]);
+
   useEffect(() => {
-    if (isOpen) {
-      setFormData(buildFormData(fincaData));
-    }
+    if (isOpen) setFormData(armarFormulario(fincaData));
   }, [isOpen, fincaData]);
 
-  const updateField = <K extends keyof FincaFormData>(
-    field: K,
-    value: FincaFormData[K],
-  ) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+  const actualizar = <K extends keyof FincaFormData>(campo: K, valor: FincaFormData[K]) => {
+    setFormData((prev) => ({ ...prev, [campo]: valor }));
   };
 
- const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  const enviar = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!formData.departamento) {
       toast.error('Selecciona un departamento');
       return;
     }
-
     if (!formData.municipio) {
       toast.error('Selecciona un municipio');
       return;
@@ -166,296 +209,170 @@ export default function CrearFincaModal({
     await onSave?.(formData);
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-      <form
-        onSubmit={handleSubmit}
-        className="w-full max-w-5xl max-h-[92vh] overflow-hidden rounded-2xl border border-white/10 bg-[#0a0a0a] shadow-2xl shadow-[#9032F0]/10"
-      >
-        <div className="flex items-center justify-between px-6 py-5 border-b border-white/10 bg-gradient-to-r from-[#9032F0]/15 to-[#6506FF]/10">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-white/10 border border-white/10">
-              <Building2 className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold text-white">
-                {isEdit ? 'Editar finca' : 'Crear nueva finca'}
-              </h2>
-              <p className="text-sm text-gray-400">
-                {isEdit
-                  ? 'Actualiza la configuración de la finca'
-                  : 'Registra una nueva finca en el sistema'}
-              </p>
-            </div>
+    <Dialog open={isOpen} onOpenChange={(abierto) => { if (!abierto && !isSaving) onClose(); }}>
+      <DialogContent className="sm:max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>{isEdit ? 'Editar finca' : 'Nueva finca'}</DialogTitle>
+          <DialogDescription>
+            {isEdit
+              ? 'Actualiza los datos de la finca cliente.'
+              : 'Registra una finca cliente en la plataforma.'}
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={enviar} className="space-y-5">
+          <div className="max-h-[60vh] space-y-5 overflow-y-auto custom-scrollbar pr-1">
+            <section className="space-y-4">
+              <h3>Información general</h3>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="finca-tipo-persona">Tipo de persona</Label>
+                  <Select
+                    value={formData.tipo_persona}
+                    onValueChange={(v) => actualizar('tipo_persona', v as 'NATURAL' | 'JURIDICA')}
+                  >
+                    <SelectTrigger id="finca-tipo-persona"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="NATURAL">Natural</SelectItem>
+                      <SelectItem value="JURIDICA">Jurídica</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="finca-nombre">Nombre de la finca</Label>
+                  <Input
+                    id="finca-nombre"
+                    required
+                    value={formData.nombre}
+                    onChange={(e) => actualizar('nombre', e.target.value)}
+                    placeholder="Finca La Victoria"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="finca-nit">NIT</Label>
+                  <Input
+                    id="finca-nit"
+                    value={formData.nit}
+                    onChange={(e) => actualizar('nit', e.target.value)}
+                    placeholder="900123456-7"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="finca-razon-social">Razón social</Label>
+                  <Input
+                    id="finca-razon-social"
+                    value={formData.razon_social}
+                    onChange={(e) => actualizar('razon_social', e.target.value)}
+                    placeholder="Nombre registrado en cámara de comercio"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="finca-correo">Correo de contacto</Label>
+                  <Input
+                    id="finca-correo"
+                    type="email"
+                    value={formData.correo_contacto}
+                    onChange={(e) => actualizar('correo_contacto', e.target.value)}
+                    placeholder="contacto@finca.com"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="finca-telefono">Teléfono</Label>
+                  <Input
+                    id="finca-telefono"
+                    type="tel"
+                    value={formData.telefono}
+                    onChange={(e) => actualizar('telefono', e.target.value)}
+                    placeholder="3157890123"
+                  />
+                </div>
+              </div>
+            </section>
+
+            <section className="space-y-4">
+              <h3>Ubicación</h3>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="finca-direccion">Dirección</Label>
+                  <Input
+                    id="finca-direccion"
+                    value={formData.direccion}
+                    onChange={(e) => actualizar('direccion', e.target.value)}
+                    placeholder="Vereda, kilómetro o dirección"
+                  />
+                </div>
+
+                <BuscadorLista
+                  id="finca-departamento"
+                  label="Departamento"
+                  valor={formData.departamento}
+                  opciones={departamentos}
+                  placeholder={cargandoDeptos ? 'Cargando…' : 'Escribe para buscar'}
+                  onEscribir={(texto) => {
+                    actualizar('departamento', texto);
+                    actualizar('municipio', '');
+                  }}
+                  onElegir={(nombre) => {
+                    actualizar('departamento', nombre);
+                    actualizar('municipio', '');
+                  }}
+                />
+
+                <BuscadorLista
+                  id="finca-municipio"
+                  label="Municipio"
+                  valor={formData.municipio}
+                  opciones={municipios}
+                  disabled={!formData.departamento || cargandoMunicipios}
+                  placeholder={cargandoMunicipios ? 'Cargando…' : 'Escribe para buscar'}
+                  onEscribir={(texto) => actualizar('municipio', texto)}
+                  onElegir={(nombre) => actualizar('municipio', nombre)}
+                />
+              </div>
+            </section>
+
+            <section className="space-y-4">
+              <h3>Vigencia</h3>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="finca-fecha-activacion">Fecha de activación</Label>
+                  <Input
+                    id="finca-fecha-activacion"
+                    type="date"
+                    value={formData.fecha_activacion}
+                    onChange={(e) => actualizar('fecha_activacion', e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="finca-fecha-suspension">Fecha de suspensión</Label>
+                  <Input
+                    id="finca-fecha-suspension"
+                    type="date"
+                    value={formData.fecha_suspension}
+                    onChange={(e) => actualizar('fecha_suspension', e.target.value)}
+                  />
+                </div>
+              </div>
+            </section>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isSaving}
-            className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-50"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="max-h-[calc(92vh-152px)] overflow-y-auto p-6 space-y-6">
-          <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
-            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-[#9032F0]" />
-              Información general
-            </h3>
-
-            <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="finca-tipo-de-persona">
-                  Tipo de persona *
-                </label>
-                <select id="finca-tipo-de-persona"
-                  value={formData.tipo_persona}
-                  onChange={(e) => updateField('tipo_persona', e.target.value as 'NATURAL' | 'JURIDICA')}
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
-                  required
-                >
-                  <option value="NATURAL" className="bg-[#111]">NATURAL</option>
-                  <option value="JURIDICA" className="bg-[#111]">JURIDICA</option>
-                </select>
-              </div>
-              
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="finca-nombre">
-                  Nombre *
-                </label>
-                <input id="finca-nombre"
-                  type="text"
-                  value={formData.nombre}
-                  onChange={(e) => updateField('nombre', e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
-                  placeholder="Ej: Finca La Esperanza"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="finca-nit">
-                  NIT *
-                </label>
-                <input id="finca-nit"
-                  type="text"
-                  value={formData.nit}
-                  onChange={(e) => updateField('nit', e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
-                  placeholder="Ej: 900123456-1"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="finca-razon-social">
-                  Razón social *
-                </label>
-                <input id="finca-razon-social"
-                  type="text"
-                  value={formData.razon_social}
-                  onChange={(e) => updateField('razon_social', e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
-                  placeholder="Ej: Agrícola Palmas S.A.S."
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="finca-correo-de-contacto">
-                  Correo de contacto *
-                </label>
-                <input id="finca-correo-de-contacto"
-                  type="email"
-                  value={formData.correo_contacto}
-                  onChange={(e) =>
-                    updateField('correo_contacto', e.target.value)
-                  }
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
-                  placeholder="contacto@finca.com"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="finca-telefono">
-                  Teléfono *
-                </label>
-                <input id="finca-telefono"
-                  type="text"
-                  value={formData.telefono}
-                  onChange={(e) => updateField('telefono', e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
-                  placeholder="3001234567"
-                  required
-                />
-              </div>
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
-            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-              <MapPin className="w-5 h-5 text-blue-400" />
-              Ubicación
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="finca-direccion">
-                  Dirección
-                </label>
-                <input id="finca-direccion"
-                  type="text"
-                  value={formData.direccion}
-                  onChange={(e) => updateField('direccion', e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
-                  placeholder="Vereda, km, referencia..."
-                />
-              </div>
-
-             <div className="relative">
-                <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="finca-departamento">
-                  Departamento *
-                </label>
-                <input id="finca-departamento"
-                  type="text"
-                  value={formData.departamento}
-                  onChange={(e) => {
-                    updateField('departamento', e.target.value);
-                    updateField('municipio', '');
-                    setShowDeptList(true);
-                  }}
-                  onFocus={() => setShowDeptList(true)}
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
-                  placeholder={loadingDepts ? 'Cargando...' : 'Buscar departamento...'}
-                />
-                {showDeptList && departamentos.length > 0 && (
-                  <div className="absolute z-10 w-full mt-1 max-h-48 overflow-y-auto rounded-xl border border-white/10 bg-[#111] shadow-xl">
-                    {departamentos
-                      .filter(d => d.nombre.toLowerCase().includes(formData.departamento.toLowerCase()))
-                      .map((dept) => (
-                        <button
-                          key={dept.codigo}
-                          type="button"
-                          onClick={() => {
-                            updateField('departamento', dept.nombre);
-                            updateField('municipio', '');
-                            setShowDeptList(false);
-                          }}
-                          className="w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors"
-                        >
-                          {dept.nombre}
-                        </button>
-                      ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="relative">
-                <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="finca-municipio">
-                  Municipio *
-                </label>
-                <input id="finca-municipio"
-                  type="text"
-                  value={formData.municipio}
-                  onChange={(e) => {
-                    updateField('municipio', e.target.value);
-                    setShowMuniList(true);
-                  }}
-                  onFocus={() => setShowMuniList(true)}
-                  disabled={!formData.departamento || loadingMunis}
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50 disabled:opacity-50"
-                  placeholder={loadingMunis ? 'Cargando municipios...' : 'Buscar municipio...'}
-                />
-                {showMuniList && municipios.length > 0 && (
-                  <div className="absolute z-10 w-full mt-1 max-h-48 overflow-y-auto rounded-xl border border-white/10 bg-[#111] shadow-xl">
-                    {municipios
-                      .filter(m => m.nombre.toLowerCase().includes(formData.municipio.toLowerCase()))
-                      .map((muni) => (
-                        <button
-                          key={muni.codigo}
-                          type="button"
-                          onClick={() => {
-                            updateField('municipio', muni.nombre);
-                            setShowMuniList(false);
-                          }}
-                          className="w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors"
-                        >
-                          {muni.nombre}
-                        </button>
-                      ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
-            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-              <Package className="w-5 h-5 text-yellow-400" />
-              Fechas
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="finca-fecha-de-activacion">
-                  Fecha de activación *
-                </label>
-                <input id="finca-fecha-de-activacion"
-                  type="date"
-                  value={formData.fecha_activacion}
-                  onChange={(e) => updateField('fecha_activacion', e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50 [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:opacity-70 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:hover:opacity-100"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="finca-fecha-de-suspension">
-                  Fecha de suspensión *
-                </label>
-                <input id="finca-fecha-de-suspension"
-                  type="date"
-                  value={formData.fecha_suspension}
-                  onChange={(e) => updateField('fecha_suspension', e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50 [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:opacity-70 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:hover:opacity-100"
-                  required
-                />
-              </div>
-            </div>
-          </section>
-
-        </div>
-
-        <div className="flex items-center justify-end gap-3 px-6 py-5 border-t border-white/10 bg-white/5">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isSaving}
-            className="px-5 py-3 rounded-xl border border-white/10 bg-white/5 text-white hover:bg-white/10 transition disabled:opacity-50"
-          >
-            Cancelar
-          </button>
-
-          <button
-            type="submit"
-            disabled={isSaving}
-            className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-[#9032F0] to-[#6506FF] text-white font-semibold hover:opacity-95 transition disabled:opacity-50"
-          >
-            <Package className="w-4 h-4" />
-            {isSaving
-              ? 'Guardando...'
-              : isEdit
-                ? 'Guardar cambios'
-                : 'Crear finca'}
-          </button>
-        </div>
-      </form>
-    </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose} disabled={isSaving}>
+              Cancelar
+            </Button>
+            <Button type="submit" isLoading={isSaving}>
+              {isEdit ? 'Guardar cambios' : 'Crear finca'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

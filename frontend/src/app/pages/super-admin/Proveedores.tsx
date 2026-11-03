@@ -1,10 +1,19 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
-  Store, Plus, Edit2, Trash2, Pause, Play, Search, Filter,
-  RefreshCw, Loader2, Eye, Star, Users,
+  Eye, Loader2, Pause, Pencil, Play, Plus, RefreshCw, Search, Star, Store, Trash2, Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Button } from '../../components/ui/button';
+import { Badge } from '../../components/ui/badge';
+import { Card } from '../../components/ui/card';
+import { Input } from '../../components/ui/input';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '../../components/ui/select';
+import PageHeader from '../../components/common/PageHeader';
+import StatStrip from '../../components/common/StatStrip';
+import EmptyState from '../../components/common/EmptyState';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import CrearProveedorModal, {
   type ProveedorFormData,
@@ -13,32 +22,24 @@ import {
   marketProveedoresAdminApi,
   type ProveedorAdmin,
   type EstadoProveedor,
+  type ProveedorPayload,
 } from '../../../api/marketProveedoresAdmin';
+import { num } from '../../lib/formato';
 
-const PAGE_SIZE = 10;
+const POR_PAGINA = 10;
 
-function toNumber(value: unknown, fallback = 0) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
+function aNumero(valor: unknown, porDefecto = 0) {
+  const n = Number(valor);
+  return Number.isFinite(n) ? n : porDefecto;
 }
 
-function estadoClasses(estado: EstadoProveedor) {
-  switch (estado) {
-    case 'activo':     return 'border-green-500/20 bg-green-500/10 text-green-400';
-    case 'suspendido': return 'border-yellow-500/20 bg-yellow-500/10 text-yellow-400';
-    case 'inactivo':   return 'border-red-500/20 bg-red-500/10 text-red-400';
-  }
-}
+const VARIANTE_ESTADO: Record<EstadoProveedor, 'success' | 'warning' | 'destructive'> = {
+  activo: 'success',
+  suspendido: 'warning',
+  inactivo: 'destructive',
+};
 
-function estadoDot(estado: EstadoProveedor) {
-  switch (estado) {
-    case 'activo':     return 'bg-green-400';
-    case 'suspendido': return 'bg-yellow-400';
-    case 'inactivo':   return 'bg-red-400';
-  }
-}
-
-function proveedorToForm(p: ProveedorAdmin | null): ProveedorFormData | null {
+function proveedorAFormulario(p: ProveedorAdmin | null): ProveedorFormData | null {
   if (!p) return null;
   return {
     nombre_empresa: p.nombre_empresa,
@@ -53,8 +54,8 @@ function proveedorToForm(p: ProveedorAdmin | null): ProveedorFormData | null {
   };
 }
 
-function buildPayload(data: ProveedorFormData) {
-  const payload: any = {
+function armarPayload(data: ProveedorFormData): ProveedorPayload {
+  const payload: ProveedorPayload = {
     nombre_empresa: data.nombre_empresa.trim(),
     telefono: data.telefono.trim(),
     email: data.email.trim(),
@@ -72,22 +73,22 @@ export default function Proveedores() {
   const navigate = useNavigate();
   const [proveedores, setProveedores] = useState<ProveedorAdmin[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingEditId, setLoadingEditId] = useState<number | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [cargandoId, setCargandoId] = useState<number | null>(null);
+  const [guardando, setGuardando] = useState(false);
 
-  const [search, setSearch] = useState('');
-  const [filterEstado, setFilterEstado] = useState<'TODOS' | EstadoProveedor>('TODOS');
+  const [busqueda, setBusqueda] = useState('');
+  const [filtroEstado, setFiltroEstado] = useState<'TODOS' | EstadoProveedor>('TODOS');
 
-  const [page, setPage] = useState(1);
-  const [lastPage, setLastPage] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
+  const [pagina, setPagina] = useState(1);
+  const [ultimaPagina, setUltimaPagina] = useState(1);
+  const [total, setTotal] = useState(0);
 
-  const [stats, setStats] = useState({ total: 0, activos: 0, suspendidos: 0, inactivos: 0 });
+  const [resumen, setResumen] = useState({ total: 0, activos: 0, suspendidos: 0, inactivos: 0 });
 
-  const [showModal, setShowModal] = useState(false);
-  const [selected, setSelected] = useState<ProveedorAdmin | null>(null);
+  const [modalAbierto, setModalAbierto] = useState(false);
+  const [seleccionado, setSeleccionado] = useState<ProveedorAdmin | null>(null);
 
-  const [confirmDialog, setConfirmDialog] = useState<{
+  const [confirmacion, setConfirmacion] = useState<{
     open: boolean;
     title: string;
     description: string;
@@ -95,127 +96,127 @@ export default function Proveedores() {
     onConfirm: () => Promise<void>;
   }>({ open: false, title: '', description: '', variant: 'warning', onConfirm: async () => {} });
 
-  const showConfirm = (
+  const pedirConfirmacion = (
     title: string,
     description: string,
     variant: 'warning' | 'danger',
     onConfirm: () => Promise<void>,
-  ) => setConfirmDialog({ open: true, title, description, variant, onConfirm });
+  ) => setConfirmacion({ open: true, title, description, variant, onConfirm });
 
-  const closeConfirm = () => setConfirmDialog((p) => ({ ...p, open: false }));
+  const cerrarConfirmacion = () => setConfirmacion((p) => ({ ...p, open: false }));
 
-  const loadProveedores = useCallback(async () => {
+  const cargarProveedores = useCallback(async () => {
     setLoading(true);
     try {
       const res = await marketProveedoresAdminApi.listar({
-        buscar: search.trim() || undefined,
-        estado: filterEstado === 'TODOS' ? undefined : filterEstado,
+        buscar: busqueda.trim() || undefined,
+        estado: filtroEstado === 'TODOS' ? undefined : filtroEstado,
         sort_by: 'nombre_empresa',
         sort_dir: 'asc',
-        per_page: PAGE_SIZE,
-        page,
+        per_page: POR_PAGINA,
+        page: pagina,
       });
       setProveedores(res.data ?? []);
-      setLastPage(toNumber(res.last_page, 1));
-      setTotalItems(toNumber(res.total, 0));
-    } catch (err: any) {
-      toast.error(err?.message ?? 'No se pudieron cargar los proveedores');
+      setUltimaPagina(aNumero(res.last_page, 1));
+      setTotal(aNumero(res.total, 0));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudieron cargar los proveedores');
       setProveedores([]);
-      setLastPage(1);
-      setTotalItems(0);
+      setUltimaPagina(1);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
-  }, [search, filterEstado, page]);
+  }, [busqueda, filtroEstado, pagina]);
 
-  // Calcular stats sobre todos los proveedores (sin filtros) en la primera carga
-  const loadStats = useCallback(async () => {
+  // El resumen se calcula sobre todos los proveedores, sin los filtros de la tabla.
+  const cargarResumen = useCallback(async () => {
     try {
       const res = await marketProveedoresAdminApi.listar({ per_page: 1000 });
-      const all = res.data ?? [];
-      setStats({
-        total: all.length,
-        activos: all.filter((p) => p.estado === 'activo').length,
-        suspendidos: all.filter((p) => p.estado === 'suspendido').length,
-        inactivos: all.filter((p) => p.estado === 'inactivo').length,
+      const todos = res.data ?? [];
+      setResumen({
+        total: todos.length,
+        activos: todos.filter((p) => p.estado === 'activo').length,
+        suspendidos: todos.filter((p) => p.estado === 'suspendido').length,
+        inactivos: todos.filter((p) => p.estado === 'inactivo').length,
       });
     } catch {
-      /* silencioso */
+      /* el resumen es secundario: la tabla ya avisa si algo falló */
     }
   }, []);
 
-  useEffect(() => { void loadStats(); }, [loadStats]);
+  useEffect(() => { void cargarResumen(); }, [cargarResumen]);
 
   useEffect(() => {
-    const t = window.setTimeout(() => { void loadProveedores(); }, 250);
+    const t = window.setTimeout(() => { void cargarProveedores(); }, 250);
     return () => window.clearTimeout(t);
-  }, [loadProveedores]);
+  }, [cargarProveedores]);
 
-  const handleRefresh = async () => {
-    await Promise.all([loadStats(), loadProveedores()]);
+  const recargar = async () => {
+    await Promise.all([cargarResumen(), cargarProveedores()]);
     toast.success('Listado actualizado');
   };
 
-  const handleOpenCreate = () => { setSelected(null); setShowModal(true); };
+  const abrirCrear = () => { setSeleccionado(null); setModalAbierto(true); };
 
-  const handleOpenEdit = async (id: number) => {
-    setLoadingEditId(id);
+  const abrirEditar = async (id: number) => {
+    setCargandoId(id);
     try {
       const res = await marketProveedoresAdminApi.ver(id);
-      setSelected(res.data);
-      setShowModal(true);
-    } catch (err: any) {
-      toast.error(err?.message ?? 'No se pudo cargar el proveedor');
+      setSeleccionado(res.data);
+      setModalAbierto(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo cargar el proveedor');
     } finally {
-      setLoadingEditId(null);
+      setCargandoId(null);
     }
   };
 
-  const handleSave = async (form: ProveedorFormData) => {
-    setSaving(true);
+  const guardar = async (form: ProveedorFormData) => {
+    setGuardando(true);
     try {
-      if (selected) {
-        const res = await marketProveedoresAdminApi.actualizar(selected.id, buildPayload(form));
+      if (seleccionado) {
+        const res = await marketProveedoresAdminApi.actualizar(seleccionado.id, armarPayload(form));
         toast.success(res.message ?? 'Proveedor actualizado');
       } else {
-        const res = await marketProveedoresAdminApi.crear(buildPayload(form));
+        const res = await marketProveedoresAdminApi.crear(armarPayload(form));
         toast.success(res.message ?? 'Proveedor creado');
       }
-      setShowModal(false);
-      setSelected(null);
-      await Promise.all([loadStats(), loadProveedores()]);
-    } catch (err: any) {
-      toast.error(err?.message ?? 'No se pudo guardar el proveedor');
+      setModalAbierto(false);
+      setSeleccionado(null);
+      await Promise.all([cargarResumen(), cargarProveedores()]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo guardar el proveedor');
     } finally {
-      setSaving(false);
+      setGuardando(false);
     }
   };
 
-  const handleToggle = (p: ProveedorAdmin) => {
+  const alternarEstado = (p: ProveedorAdmin) => {
     const accion = p.estado === 'activo' ? 'suspender' : 'activar';
-    showConfirm(
-      `${accion.charAt(0).toUpperCase() + accion.slice(1)} proveedor`,
+    pedirConfirmacion(
+      `${accion.charAt(0).toUpperCase()}${accion.slice(1)} proveedor`,
       `¿Seguro que deseas ${accion} "${p.nombre_empresa}"?`,
-      p.estado === 'activo' ? 'warning' : 'warning',
+      'warning',
       async () => {
         try {
           const res = await marketProveedoresAdminApi.toggleEstado(p.id);
           toast.success(res.message ?? 'Estado actualizado');
-          closeConfirm();
-          await Promise.all([loadStats(), loadProveedores()]);
-        } catch (err: any) {
-          toast.error(err?.message ?? 'No se pudo cambiar el estado');
+          cerrarConfirmacion();
+          await Promise.all([cargarResumen(), cargarProveedores()]);
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : 'No se pudo cambiar el estado');
         }
       },
     );
   };
 
-  const handleDelete = (p: ProveedorAdmin) => {
+  const eliminar = (p: ProveedorAdmin) => {
     if (p.estado === 'activo') {
       toast.error('Suspende el proveedor antes de eliminarlo');
       return;
     }
-    showConfirm(
+    pedirConfirmacion(
       'Eliminar proveedor',
       `¿Seguro que deseas eliminar "${p.nombre_empresa}"? Esta acción no se puede deshacer.`,
       'danger',
@@ -223,264 +224,228 @@ export default function Proveedores() {
         try {
           const res = await marketProveedoresAdminApi.eliminar(p.id);
           toast.success(res.message ?? 'Proveedor eliminado');
-          closeConfirm();
-          if (page > 1 && proveedores.length === 1) {
-            setPage((prev) => Math.max(1, prev - 1));
-            await loadStats();
+          cerrarConfirmacion();
+          // Si era el último de la página, la página deja de existir.
+          if (pagina > 1 && proveedores.length === 1) {
+            setPagina((prev) => Math.max(1, prev - 1));
+            await cargarResumen();
           } else {
-            await Promise.all([loadStats(), loadProveedores()]);
+            await Promise.all([cargarResumen(), cargarProveedores()]);
           }
-        } catch (err: any) {
-          const code = err?.code;
+        } catch (err) {
+          const code = (err as { code?: string })?.code;
           if (code === 'PROVIDER_ACTIVE') {
             toast.error('Suspende el proveedor antes de eliminarlo');
           } else {
-            toast.error(err?.message ?? 'No se pudo eliminar el proveedor');
+            toast.error(err instanceof Error ? err.message : 'No se pudo eliminar el proveedor');
           }
         }
       },
     );
   };
 
-  const showingFrom = totalItems === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
-  const showingTo = Math.min(page * PAGE_SIZE, totalItems);
+  const hayFiltros = busqueda.trim() !== '' || filtroEstado !== 'TODOS';
+  const desde = total === 0 ? 0 : (pagina - 1) * POR_PAGINA + 1;
+  const hasta = Math.min(pagina * POR_PAGINA, total);
 
   return (
-    <div className="p-4 md:p-8 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Gestión de Proveedores</h1>
-          <p className="text-sm md:text-base text-slate-400">
-            Administra las empresas proveedoras del marketplace
-          </p>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Super admin"
+        title="Proveedores"
+        description="Empresas proveedoras del marketplace."
+        actions={
+          <>
+            <Button variant="outline" onClick={() => void recargar()} disabled={loading}>
+              <RefreshCw className="h-4 w-4" strokeWidth={2} />
+              Recargar
+            </Button>
+            <Button onClick={abrirCrear}>
+              <Plus className="h-4 w-4" strokeWidth={2} />
+              Nuevo proveedor
+            </Button>
+          </>
+        }
+      />
+
+      <StatStrip
+        items={[
+          { label: 'Proveedores', value: num(resumen.total), note: 'registrados en el marketplace' },
+          { label: 'Activos', value: num(resumen.activos) },
+          { label: 'Suspendidos', value: num(resumen.suspendidos) },
+          { label: 'Inactivos', value: num(resumen.inactivos) },
+        ]}
+      />
+
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={2} />
+          <Input
+            aria-label="Buscar proveedores"
+            value={busqueda}
+            onChange={(e) => { setPagina(1); setBusqueda(e.target.value); }}
+            placeholder="Buscar por empresa, NIT o correo"
+            className="pl-9"
+          />
         </div>
-        <div className="flex flex-wrap gap-3">
-          <button
-            onClick={handleRefresh}
-            className="flex items-center gap-2 px-4 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Recargar
-          </button>
-          <button
-            onClick={handleOpenCreate}
-            className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium rounded-lg transition duration-200 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40"
-          >
-            <Plus className="w-5 h-5" />
-            Crear nuevo proveedor
-          </button>
-        </div>
+        <Select
+          value={filtroEstado}
+          onValueChange={(v) => { setPagina(1); setFiltroEstado(v as 'TODOS' | EstadoProveedor); }}
+        >
+          <SelectTrigger aria-label="Estado" className="sm:w-52"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="TODOS">Todos los estados</SelectItem>
+            <SelectItem value="activo">Activos</SelectItem>
+            <SelectItem value="suspendido">Suspendidos</SelectItem>
+            <SelectItem value="inactivo">Inactivos</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-lg p-4">
-          <p className="text-sm text-slate-400 mb-1">Total</p>
-          <p className="text-2xl font-bold text-white">{stats.total}</p>
-        </div>
-        <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-green-500/20 rounded-lg p-4">
-          <p className="text-sm text-slate-400 mb-1">Activos</p>
-          <p className="text-2xl font-bold text-green-400">{stats.activos}</p>
-        </div>
-        <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-yellow-500/20 rounded-lg p-4">
-          <p className="text-sm text-slate-400 mb-1">Suspendidos</p>
-          <p className="text-2xl font-bold text-yellow-400">{stats.suspendidos}</p>
-        </div>
-        <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-red-500/20 rounded-lg p-4">
-          <p className="text-sm text-slate-400 mb-1">Inactivos</p>
-          <p className="text-2xl font-bold text-red-400">{stats.inactivos}</p>
-        </div>
-      </div>
-
-      {/* Filtros */}
-      <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-xl p-6">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <input
-              aria-label="Buscar por empresa, NIT o email..."
-              type="text"
-              value={search}
-              onChange={(e) => { setPage(1); setSearch(e.target.value); }}
-              placeholder="Buscar por empresa, NIT o email..."
-              className="w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50 focus:border-[#9032F0]/50"
-            />
-          </div>
-
-          <div className="relative">
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <select
-              aria-label="Filter estado"
-              value={filterEstado}
-              onChange={(e) => { setPage(1); setFilterEstado(e.target.value as any); }}
-              className="pl-11 pr-10 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50 focus:border-[#9032F0]/50 appearance-none cursor-pointer"
-            >
-              <option value="TODOS">Todos los estados</option>
-              <option value="activo">Activos</option>
-              <option value="suspendido">Suspendidos</option>
-              <option value="inactivo">Inactivos</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* Tabla */}
-      <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-xl overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700">
-          <p className="text-sm text-slate-400">
-            Mostrando{' '}
-            <span className="text-white font-semibold">{showingFrom}-{showingTo}</span>{' '}
-            de <span className="text-white font-semibold">{totalItems}</span> proveedores
+      <Card className="gap-0 overflow-hidden">
+        <div className="px-5 py-3.5">
+          <p className="text-sm text-muted-foreground">
+            Mostrando <span className="font-medium text-foreground">{desde}-{hasta}</span> de{' '}
+            <span className="font-medium text-foreground">{num(total)}</span> proveedores
           </p>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px]">
-            <thead>
-              <tr className="border-b border-slate-700">
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-300">Empresa</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-300">Contacto</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-300">Ubicación</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-300">Estado</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-300">Calificación</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-300">Productos</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-300">Pedidos</th>
-                <th className="text-right px-6 py-4 text-sm font-semibold text-slate-300">Acciones</th>
+        <div className="overflow-x-auto border-t border-border">
+          <table className="w-full min-w-[1000px] text-sm">
+            <thead className="bg-muted/60 text-[13px] text-muted-foreground">
+              <tr>
+                <th className="px-5 py-2.5 text-left font-semibold">Empresa</th>
+                <th className="px-4 py-2.5 text-left font-semibold">Contacto</th>
+                <th className="px-4 py-2.5 text-left font-semibold">Ubicación</th>
+                <th className="px-4 py-2.5 text-left font-semibold">Estado</th>
+                <th className="px-4 py-2.5 text-right font-semibold">Calificación</th>
+                <th className="px-4 py-2.5 text-right font-semibold">Productos</th>
+                <th className="px-4 py-2.5 text-right font-semibold">Pedidos</th>
+                <th className="px-5 py-2.5 text-right font-semibold">Acciones</th>
               </tr>
             </thead>
-
-            <tbody>
+            <tbody className="divide-y divide-border">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-14 text-center">
-                    <div className="inline-flex items-center gap-3 text-slate-400">
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Cargando proveedores...
-                    </div>
+                  <td colSpan={8} className="px-5 py-14 text-center">
+                    <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Cargando proveedores…
+                    </span>
                   </td>
                 </tr>
               ) : proveedores.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-14 text-center">
-                    <Store className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-                    <p className="text-slate-400">No se encontraron proveedores</p>
+                  <td colSpan={8} className="p-0">
+                    <EmptyState
+                      title="No se encontraron proveedores"
+                      description={hayFiltros
+                        ? 'Ningún proveedor coincide con la búsqueda.'
+                        : 'Todavía no hay proveedores en el marketplace.'}
+                      action={hayFiltros
+                        ? { label: 'Quitar filtros', onClick: () => { setBusqueda(''); setFiltroEstado('TODOS'); setPagina(1); } }
+                        : { label: 'Nuevo proveedor', onClick: abrirCrear }}
+                    />
                   </td>
                 </tr>
               ) : (
                 proveedores.map((p) => (
-                  <tr key={p.id} className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors">
-                    <td className="px-6 py-4">
+                  <tr key={p.id} className="group transition-colors hover:bg-muted/40">
+                    <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-[#9032F0]/20 to-[#6506FF]/20 rounded-lg flex items-center justify-center border border-[#9032F0]/30 overflow-hidden">
-                          {p.logo_url ? (
-                            <img src={p.logo_url} alt={p.nombre_empresa} className="w-full h-full object-cover" />
-                          ) : (
-                            <Store className="w-5 h-5 text-[#9032F0]" />
-                          )}
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-white">{p.nombre_empresa}</p>
-                          <p className="text-xs text-slate-400">ID: {p.id}</p>
-                          <p className="text-xs text-slate-500">NIT: {p.nit || '—'}</p>
-                        </div>
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-primary-soft text-primary">
+                          {p.logo_url
+                            ? <img src={p.logo_url} alt="" className="h-full w-full object-cover" />
+                            : <Store className="h-4 w-4" strokeWidth={2} />}
+                        </span>
+                        <span className="min-w-0">
+                          <button
+                            type="button"
+                            onClick={() => void abrirEditar(p.id)}
+                            className="block truncate text-left font-semibold text-foreground hover:text-primary hover:underline"
+                          >
+                            {p.nombre_empresa}
+                          </button>
+                          <span className="block text-xs text-muted-foreground">
+                            ID {p.id} · NIT {p.nit || '—'}
+                          </span>
+                        </span>
                       </div>
                     </td>
 
-                    <td className="px-6 py-4">
-                      <p className="text-sm text-slate-300">{p.email || '—'}</p>
-                      <p className="text-xs text-slate-500 mt-1">{p.telefono || 'Sin teléfono'}</p>
+                    <td className="px-4 py-3">
+                      <span className="block text-foreground">{p.email || '—'}</span>
+                      <span className="block text-xs text-muted-foreground">{p.telefono || 'Sin teléfono'}</span>
                     </td>
 
-                    <td className="px-6 py-4">
-                      <p className="text-sm text-slate-300">
+                    <td className="px-4 py-3">
+                      <span className="block text-foreground">
                         {p.ciudad || '—'}{p.departamento ? `, ${p.departamento}` : ''}
-                      </p>
-                      <p className="text-xs text-slate-500 mt-1">{p.direccion || 'Sin dirección'}</p>
-                    </td>
-
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium border rounded-full ${estadoClasses(p.estado)}`}>
-                        <div className={`w-1.5 h-1.5 rounded-full ${estadoDot(p.estado)}`} />
-                        {p.estado.toUpperCase()}
                       </span>
+                      <span className="block text-xs text-muted-foreground">{p.direccion || 'Sin dirección'}</span>
                     </td>
 
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-1 text-sm text-slate-300">
-                        <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
+                    <td className="px-4 py-3">
+                      <Badge variant={VARIANTE_ESTADO[p.estado]} className="capitalize">{p.estado}</Badge>
+                    </td>
+
+                    <td className="px-4 py-3 text-right">
+                      <span className="inline-flex items-center gap-1 font-medium text-foreground">
+                        <Star className="h-3.5 w-3.5 fill-warning text-warning" />
                         {Number(p.calificacion_promedio ?? 0).toFixed(2)}
-                      </div>
-                      <p className="text-xs text-slate-500 mt-0.5">{p.total_ventas ?? 0} ventas</p>
+                      </span>
+                      <span className="block text-xs text-muted-foreground">{num(p.total_ventas ?? 0)} ventas</span>
                     </td>
 
-                    <td className="px-6 py-4">
-                      <p className="text-sm text-slate-300">{p.total_productos ?? 0}</p>
+                    <td className="px-4 py-3 text-right text-foreground">{num(p.total_productos ?? 0)}</td>
+
+                    <td className="px-4 py-3 text-right">
+                      <span className="block text-foreground">{num(p.total_pedidos ?? 0)}</span>
+                      <span className="block text-xs text-muted-foreground">{num(p.total_usuarios ?? 0)} usuarios</span>
                     </td>
 
-                    <td className="px-6 py-4">
-                      <p className="text-sm text-slate-300">{p.total_pedidos ?? 0}</p>
-                      <p className="text-xs text-slate-500 mt-0.5">{p.total_usuarios ?? 0} usuarios</p>
-                    </td>
-
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-2">
-                        <button aria-label="Ver"
-                          onClick={() => void handleOpenEdit(p.id)}
-                          disabled={loadingEditId === p.id}
-                          className="p-2 hover:bg-blue-500/10 text-blue-400 rounded-lg transition-colors disabled:opacity-50"
-                          title="Ver/Editar"
+                    <td className="px-5 py-3">
+                      <div className="flex items-center justify-end gap-0.5 text-muted-foreground">
+                        <Button
+                          variant="ghost" size="icon" title="Ver y editar"
+                          onClick={() => void abrirEditar(p.id)}
+                          disabled={cargandoId === p.id}
                         >
-                          {loadingEditId === p.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Eye className="w-4 h-4" />
-                          )}
-                        </button>
-
-                        <button
+                          {cargandoId === p.id
+                            ? <Loader2 className="h-4 w-4 animate-spin" />
+                            : <Eye className="h-4 w-4" strokeWidth={2} />}
+                        </Button>
+                        <Button
+                          variant="ghost" size="icon" title="Usuarios del proveedor"
                           onClick={() => navigate(`/super-admin/proveedores/${p.id}/usuarios`)}
-                          className="p-2 hover:bg-cyan-500/10 text-cyan-400 rounded-lg transition-colors"
-                          title="Usuarios del proveedor"
                         >
-                          <Users className="w-4 h-4" />
-                        </button>
-
-                        <button aria-label="Editar"
-                          onClick={() => void handleOpenEdit(p.id)}
-                          disabled={loadingEditId === p.id}
-                          className="p-2 hover:bg-purple-500/10 text-purple-400 rounded-lg transition-colors disabled:opacity-50"
-                          title="Editar"
+                          <Users className="h-4 w-4" strokeWidth={2} />
+                        </Button>
+                        <Button
+                          variant="ghost" size="icon" title="Editar"
+                          onClick={() => void abrirEditar(p.id)}
+                          disabled={cargandoId === p.id}
                         >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-
-                        {p.estado === 'activo' ? (
-                          <button
-                            onClick={() => handleToggle(p)}
-                            className="p-2 hover:bg-yellow-500/10 text-yellow-400 rounded-lg transition-colors"
-                            title="Suspender"
-                          >
-                            <Pause className="w-4 h-4" />
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleToggle(p)}
-                            className="p-2 hover:bg-green-500/10 text-green-400 rounded-lg transition-colors"
-                            title="Activar"
-                          >
-                            <Play className="w-4 h-4" />
-                          </button>
-                        )}
-
-                        <button aria-label="Eliminar"
-                          onClick={() => handleDelete(p)}
-                          disabled={p.estado === 'activo'}
-                          className="p-2 hover:bg-red-500/10 text-red-400 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          <Pencil className="h-4 w-4" strokeWidth={2} />
+                        </Button>
+                        <Button
+                          variant="ghost" size="icon"
+                          title={p.estado === 'activo' ? 'Suspender' : 'Activar'}
+                          onClick={() => alternarEstado(p)}
+                        >
+                          {p.estado === 'activo'
+                            ? <Pause className="h-4 w-4" strokeWidth={2} />
+                            : <Play className="h-4 w-4" strokeWidth={2} />}
+                        </Button>
+                        <Button
+                          variant="ghost" size="icon"
+                          className="hover:text-destructive"
                           title={p.estado === 'activo' ? 'Suspende primero' : 'Eliminar'}
+                          onClick={() => eliminar(p)}
+                          disabled={p.estado === 'activo'}
                         >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                          <Trash2 className="h-4 w-4" strokeWidth={2} />
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -490,51 +455,49 @@ export default function Proveedores() {
           </table>
         </div>
 
-        {/* Paginación */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-700">
-          <p className="text-sm text-slate-400">
-            Página <span className="text-white font-semibold">{page}</span> de{' '}
-            <span className="text-white font-semibold">{lastPage}</span>
-          </p>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page <= 1}
-              className="px-4 py-2 rounded-lg border border-slate-600 bg-slate-800 text-white hover:bg-slate-700 transition disabled:opacity-40"
-            >
-              Anterior
-            </button>
-            <button
-              onClick={() => setPage((p) => Math.min(lastPage, p + 1))}
-              disabled={page >= lastPage}
-              className="px-4 py-2 rounded-lg border border-slate-600 bg-slate-800 text-white hover:bg-slate-700 transition disabled:opacity-40"
-            >
-              Siguiente
-            </button>
+        {ultimaPagina > 1 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3">
+            <p className="text-sm text-muted-foreground">Página {pagina} de {ultimaPagina}</p>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm" variant="outline"
+                disabled={loading || pagina <= 1}
+                onClick={() => setPagina((p) => Math.max(1, p - 1))}
+              >
+                Anteriores
+              </Button>
+              <Button
+                size="sm" variant="outline"
+                disabled={loading || pagina >= ultimaPagina}
+                onClick={() => setPagina((p) => Math.min(ultimaPagina, p + 1))}
+              >
+                Siguientes
+              </Button>
+            </div>
           </div>
-        </div>
-      </div>
+        )}
+      </Card>
 
       <CrearProveedorModal
-        isOpen={showModal}
+        isOpen={modalAbierto}
         onClose={() => {
-          if (saving) return;
-          setShowModal(false);
-          setSelected(null);
+          if (guardando) return;
+          setModalAbierto(false);
+          setSeleccionado(null);
         }}
-        onSave={handleSave}
-        proveedorData={proveedorToForm(selected)}
-        isEdit={Boolean(selected)}
-        isSaving={saving}
+        onSave={guardar}
+        proveedorData={proveedorAFormulario(seleccionado)}
+        isEdit={Boolean(seleccionado)}
+        isSaving={guardando}
       />
 
       <ConfirmDialog
-        open={confirmDialog.open}
-        onClose={closeConfirm}
-        onConfirm={confirmDialog.onConfirm}
-        title={confirmDialog.title}
-        description={confirmDialog.description}
-        variant={confirmDialog.variant}
+        open={confirmacion.open}
+        onClose={cerrarConfirmacion}
+        onConfirm={confirmacion.onConfirm}
+        title={confirmacion.title}
+        description={confirmacion.description}
+        variant={confirmacion.variant}
       />
     </div>
   );

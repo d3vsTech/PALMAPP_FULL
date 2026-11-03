@@ -1,11 +1,21 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
-import { X, Store, MapPin, Image as ImageIcon, FileText, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import {
   marketProveedoresAdminApi,
   type Departamento,
   type Municipio,
 } from '../../../api/marketProveedoresAdmin';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
+import { Textarea } from '../ui/textarea';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '../ui/dialog';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '../ui/select';
 
 export interface ProveedorFormData {
   nombre_empresa: string;
@@ -19,7 +29,7 @@ export interface ProveedorFormData {
   logo_url: string;
 }
 
-const EMPTY_FORM: ProveedorFormData = {
+const FORM_VACIO: ProveedorFormData = {
   nombre_empresa: '',
   nit: '',
   telefono: '',
@@ -40,8 +50,8 @@ interface CrearProveedorModalProps {
   isSaving?: boolean;
 }
 
-function buildFormData(data?: Partial<ProveedorFormData> | null): ProveedorFormData {
-  return { ...EMPTY_FORM, ...data };
+function armarFormulario(data?: Partial<ProveedorFormData> | null): ProveedorFormData {
+  return { ...FORM_VACIO, ...data };
 }
 
 export default function CrearProveedorModal({
@@ -52,47 +62,46 @@ export default function CrearProveedorModal({
   isEdit = false,
   isSaving = false,
 }: CrearProveedorModalProps) {
-  const [formData, setFormData] = useState<ProveedorFormData>(() => buildFormData(proveedorData));
+  const [formData, setFormData] = useState<ProveedorFormData>(() => armarFormulario(proveedorData));
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
   const [municipios, setMunicipios] = useState<Municipio[]>([]);
-  const [loadingDepts, setLoadingDepts] = useState(false);
-  const [loadingMunis, setLoadingMunis] = useState(false);
+  const [cargandoDeptos, setCargandoDeptos] = useState(false);
+  const [cargandoMunicipios, setCargandoMunicipios] = useState(false);
 
   useEffect(() => {
-    if (isOpen) setFormData(buildFormData(proveedorData));
+    if (isOpen) setFormData(armarFormulario(proveedorData));
   }, [isOpen, proveedorData]);
 
-  // Cargar departamentos al abrir
   useEffect(() => {
     if (!isOpen) return;
-    setLoadingDepts(true);
+    setCargandoDeptos(true);
     marketProveedoresAdminApi.departamentos()
       .then((r) => setDepartamentos(r.data ?? []))
-      .catch((e) => console.error('Error departamentos:', e))
-      .finally(() => setLoadingDepts(false));
+      .catch((e) => console.error('Error cargando departamentos:', e))
+      .finally(() => setCargandoDeptos(false));
   }, [isOpen]);
 
-  // Cargar municipios cuando cambia departamento
+  // Los municipios dependen del departamento: cambia uno, se recargan los otros.
   useEffect(() => {
     if (!formData.departamento) {
       setMunicipios([]);
       return;
     }
-    const dept = departamentos.find((d) => d.nombre === formData.departamento);
-    if (!dept) return;
+    const depto = departamentos.find((d) => d.nombre === formData.departamento);
+    if (!depto) return;
 
-    setLoadingMunis(true);
-    marketProveedoresAdminApi.municipios(dept.codigo)
+    setCargandoMunicipios(true);
+    marketProveedoresAdminApi.municipios(depto.codigo)
       .then((r) => setMunicipios(r.data ?? []))
-      .catch((e) => console.error('Error municipios:', e))
-      .finally(() => setLoadingMunis(false));
+      .catch((e) => console.error('Error cargando municipios:', e))
+      .finally(() => setCargandoMunicipios(false));
   }, [formData.departamento, departamentos]);
 
-  const update = <K extends keyof ProveedorFormData>(field: K, value: ProveedorFormData[K]) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+  const actualizar = <K extends keyof ProveedorFormData>(campo: K, valor: ProveedorFormData[K]) => {
+    setFormData((prev) => ({ ...prev, [campo]: valor }));
   };
 
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  const enviar = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!formData.departamento) {
       toast.error('Selecciona un departamento');
@@ -105,253 +114,174 @@ export default function CrearProveedorModal({
     await onSave(formData);
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-      <form
-        onSubmit={handleSubmit}
-        className="w-full max-w-4xl max-h-[92vh] overflow-hidden rounded-2xl border border-white/10 bg-[#0a0a0a] shadow-2xl shadow-[#9032F0]/10"
-      >
-        <div className="flex items-center justify-between px-6 py-5 border-b border-white/10 bg-gradient-to-r from-[#9032F0]/15 to-[#6506FF]/10">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-white/10 border border-white/10">
-              <Store className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold text-white">
-                {isEdit ? 'Editar proveedor' : 'Crear nuevo proveedor'}
-              </h2>
-              <p className="text-sm text-gray-400">
-                {isEdit
-                  ? 'Actualiza los datos del proveedor'
-                  : 'Registra una nueva empresa proveedora del marketplace'}
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isSaving}
-            className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-50"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+    <Dialog open={isOpen} onOpenChange={(abierto) => { if (!abierto && !isSaving) onClose(); }}>
+      <DialogContent className="sm:max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>{isEdit ? 'Editar proveedor' : 'Nuevo proveedor'}</DialogTitle>
+          <DialogDescription>
+            {isEdit
+              ? 'Actualiza los datos de la empresa proveedora.'
+              : 'Registra una empresa proveedora del marketplace.'}
+          </DialogDescription>
+        </DialogHeader>
 
-        <div className="max-h-[calc(92vh-152px)] overflow-y-auto p-6 space-y-6">
-          {/* Información general */}
-          <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
-            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-              <Store className="w-5 h-5 text-[#9032F0]" />
-              Información de la empresa
-            </h3>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-slate-300 mb-1.5" htmlFor="prov-nombre-de-la-empresa-span-classname-text-red-400-span">
-                  Nombre de la empresa <span className="text-red-400">*</span>
-                </label>
-                <input id="prov-nombre-de-la-empresa-span-classname-text-red-400-span"
-                  type="text"
-                  required
-                  maxLength={150}
-                  value={formData.nombre_empresa}
-                  onChange={(e) => update('nombre_empresa', e.target.value)}
-                  placeholder="Ej: AgroInsumos del Valle S.A.S"
-                  className="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50 focus:border-[#9032F0]/50"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1.5" htmlFor="crearprove-nit">NIT</label>
-                <input id="crearprove-nit"
-                  type="text"
-                  maxLength={20}
-                  value={formData.nit}
-                  onChange={(e) => update('nit', e.target.value)}
-                  placeholder="900123456-7"
-                  className="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50 focus:border-[#9032F0]/50"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1.5" htmlFor="prov-telefono-span-classname-text-red-400-span">
-                  Teléfono <span className="text-red-400">*</span>
-                </label>
-                <input id="prov-telefono-span-classname-text-red-400-span"
-                  type="tel"
-                  required
-                  maxLength={20}
-                  value={formData.telefono}
-                  onChange={(e) => update('telefono', e.target.value)}
-                  placeholder="3157890123"
-                  className="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50 focus:border-[#9032F0]/50"
-                />
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-slate-300 mb-1.5" htmlFor="prov-email-span-classname-text-red-400-span">
-                  Email <span className="text-red-400">*</span>
-                </label>
-                <input id="prov-email-span-classname-text-red-400-span"
-                  type="email"
-                  required
-                  maxLength={150}
-                  value={formData.email}
-                  onChange={(e) => update('email', e.target.value)}
-                  placeholder="ventas@empresa.com"
-                  className="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50 focus:border-[#9032F0]/50"
-                />
-              </div>
-            </div>
-          </section>
-
-          {/* Ubicación */}
-          <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
-            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-              <MapPin className="w-5 h-5 text-[#9032F0]" />
-              Ubicación
-            </h3>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-slate-300 mb-1.5" htmlFor="prov-direccion-span-classname-text-red-400-span">
-                  Dirección <span className="text-red-400">*</span>
-                </label>
-                <input id="prov-direccion-span-classname-text-red-400-span"
-                  type="text"
-                  required
-                  maxLength={255}
-                  value={formData.direccion}
-                  onChange={(e) => update('direccion', e.target.value)}
-                  placeholder="Calle 15 #23-45"
-                  className="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50 focus:border-[#9032F0]/50"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1.5" htmlFor="crearprove-departamento-span-classname-text-red-400-span">
-                  Departamento <span className="text-red-400">*</span>
-                </label>
-                <div className="relative">
-                  <select id="crearprove-departamento-span-classname-text-red-400-span"
+        <form onSubmit={enviar} className="space-y-5">
+          <div className="max-h-[60vh] space-y-5 overflow-y-auto custom-scrollbar pr-1">
+            <section className="space-y-4">
+              <h3>Información de la empresa</h3>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="prov-nombre">Nombre de la empresa</Label>
+                  <Input
+                    id="prov-nombre"
                     required
-                    disabled={loadingDepts}
+                    maxLength={150}
+                    value={formData.nombre_empresa}
+                    onChange={(e) => actualizar('nombre_empresa', e.target.value)}
+                    placeholder="AgroInsumos del Valle S.A.S"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="prov-nit">NIT</Label>
+                  <Input
+                    id="prov-nit"
+                    maxLength={20}
+                    value={formData.nit}
+                    onChange={(e) => actualizar('nit', e.target.value)}
+                    placeholder="900123456-7"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="prov-telefono">Teléfono</Label>
+                  <Input
+                    id="prov-telefono"
+                    type="tel"
+                    required
+                    maxLength={20}
+                    value={formData.telefono}
+                    onChange={(e) => actualizar('telefono', e.target.value)}
+                    placeholder="3157890123"
+                  />
+                </div>
+
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="prov-email">Correo electrónico</Label>
+                  <Input
+                    id="prov-email"
+                    type="email"
+                    required
+                    maxLength={150}
+                    value={formData.email}
+                    onChange={(e) => actualizar('email', e.target.value)}
+                    placeholder="ventas@empresa.com"
+                  />
+                </div>
+              </div>
+            </section>
+
+            <section className="space-y-4">
+              <h3>Ubicación</h3>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="prov-direccion">Dirección</Label>
+                  <Input
+                    id="prov-direccion"
+                    required
+                    maxLength={255}
+                    value={formData.direccion}
+                    onChange={(e) => actualizar('direccion', e.target.value)}
+                    placeholder="Calle 15 #23-45"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="prov-departamento">Departamento</Label>
+                  <Select
                     value={formData.departamento}
-                    onChange={(e) => {
-                      update('departamento', e.target.value);
-                      update('ciudad', '');
+                    disabled={cargandoDeptos}
+                    onValueChange={(v) => {
+                      actualizar('departamento', v);
+                      actualizar('ciudad', '');
                     }}
-                    className="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50 focus:border-[#9032F0]/50 appearance-none cursor-pointer disabled:opacity-50"
                   >
-                    <option value="">
-                      {loadingDepts ? 'Cargando...' : 'Selecciona un departamento'}
-                    </option>
-                    {departamentos.map((d) => (
-                      <option key={d.codigo} value={d.nombre}>
-                        {d.nombre}
-                      </option>
-                    ))}
-                  </select>
-                  {loadingDepts && (
-                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-slate-400" />
-                  )}
+                    <SelectTrigger id="prov-departamento">
+                      <SelectValue placeholder={cargandoDeptos ? 'Cargando…' : 'Selecciona un departamento'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {departamentos.map((d) => (
+                        <SelectItem key={d.codigo} value={d.nombre}>{d.nombre}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1.5" htmlFor="crearprove-ciudad-span-classname-text-red-400-span">
-                  Ciudad <span className="text-red-400">*</span>
-                </label>
-                <div className="relative">
-                  <select id="crearprove-ciudad-span-classname-text-red-400-span"
-                    required
-                    disabled={!formData.departamento || loadingMunis}
+                <div className="space-y-2">
+                  <Label htmlFor="prov-ciudad">Ciudad</Label>
+                  <Select
                     value={formData.ciudad}
-                    onChange={(e) => update('ciudad', e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50 focus:border-[#9032F0]/50 appearance-none cursor-pointer disabled:opacity-50"
+                    disabled={!formData.departamento || cargandoMunicipios}
+                    onValueChange={(v) => actualizar('ciudad', v)}
                   >
-                    <option value="">
-                      {!formData.departamento
-                        ? 'Primero selecciona un departamento'
-                        : loadingMunis
-                          ? 'Cargando...'
-                          : 'Selecciona una ciudad'}
-                    </option>
-                    {municipios.map((m) => (
-                      <option key={m.codigo} value={m.nombre}>
-                        {m.nombre}
-                      </option>
-                    ))}
-                  </select>
-                  {loadingMunis && (
-                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-slate-400" />
-                  )}
+                    <SelectTrigger id="prov-ciudad">
+                      <SelectValue placeholder={
+                        !formData.departamento
+                          ? 'Primero el departamento'
+                          : cargandoMunicipios ? 'Cargando…' : 'Selecciona una ciudad'
+                      } />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {municipios.map((m) => (
+                        <SelectItem key={m.codigo} value={m.nombre}>{m.nombre}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
-            </div>
-          </section>
+            </section>
 
-          {/* Información adicional */}
-          <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
-            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-              <FileText className="w-5 h-5 text-[#9032F0]" />
-              Información adicional (opcional)
-            </h3>
+            <section className="space-y-4">
+              <h3>Información adicional</h3>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="prov-descripcion">Descripción</Label>
+                  <Textarea
+                    id="prov-descripcion"
+                    rows={3}
+                    value={formData.descripcion}
+                    onChange={(e) => actualizar('descripcion', e.target.value)}
+                    placeholder="Qué vende la empresa y a quién"
+                  />
+                </div>
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1.5" htmlFor="prov-descripcion">
-                  Descripción
-                </label>
-                <textarea id="prov-descripcion"
-                  rows={3}
-                  value={formData.descripcion}
-                  onChange={(e) => update('descripcion', e.target.value)}
-                  placeholder="Breve descripción de la empresa y sus productos"
-                  className="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50 focus:border-[#9032F0]/50 resize-none"
-                />
+                <div className="space-y-2">
+                  <Label htmlFor="prov-logo">URL del logo</Label>
+                  <Input
+                    id="prov-logo"
+                    type="url"
+                    maxLength={500}
+                    value={formData.logo_url}
+                    onChange={(e) => actualizar('logo_url', e.target.value)}
+                    placeholder="https://…"
+                  />
+                </div>
               </div>
+            </section>
+          </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1.5 flex items-center gap-1.5">
-                  <ImageIcon className="w-4 h-4" />
-                  URL del logo
-                </label>
-                <input
-                  aria-label="https://..."
-                  type="url"
-                  maxLength={500}
-                  value={formData.logo_url}
-                  onChange={(e) => update('logo_url', e.target.value)}
-                  placeholder="https://..."
-                  className="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50 focus:border-[#9032F0]/50"
-                />
-              </div>
-            </div>
-          </section>
-        </div>
-
-        <div className="px-6 py-4 border-t border-white/10 bg-white/5 flex items-center justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isSaving}
-            className="px-5 py-2.5 rounded-lg border border-slate-600 bg-slate-800 text-white hover:bg-slate-700 transition disabled:opacity-50"
-          >
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            disabled={isSaving}
-            className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-[#9032F0] to-[#6506FF] hover:from-[#9032F0]/90 hover:to-[#6506FF]/90 text-white font-semibold shadow-lg shadow-[#9032F0]/30 transition disabled:opacity-50 flex items-center gap-2"
-          >
-            {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
-            {isEdit ? 'Guardar cambios' : 'Crear proveedor'}
-          </button>
-        </div>
-      </form>
-    </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose} disabled={isSaving}>
+              Cancelar
+            </Button>
+            <Button type="submit" isLoading={isSaving}>
+              {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+              {isEdit ? 'Guardar cambios' : 'Crear proveedor'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

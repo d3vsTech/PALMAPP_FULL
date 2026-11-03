@@ -1,27 +1,27 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { useNavigate, useParams } from 'react-router';
-import {
-  ArrowLeft,
-  Users,
-  Plus,
-  Search,
-  Edit2,
-  Trash2,
-  Shield,
-  Check,
-  X,
-  Loader2,
-  UserPlus,
-  Pause,
-  Play,
-  Eye,
-  EyeOff,
-} from 'lucide-react';
+import { useParams } from 'react-router';
+import { Eye, Loader2, Pause, Pencil, Play, Plus, Search, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../contexts/AuthContext';
 import { requestConToken } from '../../../api/request';
 import { formatFechaHora } from '../../utils/fecha';
+import { Button } from '../../components/ui/button';
+import { Badge } from '../../components/ui/badge';
+import { Card } from '../../components/ui/card';
+import { Input } from '../../components/ui/input';
+import { Label } from '../../components/ui/label';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '../../components/ui/dialog';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '../../components/ui/select';
+import PageHeader from '../../components/common/PageHeader';
+import StatStrip from '../../components/common/StatStrip';
+import EmptyState from '../../components/common/EmptyState';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import PasswordField from '../auth/PasswordField';
+import { num } from '../../lib/formato';
 
 type RolTenant = 'ADMIN';
 
@@ -37,8 +37,10 @@ interface TenantUser {
   id: number;
   name: string;
   email: string;
+  /** Estado global del usuario, no el de esta finca. */
   status: boolean;
   rol: RolTenant | string;
+  /** Estado de la asignación a esta finca. */
   estado: boolean;
   asignado_at?: string;
 }
@@ -49,80 +51,53 @@ interface GlobalUserOption {
   email: string;
 }
 
-interface TenantUsersResponse {
-  data?: any[];
-}
-
-interface TenantDetailResponse {
-  data?: any;
-}
-
-interface LaravelPagination<T> {
-  data?: T[];
-}
+interface TenantUsersResponse { data?: unknown[] }
+interface TenantDetailResponse { data?: Record<string, unknown> }
+interface LaravelPagination<T> { data?: T[] }
 
 const ROLES: RolTenant[] = ['ADMIN'];
 
-function toNumber(value: unknown, fallback = 0) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
+function aNumero(valor: unknown, porDefecto = 0) {
+  const n = Number(valor);
+  return Number.isFinite(n) ? n : porDefecto;
 }
 
-function toBoolean(value: unknown, fallback = false) {
-  if (typeof value === 'boolean') return value;
-  if (typeof value === 'number') return value === 1;
-
-  if (typeof value === 'string') {
-    const normalized = value.trim().toLowerCase();
-
-    if (['1', 'true', 'si', 'sí', 'activo', 'activa'].includes(normalized)) {
-      return true;
-    }
-
-    if (['0', 'false', 'no', 'inactivo', 'inactiva'].includes(normalized)) {
-      return false;
-    }
+function aBooleano(valor: unknown, porDefecto = false) {
+  if (typeof valor === 'boolean') return valor;
+  if (typeof valor === 'number') return valor === 1;
+  if (typeof valor === 'string') {
+    const v = valor.trim().toLowerCase();
+    if (['1', 'true', 'si', 'sí', 'activo', 'activa'].includes(v)) return true;
+    if (['0', 'false', 'no', 'inactivo', 'inactiva'].includes(v)) return false;
   }
-
-  return fallback;
+  return porDefecto;
 }
 
-function normalizeTenant(raw: any): TenantInfo {
+function normalizarTenant(raw: Record<string, unknown> | undefined): TenantInfo {
+  const r = raw ?? {};
   return {
-    id: toNumber(raw?.id),
-    nombre: String(raw?.nombre ?? ''),
-    nit: String(raw?.nit ?? ''),
-    estado: String(raw?.estado ?? 'ACTIVO'),
-    plan: String(raw?.plan ?? '—'),
+    id: aNumero(r.id),
+    nombre: String(r.nombre ?? ''),
+    nit: String(r.nit ?? ''),
+    estado: String(r.estado ?? 'ACTIVO'),
+    plan: String(r.plan ?? '—'),
   };
 }
 
-function normalizeTenantUser(raw: any): TenantUser {
+function normalizarUsuario(raw: unknown): TenantUser {
+  const r = (raw ?? {}) as Record<string, unknown>;
   return {
-    id: toNumber(raw?.id),
-    name: String(raw?.name ?? ''),
-    email: String(raw?.email ?? ''),
-    status: toBoolean(raw?.status, true),
-    rol: String(raw?.rol ?? 'ADMIN'),
-    estado: toBoolean(raw?.estado, true),
-    asignado_at: raw?.asignado_at ? String(raw.asignado_at) : '',
+    id: aNumero(r.id),
+    name: String(r.name ?? ''),
+    email: String(r.email ?? ''),
+    status: aBooleano(r.status, true),
+    rol: String(r.rol ?? 'ADMIN'),
+    estado: aBooleano(r.estado, true),
+    asignado_at: r.asignado_at ? String(r.asignado_at) : '',
   };
 }
 
-
-function getAssignmentStatusClasses(isActive: boolean) {
-  return isActive
-    ? 'border-green-500/30 bg-green-500/10 text-green-400'
-    : 'border-red-500/30 bg-red-500/10 text-red-400';
-}
-
-function getGlobalUserStatusClasses(isActive: boolean) {
-  return isActive
-    ? 'border-blue-500/30 bg-blue-500/10 text-blue-300'
-    : 'border-yellow-500/30 bg-yellow-500/10 text-yellow-300';
-}
-
-const EMPTY_CREATE_FORM = {
+const FORM_CREAR_VACIO = {
   user_id: '',
   email: '',
   name: '',
@@ -131,7 +106,7 @@ const EMPTY_CREATE_FORM = {
   rol: 'ADMIN' as RolTenant,
 };
 
-const EMPTY_EDIT_FORM = {
+const FORM_EDITAR_VACIO = {
   name: '',
   email: '',
   password: '',
@@ -139,329 +114,274 @@ const EMPTY_EDIT_FORM = {
   rol: 'ADMIN' as RolTenant,
   estado: true,
 };
+
+/** Un dato del detalle. */
+function Dato({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[13px] font-medium text-muted-foreground">{label}</dt>
+      <dd className="mt-0.5 break-words text-sm text-foreground">{children}</dd>
+    </div>
+  );
+}
+
 export default function UsuariosFinca() {
-  const navigate = useNavigate();
   const { tenantId } = useParams();
   const { token } = useAuth();
 
   const [tenant, setTenant] = useState<TenantInfo | null>(null);
-  const [tenantLoading, setTenantLoading] = useState(true);
+  const [usuarios, setUsuarios] = useState<TenantUser[]>([]);
+  const [cargandoUsuarios, setCargandoUsuarios] = useState(true);
+  const [busqueda, setBusqueda] = useState('');
 
-  const [users, setUsers] = useState<TenantUser[]>([]);
-  const [usersLoading, setUsersLoading] = useState(true);
+  const [modalAbierto, setModalAbierto] = useState(false);
+  const [modo, setModo] = useState<'crear' | 'editar'>('crear');
+  const [origenAsignacion, setOrigenAsignacion] = useState<'existente' | 'nuevo'>('nuevo');
+  const [guardando, setGuardando] = useState(false);
 
-  const [searchTerm, setSearchTerm] = useState('');
+  const [seleccionado, setSeleccionado] = useState<TenantUser | null>(null);
+  const [detalle, setDetalle] = useState<TenantUser | null>(null);
+  const [formCrear, setFormCrear] = useState(FORM_CREAR_VACIO);
+  const [formEditar, setFormEditar] = useState(FORM_EDITAR_VACIO);
 
-  const [showModal, setShowModal] = useState(false);
-  const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
-  const [assignmentMode, setAssignmentMode] = useState<'existing' | 'new'>(
-    'new',
-  );
-  const [saving, setSaving] = useState(false);
+  const [usuariosGlobales, setUsuariosGlobales] = useState<GlobalUserOption[]>([]);
+  const [cargandoGlobales, setCargandoGlobales] = useState(false);
 
-  const [confirmDialog, setConfirmDialog] = useState<{
-    open: boolean; title: string; description: string;
-    variant: 'warning' | 'danger'; onConfirm: () => Promise<void>;
+  const [confirmacion, setConfirmacion] = useState<{
+    open: boolean;
+    title: string;
+    description: string;
+    variant: 'warning' | 'danger';
+    onConfirm: () => Promise<void>;
   }>({ open: false, title: '', description: '', variant: 'warning', onConfirm: async () => {} });
 
-  const showConfirm = (title: string, description: string, variant: 'warning' | 'danger', onConfirm: () => Promise<void>) => {
-    setConfirmDialog({ open: true, title, description, variant, onConfirm });
-  };
-  const closeConfirm = () => setConfirmDialog((prev) => ({ ...prev, open: false }));
+  const pedirConfirmacion = (
+    title: string,
+    description: string,
+    variant: 'warning' | 'danger',
+    onConfirm: () => Promise<void>,
+  ) => setConfirmacion({ open: true, title, description, variant, onConfirm });
 
-  const [selectedUser, setSelectedUser] = useState<TenantUser | null>(null);
-  /** Usuario abierto en el modal de "Ver detalle" (solo lectura). null = cerrado. */
-  const [viewUser, setViewUser] = useState<TenantUser | null>(null);
-  const [createForm, setCreateForm] = useState(EMPTY_CREATE_FORM);
-  const [editForm, setEditForm] = useState(EMPTY_EDIT_FORM);
-  const [showPassword, setShowPassword] = useState(false);
+  const cerrarConfirmacion = () => setConfirmacion((prev) => ({ ...prev, open: false }));
 
-  const [globalUsers, setGlobalUsers] = useState<GlobalUserOption[]>([]);
-  const [loadingGlobalUsers, setLoadingGlobalUsers] = useState(false);
-
-  const loadTenant = useCallback(async () => {
+  const cargarTenant = useCallback(async () => {
     if (!token || !tenantId) return;
-
-    setTenantLoading(true);
-
     try {
-      const result = await requestConToken<TenantDetailResponse>(
+      const res = await requestConToken<TenantDetailResponse>(
         `/api/v1/admin/tenants/${tenantId}`,
         { method: 'GET' },
         token,
       );
-
-      setTenant(normalizeTenant(result.data ?? {}));
+      setTenant(normalizarTenant(res.data));
     } catch (error) {
       console.error(error);
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : 'No se pudo cargar la finca',
-      );
-    } finally {
-      setTenantLoading(false);
+      toast.error(error instanceof Error ? error.message : 'No se pudo cargar la finca');
     }
   }, [tenantId, token]);
 
-  const loadTenantUsers = useCallback(async () => {
+  const cargarUsuarios = useCallback(async () => {
     if (!token || !tenantId) return;
-
-    setUsersLoading(true);
-
+    setCargandoUsuarios(true);
     try {
-      const result = await requestConToken<TenantUsersResponse>(
+      const res = await requestConToken<TenantUsersResponse>(
         `/api/v1/admin/tenants/${tenantId}/users`,
         { method: 'GET' },
         token,
       );
-
-      const items = Array.isArray(result.data) ? result.data : [];
-      setUsers(items.map(normalizeTenantUser));
+      const items = Array.isArray(res.data) ? res.data : [];
+      setUsuarios(items.map(normalizarUsuario));
     } catch (error) {
       console.error(error);
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : 'No se pudieron cargar los usuarios de la finca',
-      );
-      setUsers([]);
+      toast.error(error instanceof Error ? error.message : 'No se pudieron cargar los usuarios de la finca');
+      setUsuarios([]);
     } finally {
-      setUsersLoading(false);
+      setCargandoUsuarios(false);
     }
   }, [tenantId, token]);
 
-  const loadGlobalUsers = useCallback(async () => {
+  const cargarUsuariosGlobales = useCallback(async () => {
     if (!token) return;
-
-    setLoadingGlobalUsers(true);
-
+    setCargandoGlobales(true);
     try {
-      const result = await requestConToken<LaravelPagination<any>>(
-        `/api/v1/admin/users?per_page=100&status=true`,
+      const res = await requestConToken<LaravelPagination<Record<string, unknown>>>(
+        '/api/v1/admin/users?per_page=100&status=true',
         { method: 'GET' },
         token,
       );
-
-      const items = Array.isArray(result.data) ? result.data : [];
-
-      setGlobalUsers(
-        items.map((item) => ({
-          id: toNumber(item?.id),
-          name: String(item?.name ?? ''),
-          email: String(item?.email ?? ''),
-        })),
-      );
+      const items = Array.isArray(res.data) ? res.data : [];
+      setUsuariosGlobales(items.map((item) => ({
+        id: aNumero(item?.id),
+        name: String(item?.name ?? ''),
+        email: String(item?.email ?? ''),
+      })));
     } catch (error) {
       console.error(error);
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : 'No se pudieron cargar los usuarios globales',
-      );
+      toast.error(error instanceof Error ? error.message : 'No se pudieron cargar los usuarios globales');
     } finally {
-      setLoadingGlobalUsers(false);
+      setCargandoGlobales(false);
     }
   }, [token]);
 
   useEffect(() => {
-    void loadTenant();
-    void loadTenantUsers();
-  }, [loadTenant, loadTenantUsers]);
+    void cargarTenant();
+    void cargarUsuarios();
+  }, [cargarTenant, cargarUsuarios]);
 
-  const openCreateModal = async () => {
-    setModalMode('create');
-    setAssignmentMode('new');
-    setCreateForm(EMPTY_CREATE_FORM);
-    setSelectedUser(null);
-    setShowPassword(false);
-    setShowModal(true);
-
-    await loadGlobalUsers();
+  const abrirCrear = async () => {
+    setModo('crear');
+    setOrigenAsignacion('nuevo');
+    setFormCrear(FORM_CREAR_VACIO);
+    setSeleccionado(null);
+    setModalAbierto(true);
+    await cargarUsuariosGlobales();
   };
 
-  const openEditModal = (user: TenantUser) => {
-    setModalMode('edit');
-    setSelectedUser(user);
-    setEditForm({
-      name: user.name,
-      email: user.email,
+  const abrirEditar = (usuario: TenantUser) => {
+    setModo('editar');
+    setSeleccionado(usuario);
+    setFormEditar({
+      name: usuario.name,
+      email: usuario.email,
       password: '',
       password_confirmation: '',
-      rol: (user.rol as RolTenant) || 'ADMIN',
-      estado: user.estado,
+      rol: (usuario.rol as RolTenant) || 'ADMIN',
+      estado: usuario.estado,
     });
-    setShowPassword(false);
-    setShowModal(true);
+    setModalAbierto(true);
   };
 
-  const closeModal = () => {
-    if (saving) return;
-
-    setShowModal(false);
-    setSelectedUser(null);
-    setCreateForm(EMPTY_CREATE_FORM);
-    setEditForm(EMPTY_EDIT_FORM);
+  const cerrarModal = () => {
+    if (guardando) return;
+    setModalAbierto(false);
+    setSeleccionado(null);
+    setFormCrear(FORM_CREAR_VACIO);
+    setFormEditar(FORM_EDITAR_VACIO);
   };
 
-  const filteredUsers = users.filter((user) => {
-    const term = searchTerm.trim().toLowerCase();
-    if (!term) return true;
-
+  const filtrados = usuarios.filter((usuario) => {
+    const termino = busqueda.trim().toLowerCase();
+    if (!termino) return true;
     return (
-      user.name.toLowerCase().includes(term) ||
-      user.email.toLowerCase().includes(term) ||
-      String(user.rol).toLowerCase().includes(term)
+      usuario.name.toLowerCase().includes(termino) ||
+      usuario.email.toLowerCase().includes(termino) ||
+      String(usuario.rol).toLowerCase().includes(termino)
     );
   });
 
-  const totalActivos = users.filter((user) => user.estado).length;
-  const totalInactivos = users.length - totalActivos;
-  const totalGlobalInactive = users.filter((user) => !user.status).length;
+  const activos = usuarios.filter((u) => u.estado).length;
+  const inactivos = usuarios.length - activos;
+  const globalesInactivos = usuarios.filter((u) => !u.status).length;
 
-  const handleCreateSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  const crear = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-
     if (!token || !tenantId) return;
 
     let payload: Record<string, unknown>;
 
-    if (assignmentMode === 'existing') {
-      if (!createForm.user_id) {
+    if (origenAsignacion === 'existente') {
+      if (!formCrear.user_id) {
         toast.error('Selecciona un usuario existente');
         return;
       }
-
-      payload = {
-        user_id: Number(createForm.user_id),
-        rol: createForm.rol,
-      };
+      payload = { user_id: Number(formCrear.user_id), rol: formCrear.rol };
     } else {
-      if (
-        !createForm.email.trim() ||
-        !createForm.name.trim() ||
-        !createForm.password.trim()
-      ) {
-        toast.error('Completa nombre, email y contraseña');
+      if (!formCrear.email.trim() || !formCrear.name.trim() || !formCrear.password.trim()) {
+        toast.error('Completa nombre, correo y contraseña');
         return;
       }
-      if (createForm.password.trim().length < 8) {
+      if (formCrear.password.trim().length < 8) {
         toast.error('La contraseña debe tener al menos 8 caracteres');
         return;
       }
-      if (createForm.password !== createForm.password_confirmation) {
+      if (formCrear.password !== formCrear.password_confirmation) {
         toast.error('Las contraseñas no coinciden. Escríbela igual en ambos campos.');
         return;
       }
-
       payload = {
-        email: createForm.email.trim(),
-        name: createForm.name.trim(),
-        password: createForm.password.trim(),
-        rol: createForm.rol,
+        email: formCrear.email.trim(),
+        name: formCrear.name.trim(),
+        password: formCrear.password.trim(),
+        rol: formCrear.rol,
       };
     }
 
-    setSaving(true);
-
+    setGuardando(true);
     try {
-      const result = await requestConToken<{ message?: string }>(
+      const res = await requestConToken<{ message?: string }>(
         `/api/v1/admin/tenants/${tenantId}/users`,
-        {
-          method: 'POST',
-          body: JSON.stringify(payload),
-        },
+        { method: 'POST', body: JSON.stringify(payload) },
         token,
       );
-
-      toast.success(
-        result.message ?? 'Usuario agregado/asignado a la finca correctamente',
-      );
-
-      closeModal();
-      await loadTenantUsers();
+      toast.success(res.message ?? 'Usuario asignado a la finca correctamente');
+      cerrarModal();
+      await cargarUsuarios();
     } catch (error) {
       console.error(error);
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : 'No se pudo agregar el usuario a la finca',
-      );
+      toast.error(error instanceof Error ? error.message : 'No se pudo agregar el usuario a la finca');
     } finally {
-      setSaving(false);
+      setGuardando(false);
     }
   };
 
-  const handleEditSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  const editar = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-
-    if (!token || !tenantId || !selectedUser) return;
+    if (!token || !tenantId || !seleccionado) return;
 
     const payload: Record<string, unknown> = {
-      name: editForm.name.trim(),
-      email: editForm.email.trim(),
-      rol: editForm.rol,
-      estado: editForm.estado,
+      name: formEditar.name.trim(),
+      email: formEditar.email.trim(),
+      rol: formEditar.rol,
+      estado: formEditar.estado,
     };
 
-    // Contraseña opcional al editar. Si se incluye se exige confirmación.
-    if (editForm.password.trim()) {
-      if (editForm.password.trim().length < 8) {
+    // La contraseña es opcional al editar. Si se escribe, se exige confirmación.
+    if (formEditar.password.trim()) {
+      if (formEditar.password.trim().length < 8) {
         toast.error('La contraseña debe tener al menos 8 caracteres');
         return;
       }
-      if (editForm.password !== editForm.password_confirmation) {
+      if (formEditar.password !== formEditar.password_confirmation) {
         toast.error('Las contraseñas no coinciden. Escríbela igual en ambos campos.');
         return;
       }
-      payload.password = editForm.password.trim();
+      payload.password = formEditar.password.trim();
     }
 
-    setSaving(true);
-
+    setGuardando(true);
     try {
-      const result = await requestConToken<{ message?: string }>(
-        `/api/v1/admin/tenants/${tenantId}/users/${selectedUser.id}`,
-        {
-          method: 'PUT',
-          body: JSON.stringify(payload),
-        },
+      const res = await requestConToken<{ message?: string }>(
+        `/api/v1/admin/tenants/${tenantId}/users/${seleccionado.id}`,
+        { method: 'PUT', body: JSON.stringify(payload) },
         token,
       );
-
-      toast.success(result.message ?? 'Asignación actualizada correctamente');
-
-      closeModal();
-      await loadTenantUsers();
+      toast.success(res.message ?? 'Asignación actualizada correctamente');
+      cerrarModal();
+      await cargarUsuarios();
     } catch (error) {
       console.error(error);
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : 'No se pudo actualizar la asignación',
-      );
+      toast.error(error instanceof Error ? error.message : 'No se pudo actualizar la asignación');
     } finally {
-      setSaving(false);
+      setGuardando(false);
     }
   };
 
-  const handleToggleEstado = async (user: TenantUser) => {
+  const alternarEstado = (usuario: TenantUser) => {
     if (!token || !tenantId) return;
-    const accion = user.estado ? 'desactivar' : 'activar';
-    showConfirm(
-      `${accion.charAt(0).toUpperCase() + accion.slice(1)} usuario`,
-      `¿Seguro que deseas ${accion} a "${user.name}" en esta finca?`,
+    const accion = usuario.estado ? 'desactivar' : 'activar';
+    pedirConfirmacion(
+      `${accion.charAt(0).toUpperCase()}${accion.slice(1)} usuario`,
+      `¿Seguro que deseas ${accion} a "${usuario.name}" en esta finca?`,
       'warning',
       async () => {
         try {
-          const result = await requestConToken<{ message?: string }>(
-            `/api/v1/admin/tenants/${tenantId}/users/${user.id}`,
-            { method: 'PUT', body: JSON.stringify({ estado: !user.estado }) },
+          const res = await requestConToken<{ message?: string }>(
+            `/api/v1/admin/tenants/${tenantId}/users/${usuario.id}`,
+            { method: 'PUT', body: JSON.stringify({ estado: !usuario.estado }) },
             token,
           );
-          toast.success(result.message ?? `Usuario ${accion}do correctamente`);
-          closeConfirm();
-          await loadTenantUsers();
+          toast.success(res.message ?? `Usuario ${accion}do correctamente`);
+          cerrarConfirmacion();
+          await cargarUsuarios();
         } catch (err) {
           toast.error(err instanceof Error ? err.message : 'No se pudo actualizar el usuario');
         }
@@ -469,23 +389,22 @@ export default function UsuariosFinca() {
     );
   };
 
-  const handleRemove = async (user: TenantUser) => {
+  const remover = (usuario: TenantUser) => {
     if (!token || !tenantId) return;
-
-    showConfirm(
+    pedirConfirmacion(
       'Remover usuario',
-      `¿Seguro que deseas remover a "${user.name}" de esta finca?`,
+      `¿Seguro que deseas remover a "${usuario.name}" de esta finca?`,
       'danger',
       async () => {
         try {
-          const result = await requestConToken<{ message?: string }>(
-            `/api/v1/admin/tenants/${tenantId}/users/${user.id}`,
+          const res = await requestConToken<{ message?: string }>(
+            `/api/v1/admin/tenants/${tenantId}/users/${usuario.id}`,
             { method: 'DELETE' },
             token,
           );
-          toast.success(result.message ?? 'Usuario removido de la finca');
-          closeConfirm();
-          await loadTenantUsers();
+          toast.success(res.message ?? 'Usuario removido de la finca');
+          cerrarConfirmacion();
+          await cargarUsuarios();
         } catch (err) {
           toast.error(err instanceof Error ? err.message : 'No se pudo remover el usuario');
         }
@@ -495,214 +414,139 @@ export default function UsuariosFinca() {
 
   if (!tenantId) {
     return (
-      <div className="p-4 md:p-8">
-        <p className="text-red-400">Tenant inválido.</p>
+      <div className="space-y-6">
+        <PageHeader eyebrow="Super admin" title="Usuarios de la finca" backTo="/super-admin/fincas" />
+        <p className="text-sm text-destructive">La finca indicada no es válida.</p>
       </div>
     );
   }
 
   return (
-    <div className="p-4 md:p-8 space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-start gap-4">
-          <button aria-label="Volver"
-            onClick={() => navigate('/super-admin/fincas')}
-            className="mt-1 p-2 rounded-lg border border-white/10 bg-white/5 text-white hover:bg-white/10 transition flex-shrink-0"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow={tenant ? `Finca · NIT ${tenant.nit || '—'}` : 'Super admin'}
+        title={tenant?.nombre ? `Usuarios de ${tenant.nombre}` : 'Usuarios de la finca'}
+        description="Quién tiene acceso a esta finca y con qué rol."
+        backTo="/super-admin/fincas"
+        actions={
+          <Button onClick={() => void abrirCrear()}>
+            <Plus className="h-4 w-4" strokeWidth={2} />
+            Agregar usuario
+          </Button>
+        }
+      />
 
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">
-              Usuarios por Finca
-            </h1>
+      <StatStrip
+        loading={cargandoUsuarios}
+        items={[
+          { label: 'Usuarios asignados', value: num(usuarios.length), note: 'con acceso a esta finca' },
+          { label: 'Asignaciones activas', value: num(activos) },
+          { label: 'Asignaciones inactivas', value: num(inactivos) },
+          { label: 'Cuentas inactivas', value: num(globalesInactivos), note: 'desactivadas en todo el sistema' },
+        ]}
+      />
 
-            {tenantLoading ? (
-              <p className="text-gray-400">Cargando finca...</p>
-            ) : (
-              <div className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="text-white font-semibold">
-                  {tenant?.nombre || 'Finca'}
-                </span>
-                <span className="text-gray-500">•</span>
-                <span className="text-gray-400">NIT: {tenant?.nit || '—'}</span>
-                <span className="text-gray-500">•</span>
-                <span className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-gray-300">
-                  {tenant?.plan || '—'}
-                </span>
-                <span className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-gray-300">
-                  {tenant?.estado || '—'}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <button
-          onClick={() => void openCreateModal()}
-          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#9032F0] to-[#6506FF] px-5 py-3 text-white font-semibold hover:opacity-95 transition"
-        >
-          <UserPlus className="w-4 h-4" />
-          Agregar usuario
-        </button>
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={2} />
+        <Input
+          aria-label="Buscar usuarios"
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+          placeholder="Buscar por nombre, correo o rol"
+          className="pl-9"
+        />
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-          <p className="text-sm text-gray-400 mb-1">Total asignados</p>
-          <p className="text-2xl sm:text-3xl font-bold text-white">{users.length}</p>
-        </div>
-
-        <div className="rounded-2xl border border-green-500/20 bg-green-500/5 p-5">
-          <p className="text-sm text-gray-400 mb-1">Asignaciones activas</p>
-          <p className="text-2xl sm:text-3xl font-bold text-green-400">{totalActivos}</p>
-        </div>
-
-        <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-5">
-          <p className="text-sm text-gray-400 mb-1">Asignaciones inactivas</p>
-          <p className="text-2xl sm:text-3xl font-bold text-red-400">{totalInactivos}</p>
-        </div>
-
-        <div className="rounded-2xl border border-yellow-500/20 bg-yellow-500/5 p-5">
-          <p className="text-sm text-gray-400 mb-1">Usuarios globales inactivos</p>
-          <p className="text-2xl sm:text-3xl font-bold text-yellow-300">
-            {totalGlobalInactive}
-          </p>
-        </div>
-      </div>
-
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-        <div className="relative">
-          <Search className="w-5 h-5 text-gray-500 absolute left-4 top-1/2 -translate-y-1/2" />
-          <input
-            aria-label="Buscar por nombre, email o rol..."
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar por nombre, email o rol..."
-            className="w-full rounded-xl border border-white/10 bg-black/30 pl-12 pr-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
-          />
-        </div>
-      </div>
-
-      <div className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
+      <Card className="gap-0 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px]">
-            <thead>
-              <tr className="border-b border-white/10 text-left">
-                <th className="px-6 py-4 text-sm font-semibold text-gray-400">
-                  Usuario
-                </th>
-                <th className="px-6 py-4 text-sm font-semibold text-gray-400">
-                  Rol
-                </th>
-                <th className="px-6 py-4 text-sm font-semibold text-gray-400">
-                  Asignación
-                </th>
-                
-                <th className="px-6 py-4 text-sm font-semibold text-gray-400">
-                  Asignado
-                </th>
-                <th className="px-6 py-4 text-sm font-semibold text-gray-400 text-right">
-                  Acciones
-                </th>
+          <table className="w-full min-w-[860px] text-sm">
+            <thead className="bg-muted/60 text-[13px] text-muted-foreground">
+              <tr>
+                <th className="px-5 py-2.5 text-left font-semibold">Usuario</th>
+                <th className="px-4 py-2.5 text-left font-semibold">Rol</th>
+                <th className="px-4 py-2.5 text-left font-semibold">Asignación</th>
+                <th className="px-4 py-2.5 text-left font-semibold">Cuenta</th>
+                <th className="px-4 py-2.5 text-right font-semibold">Asignado</th>
+                <th className="px-5 py-2.5 text-right font-semibold">Acciones</th>
               </tr>
             </thead>
-
-            <tbody>
-              {usersLoading ? (
+            <tbody className="divide-y divide-border">
+              {cargandoUsuarios ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-14 text-center">
-                    <div className="inline-flex items-center gap-3 text-gray-400">
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Cargando usuarios de la finca...
-                    </div>
+                  <td colSpan={6} className="px-5 py-14 text-center">
+                    <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Cargando usuarios…
+                    </span>
                   </td>
                 </tr>
-              ) : filteredUsers.length === 0 ? (
+              ) : filtrados.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-14 text-center">
-                    <Users className="w-10 h-10 text-gray-600 mx-auto mb-3" />
-                    <p className="text-gray-400">
-                      No hay usuarios asignados a esta finca
-                    </p>
+                  <td colSpan={6} className="p-0">
+                    <EmptyState
+                      title="No hay usuarios para mostrar"
+                      description={busqueda.trim()
+                        ? 'Ningún usuario coincide con la búsqueda.'
+                        : 'Esta finca todavía no tiene usuarios asignados.'}
+                      action={busqueda.trim()
+                        ? { label: 'Quitar búsqueda', onClick: () => setBusqueda('') }
+                        : { label: 'Agregar usuario', onClick: () => void abrirCrear() }}
+                    />
                   </td>
                 </tr>
               ) : (
-                filteredUsers.map((user) => (
-                  <tr
-                    key={user.id}
-                    className="border-b border-white/5 hover:bg-white/5 transition-colors"
-                  >
-                    <td className="px-6 py-4">
-                      <div>
-                        <p className="text-white font-semibold">{user.name}</p>
-                        <p className="text-sm text-gray-400 mt-1">{user.email}</p>
-                      </div>
-                    </td>
-
-                    <td className="px-6 py-4">
-                      <span className="inline-flex items-center gap-1.5 rounded-lg border border-[#9032F0]/30 bg-[#9032F0]/10 px-3 py-1 text-xs font-semibold text-[#c79cff]">
-                        <Shield className="w-3 h-3" />
-                        {user.rol}
-                      </span>
-                    </td>
-
-                    <td className="px-6 py-4">
-                      <span
-                        className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1 text-xs font-semibold ${getAssignmentStatusClasses(
-                          user.estado,
-                        )}`}
+                filtrados.map((usuario) => (
+                  <tr key={usuario.id} className="transition-colors hover:bg-muted/40">
+                    <td className="px-5 py-3">
+                      <button
+                        type="button"
+                        onClick={() => setDetalle(usuario)}
+                        className="block text-left font-semibold text-foreground hover:text-primary hover:underline"
                       >
-                        {user.estado ? (
-                          <Check className="w-3 h-3" />
-                        ) : (
-                          <X className="w-3 h-3" />
-                        )}
-                        {user.estado ? 'Activa' : 'Inactiva'}
-                      </span>
+                        {usuario.name || 'Sin nombre'}
+                      </button>
+                      <span className="block text-xs text-muted-foreground">{usuario.email}</span>
                     </td>
-
-                    
-                    <td className="px-6 py-4">
-                      <span className="text-sm text-gray-300">
-                        {formatFechaHora(user.asignado_at)}
-                      </span>
+                    <td className="px-4 py-3">
+                      <Badge variant="secondary">{usuario.rol}</Badge>
                     </td>
-
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-2">
-                        <button aria-label="Ver"
-                          onClick={() => setViewUser(user)}
-                          className="p-2 rounded-lg text-blue-400 hover:bg-blue-500/10 transition-colors"
-                          title="Ver datos del usuario"
+                    <td className="px-4 py-3">
+                      <Badge variant={usuario.estado ? 'success' : 'destructive'}>
+                        {usuario.estado ? 'Activa' : 'Inactiva'}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge variant={usuario.status ? 'info' : 'warning'}>
+                        {usuario.status ? 'Habilitada' : 'Deshabilitada'}
+                      </Badge>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right text-muted-foreground">
+                      {usuario.asignado_at ? formatFechaHora(usuario.asignado_at) : '—'}
+                    </td>
+                    <td className="px-5 py-3">
+                      <div className="flex items-center justify-end gap-0.5 text-muted-foreground">
+                        <Button variant="ghost" size="icon" title="Ver detalle" onClick={() => setDetalle(usuario)}>
+                          <Eye className="h-4 w-4" strokeWidth={2} />
+                        </Button>
+                        <Button variant="ghost" size="icon" title="Editar" onClick={() => abrirEditar(usuario)}>
+                          <Pencil className="h-4 w-4" strokeWidth={2} />
+                        </Button>
+                        <Button
+                          variant="ghost" size="icon"
+                          title={usuario.estado ? 'Desactivar en esta finca' : 'Activar en esta finca'}
+                          onClick={() => alternarEstado(usuario)}
                         >
-                          <Eye className="w-4 h-4" />
-                        </button>
-
-                        <button aria-label="Editar"
-                          onClick={() => openEditModal(user)}
-                          className="p-2 rounded-lg text-purple-400 hover:bg-purple-500/10 transition-colors"
-                          title="Editar rol"
+                          {usuario.estado
+                            ? <Pause className="h-4 w-4" strokeWidth={2} />
+                            : <Play className="h-4 w-4" strokeWidth={2} />}
+                        </Button>
+                        <Button
+                          variant="ghost" size="icon" title="Remover de la finca"
+                          className="hover:text-destructive"
+                          onClick={() => remover(usuario)}
                         >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-
-                        <button
-                          onClick={() => void handleToggleEstado(user)}
-                          className={`p-2 rounded-lg transition-colors ${user.estado ? 'text-yellow-400 hover:bg-yellow-500/10' : 'text-green-400 hover:bg-green-500/10'}`}
-                          title={user.estado ? 'Desactivar en finca' : 'Activar en finca'}
-                        >
-                          {user.estado ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                        </button>
-
-                        <button aria-label="Eliminar"
-                          onClick={() => void handleRemove(user)}
-                          className="p-2 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors"
-                          title="Remover usuario de la finca"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                          <Trash2 className="h-4 w-4" strokeWidth={2} />
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -711,474 +555,232 @@ export default function UsuariosFinca() {
             </tbody>
           </table>
         </div>
-      </div>
+      </Card>
 
-      {/* Modal "Ver datos" — solo lectura. Las contraseñas NO se muestran nunca
-          (guardadas hasheadas en backend, irreversible). Si el super admin
-          necesita acceso de emergencia, debe usar "Editar" para establecer una
-          nueva clave temporal. */}
-      {viewUser && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-[#0a0a0a] overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-white/10">
-              <div>
-                <h2 className="text-2xl font-bold text-white">Datos del usuario</h2>
-                <p className="text-sm text-gray-400 mt-1">{viewUser.email}</p>
+      <Dialog open={modalAbierto} onOpenChange={(abierto) => !abierto && cerrarModal()}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{modo === 'crear' ? 'Agregar usuario' : 'Editar asignación'}</DialogTitle>
+            <DialogDescription>
+              {modo === 'crear'
+                ? 'Asigna un usuario que ya existe o crea uno nuevo para esta finca.'
+                : 'Cambia los datos del usuario y su acceso a esta finca.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {modo === 'crear' ? (
+            <form onSubmit={crear} className="space-y-4">
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant={origenAsignacion === 'nuevo' ? 'default' : 'outline'}
+                  onClick={() => setOrigenAsignacion('nuevo')}
+                >
+                  Usuario nuevo
+                </Button>
+                <Button
+                  type="button"
+                  variant={origenAsignacion === 'existente' ? 'default' : 'outline'}
+                  onClick={() => setOrigenAsignacion('existente')}
+                >
+                  Usuario existente
+                </Button>
               </div>
-              <button
-                onClick={() => setViewUser(null)}
-                className="p-2 rounded-lg text-gray-400 hover:bg-white/5 transition-colors"
-                title="Cerrar"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
 
-            <div className="px-6 py-5 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">ID</p>
-                  <p className="text-white font-mono text-sm">{viewUser.id}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Rol</p>
-                  <span className="inline-flex items-center gap-1.5 rounded-lg border border-[#9032F0]/30 bg-[#9032F0]/10 px-3 py-1 text-xs font-semibold text-[#c79cff]">
-                    <Shield className="w-3 h-3" />
-                    {viewUser.rol}
-                  </span>
-                </div>
-                <div className="sm:col-span-2">
-                  <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Nombre</p>
-                  <p className="text-white">{viewUser.name || '—'}</p>
-                </div>
-                <div className="sm:col-span-2">
-                  <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Email</p>
-                  <p className="text-white break-all">{viewUser.email || '—'}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Estado en finca</p>
-                  <span
-                    className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1 text-xs font-semibold ${getAssignmentStatusClasses(viewUser.estado)}`}
+              {origenAsignacion === 'existente' ? (
+                <div className="space-y-2">
+                  <Label htmlFor="usuario-existente">Usuario</Label>
+                  <Select
+                    value={formCrear.user_id}
+                    onValueChange={(v) => setFormCrear((f) => ({ ...f, user_id: v }))}
                   >
-                    {viewUser.estado ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
-                    {viewUser.estado ? 'Activo' : 'Inactivo'}
-                  </span>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Asignado</p>
-                  <p className="text-sm text-gray-300">{formatFechaHora(viewUser.asignado_at)}</p>
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4">
-                <p className="text-sm font-semibold text-yellow-300 mb-1">
-                  Contraseña no visible
-                </p>
-                <p className="text-xs text-yellow-200/80 leading-relaxed">
-                  Las contraseñas se guardan cifradas (hash) y no pueden recuperarse
-                  por seguridad. Si el usuario perdió acceso, abre "Editar usuario"
-                  y establece una contraseña temporal nueva.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-white/10">
-              <button
-                onClick={() => setViewUser(null)}
-                className="px-4 py-2 rounded-lg text-gray-300 hover:bg-white/5 transition-colors"
-              >
-                Cerrar
-              </button>
-              <button
-                onClick={() => {
-                  const u = viewUser;
-                  setViewUser(null);
-                  openEditModal(u);
-                }}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#9032F0] hover:bg-[#7b27d4] text-white font-semibold transition-colors"
-              >
-                <Edit2 className="w-4 h-4" />
-                Editar / cambiar contraseña
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-2xl rounded-2xl border border-white/10 bg-[#0a0a0a] overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-white/10">
-              <div>
-                <h2 className="text-2xl font-bold text-white">
-                  {modalMode === 'create'
-                    ? 'Agregar usuario a la finca'
-                    : 'Editar asignación'}
-                </h2>
-                <p className="text-sm text-gray-400 mt-1">
-                  {modalMode === 'create'
-                    ? 'Asignar un usuario existente o crear uno nuevo'
-                    : 'Cambiar rol o estado dentro de la finca'}
-                </p>
-              </div>
-
-              <button
-                onClick={closeModal}
-                className="p-2 rounded-lg text-gray-400 hover:bg-white/10 hover:text-white transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-6">
-              {modalMode === 'create' ? (
-                <form onSubmit={handleCreateSubmit} className="space-y-5">
-
-                  <>
-                    <>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="uf-nombre">
-                            Nombre *
-                          </label>
-                          <input id="uf-nombre"
-                            type="text"
-                            value={createForm.name}
-                            onChange={(e) =>
-                              setCreateForm((prev) => ({
-                                ...prev,
-                                name: e.target.value,
-                              }))
-                            }
-                            className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
-                            placeholder="Nombre completo"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="uf-email">
-                            Email *
-                          </label>
-                          <input id="uf-email"
-                            type="email"
-                            value={createForm.email}
-                            onChange={(e) =>
-                              setCreateForm((prev) => ({
-                                ...prev,
-                                email: e.target.value,
-                              }))
-                            }
-                            className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
-                            placeholder="usuario@correo.com"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-2">Contraseña *</label>
-                          <div className="relative">
-                            <input
-                              type={showPassword ? 'text' : 'password'}
-                              value={createForm.password}
-                              onChange={(e) =>
-                                setCreateForm((prev) => ({
-                                  ...prev,
-                                  password: e.target.value,
-                                }))
-                              }
-                              className="w-full rounded-xl border border-white/10 bg-black/30 pl-4 pr-11 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
-                              placeholder="Mínimo 8 caracteres"
-                              autoComplete="new-password"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowPassword(v => !v)}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
-                              tabIndex={-1}
-                              aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                            >
-                              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                            </button>
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-2">Confirmar contraseña *</label>
-                          <div className="relative">
-                            <input
-                              type={showPassword ? 'text' : 'password'}
-                              value={createForm.password_confirmation}
-                              onChange={(e) =>
-                                setCreateForm((prev) => ({
-                                  ...prev,
-                                  password_confirmation: e.target.value,
-                                }))
-                              }
-                              className={`w-full rounded-xl border bg-black/30 pl-4 pr-11 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-colors ${
-                                createForm.password_confirmation && createForm.password && createForm.password_confirmation !== createForm.password
-                                  ? 'border-red-500/40 focus:ring-red-500/50'
-                                  : 'border-white/10 focus:ring-[#9032F0]/50'
-                              }`}
-                              placeholder="Repite la contraseña"
-                              autoComplete="new-password"
-                              disabled={!createForm.password.trim()}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowPassword(v => !v)}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
-                              tabIndex={-1}
-                              aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                            >
-                              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                            </button>
-                          </div>
-                          {createForm.password_confirmation && createForm.password && createForm.password_confirmation !== createForm.password && (
-                            <p className="mt-1 text-xs text-red-400">Las contraseñas no coinciden</p>
-                          )}
-                        </div>
-                      </div>
-                    </>
-                  </>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="uf-rol-dentro-de-la-finca">
-                      Rol dentro de la finca
-                    </label>
-                    <select id="uf-rol-dentro-de-la-finca"
-                      value={createForm.rol}
-                      onChange={(e) =>
-                        setCreateForm((prev) => ({
-                          ...prev,
-                          rol: e.target.value as RolTenant,
-                        }))
-                      }
-                      className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
-                    >
-                      {ROLES.map((rol) => (
-                        <option key={rol} value={rol} className="bg-[#111]">
-                          {rol}
-                        </option>
+                    <SelectTrigger id="usuario-existente">
+                      <SelectValue placeholder={cargandoGlobales ? 'Cargando usuarios…' : 'Selecciona un usuario'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {usuariosGlobales.map((u) => (
+                        <SelectItem key={u.id} value={String(u.id)}>
+                          {u.name} · {u.email}
+                        </SelectItem>
                       ))}
-                    </select>
-                  </div>
-
-                  <div className="flex items-center justify-end gap-3 pt-2">
-                    <button
-                      type="button"
-                      onClick={closeModal}
-                      className="px-5 py-3 rounded-xl border border-white/10 bg-white/5 text-white hover:bg-white/10 transition"
-                    >
-                      Cancelar
-                    </button>
-
-                    <button
-                      type="submit"
-                      disabled={saving}
-                      className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-[#9032F0] to-[#6506FF] text-white font-semibold hover:opacity-95 transition disabled:opacity-50"
-                    >
-                      {saving ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Guardando...
-                        </>
-                      ) : (
-                        <>
-                          <Plus className="w-4 h-4" />
-                          Agregar usuario
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </form>
+                    </SelectContent>
+                  </Select>
+                </div>
               ) : (
-                <form onSubmit={handleEditSubmit} className="space-y-5">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="uf-nombre-2">
-                        Nombre
-                      </label>
-                      <input id="uf-nombre-2"
-                        type="text"
-                        value={editForm.name}
-                        onChange={(e) =>
-                          setEditForm((prev) => ({
-                            ...prev,
-                            name: e.target.value,
-                          }))
-                        }
-                        className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
-                        placeholder="Nombre completo"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="uf-email-2">
-                        Email
-                      </label>
-                      <input id="uf-email-2"
-                        type="email"
-                        value={editForm.email}
-                        onChange={(e) =>
-                          setEditForm((prev) => ({
-                            ...prev,
-                            email: e.target.value,
-                          }))
-                        }
-                        className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
-                        placeholder="correo@ejemplo.com"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="uf-rol-dentro-de-la-finca-2">
-                      Rol dentro de la finca
-                    </label>
-                    <select id="uf-rol-dentro-de-la-finca-2"
-                      value={editForm.rol}
-                      onChange={(e) =>
-                        setEditForm((prev) => ({
-                          ...prev,
-                          rol: e.target.value as RolTenant,
-                        }))
-                      }
-                      className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
-                    >
-                      {ROLES.map((rol) => (
-                        <option key={rol} value={rol} className="bg-[#111]">
-                          {rol}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="usuariosfi-nueva-contrasena-opcional">
-                        Nueva contraseña (opcional)
-                      </label>
-                      <div className="relative">
-                        <input id="usuariosfi-nueva-contrasena-opcional"
-                          type={showPassword ? 'text' : 'password'}
-                          value={editForm.password}
-                          onChange={(e) =>
-                            setEditForm((prev) => ({
-                              ...prev,
-                              password: e.target.value,
-                            }))
-                          }
-                          className="w-full rounded-xl border border-white/10 bg-black/30 pl-4 pr-11 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#9032F0]/50"
-                          placeholder="Déjalo vacío para no cambiarla"
-                          autoComplete="new-password"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(v => !v)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
-                          tabIndex={-1}
-                          aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                        >
-                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="usuariosfi-confirmar-contrasena">
-                        Confirmar contraseña
-                      </label>
-                      <div className="relative">
-                        <input id="usuariosfi-confirmar-contrasena"
-                          type={showPassword ? 'text' : 'password'}
-                          value={editForm.password_confirmation}
-                          onChange={(e) =>
-                            setEditForm((prev) => ({
-                              ...prev,
-                              password_confirmation: e.target.value,
-                            }))
-                          }
-                          className={`w-full rounded-xl border bg-black/30 pl-4 pr-11 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-colors ${
-                            editForm.password_confirmation && editForm.password && editForm.password_confirmation !== editForm.password
-                              ? 'border-red-500/40 focus:ring-red-500/50'
-                              : 'border-white/10 focus:ring-[#9032F0]/50'
-                          }`}
-                          placeholder="Repite la nueva contraseña"
-                          autoComplete="new-password"
-                          disabled={!editForm.password.trim()}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(v => !v)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
-                          tabIndex={-1}
-                          aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                        >
-                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                      {editForm.password_confirmation && editForm.password && editForm.password_confirmation !== editForm.password && (
-                        <p className="mt-1 text-xs text-red-400">Las contraseñas no coinciden</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/30 px-4 py-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={editForm.estado}
-                      onChange={(e) =>
-                        setEditForm((prev) => ({
-                          ...prev,
-                          estado: e.target.checked,
-                        }))
-                      }
-                      className="h-4 w-4"
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="usuario-nombre">Nombre</Label>
+                    <Input
+                      id="usuario-nombre"
+                      value={formCrear.name}
+                      onChange={(e) => setFormCrear((f) => ({ ...f, name: e.target.value }))}
+                      placeholder="Nombre completo"
                     />
-                    <span className="text-sm text-gray-200">
-                      Asignación activa
-                    </span>
-                  </label>
-
-                  <div className="flex items-center justify-end gap-3 pt-2">
-                    <button
-                      type="button"
-                      onClick={closeModal}
-                      className="px-5 py-3 rounded-xl border border-white/10 bg-white/5 text-white hover:bg-white/10 transition"
-                    >
-                      Cancelar
-                    </button>
-
-                    <button
-                      type="submit"
-                      disabled={saving}
-                      className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-[#9032F0] to-[#6506FF] text-white font-semibold hover:opacity-95 transition disabled:opacity-50"
-                    >
-                      {saving ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Guardando...
-                        </>
-                      ) : (
-                        <>
-                          <Edit2 className="w-4 h-4" />
-                          Guardar cambios
-                        </>
-                      )}
-                    </button>
                   </div>
-                </form>
+                  <div className="space-y-2">
+                    <Label htmlFor="usuario-correo">Correo electrónico</Label>
+                    <Input
+                      id="usuario-correo"
+                      type="email"
+                      value={formCrear.email}
+                      onChange={(e) => setFormCrear((f) => ({ ...f, email: e.target.value }))}
+                      placeholder="usuario@correo.com"
+                    />
+                  </div>
+                  <PasswordField
+                    id="usuario-password"
+                    label="Contraseña"
+                    value={formCrear.password}
+                    onChange={(v) => setFormCrear((f) => ({ ...f, password: v }))}
+                    placeholder="Mínimo 8 caracteres"
+                    autoComplete="new-password"
+                  />
+                  <PasswordField
+                    id="usuario-password-confirmacion"
+                    label="Confirmar contraseña"
+                    value={formCrear.password_confirmation}
+                    onChange={(v) => setFormCrear((f) => ({ ...f, password_confirmation: v }))}
+                    placeholder="Repite la contraseña"
+                    autoComplete="new-password"
+                  />
+                </>
               )}
-            </div>
-          </div>
-        </div>
-      )}
+
+              <div className="space-y-2">
+                <Label htmlFor="usuario-rol">Rol en la finca</Label>
+                <Select
+                  value={formCrear.rol}
+                  onValueChange={(v) => setFormCrear((f) => ({ ...f, rol: v as RolTenant }))}
+                >
+                  <SelectTrigger id="usuario-rol"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {ROLES.map((rol) => <SelectItem key={rol} value={rol}>{rol}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={cerrarModal} disabled={guardando}>
+                  Cancelar
+                </Button>
+                <Button type="submit" isLoading={guardando}>Guardar</Button>
+              </DialogFooter>
+            </form>
+          ) : (
+            <form onSubmit={editar} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="editar-nombre">Nombre</Label>
+                <Input
+                  id="editar-nombre"
+                  value={formEditar.name}
+                  onChange={(e) => setFormEditar((f) => ({ ...f, name: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editar-correo">Correo electrónico</Label>
+                <Input
+                  id="editar-correo"
+                  type="email"
+                  value={formEditar.email}
+                  onChange={(e) => setFormEditar((f) => ({ ...f, email: e.target.value }))}
+                />
+              </div>
+
+              <PasswordField
+                id="editar-password"
+                label="Contraseña nueva"
+                value={formEditar.password}
+                onChange={(v) => setFormEditar((f) => ({ ...f, password: v }))}
+                placeholder="Déjala vacía para no cambiarla"
+                autoComplete="new-password"
+              />
+              {formEditar.password.trim() !== '' && (
+                <PasswordField
+                  id="editar-password-confirmacion"
+                  label="Confirmar contraseña"
+                  value={formEditar.password_confirmation}
+                  onChange={(v) => setFormEditar((f) => ({ ...f, password_confirmation: v }))}
+                  placeholder="Repite la contraseña"
+                  autoComplete="new-password"
+                />
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="editar-rol">Rol en la finca</Label>
+                <Select
+                  value={formEditar.rol}
+                  onValueChange={(v) => setFormEditar((f) => ({ ...f, rol: v as RolTenant }))}
+                >
+                  <SelectTrigger id="editar-rol"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {ROLES.map((rol) => <SelectItem key={rol} value={rol}>{rol}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="editar-estado">Asignación</Label>
+                <Select
+                  value={formEditar.estado ? 'activa' : 'inactiva'}
+                  onValueChange={(v) => setFormEditar((f) => ({ ...f, estado: v === 'activa' }))}
+                >
+                  <SelectTrigger id="editar-estado"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="activa">Activa</SelectItem>
+                    <SelectItem value="inactiva">Inactiva</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={cerrarModal} disabled={guardando}>
+                  Cancelar
+                </Button>
+                <Button type="submit" isLoading={guardando}>Guardar cambios</Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={detalle !== null} onOpenChange={(abierto) => !abierto && setDetalle(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{detalle?.name || 'Usuario'}</DialogTitle>
+            <DialogDescription>{detalle?.email}</DialogDescription>
+          </DialogHeader>
+
+          {detalle && (
+            <dl className="grid gap-3 sm:grid-cols-2">
+              <Dato label="ID">{detalle.id}</Dato>
+              <Dato label="Rol"><Badge variant="secondary">{detalle.rol}</Badge></Dato>
+              <Dato label="Asignación">
+                <Badge variant={detalle.estado ? 'success' : 'destructive'}>
+                  {detalle.estado ? 'Activa' : 'Inactiva'}
+                </Badge>
+              </Dato>
+              <Dato label="Cuenta">
+                <Badge variant={detalle.status ? 'info' : 'warning'}>
+                  {detalle.status ? 'Habilitada' : 'Deshabilitada'}
+                </Badge>
+              </Dato>
+              <div className="sm:col-span-2">
+                <Dato label="Asignado">
+                  {detalle.asignado_at ? formatFechaHora(detalle.asignado_at) : '—'}
+                </Dato>
+              </div>
+            </dl>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <ConfirmDialog
-        open={confirmDialog.open}
-        onClose={closeConfirm}
-        onConfirm={confirmDialog.onConfirm}
-        title={confirmDialog.title}
-        description={confirmDialog.description}
-        variant={confirmDialog.variant}
+        open={confirmacion.open}
+        onClose={cerrarConfirmacion}
+        onConfirm={confirmacion.onConfirm}
+        title={confirmacion.title}
+        description={confirmacion.description}
+        variant={confirmacion.variant}
       />
     </div>
   );
