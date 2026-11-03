@@ -9,6 +9,7 @@ import {
 import { toast } from 'sonner';
 import { proveedorAuthStorage } from '../../../api/proveedorAuth';
 import { proveedorApi } from '../../../api/proveedor';
+import PageHeader from '../../components/common/PageHeader';
 
 /**
  * Mi Perfil del Portal Proveedor.
@@ -154,11 +155,12 @@ export default function MiPerfilProveedor() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1>Mi Perfil</h1>
-        <p className="text-lead">Administra tu información personal y contraseña</p>
-      </div>
+      <PageHeader
+        eyebrow="Portal de proveedores"
+        title="Mi perfil"
+        description="Tus datos de acceso y tu contraseña."
+        backTo="/proveedor/dashboard"
+      />
 
       {/* Avatar + info actual */}
       <Card>

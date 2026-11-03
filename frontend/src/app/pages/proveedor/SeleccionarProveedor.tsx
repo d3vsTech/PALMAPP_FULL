@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
-import { ArrowLeft, CheckCircle2, ChevronRight, Loader2, LogOut, Store } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Loader2, LogOut, Store } from 'lucide-react';
 import { PalmappLogo } from '../../components/common/PalmappLogo';
 import { Badge } from '../../components/ui/badge';
 import { cn } from '../../components/lib/utils';

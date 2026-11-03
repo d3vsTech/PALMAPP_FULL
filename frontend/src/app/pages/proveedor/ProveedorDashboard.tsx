@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router';
+import { ArrowRight, Loader2, Package, Plus } from 'lucide-react';
+import { toast } from 'sonner';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
-import { Link } from 'react-router';
-import { Plus, Loader2, ShoppingBag, Package } from 'lucide-react';
-import { toast } from 'sonner';
+import { Card } from '../../components/ui/card';
+import PageHeader from '../../components/common/PageHeader';
+import StatStrip from '../../components/common/StatStrip';
+import EmptyState from '../../components/common/EmptyState';
 import {
   proveedorApi,
   toNumber,
@@ -14,22 +17,20 @@ import {
 } from '../../../api/proveedor';
 import { proveedorAuthStorage } from '../../../api/proveedorAuth';
 import { formatFecha as formatFechaSafe } from '../../utils/fecha';
+import { cop, copCompacto, num } from '../../lib/formato';
 
-const ESTADO_LABELS: Record<EstadoPedidoProv, { label: string; cls: string }> = {
-  pendiente:   { label: 'Pendiente',    cls: 'bg-amber-500/10 text-amber-600 border-amber-500/20' },
-  confirmado:  { label: 'Confirmado',   cls: 'bg-blue-500/10 text-blue-600 border-blue-500/20' },
-  preparando:  { label: 'En Preparación', cls: 'bg-purple-500/10 text-purple-600 border-purple-500/20' },
-  en_transito: { label: 'En Camino',    cls: 'bg-blue-800/10 text-blue-800 border-blue-800/20' },
-  entregado:   { label: 'Entregado',    cls: 'bg-success/10 text-success border-success/20' },
-  cancelado:   { label: 'Cancelado',    cls: 'bg-destructive/10 text-destructive border-destructive/20' },
+type VarianteBadge = 'warning' | 'info' | 'success' | 'destructive' | 'secondary';
+
+const ESTADOS: Record<EstadoPedidoProv, { label: string; variante: VarianteBadge }> = {
+  pendiente:   { label: 'Pendiente',      variante: 'warning' },
+  confirmado:  { label: 'Confirmado',     variante: 'info' },
+  preparando:  { label: 'En preparación', variante: 'info' },
+  en_transito: { label: 'En camino',      variante: 'info' },
+  entregado:   { label: 'Entregado',      variante: 'success' },
+  cancelado:   { label: 'Cancelado',      variante: 'destructive' },
 };
 
-function formatCOP(v: number | string): string {
-  const n = typeof v === 'number' ? v : parseFloat(String(v)) || 0;
-  return `$${n.toLocaleString('es-CO')}`;
-}
-
-// Wrapper: aquí el vacío se muestra como '' y no como '—'.
+/** Aquí el vacío se muestra como '' y no como '—'. */
 const formatFecha = (iso: string): string => (iso ? formatFechaSafe(iso) : '');
 
 export default function ProveedorDashboard() {
@@ -42,205 +43,187 @@ export default function ProveedorDashboard() {
 
   useEffect(() => {
     proveedorApi.dashboard()
-      .then(res => setData(res.data))
-      .catch((err: any) => {
-        toast.error(err?.message ?? 'No se pudo cargar el dashboard');
+      .then((res) => setData(res.data))
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'No se pudo cargar el panel');
       })
       .finally(() => setLoading(false));
   }, []);
 
-  const variacion = data?.indicadores?.variacion_ventas_porcentaje;
-  const variacionColor = useMemo(() => {
-    if (variacion == null) return 'text-muted-foreground';
-    if (variacion > 0) return 'text-success';
-    if (variacion < 0) return 'text-destructive';
-    return 'text-muted-foreground';
-  }, [variacion]);
-  const variacionLabel = useMemo(() => {
-    if (variacion == null) return 'Sin datos del mes anterior';
-    const signo = variacion > 0 ? '+' : '';
-    return `${signo}${variacion}% vs mes anterior`;
-  }, [variacion]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20 gap-3 text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin" />
-        <span>Cargando dashboard...</span>
-      </div>
-    );
-  }
-
   const indicadores = data?.indicadores;
-  const pedidos    = data?.pedidos_recientes ?? [];
-  const productos  = data?.productos_mas_vendidos ?? [];
+  const pedidos = data?.pedidos_recientes ?? [];
+  const productos = data?.productos_mas_vendidos ?? [];
+
+  const variacion = indicadores?.variacion_ventas_porcentaje;
+  const notaVentas = variacion == null
+    ? 'Sin datos del mes anterior'
+    : `${variacion > 0 ? '+' : ''}${num(variacion, 1)} % frente al mes anterior`;
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">¡Bienvenido, {nombreProveedor}!</h1>
-          <p className="text-muted-foreground mt-1">
-            Resumen de tu actividad en el marketplace
-          </p>
-        </div>
-        <Button asChild className="gap-2">
-          <Link to="/proveedor/productos/nuevo">
-            <Plus className="h-4 w-4" />
-            Nuevo Producto
-          </Link>
-        </Button>
-      </div>
+      <PageHeader
+        eyebrow="Portal de proveedores"
+        title={`Hola, ${nombreProveedor}`}
+        description="Resumen de tu actividad en el marketplace."
+        actions={
+          <Button asChild>
+            <Link to="/proveedor/productos/nuevo">
+              <Plus className="h-4 w-4" strokeWidth={2} />
+              Nuevo producto
+            </Link>
+          </Button>
+        }
+      />
 
-      {/* KPIs principales */}
-      <div>
-        <h2 className="text-xl font-semibold mb-4">Indicadores Principales</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardContent className="p-6">
-              <p className="text-sm text-muted-foreground mb-1">Productos Activos</p>
-              <p className="text-3xl sm:text-4xl font-bold">{indicadores?.productos_activos ?? 0}</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                de {indicadores?.productos_total ?? 0} totales
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6">
-              <p className="text-sm text-muted-foreground mb-1">Pedidos Pendientes</p>
-              <p className="text-3xl sm:text-4xl font-bold">{indicadores?.pedidos_pendientes ?? 0}</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {indicadores?.pedidos_en_proceso ?? 0} en proceso
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6">
-              <p className="text-sm text-muted-foreground mb-1">Pedidos Completados</p>
-              <p className="text-3xl sm:text-4xl font-bold">{indicadores?.pedidos_completados_mes ?? 0}</p>
-              <p className="text-xs text-muted-foreground mt-1">este mes</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6">
-              <p className="text-sm text-muted-foreground mb-1">Ventas del Mes</p>
-              <p className="text-3xl sm:text-4xl font-bold">
-                ${((indicadores?.ventas_mes_actual ?? 0) / 1_000_000).toFixed(1)}M
-              </p>
-              <p className={`text-xs mt-1 ${variacionColor}`}>{variacionLabel}</p>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+      <StatStrip
+        loading={loading}
+        items={[
+          {
+            label: 'Ventas del mes',
+            value: copCompacto(indicadores?.ventas_mes_actual ?? 0),
+            note: notaVentas,
+            trend: variacion == null || variacion === 0 ? undefined : {
+              label: `${num(Math.abs(variacion), 1)} %`,
+              direction: variacion > 0 ? 'up' : 'down',
+              positive: variacion > 0,
+            },
+          },
+          {
+            label: 'Productos activos',
+            value: num(indicadores?.productos_activos ?? 0),
+            note: `de ${num(indicadores?.productos_total ?? 0)} publicados`,
+          },
+          {
+            label: 'Pedidos pendientes',
+            value: num(indicadores?.pedidos_pendientes ?? 0),
+            note: `${num(indicadores?.pedidos_en_proceso ?? 0)} en proceso`,
+          },
+          {
+            label: 'Pedidos completados',
+            value: num(indicadores?.pedidos_completados_mes ?? 0),
+            note: 'este mes',
+          },
+        ]}
+      />
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Pedidos recientes */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
-            <CardTitle className="text-lg font-semibold">Pedidos Recientes</CardTitle>
-            <Button variant="ghost" size="sm" asChild className="text-primary hover:text-primary/80">
-              <Link to="/proveedor/pedidos">Ver todos</Link>
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {pedidos.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
-                <ShoppingBag className="h-8 w-8 opacity-40" />
-                <span className="text-sm">Aún no tienes pedidos</span>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {pedidos.map((pedido) => {
-                  const estilo = ESTADO_LABELS[pedido.estado] ?? ESTADO_LABELS.pendiente;
-                  return (
+        <Card className="gap-0 overflow-hidden">
+          <div className="flex items-center justify-between gap-4 px-5 py-4">
+            <div>
+              <h3>Pedidos recientes</h3>
+              <p className="text-xs text-muted-foreground">Lo último que te pidieron las fincas</p>
+            </div>
+            <Link
+              to="/proveedor/pedidos"
+              className="flex shrink-0 items-center gap-1 text-[13px] font-semibold text-primary hover:underline"
+            >
+              Ver todos <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} />
+            </Link>
+          </div>
+
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 border-t border-border py-12 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Cargando…
+            </div>
+          ) : pedidos.length === 0 ? (
+            <div className="border-t border-border">
+              <EmptyState
+                title="Todavía no tienes pedidos"
+                description="Cuando una finca te compre, el pedido aparece aquí."
+              />
+            </div>
+          ) : (
+            <ul className="divide-y divide-border border-t border-border">
+              {pedidos.map((pedido) => {
+                const estado = ESTADOS[pedido.estado] ?? ESTADOS.pendiente;
+                return (
+                  <li key={pedido.id}>
                     <Link
-                      key={pedido.id}
                       to={`/proveedor/pedidos/${pedido.codigo}`}
-                      className="flex items-start justify-between pb-3 border-b last:border-0 last:pb-0 hover:bg-muted/30 rounded-md transition-colors -mx-2 px-2"
+                      className="flex items-start justify-between gap-4 px-5 py-3 transition-colors hover:bg-muted/40"
                     >
-                      <div className="space-y-1 flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-medium text-sm">{pedido.tenant?.nombre ?? '—'}</p>
-                          <Badge variant="outline" className={estilo.cls}>
-                            {estilo.label}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground truncate">
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-center gap-2">
+                          <span className="truncate font-semibold text-foreground">
+                            {pedido.tenant?.nombre ?? '—'}
+                          </span>
+                          <Badge variant={estado.variante}>{estado.label}</Badge>
+                        </span>
+                        <span className="mt-0.5 block truncate text-sm text-muted-foreground">
                           {pedido.primer_producto?.nombre ?? '—'}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {pedido.primer_producto?.cantidad ?? 0}
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          {num(pedido.primer_producto?.cantidad ?? 0)}
                           {pedido.primer_producto?.unidad ? ` ${pedido.primer_producto.unidad}` : ''}
                           {' · '}{formatFecha(pedido.fecha_pedido)}
-                        </p>
-                      </div>
-                      <div className="text-right ml-4 shrink-0">
-                        <p className="font-semibold text-sm">{formatCOP(pedido.total)}</p>
-                      </div>
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-right font-semibold text-foreground">
+                        {cop(toNumber(pedido.total))}
+                      </span>
                     </Link>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </Card>
 
-        {/* Productos más vendidos */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg font-semibold">Productos Más Vendidos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {productos.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
-                <Package className="h-8 w-8 opacity-40" />
-                <span className="text-sm">Aún no hay ventas registradas</span>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {productos.map((producto) => {
-                  const img = buildImagenUrl(producto.imagen_principal);
-                  return (
-                    <div key={producto.id} className="pb-3 border-b last:border-0 last:pb-0">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start gap-3 flex-1 min-w-0">
-                          {img ? (
-                            <img
-                              src={img}
-                              alt={producto.nombre}
-                              className="h-10 w-10 rounded-md object-cover border border-border flex-shrink-0"
-                            />
-                          ) : (
-                            <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
-                              <Package className="h-5 w-5 text-muted-foreground/50" />
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm mb-1 truncate" title={producto.nombre}>
-                              {producto.nombre}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {producto.unidades_vendidas.toLocaleString('es-CO')} unidades vendidas
-                            </p>
-                          </div>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="font-semibold text-sm">
-                            ${(toNumber(producto.ingresos_acumulados) / 1_000_000).toFixed(1)}M
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-0.5">ingresos</p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
+        <Card className="gap-0 overflow-hidden">
+          <div className="px-5 py-4">
+            <h3>Productos más vendidos</h3>
+            <p className="text-xs text-muted-foreground">Por ingresos acumulados</p>
+          </div>
+
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 border-t border-border py-12 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Cargando…
+            </div>
+          ) : productos.length === 0 ? (
+            <div className="border-t border-border">
+              <EmptyState
+                title="Todavía no hay ventas"
+                description="Cuando empieces a vender, aquí verás qué se mueve más."
+              />
+            </div>
+          ) : (
+            <ul className="divide-y divide-border border-t border-border">
+              {productos.map((producto) => {
+                const imagen = buildImagenUrl(producto.imagen_principal);
+                return (
+                  <li key={producto.id} className="flex items-center justify-between gap-4 px-5 py-3">
+                    <span className="flex min-w-0 flex-1 items-center gap-3">
+                      {imagen ? (
+                        <img
+                          src={imagen}
+                          alt=""
+                          className="h-10 w-10 shrink-0 rounded-lg border border-border object-cover"
+                        />
+                      ) : (
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                          <Package className="h-4 w-4" strokeWidth={2} />
+                        </span>
+                      )}
+                      <span className="min-w-0">
+                        <span className="block truncate font-semibold text-foreground" title={producto.nombre}>
+                          {producto.nombre}
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          {num(producto.unidades_vendidas)} unidades vendidas
+                        </span>
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-right">
+                      <span className="block font-semibold text-foreground">
+                        {copCompacto(toNumber(producto.ingresos_acumulados))}
+                      </span>
+                      <span className="block text-xs text-muted-foreground">ingresos</span>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </Card>
       </div>
     </div>

@@ -33,25 +33,28 @@ import {
 } from '../../../api/proveedor';
 import { formatFecha } from '../../utils/fecha';
 import { useAutoRefresh } from '../../hooks/useAutoRefresh';
+import PageHeader from '../../components/common/PageHeader';
+import StatStrip from '../../components/common/StatStrip';
+import { copCompacto, num } from '../../lib/formato';
 
 const estadoConfig: Record<EstadoPedidoProv, { label: string; className: string; icon: any }> = {
-  pendiente:   { label: 'Pendiente',     className: 'bg-amber-500/10 text-amber-600 border-amber-500/20',   icon: Clock },
-  confirmado:  { label: 'Confirmado',    className: 'bg-blue-500/10 text-blue-600 border-blue-500/20',     icon: CheckCircle },
-  preparando:  { label: 'Preparando',    className: 'bg-purple-500/10 text-purple-600 border-purple-500/20', icon: ChefHat },
-  en_transito: { label: 'En Tránsito',   className: 'bg-cyan-500/10 text-cyan-600 border-cyan-500/20',     icon: Truck },
-  entregado:   { label: 'Entregado',     className: 'bg-success/10 text-success border-success/20',         icon: PackageCheck },
-  cancelado:   { label: 'Cancelado',     className: 'bg-destructive/10 text-destructive border-destructive/20', icon: XCircle },
+  pendiente:   { label: 'Pendiente',    className: 'bg-warning-soft text-warning',         icon: Clock },
+  confirmado:  { label: 'Confirmado',   className: 'bg-info-soft text-info',               icon: CheckCircle },
+  preparando:  { label: 'Preparando',   className: 'bg-info-soft text-info',               icon: ChefHat },
+  en_transito: { label: 'En tránsito',  className: 'bg-primary-soft text-primary',         icon: Truck },
+  entregado:   { label: 'Entregado',    className: 'bg-success-soft text-success',         icon: PackageCheck },
+  cancelado:   { label: 'Cancelado',    className: 'bg-destructive-soft text-destructive', icon: XCircle },
 };
 
 const prioridadConfig: Record<PrioridadPedidoProv, { label: string; className: string; icon: any }> = {
-  normal:  { label: 'Normal',  className: 'bg-muted text-muted-foreground border-border', icon: Package },
-  alta:    { label: 'Alta',    className: 'bg-orange-500/10 text-orange-600 border-orange-500/20', icon: AlertTriangle },
-  urgente: { label: 'Urgente', className: 'bg-destructive/10 text-destructive border-destructive/20', icon: Zap },
+  normal:  { label: 'Normal',  className: 'bg-muted text-muted-foreground',       icon: Package },
+  alta:    { label: 'Alta',    className: 'bg-warning-soft text-warning',         icon: AlertTriangle },
+  urgente: { label: 'Urgente', className: 'bg-destructive-soft text-destructive', icon: Zap },
 };
 
 const pagoConfig: Record<EstadoPagoPedidoProv, { label: string; className: string }> = {
-  pendiente: { label: 'Pago pendiente', className: 'bg-amber-500/10 text-amber-600 border-amber-500/20' },
-  pagado:    { label: 'Pagado',          className: 'bg-success/10 text-success border-success/20' },
+  pendiente: { label: 'Pago pendiente', className: 'bg-warning-soft text-warning' },
+  pagado:    { label: 'Pagado',         className: 'bg-success-soft text-success' },
 };
 
 type AccionModal = 'confirmar' | 'despachar' | 'cancelar';
@@ -339,82 +342,29 @@ export default function ProveedorPedidos() {
   return (
     <TooltipProvider delayDuration={200}>
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Gestión de Pedidos</h1>
-          <p className="text-muted-foreground mt-1">Administra y procesa los pedidos de tus clientes</p>
-        </div>
-        <Button variant="outline" onClick={exportarExcel} disabled={exportando} className="gap-2">
-          {exportando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-          Exportar Excel
-        </Button>
-      </div>
+      <PageHeader
+        eyebrow="Portal de proveedores"
+        title="Pedidos"
+        description="Lo que te piden las fincas y en qué va cada entrega."
+        actions={
+          <Button variant="outline" onClick={exportarExcel} disabled={exportando}>
+            {exportando
+              ? <Loader2 className="h-4 w-4 animate-spin" />
+              : <Download className="h-4 w-4" strokeWidth={2} />}
+            Exportar a Excel
+          </Button>
+        }
+      />
 
-      {/* KPIs (vienen agregados del backend, no del listado) */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-muted-foreground">Por Confirmar</p>
-              <Clock className="h-4 w-4 text-amber-600" />
-            </div>
-            <p className="text-2xl sm:text-3xl font-bold">{stats?.por_confirmar ?? 0}</p>
-            <p className="text-xs text-muted-foreground mt-1">Requieren acción</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-muted-foreground">Activos</p>
-              <Package className="h-4 w-4 text-blue-600" />
-            </div>
-            <p className="text-2xl sm:text-3xl font-bold">{stats?.activos ?? 0}</p>
-            <p className="text-xs text-muted-foreground mt-1">En proceso</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-muted-foreground">En Tránsito</p>
-              <Truck className="h-4 w-4 text-cyan-600" />
-            </div>
-            <p className="text-2xl sm:text-3xl font-bold">{stats?.en_transito ?? 0}</p>
-            <p className="text-xs text-muted-foreground mt-1">En camino</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-muted-foreground">Completados</p>
-              <CheckCircle className="h-4 w-4 text-success" />
-            </div>
-            <p className="text-2xl sm:text-3xl font-bold">{stats?.completados ?? 0}</p>
-            <p className="text-xs text-muted-foreground mt-1">Entregados</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-muted-foreground">Ventas del mes</p>
-              <ArrowUpDown className="h-4 w-4 text-primary" />
-            </div>
-            <p className="text-2xl font-bold">
-              {(() => {
-                const v = stats?.ventas_mes ?? 0;
-                return v >= 1_000_000
-                  ? `$${(v / 1_000_000).toFixed(1)}M`
-                  : `$${v.toLocaleString('es-CO')}`;
-              })()}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">Entregados en el mes</p>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Los indicadores vienen agregados del backend, no del listado. */}
+      <StatStrip
+        items={[
+          { label: 'Ventas del mes', value: copCompacto(stats?.ventas_mes ?? 0), note: 'entregados en el mes' },
+          { label: 'Por confirmar', value: num(stats?.por_confirmar ?? 0), note: 'requieren acción' },
+          { label: 'En proceso', value: num(stats?.activos ?? 0), note: `${num(stats?.en_transito ?? 0)} en tránsito` },
+          { label: 'Completados', value: num(stats?.completados ?? 0), note: 'entregados' },
+        ]}
+      />
 
       {/* Tabs (server-side) */}
       <Tabs value={tab} onValueChange={(v: any) => { setTab(v); setPage(1); }}>
@@ -423,7 +373,7 @@ export default function ProveedorPedidos() {
           <TabsTrigger value="por_confirmar">
             Por Confirmar
             {(stats?.por_confirmar ?? 0) > 0 && (
-              <Badge className="ml-2 bg-amber-500 text-white">{stats?.por_confirmar}</Badge>
+              <Badge variant="warning" className="ml-2">{stats?.por_confirmar}</Badge>
             )}
           </TabsTrigger>
           <TabsTrigger value="activos">Activos</TabsTrigger>

@@ -15,8 +15,7 @@ import {
 import {
   Tabs, TabsContent, TabsList, TabsTrigger,
 } from '../../components/ui/tabs';
-import {
-  ArrowLeft, ShoppingCart, User, MapPin, Phone, Calendar, Package,
+import { ShoppingCart, User, MapPin, Phone, Calendar, Package,
   CheckCircle, Clock, Truck, Mail, CreditCard, Edit, XCircle, PackageCheck,
   ChefHat, Loader2, FileText, Hash, AlertTriangle, Zap, Receipt,
 } from 'lucide-react';
@@ -29,24 +28,25 @@ import {
 } from '../../../api/proveedor';
 import { formatFecha, formatFechaHora } from '../../utils/fecha';
 import { useAutoRefresh } from '../../hooks/useAutoRefresh';
+import PageHeader from '../../components/common/PageHeader';
 
 const estadoConfig: Record<EstadoPedidoProv, { label: string; className: string; icon: any }> = {
-  pendiente:   { label: 'Pendiente',     className: 'bg-amber-500/10 text-amber-600 border-amber-500/20',   icon: Clock },
-  confirmado:  { label: 'Confirmado',    className: 'bg-blue-500/10 text-blue-600 border-blue-500/20',     icon: CheckCircle },
-  preparando:  { label: 'Preparando',    className: 'bg-purple-500/10 text-purple-600 border-purple-500/20', icon: ChefHat },
-  en_transito: { label: 'En Tránsito',   className: 'bg-cyan-500/10 text-cyan-600 border-cyan-500/20',     icon: Truck },
+  pendiente:   { label: 'Pendiente',    className: 'bg-warning-soft text-warning', icon: Clock },
+  confirmado:  { label: 'Confirmado',   className: 'bg-info-soft text-info',       icon: CheckCircle },
+  preparando:  { label: 'Preparando',   className: 'bg-info-soft text-info',       icon: ChefHat },
+  en_transito: { label: 'En tránsito',  className: 'bg-primary-soft text-primary', icon: Truck },
   entregado:   { label: 'Entregado',     className: 'bg-success/10 text-success border-success/20',         icon: PackageCheck },
   cancelado:   { label: 'Cancelado',     className: 'bg-destructive/10 text-destructive border-destructive/20', icon: XCircle },
 };
 
 const prioridadConfig: Record<PrioridadPedidoProv, { label: string; className: string; icon: any }> = {
   normal:  { label: 'Normal',  className: 'bg-muted text-muted-foreground border-border', icon: Package },
-  alta:    { label: 'Alta',    className: 'bg-orange-500/10 text-orange-600 border-orange-500/20', icon: AlertTriangle },
+  alta:    { label: 'Alta',    className: 'bg-warning-soft text-warning', icon: AlertTriangle },
   urgente: { label: 'Urgente', className: 'bg-destructive/10 text-destructive border-destructive/20', icon: Zap },
 };
 
 const pagoConfig: Record<EstadoPagoPedidoProv, { label: string; className: string }> = {
-  pendiente: { label: 'Pago pendiente', className: 'bg-amber-500/10 text-amber-600 border-amber-500/20' },
+  pendiente: { label: 'Pago pendiente', className: 'bg-warning-soft text-warning' },
   pagado:    { label: 'Pagado',          className: 'bg-success/10 text-success border-success/20' },
 };
 
@@ -186,14 +186,7 @@ export default function PedidoDetalleProveedor() {
   if (cargando) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/proveedor/pedidos')}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Cargando...</h1>
-          </div>
-        </div>
+        <PageHeader eyebrow="Pedido" title="Cargando…" backTo="/proveedor/pedidos" />
         <div className="flex items-center justify-center py-20 gap-2 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" />
           Cargando pedido...
@@ -205,14 +198,7 @@ export default function PedidoDetalleProveedor() {
   if (!pedido) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/proveedor/pedidos')}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Pedido no encontrado</h1>
-          </div>
-        </div>
+        <PageHeader eyebrow="Pedido" title="Pedido no encontrado" backTo="/proveedor/pedidos" />
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <ShoppingCart className="h-12 w-12 text-muted-foreground mb-3" />
@@ -259,18 +245,12 @@ export default function PedidoDetalleProveedor() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/proveedor/pedidos')}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">{pedido.codigo}</h1>
-            <p className="text-muted-foreground mt-1">Detalle del pedido</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
+      <PageHeader
+        eyebrow="Pedido"
+        title={pedido.codigo}
+        description={pedido.tenant?.nombre}
+        backTo="/proveedor/pedidos"
+        actions={<>
           <Badge variant="outline" className={`${config.className} text-base px-3 py-1`}>
             <EstadoIcon className="h-4 w-4 mr-2" />
             {config.label}
@@ -299,8 +279,8 @@ export default function PedidoDetalleProveedor() {
             {descargandoFactura ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
             Factura PDF
           </Button>
-        </div>
-      </div>
+        </>}
+      />
 
       <Tabs value={tabActiva} onValueChange={setTabActiva}>
         <TabsList>

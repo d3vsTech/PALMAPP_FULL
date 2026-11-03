@@ -9,8 +9,7 @@ import { Checkbox } from '../../components/ui/checkbox';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
-import {
-  ArrowLeft, Plus, Trash2, Upload, Loader2,
+import { Plus, Trash2, Upload, Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePreviewUrl } from '../../hooks/usePreviewUrl';
@@ -19,6 +18,7 @@ import {
   type ProductoCreatePayload, type CategoriaRefProv, type UnidadMedidaProv,
 } from '../../../api/proveedor';
 import { formatThousands } from '../../components/lib/format';
+import PageHeader from '../../components/common/PageHeader';
 
 interface PrecioVolumenLocal {
   cantidad_minima: number;
@@ -131,16 +131,12 @@ export default function NuevoProducto() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/proveedor/productos')}>
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Nuevo Producto</h1>
-          <p className="text-muted-foreground mt-1">Agrega un nuevo producto a tu catálogo</p>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Mis productos"
+        title="Nuevo producto"
+        description="Agrega un producto a tu catálogo del marketplace."
+        backTo="/proveedor/productos"
+      />
 
       <form onSubmit={handleSubmit}>
         <div className="grid gap-6 lg:grid-cols-3">

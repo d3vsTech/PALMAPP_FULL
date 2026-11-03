@@ -9,8 +9,7 @@ import { Checkbox } from '../../components/ui/checkbox';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
-import {
-  ArrowLeft, Save, Plus, Trash2, Upload, Package, Loader2,
+import { Save, Plus, Trash2, Upload, Package, Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePreviewUrl } from '../../hooks/usePreviewUrl';
@@ -20,6 +19,7 @@ import {
   type ProductoUpdatePayload, type ProductoProv,
 } from '../../../api/proveedor';
 import { formatThousands } from '../../components/lib/format';
+import PageHeader from '../../components/common/PageHeader';
 
 interface PrecioVolumenLocal {
   cantidad_minima: number;
@@ -161,14 +161,7 @@ export default function EditarProducto() {
   if (cargando) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/proveedor/productos')}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Cargando...</h1>
-          </div>
-        </div>
+        <PageHeader eyebrow="Mis productos" title="Cargando…" backTo="/proveedor/productos" />
         <div className="flex items-center justify-center py-20 gap-2 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" />
           Cargando producto...
@@ -179,16 +172,12 @@ export default function EditarProducto() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/proveedor/productos')}>
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Editar Producto</h1>
-          <p className="text-muted-foreground mt-1">{producto?.nombre ?? 'Actualiza la información del producto'}</p>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Mis productos"
+        title="Editar producto"
+        description={producto?.nombre ?? 'Actualiza la información del producto'}
+        backTo="/proveedor/productos"
+      />
 
       <form onSubmit={handleSubmit}>
         <div className="grid gap-6 lg:grid-cols-3">

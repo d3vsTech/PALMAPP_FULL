@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
+import { Eye, Loader2, Package, Pencil, Plus, Search, Trash2, Upload } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '../../components/ui/button';
-import { Card, CardContent } from '../../components/ui/card';
-import { Input } from '../../components/ui/input';
 import { Badge } from '../../components/ui/badge';
+import { Card } from '../../components/ui/card';
+import { Input } from '../../components/ui/input';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
@@ -11,16 +13,17 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
-import {
-  Plus, Search, Edit, Trash2, Eye, Package, AlertCircle, CheckCircle,
-  Upload, Loader2,
-} from 'lucide-react';
-import { toast } from 'sonner';
+import PageHeader from '../../components/common/PageHeader';
+import StatStrip from '../../components/common/StatStrip';
+import EmptyState from '../../components/common/EmptyState';
 import {
   proveedorApi, toNumber, buildImagenUrl, ProveedorErrorCodes,
   type ProductoProv, type CategoriaRefProv, type ListarProductosParams,
   type ProductosStats,
 } from '../../../api/proveedor';
+import { cop, num } from '../../lib/formato';
+
+type EstadoFiltro = 'todos' | 'activo' | 'inactivo';
 
 export default function ProveedorProductos() {
   const [productos, setProductos] = useState<ProductoProv[]>([]);
@@ -29,25 +32,28 @@ export default function ProveedorProductos() {
   const [stats, setStats] = useState<ProductosStats | null>(null);
 
   const [busqueda, setBusqueda] = useState('');
-  const [categoriaFiltro, setCategoriaFiltro] = useState<string>('todas');
-  const [estadoFiltro, setEstadoFiltro] = useState<'todos' | 'activo' | 'inactivo'>('todos');
-  const [page, setPage] = useState(1);
+  const [categoriaFiltro, setCategoriaFiltro] = useState('todas');
+  const [estadoFiltro, setEstadoFiltro] = useState<EstadoFiltro>('todos');
+  const [pagina, setPagina] = useState(1);
   const [cargando, setCargando] = useState(true);
 
   const [productoAEliminar, setProductoAEliminar] = useState<ProductoProv | null>(null);
   const [eliminando, setEliminando] = useState(false);
 
-  /** Stale-guard: si cambian filtros/página con una petición en vuelo,
-   *  la respuesta vieja no debe pisar a la nueva. */
+  /**
+   * Si cambian filtros o página con una petición en vuelo, la respuesta vieja
+   * no debe pisar a la nueva.
+   */
   const reqIdRef = useRef(0);
 
   const cargar = () => {
     const reqId = ++reqIdRef.current;
     setCargando(true);
-    const params: ListarProductosParams = { page };
+    const params: ListarProductosParams = { page: pagina };
     if (busqueda.trim()) params.buscar = busqueda.trim();
     if (categoriaFiltro !== 'todas') params.categoria_id = parseInt(categoriaFiltro);
     if (estadoFiltro !== 'todos') params.estado = estadoFiltro;
+
     proveedorApi.productos(params)
       .then((res) => {
         if (reqId !== reqIdRef.current) return;
@@ -55,271 +61,234 @@ export default function ProveedorProductos() {
         setMeta(res.meta);
         if (res.stats) setStats(res.stats);
       })
-      .catch((e: any) => {
+      .catch((e) => {
         if (reqId !== reqIdRef.current) return;
-        toast.error(e?.message ?? 'Error al cargar productos');
+        toast.error(e instanceof Error ? e.message : 'No se pudieron cargar los productos');
       })
       .finally(() => { if (reqId === reqIdRef.current) setCargando(false); });
   };
 
   useEffect(() => {
-    // wizard-init trae categorías + unidades en 1 sola petición.
+    // wizard-init trae categorías y unidades en una sola petición.
     proveedorApi.wizardInitProductos()
-      .then((res) => setCategorias(res.data.categorias as any))
-      .catch(() => {});
+      .then((res) => setCategorias(res.data.categorias))
+      .catch(() => { /* los filtros funcionan sin el catálogo */ });
   }, []);
 
   useEffect(() => {
     const t = setTimeout(cargar, busqueda ? 350 : 0);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [busqueda, categoriaFiltro, estadoFiltro, page]);
+  }, [busqueda, categoriaFiltro, estadoFiltro, pagina]);
 
-  const eliminarProducto = async () => {
+  const eliminar = async () => {
     if (!productoAEliminar) return;
     setEliminando(true);
     try {
       await proveedorApi.eliminarProducto(productoAEliminar.id);
-      toast.success('Producto eliminado exitosamente');
+      toast.success('Producto eliminado');
       setProductoAEliminar(null);
       cargar();
-    } catch (e: any) {
-      const code = e?.code;
+    } catch (e) {
+      const code = (e as { code?: string })?.code;
       if (code === ProveedorErrorCodes.PRODUCTO_CON_ORDENES_ACTIVAS
-          || code === ProveedorErrorCodes.PRODUCTO_CON_PEDIDOS) {
-        toast.error('No se puede eliminar: el producto tiene órdenes activas. Inactívalo en lugar de eliminarlo.');
+        || code === ProveedorErrorCodes.PRODUCTO_CON_PEDIDOS) {
+        toast.error('No se puede eliminar: el producto tiene órdenes activas. Inactívalo en vez de eliminarlo.');
       } else {
-        toast.error(e?.message ?? 'Error al eliminar producto');
+        toast.error(e instanceof Error ? e.message : 'No se pudo eliminar el producto');
       }
     } finally {
       setEliminando(false);
     }
   };
 
-  const getEstadoBadge = (producto: ProductoProv) => {
-    if (producto.stock_disponible === 0) {
-      return (
-        <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20">
-          <AlertCircle className="h-3 w-3 mr-1" />
-          Sin Stock
-        </Badge>
-      );
-    }
-    if (producto.estado === 'inactivo') {
-      return (
-        <Badge variant="outline" className="bg-muted text-muted-foreground border-muted">
-          Inactivo
-        </Badge>
-      );
-    }
-    return (
-      <Badge variant="outline" className="bg-success/10 text-success border-success/20">
-        <CheckCircle className="h-3 w-3 mr-1" />
-        Activo
-      </Badge>
-    );
+  /** Sin stock manda sobre el estado: es lo que impide vender. */
+  const estadoDelProducto = (producto: ProductoProv) => {
+    if (producto.stock_disponible === 0) return { label: 'Sin stock', variante: 'destructive' as const };
+    if (producto.estado === 'inactivo') return { label: 'Inactivo', variante: 'secondary' as const };
+    return { label: 'Activo', variante: 'success' as const };
+  };
+
+  const hayFiltros = busqueda.trim() !== '' || categoriaFiltro !== 'todas' || estadoFiltro !== 'todos';
+
+  const limpiarFiltros = () => {
+    setBusqueda('');
+    setCategoriaFiltro('todas');
+    setEstadoFiltro('todos');
+    setPagina(1);
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Mis Productos</h1>
-          <p className="text-muted-foreground mt-1">
-            Gestiona tu catálogo de productos
-          </p>
+      <PageHeader
+        eyebrow="Portal de proveedores"
+        title="Mis productos"
+        description="Tu catálogo publicado en el marketplace."
+        actions={
+          <>
+            <Button variant="outline" asChild>
+              <Link to="/proveedor/productos/carga-masiva">
+                <Upload className="h-4 w-4" strokeWidth={2} />
+                Carga masiva
+              </Link>
+            </Button>
+            <Button asChild>
+              <Link to="/proveedor/productos/nuevo">
+                <Plus className="h-4 w-4" strokeWidth={2} />
+                Nuevo producto
+              </Link>
+            </Button>
+          </>
+        }
+      />
+
+      {stats && (
+        <StatStrip
+          items={[
+            { label: 'Productos publicados', value: num(meta?.total ?? 0), note: 'en tu catálogo' },
+            { label: 'Activos', value: num(stats.total_activos) },
+            { label: 'Inactivos', value: num(stats.total_inactivos) },
+            { label: 'Sin stock', value: num(stats.total_sin_stock) },
+          ]}
+        />
+      )}
+
+      <div className="grid gap-3 md:grid-cols-4">
+        <div className="relative md:col-span-2">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={2} />
+          <Input
+            aria-label="Buscar productos"
+            placeholder="Buscar por nombre o referencia"
+            value={busqueda}
+            onChange={(e) => { setBusqueda(e.target.value); setPagina(1); }}
+            className="pl-9"
+          />
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" className="gap-2" asChild>
-            <Link to="/proveedor/productos/carga-masiva">
-              <Upload className="h-4 w-4" />
-              Carga Masiva
-            </Link>
-          </Button>
-          <Button asChild className="gap-2">
-            <Link to="/proveedor/productos/nuevo">
-              <Plus className="h-4 w-4" />
-              Nuevo Producto
-            </Link>
-          </Button>
-        </div>
+        <Select value={categoriaFiltro} onValueChange={(v) => { setCategoriaFiltro(v); setPagina(1); }}>
+          <SelectTrigger aria-label="Categoría"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todas">Todas las categorías</SelectItem>
+            {categorias.map((c) => (
+              <SelectItem key={c.id} value={String(c.id)}>{c.nombre}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={estadoFiltro} onValueChange={(v) => { setEstadoFiltro(v as EstadoFiltro); setPagina(1); }}>
+          <SelectTrigger aria-label="Estado"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos los estados</SelectItem>
+            <SelectItem value="activo">Activos</SelectItem>
+            <SelectItem value="inactivo">Inactivos</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
-      {/* Stats del catálogo del proveedor */}
-      {stats && (
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Card>
-            <CardContent className="p-5">
-              <p className="text-sm text-muted-foreground mb-1">Activos</p>
-              <p className="text-2xl sm:text-3xl font-bold text-success">{stats.total_activos}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-5">
-              <p className="text-sm text-muted-foreground mb-1">Inactivos</p>
-              <p className="text-2xl sm:text-3xl font-bold text-muted-foreground">{stats.total_inactivos}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-5">
-              <p className="text-sm text-muted-foreground mb-1">Sin stock</p>
-              <p className="text-2xl sm:text-3xl font-bold text-destructive">{stats.total_sin_stock}</p>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Filtros */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="grid gap-4 md:grid-cols-4">
-            <div className="md:col-span-2">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar productos..."
-                  value={busqueda}
-                  onChange={(e) => { setBusqueda(e.target.value); setPage(1); }}
-                  className="pl-9"
-                />
-              </div>
-            </div>
-            <div>
-              <Select value={categoriaFiltro} onValueChange={(v) => { setCategoriaFiltro(v); setPage(1); }}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Categoría" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todas">Todas las categorías</SelectItem>
-                  {categorias.map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>{c.nombre}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Select value={estadoFiltro} onValueChange={(v) => { setEstadoFiltro(v as any); setPage(1); }}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Estado" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos</SelectItem>
-                  <SelectItem value="activo">Activos</SelectItem>
-                  <SelectItem value="inactivo">Inactivos</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Lista de productos */}
       {cargando ? (
-        <div className="flex items-center justify-center py-12 gap-2 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          Cargando productos...
-        </div>
+        <Card className="gap-0">
+          <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Cargando productos…
+          </div>
+        </Card>
+      ) : productos.length === 0 ? (
+        <Card className="gap-0">
+          <EmptyState
+            title="No se encontraron productos"
+            description={hayFiltros
+              ? 'Ningún producto coincide con los filtros aplicados.'
+              : 'Todavía no has publicado productos en el marketplace.'}
+            action={hayFiltros ? { label: 'Quitar filtros', onClick: limpiarFiltros } : undefined}
+          />
+        </Card>
       ) : (
-        <div className="grid gap-4">
-          {productos.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <Package className="h-12 w-12 text-muted-foreground mb-3" />
-                <p className="text-muted-foreground">No se encontraron productos</p>
-              </CardContent>
-            </Card>
-          ) : (
-            productos.map((producto) => {
-              const precio = toNumber(producto.precio_unitario);
-              return (
-                <Card key={producto.id}>
-                  <CardContent className="p-5">
-                    <div className="flex items-start gap-4">
-                      <div className="h-16 w-16 rounded-lg bg-muted flex items-center justify-center flex-shrink-0 overflow-hidden">
-                        {producto.imagen_principal ? (
-                          <img src={buildImagenUrl(producto.imagen_principal)} alt={producto.nombre} className="w-full h-full object-cover" />
-                        ) : (
-                          <Package className="h-8 w-8 text-muted-foreground" />
-                        )}
-                      </div>
+        <Card className="gap-0 divide-y divide-border overflow-hidden">
+          {productos.map((producto) => {
+            const estado = estadoDelProducto(producto);
+            const imagen = buildImagenUrl(producto.imagen_principal);
+            return (
+              <div key={producto.id} className="flex items-start gap-4 px-5 py-4 transition-colors hover:bg-muted/40">
+                <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted text-muted-foreground">
+                  {imagen
+                    ? <img src={imagen} alt="" className="h-full w-full object-cover" />
+                    : <Package className="h-6 w-6" strokeWidth={2} />}
+                </span>
 
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1 flex-wrap">
-                              <h3 className="font-semibold">{producto.nombre}</h3>
-                              {getEstadoBadge(producto)}
-                              {producto.destacado && (
-                                <Badge variant="outline" className="text-xs border-amber-500/40 text-amber-600">
-                                  Destacado
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="text-sm text-muted-foreground mb-2">{producto.descripcion}</p>
-                            <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
-                              {producto.categoria && <span>{producto.categoria.nombre}</span>}
-                              <span className={producto.stock_disponible === 0 ? 'text-destructive' : ''}>
-                                Stock: {producto.stock_disponible}
-                              </span>
-                              {producto.sku && <span>Ref: {producto.sku}</span>}
-                            </div>
-                          </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link
+                      to={`/proveedor/productos/${producto.id}`}
+                      className="font-semibold text-foreground hover:text-primary hover:underline"
+                    >
+                      {producto.nombre}
+                    </Link>
+                    <Badge variant={estado.variante}>{estado.label}</Badge>
+                    {producto.destacado && <Badge variant="warning">Destacado</Badge>}
+                  </div>
+                  {producto.descripcion && (
+                    <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">{producto.descripcion}</p>
+                  )}
+                  <p className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+                    {producto.categoria && <span>{producto.categoria.nombre}</span>}
+                    <span className={producto.stock_disponible === 0 ? 'text-destructive' : undefined}>
+                      Stock {num(producto.stock_disponible)}
+                    </span>
+                    {producto.sku && <span>Ref {producto.sku}</span>}
+                  </p>
+                </div>
 
-                          <div className="text-right flex-shrink-0">
-                            <p className="text-xl font-bold">
-                              ${precio.toLocaleString('es-CO')}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              por {producto.unidad_medida?.abreviatura ?? 'und'}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
+                <div className="shrink-0 text-right">
+                  <p className="font-bold text-foreground">{cop(toNumber(producto.precio_unitario))}</p>
+                  <p className="text-xs text-muted-foreground">
+                    por {producto.unidad_medida?.abreviatura ?? 'und'}
+                  </p>
+                </div>
 
-                      <div className="flex gap-2 flex-shrink-0">
-                        <Button variant="ghost" size="sm" asChild title="Ver detalle">
-                          <Link to={`/proveedor/productos/${producto.id}`} aria-label="Ver detalle">
-                            <Eye className="h-4 w-4" />
-                          </Link>
-                        </Button>
-                        <Button variant="ghost" size="sm" asChild title="Editar">
-                          <Link to={`/proveedor/productos/editar/${producto.id}`} aria-label="Editar">
-                            <Edit className="h-4 w-4" />
-                          </Link>
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => setProductoAEliminar(producto)}
-                          title="Eliminar"
-                          aria-label="Eliminar"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })
-          )}
-        </div>
+                <div className="flex shrink-0 items-center gap-0.5 text-muted-foreground">
+                  <Button variant="ghost" size="icon" asChild title="Ver detalle">
+                    <Link to={`/proveedor/productos/${producto.id}`} aria-label="Ver detalle">
+                      <Eye className="h-4 w-4" strokeWidth={2} />
+                    </Link>
+                  </Button>
+                  <Button variant="ghost" size="icon" asChild title="Editar">
+                    <Link to={`/proveedor/productos/editar/${producto.id}`} aria-label="Editar">
+                      <Pencil className="h-4 w-4" strokeWidth={2} />
+                    </Link>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="hover:text-destructive"
+                    title="Eliminar"
+                    aria-label="Eliminar"
+                    onClick={() => setProductoAEliminar(producto)}
+                  >
+                    <Trash2 className="h-4 w-4" strokeWidth={2} />
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </Card>
       )}
 
-      {/* Paginación */}
       {meta && meta.last_page > 1 && (
-        <div className="flex items-center justify-between pt-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">
-            Página {meta.current_page} de {meta.last_page} · {meta.total} productos
+            Página {meta.current_page} de {meta.last_page} · {num(meta.total)} productos
           </p>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={meta.current_page === 1}>
-              Anterior
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm" variant="outline"
+              onClick={() => setPagina((p) => Math.max(1, p - 1))}
+              disabled={cargando || meta.current_page === 1}
+            >
+              Anteriores
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(meta.last_page, p + 1))} disabled={meta.current_page === meta.last_page}>
-              Siguiente
+            <Button
+              size="sm" variant="outline"
+              onClick={() => setPagina((p) => Math.min(meta.last_page, p + 1))}
+              disabled={cargando || meta.current_page === meta.last_page}
+            >
+              Siguientes
             </Button>
           </div>
         </div>
@@ -327,25 +296,25 @@ export default function ProveedorProductos() {
 
       <AlertDialog
         open={!!productoAEliminar}
-        onOpenChange={(o) => !eliminando && !o && setProductoAEliminar(null)}
+        onOpenChange={(abierto) => !eliminando && !abierto && setProductoAEliminar(null)}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Eliminar producto?</AlertDialogTitle>
             <AlertDialogDescription>
               {productoAEliminar
-                ? `¿Estás seguro de que deseas eliminar el producto "${productoAEliminar.nombre}"? Esta acción no se puede deshacer.`
+                ? `Se elimina "${productoAEliminar.nombre}" del catálogo. Esta acción no se puede deshacer.`
                 : 'Esta acción no se puede deshacer.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={eliminando}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              onClick={(e) => { e.preventDefault(); eliminarProducto(); }}
+              onClick={(e) => { e.preventDefault(); void eliminar(); }}
               disabled={eliminando}
-              className="bg-destructive text-white hover:bg-destructive/90"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {eliminando ? 'Eliminando...' : 'Eliminar'}
+              {eliminando ? 'Eliminando…' : 'Eliminar'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

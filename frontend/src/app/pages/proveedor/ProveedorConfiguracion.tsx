@@ -41,6 +41,7 @@ import {
 } from '../../../api/proveedor';
 import { proveedorAuthStorage } from '../../../api/proveedorAuth';
 import { getDepartamentos, getMunicipios } from '../../../api/plantacion';
+import PageHeader from '../../components/common/PageHeader';
 
 const ETAPAS = [
   { numero: 1, nombre: 'General', descripcion: 'Información básica', icon: Store },
@@ -356,33 +357,20 @@ export default function ProveedorConfiguracion() {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate('/proveedor/dashboard')}
-              className="rounded-xl"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <h1 className="text-3xl sm:text-4xl font-bold text-foreground">Configuración</h1>
-          </div>
-          <p className="text-muted-foreground ml-14">
-            Administra la información y preferencias de tu cuenta
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Portal de proveedores"
+        title="Configuración"
+        description="Los datos de tu empresa y las preferencias de la cuenta."
+        backTo="/proveedor/dashboard"
+      />
 
       {/* Banner de OPERADOR (solo-lectura) */}
       {!esAdmin && (
-        <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/20 flex gap-3">
-          <Lock className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+        <div className="flex gap-3 rounded-lg border border-warning/20 bg-warning-soft p-4">
+          <Lock className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
           <div>
-            <p className="text-sm font-medium text-amber-700">Vista de solo lectura</p>
-            <p className="text-sm text-amber-700">
+            <p className="text-sm font-medium text-warning">Vista de solo lectura</p>
+            <p className="text-sm text-warning">
               Tu rol es <strong>Operador</strong>. Solo el Administrador del proveedor puede modificar esta configuración.
             </p>
           </div>
@@ -685,9 +673,9 @@ export default function ProveedorConfiguracion() {
                     </div>
                   </div>
 
-                  <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20 flex gap-3">
-                    <Info className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                    <p className="text-sm text-blue-600">
+                  <div className="flex gap-3 rounded-lg border border-info/20 bg-info-soft p-4">
+                    <Info className="mt-0.5 h-5 w-5 shrink-0 text-info" />
+                    <p className="text-sm text-info">
                       Esta información es confidencial y solo se usa para procesar tus pagos.
                       Asegúrate de que los datos sean correctos.
                     </p>

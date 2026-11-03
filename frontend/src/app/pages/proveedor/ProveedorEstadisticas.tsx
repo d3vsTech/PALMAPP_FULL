@@ -23,6 +23,7 @@ import {
 } from '../../../api/proveedor';
 import { formatCOP } from '../../components/lib/format';
 import { formatFecha } from '../../utils/fecha';
+import PageHeader from '../../components/common/PageHeader';
 
 /**
  * Días entre dos fechas YYYY-MM-DD, inclusivo en ambos extremos.
@@ -185,11 +186,11 @@ export default function ProveedorEstadisticas() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Estadísticas y Reportes</h1>
-        <p className="text-muted-foreground mt-1">Análisis de rendimiento y ventas</p>
-      </div>
+      <PageHeader
+        eyebrow="Portal de proveedores"
+        title="Estadísticas"
+        description="Cómo van tus ventas y qué se mueve más."
+      />
 
       {/* Filtros de período */}
       <Card>
@@ -458,9 +459,9 @@ export default function ProveedorEstadisticas() {
                       ? 'text-destructive'
                       : 'text-muted-foreground';
                   const rankBg =
-                    p.rank === 1 ? 'bg-amber-500/10 text-amber-600'
-                      : p.rank === 2 ? 'bg-slate-400/10 text-slate-600'
-                        : p.rank === 3 ? 'bg-orange-500/10 text-orange-600'
+                    p.rank === 1 ? 'bg-primary text-primary-foreground'
+                      : p.rank === 2 ? 'bg-primary-soft text-primary'
+                        : p.rank === 3 ? 'bg-warning-soft text-warning'
                           : 'bg-muted text-muted-foreground';
                   return (
                     <div
@@ -538,8 +539,8 @@ export default function ProveedorEstadisticas() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                <ArrowUpRight className="h-6 w-6 text-blue-600" />
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-info-soft">
+                <ArrowUpRight className="h-6 w-6 text-info" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Tasa de conversión</p>
@@ -556,8 +557,8 @@ export default function ProveedorEstadisticas() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-lg bg-purple-500/10 flex items-center justify-center">
-                <DollarSign className="h-6 w-6 text-purple-600" />
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary-soft">
+                <DollarSign className="h-6 w-6 text-primary" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Ticket promedio</p>
@@ -570,8 +571,8 @@ export default function ProveedorEstadisticas() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-lg bg-cyan-500/10 flex items-center justify-center">
-                <Package className="h-6 w-6 text-cyan-600" />
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-success-soft">
+                <Package className="h-6 w-6 text-success" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Productos activos</p>

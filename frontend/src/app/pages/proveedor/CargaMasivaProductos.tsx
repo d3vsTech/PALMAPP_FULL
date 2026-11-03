@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
+import PageHeader from '../../components/common/PageHeader';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '../../components/ui/table';
-import {
-  ArrowLeft, Upload, Download, FileSpreadsheet, CheckCircle, AlertCircle,
+import { Upload, Download, FileSpreadsheet, CheckCircle, AlertCircle,
   Loader2, XCircle, FileArchive, RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -108,9 +108,9 @@ const estadoLabel: Record<EstadoImportacionProductos, string> = {
 
 const estadoBadgeClass: Record<EstadoImportacionProductos, string> = {
   PENDIENTE:   'bg-muted text-muted-foreground border-border',
-  PROCESANDO:  'bg-blue-500/10 text-blue-600 border-blue-500/20',
+  PROCESANDO:  'bg-info-soft text-info',
   COMPLETADO:  'bg-success/10 text-success border-success/20',
-  CON_ERRORES: 'bg-orange-500/10 text-orange-600 border-orange-500/20',
+  CON_ERRORES: 'bg-warning-soft text-warning',
   FALLIDO:     'bg-destructive/10 text-destructive border-destructive/20',
 };
 
@@ -227,18 +227,12 @@ export default function CargaMasivaProductos() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/proveedor/productos')}>
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Carga Masiva de Productos</h1>
-          <p className="text-muted-foreground mt-1">
-            Importa múltiples productos con sus imágenes desde un archivo ZIP
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Mis productos"
+        title="Carga masiva"
+        description="Sube varios productos con sus imágenes desde un archivo ZIP."
+        backTo="/proveedor/productos"
+      />
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Columna izquierda — Instrucciones */}
@@ -325,10 +319,10 @@ export default function CargaMasivaProductos() {
                 <span><strong>Formatos de imagen:</strong> jpg, jpeg, png, webp</span>
               </div>
 
-              <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/30 rounded-lg p-3 mt-3">
+              <div className="mt-3 rounded-lg border border-warning/20 bg-warning-soft p-3">
                 <div className="flex gap-2">
-                  <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-amber-700 dark:text-amber-200">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                  <p className="text-xs text-warning">
                     Los SKUs duplicados con productos ya existentes en tu catálogo serán marcados como fallidos. El resto se importa normalmente.
                   </p>
                 </div>
@@ -432,7 +426,7 @@ export default function CargaMasivaProductos() {
                   {/* Mientras procesa: barra animada */}
                   {procesando && (
                     <div className="space-y-3">
-                      <div className="flex items-center gap-2 text-sm text-blue-600">
+                      <div className="flex items-center gap-2 text-sm text-info">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         <span>
                           {estado === 'PENDIENTE'
@@ -441,7 +435,7 @@ export default function CargaMasivaProductos() {
                         </span>
                       </div>
                       <div className="h-2 bg-muted rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-500 animate-pulse" style={{ width: '40%' }} />
+                        <div className="h-full animate-pulse bg-info" style={{ width: '40%' }} />
                       </div>
                     </div>
                   )}
@@ -459,8 +453,8 @@ export default function CargaMasivaProductos() {
                         </div>
                       )}
                       {estado === 'CON_ERRORES' && (
-                        <div className="rounded-lg border-2 border-orange-500 bg-orange-500/5 p-6 text-center">
-                          <AlertCircle className="h-12 w-12 text-orange-600 mx-auto mb-3" />
+                        <div className="rounded-lg border border-warning/30 bg-warning-soft p-6 text-center">
+                          <AlertCircle className="mx-auto mb-3 h-12 w-12 text-warning" />
                           <h3 className="font-semibold mb-1">Importación parcial</h3>
                           <p className="text-sm text-muted-foreground">
                             {importacion.filas_exitosas} productos creados ·{' '}

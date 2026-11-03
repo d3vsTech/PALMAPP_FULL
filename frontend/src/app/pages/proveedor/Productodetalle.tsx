@@ -11,8 +11,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
-import {
-  ArrowLeft, Edit, Package, Trash2, AlertCircle, CheckCircle, Loader2, Star,
+import { Edit, Package, Trash2, AlertCircle, CheckCircle, Loader2, Star,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -21,6 +20,7 @@ import {
   type ProductoProv,
 } from '../../../api/proveedor';
 import { formatThousands } from '../../components/lib/format';
+import PageHeader from '../../components/common/PageHeader';
 
 // Trunca decimales (no redondea) antes de formatear con miles.
 const formatCOP = (v: number | string): string =>
@@ -86,14 +86,11 @@ export default function ProductoDetalle() {
   if (!producto) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/proveedor/productos')}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Producto no encontrado</h1>
-          </div>
-        </div>
+        <PageHeader
+          eyebrow="Mis productos"
+          title="Producto no encontrado"
+          backTo="/proveedor/productos"
+        />
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Package className="h-12 w-12 text-muted-foreground mb-3" />
@@ -138,45 +135,29 @@ export default function ProductoDetalle() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/proveedor/productos')} title="Volver">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-2xl sm:text-3xl font-bold text-foreground">{producto.nombre}</h1>
-              {producto.destacado && (
-                <Badge variant="outline" className="border-amber-500/40 text-amber-600 gap-1">
-                  <Star className="h-3 w-3" /> Destacado
-                </Badge>
-              )}
-            </div>
-            <p className="text-muted-foreground mt-1">Detalles del producto</p>
-          </div>
-        </div>
-        <div className="flex gap-2">
+      <PageHeader
+        eyebrow="Mis productos"
+        title={producto.nombre}
+        description={producto.destacado ? 'Producto destacado del catálogo' : 'Detalle del producto'}
+        backTo="/proveedor/productos"
+        actions={<>
           <Button
             variant="outline"
             onClick={() => navigate(`/proveedor/productos/editar/${producto.id}`)}
-            className="gap-2"
-            title="Editar producto"
           >
-            <Edit className="h-4 w-4" />
+            <Edit className="h-4 w-4" strokeWidth={2} />
             Editar
           </Button>
           <Button
             variant="outline"
-            className="gap-2 text-destructive hover:text-destructive"
+            className="text-destructive hover:text-destructive"
             onClick={handleEliminar}
-            title="Eliminar producto"
           >
-            <Trash2 className="h-4 w-4" />
+            <Trash2 className="h-4 w-4" strokeWidth={2} />
             Eliminar
           </Button>
-        </div>
-      </div>
+        </>}
+      />
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Columna principal */}
