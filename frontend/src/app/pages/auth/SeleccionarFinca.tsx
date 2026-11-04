@@ -54,7 +54,8 @@ export default function SeleccionarFinca() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10 sm:px-6">
+      <main className="flex flex-1 items-center justify-center px-4 py-10 sm:px-6">
+        <div className="w-full max-w-3xl">
         <div className="mb-6 space-y-1.5">
           <h1>Selecciona una finca</h1>
           <p className="text-sm text-muted-foreground">
@@ -138,6 +139,7 @@ export default function SeleccionarFinca() {
           <LogOut className="h-4 w-4" strokeWidth={2} />
           Cerrar sesión
         </button>
+        </div>
       </main>
 
       <footer className="border-t border-border py-5">

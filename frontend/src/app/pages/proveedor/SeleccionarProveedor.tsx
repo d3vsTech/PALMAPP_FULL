@@ -105,7 +105,8 @@ export default function SeleccionarProveedor() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10 sm:px-6">
+      <main className="flex flex-1 items-center justify-center px-4 py-10 sm:px-6">
+        <div className="w-full max-w-3xl">
         <div className="mb-6 space-y-1.5">
           <p className="text-[13px] font-medium text-muted-foreground">Portal de proveedores</p>
           <h1>Selecciona tu proveedor</h1>
@@ -182,6 +183,7 @@ export default function SeleccionarProveedor() {
             <LogOut className="h-4 w-4" strokeWidth={2} />
             Cerrar sesión
           </button>
+        </div>
         </div>
       </main>
 

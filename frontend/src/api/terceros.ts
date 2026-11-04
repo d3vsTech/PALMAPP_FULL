@@ -5,7 +5,8 @@
  *  - CRUD de Terceros (Jurídica o Natural).
  *  - CRUD de Operarios anidados.
  *  - Wizard init (sin tercero) y Configuración init (con tercero existente).
- *  - Overrides de precios: labor-precios, precios-cosecha, precios-abono.
+ *  - Overrides de precios: labor-precios, actividad-precios (sublabores),
+ *    precios-cosecha y precios-abono.
  *  - Toggle (activar/desactivar) para terceros y operarios.
  *
  * Base URL: {host}/api/v1/tenant  (el prefijo `/api` ya viene en BASE_URL)
@@ -170,6 +171,50 @@ export interface UpsertLaborPrecioPayload {
   tipo_pago?: 'POR_PALMA' | 'JORNAL_FIJO' | null;
 }
 
+/**
+ * Sublabor del catálogo del tenant (`labor_actividades`). Son los "trabajos
+ * disponibles" de SANIDAD, OTROS y las labores custom de PALMA.
+ *
+ * `precio` es el del tenant y viaja **solo como referencia visual**: a un
+ * operario de tercero nunca se le aplica (API_TERCEROS.md §3).
+ */
+export interface LaborActividadItem {
+  id: number;
+  labor_id: number;
+  nombre: string;
+  precio: string | number | null;
+  /** Ausente en el wizard-init, presente en configuracion/init. */
+  estado?: boolean;
+}
+
+/** Diccionario `labor_id` → sublabores, tal como lo manda el backend. */
+export type ActividadesPorLabor = Record<string, LaborActividadItem[]>;
+
+/**
+ * Precio pactado con el tercero para una sublabor (§6.3). Gana sobre
+ * `labor-precios` cuando el jornal trae esa sublabor. Solo monto: el modo de
+ * pago sigue saliendo de la labor.
+ *
+ * Un `precio` en 0 cuenta como "sin pacto" al calcular, así que para quitarlo
+ * hay que borrar la fila, no mandar cero.
+ */
+export interface TerceroActividadPrecio {
+  id: number;
+  tercero_id?: number;
+  labor_actividad_id: number;
+  /** Aplanado desde la sublabor en `configuracion/init`. */
+  labor_id?: number;
+  precio: string | number;
+  estado: boolean;
+  /** Anidada en `GET /terceros/{id}/actividad-precios`. */
+  actividad?: LaborActividadItem;
+}
+
+export interface UpsertActividadPrecioPayload {
+  labor_actividad_id: number;
+  precio: number;
+}
+
 export interface TerceroPrecioCosecha {
   id: number;
   lote_id: number;
@@ -239,8 +284,10 @@ export interface ParametricaSelectItem {
  * todavía un `tercero_id`.
  */
 export interface TerceroWizardInit {
-  /** Labores PALMA activas excluyendo COSECHA y FERTILIZACION. */
+  /** Labores PALMA y FINCA activas, excluyendo COSECHA y FERTILIZACION. */
   labores_contexto: LaborContextoItem[];
+  /** Sublabores **activas** de las labores que las admiten. */
+  actividades_por_labor: ActividadesPorLabor;
   lotes_contexto: LoteContextoItem[];
   precios_abono_referencia: Array<{
     gramos_min: string | number;
@@ -260,9 +307,13 @@ export interface TerceroWizardInit {
 export interface TerceroConfiguracionInit {
   tercero: Tercero;
   labor_precios: TerceroLaborPrecio[];
+  /** Pactos por sublabor activos, con `labor_id` ya aplanado. */
+  actividad_precios: TerceroActividadPrecio[];
   precios_cosecha: TerceroPrecioCosecha[];
   precios_abono: TerceroPrecioAbono[];
   labores_contexto: LaborContextoItem[];
+  /** Aquí vienen **también las inactivas**, con su `estado`. */
+  actividades_por_labor: ActividadesPorLabor;
   lotes_contexto: LoteContextoItem[];
   eps: ParametricaSelectItem[];
   arl: ParametricaSelectItem[];
@@ -278,12 +329,15 @@ export interface WizardCompletePayload {
   precios_cosecha: Pick<UpsertPrecioCosechaPayload, 'lote_id' | 'precio'>[];
   precios_abono: CrearPrecioAbonoPayload[];
   labor_precios: UpsertLaborPrecioPayload[];
+  /** Pactos por sublabor. Las filas sin valor no se mandan. */
+  actividad_precios: UpsertActividadPrecioPayload[];
   operarios: CrearOperarioPayload[];
 }
 
 /** Resumen de ítems persistidos por `wizard-complete`. */
 export interface WizardCompleteResult {
   labor_precios: number;
+  actividad_precios: number;
   precios_cosecha: number;
   precios_abono: number;
   operarios: number;
@@ -446,6 +500,37 @@ export const tercerosPreciosApi = {
   eliminarLaborPrecio: (terceroId: number, precioId: number) =>
     apiClient.delete<MessageOnly>(
       `${BASE}/terceros/${terceroId}/labor-precios/${precioId}`,
+      T,
+    ),
+
+  // ── Sublabores (§6.3) ────────────────────────────────────────────────────
+
+  /** Pactos del tercero, activos e inactivos, con la sublabor anidada. */
+  listarActividadPrecios: (terceroId: number) =>
+    apiClient.get<{ data: TerceroActividadPrecio[] }>(
+      `${BASE}/terceros/${terceroId}/actividad-precios`,
+      T,
+    ),
+
+  /**
+   * Upsert por (tercero, labor_actividad_id). Solo monto: el modo de pago
+   * sigue saliendo de `labor-precios` o del catálogo.
+   *
+   * No mandar 0 para "quitar el pacto": el backend lo guarda y el cálculo lo
+   * trata como sin pacto, pero la pantalla seguiría mostrando un cero. Para
+   * quitarlo va `eliminarActividadPrecio`.
+   */
+  upsertActividadPrecio: (terceroId: number, payload: UpsertActividadPrecioPayload) =>
+    apiClient.post<Mutation<TerceroActividadPrecio>>(
+      `${BASE}/terceros/${terceroId}/actividad-precios`,
+      payload,
+      T,
+    ),
+
+  /** Elimina el pacto — vuelve a cobrar lo pactado por labor o el catálogo. */
+  eliminarActividadPrecio: (terceroId: number, precioId: number) =>
+    apiClient.delete<MessageOnly>(
+      `${BASE}/terceros/${terceroId}/actividad-precios/${precioId}`,
       T,
     ),
 

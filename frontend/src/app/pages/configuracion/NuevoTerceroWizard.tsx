@@ -65,6 +65,7 @@ import {
   type CrearTerceroPayload,
   type TerceroWizardInit,
   type WizardCompletePayload,
+  type LaborContextoItem,
 } from '../../../api/terceros';
 import { cached, invalidate } from '../../../api/cache';
 import type { ApiError } from '../../../api/client';
@@ -79,6 +80,27 @@ function asApiError(e: unknown): Partial<ApiError> {
 
 // ─── Tipos del paso 2 ────────────────────────────────────────────────────────
 
+/**
+ * Orden de las tarjetas de palma: alfabético, con "Otros" al final porque es
+ * el cajón de sastre y cierra la lista antes de las labores de finca.
+ *
+ * Cosecha y Fertilización en POR_PALMA no entran: su precio sale de la tabla
+ * por lote y de la escala de gramos, que ya tienen su propia sección arriba.
+ */
+function laboresDePalmaOrdenadas(labores: LaborContextoItem[]): LaborContextoItem[] {
+  return labores
+    .filter((l) => l.categoria === 'PALMA')
+    .filter((l) => !(
+      (l.tipo === 'COSECHA' || l.tipo === 'FERTILIZACION') && l.tipo_pago === 'POR_PALMA'
+    ))
+    .sort((a, b) => {
+      if (a.tipo === 'OTROS') return 1;
+      if (b.tipo === 'OTROS') return -1;
+      return a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' });
+    });
+}
+
+
 /** Fila de cosecha por lote (id real del backend). */
 export type PrecioCosecha = { loteId: number; loteNombre: string; precioPorKg: number };
 export type RangoAbonada  = { gramosMinimo: number; gramosMaximo: number; precioPorPalma: number };
@@ -88,6 +110,24 @@ export type RangoAbonada  = { gramosMinimo: number; gramosMaximo: number; precio
  * `API_OPERACIONES.md §3.3`), así que el precio es un valor plano.
  */
 export type PrecioLaborFinca = { laborId: number; laborNombre: string; precio: number };
+
+/**
+ * Precio pactado con el tercero para una sublabor (API_TERCEROS.md §6.3).
+ *
+ * `precioRef` es lo que el tenant le paga a sus propios colaboradores: va
+ * en gris, como referencia, porque a un operario nunca se le aplica.
+ * `precio` en 0 significa "sin pacto" y no se manda al backend.
+ */
+export type PrecioSublabor = {
+  actividadId: number;
+  laborId: number;
+  laborNombre: string;
+  nombre: string;
+  precioRef: number | null;
+  precio: number;
+  /** Solo en edición: sublabor desactivada en el catálogo del tenant. */
+  inactiva?: boolean;
+};
 
 /**
  * Precios configurables en el wizard.
@@ -105,16 +145,31 @@ export type PrecioLaborFinca = { laborId: number; laborNombre: string; precio: n
  */
 export type TipoPagoOverride = 'HEREDAR' | 'POR_PALMA' | 'JORNAL_FIJO';
 
+/**
+ * Labor de PALMA del catálogo del tenant con el precio pactado para este
+ * tercero. Se arma desde `labores_contexto`, no a mano: así aparecen Otros
+ * y las labores propias de la finca, no solo las tres fijas.
+ */
+export type PrecioLaborPalma = {
+  laborId: number;
+  laborNombre: string;
+  /** Modo del catálogo; decide si el precio es por palma o por jornal. */
+  tipoPagoCatalogo: 'POR_PALMA' | 'JORNAL_FIJO';
+  /** Lo que el tenant paga a sus colaboradores. Solo referencia. */
+  precioRef: number | null;
+  precio: number;
+  tipoPago: TipoPagoOverride;
+};
+
 export type PreciosLabores = {
   cosecha: PrecioCosecha[];
   abonada: RangoAbonada[];
-  plateo: number; poda: number; sanidad: number;
-  /** Override de modo de pago por labor fija. Por default todas heredan. */
-  plateoTipoPago: TipoPagoOverride;
-  podaTipoPago: TipoPagoOverride;
-  sanidadTipoPago: TipoPagoOverride;
+  /** Una entrada por labor de PALMA activa del tenant. */
+  palma: PrecioLaborPalma[];
   /** Una entrada por cada labor de FINCA activa del tenant. Precio en COP. */
   finca: PrecioLaborFinca[];
+  /** Sublabores de SANIDAD, OTROS y custom de PALMA. */
+  sublabores: PrecioSublabor[];
 };
 
 export const preciosVacios = (): PreciosLabores => ({
@@ -124,11 +179,9 @@ export const preciosVacios = (): PreciosLabores => ({
     { gramosMinimo: 501,  gramosMaximo: 1000, precioPorPalma: 0 },
     { gramosMinimo: 1001, gramosMaximo: 1500, precioPorPalma: 0 },
   ],
-  plateo: 0, poda: 0, sanidad: 0,
-  plateoTipoPago: 'HEREDAR',
-  podaTipoPago: 'HEREDAR',
-  sanidadTipoPago: 'HEREDAR',
+  palma: [],
   finca: [],
+  sublabores: [],
 });
 
 // ─── Paso 1: Datos del Tercero ────────────────────────────────────────────────
@@ -224,7 +277,6 @@ export function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange
     const min = last ? last.gramosMaximo + 1 : 0;
     onChange({ ...precios, abonada: [...precios.abonada, { gramosMinimo: min, gramosMaximo: min + 500, precioPorPalma: 0 }] });
   };
-  const setPrecioSimple = (key: 'plateo' | 'poda' | 'sanidad', val: number) => onChange({ ...precios, [key]: val });
 
   return (
     <Card className="border-border">
@@ -329,36 +381,118 @@ export function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange
             </Card>
           </AccordionItem>
 
-          {([
-            { key: 'plateo' as const,  label: 'Plateo',  unidad: 'palma',  bg: 'from-amber-50/50 to-amber-50/10 dark:from-amber-950/20' },
-            { key: 'poda' as const,    label: 'Poda',    unidad: 'palma',  bg: 'from-purple-50/50 to-purple-50/10 dark:from-purple-950/20' },
-            { key: 'sanidad' as const, label: 'Sanidad', unidad: 'jornal', bg: 'from-red-50/50 to-red-50/10 dark:from-red-950/20' },
-          ]).map(({ key, label, unidad, bg }) => (
-            <AccordionItem key={key} value={key} className="border-0">
-              <Card className="border-border">
-                <CardHeader className={`border-b bg-gradient-to-r ${bg} py-3 px-4`}>
-                  <AccordionTrigger className="hover:no-underline py-0">
-                    <div className="text-left">
-                      <p className="font-semibold text-sm">{label}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Precio por {unidad}</p>
-                    </div>
-                  </AccordionTrigger>
-                </CardHeader>
-                <AccordionContent>
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-2 max-w-xs">
-                      <span className="text-muted-foreground">$</span>
-                      <Input type="number" step="0.001" value={precios[key] || ''} onChange={e => setPrecioSimple(key, parseFloat(e.target.value) || 0)} placeholder="0" />
-                      <span className="text-muted-foreground text-sm">/{unidad}</span>
-                    </div>
-                    {(precios[key] as number) > 0 && (
-                      <p className="text-xs text-success mt-1.5">${(precios[key] as number).toLocaleString('es-CO')} / {unidad}</p>
-                    )}
-                  </CardContent>
-                </AccordionContent>
-              </Card>
-            </AccordionItem>
-          ))}
+          {precios.palma.map((labor, idxLabor) => {
+            const porPalma = labor.tipoPagoCatalogo === 'POR_PALMA';
+            const unidad = porPalma ? '/palma' : '/jornal';
+            // Los trabajos de la labor van dentro de su propia tarjeta, igual
+            // que en Configuración → Precios de Labores.
+            const trabajos = precios.sublabores
+              .map((fila, indice) => ({ fila, indice }))
+              .filter(({ fila }) => fila.laborId === labor.laborId);
+
+            return (
+              <AccordionItem key={labor.laborId} value={`palma-${labor.laborId}`} className="border-0">
+                <Card className="border-border">
+                  <CardHeader className="border-b bg-muted/40">
+                    <AccordionTrigger className="hover:no-underline py-0">
+                      <div className="text-left">
+                        <CardTitle>Precio {labor.laborNombre}</CardTitle>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {porPalma ? 'Precio por palma' : 'Precio por jornal fijo'}
+                        </p>
+                      </div>
+                    </AccordionTrigger>
+                  </CardHeader>
+                  <AccordionContent>
+                    <CardContent className="p-6 space-y-6">
+                      <div className="max-w-md space-y-3">
+                        <Label htmlFor={`precio-tercero-${labor.laborId}`}>
+                          {porPalma ? 'Valor por Palma' : 'Valor por Jornal'}
+                        </Label>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">$</span>
+                          <Input
+                            id={`precio-tercero-${labor.laborId}`}
+                            type="number" step="1" min="0"
+                            value={labor.precio || ''}
+                            onChange={(e) => {
+                              const next = [...precios.palma];
+                              next[idxLabor] = { ...labor, precio: parseFloat(e.target.value) || 0 };
+                              onChange({ ...precios, palma: next });
+                            }}
+                            className="text-lg font-semibold"
+                            placeholder="0"
+                          />
+                          <span className="text-muted-foreground">{unidad}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          La finca paga{' '}
+                          {labor.precioRef ? `$${labor.precioRef.toLocaleString('es-CO')}` : 'nada configurado'}
+                          {' '}{unidad}. Vacío = este tercero cobra lo mismo.
+                        </p>
+                      </div>
+
+                      {trabajos.length > 0 && (
+                        <div className="space-y-3">
+                          <div>
+                            <h4 className="font-semibold text-sm">Precios por trabajo</h4>
+                            <p className="text-xs text-muted-foreground">
+                              Cada trabajo puede tener un precio propio. Si lo dejas vacío, hereda el precio de la labor.
+                            </p>
+                          </div>
+                          <div className="rounded-lg border border-border overflow-x-auto">
+                            <table className="w-full min-w-[520px] table-fixed">
+                              <thead className="bg-muted/50">
+                                <tr>
+                                  <th className="text-left p-3 font-semibold text-sm w-2/3">Trabajo</th>
+                                  <th className="text-right p-3 font-semibold text-sm">Precio</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {trabajos.map(({ fila, indice }) => (
+                                  <tr key={fila.actividadId} className="border-t border-border">
+                                    <td className="p-3">
+                                      <p className="text-sm font-medium">
+                                        {fila.nombre}
+                                        {fila.inactiva && (
+                                          <span className="ml-2 text-xs italic text-muted-foreground">(inactivo)</span>
+                                        )}
+                                      </p>
+                                      <p className="text-xs text-muted-foreground">
+                                        La finca paga{' '}
+                                        {fila.precioRef ? `$${fila.precioRef.toLocaleString('es-CO')}` : 'el de la labor'}
+                                      </p>
+                                    </td>
+                                    <td className="p-3">
+                                      <div className="flex items-center justify-end gap-2">
+                                        <span className="text-muted-foreground text-sm">$</span>
+                                        <Input
+                                          type="number" step="1" min="0"
+                                          value={fila.precio || ''}
+                                          onChange={(e) => {
+                                            const next = [...precios.sublabores];
+                                            next[indice] = { ...fila, precio: parseFloat(e.target.value) || 0 };
+                                            onChange({ ...precios, sublabores: next });
+                                          }}
+                                          placeholder="Hereda de la labor"
+                                          className="w-44 text-right"
+                                        />
+                                        <span className="text-muted-foreground text-sm">{unidad}</span>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </AccordionContent>
+                </Card>
+              </AccordionItem>
+            );
+          })}
 
           {/* Labores de Finca — override por tercero. Solo aparecen las
               labores con `categoria=FINCA` activas en el tenant. Si el tenant
@@ -405,6 +539,7 @@ export function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange
               </Card>
             </AccordionItem>
           )}
+
         </Accordion>
       </CardContent>
     </Card>
@@ -603,6 +738,36 @@ export default function NuevoTerceroWizard() {
           }));
         }
 
+        // Labores de PALMA: el backend ya excluye Cosecha y Fertilización,
+        // que tienen sus propias secciones arriba.
+        const palma = laboresDePalmaOrdenadas(res.data.labores_contexto)
+          .map((l) => ({
+            laborId: l.id,
+            laborNombre: l.nombre,
+            tipoPagoCatalogo: l.tipo_pago,
+            precioRef: l.precio_palma == null ? null : Number(l.precio_palma),
+            precio: 0,
+            tipoPago: 'HEREDAR' as const,
+          }));
+        if (palma.length > 0) setPrecios((prev) => ({ ...prev, palma }));
+
+        // Sublabores del catálogo, agrupadas bajo el nombre de su labor.
+        const porLabor = res.data.actividades_por_labor ?? {};
+        const nombrePorLabor = new Map(
+          res.data.labores_contexto.map((l) => [l.id, l.nombre]),
+        );
+        const sublabores = Object.values(porLabor).flat().map((a) => ({
+          actividadId: a.id,
+          laborId: a.labor_id,
+          laborNombre: nombrePorLabor.get(a.labor_id) ?? 'Otras labores',
+          nombre: a.nombre,
+          precioRef: a.precio == null ? null : Number(a.precio),
+          precio: 0,
+        }));
+        if (sublabores.length > 0) {
+          setPrecios((prev) => ({ ...prev, sublabores }));
+        }
+
         // Labores de FINCA — ideal: vienen en `labores_contexto` con
         // `categoria: 'FINCA'` (ver §6.1 de API_TERCEROS.md actualizado).
         // Fallback: si el backend aún no incluye FINCA en el bundle, hacemos
@@ -660,8 +825,9 @@ export default function NuevoTerceroWizard() {
   const totalPreciosConfigurados = [
     precios.cosecha.some(c => c.precioPorKg > 0),
     precios.abonada.some(a => a.precioPorPalma > 0),
-    precios.plateo > 0, precios.poda > 0, precios.sanidad > 0,
+    precios.palma.some(l => l.precio > 0),
     precios.finca.some(f => f.precio > 0),
+    precios.sublabores.some(sl => sl.precio > 0),
   ].filter(Boolean).length;
 
   /**
@@ -702,18 +868,6 @@ export default function NuevoTerceroWizard() {
   };
 
   /**
-   * Resuelve `labor_id` real para las labores simples (Plateo, Poda, Sanidad)
-   * buscándolas en `bundle.labores_contexto` por el campo `tipo`. Devuelve
-   * `null` si la labor no está en el catálogo del tenant (caso en el que
-   * simplemente se omite la persistencia de ese override).
-   */
-  const findLaborId = (tipo: 'PLATEO' | 'PODA' | 'SANIDAD'): number | null => {
-    if (!bundleListo) return null;
-    const item = bundle.labores_contexto.find((l) => l.tipo === tipo);
-    return item?.id ?? null;
-  };
-
-  /**
    * Flujo de guardado completo (2 peticiones totales):
    *  1. POST /terceros                         — crea el tercero
    *  2. POST /terceros/{id}/wizard-complete    — toda la configuración en una sola petición atómica
@@ -735,21 +889,13 @@ export default function NuevoTerceroWizard() {
       // 2. Construir payload de configuración consolidado
       const laborPreciosPayload: WizardCompletePayload['labor_precios'] = [];
 
-      // Labores palma fijas (plateo/poda/sanidad) — labor_id resuelto desde el bundle
-      const laboresPalma = [
-        { tipo: 'PLATEO'  as const, precio: precios.plateo,  tipoPago: precios.plateoTipoPago  },
-        { tipo: 'PODA'    as const, precio: precios.poda,    tipoPago: precios.podaTipoPago    },
-        { tipo: 'SANIDAD' as const, precio: precios.sanidad, tipoPago: precios.sanidadTipoPago },
-      ];
-      for (const { tipo, precio, tipoPago } of laboresPalma) {
-        const laborId = findLaborId(tipo);
-        if (precio > 0 && laborId !== null) {
-          laborPreciosPayload.push({
-            labor_id: laborId,
-            precio_palma: precio,
-            ...(tipoPago !== 'HEREDAR' ? { tipo_pago: tipoPago } : {}),
-          });
-        }
+      // Labores de PALMA — el labor_id ya viene del catálogo.
+      for (const l of precios.palma.filter((l) => l.precio > 0)) {
+        laborPreciosPayload.push({
+          labor_id: l.laborId,
+          precio_palma: l.precio,
+          ...(l.tipoPago !== 'HEREDAR' ? { tipo_pago: l.tipoPago } : {}),
+        });
       }
 
       // Labores FINCA — labor_id ya resuelto en el estado
@@ -765,6 +911,11 @@ export default function NuevoTerceroWizard() {
           .filter((r) => r.precioPorPalma > 0)
           .map((r) => ({ gramos_min: r.gramosMinimo, gramos_max: r.gramosMaximo, precio_palma: r.precioPorPalma })),
         labor_precios: laborPreciosPayload,
+        // Las filas vacías no se mandan: un 0 quedaría guardado como pacto
+        // en cero, que el cálculo ignora pero la pantalla sí mostraría.
+        actividad_precios: precios.sublabores
+          .filter((sl) => sl.precio > 0)
+          .map((sl) => ({ labor_actividad_id: sl.actividadId, precio: sl.precio })),
         operarios: operarios
           .filter((o) => o.nombres?.trim() && o.apellidos?.trim())
           .map((op) => ({
@@ -781,6 +932,7 @@ export default function NuevoTerceroWizard() {
         wizardPayload.precios_cosecha.length > 0 ||
         wizardPayload.precios_abono.length > 0 ||
         wizardPayload.labor_precios.length > 0 ||
+        wizardPayload.actividad_precios.length > 0 ||
         wizardPayload.operarios.length > 0;
 
       if (hayConfiguracion) {
@@ -938,9 +1090,20 @@ export default function NuevoTerceroWizard() {
                     {precios.abonada.some(a => a.precioPorPalma > 0) && (
                       <div className="flex justify-between text-xs"><span className="text-muted-foreground">Abonada</span><span className="font-medium text-success">✓ Configurada</span></div>
                     )}
-                    {precios.plateo > 0 && <div className="flex justify-between text-xs"><span className="text-muted-foreground">Plateo</span><span className="font-medium">${precios.plateo.toLocaleString('es-CO')}/palma</span></div>}
-                    {precios.poda > 0 && <div className="flex justify-between text-xs"><span className="text-muted-foreground">Poda</span><span className="font-medium">${precios.poda.toLocaleString('es-CO')}/palma</span></div>}
-                    {precios.sanidad > 0 && <div className="flex justify-between text-xs"><span className="text-muted-foreground">Sanidad</span><span className="font-medium">${precios.sanidad.toLocaleString('es-CO')}/jornal</span></div>}
+                    {precios.palma.filter(l => l.precio > 0).map(l => (
+                      <div key={l.laborId} className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">{l.laborNombre}</span>
+                        <span className="font-medium">
+                          ${l.precio.toLocaleString('es-CO')}/{l.tipoPagoCatalogo === 'POR_PALMA' ? 'palma' : 'jornal'}
+                        </span>
+                      </div>
+                    ))}
+                    {precios.sublabores.some(sl => sl.precio > 0) && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Trabajos pactados</span>
+                        <span className="font-medium">{precios.sublabores.filter(sl => sl.precio > 0).length}</span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

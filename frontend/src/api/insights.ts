@@ -280,22 +280,22 @@ export const SEVERIDAD_LABEL: Record<Severidad, { label: string; color: string; 
   CRITICA: {
     label: 'Crítica',
     color: '#DC2626',
-    badgeClass: 'bg-red-100 text-red-700 border-red-300',
+    badgeClass: 'bg-destructive-soft text-destructive',
   },
   ALTA: {
     label: 'Alta',
     color: '#EA580C',
-    badgeClass: 'bg-orange-100 text-orange-700 border-orange-300',
+    badgeClass: 'bg-warning-soft text-warning',
   },
   MEDIA: {
     label: 'Media',
     color: '#CA8A04',
-    badgeClass: 'bg-yellow-100 text-yellow-700 border-yellow-300',
+    badgeClass: 'bg-warning-soft text-warning',
   },
   BAJA: {
     label: 'Baja',
     color: '#2563EB',
-    badgeClass: 'bg-blue-100 text-blue-700 border-blue-300',
+    badgeClass: 'bg-info-soft text-info',
   },
 };
 
@@ -311,9 +311,9 @@ export const DOMINIO_LABEL: Record<Dominio, string> = {
 };
 
 export const PRIORIDAD_LABEL: Record<Prioridad, { label: string; badgeClass: string }> = {
-  ALTA: { label: 'Alta', badgeClass: 'bg-red-100 text-red-700 border-red-300' },
-  MEDIA: { label: 'Media', badgeClass: 'bg-yellow-100 text-yellow-700 border-yellow-300' },
-  BAJA: { label: 'Baja', badgeClass: 'bg-blue-100 text-blue-700 border-blue-300' },
+  ALTA: { label: 'Alta', badgeClass: 'bg-destructive-soft text-destructive' },
+  MEDIA: { label: 'Media', badgeClass: 'bg-warning-soft text-warning' },
+  BAJA: { label: 'Baja', badgeClass: 'bg-info-soft text-info' },
 };
 
 // ─── Utilidades ──────────────────────────────────────────────────────────────

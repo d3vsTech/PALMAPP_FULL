@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router';
-import { ChevronDown, LogOut, Menu } from 'lucide-react';
+import { ChevronDown, Menu, User } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { abrirMenuMovil } from '../../components/layout/shellState';
 import SuperAdminSidebar, {
@@ -11,7 +11,7 @@ import { cn } from '../../components/lib/utils';
 
 /** Barra superior del panel. Se vuelve translúcida al desplazar el contenido. */
 function SuperAdminTopbar() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -37,11 +37,6 @@ function SuperAdminTopbar() {
     if (dropdownOpen) document.addEventListener('mousedown', clicFuera);
     return () => document.removeEventListener('mousedown', clicFuera);
   }, [dropdownOpen]);
-
-  const cerrarSesion = () => {
-    logout();
-    navigate('/super-admin/login');
-  };
 
   const modulo = superAdminNavItems.find((item) => esRutaSuperAdminActiva(location.pathname, item.href));
 
@@ -108,11 +103,11 @@ function SuperAdminTopbar() {
               </div>
               <button
                 type="button"
-                onClick={() => { cerrarSesion(); setDropdownOpen(false); }}
-                className="flex min-h-11 w-full items-center gap-2.5 px-4 py-2 text-left text-sm text-destructive transition-colors hover:bg-destructive-soft"
+                onClick={() => { navigate('/super-admin/perfil'); setDropdownOpen(false); }}
+                className="flex min-h-11 w-full items-center gap-2.5 px-4 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted"
               >
-                <LogOut className="h-4 w-4" strokeWidth={2} />
-                Cerrar sesión
+                <User className="h-4 w-4 text-muted-foreground" strokeWidth={2} />
+                Mi perfil
               </button>
             </div>
           )}

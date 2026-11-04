@@ -181,6 +181,7 @@ const ProveedoresAdmin = lazyWithRetry(() => import('./pages/super-admin/Proveed
 const UsuariosProveedor = lazyWithRetry(() => import('./pages/super-admin/UsuariosProveedor'));
 const Actividad = lazyWithRetry(() => import('./pages/super-admin/Actividad'));
 const Diagnosticos = lazyWithRetry(() => import('./pages/super-admin/Diagnosticos'));
+const MiPerfilSuperAdmin = lazyWithRetry(() => import('./pages/super-admin/MiPerfilSuperAdmin'));
 const RecuperarPasswordSuperAdmin = lazyWithRetry(() => import('./pages/super-admin/RecuperarPassword'));
 const RestablecerPasswordSuperAdmin = lazyWithRetry(() => import('./pages/super-admin/RestablecerPassword'));
 
@@ -274,6 +275,7 @@ export const router = createBrowserRouter([
       { path: 'proveedores/:proveedorId/usuarios', element: conSuspense(<UsuariosProveedor />) },
       { path: 'actividad',                    element: conSuspense(<Actividad />) },
       { path: 'diagnosticos',                 element: conSuspense(<Diagnosticos />) },
+      { path: 'perfil',                       element: conSuspense(<MiPerfilSuperAdmin />) },
     ],
   },
 

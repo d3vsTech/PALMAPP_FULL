@@ -9,9 +9,10 @@ import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { ArrowLeft, SquareStack, AlertCircle, Loader2 } from 'lucide-react';
+import { SquareStack, Loader2 } from 'lucide-react';
 import { lineasApi } from '../../../api/plantacion';
 import { toast } from 'sonner';
+import PageHeader from '../../components/common/PageHeader';
 
 export default function CrearLinea() {
   const navigate       = useNavigate();
@@ -73,117 +74,100 @@ export default function CrearLinea() {
   };
 
   return (
-    <div className="space-y-8 max-w-3xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon"
-          onClick={() => navigate(`/plantacion/lote/${loteId}`, { state: { openSubloteId: subloteId } })}
-          className="h-12 w-12 rounded-xl border border-border/50 hover:bg-muted">
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div>
-          <h1 className="text-3xl sm:text-4xl font-bold text-foreground flex items-center gap-3">
-            <SquareStack className="h-10 w-10 text-success" />
-            Nueva Línea
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Crea una nueva línea en <strong className="text-primary">{nombreSublote}</strong>
-          </p>
-        </div>
-      </div>
+    <div className="mx-auto max-w-3xl space-y-8">
+      <PageHeader
+        backTo={`/plantacion/lote/${loteId}`}
+        eyebrow="Mi plantación"
+        title="Nueva línea"
+        description={`Crea una línea dentro de ${nombreSublote}.`}
+      />
 
-      <Card className="glass-subtle border-border shadow-xl">
+      <Card className="gap-4">
         <CardHeader>
-          <CardTitle className="text-2xl">Información de la Línea</CardTitle>
+          <CardTitle className="text-2xl">Información de la línea</CardTitle>
           <CardDescription>
-            Las palmas se crearán automáticamente con códigos secuenciales únicos
+            Las palmas de esta línea llevan códigos secuenciales, sin repetirse.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Número de Línea */}
             <div className="space-y-2">
               <Label htmlFor="numeroLinea" className="text-base">
-                Número de Línea <span className="text-destructive">*</span>
+                Número de línea <span className="text-destructive">*</span>
               </Label>
-              <Input id="numeroLinea" type="number" step="0.001" min="1" placeholder="Ej: 1, 2, 3..."
+              <Input id="numeroLinea" type="number" step="1" min="1" placeholder="Ej: 1, 2, 3"
                 value={numero} onChange={e => setNumero(e.target.value)}
                 className="h-12 text-base" autoFocus />
               <p className="text-sm text-muted-foreground">
-                Debe ser un número único dentro de este sublote (mínimo 1)
+                Debe ser un número único dentro de este sublote, desde 1.
               </p>
               {numerosExistentes.length > 0 && (
                 <p className="text-xs text-muted-foreground">
-                  Ya existe{numerosExistentes.length > 1 ? 'n' : ''}: <span className="font-mono text-primary">{numerosExistentes.join(', ')}</span>
+                  Ya existe{numerosExistentes.length > 1 ? 'n' : ''} la{numerosExistentes.length > 1 ? 's' : ''} línea
+                  {numerosExistentes.length > 1 ? 's' : ''}{' '}
+                  <span className="font-semibold text-foreground tabular-nums">{numerosExistentes.join(', ')}</span>.
                 </p>
               )}
             </div>
 
-            {/* Cantidad de Palmas */}
+            {/* El backend solo guarda el número: las palmas se crean aparte,
+                así que el campo sigue siendo opcional. */}
             <div className="space-y-2">
               <Label htmlFor="cantidadPalmas" className="text-base">
-                Cantidad Teórica de Palmas <span className="text-muted-foreground text-sm font-normal">(opcional)</span>
+                Cantidad de palmas <span className="text-sm font-normal text-muted-foreground">(opcional)</span>
               </Label>
-              <Input id="cantidadPalmas" type="number" step="0.001" min="0" max="9999" placeholder="Ej: 50"
+              <Input id="cantidadPalmas" type="number" step="1" min="0" max="9999" placeholder="Ej: 50"
                 value={cantTeorica} onChange={e => setCantTeorica(e.target.value)}
                 className="h-12 text-base" />
               <p className="text-sm text-muted-foreground">
-                Es informativo. Las palmas reales se crean desde "Agregar Palmas".
+                Cantidad prevista para esta línea, entre 1 y 9.999. Las palmas se crean desde Agregar palmas.
               </p>
             </div>
 
-            {/* Preview de códigos */}
             {previewCodes.length > 0 && (
-              <div className="rounded-xl bg-success/5 border border-success/20 p-6">
-                <div className="flex gap-3 mb-3">
-                  <AlertCircle className="h-5 w-5 text-success flex-shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-success mb-2">Vista previa de códigos de palmas</p>
-                    <div className="space-y-1">
-                      {previewCodes.map((code, index) => (
-                        <p key={index} className="text-sm font-mono text-primary bg-white/50 rounded px-2 py-1 inline-block mr-2">
-                          {code}
-                        </p>
-                      ))}
-                      {parseInt(cantTeorica) > 5 && (
-                        <p className="text-sm text-muted-foreground mt-2">
-                          ... y {parseInt(cantTeorica) - 5} palmas más
-                        </p>
-                      )}
-                    </div>
-                  </div>
+              <div className="rounded-xl border border-border bg-muted/50 p-5">
+                <p className="mb-2.5 text-sm font-semibold text-foreground">Así quedarán los códigos</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {previewCodes.map((code, index) => (
+                    <span key={index}
+                      className="rounded-md border border-border bg-card px-2 py-1 text-xs font-semibold tabular-nums">
+                      {code}
+                    </span>
+                  ))}
                 </div>
+                {parseInt(cantTeorica) > 5 && (
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Y {(parseInt(cantTeorica) - 5).toLocaleString('es-CO')} palmas más.
+                  </p>
+                )}
               </div>
             )}
 
-            {/* Info box */}
-            <div className="rounded-xl bg-primary/5 border border-primary/20 p-6">
+            <div className="rounded-xl border border-primary/20 bg-primary-soft p-6">
               <div className="flex gap-3">
-                <SquareStack className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                <SquareStack className="mt-0.5 h-5 w-5 shrink-0 text-primary" strokeWidth={2} />
                 <div className="space-y-1">
                   <p className="text-sm font-semibold text-primary">Información importante</p>
-                  <ul className="text-sm text-muted-foreground space-y-1">
-                    <li>• Las palmas se crearán con formato: <code className="text-primary font-mono">{nombreSublote}-L[número]-[contador]</code></li>
+                  <ul className="space-y-1 text-sm text-muted-foreground">
+                    <li>• Las palmas llevan el formato <span className="font-semibold text-foreground">{nombreSublote}-L[número]-[contador]</span></li>
                     <li>• El contador de palmas usa 3 dígitos (001, 002, 003...)</li>
                     <li>• La línea se creará en estado <strong>Activo</strong></li>
-                    <li>• Al eliminar esta línea, todas sus palmas se eliminarán automáticamente</li>
+                    <li>• Al eliminar esta línea, sus palmas quedan en el sublote sin línea</li>
                   </ul>
                 </div>
               </div>
             </div>
 
-            {/* Botones */}
-            <div className="flex items-center gap-4 pt-4">
+            <div className="barra-acciones flex items-center gap-4 pt-4">
               <Button type="button" variant="outline" disabled={loading}
                 onClick={() => navigate(`/plantacion/lote/${loteId}`, { state: { openSubloteId: subloteId } })}
-                className="flex-1 h-12 text-base">
+                className="h-12 flex-1 text-base">
                 Cancelar
               </Button>
-              <Button type="submit" disabled={loading}
-                className="flex-1 h-12 text-base bg-success hover:bg-success/90 text-primary hover:text-primary shadow-lg shadow-success/20">
+              <Button type="submit" disabled={loading} className="h-12 flex-1 text-base">
                 {loading
-                  ? <><Loader2 className="h-5 w-5 mr-2 animate-spin" />Creando...</>
-                  : <><SquareStack className="h-5 w-5 mr-2" />Crear Línea</>}
+                  ? <><Loader2 className="h-5 w-5 animate-spin" />Creando</>
+                  : <><SquareStack className="h-5 w-5" strokeWidth={2} />Crear línea</>}
               </Button>
             </div>
           </form>

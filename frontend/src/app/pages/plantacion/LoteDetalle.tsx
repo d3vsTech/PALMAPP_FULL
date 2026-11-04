@@ -23,12 +23,14 @@ import {
   AlertDialogHeader, AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
 import {
-  ArrowLeft, MapPin, Calendar, Sprout, Leaf, Plus, Trash2,
+  Sprout, Leaf, Plus, Pencil, Trash2,
   ChevronDown, CheckSquare, Square, Loader2, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { lotesApi, sublotesApi, palmasApi, lineasApi } from '../../../api/plantacion';
 import { toast } from 'sonner';
 import { useRefrescoAlVolver, useVengoDeGuardar, type EstadoNavegacion } from './refresco';
+import PageHeader from '../../components/common/PageHeader';
+import IlustracionPalma from '../../components/common/IlustracionPalma';
 
 const PER_PAGE = 50;
 
@@ -80,14 +82,14 @@ const PalmasSection = memo(({
       {/* Toolbar */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <p className="text-sm font-medium text-muted-foreground">
-          Palmas {lineaId ? `de la Línea` : 'del Sublote'}
+          Palmas {lineaId ? 'de la línea' : 'del sublote'}
           {enSel && <span className="ml-2 text-primary font-semibold">({selIds.size} seleccionadas)</span>}
         </p>
         <div className="flex gap-2 flex-wrap">
           {enSel ? (
             <>
               <Button size="sm" variant="outline" onClick={() => onSelTodas(palmasKey)} className="gap-2">
-                <CheckSquare className="h-3.5 w-3.5" /> Seleccionar Todas
+                <CheckSquare className="h-3.5 w-3.5" /> Seleccionar todas
               </Button>
               {selIds.size > 0 && (
                 <Button size="sm" variant="destructive"
@@ -101,12 +103,11 @@ const PalmasSection = memo(({
             <>
               {ps.total > 1 && (
                 <Button size="sm" variant="outline" onClick={() => onActivarSel(palmasKey)} className="gap-2">
-                  <CheckSquare className="h-3.5 w-3.5" /> Selección Masiva
+                  <CheckSquare className="h-3.5 w-3.5" /> Seleccionar varias
                 </Button>
               )}
-              <Button size="sm" onClick={() => onNavegar(agregarUrl)}
-                className="gap-2 bg-success hover:bg-success/90 text-primary hover:text-primary">
-                <Plus className="h-3.5 w-3.5" /> Agregar Palmas
+              <Button size="sm" onClick={() => onNavegar(agregarUrl)} className="gap-2">
+                <Plus className="h-3.5 w-3.5" /> Agregar palmas
               </Button>
             </>
           )}
@@ -123,13 +124,12 @@ const PalmasSection = memo(({
                 <div key={palma.id}
                   {...comoBoton(() => onToggle(pid), enSel)}
                   className={[
-                    'relative group rounded-lg border-2 p-3 transition',
+                    'relative group rounded-md border px-3 py-2 transition-colors',
                     enSel ? 'cursor-pointer' : '',
-                    sel ? 'ring-2 ring-primary ring-offset-2' : '',
+                    sel ? 'ring-2 ring-primary ring-offset-1' : '',
                     palma.estado
-                      ? 'bg-success/5 border-success/30 hover:border-success'
-                      : 'bg-destructive/5 border-destructive/30 hover:border-destructive',
-                    enSel ? 'hover:shadow-lg' : 'hover:shadow-md',
+                      ? 'border-border bg-card hover:border-success'
+                      : 'border-destructive/30 bg-destructive-soft hover:border-destructive',
                   ].filter(Boolean).join(' ')}>
                   {enSel && (
                     <div className="absolute top-2 left-2 z-10">
@@ -139,17 +139,17 @@ const PalmasSection = memo(({
                     </div>
                   )}
                   <div className={`text-center ${enSel ? 'mt-4' : ''}`}>
-                    <div className={`text-xs font-mono font-semibold mb-1 ${palma.estado ? 'text-success' : 'text-destructive'}`}>
+                    <div className={`text-xs font-semibold tabular-nums ${palma.estado ? 'text-foreground' : 'text-destructive'}`}>
                       {palma.codigo}
                     </div>
-                    <div className={`text-xs ${palma.estado ? 'text-muted-foreground' : 'text-destructive/70'}`}>
+                    <div className={`text-[11px] ${palma.estado ? 'text-muted-foreground' : 'text-destructive/80'}`}>
                       {palma.estado ? 'Activa' : 'Inactiva'}
                     </div>
                   </div>
                   {!enSel && (
                     <button aria-label="Eliminar"
                       onClick={() => onEliminar(pid, subId, lineaId, palmasKey, params)}
-                      className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-lg hover:scale-110">
+                      className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100">
                       <Trash2 className="h-3 w-3" />
                     </button>
                   )}
@@ -160,7 +160,7 @@ const PalmasSection = memo(({
 
           {/* Paginación */}
           {ps.lastPage > 1 && (
-            <div className="flex items-center justify-between pt-3 border-t border-border/30">
+            <div className="flex items-center justify-between border-t border-border pt-3">
               <p className="text-sm text-muted-foreground">
                 {((ps.page - 1) * PER_PAGE) + 1}–{Math.min(ps.page * PER_PAGE, ps.total)} de {ps.total.toLocaleString('es-CO')}
               </p>
@@ -207,6 +207,8 @@ export default function LoteDetalle() {
   const [lote, setLote]           = useState<any>(null);
   const [sublotes, setSublotes]   = useState<any[]>([]);
   const [lineasMap, setLineasMap] = useState<Record<string, any[]>>({});
+  /** Sublotes sin líneas con la rejilla de palmas a la vista. */
+  const [palmasALaVista, setPalmasALaVista] = useState<Record<string, boolean>>({});
   const [loading, setLoading]     = useState(true);
   const [palmasPag, setPalmasPag] = useState<Record<string, PageState>>({});
 
@@ -336,11 +338,9 @@ export default function LoteDetalle() {
   const handleSubloteChange = (val: string) => {
     setSubloteOpen(val);
     if (!val) return;
-    const lineas      = lineasMap[val] ?? [];
-    const tieneLineas = lineas.length > 0;
-    if (!tieneLineas) {
-      cargarPalmas(`sub_${val}`, { sublote_id: Number(val) });
-    } else {
+    const lineas = lineasMap[val] ?? [];
+    // Sin líneas la rejilla arranca cerrada, así que no se pide todavía.
+    if (lineas.length > 0) {
       cargarPalmas(`sinlinea_${val}`, { sublote_id: Number(val), sin_linea: true });
     }
   };
@@ -354,7 +354,11 @@ export default function LoteDetalle() {
   const cbActivarSel    = useCallback((key: string) => { setSelKey(key); setSelIds(new Set()); }, []);
   const cbCancelarSel   = useCallback(() => { setSelKey(null); setSelIds(new Set()); }, []);
   const cbToggle        = useCallback((pid: string) => {
-    setSelIds(prev => { const n = new Set(prev); n.has(pid) ? n.delete(pid) : n.add(pid); return n; });
+    setSelIds(prev => {
+      const n = new Set(prev);
+      if (n.has(pid)) n.delete(pid); else n.add(pid);
+      return n;
+    });
   }, []);
   const cbSelTodas      = useCallback((key: string) => {
     setSelIds(new Set((palmasPag[key]?.data ?? []).map((p: any) => String(p.id))));
@@ -415,8 +419,8 @@ export default function LoteDetalle() {
 
   if (!lote) return (
     <Card><CardContent className="p-12 text-center">
-      <h2 className="text-2xl font-bold mb-2">Lote no encontrado</h2>
-      <Button onClick={() => navigate('/plantacion')}>Volver</Button>
+      <h2 className="mb-2">Lote no encontrado</h2>
+      <Button onClick={() => navigate('/plantacion')}>Volver a mi plantación</Button>
     </CardContent></Card>
   );
 
@@ -431,6 +435,14 @@ export default function LoteDetalle() {
     ? Math.max(0, new Date().getFullYear() - new Date(lote.fecha_siembra.split('T')[0] + 'T12:00:00').getFullYear())
     : 0;
   const estado = añosDesdeSiembra >= 3 ? 'Activo' : 'En desarrollo';
+
+  // La variedad y el año van en el subtítulo; si falta uno, no queda el separador suelto.
+  const anioSiembra = lote.fecha_siembra ? lote.fecha_siembra.slice(0, 4) : null;
+  const variedad = lote.variedad || semillas[0]?.nombre || semillas[0] || null;
+  const subtitulo = [
+    variedad,
+    anioSiembra ? `sembrado en ${anioSiembra}` : null,
+  ].filter(Boolean).join(' · ');
 
   const pProps = {
     palmasPag, selKey, selIds,
@@ -487,53 +499,30 @@ export default function LoteDetalle() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Breadcrumbs */}
-      <nav className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Link to="/plantacion" className="hover:text-primary transition-colors">Mi Plantación</Link>
-        <span>›</span>
-        <span className="text-foreground font-medium">{predio.nombre}</span>
-        <span>›</span>
-        <span className="text-foreground font-medium">{lote.nombre}</span>
-      </nav>
-
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-        <div className="flex items-start gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/plantacion')}
-            className="h-12 w-12 rounded-xl border border-border/50 hover:bg-muted">
-            <ArrowLeft className="h-5 w-5" />
+      <PageHeader
+        backTo="/plantacion"
+        eyebrow={<><Link to="/plantacion" className="hover:text-foreground">Mi plantación</Link> · {predio.nombre}</>}
+        title={lote.nombre}
+        description={subtitulo || undefined}
+        actions={
+          <Button variant="outline" onClick={() => navigate(`/plantacion/lote/nuevo?id=${id}`)}>
+            <Pencil className="h-4 w-4" strokeWidth={2} />
+            Editar lote
           </Button>
-          <div className="space-y-2">
-            <h1 className="text-3xl sm:text-4xl font-bold text-foreground">{lote.nombre}</h1>
-            <p className="text-muted-foreground">
-              Predio: {predio.nombre}
-              {(lote.variedad || semillas.length > 0) && (
-                <> • {lote.variedad || semillas[0]?.nombre || semillas[0]}</>
-              )}
-            </p>
-          </div>
-        </div>
-      </div>
+        }
+      />
 
       {/* Información del lote */}
-      <Card className="glass-subtle border-border shadow-lg">
+      <Card className="gap-4">
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-2xl">Información del Lote</CardTitle>
-              <CardDescription className="mt-1">Datos generales y estado actual</CardDescription>
-            </div>
-          </div>
+          <CardTitle>Información del lote</CardTitle>
+          <CardDescription>Datos generales y estado actual</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {/* Fecha Siembra */}
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Calendar className="h-4 w-4" />
-                <span className="text-sm font-medium">Fecha de Siembra</span>
-              </div>
-              <p className="text-2xl font-bold">
+              <p className="text-[13px] font-medium text-muted-foreground">Fecha de siembra</p>
+              <p className="text-xl font-bold">
                 {lote.fecha_siembra
                   ? (() => {
                       const d = new Date(lote.fecha_siembra.includes('T') ? lote.fecha_siembra : lote.fecha_siembra + 'T12:00:00');
@@ -548,13 +537,9 @@ export default function LoteDetalle() {
               )}
             </div>
 
-            {/* Hectáreas */}
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <MapPin className="h-4 w-4" />
-                <span className="text-sm font-medium">Hectáreas Sembradas</span>
-              </div>
-              <p className="text-2xl font-bold">{Number(lote.hectareas_sembradas ?? 0).toFixed(2)} ha</p>
+              <p className="text-[13px] font-medium text-muted-foreground">Hectáreas sembradas</p>
+              <p className="text-xl font-bold">{Number(lote.hectareas_sembradas ?? 0).toFixed(2)} ha</p>
               {predio.hectareas_totales && (
                 <p className="text-xs text-muted-foreground">
                   {((Number(lote.hectareas_sembradas ?? 0) / Number(predio.hectareas_totales)) * 100).toFixed(1)}% del predio
@@ -562,44 +547,23 @@ export default function LoteDetalle() {
               )}
             </div>
 
-            {/* Sublotes */}
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Sprout className="h-4 w-4" />
-                <span className="text-sm font-medium">Sublotes</span>
-              </div>
-              <p className="text-2xl font-bold text-primary">{sublotes.length}</p>
+              <p className="text-[13px] font-medium text-muted-foreground">Sublotes</p>
+              <p className="text-xl font-bold">{sublotes.length}</p>
               <p className="text-xs text-muted-foreground">{sublotes.length} registrados</p>
             </div>
 
-            {/* Estado */}
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Leaf className="h-4 w-4" />
-                <span className="text-sm font-medium">Estado</span>
-              </div>
-              <Badge
-                variant={estado === 'Activo' ? 'default' : 'secondary'}
-                className={`text-sm px-3 py-1 ${
-                  estado === 'Activo'
-                    ? 'bg-success text-white'
-                    : 'bg-accent/10 text-accent border border-accent/20'
-                }`}
-              >
-                {estado}
-              </Badge>
+              <p className="text-[13px] font-medium text-muted-foreground">Estado</p>
+              <Badge variant={estado === 'Activo' ? 'success' : 'warning'}>{estado}</Badge>
               <p className="text-xs text-muted-foreground">
                 {estado === 'Activo' ? 'Producción óptima' : 'Fase de crecimiento'}
               </p>
             </div>
 
-            {/* Total Palmas */}
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Leaf className="h-4 w-4" />
-                <span className="text-sm font-medium">Total Palmas</span>
-              </div>
-              <p className="text-2xl font-bold text-success">{totalPalmas.toLocaleString('es-CO')}</p>
+              <p className="text-[13px] font-medium text-muted-foreground">Total palmas</p>
+              <p className="text-xl font-bold">{totalPalmas.toLocaleString('es-CO')}</p>
               {Number(lote.hectareas_sembradas) > 0 && (
                 <p className="text-xs text-muted-foreground">
                   {(totalPalmas / Number(lote.hectareas_sembradas)).toFixed(0)} palmas/ha
@@ -607,18 +571,12 @@ export default function LoteDetalle() {
               )}
             </div>
 
-            {/* Semillas */}
             {semillas.length > 0 && (
               <div className="space-y-2">
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Sprout className="h-4 w-4" />
-                  <span className="text-sm font-medium">Semillas Asociadas</span>
-                </div>
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {semillas.map((s: any, i: number) => (
-                    <Badge key={i} variant="secondary" className="text-xs px-2.5 py-0.5 bg-primary/10 text-primary border border-primary/20">
-                      {s.nombre ?? s.tipo ?? s}
-                    </Badge>
+                <p className="text-[13px] font-medium text-muted-foreground">Semillas asociadas</p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {semillas.map((semilla: any, i: number) => (
+                    <Badge key={i}>{semilla.nombre ?? semilla.tipo ?? semilla}</Badge>
                   ))}
                 </div>
               </div>
@@ -629,37 +587,33 @@ export default function LoteDetalle() {
 
       {/* Sección Sublotes */}
       <div>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-2xl font-bold">Sublotes</h2>
-            <p className="text-muted-foreground mt-1">
-              Gestiona los sublotes, líneas y palmas de <strong className="text-primary">{lote.nombre}</strong>
+            <h2>Sublotes</h2>
+            <p className="text-sm text-muted-foreground">
+              Sublotes, líneas y palmas de {lote.nombre}
             </p>
           </div>
-          <Button onClick={() => navigate(`/plantacion/sublote/nuevo?loteId=${id}`)}
-            className="gap-2 bg-success hover:bg-success/90 text-primary hover:text-primary shadow-lg shadow-success/20">
-            <Plus className="h-4 w-4" /> Nuevo Sublote
+          <Button onClick={() => navigate(`/plantacion/sublote/nuevo?loteId=${id}`)}>
+            <Plus className="h-4 w-4" strokeWidth={2} /> Nuevo sublote
           </Button>
         </div>
 
         {sublotes.length === 0 ? (
-          <Card className="bg-gradient-to-br from-muted/20 to-muted/5 border-dashed border-2 border-border/50">
+          <Card className="border-dashed">
             <CardContent className="flex flex-col items-center justify-center py-12">
-              <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-muted/30 to-muted/10 mb-4">
-                <Sprout className="h-10 w-10 text-muted-foreground" />
-              </div>
-              <p className="text-lg font-semibold mb-2">No hay sublotes registrados</p>
-              <p className="text-sm text-muted-foreground mb-4 text-center max-w-md">
-                Comienza creando el primer sublote para organizar mejor tu lote
+              <IlustracionPalma variante="palma" className="mb-3" />
+              <p className="mb-1 font-semibold">Todavía no hay sublotes</p>
+              <p className="mb-4 max-w-md text-center text-sm text-muted-foreground">
+                Crea el primer sublote para organizar las líneas y palmas de este lote.
               </p>
-              <Button onClick={() => navigate(`/plantacion/sublote/nuevo?loteId=${id}`)}
-                className="gap-2 bg-success hover:bg-success/90 text-primary hover:text-primary">
-                <Plus className="h-4 w-4" /> Crear Primer Sublote
+              <Button onClick={() => navigate(`/plantacion/sublote/nuevo?loteId=${id}`)}>
+                <Plus className="h-4 w-4" strokeWidth={2} /> Crear primer sublote
               </Button>
             </CardContent>
           </Card>
         ) : (
-          <Accordion type="single" collapsible className="space-y-4"
+          <Accordion type="single" collapsible className="space-y-3"
             value={subloteOpen}
             onValueChange={handleSubloteChange}>
 
@@ -672,74 +626,64 @@ export default function LoteDetalle() {
 
               return (
                 <AccordionItem key={sublote.id} value={subId}
-                  className="rounded-2xl border-0 bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-sm border border-border/50 shadow-lg hover:shadow-xl transition overflow-hidden">
+                  className="overflow-hidden rounded-xl border border-border bg-card shadow-xs">
                   <div className="relative">
-                    <AccordionTrigger className="px-8 py-6 hover:no-underline relative z-10 [&>svg]:hidden">
-                      <div className="flex w-full items-center gap-6 pr-20">
-                        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-success/20 to-success/10 shadow-lg shadow-success/10 border border-success/20">
-                          <Sprout className="h-8 w-8 text-success" />
+                    <AccordionTrigger className="relative z-10 px-5 py-3.5 hover:no-underline [&>svg]:hidden">
+                      <div className="flex w-full items-center gap-4 pr-24">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-success-soft text-success">
+                          <Sprout className="h-[18px] w-[18px]" strokeWidth={2} />
                         </div>
-                        <div className="text-left flex-1">
-                          <div className="text-2xl font-bold mb-2">{sublote.nombre}</div>
-                          <div className="flex items-center gap-4 text-sm">
-                            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">
-                              <Leaf className="h-4 w-4 text-primary" />
-                              <span className="font-semibold text-primary">{lineas.length} {lineas.length === 1 ? 'línea' : 'líneas'}</span>
-                            </div>
-                            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-success/10 border border-success/20">
-                              <Leaf className="h-4 w-4 text-success" />
-                              <span className="font-semibold text-success">{cantPalmas.toLocaleString('es-CO')} palmas</span>
-                            </div>
-                            <Badge className={sublote.estado ? 'bg-success' : ''}>
+                        <div className="flex-1 text-left">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[15px] font-semibold text-foreground">{sublote.nombre}</span>
+                            <Badge variant={sublote.estado ? 'success' : 'secondary'}>
                               {sublote.estado ? 'Activo' : 'Inactivo'}
                             </Badge>
+                          </div>
+                          <div className="mt-0.5 text-xs text-muted-foreground">
+                            {lineas.length} {lineas.length === 1 ? 'línea' : 'líneas'} · {cantPalmas.toLocaleString('es-CO')} palmas
                           </div>
                         </div>
                       </div>
                     </AccordionTrigger>
 
-                    <div className="absolute right-20 top-1/2 -translate-y-1/2 flex gap-2 z-20">
+                    <div className="absolute right-12 top-1/2 z-20 flex -translate-y-1/2 gap-1">
                       <Button variant="ghost" size="icon"
+                        aria-label="Eliminar sublote"
                         onClick={e => {
                           e.stopPropagation();
                           setElimItem({ tipo: 'sublote', itemId: subId });
                           setElimOpen(true);
                         }}
-                        className="h-10 w-10 rounded-xl bg-background/80 backdrop-blur-sm border border-border/50 text-muted-foreground hover:text-destructive hover:bg-destructive/10 hover:border-destructive/30 shadow-md">
-                        <Trash2 className="h-4 w-4" />
+                        className="h-8 w-8 text-muted-foreground hover:bg-destructive-soft hover:text-destructive">
+                        <Trash2 className="h-4 w-4" strokeWidth={2} />
                       </Button>
                     </div>
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none z-10">
-                      <div className="h-10 w-10 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center">
-                        <ChevronDown className={`h-5 w-5 text-primary transition-transform duration-300 ${abierto ? 'rotate-180' : ''}`} strokeWidth={2.5} />
-                      </div>
+                    <div className="pointer-events-none absolute right-4 top-1/2 z-10 -translate-y-1/2">
+                      <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${abierto ? 'rotate-180' : ''}`} strokeWidth={2} />
                     </div>
                   </div>
 
                   <AccordionContent>
-                    <div className="space-y-6 px-8 pb-8 pt-2">
+                    <div className="space-y-4 border-t border-border bg-muted/30 px-5 pb-5 pt-4">
 
                       {/* CASO A: Sublote CON líneas */}
                       {tieneLineas && (
                         <div className="space-y-4">
-                          <div className="flex items-center justify-between pt-4 pb-2 border-t border-border/30">
-                            <div>
-                              <h3 className="text-lg font-semibold">Líneas del Sublote</h3>
-                              <p className="text-sm text-muted-foreground mt-0.5">
-                                {lineas.length} {lineas.length === 1 ? 'línea registrada' : 'líneas registradas'}
-                              </p>
-                            </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <h3 className="text-sm font-semibold">Líneas del sublote</h3>
                             <Button
+                              size="sm"
+                              variant="outline"
                               onClick={() => navigate(
                                 `/plantacion/linea/nuevo?loteId=${id}&subloteId=${sublote.id}` +
                                 `&nombreSublote=${encodeURIComponent(sublote.nombre)}`
-                              )}
-                              className="gap-2 bg-success hover:bg-success/90 text-primary hover:text-primary shadow-lg shadow-success/20">
-                              <Plus className="h-4 w-4" /> Nueva Línea
+                              )}>
+                              <Plus className="h-4 w-4" strokeWidth={2} /> Nueva línea
                             </Button>
                           </div>
 
-                          <Accordion type="single" collapsible className="space-y-3"
+                          <Accordion type="single" collapsible className="space-y-2"
                             value={lineaOpen[subId] ?? ''}
                             onValueChange={val => handleLineaChange(subId, val)}>
 
@@ -751,54 +695,47 @@ export default function LoteDetalle() {
 
                               return (
                                 <AccordionItem key={linea.id} value={lineaId}
-                                  className="rounded-xl bg-muted/30 border border-border/50 overflow-hidden">
+                                  className="overflow-hidden rounded-lg border border-border bg-card">
                                   <div className="relative">
-                                    <AccordionTrigger className="px-6 py-4 hover:no-underline [&>svg]:hidden">
-                                      <div className="flex w-full items-center gap-4 pr-24">
-                                        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/20">
-                                          <Leaf className="h-6 w-6 text-primary" />
+                                    <AccordionTrigger className="px-4 py-2.5 hover:no-underline [&>svg]:hidden">
+                                      <div className="flex w-full items-center gap-3 pr-20">
+                                        <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary-soft text-primary">
+                                          <Leaf className="h-3.5 w-3.5" strokeWidth={2} />
                                         </div>
-                                        <div className="text-left flex-1">
-                                          <div className="text-lg font-bold">Línea {linea.numero}</div>
-                                          <div className="flex items-center gap-3 text-sm mt-1">
-                                            <span className="text-muted-foreground">
+                                        <div className="flex-1 text-left">
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            <span className="text-sm font-semibold">Línea {linea.numero}</span>
+                                            <span className="text-xs text-muted-foreground">
                                               {cantReal.toLocaleString('es-CO')} palmas
                                               {cantTeo !== cantReal && (
-                                                <span className="ml-1 opacity-50 text-xs">(teórico: {cantTeo.toLocaleString('es-CO')})</span>
+                                                <span className="ml-1 opacity-70">(teórico: {cantTeo.toLocaleString('es-CO')})</span>
                                               )}
                                             </span>
-                                            <Badge variant={linea.estado ? 'default' : 'secondary'}
-                                              className={`text-xs ${linea.estado ? 'bg-success' : ''}`}>
+                                            <Badge variant={linea.estado ? 'success' : 'secondary'}>
                                               {linea.estado ? 'Activa' : 'Inactiva'}
                                             </Badge>
                                           </div>
                                         </div>
                                       </div>
                                     </AccordionTrigger>
-                                    <div className="absolute right-14 top-1/2 -translate-y-1/2 flex gap-2 z-20">
+                                    <div className="absolute right-10 top-1/2 z-20 flex -translate-y-1/2 gap-1">
                                       <Button variant="ghost" size="icon"
+                                        aria-label="Eliminar línea"
                                         onClick={e => {
                                           e.stopPropagation();
                                           setElimItem({ tipo: 'linea', itemId: lineaId, subId, lineaId });
                                           setElimOpen(true);
                                         }}
-                                        className="h-8 w-8 rounded-lg bg-background/50 backdrop-blur-sm border border-border/50 text-destructive hover:bg-destructive/10 hover:border-destructive/30">
-                                        <Trash2 className="h-3.5 w-3.5" />
+                                        className="h-7 w-7 text-muted-foreground hover:bg-destructive-soft hover:text-destructive">
+                                        <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
                                       </Button>
                                     </div>
-                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none z-10">
-                                      <div className="h-8 w-8 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center">
-                                        <ChevronDown className={`h-4 w-4 text-primary transition-transform duration-300 ${lineaAb ? 'rotate-180' : ''}`} strokeWidth={2.5} />
-                                      </div>
+                                    <div className="pointer-events-none absolute right-4 top-1/2 z-10 -translate-y-1/2">
+                                      <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${lineaAb ? 'rotate-180' : ''}`} strokeWidth={2} />
                                     </div>
                                   </div>
                                   <AccordionContent>
-                                    <div className="space-y-4 px-6 pb-6 pt-2">
-                                      <div className="pt-2 pb-2 border-t border-border/30">
-                                        <p className="text-sm font-medium text-muted-foreground">
-                                          Palmas de la Línea {linea.numero}
-                                        </p>
-                                      </div>
+                                    <div className="space-y-3 border-t border-border px-4 pb-4 pt-3">
                                       <PalmasSection
                                         {...pProps}
                                         palmasKey={`linea_${lineaId}`}
@@ -826,9 +763,9 @@ export default function LoteDetalle() {
                             const sinPs  = palmasPag[sinKey];
                             if (!sinPs || sinPs.loading || sinPs.total === 0) return null;
                             return (
-                              <div className="border border-amber-200 bg-amber-50/40 dark:bg-amber-900/10 dark:border-amber-800/30 rounded-xl p-4 space-y-3">
-                                <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">
-                                  ⚠ {sinPs.total.toLocaleString('es-CO')} palma{sinPs.total !== 1 ? 's' : ''} sin línea asignada
+                              <div className="space-y-3 rounded-lg border border-warning/25 bg-warning-soft p-4">
+                                <p className="text-sm font-semibold text-warning">
+                                  {sinPs.total.toLocaleString('es-CO')} palma{sinPs.total !== 1 ? 's' : ''} sin línea asignada
                                 </p>
                                 <PalmasSection
                                   {...pProps}
@@ -849,38 +786,76 @@ export default function LoteDetalle() {
                         </div>
                       )}
 
-                      {/* CASO B: Sublote SIN líneas */}
+                      {/* CASO B: Sublote SIN líneas.
+                          Sin líneas no se lista palma por palma: con cientos de
+                          palmas la rejilla tapaba el resto del lote. Se muestra
+                          el conteo y se abre bajo petición. */}
                       {!tieneLineas && (
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-between pt-4 pb-2 border-t border-border/30">
-                            <div>
-                              <h3 className="text-lg font-semibold">Palmas del Sublote</h3>
-                              <p className="text-sm text-muted-foreground mt-0.5">
-                                Sin líneas definidas — Total de palmas en el sublote
-                              </p>
-                            </div>
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <h3 className="text-sm font-semibold">Líneas del sublote</h3>
                             <Button size="sm" variant="outline"
                               onClick={() => navigate(
                                 `/plantacion/linea/nuevo?loteId=${id}` +
                                 `&subloteId=${sublote.id}` +
                                 `&nombreSublote=${encodeURIComponent(sublote.nombre)}`
-                              )} className="gap-2">
-                              <Plus className="h-3.5 w-3.5" /> Añadir Líneas
+                              )}>
+                              <Plus className="h-3.5 w-3.5" strokeWidth={2} /> Nueva línea
                             </Button>
                           </div>
-                          <PalmasSection
-                            {...pProps}
-                            palmasKey={`sub_${subId}`}
-                            params={{ sublote_id: Number(subId) }}
-                            subId={subId}
-                            lineaId={null}
-                            agregarUrl={
-                              `/plantacion/palmas/nuevo?loteId=${id}` +
-                              `&subloteId=${subId}` +
-                              `&nombreSublote=${encodeURIComponent(sublote.nombre)}` +
-                              `&palmasExistentes=${cantPalmas}`
-                            }
-                          />
+
+                          <Card className="gap-0">
+                            <CardContent className="space-y-4 py-5">
+                              <div>
+                                <p className="text-sm font-semibold text-foreground">Número de palmas</p>
+                                <p className="mt-0.5 text-xs text-muted-foreground">
+                                  Sin líneas definidas. Total de palmas en el sublote.
+                                </p>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-3">
+                                <p className="text-2xl font-bold tabular-nums">
+                                  {cantPalmas.toLocaleString('es-CO')}
+                                </p>
+                                <Button size="sm" variant="outline"
+                                  onClick={() => navigate(
+                                    `/plantacion/palmas/nuevo?loteId=${id}` +
+                                    `&subloteId=${subId}` +
+                                    `&nombreSublote=${encodeURIComponent(sublote.nombre)}` +
+                                    `&palmasExistentes=${cantPalmas}`
+                                  )}>
+                                  <Plus className="h-3.5 w-3.5" strokeWidth={2} /> Agregar palmas
+                                </Button>
+                                {cantPalmas > 0 && (
+                                  <Button size="sm" variant="ghost"
+                                    onClick={() => {
+                                      const abrir = !palmasALaVista[subId];
+                                      setPalmasALaVista(prev => ({ ...prev, [subId]: abrir }));
+                                      if (abrir && !palmasPag[`sub_${subId}`]) {
+                                        cargarPalmas(`sub_${subId}`, { sublote_id: Number(subId) });
+                                      }
+                                    }}>
+                                    {palmasALaVista[subId] ? 'Ocultar palmas' : 'Ver palmas'}
+                                  </Button>
+                                )}
+                              </div>
+                            </CardContent>
+                          </Card>
+
+                          {palmasALaVista[subId] && (
+                            <PalmasSection
+                              {...pProps}
+                              palmasKey={`sub_${subId}`}
+                              params={{ sublote_id: Number(subId) }}
+                              subId={subId}
+                              lineaId={null}
+                              agregarUrl={
+                                `/plantacion/palmas/nuevo?loteId=${id}` +
+                                `&subloteId=${subId}` +
+                                `&nombreSublote=${encodeURIComponent(sublote.nombre)}` +
+                                `&palmasExistentes=${cantPalmas}`
+                              }
+                            />
+                          )}
                         </div>
                       )}
 

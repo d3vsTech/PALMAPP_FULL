@@ -5,10 +5,14 @@
  * §1.5   DELETE /predios/{id}    → recursivo
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useLocation, useNavigate } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { Button } from '../../components/ui/button';
-import { Card, CardContent } from '../../components/ui/card';
+import { Card } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
+import PageHeader from '../../components/common/PageHeader';
+import StatStrip from '../../components/common/StatStrip';
+import EmptyState from '../../components/common/EmptyState';
+import { num } from '../../lib/formato';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,8 +23,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
-import { Plus, MapPin, Edit, Trash2, Search, Loader2 } from 'lucide-react';
-import { prediosApi, type PrediosTotales } from '../../../api/plantacion';
+import { ChevronRight, Loader2, MapPin, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import {
+  prediosApi, type PredioLoteAnidado, type PrediosTotales,
+} from '../../../api/plantacion';
 import { toast } from 'sonner';
 import { useRefrescoAlVolver, useVengoDeGuardar } from './refresco';
 
@@ -59,7 +65,10 @@ export default function MiPlantacion() {
       // (uno por predio vía `/resumen`); ahora son 2 fijos. El backend cachea
       // ambos 60s e invalida con cualquier mutación de la jerarquía.
       const [resLista, resTot] = await Promise.all([
-        prediosApi.listar({ search: q?.trim() || undefined, per_page: 50 }, opts?.fresco),
+        prediosApi.listar(
+          { search: q?.trim() || undefined, per_page: 50, incluir_lotes: true },
+          opts?.fresco,
+        ),
         prediosApi.totales(opts?.fresco).catch(() => null), // totales no es crítico para el listado
       ]);
       if (reqId !== reqRef.current) return;
@@ -155,164 +164,184 @@ export default function MiPlantacion() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Header */}
-      <div className="space-y-1">
-        <h1>Mi Plantación</h1>
-        <p className="text-lead">
-          Administra predios, lotes, sublotes, líneas y palmas de tu finca
-        </p>
-      </div>
-
-      {/* KPIs */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Card className="border-border">
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground mb-0.5">Hectáreas</p>
-            <p className="text-2xl font-bold truncate">{totalHa.toFixed(1)} ha</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border">
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground mb-0.5">Lotes</p>
-            <p className="text-2xl font-bold truncate">{totalLotes}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border">
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground mb-0.5">Palmas</p>
-            <p className="text-2xl font-bold truncate">{totalPalmas.toLocaleString('es-CO')}</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Lista de predios */}
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <h2>Predios</h2>
-          <p className="text-sm text-muted-foreground">
-            {predios.length} {predios.length === 1 ? 'predio registrado' : 'predios registrados'}
-          </p>
-        </div>
-
-        {/* Buscador con botón */}
-        <div className="mb-6 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Buscar por nombre o ubicación..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-          <Button
-            onClick={() => navigate('/plantacion/predio/nuevo')}
-            className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20"
-          >
-            <Plus className="h-5 w-5" />
-            Nuevo Predio
+      <PageHeader
+        title="Mi plantación"
+        description="Predios, lotes, sublotes, líneas y palmas de la finca."
+        actions={
+          <Button onClick={() => navigate('/plantacion/predio/nuevo')}>
+            <Plus className="h-4 w-4" strokeWidth={2} />
+            Nuevo predio
           </Button>
+        }
+      />
+
+      {/* El endpoint `/predios/totales` manda las cifras exactas del tenant.
+          Mientras llega, se suma lo que haya en el listado. */}
+      <StatStrip
+        loading={loading && predios.length === 0}
+        items={[
+          { label: 'Hectáreas', value: num(totalHa, 1), unit: 'ha', note: 'en toda la finca' },
+          { label: 'Predios', value: num(totales?.predios_count ?? predios.length) },
+          { label: 'Lotes', value: num(totalLotes) },
+          { label: 'Palmas', value: num(totalPalmas), note: 'sembradas' },
+        ]}
+      />
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2>Predios</h2>
+        <div className="relative w-full sm:w-80">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={2} />
+          <Input
+            type="search"
+            placeholder="Buscar por nombre o ubicación"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
         </div>
+      </div>
 
-        {/* Loading */}
-        {loading && (
-          <div className="flex items-center justify-center py-12 text-muted-foreground gap-3">
-            <Loader2 className="w-5 h-5 animate-spin" /> Cargando...
+      {loading ? (
+        <Card className="gap-0">
+          <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Cargando predios…
           </div>
-        )}
-
-        {/* Lista */}
-        {!loading && (
-          <div className="space-y-3">
-            {predios.map((predio) => (
-              <Card key={predio.id} className="border-border hover:border-primary/30 transition">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 border border-primary/20 shrink-0">
-                        <MapPin className="h-5 w-5 text-primary" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-lg font-bold mb-0.5 truncate">{predio.nombre}</h3>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-                          <span className="font-medium">{Number(predio.hectareas_totales ?? 0).toFixed(1)} ha</span>
-                          {predio.ubicacion && (
-                            <>
-                              <span>•</span>
-                              <span className="truncate">{predio.ubicacion}</span>
-                            </>
-                          )}
-                          <span>•</span>
-                          <span>{Number(predio.lotes_count ?? 0)} {Number(predio.lotes_count) !== 1 ? 'lotes' : 'lote'}</span>
-                          <span>•</span>
-                          <span className="text-success font-medium">{Number(predio.palmas_count ?? 0).toLocaleString('es-CO')} palmas</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex gap-1.5 shrink-0">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => navigate(`/plantacion/predio/nuevo?edit=${predio.id}`)}
-                        className="h-9 w-9 text-muted-foreground hover:text-primary hover:bg-primary/10 hover:border-primary/30"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => { setElimId(Number(predio.id)); setElimOpen(true); }}
-                        className="h-9 w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10 hover:border-destructive/30"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+        </Card>
+      ) : predios.length === 0 ? (
+        <Card className="gap-0">
+          <EmptyState
+            title={search ? 'No se encontraron predios' : 'Todavía no hay predios'}
+            description={search
+              ? 'Ningún predio coincide con la búsqueda.'
+              : 'Crea el primer predio para empezar a organizar lotes, sublotes, líneas y palmas.'}
+            action={search
+              ? { label: 'Limpiar búsqueda', onClick: () => setSearch('') }
+              : { label: 'Crear primer predio', onClick: () => navigate('/plantacion/predio/nuevo') }}
+          />
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {predios.map((predio) => {
+            const lotes: PredioLoteAnidado[] = predio.lotes ?? [];
+            return (
+              <Card key={predio.id} className="gap-0 overflow-hidden">
+                {/* La banda del predio va en tinte de marca: con muchos predios,
+                    es lo que separa un bloque del siguiente de un vistazo. */}
+                <div className="flex flex-col gap-3 bg-primary-soft/50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                      <MapPin className="h-5 w-5" strokeWidth={2} />
+                    </span>
+                    <div className="min-w-0">
+                      <h3 className="truncate">{predio.nombre}</h3>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {num(Number(predio.hectareas_totales ?? 0), 1)} ha
+                        {predio.ubicacion && <> · {predio.ubicacion}</>}
+                        {' · '}
+                        {num(Number(predio.lotes_count ?? 0))} {Number(predio.lotes_count) === 1 ? 'lote' : 'lotes'}
+                        {' · '}
+                        {num(Number(predio.palmas_count ?? 0))} palmas
+                      </p>
                     </div>
                   </div>
-                </CardContent>
+
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => navigate(`/plantacion/lote/nuevo?predioId=${predio.id}`)}
+                    >
+                      <Plus className="h-4 w-4" strokeWidth={2} />
+                      Nuevo lote
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Editar predio"
+                      className="text-muted-foreground"
+                      onClick={() => navigate(`/plantacion/predio/nuevo?edit=${predio.id}`)}
+                    >
+                      <Pencil className="h-4 w-4" strokeWidth={2} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Eliminar predio"
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={() => { setElimId(Number(predio.id)); setElimOpen(true); }}
+                    >
+                      <Trash2 className="h-4 w-4" strokeWidth={2} />
+                    </Button>
+                  </div>
+                </div>
+
+                {lotes.length > 0 ? (
+                  <div className="overflow-x-auto border-t border-border">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/60 text-[13px] text-muted-foreground">
+                        <tr>
+                          <th className="px-5 py-2.5 text-left font-semibold">Lote</th>
+                          <th className="hidden px-4 py-2.5 text-left font-semibold md:table-cell">Variedad</th>
+                          <th className="hidden px-4 py-2.5 text-right font-semibold sm:table-cell">Siembra</th>
+                          <th className="px-4 py-2.5 text-right font-semibold">Hectáreas</th>
+                          <th className="px-4 py-2.5 text-right font-semibold">Palmas</th>
+                          <th className="hidden px-4 py-2.5 text-right font-semibold lg:table-cell">Sublotes</th>
+                          <th className="w-10 px-2 py-2.5" />
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {lotes.map((lote) => (
+                          <tr key={lote.id} className="transition-colors hover:bg-muted/40">
+                            <td className="px-5 py-3">
+                              <Link
+                                to={`/plantacion/lote/${lote.id}`}
+                                className="font-semibold text-foreground hover:text-primary hover:underline"
+                              >
+                                {lote.nombre}
+                              </Link>
+                              {lote.variedad && (
+                                <span className="block text-xs text-muted-foreground md:hidden">{lote.variedad}</span>
+                              )}
+                            </td>
+                            <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">
+                              {lote.variedad ?? '—'}
+                            </td>
+                            {/* `anio_siembra` ya viene resuelto: parsear la fecha
+                                la correría un día por la zona horaria. */}
+                            <td className="hidden px-4 py-3 text-right text-muted-foreground sm:table-cell">
+                              {lote.anio_siembra ?? '—'}
+                            </td>
+                            <td className="px-4 py-3 text-right text-foreground">
+                              {lote.hectareas_sembradas == null ? '—' : num(Number(lote.hectareas_sembradas), 1)}
+                            </td>
+                            <td className="px-4 py-3 text-right text-foreground">{num(lote.palmas_count)}</td>
+                            <td className="hidden px-4 py-3 text-right text-foreground lg:table-cell">
+                              {num(lote.sublotes_count)}
+                            </td>
+                            <td className="px-2 py-3 text-right">
+                              <Link
+                                to={`/plantacion/lote/${lote.id}`}
+                                aria-label={`Abrir ${lote.nombre}`}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                              >
+                                <ChevronRight className="h-4 w-4" strokeWidth={2} />
+                              </Link>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="border-t border-border px-5 py-3 text-sm text-muted-foreground">
+                    Este predio todavía no tiene lotes.
+                  </p>
+                )}
               </Card>
-            ))}
-          </div>
-        )}
-
-        {/* Empty state — sin resultados de búsqueda */}
-        {!loading && predios.length === 0 && search && (
-          <Card className="bg-gradient-to-br from-muted/20 to-muted/5 border-dashed border-2">
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <Search className="h-16 w-16 text-muted-foreground mb-4" />
-              <p className="text-lg font-semibold mb-2">No se encontraron predios</p>
-              <p className="text-sm text-muted-foreground mb-4">
-                Intenta con otros términos de búsqueda
-              </p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Empty state — no hay predios */}
-        {!loading && predios.length === 0 && !search && (
-          <Card className="bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-sm border-border/50 shadow-lg">
-            <CardContent className="flex flex-col items-center justify-center py-16">
-              <div className="flex h-24 w-24 items-center justify-center rounded-3xl bg-gradient-to-br from-primary/20 to-primary/10 mb-6 shadow-inner">
-                <MapPin className="h-12 w-12 text-primary" />
-              </div>
-              <h3 className="text-2xl font-bold mb-2">No hay predios registrados</h3>
-              <p className="text-muted-foreground mb-6 text-center max-w-md">
-                Comienza creando tu primer predio para empezar a gestionar la estructura de tu finca
-              </p>
-              <Button
-                onClick={() => navigate('/plantacion/predio/nuevo')}
-                size="lg"
-                className="gap-2 bg-success hover:bg-success/90 shadow-lg shadow-success/20"
-              >
-                <Plus className="h-5 w-5" />
-                Crear Primer Predio
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

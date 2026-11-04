@@ -135,9 +135,40 @@ export interface PredioWizardInitResponse {
   };
 }
 
+/** Un lote como viene anidado en `GET /predios?incluir_lotes=1` (§1.1.0). */
+export interface PredioLoteAnidado {
+  id: number;
+  nombre: string;
+  /** Nombres de las semillas unidos por coma, o null si no tiene. */
+  variedad: string | null;
+  semillas: Array<{ id: number; tipo: string; nombre: string }>;
+  fecha_siembra: string | null;
+  /**
+   * El año ya resuelto por el backend. Usar este entero y no parsear
+   * `fecha_siembra`: `new Date('2018-01-01')` se lee en UTC y en Colombia
+   * muestra el 31 de diciembre de 2017.
+   */
+  anio_siembra: number | null;
+  hectareas_sembradas: string | null;
+  palmas_count: number;
+  sublotes_count: number;
+  estado: boolean;
+}
+
 export const prediosApi = {
-  listar: (p?: { search?: string; estado?: boolean; per_page?: number; page?: number }, fresco?: boolean) =>
-    get<{ data: any[]; meta: any }>('/predios', { ...(p ?? {}), ...sello(fresco) } as any),
+  /**
+   * §1.1 y §1.1.0. Con `incluir_lotes` cada predio trae sus `lotes[]` en la
+   * misma petición: son 4 consultas fijas por página, no una por predio.
+   */
+  listar: (
+    p?: { search?: string; estado?: boolean; per_page?: number; page?: number; incluir_lotes?: boolean },
+    fresco?: boolean,
+  ) =>
+    get<{ data: any[]; meta: any }>('/predios', {
+      ...(p ?? {}),
+      ...(p?.incluir_lotes ? { incluir_lotes: 1 } : {}),
+      ...sello(fresco),
+    } as any),
 
   /** §1.1.1 Totales globales del tenant. Endpoint liviano para las tarjetas
    *  de resumen del index. Usar **junto** a `listar` (no lo reemplaza). */
@@ -209,7 +240,8 @@ export const lotesApi = {
   crear: (b: { predio_id: number; nombre: string; fecha_siembra?: string; hectareas_sembradas?: number; semillas_ids?: number[] }) =>
     post<{ message: string; data: any }>('/lotes', b),
 
-  editar: (id: number, b: Partial<{ nombre: string; fecha_siembra: string; hectareas_sembradas: number; semillas_ids: number[]; estado: boolean }>) =>
+  /** §2.4. Admite los mismos campos que crear, todos opcionales. */
+  editar: (id: number, b: Partial<{ predio_id: number; nombre: string; fecha_siembra: string; hectareas_sembradas: number; semillas_ids: number[]; estado: boolean }>) =>
     put<{ message: string; data: any }>(`/lotes/${id}`, b),
 
   eliminar: (id: number) =>

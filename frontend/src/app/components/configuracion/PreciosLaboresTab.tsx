@@ -1266,6 +1266,12 @@ export function PreciosLaboresTab() {
             .filter((p): p is Labor & { tipo: 'PLATEO' | 'PODA' | 'SANIDAD' | 'OTROS' } =>
               p.tipo === 'PLATEO' || p.tipo === 'PODA' || p.tipo === 'SANIDAD' || p.tipo === 'OTROS'
             )
+            // "Otros" es el cajón de sastre: va al final de las fijas.
+            .sort((a, b) => {
+              if (a.tipo === 'OTROS') return 1;
+              if (b.tipo === 'OTROS') return -1;
+              return (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' });
+            })
             .map((palma) => (
             <AccordionItem key={`fija-${palma.id}`} value={PALMA_VALUE[palma.tipo]} className="border-0">
               <Card className="border-border">

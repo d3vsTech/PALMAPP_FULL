@@ -9,9 +9,10 @@ import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { ArrowLeft, Leaf, AlertCircle, Loader2 } from 'lucide-react';
+import { Leaf, Loader2 } from 'lucide-react';
 import { palmasApi, type BatchStatus } from '../../../api/plantacion';
 import { toast } from 'sonner';
+import PageHeader from '../../components/common/PageHeader';
 
 export default function CrearPalmas() {
   const navigate       = useNavigate();
@@ -93,140 +94,120 @@ export default function CrearPalmas() {
   const codes = preview();
 
   return (
-    <div className="space-y-8 max-w-3xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate(`/plantacion/lote/${loteId}`)}
-          className="h-12 w-12 rounded-xl border border-border/50 hover:bg-muted">
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div>
-          <h1 className="text-3xl sm:text-4xl font-bold text-foreground flex items-center gap-3">
-            <Leaf className="h-10 w-10 text-success" />
-            Agregar Palmas
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            {lineaId
-              ? <>Añade nuevas palmas a <strong className="text-primary">Línea {numeroLinea}</strong> de <strong className="text-primary">{nombreSublote}</strong></>
-              : <>Añade nuevas palmas a <strong className="text-primary">{nombreSublote}</strong></>}
-          </p>
-        </div>
-      </div>
+    <div className="mx-auto max-w-3xl space-y-8">
+      <PageHeader
+        backTo={`/plantacion/lote/${loteId}`}
+        eyebrow="Mi plantación"
+        title={<span className="flex items-center gap-3"><Leaf className="h-9 w-9 text-success" strokeWidth={2} />Agregar palmas</span>}
+      />
 
-      {/* Barra de progreso batch */}
+      {/* Avance del lote de palmas que corre en segundo plano */}
       {loading && batch && (
-        <Card className="border-primary/30 bg-primary/5">
-          <CardContent className="p-4 space-y-2">
+        <Card className="border-primary/25 bg-primary-soft">
+          <CardContent className="space-y-2 py-4">
             <div className="flex justify-between text-sm">
-              <span className="text-primary font-medium">Creando palmas en segundo plano...</span>
-              <span className="text-muted-foreground">{batch.progress}%</span>
+              <span className="font-medium text-primary">Creando palmas en segundo plano</span>
+              <span className="text-muted-foreground tabular-nums">{batch.progress}%</span>
             </div>
-            <div className="w-full bg-muted rounded-full h-2">
-              <div className="bg-primary h-2 rounded-full transition duration-500"
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+              <div className="h-full rounded-full bg-primary transition-[width] duration-500"
                 style={{ width: `${batch.progress}%` }} />
             </div>
           </CardContent>
         </Card>
       )}
 
-      <Card className="glass-subtle border-border shadow-xl">
+      <Card className="gap-4">
         <CardHeader>
-          <CardTitle className="text-2xl">Cantidad de Palmas</CardTitle>
+          <CardTitle className="text-2xl">Cantidad de palmas</CardTitle>
           <CardDescription>
-            Los códigos se generan automáticamente de forma secuencial dentro del sublote
+            Los códigos se generan solos, en orden, dentro del sublote.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Info de línea actual */}
-            <div className="rounded-xl bg-muted/30 border border-border/50 p-6">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
+            <div className="rounded-xl border border-border bg-muted/30 p-6">
+              <div className="grid grid-cols-3 gap-4 text-center">
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Sublote</p>
+                  <p className="mb-1 text-sm text-muted-foreground">Sublote</p>
                   <p className="font-semibold text-primary">{nombreSublote}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Línea</p>
+                  <p className="mb-1 text-sm text-muted-foreground">Línea</p>
                   <p className="font-semibold text-primary">{lineaId ? `Línea ${numeroLinea}` : '—'}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Palmas Existentes</p>
-                  <p className="font-semibold text-success">{palmasExist}</p>
+                  <p className="mb-1 text-sm text-muted-foreground">Palmas existentes</p>
+                  <p className="font-semibold tabular-nums text-success">
+                    {palmasExist.toLocaleString('es-CO')}
+                  </p>
                 </div>
               </div>
             </div>
 
-            {/* Cantidad */}
             <div className="space-y-2">
               <Label htmlFor="cantidadPalmas" className="text-base">
-                Cantidad de Palmas a Agregar <span className="text-destructive">*</span>
+                Cantidad de palmas a agregar <span className="text-destructive">*</span>
               </Label>
-              <Input id="cantidadPalmas" type="number" step="0.001" min="1" max="99999" placeholder="Ej: 100"
+              <Input id="cantidadPalmas" type="number" step="1" min="1" max="99999" placeholder="Ej: 100"
                 value={cantidad} onChange={e => setCantidad(e.target.value)}
                 className="h-12 text-base" autoFocus />
               <p className="text-sm text-muted-foreground">
-                Entre 1 y 99.999. Más de 5.000 se procesarán en segundo plano.
+                Entre 1 y 99.999. Más de 5.000 se procesan en segundo plano.
               </p>
             </div>
 
-            {/* Preview */}
             {codes.length > 0 && (
-              <div className="rounded-xl bg-success/5 border border-success/20 p-6">
-                <div className="flex gap-3 mb-3">
-                  <AlertCircle className="h-5 w-5 text-success flex-shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-success mb-2">Vista previa de códigos de palmas nuevas</p>
-                    <div className="space-y-1">
-                      {codes.map((c, i) => (
-                        <p key={i} className="text-sm font-mono text-primary bg-white/50 rounded px-2 py-1 inline-block mr-2">
-                          {c}
-                        </p>
-                      ))}
-                      {parseInt(cantidad) > 5 && (
-                        <p className="text-sm text-muted-foreground mt-2">
-                          ... y {parseInt(cantidad) - 5} palmas más
-                        </p>
-                      )}
-                      {palmasExist > 0 && (
-                        <p className="text-xs text-muted-foreground mt-3">
-                          La numeración continúa desde {String(palmasExist + 1).padStart(3, '0')} hasta {String(palmasExist + parseInt(cantidad)).padStart(3, '0')}
-                        </p>
-                      )}
-                    </div>
-                  </div>
+              <div className="rounded-xl border border-border bg-muted/50 p-5">
+                <p className="mb-2.5 text-sm font-semibold text-foreground">Así quedarán los códigos</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {codes.map((c, i) => (
+                    <span key={i}
+                      className="rounded-md border border-border bg-card px-2 py-1 text-xs font-semibold tabular-nums">
+                      {c}
+                    </span>
+                  ))}
                 </div>
+                {parseInt(cantidad) > 5 && (
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Y {(parseInt(cantidad) - 5).toLocaleString('es-CO')} palmas más.
+                  </p>
+                )}
+                {palmasExist > 0 && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    La numeración sigue desde {String(palmasExist + 1).padStart(3, '0')} hasta{' '}
+                    {String(palmasExist + parseInt(cantidad)).padStart(3, '0')}.
+                  </p>
+                )}
               </div>
             )}
 
-            {/* Info box */}
-            <div className="rounded-xl bg-primary/5 border border-primary/20 p-6">
+            <div className="rounded-xl border border-primary/20 bg-primary-soft p-6">
               <div className="flex gap-3">
-                <Leaf className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                <Leaf className="mt-0.5 h-5 w-5 shrink-0 text-primary" strokeWidth={2} />
                 <div className="space-y-1">
                   <p className="text-sm font-semibold text-primary">Información importante</p>
-                  <ul className="text-sm text-muted-foreground space-y-1">
-                    <li>• Los códigos se generan con formato: <code className="text-primary font-mono">{nombreSublote}-{lineaId ? `L${numeroLinea}-` : ''}[contador]</code></li>
+                  <ul className="space-y-1 text-sm text-muted-foreground">
+                    <li>• Los códigos llevan el formato <span className="font-semibold text-foreground">{nombreSublote}-{lineaId ? `L${numeroLinea}-` : ''}[contador]</span></li>
                     <li>• El contador de palmas usa 3 dígitos (001, 002, 003...)</li>
                     <li>• Las nuevas palmas se crearán en estado <strong>Activo</strong></li>
-                    <li>• Los contadores de la línea y del sublote se actualizarán automáticamente</li>
+                    <li>• Los contadores de la línea y del sublote se actualizan solos</li>
                     <li>• Nunca se repiten códigos dentro de un sublote</li>
                   </ul>
                 </div>
               </div>
             </div>
 
-            {/* Botones */}
-            <div className="flex items-center gap-4 pt-4">
+            <div className="barra-acciones flex items-center gap-4 pt-4">
               <Button type="button" variant="outline" disabled={loading}
-                onClick={() => navigate(`/plantacion/lote/${loteId}`)}
-                className="flex-1 h-12 text-base">
+                onClick={() => navigate(`/plantacion/lote/${loteId}`, { state: { openSubloteId: subloteId } })}
+                className="h-12 flex-1 text-base">
                 Cancelar
               </Button>
-              <Button type="submit" disabled={loading}
-                className="flex-1 h-12 text-base bg-success hover:bg-success/90 text-primary hover:text-primary shadow-lg shadow-success/20">
+              <Button type="submit" disabled={loading} className="h-12 flex-1 text-base">
                 {loading
-                  ? <><Loader2 className="h-5 w-5 mr-2 animate-spin" />Creando...</>
-                  : <><Leaf className="h-5 w-5 mr-2" />Agregar Palmas</>}
+                  ? <><Loader2 className="h-5 w-5 animate-spin" />Creando</>
+                  : <><Leaf className="h-5 w-5" strokeWidth={2} />Agregar palmas</>}
               </Button>
             </div>
           </form>

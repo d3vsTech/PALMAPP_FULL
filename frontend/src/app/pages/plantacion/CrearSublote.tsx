@@ -9,9 +9,10 @@ import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { ArrowLeft, Sprout, Loader2 } from 'lucide-react';
+import { Sprout, Loader2 } from 'lucide-react';
 import { sublotesApi, palmasApi, type BatchStatus } from '../../../api/plantacion';
 import { toast } from 'sonner';
+import PageHeader from '../../components/common/PageHeader';
 
 export default function CrearSublote() {
   const navigate       = useNavigate();
@@ -81,109 +82,97 @@ export default function CrearSublote() {
   };
 
   return (
-    <div className="space-y-8 max-w-3xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate(`/plantacion/lote/${loteId}`)}
-          className="h-12 w-12 rounded-xl border border-border/50 hover:bg-muted">
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div>
-          <h1 className="text-3xl sm:text-4xl font-bold text-foreground flex items-center gap-3">
-            <Sprout className="h-10 w-10 text-success" />
-            Nuevo Sublote
-          </h1>
-          <p className="text-muted-foreground mt-1">Crea un nuevo sublote dentro del lote</p>
-        </div>
-      </div>
+    <div className="mx-auto max-w-3xl space-y-8">
+      <PageHeader
+        backTo={`/plantacion/lote/${loteId}`}
+        eyebrow="Mi plantación"
+        title="Nuevo sublote"
+        description="Crea un sublote dentro del lote."
+      />
 
-      {/* Barra de progreso batch */}
+      {/* Avance del lote de palmas que corre en segundo plano */}
       {loading && batch && (
-        <Card className="border-primary/30 bg-primary/5">
-          <CardContent className="p-4 space-y-2">
+        <Card className="border-primary/25 bg-primary-soft">
+          <CardContent className="space-y-2 py-4">
             <div className="flex justify-between text-sm">
-              <span className="text-primary font-medium">Creando palmas en segundo plano...</span>
-              <span className="text-muted-foreground">{batch.progress}%</span>
+              <span className="font-medium text-primary">Creando palmas en segundo plano</span>
+              <span className="text-muted-foreground tabular-nums">{batch.progress}%</span>
             </div>
-            <div className="w-full bg-muted rounded-full h-2">
-              <div className="bg-primary h-2 rounded-full transition duration-500"
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+              <div className="h-full rounded-full bg-primary transition-[width] duration-500"
                 style={{ width: `${batch.progress}%` }} />
             </div>
           </CardContent>
         </Card>
       )}
 
-      <Card className="glass-subtle border-border shadow-xl">
+      <Card className="gap-4">
         <CardHeader>
-          <CardTitle className="text-2xl">Información del Sublote</CardTitle>
+          <CardTitle className="text-2xl">Información del sublote</CardTitle>
           <CardDescription>
-            Ingresa el nombre del sublote. La cantidad de palmas se actualizará automáticamente al agregar líneas.
+            El nombre identifica el sublote. La cantidad de palmas se actualiza sola al agregar líneas.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Nombre */}
             <div className="space-y-2">
               <Label htmlFor="nombreSublote" className="text-base">
-                Nombre del Sublote <span className="text-destructive">*</span>
+                Nombre del sublote <span className="text-destructive">*</span>
               </Label>
               <Input id="nombreSublote" placeholder="Ej: Sublote A1, Norte 1, Sector B" maxLength={50}
                 value={nombre} onChange={e => setNombre(e.target.value)}
                 className="h-12 text-base" autoFocus />
               <p className="text-sm text-muted-foreground">
-                Usa un nombre descriptivo que te ayude a identificar este sublote fácilmente
+                Usa un nombre que te sirva para reconocerlo de un vistazo.
               </p>
             </div>
 
-            {/* Cantidad de palmas */}
             <div className="space-y-2">
-              <Label className="text-base">Cantidad de Palmas <span className="text-muted-foreground text-sm font-normal">(opcional)</span></Label>
-              <Input type="number" step="0.001" min="0" max="99999"
-                placeholder="Dejar vacío si se agregarán después"
+              <Label htmlFor="cantidadPalmas" className="text-base">
+                Cantidad de palmas <span className="text-sm font-normal text-muted-foreground">(opcional)</span>
+              </Label>
+              <Input id="cantidadPalmas" type="number" step="1" min="0" max="99999"
+                placeholder="Déjalo vacío si las agregas después"
                 value={cantidad} onChange={e => setCantidad(e.target.value)}
                 className="h-12 text-base" />
               <p className="text-sm text-muted-foreground">
-                Si ingresas una cantidad, las palmas se crean automáticamente. Más de 5.000 se procesarán en segundo plano.
+                Si pones una cantidad, las palmas se crean solas. Más de 5.000 se procesan en segundo plano.
               </p>
             </div>
 
-            {/* Preview de código */}
             {nombre && (
-              <div className="rounded-xl bg-primary/5 border border-primary/20 p-4">
+              <div className="rounded-xl border border-border bg-muted/50 p-5">
                 <p className="text-sm text-muted-foreground">
-                  Formato de códigos: <span className="font-mono text-primary">{nombre}-001</span>,{' '}
-                  <span className="font-mono text-primary">{nombre}-002</span>, ...
+                  Los códigos quedarán así: <span className="font-semibold text-foreground tabular-nums">{nombre}-001</span>,{' '}
+                  <span className="font-semibold text-foreground tabular-nums">{nombre}-002</span> y siguientes.
                 </p>
               </div>
             )}
 
-            {/* Info box */}
-            <div className="rounded-xl bg-primary/5 border border-primary/20 p-6">
+            <div className="rounded-xl border border-primary/20 bg-primary-soft p-6">
               <div className="flex gap-3">
-                <Sprout className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                <Sprout className="mt-0.5 h-5 w-5 shrink-0 text-primary" strokeWidth={2} />
                 <div className="space-y-1">
                   <p className="text-sm font-semibold text-primary">Información importante</p>
-                  <ul className="text-sm text-muted-foreground space-y-1">
-                    <li>• La cantidad de palmas se calculará automáticamente al agregar líneas</li>
+                  <ul className="space-y-1 text-sm text-muted-foreground">
+                    <li>• La cantidad de palmas se recalcula al agregar líneas</li>
                     <li>• El sublote se creará en estado <strong>Activo</strong></li>
-                    <li>• Podrás gestionar líneas y palmas después de crear el sublote</li>
+                    <li>• Las líneas y las palmas se gestionan después de crearlo</li>
                   </ul>
                 </div>
               </div>
             </div>
 
-            {/* Botones */}
-            <div className="flex items-center gap-4 pt-4">
+            <div className="barra-acciones flex items-center gap-4 pt-4">
               <Button type="button" variant="outline" disabled={loading}
                 onClick={() => navigate(`/plantacion/lote/${loteId}`)}
-                className="flex-1 h-12 text-base">
+                className="h-12 flex-1 text-base">
                 Cancelar
               </Button>
-              <Button type="submit" disabled={loading}
-                className="flex-1 h-12 text-base bg-success hover:bg-success/90 text-primary hover:text-primary shadow-lg shadow-success/20">
+              <Button type="submit" disabled={loading} className="h-12 flex-1 text-base">
                 {loading
-                  ? <><Loader2 className="h-5 w-5 mr-2 animate-spin" />Creando...</>
-                  : <><Sprout className="h-5 w-5 mr-2" />Crear Sublote</>}
+                  ? <><Loader2 className="h-5 w-5 animate-spin" />Creando</>
+                  : <><Sprout className="h-5 w-5" strokeWidth={2} />Crear sublote</>}
               </Button>
             </div>
           </form>

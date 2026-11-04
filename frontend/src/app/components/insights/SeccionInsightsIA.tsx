@@ -17,22 +17,26 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent } from '../ui/card';
 import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
 import {
   Sparkles, RefreshCw, Loader2, AlertTriangle, Info,
-  Lightbulb, CheckCircle2, Clock,
+  CheckCircle2, Clock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   insightsApi, esInsightReciente, SEVERIDAD_LABEL, DOMINIO_LABEL,
   PRIORIDAD_LABEL, InsightErrorCodes,
-  type Insight, type Severidad,
+  type Insight, type Prioridad, type Severidad,
 } from '../../../api/insights';
 import { CardAlerta } from './CardAlerta';
+import { FilaDeslizable } from '../common/FilaDeslizable';
+import { primeraFrase, sinJerga } from '../../lib/texto';
 
 /** Cuántas alertas mostrar en el resumen del dashboard (las de mayor severidad).
  *  El usuario puede seguir gestionando el resto — pero no las 40 posibles a la vez. */
 const MAX_ALERTAS_VISIBLES = 6;
+
+/** Lo que puede mostrar el bloque. Cada una es una lista distinta del informe. */
+type Vista = 'alertas' | 'recomendaciones';
 
 /** Orden de severidad para ordenar. */
 const SEV_ORDER: Record<Severidad, number> = { CRITICA: 0, ALTA: 1, MEDIA: 2, BAJA: 3 };
@@ -43,7 +47,10 @@ export function SeccionInsightsIA() {
   const [progreso, setProgreso] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [retryAfter, setRetryAfter] = useState<number | null>(null);
-  const [tabActiva, setTabActiva] = useState<Severidad | 'TODAS'>('TODAS');
+  /** Las dos listas comparten sitio: una u otra, no las dos apiladas. */
+  const [vista, setVista] = useState<Vista>('alertas');
+  const [severidad, setSeveridad] = useState<Severidad | 'TODAS'>('TODAS');
+  const [prioridad, setPrioridad] = useState<Prioridad | 'TODAS'>('TODAS');
 
   /** Dispara POST /insights + polling. Se llama al montar si no hay reciente,
    *  o cuando el usuario pulsa "Regenerar". */
@@ -147,20 +154,28 @@ export function SeccionInsightsIA() {
 
   const alertas = insight?.alertas ?? [];
   const activas = alertas.filter((a) => a.estado === 'ACTIVA');
-  const contadores: Record<Severidad | 'TODAS', number> = {
-    TODAS: activas.length,
-    CRITICA: activas.filter((a) => a.severidad === 'CRITICA').length,
-    ALTA: activas.filter((a) => a.severidad === 'ALTA').length,
-    MEDIA: activas.filter((a) => a.severidad === 'MEDIA').length,
-    BAJA: activas.filter((a) => a.severidad === 'BAJA').length,
-  };
-  const alertasVisibles = [...alertas]
-    .sort((a, b) => SEV_ORDER[a.severidad] - SEV_ORDER[b.severidad])
-    .filter((a) => tabActiva === 'TODAS' || a.severidad === tabActiva)
-    .slice(0, MAX_ALERTAS_VISIBLES);
+  /** Cuantas alertas hay de cada severidad, para las pastillas del filtro. */
+  const porSeveridad = (['CRITICA', 'ALTA', 'MEDIA', 'BAJA'] as const)
+    .map((sev) => ({ sev, cuantas: activas.filter((a) => a.severidad === sev).length }))
+    .filter((x) => x.cuantas > 0);
+
+  // Las mas graves primero: son las que se ven sin deslizar.
+  const alertasFiltradas = [...activas]
+    .filter((a) => severidad === 'TODAS' || a.severidad === severidad)
+    .sort((a, b) => SEV_ORDER[a.severidad] - SEV_ORDER[b.severidad]);
+  const alertasVisibles = alertasFiltradas.slice(0, MAX_ALERTAS_VISIBLES);
 
   const recomendaciones = (insight?.recomendaciones ?? []).filter(
     (r) => r.estado === 'PENDIENTE',
+  );
+
+  /** Cuantas sugerencias hay de cada prioridad, para las pastillas. */
+  const porPrioridad = (['ALTA', 'MEDIA', 'BAJA'] as const)
+    .map((p) => ({ p, cuantas: recomendaciones.filter((r) => r.prioridad === p).length }))
+    .filter((x) => x.cuantas > 0);
+
+  const recomendacionesFiltradas = recomendaciones.filter(
+    (r) => prioridad === 'TODAS' || r.prioridad === prioridad,
   );
 
   /**
@@ -171,26 +186,48 @@ export function SeccionInsightsIA() {
    * administra una finca. Se decide por la estructura y no por el texto:
    * buscar palabras dentro del resumen se rompe al primer cambio del prompt.
    */
+  /** Las tres listas del informe, cada una con su etiqueta. */
+  const vistas: { clave: Vista; etiqueta: string; cuantos: number }[] = [
+    { clave: 'alertas', etiqueta: 'Alertas', cuantos: activas.length },
+    { clave: 'recomendaciones', etiqueta: 'Recomendaciones', cuantos: recomendaciones.length },
+  ].filter((v): v is { clave: Vista; etiqueta: string; cuantos: number } => v.cuantos > 0);
+
+  const resumenVista =
+    vista === 'recomendaciones'
+      ? `${recomendaciones.length} ${recomendaciones.length === 1 ? 'sugerencia' : 'sugerencias'} por aplicar`
+      : activas.length === 0
+        ? 'Todo al día'
+        : `${activas.length} ${activas.length === 1 ? 'alerta' : 'alertas'} por revisar`;
+
   const sinHallazgos =
     (insight?.alertas?.length ?? 0) === 0 &&
-    (insight?.recomendaciones?.length ?? 0) === 0 &&
-    (insight?.hallazgos?.length ?? 0) === 0;
+    (insight?.recomendaciones?.length ?? 0) === 0;
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-5 w-5 text-primary" />
-          <h3 className="font-semibold text-lg">Diagnóstico IA</h3>
-          <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-[10px] font-bold uppercase">
-            IA
-          </Badge>
+      <div className="flex flex-col gap-1.5 md:flex-row md:items-start md:justify-between">
+        <div className="flex items-start gap-2.5">
+          <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent/30 text-primary">
+            <Sparkles className="h-4 w-4" strokeWidth={2} />
+          </span>
+          <div>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <h2 className="text-base">Diagnóstico de tu finca</h2>
+              <span className="inline-flex items-center rounded-full bg-accent/30 px-2.5 py-0.5 text-xs font-semibold text-primary">
+                Análisis con IA
+              </span>
+            </div>
+            <p className="text-[13px] text-muted-foreground">
+              La inteligencia artificial de PalmApp revisa la información de tu finca y te avisa lo que necesita atención.
+            </p>
+          </div>
         </div>
         {insight?.procesado_at && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground flex items-center gap-1">
-              <Clock className="h-3 w-3" />
+          <div className="flex shrink-0 flex-col items-start gap-1 pl-[38px] md:items-end md:pl-0">
+            <span className="text-[13px] text-muted-foreground">{resumenVista}</span>
+            <span className="flex items-center gap-2">
+            <span className="flex items-center gap-1 text-[13px] text-muted-foreground">
+              <Clock className="h-3.5 w-3.5" />
               {new Date(insight.procesado_at).toLocaleString('es-CO')}
             </span>
             <Button
@@ -206,6 +243,7 @@ export function SeccionInsightsIA() {
                   ? `Espera ${retryAfter}s`
                   : <><RefreshCw className="h-3.5 w-3.5" />Regenerar</>}
             </Button>
+            </span>
           </div>
         )}
       </div>
@@ -286,153 +324,179 @@ export function SeccionInsightsIA() {
 
       {estadoUi === 'listo' && insight && !sinHallazgos && (
         <>
-          {/* Tabs por severidad */}
-          {activas.length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap">
-              {(['TODAS', 'CRITICA', 'ALTA', 'MEDIA', 'BAJA'] as const).map((sev) => {
-                const activa = tabActiva === sev;
-                const count = contadores[sev];
-                if (sev !== 'TODAS' && count === 0) return null;
-                return (
-                  <button
-                    key={sev}
-                    onClick={() => setTabActiva(sev)}
-                    className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
-                      activa
-                        ? 'bg-primary text-primary-foreground border-primary'
-                        : 'bg-background border-border hover:border-primary/40'
-                    }`}
-                  >
-                    {sev === 'TODAS' ? 'Todas' : SEVERIDAD_LABEL[sev].label}
-                    <span className="ml-1.5 opacity-70">({count})</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Alertas */}
-          {activas.length === 0 ? (
-            <Card className="border-border">
-              <CardContent className="p-6 text-center">
-                <CheckCircle2 className="h-8 w-8 text-success mx-auto mb-2" />
-                <p className="font-medium text-foreground">Todo bien en tu finca</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  No encontramos nada preocupante en el último análisis.
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-2">
-              {alertasVisibles.map((a) => (
-                <CardAlerta key={a.id} alerta={a} />
+          <div className="flex flex-wrap items-center gap-2">
+          {vistas.length > 1 && (
+            <div
+              role="group"
+              aria-label="Qué mostrar"
+              className="flex w-fit rounded-lg border border-border bg-card p-0.5"
+            >
+              {vistas.map(({ clave, etiqueta, cuantos }) => (
+                <button
+                  key={clave}
+                  type="button"
+                  onClick={() => setVista(clave)}
+                  aria-pressed={vista === clave}
+                  className={`shrink-0 rounded-md px-3 py-1.5 text-[13px] font-semibold transition-colors ${
+                    vista === clave
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  }`}
+                >
+                  {etiqueta} ({cuantos})
+                </button>
               ))}
-              {activas.length > MAX_ALERTAS_VISIBLES && tabActiva === 'TODAS' && (
-                <p className="text-xs text-center text-muted-foreground pt-2">
-                  Mostramos las {MAX_ALERTAS_VISIBLES} más importantes de {activas.length} en total. Usa las pestañas para filtrar.
-                </p>
-              )}
             </div>
           )}
 
-          {/* Recomendaciones (sección aparte, compacta) */}
-          {recomendaciones.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Lightbulb className="h-4 w-4 text-yellow-600" />
-                <h4 className="font-semibold text-sm">Sugerencias para tu finca ({recomendaciones.length})</h4>
-              </div>
-              <div className="grid gap-2 md:grid-cols-2">
-                {recomendaciones.slice(0, 4).map((r) => (
-                  <Card key={r.id} className="border-border">
-                    <CardContent className="p-3 space-y-1.5">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Badge variant="outline" className={PRIORIDAD_LABEL[r.prioridad].badgeClass}>
-                          {PRIORIDAD_LABEL[r.prioridad].label}
-                        </Badge>
-                        <Badge variant="outline" className="text-[10px]">
-                          {DOMINIO_LABEL[r.dominio]}
-                        </Badge>
-                      </div>
-                      <p className="font-medium text-sm">{r.titulo}</p>
-                      <p className="text-xs text-muted-foreground">{r.descripcion}</p>
-                      {r.kpi_objetivo && r.delta_pct_estimado && (
-                        <p className="text-[11px] text-primary">
-                          Mejora esperada: {r.delta_pct_estimado}%
-                          {r.horizonte_dias && ` en ${r.horizonte_dias} días`}
-                        </p>
-                      )}
-                      <div className="flex gap-2 pt-1">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-xs h-7 gap-1"
-                          onClick={async () => {
-                            try {
-                              const upd = await insightsApi.marcarRecomendacion(r.id, 'APLICADA');
-                              toast.success('Recomendación aplicada');
-                              setInsight((prev) => prev ? {
-                                ...prev,
-                                recomendaciones: (prev.recomendaciones ?? []).map((x) =>
-                                  x.id === upd.id ? upd : x,
-                                ),
-                              } : prev);
-                            } catch (err: any) {
-                              toast.error(err?.message ?? 'No se pudo aplicar');
-                            }
-                          }}
-                        >
-                          <CheckCircle2 className="h-3 w-3" />
-                          Aplicar
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="text-xs h-7"
-                          onClick={async () => {
-                            try {
-                              const upd = await insightsApi.marcarRecomendacion(r.id, 'DESCARTADA');
-                              setInsight((prev) => prev ? {
-                                ...prev,
-                                recomendaciones: (prev.recomendaciones ?? []).map((x) =>
-                                  x.id === upd.id ? upd : x,
-                                ),
-                              } : prev);
-                            } catch (err: any) {
-                              toast.error(err?.message ?? 'No se pudo descartar');
-                            }
-                          }}
-                        >
-                          Descartar
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
+          {vista === 'recomendaciones' && porPrioridad.length > 1 && (
+            <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtrar por prioridad">
+              {([{ p: 'TODAS' as const, cuantas: recomendaciones.length }, ...porPrioridad]).map(({ p, cuantas }) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPrioridad(p)}
+                  aria-pressed={prioridad === p}
+                  className={`rounded-full border px-3 py-1 text-[13px] font-medium transition-colors ${
+                    prioridad === p
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-border bg-card text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {p === 'TODAS' ? 'Todas' : PRIORIDAD_LABEL[p].label}
+                  <span className="ml-1 opacity-70">({cuantas})</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {vista === 'alertas' && porSeveridad.length > 1 && (
+            <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtrar por gravedad">
+              {([{ sev: 'TODAS' as const, cuantas: activas.length }, ...porSeveridad]).map(({ sev, cuantas }) => (
+                <button
+                  key={sev}
+                  type="button"
+                  onClick={() => setSeveridad(sev)}
+                  aria-pressed={severidad === sev}
+                  className={`rounded-full border px-3 py-1 text-[13px] font-medium transition-colors ${
+                    severidad === sev
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-border bg-card text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {sev === 'TODAS' ? 'Todas' : SEVERIDAD_LABEL[sev].label}
+                  <span className="ml-1 opacity-70">({cuantas})</span>
+                </button>
+              ))}
+            </div>
+          )}
+          </div>
+
+          {vista === 'alertas' ? (
+            alertasVisibles.length === 0 ? (
+              <Card className="border-border">
+                <CardContent className="p-6 text-center">
+                  <CheckCircle2 className="h-8 w-8 text-success mx-auto mb-2" />
+                  <p className="font-medium text-foreground">Todo bien en tu finca</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    No encontramos nada preocupante en el último análisis.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+              <FilaDeslizable etiqueta="Hallazgos de tu finca">
+                {alertasVisibles.map((a) => (
+                  <div
+                    key={a.id}
+                    className="w-[290px] shrink-0 snap-start md:w-[calc((100%-2rem)/3)]"
+                  >
+                    <CardAlerta alerta={a} />
+                  </div>
                 ))}
-              </div>
-            </div>
-          )}
+              </FilaDeslizable>
+                {alertasFiltradas.length > MAX_ALERTAS_VISIBLES && (
+                  <p className="text-center text-xs text-muted-foreground">
+                    Mostramos los {MAX_ALERTAS_VISIBLES} más importantes de {alertasFiltradas.length} en total.
+                  </p>
+                )}
+              </>
+            )
+          ) : (
+            <FilaDeslizable etiqueta="Sugerencias para tu finca">
+              {recomendacionesFiltradas.map((r) => (
+                <div
+                  key={r.id}
+                  className="flex w-[290px] shrink-0 snap-start flex-col rounded-xl border border-border bg-card p-4 md:w-[calc((100%-2rem)/3)]"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${PRIORIDAD_LABEL[r.prioridad].badgeClass}`}>
+                      <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
+                      {PRIORIDAD_LABEL[r.prioridad].label}
+                    </span>
+                    <span className="truncate text-[13px] font-medium text-muted-foreground">
+                      {DOMINIO_LABEL[r.dominio]}
+                    </span>
+                  </div>
 
-          {/* Hallazgos (observaciones informativas, sin ciclo) */}
-          {(insight.hallazgos ?? []).length > 0 && (
-            <Card className="border-border">
-              <CardContent className="p-4 space-y-2">
-                <div className="flex items-center gap-2">
-                  <Info className="h-4 w-4 text-muted-foreground" />
-                  <h4 className="font-semibold text-sm">Otras cosas que notamos</h4>
+                  <p className="mt-3 line-clamp-2 text-[15px] font-semibold leading-snug text-foreground" title={sinJerga(r.titulo)}>
+                    {sinJerga(r.titulo)}
+                  </p>
+                  <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground" title={sinJerga(r.descripcion)}>
+                    {primeraFrase(r.descripcion)}
+                  </p>
+                  {r.kpi_objetivo && r.delta_pct_estimado && (
+                    <p className="mt-1.5 text-xs text-primary">
+                      Mejora esperada {r.delta_pct_estimado} %
+                      {r.horizonte_dias && ` en ${r.horizonte_dias} dias`}
+                    </p>
+                  )}
+
+                  <div className="mt-auto flex items-center gap-2 pt-3">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={async () => {
+                        try {
+                          const upd = await insightsApi.marcarRecomendacion(r.id, 'APLICADA');
+                          toast.success('Sugerencia aplicada');
+                          setInsight((prev) => prev ? {
+                            ...prev,
+                            recomendaciones: (prev.recomendaciones ?? []).map((x) =>
+                              x.id === upd.id ? upd : x,
+                            ),
+                          } : prev);
+                        } catch (err) {
+                          toast.error(err instanceof Error ? err.message : 'No se pudo aplicar');
+                        }
+                      }}
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2} />
+                      Aplicar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={async () => {
+                        try {
+                          const upd = await insightsApi.marcarRecomendacion(r.id, 'DESCARTADA');
+                          setInsight((prev) => prev ? {
+                            ...prev,
+                            recomendaciones: (prev.recomendaciones ?? []).map((x) =>
+                              x.id === upd.id ? upd : x,
+                            ),
+                          } : prev);
+                        } catch (err) {
+                          toast.error(err instanceof Error ? err.message : 'No se pudo descartar');
+                        }
+                      }}
+                    >
+                      Descartar
+                    </Button>
+                  </div>
                 </div>
-                <ul className="space-y-1.5 text-xs text-muted-foreground">
-                  {(insight.hallazgos ?? []).slice(0, 4).map((h, i) => (
-                    <li key={i} className="flex gap-2">
-                      <Badge variant="outline" className="text-[9px] shrink-0 h-fit">
-                        {DOMINIO_LABEL[h.dominio]}
-                      </Badge>
-                      <span>{h.texto}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
+              ))}
+            </FilaDeslizable>
           )}
         </>
       )}

@@ -45,6 +45,7 @@ import {
   type TerceroLaborPrecio,
   type TerceroPrecioCosecha,
   type TerceroPrecioAbono,
+  type LaborContextoItem,
 } from '../../../api/terceros';
 import { invalidate } from '../../../api/cache';
 import type { ApiError } from '../../../api/client';
@@ -91,6 +92,26 @@ function bundleToDatos(tercero: Tercero): Partial<EmpresaTercero> {
  */
 type LaborFincaItem = { id: number; nombre: string };
 
+/**
+ * Orden de las tarjetas de palma: alfabético, con "Otros" al final porque es
+ * el cajón de sastre y cierra la lista antes de las labores de finca.
+ *
+ * Cosecha y Fertilización en POR_PALMA no entran: su precio sale de la tabla
+ * por lote y de la escala de gramos, que ya tienen su propia sección arriba.
+ */
+function laboresDePalmaOrdenadas(labores: LaborContextoItem[]): LaborContextoItem[] {
+  return labores
+    .filter((l) => l.categoria === 'PALMA')
+    .filter((l) => !(
+      (l.tipo === 'COSECHA' || l.tipo === 'FERTILIZACION') && l.tipo_pago === 'POR_PALMA'
+    ))
+    .sort((a, b) => {
+      if (a.tipo === 'OTROS') return 1;
+      if (b.tipo === 'OTROS') return -1;
+      return a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' });
+    });
+}
+
 function bundleToPrecios(
   bundle: TerceroConfiguracionInit,
   anio: number,
@@ -118,26 +139,27 @@ function bundleToPrecios(
       }))
     : preciosVacios().abonada;
 
-  // Labores fijas — buscamos PLATEO, PODA, SANIDAD en el catálogo y vemos si
-  // el tercero tiene override. Devolvemos tanto el `precio` como el
-  // `tipoPagoOverride` (HEREDAR si el backend no tiene `tipo_pago` explícito).
-  const findOverridePorTipo = (
-    tipo: 'PLATEO' | 'PODA' | 'SANIDAD',
-  ): { precio: number; tipoPago: import('./NuevoTerceroWizard').TipoPagoOverride } => {
-    const labor = bundle.labores_contexto.find((l) => l.tipo === tipo);
-    if (!labor) return { precio: 0, tipoPago: 'HEREDAR' };
-    const override = bundle.labor_precios.find(
-      (lp) => lp.labor_id === labor.id && lp.estado,
-    );
-    if (!override) return { precio: 0, tipoPago: 'HEREDAR' };
-    const tipoPago = override.tipo_pago === 'POR_PALMA' || override.tipo_pago === 'JORNAL_FIJO'
-      ? override.tipo_pago
-      : 'HEREDAR';
-    return { precio: Number(override.precio_palma), tipoPago };
-  };
-  const plateoOv = findOverridePorTipo('PLATEO');
-  const podaOv   = findOverridePorTipo('PODA');
-  const sanidadOv = findOverridePorTipo('SANIDAD');
+  // Labores de PALMA — una fila por labor activa del catálogo, con el
+  // override del tercero si lo tiene. `HEREDAR` = el backend no guardó un
+  // `tipo_pago` propio, así que el modo sale del catálogo del tenant.
+  const palma = laboresDePalmaOrdenadas(bundle.labores_contexto)
+    .map((l) => {
+      const override = bundle.labor_precios.find(
+        (lp) => lp.labor_id === l.id && lp.estado,
+      );
+      const tipoPago: import('./NuevoTerceroWizard').TipoPagoOverride =
+        override?.tipo_pago === 'POR_PALMA' || override?.tipo_pago === 'JORNAL_FIJO'
+          ? override.tipo_pago
+          : 'HEREDAR';
+      return {
+        laborId: l.id,
+        laborNombre: l.nombre,
+        tipoPagoCatalogo: l.tipo_pago,
+        precioRef: l.precio_palma == null ? null : Number(l.precio_palma),
+        precio: override ? Number(override.precio_palma) : 0,
+        tipoPago,
+      };
+    });
 
   // Labores de FINCA — cada labor del catálogo, precargada con el override
   // si existe. El admin verá un input por cada labor de finca activa del
@@ -153,16 +175,39 @@ function bundleToPrecios(
     };
   });
 
+  // Sublabores — una fila por trabajo del catálogo, con el pacto del
+  // tercero si existe. Las inactivas solo se muestran si hay pacto: una
+  // sublabor retirada no debe invitar a pactarle precio.
+  const pactoPorActividad = new Map(
+    bundle.actividad_precios
+      .filter((ap) => ap.estado)
+      .map((ap) => [ap.labor_actividad_id, ap]),
+  );
+  const nombrePorLabor = new Map(
+    bundle.labores_contexto.map((l) => [l.id, l.nombre]),
+  );
+  const sublabores = Object.values(bundle.actividades_por_labor ?? {})
+    .flat()
+    .filter((a) => a.estado !== false || pactoPorActividad.has(a.id))
+    .map((a) => {
+      const pacto = pactoPorActividad.get(a.id);
+      return {
+        actividadId: a.id,
+        laborId: a.labor_id,
+        laborNombre: nombrePorLabor.get(a.labor_id) ?? 'Otras labores',
+        nombre: a.nombre,
+        precioRef: a.precio == null ? null : Number(a.precio),
+        precio: pacto ? Number(pacto.precio) : 0,
+        inactiva: a.estado === false,
+      };
+    });
+
   return {
     cosecha: cosechaPorLote,
     abonada,
-    plateo: plateoOv.precio,
-    poda: podaOv.precio,
-    sanidad: sanidadOv.precio,
-    plateoTipoPago: plateoOv.tipoPago,
-    podaTipoPago: podaOv.tipoPago,
-    sanidadTipoPago: sanidadOv.tipoPago,
+    palma,
     finca,
+    sublabores,
   };
 }
 
@@ -283,7 +328,7 @@ export default function EditarTerceroWizard() {
   const totalPreciosConfigurados = [
     precios.cosecha.some(c => c.precioPorKg > 0),
     precios.abonada.some(a => a.precioPorPalma > 0),
-    precios.plateo > 0, precios.poda > 0, precios.sanidad > 0,
+    precios.palma.some(l => l.precio > 0),
     precios.finca.some(f => f.precio > 0),
   ].filter(Boolean).length;
 
@@ -315,19 +360,6 @@ export default function EditarTerceroWizard() {
       representante: datos.contacto?.trim() || undefined,
       ...common,
     };
-  };
-
-  /** Resuelve labor_id real desde el bundle por `tipo`. */
-  const findLaborId = (tipo: 'PLATEO' | 'PODA' | 'SANIDAD'): number | null => {
-    const item = bundle?.labores_contexto.find((l) => l.tipo === tipo);
-    return item?.id ?? null;
-  };
-
-  /** Override de labor existente para un tipo (PLATEO/PODA/SANIDAD). */
-  const findOverrideLabor = (tipo: 'PLATEO' | 'PODA' | 'SANIDAD'): TerceroLaborPrecio | undefined => {
-    const laborId = findLaborId(tipo);
-    if (!laborId || !bundle) return undefined;
-    return bundle.labor_precios.find((lp) => lp.labor_id === laborId);
   };
 
   /**
@@ -448,50 +480,33 @@ export default function EditarTerceroWizard() {
         }
       }
 
-      // 4. Labores simples — DIFF por valor + tipo_pago.
-      const upsertOrDelete = (
-        precio: number,
-        tipo: 'PLATEO' | 'PODA' | 'SANIDAD',
-        tipoPagoOverride: import('./NuevoTerceroWizard').TipoPagoOverride,
-      ) => {
-        const laborId = findLaborId(tipo);
-        if (!laborId) return;
-        const override = findOverrideLabor(tipo);
-        if (precio > 0) {
-          // Solo upsert si cambió el valor o el modo de pago override.
+      // 4. Labores — un solo diff por `labor_id` para PALMA y FINCA. El
+      // índice se arma una vez: buscar dentro del bucle recorría la lista
+      // entera de precios por cada labor.
+      //   precio > 0  → upsert si cambió el valor o el modo
+      //   precio == 0 + override existente → DELETE, vuelve al precio del tenant
+      const overridePorLabor = new Map(
+        bundle.labor_precios.map((lp) => [lp.labor_id, lp]),
+      );
+
+      for (const l of precios.palma) {
+        const override = overridePorLabor.get(l.laborId);
+        if (l.precio > 0) {
           const precioViejo = override ? Number(override.precio_palma) : null;
-          const tipoPagoNuevo = tipoPagoOverride === 'HEREDAR' ? null : tipoPagoOverride;
+          const tipoPagoNuevo = l.tipoPago === 'HEREDAR' ? null : l.tipoPago;
           const tipoPagoViejo = override?.tipo_pago ?? null;
-          if (precioViejo !== precio || tipoPagoViejo !== tipoPagoNuevo) {
+          if (precioViejo !== l.precio || tipoPagoViejo !== tipoPagoNuevo) {
             const payloadLabor: import('../../../api/terceros').UpsertLaborPrecioPayload = {
-              labor_id: laborId,
-              precio_palma: precio,
+              labor_id: l.laborId,
+              precio_palma: l.precio,
             };
-            if (tipoPagoOverride !== 'HEREDAR') {
-              payloadLabor.tipo_pago = tipoPagoOverride;
-            }
-            tareas.push(
-              tercerosPreciosApi.upsertLaborPrecio(terceroId, payloadLabor),
-            );
+            if (tipoPagoNuevo !== null) payloadLabor.tipo_pago = tipoPagoNuevo;
+            tareas.push(tercerosPreciosApi.upsertLaborPrecio(terceroId, payloadLabor));
           }
         } else if (override) {
           tareas.push(tercerosPreciosApi.eliminarLaborPrecio(terceroId, override.id));
         }
-      };
-      upsertOrDelete(precios.plateo, 'PLATEO', precios.plateoTipoPago);
-      upsertOrDelete(precios.poda, 'PODA', precios.podaTipoPago);
-      upsertOrDelete(precios.sanidad, 'SANIDAD', precios.sanidadTipoPago);
-
-      // 4b. Labores de FINCA — diff por labor. Sin tipo del catálogo (los
-      // tipos solo aplican a PALMA), comparamos por `labor_id` directo.
-      // Buscamos el override existente en `bundle.labor_precios` y decidimos:
-      //   precio > 0  → upsert
-      //   precio == 0 + override existente → DELETE
-      // El índice se arma una vez: buscar dentro del bucle recorría la lista
-      // entera de precios por cada labor de finca.
-      const overridePorLabor = new Map(
-        bundle.labor_precios.map((lp) => [lp.labor_id, lp]),
-      );
+      }
 
       for (const f of precios.finca) {
         const override = overridePorLabor.get(f.laborId);
@@ -507,6 +522,31 @@ export default function EditarTerceroWizard() {
           }
         } else if (override) {
           tareas.push(tercerosPreciosApi.eliminarLaborPrecio(terceroId, override.id));
+        }
+      }
+
+      // 4c. Sublabores — mismo diff. Un pacto en 0 el backend lo guarda
+      // pero el cálculo lo ignora, así que vaciar el campo borra la fila.
+      const pactoPorActividad = new Map(
+        bundle.actividad_precios.map((ap) => [ap.labor_actividad_id, ap]),
+      );
+
+      for (const sl of precios.sublabores) {
+        const pacto = pactoPorActividad.get(sl.actividadId);
+        if (sl.precio > 0) {
+          const precioViejo = pacto ? Number(pacto.precio) : null;
+          if (precioViejo !== sl.precio) {
+            tareas.push(
+              tercerosPreciosApi.upsertActividadPrecio(terceroId, {
+                labor_actividad_id: sl.actividadId,
+                precio: sl.precio,
+              }),
+            );
+          }
+        } else if (pacto) {
+          tareas.push(
+            tercerosPreciosApi.eliminarActividadPrecio(terceroId, pacto.id),
+          );
         }
       }
 
