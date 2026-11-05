@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router';
+import { useEstadoPersistido } from '../../hooks/useEstadoPersistido';
+import { useAlCambiar } from '../../hooks/useAlCambiar';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -82,14 +84,16 @@ export default function Operaciones() {
   const location = useLocation();
 
   // ── KPIs con filtro de período ─────────────────────────────────────────────
-  const [periodoKPI, setPeriodoKPI] = useState<PeriodoIndicadores>('mensual');
-  const [fechaInicioKPI, setFechaInicioKPI] = useState('');
-  const [fechaFinKPI, setFechaFinKPI] = useState('');
-  const [mesKPI, setMesKPI] = useState(mesDeHoy());
-  const [quincenaKPI, setQuincenaKPI] = useState<Quincena>(
-    new Date().getDate() <= 15 ? 1 : 2,
+  // El período persiste mientras dure la sesión: abrir una planilla y volver
+  // ya no devuelve la pantalla al mes corriente.
+  const [periodoKPI, setPeriodoKPI] = useEstadoPersistido<PeriodoIndicadores>('operaciones.periodo', 'mensual');
+  const [fechaInicioKPI, setFechaInicioKPI] = useEstadoPersistido('operaciones.desde', '');
+  const [fechaFinKPI, setFechaFinKPI] = useEstadoPersistido('operaciones.hasta', '');
+  const [mesKPI, setMesKPI] = useEstadoPersistido('operaciones.mes', mesDeHoy());
+  const [quincenaKPI, setQuincenaKPI] = useEstadoPersistido<Quincena>(
+    'operaciones.quincena', new Date().getDate() <= 15 ? 1 : 2,
   );
-  const [anioKPI, setAnioKPI] = useState(new Date().getFullYear());
+  const [anioKPI, setAnioKPI] = useEstadoPersistido('operaciones.anio', new Date().getFullYear());
   const [indicadores, setIndicadores] = useState<Indicadores | null>(null);
   const [cargandoIndicadores, setCargandoIndicadores] = useState(false);
 
@@ -127,7 +131,7 @@ export default function Operaciones() {
   // ── Listado de planillas ───────────────────────────────────────────────────
   const [planillas, setPlanillas] = useState<Planilla[]>([]);
   const [metaLista, setMetaLista] = useState<PaginatedMeta | null>(null);
-  const [paginaLista, setPaginaLista] = useState(1);
+  const [paginaLista, setPaginaLista] = useEstadoPersistido('operaciones.pagina', 1);
   const [cargandoLista, setCargandoLista] = useState(true);
 
   // ── Eliminación de planilla ────────────────────────────────────────────────
@@ -226,9 +230,14 @@ export default function Operaciones() {
     }
   }, [paginaLista, desdeLista, hastaLista]);
 
-  // Al mover el periodo, seguir parado en la pagina 5 del rango anterior
-  // deja la lista vacia sin explicacion. Se vuelve al principio.
-  useEffect(() => { setPaginaLista(1); }, [desdeLista, hastaLista]);
+  // Al mover el período, seguir parado en la página 5 del rango anterior
+  // deja la lista vacía sin explicación. Se vuelve al principio. El rango
+  // llega con los indicadores, así que la primera vez que se conoce no es un
+  // cambio: es el estado que venía de la sesión y hay que respetarlo.
+  useAlCambiar(
+    desdeLista && hastaLista ? `${desdeLista}|${hastaLista}` : '',
+    () => setPaginaLista(1),
+  );
 
   // Refresca cuando el usuario navega a `/operaciones`. `location.key`
   // cambia en cada navegación (aunque sea al mismo path), así que al volver

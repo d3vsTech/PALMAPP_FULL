@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { toast } from 'sonner';
@@ -18,6 +18,8 @@ import {
   FileText, FileUp, Search, Calculator, Edit, Trash2, AlertTriangle, Info, Download,
   RotateCcw,
 } from 'lucide-react';
+import { useEstadoPersistido } from '../../hooks/useEstadoPersistido';
+import { useAlCambiar } from '../../hooks/useAlCambiar';
 import { useAuth } from '../../contexts/AuthContext';
 import { RevertirEstadoDialog } from '../../components/common/RevertirEstadoDialog';
 import { reversionApi } from '../../../api/reversionEstados';
@@ -49,6 +51,12 @@ const ESTADO_UI_TO_API: Record<EstadoViaje, EstadoViajeApi> = {
 };
 
 const PER_PAGE = 25;
+
+/** Los filtros de la tabla en limpio. Sirve de valor inicial y de "borrar todo". */
+const FILTROS_VACIOS = {
+  remision: '', estado: '',
+  vehiculo: '', conductor: '', extractora: '',
+};
 
 interface ViajeUI {
   id: string;
@@ -134,27 +142,25 @@ export default function Viajes() {
   const [viajeAReabrir, setViajeAReabrir] = useState<{ id: string; remision: string } | null>(null);
   const navigate = useNavigate();
 
-  // Filtros de la tabla
-  const [filtros, setFiltros] = useState({
-    remision: '', fecha: '', estado: '',
-    vehiculo: '', conductor: '', extractora: '',
-  });
+  // Filtros de la tabla. Persisten mientras dure la sesión: entrar al detalle
+  // de un viaje y volver ya no borra lo que el usuario venía mirando.
+  const [filtros, setFiltros] = useEstadoPersistido('viajes.filtros', FILTROS_VACIOS);
 
   // Periodo KPI
-  const [periodoKPI,    setPeriodoKPI]    = useState<'quincenal' | 'mensual' | 'anual' | 'personalizado'>('mensual');
-  const [fechaInicioKPI, setFechaInicioKPI] = useState('');
-  const [fechaFinKPI,    setFechaFinKPI]    = useState('');
-  const [mesKPI,        setMesKPI]        = useState(mesDeHoy());
-  const [quincenaKPI,   setQuincenaKPI]   = useState<QuincenaViajes>(
-    new Date().getDate() <= 15 ? 1 : 2,
+  const [periodoKPI,    setPeriodoKPI]    = useEstadoPersistido<'quincenal' | 'mensual' | 'anual' | 'personalizado'>('viajes.periodo', 'mensual');
+  const [fechaInicioKPI, setFechaInicioKPI] = useEstadoPersistido('viajes.desde', '');
+  const [fechaFinKPI,    setFechaFinKPI]    = useEstadoPersistido('viajes.hasta', '');
+  const [mesKPI,        setMesKPI]        = useEstadoPersistido('viajes.mes', mesDeHoy());
+  const [quincenaKPI,   setQuincenaKPI]   = useEstadoPersistido<QuincenaViajes>(
+    'viajes.quincena', new Date().getDate() <= 15 ? 1 : 2,
   );
-  const [anioKPI,       setAnioKPI]       = useState(new Date().getFullYear());
+  const [anioKPI,       setAnioKPI]       = useEstadoPersistido('viajes.anio', new Date().getFullYear());
 
   // Datos
   const [viajes, setViajes] = useState<ViajeUI[]>([]);
   const [totalLista, setTotalLista] = useState(0);
   const [ultimaPagina, setUltimaPagina] = useState(1);
-  const [pagina, setPagina] = useState(1);
+  const [pagina, setPagina] = useEstadoPersistido('viajes.pagina', 1);
   const [extractoras, setExtractoras] = useState<ExtractoraSelect[]>([]);
   const [indicadoresApi, setIndicadoresApi] = useState<IndicadoresViajes | null>(null);
   const [loadingList, setLoadingList] = useState(true);
@@ -192,6 +198,30 @@ export default function Viajes() {
   const handleFiltroChange = (key: keyof typeof filtros, value: string) =>
     setFiltros(prev => ({ ...prev, [key]: value }));
 
+  const limpiarFiltros = () => setFiltros(FILTROS_VACIOS);
+
+  /**
+   * El período del encabezado manda sobre toda la pantalla, no solo sobre los
+   * KPIs: antes la tabla ignoraba el selector y mostraba viajes de meses que
+   * los indicadores contaban en cero. El rango va como 'YYYY-MM-DD', que es lo
+   * que esperan `fecha_desde` / `fecha_hasta` en `GET /viajes`
+   * (API_VIAJES.md 5.8).
+   */
+  const rangoPeriodo = useMemo(() => {
+    if (periodoKPI === 'anual') {
+      return { desde: `${anioKPI}-01-01`, hasta: `${anioKPI}-12-31` };
+    }
+    if (periodoKPI === 'personalizado') {
+      return { desde: fechaInicioKPI, hasta: fechaFinKPI };
+    }
+    const primeraQuincena = periodoKPI === 'quincenal' && quincenaKPI === 1;
+    const segundaQuincena = periodoKPI === 'quincenal' && quincenaKPI === 2;
+    return {
+      desde: segundaQuincena ? `${mesKPI}-16` : `${mesKPI}-01`,
+      hasta: primeraQuincena ? `${mesKPI}-15` : finDeMes(mesKPI),
+    };
+  }, [periodoKPI, anioKPI, fechaInicioKPI, fechaFinKPI, mesKPI, quincenaKPI]);
+
   // ── carga listado ──────────────────────────────────────────────────────────
   // Los campos de texto se escriben letra por letra: sin esta espera, cada
   // tecla saldría al backend.
@@ -201,8 +231,13 @@ export default function Viajes() {
     return () => clearTimeout(t);
   }, [filtros]);
 
-  // Al cambiar un filtro, la página 3 del resultado anterior no significa nada.
-  useEffect(() => { setPagina(1); }, [filtrosAplicados]);
+  // Al cambiar un filtro o el período, la página 3 del resultado anterior no
+  // significa nada. En el montaje no aplica: ahí la página viene de la sesión
+  // y es justo la que hay que respetar.
+  useAlCambiar(
+    `${JSON.stringify(filtrosAplicados)}|${rangoPeriodo.desde}|${rangoPeriodo.hasta}`,
+    () => setPagina(1),
+  );
 
   const cargarViajes = useCallback(async () => {
     setLoadingList(true);
@@ -210,18 +245,20 @@ export default function Viajes() {
       const f = filtrosAplicados;
       const params: ListarViajesParams = { per_page: PER_PAGE, page: pagina };
       if (f.remision)   params.remision = f.remision;
-      if (f.fecha)      params.fecha = f.fecha;
       if (f.estado)     params.estado = ESTADO_UI_TO_API[f.estado as EstadoViaje];
       if (f.vehiculo)   params.vehiculo = f.vehiculo;
       if (f.conductor)  params.conductor = f.conductor;
       if (f.extractora) params.extractora_id = Number(f.extractora);
+      // La fecha la manda el selector del encabezado, no la tabla.
+      if (rangoPeriodo.desde) params.fecha_desde = rangoPeriodo.desde;
+      if (rangoPeriodo.hasta) params.fecha_hasta = rangoPeriodo.hasta;
       const res = await viajesApi.listar(params);
       setViajes((res.data ?? []).map(mapViaje));
       setTotalLista(res.meta?.total ?? (res.data ?? []).length);
       setUltimaPagina(res.meta?.last_page ?? 1);
     } catch (e) { console.warn('listar viajes error', e); }
     finally { setLoadingList(false); }
-  }, [filtrosAplicados, pagina]);
+  }, [filtrosAplicados, pagina, rangoPeriodo]);
 
   useEffect(() => { cargarViajes(); }, [cargarViajes]);
 
@@ -295,31 +332,28 @@ export default function Viajes() {
   // Los filtros los resuelve `GET /viajes`: la tabla pinta la página que
   // llegó, sin volver a filtrar sobre un recorte.
   const viajesFiltrados = viajes;
+  const hayFiltros = Object.values(filtrosAplicados).some(Boolean);
+
+  /** Para contarle al usuario qué rango está mirando cuando la tabla sale vacía. */
+  const fechaCorta = (s: string) => {
+    const d = parseFecha(s);
+    return d
+      ? d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
+      : s;
+  };
+  const etiquetaPeriodo = rangoPeriodo.desde && rangoPeriodo.hasta
+    ? `del ${fechaCorta(rangoPeriodo.desde)} al ${fechaCorta(rangoPeriodo.hasta)}`
+    : 'del período elegido';
 
   // ── KPIs por período (cliente) — fallback si la API no responde ────────────
-  const obtenerRangoFechas = () => {
-    if (periodoKPI === 'anual') {
-      return { inicio: new Date(anioKPI, 0, 1), fin: new Date(anioKPI, 11, 31) };
-    }
-    if (periodoKPI === 'personalizado') {
-      const hoy = new Date();
-      return {
-        inicio: fechaInicioKPI ? new Date(fechaInicioKPI) : hoy,
-        fin: fechaFinKPI ? new Date(fechaFinKPI) : hoy,
-      };
-    }
-    const esQ1 = periodoKPI === 'quincenal' && quincenaKPI === 1;
-    const esQ2 = periodoKPI === 'quincenal' && quincenaKPI === 2;
-    return {
-      inicio: new Date(esQ2 ? `${mesKPI}-16` : `${mesKPI}-01`),
-      fin: new Date(esQ1 ? `${mesKPI}-15` : finDeMes(mesKPI)),
-    };
-  };
-  const { inicio, fin } = obtenerRangoFechas();
+  // Las fechas vienen como 'YYYY-MM-DD', así que comparar los textos basta y
+  // evita construir Date por fila.
   const viajesPorPeriodo = viajes.filter(v => {
-    if (!v.fecha) return false;
-    const f = new Date(v.fecha);
-    return f >= inicio && f <= fin;
+    const f = (v.fecha ?? '').slice(0, 10);
+    if (!f) return false;
+    if (rangoPeriodo.desde && f < rangoPeriodo.desde) return false;
+    if (rangoPeriodo.hasta && f > rangoPeriodo.hasta) return false;
+    return true;
   });
 
   const totalViajes        = indicadoresApi?.total_viajes ?? viajesPorPeriodo.length;
@@ -535,21 +569,12 @@ export default function Viajes() {
                 <div className="flex items-center justify-center py-16 text-muted-foreground gap-2">
                   <Clock className="h-5 w-5 animate-spin" /> Cargando viajes...
                 </div>
-              ) : viajes.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-                    <Truck className="h-8 w-8 text-muted-foreground" />
-                  </div>
-                  <h3 className="mb-2 text-lg font-semibold">No hay viajes registrados</h3>
-                  <p className="mb-4 text-sm text-muted-foreground">Comienza creando tu primer viaje de despacho</p>
-                  <Button onClick={() => navigate('/viajes/nuevo')}>
-                    <Plus className="mr-2 h-4 w-4" /> Crear Primer Viaje
-                  </Button>
-                </div>
               ) : (
                 <div className="space-y-4">
-                  {/* Filtros */}
-                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-6 p-4 bg-muted/30 rounded-lg border border-border">
+                  {/* Filtros. Van siempre: si se escondieran al quedar la tabla
+                      vacía, el filtro que dejó cero resultados no se podría
+                      borrar y la pantalla quedaría trancada. */}
+                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5 p-4 bg-muted/30 rounded-lg border border-border">
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-muted-foreground" htmlFor="viajes-remision">Remisión</label>
                       <div className="relative">
@@ -557,11 +582,6 @@ export default function Viajes() {
                         <Input id="viajes-remision" placeholder="REM-2026-001" value={filtros.remision}
                           onChange={e => handleFiltroChange('remision', e.target.value)} className="pl-8 h-9" />
                       </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground" htmlFor="viajes-fecha">Fecha</label>
-                      <Input id="viajes-fecha" type="date" value={filtros.fecha}
-                        onChange={e => handleFiltroChange('fecha', e.target.value)} className="h-9" />
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-muted-foreground">Estado</label>
@@ -613,6 +633,15 @@ export default function Viajes() {
                     </div>
                   </div>
 
+                  {hayFiltros && (
+                    <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
+                      <span>Dentro del período {etiquetaPeriodo}.</span>
+                      <Button variant="ghost" size="sm" onClick={limpiarFiltros} className="gap-2">
+                        <RotateCcw className="h-4 w-4" /> Limpiar filtros
+                      </Button>
+                    </div>
+                  )}
+
                   {/* Tabla */}
                   <div className="overflow-x-auto">
                     <table className="w-full">
@@ -631,10 +660,35 @@ export default function Viajes() {
                       <tbody>
                         {viajesFiltrados.length === 0 ? (
                           <tr>
-                            <td colSpan={8} className="text-center py-12">
-                              <div className="flex flex-col items-center gap-2">
-                                <Search className="h-8 w-8 text-muted-foreground" />
-                                <p className="text-sm text-muted-foreground">No se encontraron viajes con los filtros aplicados</p>
+                            <td colSpan={8} className="py-12">
+                              <div className="flex flex-col items-center gap-3 text-center">
+                                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+                                  {hayFiltros
+                                    ? <Search className="h-7 w-7 text-muted-foreground" />
+                                    : <Truck className="h-7 w-7 text-muted-foreground" />}
+                                </div>
+                                <div className="space-y-1">
+                                  <p className="font-semibold">
+                                    {hayFiltros
+                                      ? 'No se encontraron viajes con los filtros aplicados'
+                                      : `No hay viajes ${etiquetaPeriodo}`}
+                                  </p>
+                                  <p className="text-sm text-muted-foreground">
+                                    {hayFiltros
+                                      ? 'Borre los filtros o cambie el período del encabezado.'
+                                      : 'Cambie el período del encabezado o registre un despacho.'}
+                                  </p>
+                                </div>
+                                <div className="flex flex-wrap items-center justify-center gap-2">
+                                  {hayFiltros && (
+                                    <Button variant="outline" size="sm" onClick={limpiarFiltros} className="gap-2">
+                                      <RotateCcw className="h-4 w-4" /> Limpiar filtros
+                                    </Button>
+                                  )}
+                                  <Button size="sm" onClick={() => navigate('/viajes/nuevo')} className="gap-2">
+                                    <Plus className="h-4 w-4" /> Nuevo Viaje
+                                  </Button>
+                                </div>
                               </div>
                             </td>
                           </tr>
