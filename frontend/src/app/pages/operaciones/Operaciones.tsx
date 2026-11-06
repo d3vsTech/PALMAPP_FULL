@@ -59,6 +59,17 @@ interface OpcionesPeriodo {
  * aplica a su período y las demás se ignoran, así que se mandan por separado
  * en vez de acompañar a todas (API_OPERACIONES.md 2.2.1).
  */
+/** Con lo que abre la pantalla cuando no hay nada guardado en la sesión. */
+function periodoPorDefecto() {
+  const hoy = new Date();
+  return {
+    periodo: 'mensual' as PeriodoIndicadores,
+    mes: mesDeHoy(),
+    anio: hoy.getFullYear(),
+    quincena: (hoy.getDate() <= 15 ? 1 : 2) as Quincena,
+  };
+}
+
 function paramsDelPeriodo(periodo: PeriodoIndicadores, o: OpcionesPeriodo): ParamsIndicadores {
   if (periodo === 'mensual') return { periodo, mes: o.mes };
   if (periodo === 'quincenal') return { periodo, mes: o.mes, quincena: o.quincena };
@@ -84,16 +95,30 @@ export default function Operaciones() {
   const location = useLocation();
 
   // ── KPIs con filtro de período ─────────────────────────────────────────────
+  const porDefecto = periodoPorDefecto();
   // El período persiste mientras dure la sesión: abrir una planilla y volver
   // ya no devuelve la pantalla al mes corriente.
-  const [periodoKPI, setPeriodoKPI] = useEstadoPersistido<PeriodoIndicadores>('operaciones.periodo', 'mensual');
+  const [periodoKPI, setPeriodoKPI] = useEstadoPersistido<PeriodoIndicadores>('operaciones.periodo', porDefecto.periodo);
   const [fechaInicioKPI, setFechaInicioKPI] = useEstadoPersistido('operaciones.desde', '');
   const [fechaFinKPI, setFechaFinKPI] = useEstadoPersistido('operaciones.hasta', '');
-  const [mesKPI, setMesKPI] = useEstadoPersistido('operaciones.mes', mesDeHoy());
-  const [quincenaKPI, setQuincenaKPI] = useEstadoPersistido<Quincena>(
-    'operaciones.quincena', new Date().getDate() <= 15 ? 1 : 2,
-  );
-  const [anioKPI, setAnioKPI] = useEstadoPersistido('operaciones.anio', new Date().getFullYear());
+  const [mesKPI, setMesKPI] = useEstadoPersistido('operaciones.mes', porDefecto.mes);
+  const [quincenaKPI, setQuincenaKPI] = useEstadoPersistido<Quincena>('operaciones.quincena', porDefecto.quincena);
+  const [anioKPI, setAnioKPI] = useEstadoPersistido('operaciones.anio', porDefecto.anio);
+
+  /**
+   * El período queda guardado por sesión, así que hace falta una salida
+   * explícita para volver al mes en curso sin deshacer campo por campo.
+   */
+  const reiniciarPeriodo = () => {
+    const d = periodoPorDefecto();
+    setPeriodoKPI(d.periodo);
+    setMesKPI(d.mes);
+    setAnioKPI(d.anio);
+    setQuincenaKPI(d.quincena);
+    setFechaInicioKPI('');
+    setFechaFinKPI('');
+    setPaginaLista(1);
+  };
   const [indicadores, setIndicadores] = useState<Indicadores | null>(null);
   const [cargandoIndicadores, setCargandoIndicadores] = useState(false);
 
@@ -340,6 +365,7 @@ export default function Operaciones() {
             <Select value={periodoKPI} onValueChange={(v) => setPeriodoKPI(v as PeriodoIndicadores)}>
               <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
               <SelectContent>
+                <SelectItem value="semanal">Semanal</SelectItem>
                 <SelectItem value="quincenal">Quincenal</SelectItem>
                 <SelectItem value="mensual">Mensual</SelectItem>
                 <SelectItem value="anual">Anual</SelectItem>
@@ -372,6 +398,10 @@ export default function Operaciones() {
                   className="w-40" placeholder="Fecha fin" />
               </>
             )}
+            <Button variant="ghost" size="sm" onClick={reiniciarPeriodo} className="gap-2"
+              title="Vuelve al mes en curso">
+              <RotateCcw className="h-4 w-4" /> Reiniciar
+            </Button>
           </div>
         </div>
 

@@ -58,6 +58,21 @@ const FILTROS_VACIOS = {
   vehiculo: '', conductor: '', extractora: '',
 };
 
+/** 'YYYY-MM-DD' en hora local; `toISOString()` corre la fecha por la UTC. */
+const isoLocal = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/** Con lo que abre la pantalla cuando no hay nada guardado en la sesión. */
+function periodoPorDefecto() {
+  const hoy = new Date();
+  return {
+    periodo: 'mensual' as const,
+    mes: mesDeHoy(),
+    anio: hoy.getFullYear(),
+    quincena: (hoy.getDate() <= 15 ? 1 : 2) as QuincenaViajes,
+  };
+}
+
 interface ViajeUI {
   id: string;
   remisionId: string;
@@ -147,14 +162,13 @@ export default function Viajes() {
   const [filtros, setFiltros] = useEstadoPersistido('viajes.filtros', FILTROS_VACIOS);
 
   // Periodo KPI
-  const [periodoKPI,    setPeriodoKPI]    = useEstadoPersistido<'quincenal' | 'mensual' | 'anual' | 'personalizado'>('viajes.periodo', 'mensual');
+  const porDefecto = periodoPorDefecto();
+  const [periodoKPI,    setPeriodoKPI]    = useEstadoPersistido<'semanal' | 'quincenal' | 'mensual' | 'anual' | 'personalizado'>('viajes.periodo', porDefecto.periodo);
   const [fechaInicioKPI, setFechaInicioKPI] = useEstadoPersistido('viajes.desde', '');
   const [fechaFinKPI,    setFechaFinKPI]    = useEstadoPersistido('viajes.hasta', '');
-  const [mesKPI,        setMesKPI]        = useEstadoPersistido('viajes.mes', mesDeHoy());
-  const [quincenaKPI,   setQuincenaKPI]   = useEstadoPersistido<QuincenaViajes>(
-    'viajes.quincena', new Date().getDate() <= 15 ? 1 : 2,
-  );
-  const [anioKPI,       setAnioKPI]       = useEstadoPersistido('viajes.anio', new Date().getFullYear());
+  const [mesKPI,        setMesKPI]        = useEstadoPersistido('viajes.mes', porDefecto.mes);
+  const [quincenaKPI,   setQuincenaKPI]   = useEstadoPersistido<QuincenaViajes>('viajes.quincena', porDefecto.quincena);
+  const [anioKPI,       setAnioKPI]       = useEstadoPersistido('viajes.anio', porDefecto.anio);
 
   // Datos
   const [viajes, setViajes] = useState<ViajeUI[]>([]);
@@ -201,6 +215,23 @@ export default function Viajes() {
   const limpiarFiltros = () => setFiltros(FILTROS_VACIOS);
 
   /**
+   * El período y los filtros quedan guardados por sesión, así que hace falta
+   * una salida explícita: sin esto, volver al mes de hoy obliga a deshacer
+   * campo por campo lo que se dejó puesto.
+   */
+  const reiniciarVista = () => {
+    const d = periodoPorDefecto();
+    setPeriodoKPI(d.periodo);
+    setMesKPI(d.mes);
+    setAnioKPI(d.anio);
+    setQuincenaKPI(d.quincena);
+    setFechaInicioKPI('');
+    setFechaFinKPI('');
+    setFiltros(FILTROS_VACIOS);
+    setPagina(1);
+  };
+
+  /**
    * El período del encabezado manda sobre toda la pantalla, no solo sobre los
    * KPIs: antes la tabla ignoraba el selector y mostraba viajes de meses que
    * los indicadores contaban en cero. El rango va como 'YYYY-MM-DD', que es lo
@@ -213,6 +244,15 @@ export default function Viajes() {
     }
     if (periodoKPI === 'personalizado') {
       return { desde: fechaInicioKPI, hasta: fechaFinKPI };
+    }
+    if (periodoKPI === 'semanal') {
+      // El backend resuelve SEMANAL como los últimos 7 días calendario,
+      // hoy - 6 hasta hoy (API_VIAJES.md 5.9). La tabla usa el mismo corte
+      // para no contradecir a los indicadores.
+      const hoy = new Date();
+      const inicio = new Date(hoy);
+      inicio.setDate(hoy.getDate() - 6);
+      return { desde: isoLocal(inicio), hasta: isoLocal(hoy) };
     }
     const primeraQuincena = periodoKPI === 'quincenal' && quincenaKPI === 1;
     const segundaQuincena = periodoKPI === 'quincenal' && quincenaKPI === 2;
@@ -276,7 +316,8 @@ export default function Viajes() {
       // Cada ancla aplica a un solo período, así que se manda la suya y nada
       // más (API_VIAJES.md 5.9). El rango a la medida va en desde / hasta.
       const params: IndicadoresParams =
-        periodoKPI === 'quincenal' ? { periodo: 'QUINCENAL', mes: mesKPI, quincena: quincenaKPI }
+        periodoKPI === 'semanal'   ? { periodo: 'SEMANAL' }
+        : periodoKPI === 'quincenal' ? { periodo: 'QUINCENAL', mes: mesKPI, quincena: quincenaKPI }
         : periodoKPI === 'mensual' ? { periodo: 'MENSUAL', mes: mesKPI }
         : periodoKPI === 'anual'   ? { periodo: 'ANUAL', anio: anioKPI }
         : { periodo: 'CUSTOM', desde: fechaInicioKPI || undefined, hasta: fechaFinKPI || undefined };
@@ -470,6 +511,7 @@ export default function Viajes() {
               onValueChange={(v) => setPeriodoKPI(v as typeof periodoKPI)}>
               <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
               <SelectContent>
+                <SelectItem value="semanal">Semanal</SelectItem>
                 <SelectItem value="quincenal">Quincenal</SelectItem>
                 <SelectItem value="mensual">Mensual</SelectItem>
                 <SelectItem value="anual">Anual</SelectItem>
@@ -498,6 +540,10 @@ export default function Viajes() {
                 <Input type="date" value={fechaFinKPI} onChange={e => setFechaFinKPI(e.target.value)} className="w-40" placeholder="Fecha fin" />
               </>
             )}
+            <Button variant="ghost" size="sm" onClick={reiniciarVista} className="gap-2"
+              title="Vuelve al mes en curso y borra los filtros de la tabla">
+              <RotateCcw className="h-4 w-4" /> Reiniciar
+            </Button>
           </div>
         </div>
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
