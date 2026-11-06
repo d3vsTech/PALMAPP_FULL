@@ -178,20 +178,65 @@ function miles(n: number): string {
   return n.toLocaleString('es-CO');
 }
 
+/**
+ * A qué grupo pertenece cada jornal, por id de jornal.
+ *
+ * Un grupo (3.2.1) es una cuadrilla: varios colaboradores en la misma labor y
+ * el mismo lote, con una `cantidad_palmas` compartida. El backend **replica**
+ * esa cantidad en cada jornal miembro, no la reparte; lo que divide entre los
+ * miembros es la plata (`valor_total`).
+ *
+ * El índice se arma de las dos formas en que puede llegar el dato: el array
+ * `jornal_grupos` cuando el backend lo expone, y el campo `jornal_grupo_id`
+ * de cada jornal.
+ */
+function indiceDeGrupos(planilla: PlanillaDetalle): Map<number, number> {
+  const grupoDe = new Map<number, number>();
+
+  (planilla.jornal_grupos ?? []).forEach((g) => {
+    (g.jornales ?? []).forEach((j) => grupoDe.set(j.id, g.id));
+  });
+  (planilla.jornales ?? []).forEach((j) => {
+    if (j.jornal_grupo_id) grupoDe.set(j.id, j.jornal_grupo_id);
+  });
+
+  return grupoDe;
+}
+
+/**
+ * Las palmas que suman unos jornales, contando cada cuadrilla una sola vez.
+ *
+ * Sumar los seis jornales de una cuadrilla multiplicaba el trabajo por seis:
+ * si entre todos fertilizaron 5.786 palmas, la planilla reportaba 34.716. Un
+ * jornal suelto sí suma lo suyo, que es el caso de la gente trabajando por
+ * separado.
+ */
+function sumarPalmas(jornales: Jornal[], grupoDe: Map<number, number>): number {
+  const contados = new Set<number>();
+
+  return jornales.reduce((suma, j) => {
+    const grupo = grupoDe.get(j.id);
+    if (grupo === undefined) return suma + numero(j.cantidad_palmas);
+    if (contados.has(grupo)) return suma;
+    contados.add(grupo);
+    return suma + numero(j.cantidad_palmas);
+  }, 0);
+}
+
 /** "1.927 palmas" cuando la labor se mide en palmas; vacío cuando no. */
-function totalDeLabor(jornales: Jornal[]): string {
-  const palmas = jornales.reduce((s, j) => s + numero(j.cantidad_palmas), 0);
+function totalDeLabor(jornales: Jornal[], grupoDe: Map<number, number>): string {
+  const palmas = sumarPalmas(jornales, grupoDe);
   return palmas > 0 ? `${miles(palmas)} palmas` : '';
 }
 
-function laboresDeJornales(jornales: Jornal[]): GrupoLaborPalma[] {
+function laboresDeJornales(jornales: Jornal[], grupoDe: Map<number, number>): GrupoLaborPalma[] {
   const porLabor = agrupar(jornales, (j) => (j.labor_id ? `l${j.labor_id}` : `t${j.tipo ?? 'otros'}`));
 
   const grupos = [...porLabor.entries()].map(([clave, deLaLabor]) => ({
     clave,
     labor: nombreLabor(deLaLabor[0]),
     orden: ORDEN_TIPO.indexOf(deLaLabor[0].tipo ?? ''),
-    total: totalDeLabor(deLaLabor),
+    total: totalDeLabor(deLaLabor, grupoDe),
     trabajos: [...agrupar(deLaLabor, claveTrabajo).entries()]
       .map(([id, delTrabajo]) => trabajoDeJornales(id, delTrabajo)),
   }));
@@ -227,10 +272,8 @@ function grupoCosecha(cosechas: Cosecha[]): GrupoLaborPalma | null {
   };
 }
 
-function palmasPorTipo(jornales: Jornal[], tipo: string): number {
-  return jornales
-    .filter((j) => j.tipo === tipo)
-    .reduce((s, j) => s + numero(j.cantidad_palmas), 0);
+function palmasPorTipo(jornales: Jornal[], tipo: string, grupoDe: Map<number, number>): number {
+  return sumarPalmas(jornales.filter((j) => j.tipo === tipo), grupoDe);
 }
 
 const ESTADO_HORA_EXTRA: Record<string, string> = {
@@ -300,6 +343,7 @@ export function resumirPlanilla(
   const palma = jornales.filter((j) => j.categoria === 'PALMA');
   const finca = jornales.filter((j) => j.categoria === 'FINCA');
   const cosecha = grupoCosecha(cosechas);
+  const grupoDe = indiceDeGrupos(planilla);
 
   // Una rechazada no se paga ni se trabaja: se lista, pero no suma.
   const horasExtra = (planilla.horas_extra ?? []).map(filaHoraExtra);
@@ -317,11 +361,11 @@ export function resumirPlanilla(
     inicioLabores: horaInicio(planilla, resumen),
     lluvia: textoLluvia(planilla),
     colaboradoresCosecha: contarCuadrilla(cosechas),
-    palmasPlateadas: palmasPorTipo(palma, 'PLATEO'),
-    palmasPodadas: palmasPorTipo(palma, 'PODA'),
-    palmasFertilizadas: palmasPorTipo(palma, 'FERTILIZACION'),
+    palmasPlateadas: palmasPorTipo(palma, 'PLATEO', grupoDe),
+    palmasPodadas: palmasPorTipo(palma, 'PODA', grupoDe),
+    palmasFertilizadas: palmasPorTipo(palma, 'FERTILIZACION', grupoDe),
     horasExtraSumadas: extrasQueCuentan.reduce((s, h) => s + h.horas, 0),
-    laboresPalma: [...(cosecha ? [cosecha] : []), ...laboresDeJornales(palma)],
+    laboresPalma: [...(cosecha ? [cosecha] : []), ...laboresDeJornales(palma, grupoDe)],
     laboresFinca,
     horasExtra,
     ausentes: (planilla.ausencias ?? []).map(nombreAusente),

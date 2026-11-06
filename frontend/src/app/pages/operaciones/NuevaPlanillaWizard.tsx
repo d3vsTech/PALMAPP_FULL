@@ -733,16 +733,16 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         const backendEnviaGrupos = Array.isArray((p as any).jornal_grupos);
 
         let jornalesSueltos: any[] = [];
-        let grupos: any[] = [...gruposDelBackend];
+        const grupos: any[] = [...gruposDelBackend];
 
         if (backendEnviaGrupos) {
           // Fase 3: usar el array oficial y filtrar miembros del listado.
           jornalesSueltos = jornalesTodos.filter(j => j.jornal_grupo_id == null);
         } else {
           // Fases 1-2: reagrupar por `jornal_grupo_id` si viene, tratando
-          // los jornales sin él como sueltos. Al sumar `cantidad_palmas` de
-          // los miembros recuperamos el valor original del grupo (el backend
-          // divide `cantidad_palmas / N` al guardar cada miembro).
+          // los jornales sin él como sueltos. `cantidad_palmas` del grupo se
+          // toma de un miembro, no de la suma: el backend la replica igual en
+          // todos (lo que divide entre miembros es `valor_total`).
           const porGrupoId = new Map<number, any[]>();
           for (const j of jornalesTodos) {
             const gid = j.jornal_grupo_id;
