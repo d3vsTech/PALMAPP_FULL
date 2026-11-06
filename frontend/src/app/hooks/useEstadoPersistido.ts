@@ -1,6 +1,29 @@
 import { useEffect, useState } from 'react';
 
 /**
+ * Todo lo que guardan estos hooks lleva el mismo prefijo, para poder barrerlo
+ * de un solo golpe cuando se cierra la sesión.
+ */
+const PREFIJO = 'palmapp.ui.';
+
+/**
+ * Borra los filtros guardados de todas las pantallas.
+ *
+ * El `sessionStorage` sobrevive al logout, porque la pestaña sigue siendo la
+ * misma. Sin esto, el que entra después se encuentra la pantalla parada en el
+ * mes que dejó el anterior, sin saber por qué. La llama `clearAll` del
+ * AuthContext, que es el único punto por donde se cierra una sesión.
+ */
+export function limpiarEstadoPersistido() {
+  try {
+    const claves = Object.keys(sessionStorage).filter(k => k.startsWith(PREFIJO));
+    claves.forEach(k => sessionStorage.removeItem(k));
+  } catch (e) {
+    console.warn('[useEstadoPersistido] no se pudo limpiar la sesión', e);
+  }
+}
+
+/**
  * Lee el valor guardado; si no hay o quedó ilegible, devuelve el inicial.
  */
 function leer<T>(clave: string, inicial: T): T {
@@ -25,7 +48,8 @@ function leer<T>(clave: string, inicial: T): T {
  * la jornada de trabajo. Mañana la pantalla vuelve a abrir en el período de
  * hoy, que es lo que se espera al entrar de nuevo.
  */
-export function useEstadoPersistido<T>(clave: string, inicial: T) {
+export function useEstadoPersistido<T>(nombre: string, inicial: T) {
+  const clave = PREFIJO + nombre;
   const [valor, setValor] = useState<T>(() => leer(clave, inicial));
 
   useEffect(() => {

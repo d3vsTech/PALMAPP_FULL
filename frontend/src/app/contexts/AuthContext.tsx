@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
+import { limpiarEstadoPersistido } from '../hooks/useEstadoPersistido';
 import { toast } from 'sonner';
 import { API_URL } from '../../api/env';
 
@@ -162,6 +163,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setPendingTenantSelection(false);
     setAvailableTenants([]);
+    // Los filtros de las pantallas de listado viven en `sessionStorage` y la
+    // pestaña no se recarga al salir: sin esto el próximo que entre hereda el
+    // período del anterior.
+    limpiarEstadoPersistido();
   };
 
   const saveToken = (t: string) => {
