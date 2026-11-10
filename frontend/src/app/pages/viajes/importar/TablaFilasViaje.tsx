@@ -12,6 +12,7 @@ import {
   ADVERTENCIA_VIAJE_LABEL,
   ERROR_VIAJE_LABEL,
   type CosechaDelCargue,
+  type EstadoFinalViaje,
   type FilaViajeCargue,
   type ReconteoDeLaFila,
 } from '../../../../api/importarViajes';
@@ -59,23 +60,35 @@ function CeldaCuadrilla({ cosecha }: { cosecha: CosechaDelCargue | null }) {
   );
 }
 
-/** Los gajos del camión. Vacío significa que se llevó la cosecha entera. */
+/**
+ * Los gajos del camión.
+ *
+ * La celda `gajos` vacía significa "toda la cosecha", pero eso se resuelve
+ * distinto según el estado final. Con FINALIZADO el backend toma los gajos de
+ * la planilla y deja el reconteo aprobado, así que el número ya viene y lo que
+ * hay que decir es que no salió del archivo. Con CREADO el detalle sí queda
+ * sin contar, para hacerlo en pantalla.
+ */
 function CeldaGajos({ fila }: { fila: FilaViajeCargue }) {
   if (fila.gajos_en_viaje === null || fila.gajos_en_viaje === undefined) {
     return (
       <div className="text-right">
         <p className="text-sm">Toda</p>
-        <p className="text-xs text-muted-foreground">sin reconteo</p>
+        <p className="text-xs text-muted-foreground">se cuenta en pantalla</p>
       </div>
     );
   }
   return (
     <div className="text-right">
       <p className="text-sm font-semibold">{miles(fila.gajos_en_viaje)}</p>
-      {fila.cosecha?.gajos_reportados != null && (
-        <p className="text-xs text-muted-foreground">
-          de {miles(fila.cosecha.gajos_reportados)} en planilla
-        </p>
+      {fila.gajos_asumidos ? (
+        <p className="text-xs text-muted-foreground">los de la planilla</p>
+      ) : (
+        fila.cosecha?.gajos_reportados != null && (
+          <p className="text-xs text-muted-foreground">
+            de {miles(fila.cosecha.gajos_reportados)} en planilla
+          </p>
+        )
       )}
     </div>
   );
@@ -104,14 +117,30 @@ function CeldaReconteo({ reconteo }: { reconteo: ReconteoDeLaFila | null }) {
   );
 }
 
-export function TablaFilasViaje({ filas }: { filas: FilaViajeCargue[] }) {
-  if (filas.length === 0) {
-    return (
-      <p className="px-4 py-3 text-sm text-muted-foreground">
-        Este viaje no lleva cosechas: paga por jornal y cierra sin promedio.
-      </p>
-    );
-  }
+/**
+ * Un viaje sin filas de cosecha no es un archivo a medias. Son dos casos
+ * legítimos y conviene distinguirlos, porque lo que el usuario tiene que hacer
+ * después es distinto: el de jornal ya está completo, el de solo cabecera
+ * espera que le monten las cosechas en pantalla.
+ */
+function SinCosechas({ estadoFinal }: { estadoFinal: EstadoFinalViaje }) {
+  return (
+    <p className="px-4 py-3 text-sm text-muted-foreground">
+      {estadoFinal === 'CREADO'
+        ? 'Este viaje no lleva cosechas: queda en reconteo con su remisión y las cosechas se le agregan después desde Viajes.'
+        : 'Este viaje no lleva cosechas: paga por jornal y cierra sin promedio.'}
+    </p>
+  );
+}
+
+export function TablaFilasViaje({
+  filas,
+  estadoFinal,
+}: {
+  filas: FilaViajeCargue[];
+  estadoFinal: EstadoFinalViaje;
+}) {
+  if (filas.length === 0) return <SinCosechas estadoFinal={estadoFinal} />;
 
   return (
     <div className="overflow-x-auto">

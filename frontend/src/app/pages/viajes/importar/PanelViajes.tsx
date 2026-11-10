@@ -71,6 +71,9 @@ function Dato({
  * El promedio que el viaje va a sembrar en cada lote. Llega vacío cuando el
  * viaje queda en reconteo o cuando cierra sin promedio: mixto, peso en cero o
  * sin cosechas. Las advertencias del viaje explican cuál de los tres es.
+ *
+ * Vacío no es un defecto: un viaje de jornal y uno importado solo con la
+ * cabecera no siembran promedio por diseño.
  */
 function PromedioPrevisto({ calculo }: { calculo: CalculoViajeCargue | null }) {
   const previstos = calculo?.promedio_previsto ?? [];
@@ -158,7 +161,7 @@ function TarjetaViaje({ viaje, filas }: { viaje: ViajeDelCargue; filas: FilaViaj
         />
       </div>
 
-      <TablaFilasViaje filas={filas} />
+      <TablaFilasViaje filas={filas} estadoFinal={viaje.estado_final} />
     </div>
   );
 }

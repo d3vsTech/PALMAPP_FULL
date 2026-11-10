@@ -18,7 +18,13 @@
  *
  *  3. El 409 por nómina abierta aquí solo tiene una salida: forzar. Cargar en
  *     reconteo **no** la esquiva, porque el cargue escribe igual el reconteo
- *     de gajos y la nómina lo lee.
+ *     de gajos y la nómina lo lee. La excepción es el viaje sin cosechas: no
+ *     hay reconteo que escribir, así que no roza la nómina por ninguna vía.
+ *
+ *  4. Un viaje del que solo se tiene la cabecera (fecha, camión, planta) es un
+ *     caso válido, no un archivo a medias: va en una fila con `cosecha` vacía
+ *     y `gajos_total` en 0, en estado final CREADO, y las cosechas se le
+ *     montan después desde el wizard normal del viaje.
  */
 import { useNavigate } from 'react-router';
 import { ArrowLeft, Upload } from 'lucide-react';
@@ -43,12 +49,17 @@ const ESTADOS: Array<{ valor: EstadoFinalViaje; etiqueta: string; nota: string }
   {
     valor: 'FINALIZADO',
     etiqueta: 'Finalizados',
-    nota: 'Quedan cerrados, con su promedio kg/gajo y su desprendible. Piden el peso de báscula.',
+    nota:
+      'Los viajes quedan cerrados y listos. Hay que escribir el peso de la báscula. '
+      + 'Son los que cuentan para el pago de la cosecha.',
   },
   {
     valor: 'CREADO',
     etiqueta: 'En reconteo',
-    nota: 'Quedan abiertos para revisarlos y cerrarlos en pantalla. Todavía no siembran promedio.',
+    nota:
+      'Los viajes quedan abiertos, para revisarlos y cerrarlos uno por uno en pantalla. '
+      + 'Todavía no cuentan para el pago. Escoja esta opción también cuando solo tenga '
+      + 'los datos del camión y le falten las cosechas.',
   },
 ];
 
@@ -116,7 +127,7 @@ export default function ImportarViajesPage() {
       <PasoCard
         n={1}
         titulo="Descarga la plantilla"
-        subtitulo="Trae los camiones, las plantas y las cosechas por despachar en listas desplegables"
+        subtitulo="Trae sus camiones, sus plantas y sus cosechas en listas, para no escribirlos a mano"
         accion={
           <BotonesPlantilla
             descargando={cargue.descargando}
@@ -127,50 +138,75 @@ export default function ImportarViajesPage() {
         <VistaPreviaPlantilla columnas={COLUMNAS_VIAJES} filas={FILAS_VIAJES} />
         <div className="space-y-1.5 text-sm text-muted-foreground">
           <Regla n={1}>
-            Una fila es <strong className="text-foreground">una cosecha transportada</strong>. Las
-            filas con la misma <strong className="text-foreground">remision</strong> son el mismo
-            viaje, y las columnas del camión basta ponerlas en la primera.
+            <strong className="text-foreground">Una fila por cada cosecha que llevó el camión.</strong>{' '}
+            Si el camión llevó tres cosechas, escriba tres filas y repita el mismo número de{' '}
+            <strong className="text-foreground">remision</strong> en las tres. La fecha, la placa
+            y la planta se escriben una sola vez, en la primera fila.
           </Regla>
           <Regla n={2}>
-            Primero hay que cargar las <strong className="text-foreground">operaciones</strong> del
-            mes: la cosecha se elige de la lista y tiene que existir en una planilla aprobada.
+            <strong className="text-foreground">Primero suba las planillas del mes.</strong> La
+            cosecha se escoge de una lista, y esa lista solo trae lo que ya está en una planilla
+            aprobada. Si la planilla falta, la cosecha no aparece.
           </Regla>
           <Regla n={3}>
-            La remisión es <strong className="text-foreground">la del cliente</strong>. No puede ir
-            con el formato REM-2025-004, que es el consecutivo que genera el sistema.
+            En <strong className="text-foreground">remision</strong> va{' '}
+            <strong className="text-foreground">el número que usa la finca</strong>, el del papel
+            que llevó el camión. No escriba algo como REM-2025-004: ese es el número que el
+            sistema se pone solo a los viajes hechos aquí.
           </Regla>
           <Regla n={4}>
-            <strong className="text-foreground">gajos</strong> es cuántos de esa cosecha iban en
-            este camión. Vacío significa toda la cosecha, y eso solo vale si ningún otro camión se
-            llevó parte de ella.
+            En <strong className="text-foreground">gajos</strong> va{' '}
+            <strong className="text-foreground">cuántos gajos de esa cosecha subieron a este
+            camión</strong>. Si el camión se llevó la cosecha completa, deje la casilla vacía. Si
+            la cosecha se repartió entre dos o más camiones, escriba en cada fila cuántos gajos
+            llevó cada uno.
           </Regla>
           <Regla n={5}>
-            Un viaje que paga por jornal va en{' '}
-            <strong className="text-foreground">una sola fila</strong>, sin cosecha y con{' '}
-            <strong className="text-foreground">gajos_total</strong>.
+            <strong className="text-foreground">Si el camión salió sin cosechas, use una sola
+            fila:</strong> deje <strong className="text-foreground">cosecha</strong> vacía y
+            escriba el total de gajos en{' '}
+            <strong className="text-foreground">gajos_total</strong>. Sirve para dos casos. Uno,
+            la finca paga por jornal y no lleva cuenta de cosechas. Dos, usted todavía no sabe
+            qué cosechas llevó: escriba{' '}
+            <strong className="text-foreground">0</strong> en gajos_total, escoja{' '}
+            <strong className="text-foreground">En reconteo</strong> en el paso 2, y después le
+            agrega las cosechas desde el viaje.
+          </Regla>
+          <Regla n={6}>
+            <strong className="text-foreground">Borre la fila 2 de la plantilla antes de
+            cargar.</strong> Esa fila es un ejemplo, pero con datos de verdad de su finca: un
+            camión suyo, una planta suya y una cosecha suya. Si la deja, el sistema va a creer
+            que ese viaje existió. Si prefiere aprovecharla para su primer viaje, bórrele al
+            menos lo que dice en <strong className="text-foreground">cosecha</strong> y en{' '}
+            <strong className="text-foreground">gajos</strong>.
           </Regla>
         </div>
         <p className="text-xs text-muted-foreground">
-          La columna <strong className="text-foreground">placa</strong> identifica al camión con
-          su conductor y su empresa, que es como están en Configuración. La empresa no se
-          escribe: cada camión tiene la suya en la ficha y el viaje la toma de ahí. La columna{' '}
-          <strong className="text-foreground">conductor</strong> se deja vacía salvo que ese día
-          manejara otra persona; entonces el viaje guarda ese nombre.
+          En <strong className="text-foreground">placa</strong> escoja el camión de la lista. La
+          empresa de transporte no se escribe: cada camión ya tiene la suya guardada y el viaje
+          la copia solo. La casilla <strong className="text-foreground">conductor</strong> se
+          deja vacía casi siempre, porque el sistema pone el conductor de siempre de ese camión.
+          Llénela nada más cuando ese día manejó otra persona.
         </p>
       </PasoCard>
 
       <PasoCard
         n={2}
         titulo="Decide cómo quedan los viajes"
-        subtitulo="Esto no es un detalle visual: cambia lo que la nómina va a pagar"
+        subtitulo="Lo que escoja aquí cambia lo que la nómina va a pagar"
       >
         <SelectorEstadoFinal estado={estadoFinal} onCambiar={cargue.cambiarEstadoFinal} />
         <p className="text-xs text-muted-foreground">
-          Un viaje finalizado siembra el promedio kg/gajo del lote, y de ahí sale el pago de
-          cosecha de la nómina. Por eso conviene revisar el promedio previsto de cada viaje antes
-          de cargar: tiene que quedar entre {PROMEDIO_MINIMO} y {PROMEDIO_MAXIMO} kg por gajo. Uno
-          de 600 significa que el peso vino en toneladas o que los gajos están mal digitados.
-          Dejarlos en reconteo no esquiva la nómina: el reconteo de gajos se escribe igual.
+          Cuando un viaje queda cerrado, el sistema saca cuánto pesó cada gajo de ese lote, y con
+          ese número se le paga la cosecha a la cuadrilla. Por eso vale la pena mirar, antes de
+          cargar, el peso por gajo que el sistema calcula para cada viaje: lo normal es entre{' '}
+          {PROMEDIO_MINIMO} y {PROMEDIO_MAXIMO} kilos. Si sale uno de 600, es que el peso se
+          escribió en toneladas o que los gajos quedaron mal escritos.
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Dejar los viajes abiertos no los saca de la nómina: el conteo de gajos se guarda igual y
+          la nómina lo lee. El único que no la toca es el viaje sin cosechas, el de la regla 5 del
+          paso 1.
         </p>
       </PasoCard>
 
@@ -221,8 +257,8 @@ export default function ImportarViajesPage() {
           <div className="flex flex-wrap items-center justify-end gap-3">
             {conError > 0 && (
               <p className="text-sm text-destructive">
-                Corrige las {conError} fila{conError === 1 ? '' : 's'} con error. Si una falla, no
-                entra ningún viaje.
+                Corrija {conError === 1 ? 'la fila' : `las ${conError} filas`} con error. Basta
+                con que una falle para que no entre ningún viaje.
               </p>
             )}
             <Button
@@ -249,9 +285,10 @@ export default function ImportarViajesPage() {
             <AlertDialogDescription className="space-y-2">
               <span className="block">{cargue.conflicto?.mensaje}</span>
               <span className="block">
-                Esa liquidación va a pagar la cosecha con el reconteo y el promedio que estás
-                cargando. Puedes esperar a cerrarla, o seguir de todas formas si ya contaste con
-                eso: su Validar Cosecha quedará sin confirmar y habrá que confirmarlo otra vez.
+                Esa nómina va a pagar la cosecha con los gajos y el peso que usted está
+                cargando ahora. Puede esperar a cerrarla, o seguir de todas formas si ya contaba
+                con eso. Si sigue, el Validar Cosecha de esa nómina queda sin confirmar y hay que
+                confirmarlo otra vez antes de cerrarla.
               </span>
             </AlertDialogDescription>
           </AlertDialogHeader>

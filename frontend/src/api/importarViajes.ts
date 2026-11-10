@@ -275,8 +275,17 @@ export interface FilaViajeCargue {
   cosecha: CosechaDelCargue | null;
   /** Lo que el usuario escribió en la celda, tal cual. */
   cosecha_celda: string | null;
-  /** `null` = toda la cosecha; el detalle queda con reconteo pendiente. */
+  /**
+   * Los gajos de esa cosecha que iban en este camión.
+   *
+   * `null` solo con `estado_final = CREADO`: el detalle queda "toda la cosecha"
+   * y el reconteo pendiente de contar en pantalla. Con FINALIZADO el backend
+   * asume los reportados en planilla y lo deja aprobado, así que aquí llega el
+   * número y `gajos_asumidos` dice que no salió del archivo.
+   */
   gajos_en_viaje: number | null;
+  /** La celda `gajos` venía vacía y FINALIZADO tomó los gajos de la planilla. */
+  gajos_asumidos?: boolean;
   reconteo: ReconteoDeLaFila | null;
 
   omitida: boolean;
@@ -441,7 +450,7 @@ export const ERROR_VIAJE_LABEL: Record<string, string> = {
   EXTRACTORA_AMBIGUA: 'Hay varias plantas con ese nombre',
   // Cosecha
   FILA_SIN_COSECHA_EN_VIAJE_CON_COSECHAS: 'Elija la cosecha o borre la fila',
-  COSECHA_REQUERIDA: 'Falta la cosecha',
+  COSECHA_REQUERIDA: 'Falta la cosecha, o el total de gajos si el viaje no lleva',
   COSECHA_ID_INVALIDO: 'El id de la cosecha no es válido',
   COSECHA_NO_ENCONTRADA: 'Esa cosecha no existe en la finca',
   COSECHA_AMBIGUA: 'Ese tiquete está en más de una cosecha: escriba el id',
@@ -463,11 +472,11 @@ export const ADVERTENCIA_VIAJE_LABEL: Record<string, string> = {
   NOMBRE_DIFIERE_DEL_CATALOGO: 'El nombre no coincide con el catálogo',
   CONDUCTOR_DIFIERE_DEL_TRANSPORTADOR: 'El conductor del archivo no es el de la ficha',
   // Remisión
-  REMISION_COINCIDE_CON_RANGO: 'La remisión choca con un rango de numeración activo',
+  REMISION_COINCIDE_CON_RANGO: 'La remisión es de la serie de un rango activo: verifique el número',
   REMISION_SIMILAR: 'Ya hay una remisión igual con otras mayúsculas',
   LLEGADA_ANTERIOR_A_SALIDA: 'La llegada es anterior a la salida',
   // Gajos y reconteo
-  GAJOS_NO_ESPECIFICADOS: 'Sin gajos: se lleva toda la cosecha y el reconteo queda pendiente',
+  GAJOS_NO_ESPECIFICADOS: 'Sin gajos: se lleva toda la cosecha',
   RECONTEO_SUPERA_PLANILLA: 'Se contaron más gajos de los que anotó la planilla',
   SOBRECONTEO_TOLERADO: 'Hay gajos de más, dentro de la tolerancia',
   RECONTEO_DIFIERE_DE_PLANILLA: 'El reconteo no cuadra con la planilla: la nómina paga el reconteo',
@@ -488,7 +497,7 @@ export const ADVERTENCIA_VIAJE_LABEL: Record<string, string> = {
   YA_CARGADO: 'Ese viaje ya se había cargado: se omite',
   ESTADO_FINAL_CREADO: 'Los viajes quedan en reconteo, sin promedio',
   VIAJES_YA_CARGADOS: 'Algunos viajes ya estaban cargados y se omiten',
-  VIAJES_SIN_COSECHAS: 'Hay viajes sin cosechas: cierran sin promedio',
+  VIAJES_SIN_COSECHAS: 'Hay viajes sin cosechas: no siembran promedio',
   VIAJES_SIN_PROMEDIO: 'Hay viajes que cierran sin sembrar promedio',
   COSECHAS_EN_MAS_DE_UN_VIAJE: 'Hay cosechas repartidas entre varios camiones',
 };
