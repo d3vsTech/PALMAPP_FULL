@@ -688,6 +688,34 @@ export default function DetalleViaje() {
     }
   };
 
+  /**
+   * §5.10 — El boton de reabrir vive en la vista resumen y la pantalla
+   * tiene dos `return`. Montar el dialogo dentro de uno solo dejaba el
+   * boton sin efecto: el clic prendia el estado y nada lo leia. Se arma
+   * aqui y las dos vistas lo pintan.
+   */
+  const dialogoReabrir = (
+    <RevertirEstadoDialog
+      abierto={reabrirAbierto}
+      onCerrar={() => setReabrirAbierto(false)}
+      titulo="Reabrir el viaje"
+      descripcion="Vuelve a CREADO con sus cosechas enlazadas y los reconteos pendientes, para corregir el peso, un reconteo o una cosecha que no iba."
+      etiquetaAccion="Reabrir viaje"
+      efectos={[
+        'Los reconteos vuelven a pendiente; los gajos en viaje se conservan.',
+        'Se borra el promedio kg/gajo que este camión aportó al lote.',
+        'Los datos de la extractora y los documentos se conservan.',
+        'El desprendible deja de servirse hasta que vuelva a finalizar.',
+      ]}
+      verificar={async () => (await reversionApi.viaje.verificar(Number(id))).data}
+      confirmar={async (motivo) => {
+        const res = await reversionApi.viaje.reabrir(Number(id), motivo);
+        toast.success(res.message ?? 'Viaje reabierto');
+      }}
+      onHecho={() => { void cargar(); }}
+    />
+  );
+
   // ── Vista Resumen (por defecto) ────────────────────────────────────────────
   if (vistaResumen) {
     return (
@@ -704,6 +732,16 @@ export default function DetalleViaje() {
                 {modoGestion ? 'Editar Viaje' : 'Detalle del Viaje'}
               </h1>
               <Badge variant="outline" className={badgeClass}>{estadoActual}</Badge>
+              {/*
+                * §15 — un viaje que entró por archivo. Importa decirlo aquí
+                * porque su `finalizado_at` es la hora del cargue, no la del
+                * cierre real, y el timeline de abajo no cuenta nada.
+                */}
+              {viaje.origen === 'IMPORTACION' && (
+                <Badge variant="outline" className="border-border text-muted-foreground">
+                  Importado
+                </Badge>
+              )}
             </div>
             <p className="text-muted-foreground mt-1 text-sm">{remisionId}</p>
           </div>
@@ -1097,6 +1135,8 @@ export default function DetalleViaje() {
             </Card>
           </div>}
         </div>
+
+        {dialogoReabrir}
       </div>
     );
   }
@@ -1681,25 +1721,7 @@ export default function DetalleViaje() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <RevertirEstadoDialog
-        abierto={reabrirAbierto}
-        onCerrar={() => setReabrirAbierto(false)}
-        titulo="Reabrir el viaje"
-        descripcion="Vuelve a CREADO con sus cosechas enlazadas y los reconteos pendientes, para corregir el peso, un reconteo o una cosecha que no iba."
-        etiquetaAccion="Reabrir viaje"
-        efectos={[
-          'Los reconteos vuelven a pendiente; los gajos en viaje se conservan.',
-          'Se borra el promedio kg/gajo que este camión aportó al lote.',
-          'Los datos de la extractora y los documentos se conservan.',
-          'El desprendible deja de servirse hasta que vuelva a finalizar.',
-        ]}
-        verificar={async () => (await reversionApi.viaje.verificar(Number(id))).data}
-        confirmar={async (motivo) => {
-          const res = await reversionApi.viaje.reabrir(Number(id), motivo);
-          toast.success(res.message ?? 'Viaje reabierto');
-        }}
-        onHecho={() => { void cargar(); }}
-      />
+      {dialogoReabrir}
     </div>
   );
 }

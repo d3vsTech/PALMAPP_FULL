@@ -10,7 +10,7 @@
  * tiene salida**. Si una nómina que cubre la fecha ya liquidó, el botón queda
  * apagado y no se ofrece ningún "continuar de todas formas", porque no existe.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AlertTriangle, Ban, Info, Loader2, RotateCcw } from 'lucide-react';
 import { Button } from '../ui/button';
@@ -98,10 +98,17 @@ export function RevertirEstadoDialog({
   const [motivo, setMotivo] = useState('');
   const [enviando, setEnviando] = useState(false);
 
+  // Las pantallas pasan `verificar` como arrow inline, asi que cambia de
+  // identidad en cada render. Si el efecto de abajo depende de ella, se repite
+  // sin fin: borra el motivo mientras se escribe y React corta con "maximum
+  // update depth exceeded". El ref la deja colgada solo de `abierto`.
+  const verificarRef = useRef(verificar);
+  verificarRef.current = verificar;
+
   const correrVerificacion = useCallback(async () => {
     setVerificando(true);
     try {
-      setVerificacion(await verificar());
+      setVerificacion(await verificarRef.current());
     } catch {
       // Sin verificación no se puede decidir nada, así que se asume bloqueado.
       setVerificacion({
@@ -112,7 +119,7 @@ export function RevertirEstadoDialog({
     } finally {
       setVerificando(false);
     }
-  }, [verificar]);
+  }, []);
 
   useEffect(() => {
     if (!abierto) return;
