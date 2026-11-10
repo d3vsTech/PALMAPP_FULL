@@ -89,6 +89,11 @@ interface ViajeUI {
   /** Para la remisión impresa: dirección de la planta y notas del despacho. */
   extractoraUbicacion: string;
   observaciones: string;
+  /**
+   * §15 — un viaje que entró por archivo. Su `finalizado_at` es el momento del
+   * cargue y no el del cierre real, así que conviene que se note en la fila.
+   */
+  importado: boolean;
 }
 
 function mapViaje(v: Viaje): ViajeUI {
@@ -109,6 +114,7 @@ function mapViaje(v: Viaje): ViajeUI {
     peso:           r.peso_viaje ? parseFloat(String(r.peso_viaje)) : undefined,
     extractoraUbicacion: String(r.extractora?.ubicacion ?? ''),
     observaciones:  String(r.observaciones ?? ''),
+    importado:      r.origen === 'IMPORTACION',
   };
 }
 
@@ -744,6 +750,14 @@ export default function Viajes() {
                               className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors ${index % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}>
                               <td className="p-4">
                                 <span className="text-sm font-medium text-foreground">{viaje.remisionId}</span>
+                                {viaje.importado && (
+                                  <span
+                                    className="ml-2 rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                                    title="Entró por el cargue de histórico"
+                                  >
+                                    Importado
+                                  </span>
+                                )}
                               </td>
                               <td className="p-4">
                                 {(() => {

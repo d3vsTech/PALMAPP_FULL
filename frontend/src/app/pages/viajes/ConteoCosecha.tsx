@@ -358,14 +358,31 @@ export default function ConteoCosecha() {
 
   useEffect(() => { cargar(); }, [cargar]);
 
-  // ── al iniciar agregar/editar, cargar operaciones disponibles
+  /**
+   * Las planillas que se le pueden colgar a este viaje.
+   *
+   * El endpoint no tiene ventana de fechas por defecto: lista toda planilla
+   * aprobada con gajos pendientes, de cualquier mes. Se acota con
+   * `fecha_hasta = fecha_viaje` porque `POST /detalles` rechaza con 422
+   * `FECHA_VIAJE_ANTERIOR_A_COSECHA` la planilla posterior al viaje, y no
+   * tiene sentido ofrecer en el select lo que el guardado va a devolver. Pesa
+   * sobre todo en los viajes importados, que son viejos y de otro modo
+   * aparecen con la cosecha de todo el año encima.
+   */
   const cargarOperaciones = async () => {
     setCargandoOps(true);
     try {
-      const r = await viajesApi.operacionesDisponibles();
+      const fechaTope = viaje?.fecha_viaje ? String(viaje.fecha_viaje).slice(0, 10) : undefined;
+      const r = await viajesApi.operacionesDisponibles(
+        fechaTope ? { fecha_hasta: fechaTope } : undefined,
+      );
       setOperaciones(r.data ?? []);
-    } catch { /* ignore */ }
-    finally { setCargandoOps(false); }
+    } catch (e) {
+      setOperaciones([]);
+      toast.error(e instanceof Error ? e.message : 'No se pudieron cargar las planillas');
+    } finally {
+      setCargandoOps(false);
+    }
   };
 
   // ── al elegir planilla, cargar sus cosechas con gajos pendientes
