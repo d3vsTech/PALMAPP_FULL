@@ -12,6 +12,7 @@ import { useState, useRef, useEffect } from 'react';
 import { cn } from '../lib/utils';
 import { navItems, esRutaActiva, TITULOS_SECCION } from './Sidebar';
 import { abrirMenuMovil } from './shellState';
+import BotonTour from '../tour/BotonTour';
 
 const ROLES: Record<string, string> = {
   dueño: 'Dueño',
@@ -87,7 +88,9 @@ export default function Topbar() {
           )}
         </div>
 
-        <div className="relative shrink-0" ref={dropdownRef}>
+        <div className="flex shrink-0 items-center gap-1 md:gap-2">
+          <BotonTour />
+          <div className="relative" ref={dropdownRef}>
           <button
             type="button"
             onClick={() => setDropdownOpen(!dropdownOpen)}
@@ -135,6 +138,7 @@ export default function Topbar() {
               </div>
             </div>
           )}
+          </div>
         </div>
       </div>
     </header>
