@@ -8,6 +8,7 @@ import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Textarea } from '../../components/ui/textarea';
 import { Badge } from '../../components/ui/badge';
+import PageHeader from '../../components/common/PageHeader';
 import { MultiSelectColaboradores } from '../../components/operaciones/MultiSelectColaboradores';
 import type { ColaboradorEnVacaciones } from '../../../api/operaciones';
 import { marcarVacaciones } from './planilla/vacacionesPlanilla';
@@ -2668,7 +2669,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   const puedeAvanzarEtapa1 = fecha && elaboradoPor;
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-7xl relative">
+    <div className="relative space-y-6">
       {/* Overlay de carga durante el guardado */}
       {guardando && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
@@ -2678,44 +2679,28 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           </div>
         </div>
       )}
-      {/* Header */}
-      <div className="mb-8">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate('/operaciones')}
-          className="mb-4 gap-2"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1>
-              {modoLectura
-                ? 'Ver Planilla del Día'
-                : isEditMode
-                  ? 'Editar Planilla del Día'
-                  : 'Crear Nueva Planilla'}
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              {modoLectura
-                ? `Detalle de la planilla${estadoPlanilla ? ` — Estado: ${estadoPlanilla}` : ''}`
-                : 'Configura tu planilla paso a paso'}
-            </p>
-          </div>
-          {/* Los botones "Editar" y "Aprobar Planilla" del header se eliminaron
-              a pedido del usuario. Ambas acciones ya están disponibles desde el
-              listado /operaciones (columna Acciones por fila) y desde el paso 5
-              del wizard en modo lectura ("Finalizar"). */}
-        </div>
-      </div>
+      {/* Los botones "Editar" y "Aprobar planilla" del encabezado se quitaron
+          a pedido del usuario. Las dos acciones están en el listado
+          /operaciones y en el paso 5 del wizard en modo lectura. */}
+      <PageHeader
+        backTo="/operaciones"
+        eyebrow="Operaciones"
+        title={modoLectura
+          ? 'Ver planilla del día'
+          : isEditMode
+            ? 'Editar planilla del día'
+            : 'Crear nueva planilla'}
+        description={modoLectura
+          ? `Detalle de la planilla${estadoPlanilla ? ` · estado: ${estadoPlanilla}` : ''}`
+          : 'Arma la planilla paso a paso.'}
+      />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Columna izquierda: Wizard (2/3) */}
-        <div className="lg:col-span-2 space-y-8">
+        <div className="lg:col-span-2 space-y-6">
 
           {/* Stepper horizontal */}
-          <Card className="border-border">
+          <Card className="gap-0">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 {ETAPAS.map((etapa, index) => {
@@ -2735,16 +2720,16 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         disabled={!navegable}
                       >
                         <div
-                          className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition ${
+                          className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition ${
                             estaCompleta
-                              ? 'bg-primary border-primary text-white'
+                              ? 'border-primary bg-primary text-primary-foreground'
                               : estaActiva
-                              ? 'bg-primary/10 border-primary text-primary'
-                              : 'bg-muted border-border text-muted-foreground'
+                              ? 'border-primary bg-primary-soft text-primary'
+                              : 'border-border bg-muted text-muted-foreground'
                           }`}
                         >
                           {estaCompleta ? (
-                            <Check className="h-5 w-5" />
+                            <Check className="h-4 w-4" strokeWidth={2} />
                           ) : (
                             <span className="font-bold">{etapa.numero}</span>
                           )}
@@ -2827,7 +2812,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
             {/* ETAPA 2: LABORES DE PALMA */}
             {etapaActual === 2 && (
-              <Card className="border-border">
+              <Card className="gap-0">
                 <CardHeader>
                   <div>
                     <CardTitle>Labores de Palma</CardTitle>
@@ -3120,15 +3105,15 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
         {/* Columna derecha: Panel de resumen (1/3) - sticky */}
         <div className="lg:col-span-1">
-          <div className="sticky top-8">
-            <Card className="border-border">
-              <CardHeader className="border-b border-border">
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-primary" />
+          <div className="sticky top-4">
+            <Card className="gap-0">
+              <CardHeader className="border-b border-border px-5 py-3">
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                  <FileText className="h-4 w-4 text-primary" strokeWidth={2} />
                   Resumen
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-6 space-y-6">
+              <CardContent className="space-y-5 p-5">
                 {/* Progreso general */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between text-sm">
@@ -3147,7 +3132,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
                 {/* RESUMEN DETALLADO */}
                 <div className="space-y-2">
-                  <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Resumen Detallado
                   </h4>
 
@@ -3202,7 +3187,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
                 {/* Contadores de labores */}
                 <div className="space-y-3">
-                  <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Labores Registradas
                   </h4>
 
@@ -3211,11 +3196,11 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium">Cosecha</span>
-                        <Badge variant="outline" className="bg-success/10 text-success border-success/20">
+                        <Badge variant="success" className="before:hidden">
                           {trabajosCosecha.length}
                         </Badge>
                       </div>
-                      <div className="space-y-1 pl-3 border-l-2 border-success/20">
+                      <div className="space-y-1 pl-3 border-l-2 border-success/30">
                         {trabajosCosecha.map((trabajo) => {
                           const lote = lotesData.find(l => l.id === trabajo.lote);
                           const sublote = sublotes.find(s => s.id === trabajo.sublote);
@@ -3259,11 +3244,11 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium">Plateo</span>
-                        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+                        <Badge className="before:hidden">
                           {trabajosPlateo.length}
                         </Badge>
                       </div>
-                      <div className="space-y-1 pl-3 border-l-2 border-primary/20">
+                      <div className="space-y-1 pl-3 border-l-2 border-primary/30">
                         {trabajosPlateo.map((trabajo) => {
                           const lote = lotesData.find(l => l.id === trabajo.lote);
                           const sublote = sublotes.find(s => s.id === trabajo.sublote);
@@ -3307,11 +3292,11 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium">Poda</span>
-                        <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20">
+                        <Badge variant="warning" className="before:hidden">
                           {trabajosPoda.length}
                         </Badge>
                       </div>
-                      <div className="space-y-1 pl-3 border-l-2 border-warning/20">
+                      <div className="space-y-1 pl-3 border-l-2 border-warning/30">
                         {trabajosPoda.map((trabajo) => {
                           const lote = lotesData.find(l => l.id === trabajo.lote);
                           const sublote = sublotes.find(s => s.id === trabajo.sublote);
@@ -3355,11 +3340,11 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium">Fertilización</span>
-                        <Badge variant="outline" className="bg-accent/10 text-accent border-accent/20">
+                        <Badge variant="info" className="before:hidden">
                           {trabajosFertilizacion.length}
                         </Badge>
                       </div>
-                      <div className="space-y-1 pl-3 border-l-2 border-accent/20">
+                      <div className="space-y-1 pl-3 border-l-2 border-info/30">
                         {trabajosFertilizacion.map((trabajo) => {
                           const lote = lotesData.find(l => l.id === trabajo.lote);
                           const sublote = sublotes.find(s => s.id === trabajo.sublote);
@@ -3401,11 +3386,11 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium">Sanidad</span>
-                        <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20">
+                        <Badge variant="destructive" className="before:hidden">
                           {trabajosSanidad.length}
                         </Badge>
                       </div>
-                      <div className="space-y-1 pl-3 border-l-2 border-destructive/20">
+                      <div className="space-y-1 pl-3 border-l-2 border-destructive/30">
                         {trabajosSanidad.map((trabajo) => {
                           const lote = lotesData.find(l => l.id === trabajo.lote);
                           const sublote = sublotes.find(s => s.id === trabajo.sublote);
@@ -3445,7 +3430,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium">Labores de Finca</span>
-                        <Badge variant="outline" className="bg-muted text-muted-foreground border-border">
+                        <Badge variant="secondary" className="before:hidden">
                           {trabajosAuxiliares.length}
                         </Badge>
                       </div>
@@ -3479,7 +3464,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium">Otros</span>
-                        <Badge variant="outline">{trabajosOtros.length}</Badge>
+                        <Badge variant="outline" className="before:hidden">{trabajosOtros.length}</Badge>
                       </div>
                       <div className="space-y-1 pl-3 border-l-2 border-border">
                         {trabajosOtros.map((trabajo) => {
@@ -3539,10 +3524,10 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                     <div className="h-px bg-border" />
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+                        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                           Horas Extras
                         </h4>
-                        <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20">
+                        <Badge variant="warning" className="before:hidden">
                           {horasExtras.length}
                         </Badge>
                       </div>
@@ -3582,10 +3567,10 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                     <div className="h-px bg-border" />
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+                        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                           Novedades
                         </h4>
-                        <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20">
+                        <Badge variant="destructive" className="before:hidden">
                           {ausentes.length}
                         </Badge>
                       </div>
@@ -3636,7 +3621,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                   <>
                     <div className="h-px bg-border" />
                     <div className="space-y-2">
-                      <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+                      <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         Novedades del día
                       </h4>
                       <div className="rounded-md bg-muted/30 p-2 space-y-1 text-xs">
@@ -3649,7 +3634,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         {resumen!.novedades_del_dia!.pendientes > 0 && (
                           <div className="flex items-center justify-between">
                             <span className="text-muted-foreground">Sin aprobar</span>
-                            <span className="font-semibold text-amber-700 dark:text-amber-400">
+                            <span className="font-semibold text-warning">
                               {resumen!.novedades_del_dia!.pendientes}
                             </span>
                           </div>
@@ -3696,7 +3681,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
       <AlertDialog open={alertaPlanillaVacia} onOpenChange={setAlertaPlanillaVacia}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-amber-700">
+            <AlertDialogTitle className="flex items-center gap-2 text-warning">
               <AlertCircle className="h-5 w-5" />
               La planilla está vacía
             </AlertDialogTitle>
@@ -3727,7 +3712,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                   setAccionPendiente(null);
                 }
               }}
-              className="bg-amber-600 hover:bg-amber-700"
+              className="bg-warning text-warning-foreground hover:bg-warning/90"
             >
               Continuar de todas formas
             </AlertDialogAction>
@@ -3745,7 +3730,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
       >
         <AlertDialogContent className="max-w-lg">
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-amber-700">
+            <AlertDialogTitle className="flex items-center gap-2 text-warning">
               <AlertCircle className="h-5 w-5" />
               {coberturaModo === 'aprobar'
                 ? 'Faltan colaboradores por registrar'
@@ -3791,8 +3776,8 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                     cubiertos por algo PENDIENTE, porque si nadie aprueba esa
                     novedad el día se queda sin respaldo en nómina. */}
                 {(coberturaFaltantes?.con_novedad_pendiente?.length ?? 0) > 0 && (
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/30">
-                    <p className="text-xs font-semibold uppercase text-amber-800 mb-1.5 dark:text-amber-400">
+                  <div className="rounded-xl border border-warning/30 bg-warning-soft p-3">
+                    <p className="mb-1.5 text-xs font-semibold uppercase text-warning">
                       Con novedad sin aprobar ({coberturaFaltantes!.con_novedad_pendiente!.length})
                     </p>
                     <ul className="text-sm space-y-0.5 max-h-40 overflow-y-auto">
@@ -3816,7 +3801,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                     {/* PR-N8 (2026-10-12): dejó de ser una recomendación. Una
                         novedad sin aprobar impide liquidar a ese colaborador y
                         cerrar la nómina del período. */}
-                    <p className="mt-2 text-xs text-amber-800 dark:text-amber-400">
+                    <p className="mt-2 text-xs text-warning">
                       Mientras sigan sin aprobar, la nómina no va a poder liquidar a esa gente
                       ni cerrarse. Decídalas en Novedades.
                     </p>
@@ -3861,7 +3846,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                     setCoberturaFaltantes(null);
                     await ejecutarAprobar();
                   }}
-                  className="bg-amber-600 hover:bg-amber-700"
+                  className="bg-warning text-warning-foreground hover:bg-warning/90"
                 >
                   Aprobar de todas formas
                 </AlertDialogAction>

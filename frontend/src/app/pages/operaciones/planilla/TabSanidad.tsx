@@ -88,7 +88,7 @@ export function TabSanidad({
                       {/* Formulario de edición */}
                       {sanidadEnEdicion && (
                         <div ref={setFormRef('sanidad')} className="scroll-mt-24">
-                        <Card className="border-primary/50 shadow-lg">
+                        <Card className="gap-4 border-primary/40">
                           <CardContent className="pt-6 space-y-4">
                             <div className="grid gap-4 md:grid-cols-2">
                               <div className="space-y-2 md:col-span-2">

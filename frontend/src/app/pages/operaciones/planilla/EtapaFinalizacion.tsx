@@ -113,12 +113,12 @@ export function EtapaFinalizacion({
   const hayFilas = ausentes.length > 0 || previas.length > 0;
 
   return (
-    <Card className="border-border">
+    <Card className="gap-4">
       <CardHeader>
         <div className="flex items-center gap-3">
-          <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-            <ClipboardList className="h-6 w-6 text-primary" />
-          </div>
+          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-soft text-primary">
+            <ClipboardList className="h-5 w-5" strokeWidth={2} />
+          </span>
           <div>
             <CardTitle>Finalización</CardTitle>
             <p className="text-sm text-muted-foreground">
@@ -170,14 +170,14 @@ export function EtapaFinalizacion({
                           >
                             {col.nombres} {col.apellidos}
                             {col.enVacaciones && (
-                              <span className="ml-2 text-xs text-amber-700 dark:text-amber-500">
+                              <span className="ml-2 text-xs text-warning">
                                 {etiquetaVacaciones(col.enVacaciones)}
                               </span>
                             )}
                             {/* PR-N3: dos novedades el mismo día chocan con
                                 422 NOVEDAD_SOLAPADA. Se bloquea antes. */}
                             {!col.enVacaciones && col.novedadVigente && (
-                              <span className="ml-2 text-xs text-amber-700 dark:text-amber-500">
+                              <span className="ml-2 text-xs text-warning">
                                 {etiquetaNovedad(col.novedadVigente)}
                               </span>
                             )}

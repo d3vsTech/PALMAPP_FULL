@@ -55,12 +55,12 @@ export function ColaboradorChip({ col }: { col: ColaboradorWizard }) {
         </span>
       )}
       {col.enVacaciones && (
-        <span className="ml-1.5 rounded bg-amber-200/70 px-1 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-amber-900">
+        <span className="ml-1.5 rounded bg-warning-soft px-1 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-warning">
           Vacaciones
         </span>
       )}
       {!col.enVacaciones && col.novedadVigente && (
-        <span className="ml-1.5 rounded bg-amber-200/70 px-1 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-amber-900">
+        <span className="ml-1.5 rounded bg-warning-soft px-1 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-warning">
           {col.novedadVigente.fuente === 'TERMINACION' ? 'Retirado' : 'Novedad'}
         </span>
       )}

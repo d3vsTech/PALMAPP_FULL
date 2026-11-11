@@ -3,7 +3,11 @@ import { useNavigate, useLocation } from 'react-router';
 import { useEstadoPersistido } from '../../hooks/useEstadoPersistido';
 import { useAlCambiar } from '../../hooks/useAlCambiar';
 import { Button } from '../../components/ui/button';
-import { Card, CardContent } from '../../components/ui/card';
+import { Card } from '../../components/ui/card';
+import PageHeader from '../../components/common/PageHeader';
+import StatStrip from '../../components/common/StatStrip';
+import EmptyState from '../../components/common/EmptyState';
+import TableSkeleton from '../../components/common/TableSkeleton';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import {
@@ -19,7 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
-import { Plus, Eye, FileText, Loader2, Trash2, Pencil, Check,
+import { Plus, Eye, Loader2, Trash2, Pencil, Check,
   AlertCircle, Upload, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { AprobarRangoDialog } from './importar/AprobarRangoDialog';
@@ -27,7 +31,7 @@ import { RevertirEstadoDialog } from '../../components/common/RevertirEstadoDial
 import { reversionApi } from '../../../api/reversionEstados';
 import StatusBadge from '../../components/common/StatusBadge';
 import {
-  SelectorAnio, SelectorMes, finDeMes, mesDeHoy,
+  SelectorAnio, SelectorMes, mesDeHoy,
 } from '../../components/common/SelectorMes';
 import { toast } from 'sonner';
 import {
@@ -36,7 +40,7 @@ import {
   type CoberturaPlanilla, type PaginatedMeta,
   type ParamsIndicadores, type Quincena,
 } from '../../../api/operaciones';
-import { formatCOP } from '../../components/lib/format';
+import { num } from '../../lib/formato';
 import { formatFecha } from '../../utils/fecha';
 
 const PER_PAGE = 50;
@@ -304,325 +308,270 @@ export default function Operaciones() {
   const formatearFecha = (iso: string): string =>
     formatFecha(iso, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
 
-  // Wrapper: aquí null y 0 se muestran como '—'.
-  const formatearMoneda = (n: number | string | null | undefined): string => {
-    const num = typeof n === 'string' ? parseFloat(n) : n;
-    return num == null || Number.isNaN(num) || num === 0 ? '—' : formatCOP(num);
-  };
 
   const mapEstadoUI = (e: EstadoPlanilla): 'BORRADOR' | 'APROBADO' =>
     e === 'BORRADOR' ? 'BORRADOR' : 'APROBADO';
 
   return (
-    <div className="space-y-8">
-      {/* Header con botones - mismo estilo que Mi Plantación */}
-      <div className="flex flex-wrap items-start justify-between mb-8 gap-4">
-        <div>
-          <h1 className="text-3xl sm:text-4xl font-bold text-foreground">Operaciones</h1>
-          <p className="text-muted-foreground mt-2">
-            Gestiona las labores diarias, planillas de cosecha y jornales
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          {/* El histórico de antes del sistema entra por archivo, no tarjeta
-              por tarjeta en el wizard (§13 API_OPERACIONES). */}
-          {hasPermiso('operaciones.aprobar') && (
-            <Button
-              variant="outline"
-              onClick={() => setAprobarRangoAbierto(true)}
-              className="gap-2"
-            >
-              <Check className="h-5 w-5" />
-              Aprobar por rango
+    <div className="space-y-6">
+      <PageHeader
+        title="Operaciones"
+        description="Planillas del día: jornales, cosecha y labores de la finca."
+        actions={
+          <>
+            {hasPermiso('operaciones.aprobar') && (
+              <Button variant="outline" onClick={() => setAprobarRangoAbierto(true)}>
+                <Check className="h-4 w-4" strokeWidth={2} />
+                Aprobar por rango
+              </Button>
+            )}
+            {/* El histórico de antes del sistema entra por archivo, no tarjeta
+                por tarjeta en el wizard (§13 API_OPERACIONES). */}
+            {hasPermiso('operaciones.importar') && (
+              <Button variant="outline" onClick={() => navigate('/operaciones/importar')}>
+                <Upload className="h-4 w-4" strokeWidth={2} />
+                Importar histórico
+              </Button>
+            )}
+            <Button onClick={() => navigate('/operaciones/planilla/nueva')}>
+              <Plus className="h-4 w-4" strokeWidth={2} />
+              Nueva planilla del día
             </Button>
+          </>
+        }
+      />
+      {/* El período manda sobre los indicadores y sobre la lista de abajo:
+          las dos leen el mismo rango de fechas. */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <h2>Indicadores del período</h2>
+        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+          <Label className="text-sm font-medium">Período:</Label>
+          <Select value={periodoKPI} onValueChange={(v) => setPeriodoKPI(v as PeriodoIndicadores)}>
+            <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="semanal">Semanal</SelectItem>
+              <SelectItem value="quincenal">Quincenal</SelectItem>
+              <SelectItem value="mensual">Mensual</SelectItem>
+              <SelectItem value="anual">Anual</SelectItem>
+              <SelectItem value="personalizado">Personalizado</SelectItem>
+            </SelectContent>
+          </Select>
+          {(periodoKPI === 'mensual' || periodoKPI === 'quincenal') && (
+            <SelectorMes valor={mesKPI} onChange={setMesKPI} />
           )}
-          {hasPermiso('operaciones.importar') && (
-            <Button
-              variant="outline"
-              onClick={() => navigate('/operaciones/importar')}
-              className="gap-2 border-2 border-primary text-primary hover:bg-primary/5"
-            >
-              <Upload className="h-5 w-5" />
-              Importar histórico
-            </Button>
+          {periodoKPI === 'anual' && (
+            <SelectorAnio valor={anioKPI} onChange={setAnioKPI} />
           )}
-          <Button
-            onClick={() => navigate('/operaciones/planilla/nueva')}
-            className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20"
-          >
-            <Plus className="h-5 w-5" />
-            Nueva Planilla del Día
+          {periodoKPI === 'quincenal' && (
+            <Select value={String(quincenaKPI)}
+              onValueChange={(v) => setQuincenaKPI(Number(v) as Quincena)}>
+              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">Del 1 al 15</SelectItem>
+                <SelectItem value="2">Del 16 al fin de mes</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+          {periodoKPI === 'personalizado' && (
+            <>
+              <Input type="date" aria-label="Fecha de inicio" className="w-40"
+                value={fechaInicioKPI} onChange={(e) => setFechaInicioKPI(e.target.value)} />
+              <Input type="date" aria-label="Fecha de fin" className="w-40"
+                value={fechaFinKPI} onChange={(e) => setFechaFinKPI(e.target.value)} />
+            </>
+          )}
+          <Button variant="ghost" size="sm" onClick={reiniciarPeriodo}
+            title="Vuelve al mes en curso">
+            <RotateCcw className="h-4 w-4" strokeWidth={2} />
+            Reiniciar
           </Button>
         </div>
       </div>
 
-      {/* KPIs */}
-      <div>
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <h2 className="text-2xl font-bold text-foreground">Indicadores Principales</h2>
-          <div className="flex flex-wrap items-center justify-end gap-3">
-            <Label className="text-sm font-medium">Período:</Label>
-            <Select value={periodoKPI} onValueChange={(v) => setPeriodoKPI(v as PeriodoIndicadores)}>
-              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="semanal">Semanal</SelectItem>
-                <SelectItem value="quincenal">Quincenal</SelectItem>
-                <SelectItem value="mensual">Mensual</SelectItem>
-                <SelectItem value="anual">Anual</SelectItem>
-                <SelectItem value="personalizado">Personalizado</SelectItem>
-              </SelectContent>
-            </Select>
-            {(periodoKPI === 'mensual' || periodoKPI === 'quincenal') && (
-              <SelectorMes valor={mesKPI} onChange={setMesKPI} />
-            )}
-            {periodoKPI === 'anual' && (
-              <SelectorAnio valor={anioKPI} onChange={setAnioKPI} />
-            )}
-            {periodoKPI === 'quincenal' && (
-              <Select value={String(quincenaKPI)}
-                onValueChange={(v) => setQuincenaKPI(Number(v) as Quincena)}>
-                <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1">Del 1 al 15</SelectItem>
-                  <SelectItem value="2">Del 16 al fin de mes</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-            {periodoKPI === 'personalizado' && (
-              <>
-                <Input type="date" value={fechaInicioKPI}
-                  onChange={(e) => setFechaInicioKPI(e.target.value)}
-                  className="w-40" placeholder="Fecha inicio" />
-                <Input type="date" value={fechaFinKPI}
-                  onChange={(e) => setFechaFinKPI(e.target.value)}
-                  className="w-40" placeholder="Fecha fin" />
-              </>
-            )}
-            <Button variant="ghost" size="sm" onClick={reiniciarPeriodo} className="gap-2"
-              title="Vuelve al mes en curso">
-              <RotateCcw className="h-4 w-4" /> Reiniciar
-            </Button>
-          </div>
-        </div>
+      <StatStrip
+        loading={cargandoIndicadores && !indicadores}
+        items={[
+          {
+            label: 'Planillas en borrador',
+            value: num(indicadores?.planillas_borrador ?? 0),
+            note: 'sin aprobar',
+          },
+          {
+            label: 'Planillas aprobadas',
+            value: num(indicadores?.planillas_aprobadas ?? 0),
+            note: 'cuentan como día operado',
+          },
+          {
+            label: 'Total de planillas',
+            value: num(indicadores?.total_planillas ?? 0),
+            note: 'en el rango elegido',
+          },
+        ]}
+      />
 
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          <Card className="glass-subtle border-border hover:shadow-lg transition duration-300">
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-muted-foreground mb-2">Planillas en Borrador</p>
-                  <div className="flex items-baseline gap-2">
-                    <p className="text-2xl sm:text-3xl font-bold text-foreground">
-                      {cargandoIndicadores ? '—' : (indicadores?.planillas_borrador ?? 0)}
-                    </p>
-                    <span className="text-sm text-muted-foreground">pendientes</span>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="glass-subtle border-border hover:shadow-lg transition duration-300">
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-muted-foreground mb-2">Planillas Aprobadas</p>
-                  <div className="flex items-baseline gap-2">
-                    <p className="text-2xl sm:text-3xl font-bold text-foreground">
-                      {cargandoIndicadores ? '—' : (indicadores?.planillas_aprobadas ?? 0)}
-                    </p>
-                    <span className="text-sm text-muted-foreground">completadas</span>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="glass-subtle border-border hover:shadow-lg transition duration-300">
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-muted-foreground mb-2">Total Planillas</p>
-                  <div className="flex items-baseline gap-2">
-                    <p className="text-2xl sm:text-3xl font-bold text-foreground">
-                      {cargandoIndicadores ? '—' : (indicadores?.total_planillas ?? 0)}
-                    </p>
-                    <span className="text-sm text-muted-foreground">registros</span>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      {/* Lista de planillas */}
-      <div>
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold mb-2">Planillas del período</h2>
-          <p className="text-muted-foreground">
+      <div className="space-y-4">
+        <div className="space-y-1">
+          <h2>Planillas del período</h2>
+          <p className="text-[15px] text-muted-foreground">
             {metaLista && desdeLista && hastaLista
-              ? `${metaLista.total} planilla(s) entre ${formatearFecha(desdeLista)} y ${formatearFecha(hastaLista)}`
-              : 'Registro de operaciones diarias por fecha'}
+              ? `${num(metaLista.total)} ${metaLista.total === 1 ? 'planilla' : 'planillas'} entre ${formatearFecha(desdeLista)} y ${formatearFecha(hastaLista)}`
+              : 'Registro de operaciones diarias por fecha.'}
           </p>
         </div>
 
         {cargandoLista ? (
-          <Card className="border-border">
-            <CardContent className="flex items-center justify-center py-16">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </CardContent>
+          <Card className="gap-0">
+            <TableSkeleton rows={6} columns={4} />
           </Card>
         ) : planillas.length === 0 ? (
-          <Card className="border-border">
-            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-                <FileText className="h-8 w-8 text-muted-foreground" />
-              </div>
-              <h3 className="mb-2 text-lg font-semibold">No hay planillas registradas</h3>
-              <p className="mb-4 text-sm text-muted-foreground">
-                Comienza creando tu primera planilla del día
-              </p>
-              <Button onClick={() => navigate('/operaciones/planilla/nueva')}>
-                <Plus className="mr-2 h-4 w-4" />
-                Crear Primera Planilla
-              </Button>
-            </CardContent>
+          <Card className="gap-0">
+            <EmptyState
+              title="No hay planillas en este período"
+              description="Cambia el período arriba o crea la planilla del día para empezar a registrar jornales y cosecha."
+              action={{
+                label: 'Crear planilla del día',
+                onClick: () => navigate('/operaciones/planilla/nueva'),
+              }}
+            />
           </Card>
         ) : (
-          <Card className="border-border">
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/30">
-                      <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Fecha</th>
-                      <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Estado</th>
-                      <th className="text-center p-4 font-semibold text-sm text-muted-foreground">Colaboradores</th>
-                      <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {planillas.map((planilla, index) => (
-                      <tr
-                        key={planilla.id}
-                        className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors ${
-                          index % 2 === 0 ? 'bg-background' : 'bg-muted/5'
-                        }`}
-                      >
-                        <td className="p-4">
-                          <span className="text-sm font-medium text-foreground">
-                            {formatearFecha(planilla.fecha)}
-                          </span>
-                        </td>
-                        <td className="p-4">
-                          <StatusBadge status={mapEstadoUI(planilla.estado)} />
-                        </td>
-                        <td className="p-4 text-center">
-                          {/* Desde el 2026-09-28 `colaboradores_count` ya
-                              incluye a los colaboradores con ausencia y
-                              deduplica: quien trabajó medio día y además tiene
-                              novedad cuenta una sola vez. Sumarle
-                              `ausencias_count` aquí lo contaba dos veces. */}
-                          <span
-                            className="inline-flex items-center justify-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary"
-                            title={`${planilla.ausencias_count ?? 0} con novedad registrada`}
+          <Card className="gap-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/60 text-[13px] text-muted-foreground">
+                  <tr>
+                    <th className="px-5 py-2.5 text-left font-semibold">Fecha</th>
+                    <th className="px-4 py-2.5 text-left font-semibold">Estado</th>
+                    <th className="px-4 py-2.5 text-right font-semibold">Colaboradores</th>
+                    <th className="px-5 py-2.5 text-right font-semibold">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {planillas.map((planilla) => (
+                    <tr key={planilla.id} className="transition-colors hover:bg-muted/40">
+                      <td className="px-5 py-3 font-semibold text-foreground">
+                        {formatearFecha(planilla.fecha)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={mapEstadoUI(planilla.estado)} />
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {/* Desde el 2026-09-28 `colaboradores_count` ya
+                            incluye a los colaboradores con ausencia y
+                            deduplica: quien trabajó medio día y además tiene
+                            novedad cuenta una sola vez. Sumarle
+                            `ausencias_count` aquí lo contaba dos veces. */}
+                        <span
+                          className="inline-flex min-w-7 items-center justify-center rounded-full bg-primary-soft px-2 py-0.5 text-xs font-semibold text-primary"
+                          title={`${planilla.ausencias_count ?? 0} con novedad registrada`}
+                        >
+                          {num(planilla.colaboradores_count ?? 0)}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Ver planilla"
+                            title="Ver planilla"
+                            className="text-muted-foreground"
+                            onClick={() => navigate(`/operaciones/planilla/${planilla.id}`)}
                           >
-                            {planilla.colaboradores_count ?? 0}
-                          </span>
-                        </td>
-                        <td className="p-4">
-                          <div className="flex gap-2 justify-end">
+                            <Eye className="h-4 w-4" strokeWidth={2} />
+                          </Button>
+                          {planilla.estado === 'BORRADOR' && (
                             <Button
-                              size="sm" variant="outline"
-                              className="hover:bg-primary/10 hover:text-primary hover:border-primary"
-                              title="Visualizar"
-                              onClick={() => navigate(`/operaciones/planilla/${planilla.id}`)}
+                              variant="ghost"
+                              size="icon"
+                              aria-label="Editar planilla"
+                              title="Editar planilla"
+                              className="text-muted-foreground"
+                              onClick={() => navigate(`/operaciones/planilla/editar/${planilla.id}`)}
+                              disabled={aprobandoId === planilla.id}
                             >
-                              <Eye className="h-4 w-4" />
+                              <Pencil className="h-4 w-4" strokeWidth={2} />
                             </Button>
-                            {planilla.estado === 'BORRADOR' && (
-                              <Button
-                                size="sm" variant="outline"
-                                className="hover:bg-primary/10 hover:text-primary hover:border-primary"
-                                title="Editar planilla"
-                                onClick={() =>
-                                  navigate(`/operaciones/planilla/editar/${planilla.id}`)
-                                }
-                                disabled={aprobandoId === planilla.id}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                            )}
-                            {planilla.estado === 'BORRADOR' && (
-                              <Button
-                                size="sm" variant="outline"
-                                className="hover:bg-success/10 hover:text-success hover:border-success/30"
-                                title="Aprobar planilla"
-                                onClick={() => aprobarPlanilla(planilla)}
-                                disabled={aprobandoId === planilla.id}
-                              >
-                                {aprobandoId === planilla.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Check className="h-4 w-4" />
-                                )}
-                              </Button>
-                            )}
-                            {/* §7.3 — Permiso aparte: `operaciones.aprobar` no
-                                lo incluye. Sin él no se pinta el botón. */}
-                            {planilla.estado === 'APROBADA' && hasPermiso('operaciones.desaprobar') && (
-                              <Button
-                                size="sm" variant="outline"
-                                className="hover:bg-amber-500/10 hover:text-amber-700 hover:border-amber-500/30"
-                                title="Devolver a borrador"
-                                onClick={() => setPlanillaADesaprobar(planilla)}
-                              >
-                                <RotateCcw className="h-4 w-4" />
-                              </Button>
-                            )}
+                          )}
+                          {planilla.estado === 'BORRADOR' && (
                             <Button
-                              size="sm" variant="outline"
-                              className="hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
-                              title="Eliminar"
-                              onClick={() => setPlanillaAEliminar(planilla)}
-                              disabled={planilla.estado === 'APROBADA' || aprobandoId === planilla.id}
+                              variant="ghost"
+                              size="icon"
+                              aria-label="Aprobar planilla"
+                              title="Aprobar planilla"
+                              className="text-muted-foreground hover:text-success"
+                              onClick={() => aprobarPlanilla(planilla)}
+                              disabled={aprobandoId === planilla.id}
                             >
-                              <Trash2 className="h-4 w-4" />
+                              {aprobandoId === planilla.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Check className="h-4 w-4" strokeWidth={2} />
+                              )}
                             </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {metaLista && metaLista.last_page > 1 && (
-                <div className="flex items-center justify-between gap-4 border-t border-border p-4">
-                  <p className="text-sm text-muted-foreground">
-                    Página {metaLista.current_page} de {metaLista.last_page}
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm" variant="outline"
-                      disabled={cargandoLista || metaLista.current_page <= 1}
-                      onClick={() => setPaginaLista((p) => p - 1)}
-                    >
-                      <ChevronLeft className="mr-1 h-4 w-4" />
-                      Anteriores
-                    </Button>
-                    <Button
-                      size="sm" variant="outline"
-                      disabled={cargandoLista || metaLista.current_page >= metaLista.last_page}
-                      onClick={() => setPaginaLista((p) => p + 1)}
-                    >
-                      Siguientes
-                      <ChevronRight className="ml-1 h-4 w-4" />
-                    </Button>
-                  </div>
+                          )}
+                          {/* §7.3 — Permiso aparte: `operaciones.aprobar` no
+                              lo incluye. Sin él no se pinta el botón. */}
+                          {planilla.estado === 'APROBADA' && hasPermiso('operaciones.desaprobar') && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label="Devolver a borrador"
+                              title="Devolver a borrador"
+                              className="text-muted-foreground hover:text-warning"
+                              onClick={() => setPlanillaADesaprobar(planilla)}
+                            >
+                              <RotateCcw className="h-4 w-4" strokeWidth={2} />
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Eliminar planilla"
+                            title={planilla.estado === 'APROBADA'
+                              ? 'Una planilla aprobada no se elimina'
+                              : 'Eliminar planilla'}
+                            className="text-muted-foreground hover:text-destructive"
+                            onClick={() => setPlanillaAEliminar(planilla)}
+                            disabled={planilla.estado === 'APROBADA' || aprobandoId === planilla.id}
+                          >
+                            <Trash2 className="h-4 w-4" strokeWidth={2} />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {metaLista && metaLista.last_page > 1 && (
+              <div className="flex items-center justify-between gap-4 border-t border-border px-5 py-3">
+                <p className="text-sm text-muted-foreground">
+                  Página {metaLista.current_page} de {metaLista.last_page}
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={cargandoLista || metaLista.current_page <= 1}
+                    onClick={() => setPaginaLista((p) => p - 1)}
+                  >
+                    <ChevronLeft className="h-4 w-4" strokeWidth={2} />
+                    Anteriores
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={cargandoLista || metaLista.current_page >= metaLista.last_page}
+                    onClick={() => setPaginaLista((p) => p + 1)}
+                  >
+                    Siguientes
+                    <ChevronRight className="h-4 w-4" strokeWidth={2} />
+                  </Button>
                 </div>
-              )}
-            </CardContent>
+              </div>
+            )}
           </Card>
         )}
       </div>
@@ -656,7 +605,7 @@ export default function Operaciones() {
       <AlertDialog open={alertaPlanillaVacia} onOpenChange={setAlertaPlanillaVacia}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-amber-700">
+            <AlertDialogTitle className="flex items-center gap-2 text-warning">
               <AlertCircle className="h-5 w-5" />
               La planilla está vacía
             </AlertDialogTitle>
@@ -682,7 +631,7 @@ export default function Operaciones() {
                   await ejecutarAprobar(planillaPendiente);
                 }
               }}
-              className="bg-amber-600 hover:bg-amber-700"
+              className="bg-warning text-warning-foreground hover:bg-warning/90"
             >
               Aprobar de todas formas
             </AlertDialogAction>
@@ -699,7 +648,7 @@ export default function Operaciones() {
       >
         <AlertDialogContent className="max-w-lg">
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-amber-700">
+            <AlertDialogTitle className="flex items-center gap-2 text-warning">
               <AlertCircle className="h-5 w-5" />
               Faltan colaboradores por registrar
             </AlertDialogTitle>
@@ -767,7 +716,7 @@ export default function Operaciones() {
                   await ejecutarAprobar(planillaPendiente);
                 }
               }}
-              className="bg-amber-600 hover:bg-amber-700"
+              className="bg-warning text-warning-foreground hover:bg-warning/90"
             >
               Aprobar de todas formas
             </AlertDialogAction>

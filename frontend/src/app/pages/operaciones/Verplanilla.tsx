@@ -9,14 +9,17 @@
  * Lee el mismo `GET /operaciones/{id}` de siempre; el wizard sigue siendo quien
  * crea y edita, y no se tocó.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
+import PageHeader from '../../components/common/PageHeader';
+import EmptyState from '../../components/common/EmptyState';
+import { num } from '../../lib/formato';
 import {
-  ArrowLeft, CheckCircle, ClipboardList, Clock, CloudRain, Download,
-  Leaf, Loader2, Timer, User, Users, Wrench,
+  CheckCircle, ClipboardList, Clock, CloudRain, Download,
+  Leaf, Loader2, Timer, User, Users, Wrench, type LucideIcon,
 } from 'lucide-react';
 import { operacionesApi, type PlanillaDetalle, type Resumen } from '../../../api/operaciones';
 import {
@@ -57,17 +60,14 @@ function FilasDeLabor({ grupo }: { grupo: GrupoLaborPalma }) {
   return (
     <>
       {grupo.trabajos.map((t, i) => (
-        <tr
-          key={t.id}
-          className={`border-b border-border last:border-0 ${i % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}
-        >
+        <tr key={t.id}>
           {i === 0 && (
             <td rowSpan={grupo.trabajos.length} className="px-5 py-2.5 align-top">
               <div className="flex items-center gap-1.5">
-                <Badge className="bg-primary/10 text-primary border-primary/20 font-semibold text-xs">
+                <Badge variant="outline" className="border-primary/20 bg-primary-soft text-xs font-semibold text-primary">
                   {grupo.labor}
                 </Badge>
-                <span className="text-xs text-muted-foreground tabular-nums">
+                <span className="text-xs tabular-nums text-muted-foreground">
                   {grupo.trabajos.length}
                 </span>
               </div>
@@ -80,7 +80,7 @@ function FilasDeLabor({ grupo }: { grupo: GrupoLaborPalma }) {
         </tr>
       ))}
       {grupo.total && (
-        <tr className="border-b border-border bg-muted/10 last:border-0">
+        <tr className="bg-muted/40">
           <td className="px-5 py-2 text-xs font-semibold text-muted-foreground" colSpan={4}>
             Total {grupo.labor}
           </td>
@@ -91,204 +91,196 @@ function FilasDeLabor({ grupo }: { grupo: GrupoLaborPalma }) {
   );
 }
 
-function LaboresDePalma({ grupos }: { grupos: GrupoLaborPalma[] }) {
+/** Clases de la cabecera de tabla del sistema visual. */
+const CABECERA = 'bg-muted/60 text-[13px] text-muted-foreground';
+
+/** Tarjeta de sección: el título con su ícono y debajo la tabla o el texto. */
+function Seccion({ icono: Icono, titulo, children }: {
+  icono: LucideIcon;
+  titulo: string;
+  children: ReactNode;
+}) {
   return (
-    <Card className="border-border">
-      <CardHeader className="border-b border-border py-3 px-5">
-        <CardTitle className="text-sm font-semibold flex items-center gap-2">
-          <Leaf className="h-4 w-4 text-primary" />
-          Labores de Palma
+    <Card className="gap-0">
+      <CardHeader className="border-b border-border px-5 py-3">
+        <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+          <Icono className="h-4 w-4 text-primary" strokeWidth={2} />
+          {titulo}
         </CardTitle>
       </CardHeader>
-      <CardContent className="p-0">
-        {grupos.length === 0 ? (
-          <p className="px-5 py-6 text-sm text-muted-foreground">
-            Ese día no se registró ninguna labor de palma.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[680px] text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/30">
-                  <th className="text-left px-5 py-2.5 font-semibold text-muted-foreground text-xs">Labor</th>
-                  <th className="text-left px-5 py-2.5 font-semibold text-muted-foreground text-xs">Colaboradores</th>
-                  <th className="text-left px-5 py-2.5 font-semibold text-muted-foreground text-xs">Lotes</th>
-                  <th className="text-left px-5 py-2.5 font-semibold text-muted-foreground text-xs">Sublotes</th>
-                  <th className="text-left px-5 py-2.5 font-semibold text-muted-foreground text-xs">Detalle</th>
-                </tr>
-              </thead>
-              <tbody>
-                {grupos.map((g) => <FilasDeLabor key={g.clave} grupo={g} />)}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </CardContent>
+      <CardContent className="p-0">{children}</CardContent>
     </Card>
+  );
+}
+
+function LaboresDePalma({ grupos }: { grupos: GrupoLaborPalma[] }) {
+  return (
+    <Seccion icono={Leaf} titulo="Labores de palma">
+      {grupos.length === 0 ? (
+        <p className="px-5 py-6 text-sm text-muted-foreground">
+          Ese día no se registró ninguna labor de palma.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[680px] text-sm">
+            <thead className={CABECERA}>
+              <tr>
+                <th className="px-5 py-2.5 text-left font-semibold">Labor</th>
+                <th className="px-5 py-2.5 text-left font-semibold">Colaboradores</th>
+                <th className="px-5 py-2.5 text-left font-semibold">Lotes</th>
+                <th className="px-5 py-2.5 text-left font-semibold">Sublotes</th>
+                <th className="px-5 py-2.5 text-left font-semibold">Detalle</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {grupos.map((g) => <FilasDeLabor key={g.clave} grupo={g} />)}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Seccion>
   );
 }
 
 function LaboresDeFinca({ resumen }: { resumen: ResumenPlanilla }) {
   return (
-    <Card className="border-border">
-      <CardHeader className="border-b border-border py-3 px-5">
-        <CardTitle className="text-sm font-semibold flex items-center gap-2">
-          <Wrench className="h-4 w-4 text-primary" />
-          Labores de Finca
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="p-0">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border bg-muted/20">
-              <th className="text-left px-5 py-2 font-medium text-muted-foreground text-xs">Colaborador</th>
-              <th className="text-left px-5 py-2 font-medium text-muted-foreground text-xs">Labor</th>
+    <Seccion icono={Wrench} titulo="Labores de finca">
+      <table className="w-full text-sm">
+        <thead className={CABECERA}>
+          <tr>
+            <th className="px-5 py-2.5 text-left font-semibold">Colaborador</th>
+            <th className="px-5 py-2.5 text-left font-semibold">Labor</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {resumen.laboresFinca.map((f) => (
+            <tr key={f.id}>
+              <td className="px-5 py-2.5 font-medium">{f.colaborador}</td>
+              <td className="px-5 py-2.5 text-muted-foreground">
+                {f.labor}
+                {f.ubicacion && <span className="text-muted-foreground/70"> · {f.ubicacion}</span>}
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {resumen.laboresFinca.map((f) => (
-              <tr key={f.id} className="border-b border-border last:border-0">
-                <td className="px-5 py-2 font-medium text-xs">{f.colaborador}</td>
-                <td className="px-5 py-2 text-xs text-muted-foreground">
-                  {f.labor}
-                  {f.ubicacion && <span className="text-muted-foreground/70"> · {f.ubicacion}</span>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </CardContent>
-    </Card>
+          ))}
+        </tbody>
+      </table>
+    </Seccion>
   );
 }
 
 const TONO_ESTADO: Record<string, string> = {
-  Aprobada: 'border-success/30 bg-success/10 text-success',
-  Liquidada: 'border-primary/30 bg-primary/10 text-primary',
-  Rechazada: 'border-destructive/30 bg-destructive/10 text-destructive',
+  Aprobada: 'border-success/30 bg-success-soft text-success',
+  Liquidada: 'border-primary/30 bg-primary-soft text-primary',
+  Rechazada: 'border-destructive/30 bg-destructive-soft text-destructive',
 };
 
 function HorasExtra({ resumen }: { resumen: ResumenPlanilla }) {
   return (
-    <Card className="border-border">
-      <CardHeader className="border-b border-border py-3 px-5">
-        <CardTitle className="text-sm font-semibold flex items-center gap-2">
-          <Timer className="h-4 w-4 text-primary" />
-          Horas Extra
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted/20">
-                <th className="text-left px-5 py-2 font-medium text-muted-foreground text-xs">Colaborador</th>
-                <th className="text-left px-5 py-2 font-medium text-muted-foreground text-xs">Tipo</th>
-                <th className="text-right px-5 py-2 font-medium text-muted-foreground text-xs">Horas</th>
-                <th className="text-left px-5 py-2 font-medium text-muted-foreground text-xs">Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {resumen.horasExtra.map((h) => (
-                <tr key={h.id} className="border-b border-border last:border-0">
-                  <td className="px-5 py-2 font-medium text-xs">{h.colaborador}</td>
-                  <td className="px-5 py-2 text-xs text-muted-foreground">{h.tipo}</td>
-                  <td className="px-5 py-2 text-right text-xs tabular-nums">{h.horas}</td>
-                  <td className="px-5 py-2">
-                    <Badge
-                      variant="outline"
-                      className={`text-xs font-normal ${TONO_ESTADO[h.estado] ?? 'text-muted-foreground'}`}
-                    >
-                      {h.estado}
-                    </Badge>
-                  </td>
-                </tr>
-              ))}
-              <tr className="border-t border-border bg-muted/10">
-                <td colSpan={2} className="px-5 py-2 text-xs font-semibold text-right text-muted-foreground">
-                  Total de horas:
+    <Seccion icono={Timer} titulo="Horas extra">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className={CABECERA}>
+            <tr>
+              <th className="px-5 py-2.5 text-left font-semibold">Colaborador</th>
+              <th className="px-5 py-2.5 text-left font-semibold">Tipo</th>
+              <th className="px-5 py-2.5 text-right font-semibold">Horas</th>
+              <th className="px-5 py-2.5 text-left font-semibold">Estado</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {resumen.horasExtra.map((h) => (
+              <tr key={h.id}>
+                <td className="px-5 py-2.5 font-medium">{h.colaborador}</td>
+                <td className="px-5 py-2.5 text-muted-foreground">{h.tipo}</td>
+                <td className="px-5 py-2.5 text-right tabular-nums">{h.horas}</td>
+                <td className="px-5 py-2.5">
+                  <Badge
+                    variant="outline"
+                    className={`text-xs font-normal ${TONO_ESTADO[h.estado] ?? 'text-muted-foreground'}`}
+                  >
+                    {h.estado}
+                  </Badge>
                 </td>
-                <td className="px-5 py-2 text-right text-sm font-bold tabular-nums">
-                  {resumen.horasExtraSumadas}
-                </td>
-                <td />
               </tr>
-            </tbody>
-          </table>
-        </div>
-      </CardContent>
-    </Card>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t border-border bg-muted/40">
+              <td colSpan={2} className="px-5 py-2.5 text-right text-xs font-semibold text-muted-foreground">
+                Total de horas:
+              </td>
+              <td className="px-5 py-2.5 text-right font-bold tabular-nums">
+                {resumen.horasExtraSumadas}
+              </td>
+              <td />
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </Seccion>
   );
 }
 
 function Novedades({ observaciones, ausentes }: { observaciones: string; ausentes: string[] }) {
   return (
-    <Card className="border-border">
-      <CardHeader className="border-b border-border py-3 px-5">
-        <CardTitle className="text-sm font-semibold flex items-center gap-2">
-          <ClipboardList className="h-4 w-4 text-primary" />
-          Novedades
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="p-5 space-y-4">
+    <Seccion icono={ClipboardList} titulo="Novedades">
+      <div className="space-y-4 p-5">
         {observaciones && (
           <div>
-            <p className="text-xs font-medium text-muted-foreground mb-1">Observaciones</p>
+            <p className="mb-1 text-[13px] font-medium text-muted-foreground">Observaciones</p>
             <p className="text-sm">{observaciones}</p>
           </div>
         )}
         {ausentes.length > 0 && (
           <div>
-            <p className="text-xs font-medium text-muted-foreground mb-1">Ausentes</p>
+            <p className="mb-1 text-[13px] font-medium text-muted-foreground">Ausentes</p>
             <div className="space-y-0.5">
               {ausentes.map((a) => <p key={a} className="text-sm">{a}</p>)}
             </div>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </Seccion>
   );
 }
 
 /** Las dos filas de arriba: los datos del día y lo que se logró. */
 function Encabezado({ resumen }: { resumen: ResumenPlanilla }) {
   const datos = [
-    { icon: <User className="h-3.5 w-3.5" />, label: 'Elaborado por', value: resumen.elaboradoPor },
-    { icon: <Clock className="h-3.5 w-3.5" />, label: 'Inicio labores', value: resumen.inicioLabores },
-    { icon: <CloudRain className="h-3.5 w-3.5" />, label: 'Lluvia', value: resumen.lluvia },
-    { icon: <Users className="h-3.5 w-3.5" />, label: 'Colaboradores cosecha', value: `${resumen.colaboradoresCosecha}` },
+    { icon: <User className="h-3.5 w-3.5" strokeWidth={2} />, label: 'Elaborado por', value: resumen.elaboradoPor },
+    { icon: <Clock className="h-3.5 w-3.5" strokeWidth={2} />, label: 'Inicio labores', value: resumen.inicioLabores },
+    { icon: <CloudRain className="h-3.5 w-3.5" strokeWidth={2} />, label: 'Lluvia', value: resumen.lluvia },
+    { icon: <Users className="h-3.5 w-3.5" strokeWidth={2} />, label: 'Colaboradores cosecha', value: num(resumen.colaboradoresCosecha) },
   ];
 
   const metricas = [
-    { label: 'Palmas plateadas', value: resumen.palmasPlateadas.toLocaleString('es-CO') },
-    { label: 'Palmas podadas', value: resumen.palmasPodadas.toLocaleString('es-CO') },
-    { label: 'Palmas fertilizadas', value: resumen.palmasFertilizadas.toLocaleString('es-CO') },
-    { label: 'Horas extra', value: `${resumen.horasExtraSumadas}` },
+    { label: 'Palmas plateadas', value: num(resumen.palmasPlateadas) },
+    { label: 'Palmas podadas', value: num(resumen.palmasPodadas) },
+    { label: 'Palmas fertilizadas', value: num(resumen.palmasFertilizadas) },
+    { label: 'Horas extra', value: num(resumen.horasExtraSumadas) },
   ];
 
   return (
-    <Card className="border-border">
-      <CardContent className="p-0">
-        <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-border border-b border-border">
-          {datos.map((item) => (
-            <div key={item.label} className="px-5 py-3.5 min-w-0">
-              <div className="flex items-center gap-1.5 text-muted-foreground mb-0.5">
-                {item.icon}
-                <span className="text-xs">{item.label}</span>
-              </div>
-              <p className="text-sm font-semibold text-foreground truncate">{item.value}</p>
+    <Card className="gap-0">
+      <div className="grid grid-cols-2 divide-x divide-border border-b border-border sm:grid-cols-4">
+        {datos.map((item) => (
+          <div key={item.label} className="min-w-0 px-5 py-3.5">
+            <div className="mb-0.5 flex items-center gap-1.5 text-muted-foreground">
+              {item.icon}
+              <span className="text-xs">{item.label}</span>
             </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-border bg-muted/20">
-          {metricas.map((m) => (
-            <div key={m.label} className="px-5 py-3 min-w-0">
-              <p className="text-xs text-muted-foreground mb-0.5">{m.label}</p>
-              <p className="text-base font-bold text-foreground truncate">{m.value}</p>
-            </div>
-          ))}
-        </div>
-      </CardContent>
+            <p className="truncate text-sm font-semibold text-foreground">{item.value}</p>
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-2 divide-x divide-border bg-muted/40 sm:grid-cols-4">
+        {metricas.map((m) => (
+          <div key={m.label} className="min-w-0 px-5 py-3">
+            <p className="mb-0.5 text-xs text-muted-foreground">{m.label}</p>
+            <p className="truncate text-base font-bold text-foreground">{m.value}</p>
+          </div>
+        ))}
+      </div>
     </Card>
   );
 }
@@ -330,18 +322,26 @@ export default function Verplanilla() {
 
   if (cargando) {
     return (
-      <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin" />
-        Cargando la planilla...
+      <div className="mx-auto max-w-4xl">
+        <Card className="gap-0">
+          <div className="flex items-center justify-center gap-2 py-20 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Cargando la planilla…
+          </div>
+        </Card>
       </div>
     );
   }
 
   if (error || !planilla) {
     return (
-      <div className="space-y-4 py-20 text-center">
-        <p className="text-muted-foreground">{error ?? 'Planilla no encontrada.'}</p>
-        <Button variant="outline" onClick={() => navigate('/operaciones')}>Volver a Operaciones</Button>
+      <div className="mx-auto max-w-4xl">
+        <Card className="gap-0">
+          <EmptyState
+            title="No se pudo abrir la planilla"
+            description={error ?? 'La planilla no existe o ya fue eliminada.'}
+            action={{ label: 'Volver a operaciones', onClick: () => navigate('/operaciones') }}
+          />
+        </Card>
       </div>
     );
   }
@@ -372,41 +372,31 @@ export default function Verplanilla() {
   const hayHorasExtra = datos.horasExtra.length > 0;
 
   return (
-    <div className="container mx-auto py-6 px-4 max-w-4xl space-y-5">
+    <div className="mx-auto max-w-4xl space-y-6">
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate('/operaciones')} className="gap-1.5 -ml-2">
-            <ArrowLeft className="h-4 w-4" />
-            Volver
+      <PageHeader
+        backTo="/operaciones"
+        eyebrow={<span className="capitalize">{fechaLarga}</span>}
+        title={
+          <span className="flex flex-wrap items-center gap-2">
+            Planilla del día
+            {aprobada ? (
+              <Badge variant="outline" className="border-success/30 bg-success-soft text-success">
+                <CheckCircle className="h-3.5 w-3.5" strokeWidth={2} />
+                Aprobada
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-muted-foreground">Borrador</Badge>
+            )}
+          </span>
+        }
+        actions={
+          <Button variant="outline" disabled={descargando} onClick={() => void descargar()}>
+            <Download className="h-4 w-4" strokeWidth={2} />
+            {descargando ? 'Generando...' : 'Descargar PDF'}
           </Button>
-          <div className="h-5 w-px bg-border" />
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-primary">Planilla del Día</h1>
-              {aprobada ? (
-                <Badge className="bg-success/15 text-success border-success/30 text-xs">
-                  <CheckCircle className="h-3 w-3 mr-1" />
-                  Aprobada
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="text-xs text-muted-foreground">Borrador</Badge>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground capitalize">{fechaLarga}</p>
-          </div>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5"
-          disabled={descargando}
-          onClick={() => void descargar()}
-        >
-          <Download className="h-3.5 w-3.5" />
-          {descargando ? 'Generando...' : 'Descargar'}
-        </Button>
-      </div>
+        }
+      />
 
       <Encabezado resumen={datos} />
 
@@ -416,7 +406,7 @@ export default function Verplanilla() {
 
       {/* Dos columnas solo cuando hay dos tarjetas: una sola a media página se
           veía recortada contra el ancho de las labores de arriba. */}
-      <div className={`grid gap-5 ${hayFinca && hayNovedades ? 'sm:grid-cols-2' : ''}`}>
+      <div className={`grid gap-6 ${hayFinca && hayNovedades ? 'sm:grid-cols-2' : ''}`}>
         {hayFinca && <LaboresDeFinca resumen={datos} />}
         {hayNovedades && (
           <Novedades observaciones={planilla.observaciones ?? ''} ausentes={datos.ausentes} />

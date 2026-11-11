@@ -41,12 +41,12 @@ export function EtapaInfoGeneral({
   setInicioLabores,
 }: Props) {
   return (
-    <Card className="border-border">
+    <Card className="gap-4">
       <CardHeader>
         <div className="flex items-center gap-3">
-          <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-            <FileText className="h-6 w-6 text-primary" />
-          </div>
+          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-soft text-primary">
+            <FileText className="h-5 w-5" strokeWidth={2} />
+          </span>
           <div>
             <CardTitle>Información General</CardTitle>
             <p className="text-sm text-muted-foreground">

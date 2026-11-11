@@ -60,12 +60,12 @@ export function EtapaHorasExtras({
       {/* Formulario de edición */}
       {horaExtraEnEdicion && (
         <div ref={setFormRef('horaExtra')} className="scroll-mt-24">
-        <Card className="border-primary/50 shadow-lg">
+        <Card className="gap-4 border-primary/40">
           <CardHeader>
             <div className="flex items-center gap-3">
-              <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                <Clock className="h-6 w-6 text-primary" />
-              </div>
+              <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                <Clock className="h-5 w-5" strokeWidth={2} />
+              </span>
               <div>
                 <CardTitle>Horas Extras</CardTitle>
                 <p className="text-sm text-muted-foreground">
@@ -99,12 +99,12 @@ export function EtapaHorasExtras({
                         <SelectItem key={col.id} value={col.id} disabled={bloqueado}>
                           {col.nombres} {col.apellidos}
                           {col.enVacaciones && (
-                            <span className="ml-2 text-xs text-amber-700 dark:text-amber-500">
+                            <span className="ml-2 text-xs text-warning">
                               {etiquetaVacaciones(col.enVacaciones)}
                             </span>
                           )}
                           {!col.enVacaciones && col.novedadVigente && (
-                            <span className="ml-2 text-xs text-amber-700 dark:text-amber-500">
+                            <span className="ml-2 text-xs text-warning">
                               {etiquetaNovedad(col.novedadVigente)}
                             </span>
                           )}

@@ -76,7 +76,7 @@ function FilaPlanilla({ planilla }: { planilla: PlanillaDelCargue }) {
       <div className="flex shrink-0 items-center gap-2">
         <Lluvia planilla={planilla} />
         {faltantes > 0 && (
-          <span className="text-xs text-amber-700 dark:text-amber-400">
+          <span className="text-xs text-warning">
             {faltantes} sin registrar
           </span>
         )}

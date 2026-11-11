@@ -53,7 +53,7 @@ export function EtapaLaboresFinca({
   );
 
   return (
-    <Card className="border-border">
+    <Card className="gap-4">
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
@@ -210,11 +210,11 @@ export function EtapaLaboresFinca({
                       {/* PR-L8: una fila ya guardada también avisa, porque es
                           la que hay que revisar o quitar. */}
                       {personaSel?.enVacaciones ? (
-                        <span className="ml-2 inline-block align-middle text-[10px] px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-200 font-medium">
+                        <span className="ml-2 inline-block align-middle text-[10px] px-1.5 py-0.5 rounded-md bg-warning-soft text-warning border border-warning/30 font-medium">
                           {etiquetaVacaciones(personaSel.enVacaciones)}
                         </span>
                       ) : personaSel?.novedadVigente ? (
-                        <span className="ml-2 inline-block align-middle text-[10px] px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-200 font-medium">
+                        <span className="ml-2 inline-block align-middle text-[10px] px-1.5 py-0.5 rounded-md bg-warning-soft text-warning border border-warning/30 font-medium">
                           {etiquetaNovedad(personaSel.novedadVigente)}
                         </span>
                       ) : null}

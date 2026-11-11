@@ -131,8 +131,8 @@ export function AprobarRangoDialog({ abierto, onCerrar, onAprobado }: Props) {
           </label>
 
           {conflicto && (
-            <div className="space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-              <p className="flex items-start gap-2 text-amber-900 dark:text-amber-200">
+            <div className="space-y-2 rounded-lg border border-warning/30 bg-warning-soft p-3 text-sm">
+              <p className="flex items-start gap-2 text-warning">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 {conflicto}
               </p>

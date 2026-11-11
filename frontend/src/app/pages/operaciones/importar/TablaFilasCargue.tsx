@@ -100,7 +100,7 @@ function CeldaCosecha({ fila }: { fila: FilaCosecha }) {
       <td className="px-3 py-2 text-right align-top">
         <p className="text-sm font-semibold">{fmtPesos(fila.calculo?.valor_total)}</p>
         {fila.liquidable?.ok === false && (
-          <p className="text-xs text-amber-700 dark:text-amber-400">no liquidable</p>
+          <p className="text-xs text-warning">no liquidable</p>
         )}
       </td>
     </>
