@@ -28,6 +28,7 @@ import { formatFecha, formatFechaHora, formatHora } from '../../utils/fecha';
 import { useAuth } from '../../contexts/AuthContext';
 import { RevertirEstadoDialog } from '../../components/common/RevertirEstadoDialog';
 import { reversionApi } from '../../../api/reversionEstados';
+import PageHeader from '../../components/common/PageHeader';
 
 // ─── tipos UI (3 estados compactos) ───────────────────────────────────────────
 export type EstadoViaje = 'Creado' | 'En Validación' | 'Finalizado';
@@ -719,18 +720,13 @@ export default function DetalleViaje() {
   // ── Vista Resumen (por defecto) ────────────────────────────────────────────
   if (vistaResumen) {
     return (
-      <div className="container mx-auto py-8 px-4 max-w-7xl">
-        {/* Header */}
-        <div className="mb-8">
-          <Button variant="ghost" size="sm" onClick={() => navigate('/viajes')} className="mb-4 gap-2">
-            <ArrowLeft className="h-4 w-4" />
-            Volver a Viajes
-          </Button>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl sm:text-3xl font-bold text-primary">
-                {modoGestion ? 'Editar Viaje' : 'Detalle del Viaje'}
-              </h1>
+      <div className="space-y-6">
+        <PageHeader
+          backTo="/viajes"
+          eyebrow="Viajes"
+          title={
+            <span className="flex flex-wrap items-center gap-2">
+              {modoGestion ? 'Editar viaje' : 'Detalle del viaje'}
               <Badge variant="outline" className={badgeClass}>{estadoActual}</Badge>
               {/*
                 * §15 — un viaje que entró por archivo. Importa decirlo aquí
@@ -742,10 +738,10 @@ export default function DetalleViaje() {
                   Importado
                 </Badge>
               )}
-            </div>
-            <p className="text-muted-foreground mt-1 text-sm">{remisionId}</p>
-          </div>
-        </div>
+            </span>
+          }
+          description={remisionId}
+        />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Columna principal — a ancho completo mientras se edita */}
@@ -902,27 +898,27 @@ export default function DetalleViaje() {
               </CardHeader>
               <CardContent className="p-6 space-y-5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="rounded-xl bg-primary/5 p-4 text-center">
-                    <p className="text-2xl sm:text-3xl font-bold text-primary">{numFmt(totalGajos)}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Gajos Totales</p>
+                  <div className="rounded-xl bg-primary-soft p-4 text-center">
+                    <p className="text-3xl font-bold tabular-nums text-primary">{numFmt(totalGajos)}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Gajos totales</p>
                   </div>
-                  <div className="rounded-xl bg-primary/5 p-4 text-center">
-                    <p className="text-2xl sm:text-3xl font-bold text-primary">{lotesSummary.length}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Lotes</p>
+                  <div className="rounded-xl bg-primary-soft p-4 text-center">
+                    <p className="text-3xl font-bold tabular-nums text-primary">{lotesSummary.length}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Lotes</p>
                   </div>
                 </div>
 
                 {filasCosecha.length > 0 ? (
                   <div className="rounded-lg border border-border overflow-x-auto">
                     <table className="w-full text-sm">
-                      <thead>
-                        <tr className="bg-primary/5 border-b border-border">
-                          <th className="text-left px-4 py-2.5 font-semibold text-foreground">Fecha Planilla</th>
-                          <th className="text-left px-4 py-2.5 font-semibold text-foreground">Colaborador(es)</th>
-                          <th className="text-left px-4 py-2.5 font-semibold text-foreground">Lote</th>
-                          <th className="text-left px-4 py-2.5 font-semibold text-foreground">Sublote</th>
-                          <th className="text-right px-4 py-2.5 font-semibold text-foreground">Gajos</th>
-                          <th className="text-right px-4 py-2.5 font-semibold text-foreground">Peso (kg)</th>
+                      <thead className="bg-muted/60 text-[13px] text-muted-foreground">
+                        <tr>
+                          <th className="px-4 py-2.5 text-left font-semibold">Fecha planilla</th>
+                          <th className="px-4 py-2.5 text-left font-semibold">Colaboradores</th>
+                          <th className="px-4 py-2.5 text-left font-semibold">Lote</th>
+                          <th className="px-4 py-2.5 text-left font-semibold">Sublote</th>
+                          <th className="px-4 py-2.5 text-right font-semibold">Gajos</th>
+                          <th className="px-4 py-2.5 text-right font-semibold">Peso (kg)</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1143,21 +1139,18 @@ export default function DetalleViaje() {
 
   // ── Vista Gestión (wizard de etapas) ───────────────────────────────────────
   return (
-    <div className="container mx-auto py-8 px-4 max-w-7xl">
-      {/* Header */}
-      <div className="mb-8">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/viajes')} className="mb-4 gap-2">
-          <ArrowLeft className="h-4 w-4" />
-          Volver a Viajes
-        </Button>
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl sm:text-3xl font-bold text-primary">Carga Remisión</h1>
-          <Badge variant="outline" className={badgeClass}>
-            {estadoActual}
-          </Badge>
-        </div>
-        <p className="text-muted-foreground mt-1 text-sm">{remisionId}</p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        backTo="/viajes"
+        eyebrow="Viajes"
+        title={
+          <span className="flex flex-wrap items-center gap-2">
+            Carga de la remisión
+            <Badge variant="outline" className={badgeClass}>{estadoActual}</Badge>
+          </span>
+        }
+        description={remisionId}
+      />
 
       {/* Una sola columna a ancho completo: la carga de la remisión no
           convive con el timeline ni con las acciones del detalle. */}

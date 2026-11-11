@@ -20,8 +20,9 @@ import { Badge } from '../../components/ui/badge';
 import { Progress } from '../../components/ui/progress';
 import {
   Loader2, CheckCircle2, AlertTriangle, XCircle, Upload, Download,
-  FileSpreadsheet, X, FileText, ArrowLeft,
+  X, FileText, ArrowLeft,
 } from 'lucide-react';
+import PageHeader from '../../components/common/PageHeader';
 import {
   colaboradoresApi,
   ESTADOS_IMPORTACION_FINALES,
@@ -296,32 +297,21 @@ export default function ImportarColaboradores() {
     <div className="space-y-6">
       {/* Mientras sube no se puede salir: cortar a mitad dejaría parte de los
           colaboradores creados y parte no, sin forma de saber cuáles. */}
-      <Button
-        variant="ghost"
-        size="sm"
-        disabled={enProgreso}
-        onClick={cerrar}
-        className="gap-2"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Volver a Colaboradores
-      </Button>
-
-      <div className="flex items-center gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-          <FileSpreadsheet className="h-6 w-6 text-primary" />
-        </div>
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-primary">Importar colaboradores</h1>
-          <p className="mt-0.5 text-muted-foreground">
-            {fase === 'intro'
-              ? 'Cargue un archivo de Excel con la información de los colaboradores'
-              : file
-                ? <>Archivo: <strong>{file.name}</strong></>
-                : 'Seleccione un archivo de Excel para empezar'}
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Colaboradores"
+        title="Importar colaboradores"
+        description={fase === 'intro'
+          ? 'Cargue un archivo de Excel con la información de los colaboradores.'
+          : file
+            ? <>Archivo: <strong className="text-foreground">{file.name}</strong></>
+            : 'Seleccione un archivo de Excel para empezar.'}
+        actions={
+          <Button variant="outline" disabled={enProgreso} onClick={cerrar}>
+            <ArrowLeft className="h-4 w-4" strokeWidth={2} />
+            Volver a colaboradores
+          </Button>
+        }
+      />
 
       <Card className="border-border">
         <CardContent className="flex flex-col p-0">
@@ -892,7 +882,7 @@ function Stat({
       <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
         {Icon && <Icon className="h-4 w-4" />} {label}
       </div>
-      <p className={`text-2xl font-bold ${valueColor}`}>{value}</p>
+      <p className={`text-2xl font-bold tabular-nums ${valueColor}`}>{value}</p>
     </div>
   );
 }

@@ -13,6 +13,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { Button } from '../../components/ui/button';
+import PageHeader from '../../components/common/PageHeader';
 import { Card, CardContent } from '../../components/ui/card';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -156,23 +157,19 @@ export default function AjustesCosecha() {
   const viajeSeleccionado = viajesDisponibles.find((v) => String(v.id) === viajeDestino);
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-7xl space-y-8">
-      {/* Header */}
-      <div className="space-y-1">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={volverAlOrigen}
-          className="mb-2 gap-2 -ml-2"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          {volverLabel}
-        </Button>
-        <h1>Ajustes de cosecha</h1>
-        <p className="text-muted-foreground mt-1">
-          Cosechas con gajos pendientes desde hace 3+ viajes. Decide qué hacer con ellos.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        backTo={vieneDeNomina ? undefined : '/viajes'}
+        eyebrow={vieneDeNomina ? 'Nómina' : 'Viajes'}
+        title="Ajustes de cosecha"
+        description="Cosechas con gajos pendientes desde hace 3 viajes o más. Decida qué hacer con ellos."
+        actions={vieneDeNomina ? (
+          <Button variant="outline" onClick={volverAlOrigen}>
+            <ArrowLeft className="h-4 w-4" strokeWidth={2} />
+            {volverLabel}
+          </Button>
+        ) : undefined}
+      />
 
       {/* Tabla */}
       {cargando ? (

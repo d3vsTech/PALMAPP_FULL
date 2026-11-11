@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Button } from '../../components/ui/button';
 import { toast } from 'sonner';
-import { Card, CardContent } from '../../components/ui/card';
+import { Card } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
@@ -14,10 +14,14 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
 import {
-  Plus, Truck, Package, MapPin, Scale, Eye, TrendingUp, CheckCircle, Clock,
-  FileText, FileUp, Search, Calculator, Edit, Trash2, AlertTriangle, Info, Download,
-  RotateCcw,
+  Plus, MapPin, Eye, FileUp, Search, Calculator, Edit, Trash2,
+  AlertTriangle, Info, Download, RotateCcw,
 } from 'lucide-react';
+import PageHeader from '../../components/common/PageHeader';
+import StatStrip from '../../components/common/StatStrip';
+import EmptyState from '../../components/common/EmptyState';
+import TableSkeleton from '../../components/common/TableSkeleton';
+import { num } from '../../lib/formato';
 import { useEstadoPersistido } from '../../hooks/useEstadoPersistido';
 import { useAlCambiar } from '../../hooks/useAlCambiar';
 import { useAuth } from '../../contexts/AuthContext';
@@ -127,30 +131,15 @@ function parseFecha(s?: string): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
+/** El estado con el color del sistema; el punto del badge hace de semáforo. */
+const VARIANTE_ESTADO: Record<EstadoViaje, 'secondary' | 'info' | 'success'> = {
+  'Creado': 'secondary',
+  'En Validación': 'info',
+  'Finalizado': 'success',
+};
+
 function getEstadoBadge(estado: EstadoViaje) {
-  switch (estado) {
-    case 'Creado':
-      return (
-        <Badge variant="outline" className="bg-muted text-muted-foreground border-muted">
-          <FileText className="h-3 w-3 mr-1" />
-          Creado
-        </Badge>
-      );
-    case 'En Validación':
-      return (
-        <Badge variant="outline" className="bg-primary/10 text-primary dark:text-primary border-blue-500/30">
-          <Clock className="h-3 w-3 mr-1" />
-          En Validación
-        </Badge>
-      );
-    case 'Finalizado':
-      return (
-        <Badge variant="outline" className="bg-success/10 text-success border-success/30">
-          <CheckCircle className="h-3 w-3 mr-1" />
-          Finalizado
-        </Badge>
-      );
-  }
+  return <Badge variant={VARIANTE_ESTADO[estado]}>{estado}</Badge>;
 }
 
 // ─── componente ───────────────────────────────────────────────────────────────
@@ -476,455 +465,375 @@ export default function Viajes() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Header */}
-      <div className="flex flex-wrap items-start justify-between mb-6 gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-primary">Viajes</h1>
-          <p className="text-muted-foreground mt-1">
-            Gestión de despachos de fruto hacia la extractora
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {/* El cargue del histórico: los despachos de antes del sistema. Va
-              visible siempre, como el resto del módulo, y el backend es el que
-              decide con el permiso `viajes.importar`. */}
-          <Button
-            variant="outline"
-            onClick={() => navigate('/viajes/importar')}
-            className="gap-2"
-          >
-            <FileUp className="h-4 w-4" />
-            Importar histórico
-          </Button>
-          <Button
-            onClick={() => navigate('/viajes/nuevo')}
-            className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20"
-          >
-            <Plus className="h-5 w-5" />
-            Nuevo Viaje
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Viajes"
+        description="Despachos de fruto hacia la extractora."
+        actions={
+          <>
+            {/* El cargue del histórico: los despachos de antes del sistema. Va
+                visible siempre, como el resto del módulo, y el backend es el
+                que decide con el permiso `viajes.importar`. */}
+            <Button variant="outline" onClick={() => navigate('/viajes/importar')}>
+              <FileUp className="h-4 w-4" strokeWidth={2} />
+              Importar histórico
+            </Button>
+            <Button onClick={() => navigate('/viajes/nuevo')}>
+              <Plus className="h-4 w-4" strokeWidth={2} />
+              Nuevo viaje
+            </Button>
+          </>
+        }
+      />
 
 
-      {/* Indicadores Principales */}
-      <div>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-          <h2 className="text-2xl font-bold text-foreground">Indicadores Principales</h2>
-          <div className="flex flex-wrap items-center gap-3">
-            <Label className="text-sm font-medium">Período:</Label>
-            <Select value={periodoKPI}
-              onValueChange={(v) => setPeriodoKPI(v as typeof periodoKPI)}>
-              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+      {/* El período manda sobre los indicadores y sobre la lista de abajo:
+          las dos leen el mismo rango de fechas. */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <h2>Indicadores del período</h2>
+        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+          <Label className="text-sm font-medium">Período:</Label>
+          <Select value={periodoKPI}
+            onValueChange={(v) => setPeriodoKPI(v as typeof periodoKPI)}>
+            <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="semanal">Semanal</SelectItem>
+              <SelectItem value="quincenal">Quincenal</SelectItem>
+              <SelectItem value="mensual">Mensual</SelectItem>
+              <SelectItem value="anual">Anual</SelectItem>
+              <SelectItem value="personalizado">Personalizado</SelectItem>
+            </SelectContent>
+          </Select>
+          {(periodoKPI === 'mensual' || periodoKPI === 'quincenal') && (
+            <SelectorMes valor={mesKPI} onChange={setMesKPI} />
+          )}
+          {periodoKPI === 'anual' && (
+            <SelectorAnio valor={anioKPI} onChange={setAnioKPI} />
+          )}
+          {periodoKPI === 'quincenal' && (
+            <Select value={String(quincenaKPI)}
+              onValueChange={(v) => setQuincenaKPI(Number(v) as QuincenaViajes)}>
+              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="semanal">Semanal</SelectItem>
-                <SelectItem value="quincenal">Quincenal</SelectItem>
-                <SelectItem value="mensual">Mensual</SelectItem>
-                <SelectItem value="anual">Anual</SelectItem>
-                <SelectItem value="personalizado">Personalizado</SelectItem>
+                <SelectItem value="1">Del 1 al 15</SelectItem>
+                <SelectItem value="2">Del 16 al fin de mes</SelectItem>
               </SelectContent>
             </Select>
-            {(periodoKPI === 'mensual' || periodoKPI === 'quincenal') && (
-              <SelectorMes valor={mesKPI} onChange={setMesKPI} />
-            )}
-            {periodoKPI === 'anual' && (
-              <SelectorAnio valor={anioKPI} onChange={setAnioKPI} />
-            )}
-            {periodoKPI === 'quincenal' && (
-              <Select value={String(quincenaKPI)}
-                onValueChange={(v) => setQuincenaKPI(Number(v) as QuincenaViajes)}>
-                <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1">Del 1 al 15</SelectItem>
-                  <SelectItem value="2">Del 16 al fin de mes</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-            {periodoKPI === 'personalizado' && (
-              <>
-                <Input type="date" value={fechaInicioKPI} onChange={e => setFechaInicioKPI(e.target.value)} className="w-40" placeholder="Fecha inicio" />
-                <Input type="date" value={fechaFinKPI} onChange={e => setFechaFinKPI(e.target.value)} className="w-40" placeholder="Fecha fin" />
-              </>
-            )}
-            <Button variant="ghost" size="sm" onClick={reiniciarVista} className="gap-2"
-              title="Vuelve al mes en curso y borra los filtros de la tabla">
-              <RotateCcw className="h-4 w-4" /> Reiniciar
-            </Button>
-          </div>
-        </div>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {/* Total Viajes */}
-          <Card className="glass-subtle border-border hover:shadow-lg transition duration-300">
-            <CardContent className="p-6">
-              <div className="flex-1">
-                <p className="text-sm font-medium text-muted-foreground mb-2">Total Viajes</p>
-                <div className="flex items-baseline gap-2">
-                  <p className="text-2xl sm:text-3xl font-bold text-foreground">{loadingKPI ? '…' : totalViajes}</p>
-                  <span className="text-sm text-muted-foreground">despachos</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* En Validación */}
-          <Card className="glass-subtle border-border hover:shadow-lg transition duration-300">
-            <CardContent className="p-6">
-              <div className="flex-1">
-                <p className="text-sm font-medium text-muted-foreground mb-2">En Validación</p>
-                <div className="flex items-baseline gap-2">
-                  <p className="text-2xl sm:text-3xl font-bold text-foreground">{loadingKPI ? '…' : viajesEnValidacion}</p>
-                  <span className="text-sm text-muted-foreground">pendientes</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Finalizados */}
-          <Card className="glass-subtle border-border hover:shadow-lg transition duration-300">
-            <CardContent className="p-6">
-              <div className="flex-1">
-                <p className="text-sm font-medium text-muted-foreground mb-2">Finalizados</p>
-                <div className="flex items-baseline gap-2">
-                  <p className="text-2xl sm:text-3xl font-bold text-foreground">{loadingKPI ? '…' : viajesFinalizados}</p>
-                  <span className="text-sm text-muted-foreground">completados</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Kilogramos Totales */}
-          <Card className="glass-subtle border-border hover:shadow-lg transition duration-300">
-            <CardContent className="p-6">
-              <div className="flex-1">
-                <p className="text-sm font-medium text-muted-foreground mb-2">Kilogramos Totales</p>
-                <div className="flex items-baseline gap-2">
-                  <p className="text-2xl sm:text-3xl font-bold text-foreground">{loadingKPI ? '…' : pesoTotal.toLocaleString('es-CO')}</p>
-                  <span className="text-sm text-muted-foreground">kg</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          )}
+          {periodoKPI === 'personalizado' && (
+            <>
+              <Input type="date" aria-label="Fecha de inicio" className="w-40"
+                value={fechaInicioKPI} onChange={e => setFechaInicioKPI(e.target.value)} />
+              <Input type="date" aria-label="Fecha de fin" className="w-40"
+                value={fechaFinKPI} onChange={e => setFechaFinKPI(e.target.value)} />
+            </>
+          )}
+          <Button variant="ghost" size="sm" onClick={reiniciarVista}
+            title="Vuelve al mes en curso y borra los filtros de la tabla">
+            <RotateCcw className="h-4 w-4" strokeWidth={2} />
+            Reiniciar
+          </Button>
         </div>
       </div>
 
-      {/* Lista de viajes */}
-      <div>
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold mb-2">Viajes Registrados</h2>
-          <p className="text-muted-foreground">Despachos de fruto hacia extractoras</p>
+      <StatStrip
+        loading={loadingKPI && !indicadoresApi}
+        items={[
+          { label: 'Total de viajes', value: num(totalViajes), note: 'despachos en el período' },
+          { label: 'En validación', value: num(viajesEnValidacion), note: 'esperan la remisión de la planta' },
+          { label: 'Finalizados', value: num(viajesFinalizados), note: 'ya cerrados' },
+          { label: 'Kilogramos', value: num(pesoTotal), unit: 'kg', note: 'peso de báscula' },
+        ]}
+      />
+
+      <div className="space-y-4">
+        <div className="space-y-1">
+          <h2>Viajes registrados</h2>
+          <p className="text-[15px] text-muted-foreground">Despachos de fruto hacia las extractoras.</p>
         </div>
 
-        <div className="space-y-4">
-          <Card className="glass-subtle border-border">
-            <CardContent className="pt-6">
-              {loadingList ? (
-                <div className="flex items-center justify-center py-16 text-muted-foreground gap-2">
-                  <Clock className="h-5 w-5 animate-spin" /> Cargando viajes...
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {/* Filtros. Van siempre: si se escondieran al quedar la tabla
-                      vacía, el filtro que dejó cero resultados no se podría
-                      borrar y la pantalla quedaría trancada. */}
-                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5 p-4 bg-muted/30 rounded-lg border border-border">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground" htmlFor="viajes-remision">Remisión</label>
-                      <div className="relative">
-                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input id="viajes-remision" placeholder="REM-2026-001" value={filtros.remision}
-                          onChange={e => handleFiltroChange('remision', e.target.value)} className="pl-8 h-9" />
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">Estado</label>
-                      <Select
-                        value={filtros.estado || '__todos__'}
-                        onValueChange={(v) => handleFiltroChange('estado', v === '__todos__' ? '' : v)}
-                      >
-                        <SelectTrigger className="h-9 w-full">
-                          <SelectValue placeholder="Todos" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__todos__">Todos</SelectItem>
-                          <SelectItem value="Creado">Creado</SelectItem>
-                          <SelectItem value="En Validación">En Validación</SelectItem>
-                          <SelectItem value="Finalizado">Finalizado</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground" htmlFor="viajes-vehiculo">Vehículo</label>
-                      <div className="relative">
-                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input id="viajes-vehiculo" placeholder="ABC-123" value={filtros.vehiculo}
-                          onChange={e => handleFiltroChange('vehiculo', e.target.value)} className="pl-8 h-9" />
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground" htmlFor="viajes-conductor">Conductor</label>
-                      <div className="relative">
-                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input id="viajes-conductor" placeholder="Nombre" value={filtros.conductor}
-                          onChange={e => handleFiltroChange('conductor', e.target.value)} className="pl-8 h-9" />
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground" htmlFor="viajes-extractora">Extractora</label>
-                      <Select
-                        value={filtros.extractora || '__todas__'}
-                        onValueChange={(v) => handleFiltroChange('extractora', v === '__todas__' ? '' : v)}
-                      >
-                        <SelectTrigger id="viajes-extractora" className="h-9"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__todas__">Todas</SelectItem>
-                          {extractoras.map((e) => (
-                            <SelectItem key={e.id} value={String(e.id)}>{e.razon_social}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
+        {/* Filtros. Van siempre: si se escondieran al quedar la tabla
+            vacía, el filtro que dejó cero resultados no se podría
+            borrar y la pantalla quedaría trancada. */}
+        <div className="grid gap-3 rounded-xl border border-border bg-muted/40 p-4 md:grid-cols-2 lg:grid-cols-5">
+          <div className="space-y-1.5">
+            <label className="text-[13px] font-medium text-muted-foreground" htmlFor="viajes-remision">Remisión</label>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={2} />
+              <Input id="viajes-remision" placeholder="REM-2026-001" value={filtros.remision}
+                onChange={e => handleFiltroChange('remision', e.target.value)} className="h-9 pl-8" />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[13px] font-medium text-muted-foreground">Estado</label>
+            <Select
+              value={filtros.estado || '__todos__'}
+              onValueChange={(v) => handleFiltroChange('estado', v === '__todos__' ? '' : v)}
+            >
+              <SelectTrigger className="h-9 w-full">
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__todos__">Todos</SelectItem>
+                <SelectItem value="Creado">Creado</SelectItem>
+                <SelectItem value="En Validación">En Validación</SelectItem>
+                <SelectItem value="Finalizado">Finalizado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[13px] font-medium text-muted-foreground" htmlFor="viajes-vehiculo">Vehículo</label>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={2} />
+              <Input id="viajes-vehiculo" placeholder="ABC-123" value={filtros.vehiculo}
+                onChange={e => handleFiltroChange('vehiculo', e.target.value)} className="h-9 pl-8" />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[13px] font-medium text-muted-foreground" htmlFor="viajes-conductor">Conductor</label>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={2} />
+              <Input id="viajes-conductor" placeholder="Nombre" value={filtros.conductor}
+                onChange={e => handleFiltroChange('conductor', e.target.value)} className="h-9 pl-8" />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[13px] font-medium text-muted-foreground" htmlFor="viajes-extractora">Extractora</label>
+            <Select
+              value={filtros.extractora || '__todas__'}
+              onValueChange={(v) => handleFiltroChange('extractora', v === '__todas__' ? '' : v)}
+            >
+              <SelectTrigger id="viajes-extractora" className="h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__todas__">Todas</SelectItem>
+                {extractoras.map((e) => (
+                  <SelectItem key={e.id} value={String(e.id)}>{e.razon_social}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
 
-                  {hayFiltros && (
-                    <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
-                      <span>Dentro del período {etiquetaPeriodo}.</span>
-                      <Button variant="ghost" size="sm" onClick={limpiarFiltros} className="gap-2">
-                        <RotateCcw className="h-4 w-4" /> Limpiar filtros
-                      </Button>
-                    </div>
-                  )}
+        {hayFiltros && (
+          <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
+            <span>Dentro del período {etiquetaPeriodo}.</span>
+            <Button variant="ghost" size="sm" onClick={limpiarFiltros}>
+              <RotateCcw className="h-4 w-4" strokeWidth={2} />
+              Limpiar filtros
+            </Button>
+          </div>
+        )}
 
-                  {/* Tabla */}
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-border bg-muted/30">
-                          <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Remisión</th>
-                          <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Fecha</th>
-                          <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Estado</th>
-                          <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Vehículo / Conductor</th>
-                          <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Extractora</th>
-                          <th className="text-center p-4 font-semibold text-sm text-muted-foreground">Gajos</th>
-                          <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Peso (kg)</th>
-                          <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Acciones</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {viajesFiltrados.length === 0 ? (
-                          <tr>
-                            <td colSpan={8} className="py-12">
-                              <div className="flex flex-col items-center gap-3 text-center">
-                                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
-                                  {hayFiltros
-                                    ? <Search className="h-7 w-7 text-muted-foreground" />
-                                    : <Truck className="h-7 w-7 text-muted-foreground" />}
-                                </div>
-                                <div className="space-y-1">
-                                  <p className="font-semibold">
-                                    {hayFiltros
-                                      ? 'No se encontraron viajes con los filtros aplicados'
-                                      : `No hay viajes ${etiquetaPeriodo}`}
-                                  </p>
-                                  <p className="text-sm text-muted-foreground">
-                                    {hayFiltros
-                                      ? 'Borre los filtros o cambie el período del encabezado.'
-                                      : 'Cambie el período del encabezado o registre un despacho.'}
-                                  </p>
-                                </div>
-                                <div className="flex flex-wrap items-center justify-center gap-2">
-                                  {hayFiltros && (
-                                    <Button variant="outline" size="sm" onClick={limpiarFiltros} className="gap-2">
-                                      <RotateCcw className="h-4 w-4" /> Limpiar filtros
-                                    </Button>
-                                  )}
-                                  <Button size="sm" onClick={() => navigate('/viajes/nuevo')} className="gap-2">
-                                    <Plus className="h-4 w-4" /> Nuevo Viaje
-                                  </Button>
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
-                        ) : (
-                          viajesFiltrados.map((viaje, index) => (
-                            <tr key={viaje.id}
-                              className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors ${index % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}>
-                              <td className="p-4">
-                                <span className="text-sm font-medium text-foreground">{viaje.remisionId}</span>
-                                {viaje.importado && (
-                                  <span
-                                    className="ml-2 rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground"
-                                    title="Entró por el cargue de histórico"
+        {loadingList ? (
+          <Card className="gap-0">
+            <TableSkeleton rows={6} columns={6} />
+          </Card>
+        ) : viajesFiltrados.length === 0 ? (
+          <Card className="gap-0">
+            <EmptyState
+              title={hayFiltros
+                ? 'Ningún viaje coincide con los filtros'
+                : `No hay viajes ${etiquetaPeriodo}`}
+              description={hayFiltros
+                ? 'Borre los filtros o cambie el período de arriba.'
+                : 'Cambie el período de arriba o registre un despacho.'}
+              action={hayFiltros
+                ? { label: 'Limpiar filtros', onClick: limpiarFiltros }
+                : { label: 'Nuevo viaje', onClick: () => navigate('/viajes/nuevo') }}
+            />
+          </Card>
+        ) : (
+          <Card className="gap-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/60 text-[13px] text-muted-foreground">
+                  <tr>
+                    <th className="px-5 py-2.5 text-left font-semibold">Remisión</th>
+                    <th className="px-4 py-2.5 text-left font-semibold">Fecha</th>
+                    <th className="px-4 py-2.5 text-left font-semibold">Estado</th>
+                    <th className="px-4 py-2.5 text-left font-semibold">Vehículo y conductor</th>
+                    <th className="px-4 py-2.5 text-left font-semibold">Extractora</th>
+                    <th className="px-4 py-2.5 text-right font-semibold">Gajos</th>
+                    <th className="px-4 py-2.5 text-right font-semibold">Peso (kg)</th>
+                    <th className="px-5 py-2.5 text-right font-semibold">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {viajesFiltrados.map((viaje) => {
+                    const d = parseFecha(viaje.fecha);
+                    return (
+                      <tr key={viaje.id} className="transition-colors hover:bg-muted/40">
+                        <td className="px-5 py-3">
+                          <span className="font-semibold text-foreground">{viaje.remisionId}</span>
+                          {viaje.importado && (
+                            <span
+                              className="ml-2 rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                              title="Entró por el cargue de histórico"
+                            >
+                              Importado
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="block font-medium text-foreground">
+                            {d ? d.toLocaleDateString('es-CO', { month: 'short', day: 'numeric' }) : '—'}
+                          </span>
+                          <span className="text-xs text-muted-foreground">{d ? d.getFullYear() : ''}</span>
+                        </td>
+                        <td className="px-4 py-3">{getEstadoBadge(viaje.estado)}</td>
+                        <td className="px-4 py-3">
+                          <span className="block font-medium text-foreground">{viaje.placaVehiculo}</span>
+                          <span className="text-xs text-muted-foreground">{viaje.conductor}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1.5">
+                            <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" strokeWidth={2} />
+                            <span className="text-foreground">{viaje.extractora}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums text-foreground">
+                          {num(viaje.gajosEstimados)}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {viaje.peso ? (
+                            <span className="font-semibold tabular-nums text-foreground">{num(viaje.peso)}</span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3">
+                          <div className="flex items-center justify-end gap-1">
+                            {viaje.estado === 'Creado' ? (
+                              <>
+                                {/* La remisión se imprime ANTES de salir: es el
+                                    papel que lleva el conductor y que firma la
+                                    planta al recibir. El desprendible del
+                                    backend es otra cosa y solo existe en
+                                    FINALIZADO. */}
+                                <Button
+                                  variant="ghost" size="icon"
+                                  className="text-muted-foreground"
+                                  disabled={descargando === viaje.id}
+                                  onClick={() => void descargarRemisionViaje(viaje)}
+                                  aria-label="Descargar remisión de entrega"
+                                  title="Descargar remisión de entrega"
+                                >
+                                  <Download className="h-4 w-4" strokeWidth={2} />
+                                </Button>
+                                <Button
+                                  variant="ghost" size="icon"
+                                  className="text-muted-foreground hover:text-success"
+                                  aria-label="Conteo de cosecha"
+                                  title="Conteo de cosecha (opcional)"
+                                  onClick={() => navigate(`/viajes/${viaje.id}/conteo`, {
+                                    state: {
+                                      viaje: {
+                                        id: viaje.id, fecha: viaje.fecha,
+                                        placaVehiculo: viaje.placaVehiculo, conductor: viaje.conductor,
+                                        transportador: viaje.transportador, extractora: viaje.extractora,
+                                        horaSalida: viaje.horaSalida,
+                                      }
+                                    }
+                                  })}
+                                >
+                                  <Calculator className="h-4 w-4" strokeWidth={2} />
+                                </Button>
+                                {/* Abre el detalle directamente en el
+                                    formulario de edición. */}
+                                <Button
+                                  variant="ghost" size="icon" asChild
+                                  className="text-muted-foreground"
+                                  aria-label="Editar viaje" title="Editar"
+                                >
+                                  <Link to={`/viajes/${viaje.id}?vista=editar`}>
+                                    <Edit className="h-4 w-4" strokeWidth={2} />
+                                  </Link>
+                                </Button>
+                                <Button
+                                  variant="ghost" size="icon"
+                                  className="text-muted-foreground hover:text-destructive"
+                                  onClick={(e) => abrirDialogoEliminar(viaje, e)}
+                                  aria-label="Eliminar viaje" title="Eliminar"
+                                >
+                                  <Trash2 className="h-4 w-4" strokeWidth={2} />
+                                </Button>
+                              </>
+                            ) : viaje.estado === 'En Validación' ? (
+                              /* En Validación: el único paso útil es cargar la
+                                 remisión de la extractora. Al abrir el detalle
+                                 se sube el PDF. */
+                              <Button
+                                variant="ghost" size="icon" asChild
+                                className="text-muted-foreground"
+                                aria-label="Cargar remisión de la extractora"
+                                title="Cargar remisión extractora"
+                              >
+                                <Link to={`/viajes/${viaje.id}?vista=gestion`}>
+                                  <FileUp className="h-4 w-4" strokeWidth={2} />
+                                </Link>
+                              </Button>
+                            ) : (
+                              /* Finalizado: solo lectura. No hay eliminar
+                                 porque ya está cerrado y liquidado en nómina.
+                                 La única vuelta atrás es reabrirlo (§5.10),
+                                 con su permiso aparte. */
+                              <>
+                                {hasPermiso('viajes.reabrir') && (
+                                  <Button
+                                    variant="ghost" size="icon"
+                                    className="text-muted-foreground hover:text-warning"
+                                    aria-label="Reabrir viaje" title="Reabrir viaje"
+                                    onClick={() => setViajeAReabrir({ id: viaje.id, remision: viaje.remisionId })}
                                   >
-                                    Importado
-                                  </span>
+                                    <RotateCcw className="h-4 w-4" strokeWidth={2} />
+                                  </Button>
                                 )}
-                              </td>
-                              <td className="p-4">
-                                {(() => {
-                                  const d = parseFecha(viaje.fecha);
-                                  return (
-                                    <div className="flex flex-col">
-                                      <span className="text-sm font-medium text-foreground">
-                                        {d ? d.toLocaleDateString('es-CO', { month: 'short', day: 'numeric' }) : '—'}
-                                      </span>
-                                      <span className="text-xs text-muted-foreground">
-                                        {d ? d.getFullYear() : ''}
-                                      </span>
-                                    </div>
-                                  );
-                                })()}
-                              </td>
-                              <td className="p-4">{getEstadoBadge(viaje.estado)}</td>
-                              <td className="p-4">
-                                <div className="flex flex-col">
-                                  <span className="text-sm font-medium text-foreground">{viaje.placaVehiculo}</span>
-                                  <span className="text-xs text-muted-foreground">{viaje.conductor}</span>
-                                </div>
-                              </td>
-                              <td className="p-4">
-                                <div className="flex items-center gap-1.5">
-                                  <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-                                  <span className="text-sm font-medium text-foreground">{viaje.extractora}</span>
-                                </div>
-                              </td>
-                              <td className="p-4 text-center">
-                                <span className="inline-flex items-center justify-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
-                                  {viaje.gajosEstimados.toLocaleString('es-CO')}
-                                </span>
-                              </td>
-                              <td className="p-4 text-right">
-                                {viaje.peso ? (
-                                  <span className="text-sm font-semibold text-success">{viaje.peso.toLocaleString('es-CO')}</span>
-                                ) : (
-                                  <span className="text-xs text-muted-foreground">-</span>
-                                )}
-                              </td>
-                              <td className="p-4">
-                                <div className="flex gap-2 justify-end">
-                                  {viaje.estado === 'Creado' ? (
-                                    <>
-                                      {/* La remisión se imprime ANTES de salir:
-                                          es el papel que lleva el conductor y
-                                          que firma la planta al recibir. El
-                                          desprendible del backend es otra cosa
-                                          y solo existe en FINALIZADO. */}
-                                      <Button size="sm" variant="outline"
-                                        disabled={descargando === viaje.id}
-                                        onClick={() => void descargarRemisionViaje(viaje)}
-                                        className="hover:bg-primary/10 hover:text-primary hover:border-primary"
-                                        title="Descargar remisión de entrega">
-                                        <Download className="h-4 w-4" />
-                                      </Button>
-                                      <Button size="sm" variant="outline"
-                                        onClick={() => navigate(`/viajes/${viaje.id}/conteo`, {
-                                          state: {
-                                            viaje: {
-                                              id: viaje.id, fecha: viaje.fecha,
-                                              placaVehiculo: viaje.placaVehiculo, conductor: viaje.conductor,
-                                              transportador: viaje.transportador, extractora: viaje.extractora,
-                                              horaSalida: viaje.horaSalida,
-                                            }
-                                          }
-                                        })}
-                                        className="hover:bg-success/10 hover:text-success hover:border-success"
-                                        title="Conteo de Cosecha (Opcional)">
-                                        <Calculator className="h-4 w-4" />
-                                      </Button>
-                                      <Button size="sm" variant="outline" asChild
-                                        className="hover:bg-primary/10 hover:text-primary hover:border-primary"
-                                        title="Editar">
-                                        {/* Abre el detalle directamente en el
-                                            formulario de edición. */}
-                                        <Link to={`/viajes/${viaje.id}?vista=editar`}>
-                                          <Edit className="h-4 w-4" />
-                                        </Link>
-                                      </Button>
-                                      <Button size="sm" variant="outline"
-                                        onClick={(e) => abrirDialogoEliminar(viaje, e)}
-                                        className="hover:bg-destructive/10 hover:text-destructive hover:border-destructive"
-                                        title="Eliminar">
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    </>
-                                  ) : viaje.estado === 'En Validación' ? (
-                                    /* En Validación: el único paso útil es
-                                       cargar la remisión de la extractora.
-                                       Al abrir el detalle se sube el PDF. */
-                                    <Button size="sm" variant="outline" asChild
-                                      className="hover:bg-primary/10 hover:text-primary hover:border-primary"
-                                      title="Cargar remisión extractora">
-                                      <Link to={`/viajes/${viaje.id}?vista=gestion`}>
-                                        <FileUp className="h-4 w-4" />
-                                      </Link>
-                                    </Button>
-                                  ) : (
-                                    /* Finalizado: solo lectura. No hay
-                                       eliminar porque ya está cerrado y
-                                       liquidado en nómina. La única vuelta
-                                       atrás es reabrirlo (§5.10), con su
-                                       permiso aparte. */
-                                    <>
-                                      {hasPermiso('viajes.reabrir') && (
-                                        <Button
-                                          size="sm" variant="outline"
-                                          className="hover:bg-amber-500/10 hover:text-amber-700 hover:border-amber-500/30"
-                                          title="Reabrir viaje"
-                                          onClick={() => setViajeAReabrir({ id: viaje.id, remision: viaje.remisionId })}
-                                        >
-                                          <RotateCcw className="h-4 w-4" />
-                                        </Button>
-                                      )}
-                                      <Button size="sm" variant="outline" asChild
-                                        className="hover:bg-primary/10 hover:text-primary hover:border-primary"
-                                        title="Visualizar">
-                                        <Link to={`/viajes/${viaje.id}`}>
-                                          <Eye className="h-4 w-4" />
-                                        </Link>
-                                      </Button>
-                                    </>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                                <Button
+                                  variant="ghost" size="icon" asChild
+                                  className="text-muted-foreground"
+                                  aria-label="Ver viaje" title="Ver viaje"
+                                >
+                                  <Link to={`/viajes/${viaje.id}`}>
+                                    <Eye className="h-4 w-4" strokeWidth={2} />
+                                  </Link>
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
 
-                  {/* Contador de resultados */}
-                  {viajesFiltrados.length > 0 && (
-                    <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground px-2">
-                      <p>
-                        Mostrando <span className="font-medium text-foreground">{viajesFiltrados.length}</span> de{' '}
-                        <span className="font-medium text-foreground">{totalLista}</span> viajes
-                      </p>
-                      {ultimaPagina > 1 && (
-                        <div className="flex items-center gap-2">
-                          <span>Página {pagina} de {ultimaPagina}</span>
-                          <Button
-                            size="sm" variant="outline"
-                            disabled={loadingList || pagina <= 1}
-                            onClick={() => setPagina((p) => p - 1)}
-                          >
-                            Anteriores
-                          </Button>
-                          <Button
-                            size="sm" variant="outline"
-                            disabled={loadingList || pagina >= ultimaPagina}
-                            onClick={() => setPagina((p) => p + 1)}
-                          >
-                            Siguientes
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  )}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3 text-sm text-muted-foreground">
+              <p>
+                Mostrando <span className="font-semibold text-foreground">{num(viajesFiltrados.length)}</span> de{' '}
+                <span className="font-semibold text-foreground">{num(totalLista)}</span> viajes
+              </p>
+              {ultimaPagina > 1 && (
+                <div className="flex items-center gap-2">
+                  <span>Página {pagina} de {ultimaPagina}</span>
+                  <Button
+                    size="sm" variant="outline"
+                    disabled={loadingList || pagina <= 1}
+                    onClick={() => setPagina((p) => p - 1)}
+                  >
+                    Anteriores
+                  </Button>
+                  <Button
+                    size="sm" variant="outline"
+                    disabled={loadingList || pagina >= ultimaPagina}
+                    onClick={() => setPagina((p) => p + 1)}
+                  >
+                    Siguientes
+                  </Button>
                 </div>
               )}
-            </CardContent>
+            </div>
           </Card>
-        </div>
+        )}
       </div>
 
       <RevertirEstadoDialog

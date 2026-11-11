@@ -60,6 +60,7 @@ import {
 import { fetchConToken } from '../../../api/request';
 import { configuracionApi } from '../../../api/configuracion';
 import { toast } from 'sonner';
+import PageHeader from '../../components/common/PageHeader';
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────────
 interface FormData {
@@ -923,7 +924,7 @@ export default function NuevoColaboradorWizard() {
 
   // ─── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-8 relative">
+    <div className="relative space-y-6">
       {/* Overlay de carga (solo edición) — montado en <body> vía portal para
           que ignore cualquier transform/contexto de stacking de los padres. */}
       {cargandoColaborador && createPortal(
@@ -945,33 +946,27 @@ export default function NuevoColaboradorWizard() {
         document.body,
       )}
 
-      {/* Header */}
-      <div>
-        <div className="flex items-center gap-3 mb-2 flex-wrap">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/colaboradores')} className="rounded-xl">
-            <ArrowLeft className="h-5 w-5" />
+      <PageHeader
+        backTo="/colaboradores"
+        eyebrow="Colaboradores"
+        title={isEditMode ? 'Editar colaborador' : 'Nuevo colaborador'}
+        description="Complete la información paso a paso."
+        actions={!isEditMode && borradorRestaurado ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground hover:text-destructive"
+            onClick={() => {
+              limpiarBorrador();
+              setFormData(FORM_INICIAL);
+              setEtapaActual(1);
+              toast.success('Borrador descartado');
+            }}
+          >
+            Descartar borrador
           </Button>
-          <h1 className="text-3xl md:text-4xl font-bold text-foreground">
-            {isEditMode ? 'Editar Colaborador' : 'Nuevo Colaborador'}
-          </h1>
-          {!isEditMode && borradorRestaurado && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-muted-foreground hover:text-destructive ml-auto"
-              onClick={() => {
-                limpiarBorrador();
-                setFormData(FORM_INICIAL);
-                setEtapaActual(1);
-                toast.success('Borrador descartado');
-              }}
-            >
-              Descartar borrador
-            </Button>
-          )}
-        </div>
-        <p className="text-muted-foreground ml-14">Completa la información paso a paso</p>
-      </div>
+        ) : undefined}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Wizard */}

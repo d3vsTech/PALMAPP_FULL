@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Button } from '../../components/ui/button';
+import PageHeader from '../../components/common/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
@@ -726,16 +727,13 @@ export default function ConteoCosecha() {
   const horaSalida = String(v.hora_salida ?? '').slice(0, 5);
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-7xl">
-      {/* Header */}
-      <div className="mb-6">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/viajes')} className="mb-4 gap-2">
-          <ArrowLeft className="h-4 w-4" />
-          Volver a Viajes
-        </Button>
-        <h1 className="text-2xl sm:text-3xl font-bold text-primary">Conteo de Cosecha</h1>
-        <p className="text-muted-foreground mt-1">Registra las cosechas del viaje</p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        backTo="/viajes"
+        eyebrow="Viajes"
+        title="Conteo de cosecha"
+        description="Registra las cosechas que llevó el viaje."
+      />
 
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

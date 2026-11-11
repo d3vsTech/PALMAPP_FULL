@@ -27,8 +27,9 @@
  *     montan después desde el wizard normal del viaje.
  */
 import { useNavigate } from 'react-router';
-import { ArrowLeft, Upload } from 'lucide-react';
+import { Upload } from 'lucide-react';
 import { Button } from '../../components/ui/button';
+import PageHeader from '../../components/common/PageHeader';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -93,9 +94,9 @@ function SelectorEstadoFinal({
 
 function Indicador({ titulo, valor, tono }: { titulo: string; valor: string; tono?: string }) {
   return (
-    <div className="rounded-lg border border-border bg-muted/20 p-3">
+    <div className="rounded-xl border border-border bg-card p-3">
       <p className="text-xs uppercase tracking-wide text-muted-foreground">{titulo}</p>
-      <p className={`text-2xl font-bold ${tono ?? 'text-foreground'}`}>{valor}</p>
+      <p className={`text-2xl font-bold tabular-nums ${tono ?? 'text-foreground'}`}>{valor}</p>
     </div>
   );
 }
@@ -112,17 +113,12 @@ export default function ImportarViajesPage() {
 
   return (
     <div className="space-y-6">
-      <Button variant="ghost" size="sm" onClick={() => navigate('/viajes')} className="gap-2">
-        <ArrowLeft className="h-4 w-4" />
-        Volver a Viajes
-      </Button>
-
-      <div>
-        <h1 className="text-2xl font-bold text-primary sm:text-3xl">Importar histórico</h1>
-        <p className="mt-1 text-muted-foreground">
-          Carga los despachos de fruta de antes del sistema desde un archivo
-        </p>
-      </div>
+      <PageHeader
+        backTo="/viajes"
+        eyebrow="Viajes"
+        title="Importar histórico"
+        description="Carga los despachos de fruta de antes del sistema desde un archivo."
+      />
 
       <PasoCard
         n={1}

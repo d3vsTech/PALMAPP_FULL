@@ -9,12 +9,9 @@ import { Label } from '../../components/ui/label';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
+import PageHeader from '../../components/common/PageHeader';
 import {
-  Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
-  BreadcrumbPage, BreadcrumbSeparator,
-} from '../../components/ui/breadcrumb';
-import {
-  ArrowLeft, Truck, User, MapPin, Calendar, Save, X, Hash, FileText,
+  Truck, User, MapPin, Calendar, Save, X, Hash, FileText,
 } from 'lucide-react';
 import {
   viajesApi,
@@ -361,54 +358,28 @@ export default function NuevoEditarViaje() {
   };
 
   return (
-    <div className="space-y-4">
-      {/* Breadcrumb */}
-      <Breadcrumb>
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild>
-              <Link to="/viajes">Viajes</Link>
-            </BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbPage>{esEdicion ? 'Editar Viaje' : 'Nuevo Viaje'}</BreadcrumbPage>
-          </BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
-
-      {/* Header con botón atrás */}
-      <div className="flex items-start gap-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => navigate('/viajes')}
-          className="h-12 w-12 rounded-xl border border-border/50 hover:bg-muted"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div className="space-y-1">
-          <h1 className="text-2xl sm:text-3xl font-bold text-primary">
-            {esEdicion ? 'Editar Viaje' : 'Nuevo Viaje'}
-          </h1>
-          <p className="text-muted-foreground">
-            {esEdicion ? 'Modifica la información del viaje' : 'Registra un nuevo despacho de fruto'}
-          </p>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        backTo="/viajes"
+        eyebrow={<Link to="/viajes" className="hover:text-foreground">Viajes</Link>}
+        title={esEdicion ? 'Editar viaje' : 'Nuevo viaje'}
+        description={esEdicion
+          ? 'Modifica la información del despacho.'
+          : 'Registra un nuevo despacho de fruto.'}
+      />
 
       {/* Formulario */}
       <form onSubmit={guardarViaje}>
         <div className="max-w-5xl mx-auto">
-          <Card className="glass-subtle border-border shadow-lg">
-            <CardHeader className="pb-3">
+          <Card className="gap-4">
+            <CardHeader className="pb-0">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/20">
-                  <Truck className="h-5 w-5 text-primary" />
-                </div>
+                <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                  <Truck className="h-5 w-5" strokeWidth={2} />
+                </span>
                 <div>
-                  <CardTitle className="text-lg">Información del Viaje</CardTitle>
-                  <CardDescription className="text-xs">Datos básicos del despacho</CardDescription>
+                  <CardTitle>Información del viaje</CardTitle>
+                  <CardDescription>Datos básicos del despacho</CardDescription>
                 </div>
               </div>
             </CardHeader>

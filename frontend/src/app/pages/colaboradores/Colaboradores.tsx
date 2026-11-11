@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router';
-import { Card, CardContent } from '../../components/ui/card';
+import { Card } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Badge } from '../../components/ui/badge';
@@ -9,9 +9,14 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
 import {
-  Users, Search, Eye, Edit, Plus, Trash2,
-  Loader2, UserCheck, UserX, FileSpreadsheet,
+  Search, Eye, Edit, Plus, Trash2, UserCheck, UserX, FileSpreadsheet,
 } from 'lucide-react';
+import PageHeader from '../../components/common/PageHeader';
+import StatStrip from '../../components/common/StatStrip';
+import EmptyState from '../../components/common/EmptyState';
+import TableSkeleton from '../../components/common/TableSkeleton';
+import Avatar from '../../components/common/Avatar';
+import { num } from '../../lib/formato';
 import { colaboradoresApi, buildAvatarUrl } from '../../../api/colaboradores';
 import { sortByFirstName } from '../../utils/personas';
 import { toast } from 'sonner';
@@ -51,9 +56,6 @@ export default function Colaboradores() {
   const getNombre = (c: any) =>
     c.nombre_completo ||
     [c.primer_nombre, c.segundo_nombre, c.primer_apellido, c.segundo_apellido].filter(Boolean).join(' ');
-
-  const getIniciales = (c: any) =>
-    ((c.primer_nombre?.[0] ?? '') + (c.primer_apellido?.[0] ?? '')).toUpperCase() || '??';
 
   const handleEliminar = (id: number, nombre: string) => {
     setColaboradorToDelete({ id, nombre });
@@ -95,7 +97,7 @@ export default function Colaboradores() {
   const colaboradoresOrdenados = sortByFirstName(colaboradores);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Alert Dialog eliminar */}
       <AlertDialog open={alertDialog} onOpenChange={setAlertDialog}>
         <AlertDialogContent>
@@ -143,149 +145,145 @@ export default function Colaboradores() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Header */}
-      <div className="space-y-1 mb-6">
-        <h1>Colaboradores</h1>
-        <p className="text-lead">Gestión de personal y documentación</p>
-      </div>
-
-      {/* Resumen */}
-      <div className="space-y-4">
-        <h2>Resumen</h2>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {[
-            { label: 'Total Colaboradores', value: meta.total ?? colaboradores.length, sub: 'registrados'},
-            { label: 'Colaboradores Activos', value: activos, sub: 'activos'},
-            { label: 'Colaboradores Inactivos', value: inactivos, sub: 'inactivos'},
-          ].map(({ label, value, sub}) => (
-            <Card key={label} className="border-border hover:shadow-lg transition duration-300">
-              <CardContent className="p-6">
-                <p className="text-sm text-muted-foreground mb-2">{label}</p>
-                <div className="flex items-baseline gap-2">
-                  <p className="text-3xl sm:text-4xl font-bold">{loading ? '—' : value}</p>
-                  <span className="text-sm text-muted-foreground">{sub}</span>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-
-      {/* Lista */}
-      <div className="space-y-4">
-        <div>
-          <h2 className="mb-2">Lista de Colaboradores</h2>
-          <p className="text-muted-foreground">Todos los colaboradores del sistema</p>
-        </div>
-
-        <div className="mb-6 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input type="text" placeholder="Buscar por nombre, cédula o cargo..."
-              value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10" />
-          </div>
-          <div className="flex flex-col sm:flex-row gap-3">
-            <Button onClick={() => navigate('/colaboradores/nuevo')}
-              className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20">
-              <Plus className="h-5 w-5" /> Nuevo Colaborador
+      <PageHeader
+        title="Colaboradores"
+        description="Personal de la finca y su documentación."
+        actions={
+          <>
+            <Button variant="outline" onClick={() => navigate('/colaboradores/importar')}>
+              <FileSpreadsheet className="h-4 w-4" strokeWidth={2} />
+              Importar
             </Button>
-            <Button onClick={() => navigate('/colaboradores/importar')}
-              className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20">
-              <FileSpreadsheet className="h-5 w-5" /> Importar Colaboradores
+            <Button onClick={() => navigate('/colaboradores/nuevo')}>
+              <Plus className="h-4 w-4" strokeWidth={2} />
+              Nuevo colaborador
             </Button>
+          </>
+        }
+      />
+
+      <StatStrip
+        loading={loading && colaboradores.length === 0}
+        items={[
+          { label: 'Total de colaboradores', value: num(meta.total ?? colaboradores.length), note: 'registrados' },
+          { label: 'Activos', value: num(activos), note: 'con la ficha encendida' },
+          { label: 'Inactivos', value: num(inactivos), note: 'retirados o apagados' },
+        ]}
+      />
+
+      <div className="space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2>Lista de colaboradores</h2>
+          <div className="relative w-full sm:w-80">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={2} />
+            <Input
+              type="search"
+              placeholder="Buscar por nombre, cédula o cargo"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="pl-9"
+            />
           </div>
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-12 text-muted-foreground gap-3">
-            <Loader2 className="w-5 h-5 animate-spin" /> Cargando colaboradores...
-          </div>
-        ) : colaboradores.length > 0 ? (
-          <Card className="border-border">
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/30">
-                      <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Nombre</th>
-                      <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Cédula</th>
-                      <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Cargo</th>
-                      <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {colaboradoresOrdenados.map((c, i) => (
-                      <tr key={c.id} className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors ${i % 2 === 0 ? 'bg-background' : 'bg-muted/5'}`}>
-                        <td className="p-4">
-                          <div className="flex items-center gap-3">
-                            {c.avatar_url ? (
-                              <img
-                                src={buildAvatarUrl(c.avatar_url) ?? ''}
-                                alt={getNombre(c)}
-                                className={`h-10 w-10 shrink-0 rounded-full object-cover border ${c.estado ? 'border-primary/20' : 'border-border opacity-60'}`}
-                              />
-                            ) : (
-                              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold ${c.estado ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-muted text-muted-foreground border border-border'}`}>
-                                {getIniciales(c)}
-                              </div>
-                            )}
-                            <div className="flex flex-col">
-                              <span className="font-semibold text-sm">{getNombre(c)}</span>
-                              <Badge className={`w-fit mt-1 text-xs ${c.estado ? 'bg-success/10 text-success border-success/20' : 'bg-muted text-muted-foreground border-muted'}`}>
-                                {c.estado ? 'Activo' : 'Inactivo'}
-                              </Badge>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="p-4">
-                          <span className="text-sm font-medium text-foreground">{c.documento}</span>
-                          
-                        </td>
-                        <td className="p-4">
-                          <span className="text-sm font-medium text-foreground">{c.cargo}</span>
-                         
-                        </td>
-                        <td className="p-4">
-                          <div className="flex gap-2 justify-end">
-                            <Button size="sm" variant="outline" onClick={() => navigate(`/colaboradores/${c.id}`)}
-                              className="hover:bg-primary/10 hover:text-primary hover:border-primary" title="Visualizar">
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => navigate(`/colaboradores/editar/${c.id}`)}
-                              className="hover:bg-accent/10 hover:text-accent hover:border-accent" title="Editar">
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => handleToggle(c)}
-                              className={c.estado ? 'border-destructive/50 text-destructive hover:bg-destructive hover:text-white' : 'border-success/50 text-success hover:bg-success hover:text-primary'}
-                              title={c.estado ? 'Desactivar' : 'Activar'}>
-                              {c.estado ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
-                            </Button>
-                            <Button size="sm" variant="destructive" onClick={() => handleEliminar(Number(c.id), getNombre(c))} title="Eliminar">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
+          <Card className="gap-0">
+            <TableSkeleton rows={6} columns={4} avatar />
+          </Card>
+        ) : colaboradores.length === 0 ? (
+          <Card className="gap-0">
+            <EmptyState
+              title="No se encontraron colaboradores"
+              description={searchTerm
+                ? 'Ningún colaborador coincide con la búsqueda.'
+                : 'Registre el primer colaborador para empezar.'}
+              action={searchTerm
+                ? { label: 'Limpiar búsqueda', onClick: () => setSearchTerm('') }
+                : { label: 'Nuevo colaborador', onClick: () => navigate('/colaboradores/nuevo') }}
+            />
           </Card>
         ) : (
-          <Card className="bg-gradient-to-br from-muted/20 to-muted/5 border-dashed border-2">
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <Users className="h-16 w-16 text-muted-foreground mb-4" />
-              <p className="text-lg font-semibold mb-2">No se encontraron colaboradores</p>
-              <p className="text-sm text-muted-foreground mb-4">
-                {searchTerm ? 'Intenta con otros términos de búsqueda' : 'Comienza agregando tu primer colaborador'}
-              </p>
-              {!searchTerm && (
-                <Button onClick={() => navigate('/colaboradores/nuevo')} className="gap-2 bg-primary hover:bg-primary/90">
-                  <Plus className="h-4 w-4" /> Nuevo Colaborador
-                </Button>
-              )}
-            </CardContent>
+          <Card className="gap-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/60 text-[13px] text-muted-foreground">
+                  <tr>
+                    <th className="px-5 py-2.5 text-left font-semibold">Nombre</th>
+                    <th className="px-4 py-2.5 text-left font-semibold">Cédula</th>
+                    <th className="px-4 py-2.5 text-left font-semibold">Cargo</th>
+                    <th className="px-5 py-2.5 text-right font-semibold">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {colaboradoresOrdenados.map((c) => (
+                    <tr key={c.id} className="transition-colors hover:bg-muted/40">
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-3">
+                          {c.avatar_url ? (
+                            <img
+                              src={buildAvatarUrl(c.avatar_url) ?? ''}
+                              alt={getNombre(c)}
+                              className={`h-9 w-9 shrink-0 rounded-full border border-border object-cover ${c.estado ? '' : 'opacity-60'}`}
+                            />
+                          ) : (
+                            <Avatar nombre={getNombre(c)} className={c.estado ? '' : 'opacity-60'} />
+                          )}
+                          <div className="min-w-0">
+                            <span className="block truncate font-semibold text-foreground">{getNombre(c)}</span>
+                            <Badge variant={c.estado ? 'success' : 'secondary'} className="mt-1">
+                              {c.estado ? 'Activo' : 'Inactivo'}
+                            </Badge>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 tabular-nums text-foreground">{c.documento}</td>
+                      <td className="px-4 py-3 text-foreground">{c.cargo}</td>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost" size="icon"
+                            className="text-muted-foreground"
+                            aria-label="Ver colaborador" title="Ver"
+                            onClick={() => navigate(`/colaboradores/${c.id}`)}
+                          >
+                            <Eye className="h-4 w-4" strokeWidth={2} />
+                          </Button>
+                          <Button
+                            variant="ghost" size="icon"
+                            className="text-muted-foreground"
+                            aria-label="Editar colaborador" title="Editar"
+                            onClick={() => navigate(`/colaboradores/editar/${c.id}`)}
+                          >
+                            <Edit className="h-4 w-4" strokeWidth={2} />
+                          </Button>
+                          <Button
+                            variant="ghost" size="icon"
+                            className={c.estado
+                              ? 'text-muted-foreground hover:text-destructive'
+                              : 'text-muted-foreground hover:text-success'}
+                            aria-label={c.estado ? 'Desactivar colaborador' : 'Activar colaborador'}
+                            title={c.estado ? 'Desactivar' : 'Activar'}
+                            onClick={() => handleToggle(c)}
+                          >
+                            {c.estado
+                              ? <UserX className="h-4 w-4" strokeWidth={2} />
+                              : <UserCheck className="h-4 w-4" strokeWidth={2} />}
+                          </Button>
+                          <Button
+                            variant="ghost" size="icon"
+                            className="text-muted-foreground hover:text-destructive"
+                            aria-label="Eliminar colaborador" title="Eliminar"
+                            onClick={() => handleEliminar(Number(c.id), getNombre(c))}
+                          >
+                            <Trash2 className="h-4 w-4" strokeWidth={2} />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </Card>
         )}
       </div>

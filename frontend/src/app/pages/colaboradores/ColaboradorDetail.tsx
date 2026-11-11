@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router';
+import { Link, useParams, useNavigate } from 'react-router';
 
 import { formatFecha } from '../../utils/fecha';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
@@ -10,9 +10,11 @@ import {
   Accordion, AccordionContent, AccordionItem, AccordionTrigger,
 } from '../../components/ui/accordion';
 import {
-  ArrowLeft, Edit, User, Briefcase, Shield, FileText,
+  Edit, User, Briefcase, Shield, FileText,
   Download, IdCard, Package, Building2, Loader2, Phone, Eye,
 } from 'lucide-react';
+import PageHeader from '../../components/common/PageHeader';
+import EmptyState from '../../components/common/EmptyState';
 import {
   colaboradoresApi,
   buildAvatarUrl,
@@ -99,15 +101,21 @@ export default function ColaboradorDetail() {
   };
 
   if (loading) return (
-    <div className="flex items-center justify-center py-16 text-muted-foreground gap-3">
-      <Loader2 className="w-5 h-5 animate-spin" /> Cargando colaborador...
-    </div>
+    <Card className="gap-0">
+      <div className="flex items-center justify-center gap-2 py-20 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" /> Cargando colaborador…
+      </div>
+    </Card>
   );
 
   if (!colaborador) return (
-    <div className="text-center py-16">
-      <p className="text-muted-foreground">Colaborador no encontrado</p>
-    </div>
+    <Card className="gap-0">
+      <EmptyState
+        title="No se encontró el colaborador"
+        description="La ficha no existe o ya fue eliminada."
+        action={{ label: 'Volver a colaboradores', onClick: () => navigate('/colaboradores') }}
+      />
+    </Card>
   );
 
   const nombre = [colaborador.primer_nombre, colaborador.segundo_nombre, colaborador.primer_apellido, colaborador.segundo_apellido].filter(Boolean).join(' ');
@@ -133,40 +141,38 @@ export default function ColaboradorDetail() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-        <div className="flex items-start gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/colaboradores')}
-            className="h-10 w-10 rounded-lg border border-border hover:bg-muted">
-            <ArrowLeft className="h-5 w-5" />
+      <PageHeader
+        backTo="/colaboradores"
+        eyebrow={<Link to="/colaboradores" className="hover:text-foreground">Colaboradores</Link>}
+        title={
+          <span className="flex flex-wrap items-center gap-2">
+            {nombre}
+            <Badge variant={colaborador.estado ? 'success' : 'secondary'}>
+              {colaborador.estado ? 'Activo' : 'Inactivo'}
+            </Badge>
+          </span>
+        }
+        description="Ficha completa del colaborador."
+        actions={
+          <Button onClick={() => navigate(`/colaboradores/editar/${id}`)}>
+            <Edit className="h-4 w-4" strokeWidth={2} />
+            Editar
           </Button>
-          <div className="space-y-1">
-            <div className="flex items-center gap-3">
-              <h1>Detalle de Colaborador</h1>
-              <Badge className={colaborador.estado ? 'bg-success/10 text-success border-success/20' : 'bg-muted text-muted-foreground border-muted'}>
-                {colaborador.estado ? 'Activo' : 'Inactivo'}
-              </Badge>
-            </div>
-            <p className="text-lead">Información completa del colaborador</p>
-          </div>
-        </div>
-        <Button onClick={() => navigate(`/colaboradores/editar/${id}`)} className="gap-2 bg-primary hover:bg-primary/90">
-          <Edit className="h-4 w-4" /> Editar
-        </Button>
-      </div>
+        }
+      />
 
       {/* Card principal */}
-      <Card className="border-border">
+      <Card className="gap-4">
         <CardContent className="p-6">
           <div className="flex items-start gap-6">
             {colaborador.avatar_url ? (
               <img
                 src={buildAvatarUrl(colaborador.avatar_url) ?? ''}
                 alt={nombre}
-                className={`h-24 w-24 rounded-full object-cover flex-shrink-0 border-2 ${colaborador.estado ? 'border-primary/20' : 'border-border opacity-60'}`}
+                className={`h-24 w-24 shrink-0 rounded-full border border-border object-cover ${colaborador.estado ? '' : 'opacity-60'}`}
               />
             ) : (
-              <div className={`h-24 w-24 rounded-full flex items-center justify-center text-2xl font-bold flex-shrink-0 ${colaborador.estado ? 'bg-primary/10 text-primary border-2 border-primary/20' : 'bg-muted text-muted-foreground border-2 border-border'}`}>
+              <div className={`flex h-24 w-24 shrink-0 items-center justify-center rounded-full text-2xl font-bold ${colaborador.estado ? 'bg-primary-soft text-primary' : 'bg-muted text-muted-foreground'}`}>
                 {iniciales}
               </div>
             )}
@@ -195,7 +201,7 @@ export default function ColaboradorDetail() {
       {/* Grid de info detallada */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Información Personal */}
-        <Card className="border-border">
+        <Card className="gap-4">
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
               <User className="h-5 w-5 text-primary" />
@@ -220,7 +226,7 @@ export default function ColaboradorDetail() {
         </Card>
 
         {/* Información Laboral */}
-        <Card className="border-border">
+        <Card className="gap-4">
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
               <Briefcase className="h-5 w-5 text-primary" />
@@ -255,7 +261,7 @@ export default function ColaboradorDetail() {
         </Card>
 
         {/* Seguridad Social */}
-        <Card className="border-border">
+        <Card className="gap-4">
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
               <Shield className="h-5 w-5 text-primary" />
@@ -271,7 +277,7 @@ export default function ColaboradorDetail() {
         </Card>
 
         {/* Identificación */}
-        <Card className="border-border">
+        <Card className="gap-4">
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
               <IdCard className="h-5 w-5 text-primary" />
@@ -292,7 +298,7 @@ export default function ColaboradorDetail() {
         </Card>
 
         {/* Dotación */}
-        <Card className="border-border">
+        <Card className="gap-4">
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
               <Package className="h-5 w-5 text-primary" />
@@ -307,7 +313,7 @@ export default function ColaboradorDetail() {
         </Card>
 
         {/* Bancario */}
-        <Card className="border-border">
+        <Card className="gap-4">
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
               <Building2 className="h-5 w-5 text-primary" />
@@ -325,7 +331,7 @@ export default function ColaboradorDetail() {
       {/* Documentos */}
       <div className="space-y-4">
         <h2>Documentos</h2>
-        <Card className="border-border">
+        <Card className="gap-4">
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
               <FileText className="h-5 w-5 text-primary" />
