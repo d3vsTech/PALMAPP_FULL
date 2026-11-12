@@ -62,6 +62,11 @@ export type Dominio =
   | 'calidad_post_cosecha'
   | 'friccion_laboral'
   | 'cobertura_agronomica'
+  /**
+   * Lo reportado en campo contra lo que llegó al camión: la diferencia con
+   * el reconteo y, desde 2026-11-11, los gajos que nunca se cargaron a uno
+   * (`metrica: gajos_pendientes_clavijo`).
+   */
   | 'calidad_medicion'
   | 'contratistas_vs_propios'
   | 'impacto_lluvia'
@@ -92,7 +97,22 @@ export interface Alerta {
   empleado_id: number | null;
   viaje_id: number | null;
   fecha_evidencia: string | null;
+  /**
+   * Nombre corto de lo que se midió, ej. `kg_gajo`, `podrido_pct`.
+   * 2026-11-11 — `gajos_pendientes_clavijo` (dominio `calidad_medicion`)
+   * son los gajos reportados en campo que nunca se cargaron a un camión y
+   * siguen sin decisión en Viajes → Ajuste de gajos. Umbral 10, el mismo
+   * de la alerta ALTA de nómina. Es un backlog: puede traer cosechas de
+   * meses anteriores al período del insight.
+   */
   metrica: string | null;
+  /**
+   * Valor observado. 2026-11-07 — siempre una cifra literal del snapshot,
+   * nunca un promedio que calculó la IA; cuando la alerta agrupa varios
+   * lotes o empleados es el **máximo** del grupo, y `lote_id` /
+   * `empleado_id` apuntan a ese máximo. El rango completo va en
+   * `descripcion`.
+   */
   valor: string | null;
   umbral: string | null;
   estado: EstadoAlerta;

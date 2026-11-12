@@ -31,10 +31,6 @@ import { CardAlerta } from './CardAlerta';
 import { FilaDeslizable } from '../common/FilaDeslizable';
 import { primeraFrase, sinJerga } from '../../lib/texto';
 
-/** Cuántas alertas mostrar en el resumen del dashboard (las de mayor severidad).
- *  El usuario puede seguir gestionando el resto — pero no las 40 posibles a la vez. */
-const MAX_ALERTAS_VISIBLES = 6;
-
 /** Lo que puede mostrar el bloque. Cada una es una lista distinta del informe. */
 type Vista = 'alertas' | 'recomendaciones';
 
@@ -159,11 +155,12 @@ export function SeccionInsightsIA() {
     .map((sev) => ({ sev, cuantas: activas.filter((a) => a.severidad === sev).length }))
     .filter((x) => x.cuantas > 0);
 
-  // Las mas graves primero: son las que se ven sin deslizar.
+  // Las mas graves primero: son las que se ven sin deslizar. Van todas —
+  // la fila se desliza y el filtro por severidad ya acota cuando hace falta;
+  // esconder la última de siete solo obligaba a preguntar cuál faltaba.
   const alertasFiltradas = [...activas]
     .filter((a) => severidad === 'TODAS' || a.severidad === severidad)
     .sort((a, b) => SEV_ORDER[a.severidad] - SEV_ORDER[b.severidad]);
-  const alertasVisibles = alertasFiltradas.slice(0, MAX_ALERTAS_VISIBLES);
 
   const recomendaciones = (insight?.recomendaciones ?? []).filter(
     (r) => r.estado === 'PENDIENTE',
@@ -393,7 +390,7 @@ export function SeccionInsightsIA() {
           </div>
 
           {vista === 'alertas' ? (
-            alertasVisibles.length === 0 ? (
+            alertasFiltradas.length === 0 ? (
               <Card className="border-border">
                 <CardContent className="p-6 text-center">
                   <CheckCircle2 className="h-8 w-8 text-success mx-auto mb-2" />
@@ -404,9 +401,8 @@ export function SeccionInsightsIA() {
                 </CardContent>
               </Card>
             ) : (
-              <>
               <FilaDeslizable etiqueta="Hallazgos de tu finca">
-                {alertasVisibles.map((a) => (
+                {alertasFiltradas.map((a) => (
                   <div
                     key={a.id}
                     className="w-[290px] shrink-0 snap-start md:w-[calc((100%-2rem)/3)]"
@@ -415,12 +411,6 @@ export function SeccionInsightsIA() {
                   </div>
                 ))}
               </FilaDeslizable>
-                {alertasFiltradas.length > MAX_ALERTAS_VISIBLES && (
-                  <p className="text-center text-xs text-muted-foreground">
-                    Mostramos los {MAX_ALERTAS_VISIBLES} más importantes de {alertasFiltradas.length} en total.
-                  </p>
-                )}
-              </>
             )
           ) : (
             <FilaDeslizable etiqueta="Sugerencias para tu finca">

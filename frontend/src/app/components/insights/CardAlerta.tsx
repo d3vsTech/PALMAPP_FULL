@@ -33,7 +33,9 @@ const METRICA_LABEL: Record<string, string> = {
   kg_gajo: 'Kilos por gajo',
   kg_totales: 'Producción total (kg)',
   kg_totales_vs_gajos: 'Kilos vs gajos reportados',
+  delta_gajos_pct: 'Diferencia entre reportado y reconteo (%)',
   delta_gajos_pct_promedio: 'Diferencia entre reportado y reconteo',
+  gajos_pendientes_clavijo: 'Gajos cortados sin camión',
   delta_kg_gajo_pct: 'Caída en kilos por gajo (%)',
   delta_kg_pct: 'Cambio en producción total (%)',
   fruto_verde_pct: 'Fruto verde (%)',
@@ -59,6 +61,18 @@ const ICONO_DOMINIO: Record<Dominio, LucideIcon> = {
   contratistas_vs_propios: Users,
   impacto_lluvia: CloudRain,
   comparativa_ano_ano: CalendarDays,
+};
+
+/**
+ * Algunas alertas se resuelven en una pantalla concreta, no en el módulo
+ * entero del dominio. La métrica manda sobre el dominio cuando está acá.
+ *
+ * 2026-11-11 — Los gajos cortados que nunca llegaron a un camión se deciden
+ * en Viajes → Ajuste de gajos (clavijo o reasignación); mandar al liquidador
+ * a Operaciones lo deja a dos pantallas de donde puede hacer algo.
+ */
+const RUTA_METRICA: Record<string, string> = {
+  gajos_pendientes_clavijo: '/viajes/ajustes-cosecha',
 };
 
 /**
@@ -105,7 +119,8 @@ export function CardAlerta({ alerta }: Props) {
   const severidad = SEVERIDAD_LABEL[alerta.severidad];
   const dominio = DOMINIO_LABEL[alerta.dominio] ?? alerta.dominio;
   const Icono = ICONO_DOMINIO[alerta.dominio] ?? AlertTriangle;
-  const ruta = RUTA_DOMINIO[alerta.dominio];
+  const ruta = (alerta.metrica ? RUTA_METRICA[alerta.metrica] : undefined)
+    ?? RUTA_DOMINIO[alerta.dominio];
 
   return (
     <div className="flex h-full flex-col rounded-xl border border-border bg-card p-4 transition-colors duration-200 hover:border-muted-strong">
