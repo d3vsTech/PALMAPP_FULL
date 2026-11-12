@@ -1599,10 +1599,20 @@ export interface ValidacionCosechaItem {
    */
   kg_extractora_fuera_del_periodo?: number;
   /**
-   * §4.6 (2026-09-05, opcional) — explicación de la regla aplicada cuando
-   * la fila concilia contra un viaje de otra quincena.
+   * §4.6 (2026-09-05, opcional) — con qué se estimó la porción que viajó en
+   * otra quincena: `VIAJE_HOMOGENEO` (promedio del propio camión, medición),
+   * `ULTIMO_PROMEDIO_LOTE` (última medición del lote anterior al camión),
+   * `BASELINE`, `PESO_CONFIRMADO`, `MIXTO` (más de una regla) o `null` si no
+   * hay porción cruzada. Texto legible en `describirReglaFueraDelPeriodo`.
    */
-  regla_fuera_del_periodo?: string | null;
+  regla_fuera_del_periodo?:
+    | 'VIAJE_HOMOGENEO'
+    | 'ULTIMO_PROMEDIO_LOTE'
+    | 'BASELINE'
+    | 'PESO_CONFIRMADO'
+    | 'MIXTO'
+    | null
+    | string;
 }
 
 export interface ValidacionCosechaDetalleColaborador {
@@ -1636,32 +1646,50 @@ export interface ValidacionCosechaDetalleColaborador {
  *
  * Origen del `promedio_efectivo` (orden de prioridad):
  *  1. `promedio_manual` (override admin en `nomina_promedio_lote`).
- *  2. AVG de `promedio_lote` auto-generado por viajes en el período.
- *  3. Baseline del año con `viaje_id IS NULL`.
+ *  2. AVG de las **mediciones** de viaje con fecha en el período.
+ *  3. Última medición del lote anterior al período.
+ *  4. Baseline del año con `viaje_id IS NULL`.
+ *
+ * 2026-11-11 — Antes el paso 2 promediaba también los baselines con fecha
+ * en el rango y el paso 3 no existía: un lote sin camión homogéneo en la
+ * quincena pagaba el baseline del año aunque tuviera meses de mediciones.
  */
 export interface ValidacionCosechaPromedioLote {
   lote_id: number;
   lote_nombre: string;
-  /** AVG calculado por backend desde `promedio_lote` en el período. */
-  promedio_auto: number;
+  /**
+   * El valor de la prioridad 2, 3 o 4 (el backend resuelve cuál).
+   * `null` (2026-11-11) cuando no hay nada que aplicar: ni mediciones ni
+   * baseline para ese lote.
+   */
+  promedio_auto: number | null;
   /** Override manual del admin para esta nómina × lote (null = sin ajuste). */
   promedio_manual: number | null;
-  /** El que realmente se usa en los cálculos de pago y cierre. */
-  promedio_efectivo: number;
   /**
-   * §4.6 — Cuántas filas del AVG vienen de viaje homogéneo (medición real).
-   * `0` = **ninguna medición**: `promedio_efectivo` es baseline puro, los
-   * dos lados de la comparación usan el mismo número y la diferencia da 0
-   * de forma engañosa. La UI debe marcarlo (F4).
+   * El que realmente se usa en los cálculos de pago y cierre: el manual si
+   * existe, si no el auto. `null` si tampoco hay auto.
+   */
+  promedio_efectivo: number | null;
+  /**
+   * §4.6 — Cuántos viajes homogéneos del rango alimentan `promedio_auto`.
+   * `0` = **ninguna medición en el período**: el promedio es una estimación,
+   * los dos lados de la comparación usan el mismo número y la diferencia da
+   * 0 de forma engañosa. La UI debe marcarlo (F4). Vale 0 en
+   * `ULTIMO_PROMEDIO_LOTE`, en `BASELINE` y cuando `origen` es `null`.
    */
   mediciones_bascula?: number;
   /**
-   * §4.6 — Procedencia del promedio.
-   *  - `BASCULA`: todas las filas vienen de viajes homogéneos.
-   *  - `MIXTO`: mezcla mediciones + baseline.
-   *  - `BASELINE`: **cero mediciones** → cero falso.
+   * §4.1 — Procedencia del promedio.
+   *  - `BASCULA`: hay mediciones de viaje homogéneo dentro del período.
+   *  - `ULTIMO_PROMEDIO_LOTE`: ninguna en el rango; manda la última anterior.
+   *  - `BASELINE`: el lote **nunca se ha pesado**.
+   *  - `null`: no hay nada que aplicar.
+   *
+   * 2026-11-11 — `MIXTO` dejó de existir (el baseline ya no se mezcla con
+   * las mediciones). El tipo lo tolera por si llega de un backend viejo;
+   * `describirOrigenPromedio` lo trata como estimación.
    */
-  origen?: 'BASCULA' | 'MIXTO' | 'BASELINE' | string;
+  origen?: 'BASCULA' | 'ULTIMO_PROMEDIO_LOTE' | 'BASELINE' | null | string;
 }
 
 /** Bundle calculado de comparación: lo registrado vs el reporte de la extractora. */

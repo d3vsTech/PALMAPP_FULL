@@ -54,6 +54,16 @@ import {
   ValidacionCosechaBundle,
   NominaErrorCodes,
 } from '../../../api/nomina';
+import {
+  describirOrigenPromedio,
+  describirReglaFueraDelPeriodo,
+  esPromedioEstimado,
+} from '../../components/nomina/origenPromedioLote';
+import {
+  cargarFuentesPromedio,
+  etiquetaFuentePromedio,
+  type FuentePromedioLote,
+} from '../../components/nomina/fuentePromedioLote';
 import { configuracionApi } from '../../../api/configuracion';
 import { operariosApi, tercerosApi, type OperarioSelectItem, type Tercero } from '../../../api/terceros';
 import type { ApiError } from '../../../api/client';
@@ -432,8 +442,8 @@ export default function NuevaNominaWizard() {
   /** `ajustado_at` devuelto por el PUT de cada lote — manda sobre el
    *  `updated_at` del listado en la columna "Fecha Actualización". */
   const [fechasAjusteManual, setFechasAjusteManual] = useState<Map<number, string>>(new Map());
-  /** lote_id → updated_at del último promedio del año seleccionado. */
-  const [fechasPromedioLote, setFechasPromedioLote] = useState<Map<number, string>>(new Map());
+  /** lote_id → el viaje (o el baseline) del que salió el promedio automático. */
+  const [fuentesPromedio, setFuentesPromedio] = useState<Map<number, FuentePromedioLote>>(new Map());
 
   /**
    * Persistir progreso en localStorage cada vez que cambia `nominaId` o
@@ -709,33 +719,29 @@ export default function NuevaNominaWizard() {
     setPromediosEditados({});
   }, [mostrarAjustePromedios]);
 
-  // Traer fecha de actualización por lote — pobla la columna "Fecha
-  // Actualización" del modal combinado. No bloquea la UI.
-  // Filtrado por el RANGO de la nómina (fecha_desde/fecha_hasta, inclusivos):
-  // el promedio "Auto" solo se calcula con registros cuya fecha cae dentro
-  // del rango. Con `anio` entraban registros de otras quincenas (p.ej. un
-  // viaje del 16/05 en la nómina 1–15 de mayo) y la lista no coincidía con
-  // lo que el sistema promedió. Además `anio` rompía nóminas que cruzan
-  // diciembre.
+  // De qué viaje salió el promedio de cada lote — pobla la primera columna
+  // del modal. La fecha que importa es la del camión que midió, no la del
+  // día en que alguien tocó el registro: el liquidador necesita saber con
+  // qué pesaje se está pagando. Un lote que se paga con una estimación
+  // (última medición anterior o baseline) tiene su fila fuera del rango,
+  // así que se busca aparte. No bloquea la UI.
   useEffect(() => {
     if (!mostrarAjustePromedios) return;
-    if (!fechaInicio || !fechaFin) return;
-    configuracionApi.promediosLote
-      .listar({ fecha_desde: fechaInicio, fecha_hasta: fechaFin, per_page: 100 })
-      .then((res) => {
-        const m = new Map<number, string>();
-        for (const p of res.data ?? []) {
-          const updated = (p as any).updated_at as string | undefined;
-          if (!updated) continue;
-          const existente = m.get(p.lote_id);
-          if (!existente || new Date(updated).getTime() > new Date(existente).getTime()) {
-            m.set(p.lote_id, updated);
-          }
-        }
-        setFechasPromedioLote(m);
+    if (!fechaInicio || !fechaFin || !bundleCosecha) return;
+    let vigente = true;
+    cargarFuentesPromedio(bundleCosecha.promedios_por_lote, fechaInicio, fechaFin)
+      .then((m) => {
+        if (vigente) setFuentesPromedio(m);
       })
-      .catch(() => setFechasPromedioLote(new Map()));
-  }, [mostrarAjustePromedios, fechaInicio, fechaFin]);
+      .catch(() => {
+        // Sin fuentes la columna muestra "—"; el ajuste de promedios sigue
+        // funcionando, que es para lo que se abre el modal.
+        if (vigente) setFuentesPromedio(new Map());
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [mostrarAjustePromedios, fechaInicio, fechaFin, bundleCosecha]);
 
   /** Guarda los promedios editados — un PUT por cada lote modificado.
    *  El valor original es el `promedio_efectivo` del bundle (que ya considera
@@ -2036,6 +2042,17 @@ export default function NuevaNominaWizard() {
                 const nombreALoteIdMap = new Map<string, number>();
                 for (const p of promediosPorLote) nombreALoteIdMap.set(p.lote_nombre, p.lote_id);
 
+                // §4.1 (2026-11-11) F4 — El promedio del lote puede ser una
+                // medición o una estimación, y la fila se lee distinto según
+                // cuál sea: con estimación los dos lados de la comparación
+                // usan el mismo número y la diferencia da 0 sin que nadie
+                // haya pesado esa fruta. Las filas van por nombre de lote.
+                const promedioDeLote = (nombreLote: string) => {
+                  const loteId = nombreALoteIdMap.get(nombreLote);
+                  if (loteId === undefined) return undefined;
+                  return promediosPorLote.find((x) => x.lote_id === loteId);
+                };
+
                 const kgTrabDeCosecha = (c: { lote: string; kg_trabajado: number; gajos_persona?: number }): number => {
                   const loteId = nombreALoteIdMap.get(c.lote);
                   if (loteId === undefined) return c.kg_trabajado;
@@ -2377,10 +2394,10 @@ export default function NuevaNominaWizard() {
                                                 en versión antigua. */}
                                             {d.cosechas.some((c) => c.promedio_efectivo != null || c.promedio_aplicado != null) && (
                                               <>
-                                                <th className="text-right p-2" title="Promedio kg/gajo del lote para toda la quincena">
+                                                <th className="text-right p-2" title="Promedio kg/gajo del lote para toda la quincena: los camiones homogéneos del período, o la última medición del lote si no hubo ninguno. El baseline del año solo aplica a un lote que nunca se ha pesado.">
                                                   Prom. lote
                                                 </th>
-                                                <th className="text-right p-2" title="Promedio kg/gajo que aplicó el viaje al pesar (BÁSCULA si medido, BASELINE si estimado)">
+                                                <th className="text-right p-2" title="Promedio kg/gajo que aplicó el viaje al pesar: medición si el camión era homogéneo, estimación si iba revuelto">
                                                   Prom. viaje
                                                 </th>
                                               </>
@@ -2411,7 +2428,7 @@ export default function NuevaNominaWizard() {
                                                 key={idx}
                                                 className={`border-b border-border/40 last:border-0 ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/5'} ${c.alerta_despacho === 'ALTA' ? 'bg-orange-50/40 dark:bg-orange-950/10' : ''}`}
                                                 title={c.despachado_fuera_del_periodo
-                                                  ? `El viaje salió el ${c.fecha_viaje ?? 'día siguiente'} (otra quincena), pero la fila SÍ concilia contra su báscula acá (§4.6). ${c.regla_fuera_del_periodo ?? ''}`
+                                                  ? `El viaje salió el ${c.fecha_viaje ?? 'día siguiente'} (otra quincena), pero la fila SÍ concilia contra su báscula acá. ${describirReglaFueraDelPeriodo(c.regla_fuera_del_periodo) ?? ''}`.trim()
                                                   : undefined}
                                               >
                                                 <td className="p-2 whitespace-nowrap">{c.fecha}</td>
@@ -2471,12 +2488,28 @@ export default function NuevaNominaWizard() {
                                                     la cabecera de la tabla. */}
                                                 {(d.cosechas ?? []).some((x) => x.promedio_efectivo != null || x.promedio_aplicado != null) && (
                                                   <>
-                                                    <td className="p-2 text-right text-muted-foreground">
+                                                    <td className="p-2 text-right">
                                                       {/* §9 API_NOMINA — promedios kg/gajo con 4 decimales
-                                                          (el cuarto decimal es lo que decide si cuadra o no). */}
-                                                      {c.promedio_efectivo != null
-                                                        ? Number(c.promedio_efectivo).toFixed(4)
-                                                        : '—'}
+                                                          (el cuarto decimal es lo que decide si cuadra o no).
+                                                          §4.1 (2026-11-11) — el "≈" marca el lote que no tuvo
+                                                          camión homogéneo en el período: su promedio está
+                                                          estimado y su diferencia no confirma nada. */}
+                                                      {c.promedio_efectivo != null ? (() => {
+                                                        const pl = promedioDeLote(c.lote);
+                                                        const org = pl
+                                                          ? describirOrigenPromedio(pl.origen, pl.mediciones_bascula)
+                                                          : null;
+                                                        const estimado = org != null && !org.medido;
+                                                        return (
+                                                          <span
+                                                            className={`inline-flex items-center gap-1 ${estimado ? 'text-amber-700' : 'text-muted-foreground'}`}
+                                                            title={org?.detalle}
+                                                          >
+                                                            {estimado && <span aria-hidden="true">≈</span>}
+                                                            {Number(c.promedio_efectivo).toFixed(4)}
+                                                          </span>
+                                                        );
+                                                      })() : <span className="text-muted-foreground">—</span>}
                                                     </td>
                                                     <td className="p-2 text-right">
                                                       {c.promedio_aplicado != null ? (() => {
@@ -2973,11 +3006,15 @@ export default function NuevaNominaWizard() {
             const nombreALoteId = new Map<string, number>();
             for (const p of bundleCosecha.promedios_por_lote) {
               const editado = promediosEditados[p.lote_id];
+              // `promedio_efectivo` llega null en un lote sin mediciones ni
+              // baseline (2026-11-11). Cero deja la simulación sin efecto,
+              // que es lo correcto: no hay promedio con qué recalcular.
+              const efectivo = p.promedio_efectivo ?? 0;
               promedioEfectivoActual.set(
                 p.lote_id,
-                editado !== undefined && editado > 0 ? editado : p.promedio_efectivo,
+                editado !== undefined && editado > 0 ? editado : efectivo,
               );
-              promedioOriginal.set(p.lote_id, p.promedio_efectivo);
+              promedioOriginal.set(p.lote_id, efectivo);
               nombreALoteId.set(p.lote_nombre, p.lote_id);
             }
 
@@ -3067,19 +3104,25 @@ export default function NuevaNominaWizard() {
           })()}
 
           {/* Tabla de promedios por lote (solo lotes con cosechas en el período).
-              4 columnas: Fecha Actualización | Lote | Auto | Ajuste Manual. */}
+              4 columnas: Medición | Lote | Auto | Ajuste Manual. */}
           <div className="rounded-lg border overflow-x-auto">
             <table className="w-full min-w-[640px]">
               <thead>
                 <tr className="border-b border-border bg-muted/50 text-xs text-muted-foreground">
-                  <th className="text-left p-3 pl-5 font-semibold">
-                    Fecha <span className="font-normal text-[10px] block leading-tight">Actualización</span>
+                  <th
+                    className="text-left p-3 pl-5 font-semibold"
+                    title="El viaje homogéneo que pesó esa fruta y el día que salió. Si en el período no hubo ninguno, de dónde se tomó el promedio."
+                  >
+                    Medición <span className="font-normal text-[10px] block leading-tight">de dónde sale el promedio</span>
                   </th>
                   <th className="text-left p-3 font-semibold">Lote</th>
-                  <th className="text-right p-3 font-semibold">
-                    {/* Incluye viajes Y baselines del admin con fecha en el
-                        rango de la nómina, no solo viajes. */}
-                    Auto <span className="font-normal text-[10px] block leading-tight">(promedios del período)</span>
+                  <th
+                    className="text-right p-3 font-semibold"
+                    title="Camiones homogéneos del período. Si no hubo ninguno, la última medición del lote; el baseline del año solo si el lote nunca se ha pesado."
+                  >
+                    {/* 2026-11-11 — El baseline del admin ya no entra al
+                        promedio del período: diluía la báscula. */}
+                    Auto <span className="font-normal text-[10px] block leading-tight">(promedio del lote)</span>
                   </th>
                   <th className="text-right p-3 pr-5 font-semibold">
                     Ajuste Manual <span className="font-normal text-[10px] block leading-tight">(esta nómina)</span>
@@ -3103,25 +3146,42 @@ export default function NuevaNominaWizard() {
                 ) : (
                   bundleCosecha.promedios_por_lote.map((p) => {
                     const valorActual = promedioValorActual(p.lote_id);
-                    // Prioridad: `ajustado_at` del PUT (fecha real del ajuste
-                    // manual) sobre el `updated_at` del listado del período.
-                    const fechaAct = fechasAjusteManual.get(p.lote_id)
-                      ?? fechasPromedioLote.get(p.lote_id);
-                    const fechaFmt = fechaAct
-                      ? new Date(fechaAct).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })
+                    const origen = describirOrigenPromedio(p.origen, p.mediciones_bascula);
+                    const fuente = fuentesPromedio.get(p.lote_id);
+                    // Con ajuste manual el promedio ya no sale de ningún
+                    // camión: lo puso una persona, y la fecha que explica el
+                    // número es la de ese ajuste.
+                    const esManual = p.promedio_manual != null;
+                    const fechaFuente = esManual
+                      ? fechasAjusteManual.get(p.lote_id) ?? null
+                      : fuente?.fecha ?? null;
+                    const fechaFmt = fechaFuente
+                      ? new Date(`${fechaFuente.slice(0, 10)}T12:00:00`)
+                        .toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })
                       : '—';
+                    const etiquetaFuente = esManual
+                      ? 'Ajuste manual'
+                      : etiquetaFuentePromedio(p.origen, fuente);
                     return (
                       <tr
                         key={p.lote_id}
                         className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
                       >
-                        <td className="p-3 pl-5 text-xs text-muted-foreground">
-                          {fechaFmt}
+                        <td className="p-3 pl-5 text-xs">
+                          <span className="block text-foreground">{fechaFmt}</span>
+                          <span
+                            className={`block text-[10px] leading-tight ${!esManual && origen && !origen.medido ? 'text-amber-700' : 'text-muted-foreground'}`}
+                            title={esManual ? 'Promedio puesto a mano para esta nómina' : origen?.detalle}
+                          >
+                            {etiquetaFuente}
+                          </span>
                         </td>
                         <td className="p-3 font-medium text-sm">{p.lote_nombre}</td>
                         <td className="p-3 text-right text-sm text-muted-foreground">
-                          {/* §9 API_NOMINA — promedios kg/gajo con 4 decimales. */}
-                          {p.promedio_auto.toFixed(4)}
+                          {/* §9 API_NOMINA — promedios kg/gajo con 4 decimales.
+                              `promedio_auto` llega null cuando el lote no tiene
+                              ni mediciones ni baseline (2026-11-11). */}
+                          {p.promedio_auto != null ? p.promedio_auto.toFixed(4) : '—'}
                         </td>
                         <td className="p-3 pr-5 text-right">
                           <div className="flex items-center justify-end gap-2">
@@ -3152,6 +3212,29 @@ export default function NuevaNominaWizard() {
               </tbody>
             </table>
           </div>
+
+          {/* F4 — El lote sin camión homogéneo en el período paga una
+              estimación, y el otro lado de la conciliación congela esa misma
+              estimación: su diferencia da 0 por construcción. En pantalla se
+              ve mejor que un lote medido, y es al revés. Hay que decirlo. */}
+          {(() => {
+            const estimados = (bundleCosecha?.promedios_por_lote ?? [])
+              .filter((p) => esPromedioEstimado(p));
+            if (estimados.length === 0) return null;
+            return (
+              <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
+                <p className="text-xs text-amber-800 dark:text-amber-300">
+                  <strong>
+                    {estimados.map((p) => p.lote_nombre).join(', ')}
+                  </strong>
+                  {estimados.length === 1 ? ' no tuvo' : ' no tuvieron'} ningún camión homogéneo en
+                  este período, así que {estimados.length === 1 ? 'su promedio está estimado' : 'sus promedios están estimados'}.
+                  Los dos lados de la comparación usan el mismo número: una diferencia en 0 no
+                  confirma que cuadre.
+                </p>
+              </div>
+            );
+          })()}
 
           <DialogFooter>
             <Button
