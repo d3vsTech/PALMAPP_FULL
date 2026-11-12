@@ -621,6 +621,28 @@ export interface TramoIncapacidad {
  * (doc §5.1). Solo colaboradores internos. Cada entrada corresponde a una
  * ausencia APROBADA que afecta al empleado en el rango de la nómina.
  */
+/**
+ * Una entrada por tipo de ausencia remunerada del período. La suma de
+ * `valor` es `total_incapacidades`, que agrupa incapacidad EPS, ARL,
+ * licencias y permisos remunerados: por eso la línea del devengado no puede
+ * llamarse "Incapacidades" a secas.
+ */
+export interface AusenciaRemuneradaResumen {
+  /** Constante del modelo, ej. `PERMISO_REMUNERADO`. */
+  tipo: string;
+  /** Nombre en español, listo para pintar. */
+  etiqueta: string;
+  /** Cuántas filas de ausencia se agruparon en esta entrada. */
+  filas: number;
+  dias: number;
+  /**
+   * `null` en el desprendible cuando hay más de un tipo: el valor por tipo
+   * no se persiste al liquidar. Con un solo tipo es todo `total_incapacidades`.
+   * En el preview siempre llega.
+   */
+  valor: number | null;
+}
+
 export interface DetalleAusenciaPreview {
   id: number;
   /** Constante del modelo, ej. INCAPACIDAD_EPS / AUSENCIA_INJUSTIFICADA. */
@@ -635,9 +657,20 @@ export interface DetalleAusenciaPreview {
   porcentaje_pago: number;
   /** Monto que suma (INCAPACIDAD) o descuenta (DESCUENTO) del pago. */
   valor_calculado: number;
-  /** `INCAPACIDAD` = remunerada, suma al devengado.
-   *  `DESCUENTO`   = no remunerada, descuenta del salario. */
-  afecta: 'INCAPACIDAD' | 'DESCUENTO';
+  /**
+   * Qué le hace la ausencia al pago. Manda sobre `es_remunerada` para
+   * decidir cómo se pinta la fila: una no remunerada puede descontar o no
+   * según la modalidad del contrato.
+   *
+   * `INCAPACIDAD` = remunerada, suma al devengado.
+   * `DESCUENTO`   = no remunerada de un FIJO, sale del salario/30.
+   * `SIN_PAGO`    = no remunerada de un PRODUCCION. Ni paga ni descuenta:
+   *                 a destajo el día que no se trabaja no produce y no se
+   *                 cobra (CST arts. 51.4 y 53). `valor_calculado` llega en
+   *                 0 y `valor_dia` queda solo como referencia.
+   * `INFORMATIVA` = novedad parcial por horas; nunca entró al cálculo.
+   */
+  afecta: 'INCAPACIDAD' | 'DESCUENTO' | 'SIN_PAGO' | 'INFORMATIVA';
   /**
    * §9.6 (FIX B) — Ausencias EPS contiguas del mismo empleado se agrupan
    * en un ÚNICO evento para aplicar la regla 100% / 66.67% desde el inicio
@@ -681,6 +714,13 @@ export interface DetalleAusenciaPreview {
   tramos?: TramoIncapacidad[];
   /** Frase lista para pintar debajo de la línea; la arma el backend. */
   resumen?: string | null;
+  /**
+   * 2026-11-11 — Fechas del rango en las que el colaborador registró jornal
+   * o cosecha. Esos días se liquidan como trabajados y quedan **fuera** de
+   * `dias_en_rango`, así que la licencia paga menos días que los del
+   * calendario. `[]` o ausente si no hubo ninguno.
+   */
+  fechas_con_trabajo?: string[];
 }
 
 /**
@@ -867,6 +907,18 @@ export interface PreviewLiquidacion {
    */
   detalle_ausencias?: DetalleAusenciaPreview[];
   /**
+   * Las ausencias remuneradas del período agrupadas por tipo. Es lo que
+   * permite abrir `total_incapacidades` en una línea por tipo en vez de una
+   * sola llamada "Incapacidades".
+   */
+  ausencias_remuneradas_resumen?: AusenciaRemuneradaResumen[];
+  /**
+   * El nombre correcto de esa línea cuando se muestra una sola: la etiqueta
+   * del tipo si hay uno solo, "Incapacidades y licencias" si hay varios y
+   * alguno es incapacidad, "Licencias y permisos remunerados" si ninguno.
+   */
+  etiqueta_ausencias_remuneradas?: string;
+  /**
    * Conteos de horas extras y ausencias PENDIENTES de aprobar del período.
    * Si alguno es > 0, el frontend debe mostrar advertencia (esos registros
    * NO están incluidos en el cálculo actual). Solo empleados internos.
@@ -1049,6 +1101,13 @@ export interface PreviewLiquidacion {
        * al 100 % y se liquida de más: conviene consolidarlo en una sola.
        */
       | 'INCAPACIDAD_EPS_POSIBLE_FRAGMENTACION'
+      /**
+       * 2026-11-11 — Hay jornal o cosecha en días cubiertos por una ausencia
+       * remunerada. Esos días se liquidan como trabajados y la licencia deja
+       * de pagarlos, así que o la planilla está mal o la novedad se acortó.
+       * Trae `fechas[]` y `ausencias[]` en `detalle`.
+       */
+      | 'AUSENCIA_REMUNERADA_CON_TRABAJO_REGISTRADO'
       | string;
     mensaje?: string;
     /**
@@ -1272,6 +1331,10 @@ export interface DesprendibleData {
     total_horas_extra: number;
     total_recargos: number;
     total_incapacidades: number;
+    /** Las remuneradas por tipo; `valor` puede ser `null`. */
+    ausencias_remuneradas_resumen?: AusenciaRemuneradaResumen[];
+    /** El nombre de la línea única de `total_incapacidades`. */
+    etiqueta_ausencias_remuneradas?: string;
     subsidio_transporte: number;
     /**
      * PR-N6 — Días con los que se calculó el auxilio, leídos de
@@ -1323,11 +1386,18 @@ export interface DesprendibleData {
     detalle_ausencias?: (Omit<DetalleAusenciaPreview, 'dias_en_rango' | 'valor_calculado' | 'afecta'> & {
       dias_calendario: number;
       /**
+       * 2026-11-11 — Días que paga esta fila: el calendario del rango menos
+       * los días con trabajo registrado. Es el que va en la columna "Días".
+       * Ausente en una respuesta anterior a ese cambio; ahí se cae a
+       * `dias_calendario`.
+       */
+      dias_en_rango?: number;
+      /**
        * PR-N3 — Una parcial nunca entró al cálculo (no está en el preview)
        * pero quedó LIQUIDADA en esta nómina y se lista como informativa, con
        * `dias_calendario: 0` y sin valor.
        */
-      afecta: 'INCAPACIDAD' | 'DESCUENTO' | 'INFORMATIVA';
+      afecta: 'INCAPACIDAD' | 'DESCUENTO' | 'SIN_PAGO' | 'INFORMATIVA';
       parcial?: boolean;
       hora_inicio?: string | null;
       hora_fin?: string | null;

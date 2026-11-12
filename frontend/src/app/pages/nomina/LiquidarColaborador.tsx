@@ -37,6 +37,7 @@ import { toast } from 'sonner';
 import { AdvertenciasBanner, NotaAntesDeConfirmar } from '../../components/nomina/AdvertenciasBanner';
 import { DetalleDescansos } from '../../components/nomina/DetalleDescansos';
 import { DetalleAusencias } from '../../components/nomina/DetalleAusencias';
+import { lineasAusenciasRemuneradas, motivosRemunerados } from '../../components/nomina/ausenciasRemuneradas';
 import { FaltasInjustificadas } from '../../components/nomina/FaltasInjustificadas';
 import { avisarCierreAutomatico } from '../../utils/cierreAutomaticoNomina';
 import { DiasVacaciones } from '../../components/nomina/DiasVacaciones';
@@ -1170,19 +1171,22 @@ export default function LiquidarColaborador() {
                   </span>
                 </div>
               )}
-              {(preview.total_incapacidades ?? 0) > 0 && (
-                <div className="flex justify-between px-4 py-3 border-b border-success/10">
+              {/* Una línea por tipo de ausencia remunerada. `total_incapacidades`
+                  mete en el mismo saco la incapacidad de la EPS y el permiso
+                  remunerado, y escribir "INCAPACIDADES" sobre un permiso es
+                  decirle al trabajador algo que no pasó. */}
+              {(preview.total_incapacidades ?? 0) > 0 && lineasAusenciasRemuneradas({
+                resumen: preview.ausencias_remuneradas_resumen,
+                etiqueta: preview.etiqueta_ausencias_remuneradas,
+                total: preview.total_incapacidades ?? 0,
+                motivos: motivosRemunerados(preview.detalle_ausencias),
+              }).map((linea, iLinea) => (
+                <div key={linea.clave} className="flex justify-between px-4 py-3 border-b border-success/10">
                   <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Incapacidades
-                    {(preview.detalle_ausencias?.length ?? 0) > 0 && (
+                    {linea.etiqueta}
+                    {linea.detalle && (
                       <span className="ml-2 normal-case tracking-normal text-muted-foreground/80">
-                        · {Array.from(new Set(
-                          preview.detalle_ausencias!
-                            // Solo las que suman al devengado (INCAPACIDAD).
-                            .filter((a) => a.afecta === 'INCAPACIDAD')
-                            .map((a) => a.motivo_nombre)
-                            .filter(Boolean),
-                        )).join(', ')}
+                        · {linea.detalle}
                       </span>
                     )}
                     {/* §9.6 (FIX B) — Si alguna incapacidad EPS agrupa varios
@@ -1191,6 +1195,7 @@ export default function LiquidarColaborador() {
                         100%/66.67% se aplicó desde el inicio real, no desde
                         cada fila. Sale con tooltip explicando qué es. */}
                     {(() => {
+                      if (iLinea > 0) return null;
                       const agrupadas = (preview.detalle_ausencias ?? []).filter(
                         (a) => a.afecta === 'INCAPACIDAD' && (a.ausencia_ids?.length ?? 0) > 1,
                       );
@@ -1209,9 +1214,9 @@ export default function LiquidarColaborador() {
                       );
                     })()}
                   </span>
-                  <span className="font-semibold">${(preview.total_incapacidades ?? 0).toLocaleString('es-CO')}</span>
+                  <span className="font-semibold">${linea.valor.toLocaleString('es-CO')}</span>
                 </div>
-              )}
+              ))}
               {/* PR-L15 — Vacaciones con `modo_pago = NOMINA`: el tramo del
                   disfrute es salario de este período y ya viene dentro de
                   `total_devengado`. Las `DIRECTO` llegan en 0: las pagó

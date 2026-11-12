@@ -48,10 +48,18 @@ export interface AusenciaItem {
   /** Suma (INCAPACIDAD) o descuenta (DESCUENTO). Ausente en el desprendible. */
   valor_calculado?: number;
   /**
+   * Qué le hace la ausencia al pago. Manda sobre `es_remunerada`: una no
+   * remunerada descuenta o no según la modalidad del contrato.
+   *
    * PR-N3 — `INFORMATIVA` es una novedad parcial: quedó LIQUIDADA en la
    * nómina pero nunca entró al cálculo, así que no suma ni descuenta.
+   *
+   * 2026-11-10 — `SIN_PAGO` es la no remunerada de un destajero: el día no
+   * produjo y no se cobra, pero tampoco se descuenta nada (CST art. 53).
+   * Antes llegaba como `DESCUENTO` y la tabla pintaba un negativo en rojo
+   * que no salía de ningún total.
    */
-  afecta: 'INCAPACIDAD' | 'DESCUENTO' | 'INFORMATIVA' | string;
+  afecta: 'INCAPACIDAD' | 'DESCUENTO' | 'SIN_PAGO' | 'INFORMATIVA' | string;
   /** PR-N3 — Solo en el desprendible: la novedad es por horas. */
   parcial?: boolean;
   hora_inicio?: string | null;
@@ -72,6 +80,8 @@ export interface AusenciaItem {
   piso_smlv_aplicado?: boolean;
   tramos?: TramoIncapacidad[];
   resumen?: string | null;
+  /** Días del rango con jornal o cosecha: se pagaron como trabajados. */
+  fechas_con_trabajo?: string[];
 }
 
 interface Props {
@@ -96,6 +106,12 @@ function rangoFechas(a: AusenciaItem): string {
   const desde = String(a.fecha_inicio).slice(0, 10);
   const hasta = String(a.fecha_fin).slice(0, 10);
   return desde === hasta ? desde : `${desde} — ${hasta}`;
+}
+
+/** `2026-03-30T05:00:00Z` -> `30/03/2026`, sin construir un Date. */
+function soloFecha(iso: string): string {
+  const [a, m, d] = String(iso).slice(0, 10).split('-');
+  return d ? `${d}/${m}/${a}` : String(iso);
 }
 
 /** "EPS" en vez de "EPS_PROLONGADA" ocupa menos y dice lo mismo en la fila. */
@@ -177,9 +193,25 @@ export function DetalleAusencias({ items, formatMoney, variant = 'default', titu
         </div>
 
         {items.map((a, i) => {
+          // `dias_en_rango` son los que paga la fila; `dias_calendario`, los
+          // del rango completo. Con un día trabajado adentro no son lo mismo.
           const dias = a.dias_en_rango ?? a.dias_calendario ?? 0;
+          const conTrabajo = (a.fechas_con_trabajo ?? []).map(soloFecha);
+          const notaTrabajo = conTrabajo.length === 0
+            ? null
+            : conTrabajo.length === 1
+              ? `${conTrabajo[0]} se liquidó como día trabajado`
+              : `${conTrabajo.join(', ')} se liquidaron como días trabajados`;
           const descuenta = a.afecta === 'DESCUENTO';
-          const informativa = a.afecta === 'INFORMATIVA' || a.parcial === true;
+          const sinPago = a.afecta === 'SIN_PAGO';
+          /*
+           * Cualquier valor que no conozcamos se trata como informativo: sin
+           * cifra y sin signo. Es la única salida segura si el backend
+           * agrega un caso nuevo antes que el front.
+           */
+          const informativa =
+            a.parcial === true ||
+            !['INCAPACIDAD', 'DESCUENTO', 'SIN_PAGO'].includes(String(a.afecta));
           const horario = a.hora_inicio && a.hora_fin
             ? `${String(a.hora_inicio).slice(0, 5)} a ${String(a.hora_fin).slice(0, 5)}`
             : null;
@@ -226,9 +258,19 @@ export function DetalleAusencias({ items, formatMoney, variant = 'default', titu
                     {tramos} tramos en un solo evento
                   </span>
                 )}
-                {/* La frase la arma el backend con el evento completo, que
-                    puede haber empezado en la quincena anterior. */}
-                {!isCompact && a.resumen && (
+                {/* El día con jornal o cosecha se paga como trabajado y sale
+                    de la licencia, así que la fila paga menos días que los
+                    del calendario. Sin esta nota la resta no se explica. */}
+                {notaTrabajo && (
+                  <span className="block text-[10px] leading-snug text-muted-foreground">
+                    {notaTrabajo}
+                  </span>
+                )}
+                {/* En una fila que no se paga no va ningún texto debajo: el
+                    backend manda una frase con el artículo del código y el
+                    valor del día, y la columna de al lado ya dijo lo único
+                    que hay que decir. */}
+                {!isCompact && !sinPago && a.resumen && (
                   <span className="block text-[10px] leading-snug text-muted-foreground">
                     {a.resumen}
                   </span>
@@ -249,10 +291,18 @@ export function DetalleAusencias({ items, formatMoney, variant = 'default', titu
                 )}
               </span>
 
+              {/* El estilo lo manda `afecta`, no `es_remunerada`: sin cifra
+                  ni rojo cuando el día simplemente no se paga. */}
               <span
-                className={`text-right font-semibold ${descuenta ? 'text-destructive' : ''}`}
+                className={`text-right font-semibold ${
+                  descuenta ? 'text-destructive' : sinPago ? 'font-medium text-muted-foreground' : ''
+                }`}
               >
-                {valor > 0 && !informativa ? `${descuenta ? '−' : ''}${formatMoney(valor)}` : '—'}
+                {sinPago
+                  ? 'No se paga'
+                  : valor > 0 && !informativa
+                    ? `${descuenta ? '−' : ''}${formatMoney(valor)}`
+                    : '—'}
               </span>
             </div>
           );

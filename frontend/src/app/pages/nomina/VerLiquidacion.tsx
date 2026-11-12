@@ -28,6 +28,7 @@ import { nominaApi, type DesprendibleData } from '../../../api/nomina';
 import { nombreArchivoDesprendible } from './DesprendiblePago';
 import type { ApiError } from '../../../api/client';
 import { imprimirPdf } from '../../lib/pdf/imprimirPdf';
+import { lineasAusenciasRemuneradas, motivosRemunerados } from '../../components/nomina/ausenciasRemuneradas';
 
 function getIniciales(nombre: string): string {
   const partes = nombre.trim().split(' ').filter(Boolean);
@@ -270,20 +271,18 @@ export default function VerLiquidacion() {
             {liquidacion.total_recargos > 0 && (
               <Item label="Recargos" value={fmt(liquidacion.total_recargos)} />
             )}
-            {liquidacion.total_incapacidades > 0 && (
+            {liquidacion.total_incapacidades > 0 && lineasAusenciasRemuneradas({
+              resumen: liquidacion.ausencias_remuneradas_resumen,
+              etiqueta: liquidacion.etiqueta_ausencias_remuneradas,
+              total: liquidacion.total_incapacidades,
+              motivos: motivosRemunerados(liquidacion.detalle_ausencias),
+            }).map((linea) => (
               <Item
-                label={
-                  (liquidacion as any).detalle_ausencias?.length > 0
-                    ? `Incapacidades · ${Array.from(new Set(
-                        ((liquidacion as any).detalle_ausencias as any[])
-                          .filter((a) => a.afecta === 'INCAPACIDAD')
-                          .map((a) => a.motivo_nombre).filter(Boolean),
-                      )).join(', ')}`
-                    : 'Incapacidades'
-                }
-                value={fmt(liquidacion.total_incapacidades)}
+                key={linea.clave}
+                label={linea.detalle ? `${linea.etiqueta} · ${linea.detalle}` : linea.etiqueta}
+                value={fmt(linea.valor)}
               />
-            )}
+            ))}
             {liquidacion.bonificaciones.length > 0 && (
               <>
                 <p className="text-xs font-semibold mt-3 mb-1">Bonificaciones</p>

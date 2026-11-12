@@ -24,6 +24,7 @@ import { nominaApi, DesprendibleData } from '../../../api/nomina';
 import type { ApiError } from '../../../api/client';
 import { DetalleDescansos } from '../../components/nomina/DetalleDescansos';
 import { DetalleAusencias } from '../../components/nomina/DetalleAusencias';
+import { lineasAusenciasRemuneradas, motivosRemunerados } from '../../components/nomina/ausenciasRemuneradas';
 import { FaltasInjustificadas } from '../../components/nomina/FaltasInjustificadas';
 import { DiasVacaciones } from '../../components/nomina/DiasVacaciones';
 import { imprimirPdf } from '../../lib/pdf/imprimirPdf';
@@ -256,7 +257,18 @@ export default function DesprendiblePago() {
                     value={fmt(liquidacion.total_horas_extra + liquidacion.total_recargos)}
                   />
                 )}
-                <RowSmall label="Incapacidades" value={fmt(liquidacion.total_incapacidades)} />
+                {liquidacion.total_incapacidades > 0 && lineasAusenciasRemuneradas({
+                  resumen: liquidacion.ausencias_remuneradas_resumen,
+                  etiqueta: liquidacion.etiqueta_ausencias_remuneradas,
+                  total: liquidacion.total_incapacidades,
+                  motivos: motivosRemunerados(liquidacion.detalle_ausencias),
+                }).map((linea) => (
+                  <RowSmall
+                    key={linea.clave}
+                    label={linea.detalle ? `${linea.etiqueta} (${linea.detalle})` : linea.etiqueta}
+                    value={fmt(linea.valor)}
+                  />
+                ))}
                 {/* PR-L15 - Solo las vacaciones que paga esta nomina. Las que
                     pago Liquidaciones llegan en 0 y siguen apareciendo abajo,
                     sin valor, para explicar los dias que faltan. */}

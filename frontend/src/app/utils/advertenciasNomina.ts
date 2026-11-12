@@ -48,6 +48,10 @@ const CATALOGO: Record<string, DefinicionAdvertencia> = {
     titulo: 'Trabajó en días que ya se pagaron como vacaciones',
     severidad: 'critica',
   },
+  AUSENCIA_REMUNERADA_CON_TRABAJO_REGISTRADO: {
+    titulo: 'Trabajó en días cubiertos por una licencia o incapacidad',
+    severidad: 'critica',
+  },
 
   // Informativas: explican una cifra, no piden una decisión ahora.
   DESCANSO_DOMINICAL_PERDIDO: {
