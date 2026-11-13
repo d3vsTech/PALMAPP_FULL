@@ -78,6 +78,14 @@ function periodoLabel(n: Nomina): string {
   return `${mes} ${n.anio}`;
 }
 
+/**
+ * Pesos con separador de miles y SIEMPRE dos decimales. Sin el minimo la
+ * columna mezclaba `$71.557,1` con `$77.213,64` y las cifras no alineaban.
+ */
+function fmtPesos(v: number): string {
+  return `$${v.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 function toNumber(v: string | number | null | undefined): number {
   if (v == null) return 0;
   if (typeof v === 'number') return v;
@@ -626,6 +634,22 @@ export default function NominaDetalle() {
   const empleadosMostrar = abierta
     ? empleadosInternos
     : empleadosInternos.filter((e) => e.estado === 'LIQUIDADO');
+
+  /**
+   * Pie de la tabla. Solo se pinta con la nomina CERRADA, donde cada fila
+   * ya tiene sus columnas congeladas; con la nomina abierta las pendientes
+   * sumarian ceros y el total enganaria.
+   */
+  const totalesTabla = empleadosMostrar.reduce(
+    (acc, e) => ({
+      jornales: acc.jornales + toNumber(e.total_jornales),
+      cosechas: acc.cosechas + toNumber(e.total_cosecha),
+      devengado: acc.devengado + toNumber(e.total_devengado) + toNumber(e.subsidio_transporte),
+      deducciones: acc.deducciones + toNumber(e.total_deducciones),
+      neto: acc.neto + toNumber(e.total_neto),
+    }),
+    { jornales: 0, cosechas: 0, devengado: 0, deducciones: 0, neto: 0 },
+  );
 
   const quitarEmpleado = async () => {
     if (!empleadoAQuitar) return;
@@ -1696,18 +1720,34 @@ export default function NominaDetalle() {
                       <tr className="border-b border-border bg-muted/30">
                         <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Colaborador</th>
                         <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Tipo</th>
-                        <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Salario Base</th>
+                        {abierta && (
+                          <>
+                            <th className="text-right p-4 font-semibold text-sm text-muted-foreground">
+                              Neto proyectado
+                              <span className="block text-[10px] font-normal leading-tight">
+                                lo que va a cobrar
+                              </span>
+                            </th>
+                            <th className="text-center p-4 font-semibold text-sm text-muted-foreground">Estado</th>
+                          </>
+                        )}
                         {!abierta && (
                           <>
                             <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Jornales</th>
                             <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Cosechas</th>
-                            <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Devengado</th>
-                            <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Deducciones</th>
-                            <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Neto</th>
+                            <th className="text-right p-4 font-semibold text-sm text-muted-foreground">
+                              Devengado
+                              <span className="block text-[10px] font-normal leading-tight">
+                                incluye auxilio de transporte
+                              </span>
+                            </th>
+                            <th className="text-right p-4 font-semibold text-sm text-muted-foreground">
+                              Deducciones
+                            </th>
+                            <th className="text-right p-4 font-semibold text-sm text-muted-foreground">
+                              Neto a pagar
+                            </th>
                           </>
-                        )}
-                        {abierta && (
-                          <th className="text-center p-4 font-semibold text-sm text-muted-foreground">Estado</th>
                         )}
                         <th className="text-right p-4 font-semibold text-sm text-muted-foreground">Acciones</th>
                       </tr>
@@ -1735,8 +1775,17 @@ export default function NominaDetalle() {
                         const terceroNombre = esOperario
                           ? emp.operario?.tercero?.razon_social
                           : null;
-                        const jornales = toNumber((emp as any).total_jornales);
-                        const cosechas = toNumber((emp as any).total_cosechas);
+                        // El campo del backend es `total_cosecha`, en
+                        // singular. Con el plural la columna leia undefined y
+                        // todas las filas mostraban cero.
+                        const jornales = toNumber(emp.total_jornales);
+                        const cosechas = toNumber(emp.total_cosecha);
+                        // `total_devengado` es salario puro: el auxilio de
+                        // transporte no cotiza y el backend lo deja afuera
+                        // (API_NOMINA 9.4). La columna lo suma porque es lo
+                        // que la persona devenga en el periodo.
+                        const auxilio = toNumber(emp.subsidio_transporte);
+                        const devengado = toNumber(emp.total_devengado) + auxilio;
                         return (
                           <tr
                             key={emp.id}
@@ -1753,7 +1802,7 @@ export default function NominaDetalle() {
                                 }`}>
                                   <span className="text-sm font-bold">{getIniciales(nombre)}</span>
                                 </div>
-                                <div>
+                                <div className="min-w-0">
                                   <span className="font-semibold text-sm">{nombre}</span>
                                   {cargo && (
                                     <p className="text-xs text-muted-foreground">{cargo}</p>
@@ -1772,6 +1821,7 @@ export default function NominaDetalle() {
                                 </Badge>
                               )}
                             </td>
+                            {abierta && (
                             <td className="p-4 text-right">
                               {/* Prioridad: LIQUIDADO usa total_devengado
                                   congelado. Si el usuario abrió el editor de
@@ -1813,27 +1863,33 @@ export default function NominaDetalle() {
                                 );
                               })()}
                             </td>
+                            )}
                             {!abierta && (
                               <>
-                                <td className="p-4 text-right">
-                                  <span className="text-sm font-medium">${jornales.toLocaleString('es-CO')}</span>
+                                <td className="p-4 text-right tabular-nums">
+                                  <span className="text-sm">{fmtPesos(jornales)}</span>
                                 </td>
-                                <td className="p-4 text-right">
-                                  <span className="text-sm font-medium">${cosechas.toLocaleString('es-CO')}</span>
+                                <td className="p-4 text-right tabular-nums">
+                                  <span className="text-sm">{fmtPesos(cosechas)}</span>
                                 </td>
-                                <td className="p-4 text-right">
-                                  <span className="text-sm font-semibold text-success">
-                                    ${toNumber(emp.total_devengado).toLocaleString('es-CO')}
+                                <td className="p-4 text-right tabular-nums">
+                                  <span
+                                    className="text-sm font-medium text-success"
+                                    title={auxilio > 0
+                                      ? `Salario ${fmtPesos(toNumber(emp.total_devengado))} + auxilio de transporte ${fmtPesos(auxilio)}`
+                                      : 'Sin auxilio de transporte en el periodo'}
+                                  >
+                                    {fmtPesos(devengado)}
                                   </span>
                                 </td>
-                                <td className="p-4 text-right">
-                                  <span className="text-sm font-medium text-destructive">
-                                    ${toNumber(emp.total_deducciones).toLocaleString('es-CO')}
+                                <td className="p-4 text-right tabular-nums">
+                                  <span className="text-sm text-destructive">
+                                    {fmtPesos(toNumber(emp.total_deducciones))}
                                   </span>
                                 </td>
-                                <td className="p-4 text-right">
+                                <td className="p-4 text-right tabular-nums">
                                   <span className="text-sm font-bold text-primary">
-                                    ${toNumber(emp.total_neto).toLocaleString('es-CO')}
+                                    {fmtPesos(toNumber(emp.total_neto))}
                                   </span>
                                 </td>
                               </>
@@ -1910,6 +1966,32 @@ export default function NominaDetalle() {
                         );
                       })}
                     </tbody>
+                    {!abierta && (
+                      <tfoot>
+                        <tr className="border-t-2 border-border bg-muted/30">
+                          <td className="p-4 text-sm font-semibold">
+                            Total {empleadosMostrar.length} colaborador{empleadosMostrar.length === 1 ? '' : 'es'}
+                          </td>
+                          <td />
+                          <td className="p-4 text-right text-sm font-semibold tabular-nums">
+                            {fmtPesos(totalesTabla.jornales)}
+                          </td>
+                          <td className="p-4 text-right text-sm font-semibold tabular-nums">
+                            {fmtPesos(totalesTabla.cosechas)}
+                          </td>
+                          <td className="p-4 text-right text-sm font-semibold text-success tabular-nums">
+                            {fmtPesos(totalesTabla.devengado)}
+                          </td>
+                          <td className="p-4 text-right text-sm font-semibold text-destructive tabular-nums">
+                            {fmtPesos(totalesTabla.deducciones)}
+                          </td>
+                          <td className="p-4 text-right text-sm font-bold text-primary tabular-nums">
+                            {fmtPesos(totalesTabla.neto)}
+                          </td>
+                          <td />
+                        </tr>
+                      </tfoot>
+                    )}
                   </table>
                 </div>
               )}
