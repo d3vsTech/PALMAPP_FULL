@@ -39,6 +39,7 @@ import {
 } from '../../../../api/liquidaciones';
 import type { ApiError } from '../../../../api/client';
 import { formatFecha } from '../../../utils/fecha';
+import { comparePersonaByFirstName, sortByFirstName } from '../../../utils/personas';
 import { fmtCOP, getIniciales, TEXTOS_PERIODO, type TipoPeriodoDetalle } from './textos';
 import VistaPeriodoCerrado from './VistaPeriodoCerrado';
 
@@ -341,8 +342,10 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
     setCargandoDisponibles(true);
     try {
       const res = await liquidacionesApi.colaboradoresDisponibles(periodoId);
-      setElegibles(res.data.empleados);
-      setExcluidos(res.meta.excluidos ?? []);
+      // Por primer nombre, como en Pagos: quien busca a alguien lo busca
+      // por como se llama, no por el orden en que lo creo el backend.
+      setElegibles(sortByFirstName(res.data.empleados));
+      setExcluidos(sortByFirstName(res.meta.excluidos ?? []));
     } catch (err) {
       const e = err as ApiError;
       if (e.code === LiquidacionesErrorCodes.PERIODO_CESANTIAS_REQUERIDO) {
@@ -508,7 +511,10 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
     return <VistaPeriodoCerrado periodo={periodo} tipo={tipo} onReload={recargar} />;
   }
 
-  const filasAgregadas = periodo.filas ?? [];
+  // El mismo orden que la lista de elegibles, para que agregar a alguien no
+  // lo mande al final de los chips.
+  const filasAgregadas = [...(periodo.filas ?? [])]
+    .sort((a, b) => comparePersonaByFirstName(a.empleado, b.empleado));
 
   // ── Wizard BORRADOR ───────────────────────────────────────────────────────
   return (
@@ -792,7 +798,9 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
             </div>
           )}
 
-          {!cargandoPreview && preview?.filas.map((fila) => (
+          {!cargandoPreview && [...(preview?.filas ?? [])]
+            .sort((a, b) => comparePersonaByFirstName(a.empleado, b.empleado))
+            .map((fila) => (
             <DesprendiblePreview key={fila.fila_id} fila={fila} tipo={tipo} />
           ))}
 

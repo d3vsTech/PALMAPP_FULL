@@ -31,6 +31,7 @@ import {
 } from '../../../../api/liquidaciones';
 import type { ApiError } from '../../../../api/client';
 import { formatFecha } from '../../../utils/fecha';
+import { comparePersonaByFirstName } from '../../../utils/personas';
 import { fmtCOP, descargarBlob, nombrePdf, semestreLabel, TEXTOS_PERIODO, type TipoPeriodoDetalle } from './textos';
 import { imprimirPdf } from '../../../lib/pdf/imprimirPdf';
 import RegistrarPagoDialog, { type ObjetivoPago } from './RegistrarPagoDialog';
@@ -47,7 +48,9 @@ export default function VistaPeriodoCerrado({ periodo, tipo, onReload }: Props) 
   const txt = TEXTOS_PERIODO[tipo];
   const esCesantias = tipo === 'CESANTIAS';
   const esPrima = tipo === 'PRIMA';
-  const filas = periodo.filas ?? [];
+  // Por primer nombre, el orden de todo el sistema.
+  const filas = [...(periodo.filas ?? [])]
+    .sort((a, b) => comparePersonaByFirstName(a.empleado, b.empleado));
   const pendientes = filas.filter(f => f.estado_pago === 'PENDIENTE');
 
   const [objetivoPago, setObjetivoPago] = useState<ObjetivoPago | null>(null);

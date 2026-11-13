@@ -12,6 +12,7 @@ import { AlertTriangle, Loader2, User } from 'lucide-react';
 import { colaboradoresApi, type ColaboradorSelectItem } from '../../../../api/colaboradores';
 import type { ApiError } from '../../../../api/client';
 import { formatFecha } from '../tipos';
+import { sortByFirstName } from '../../../utils/personas';
 
 /** Sin tildes y en minúsculas: "Martinez" encuentra a "Martínez". */
 const sinTildes = (t: string) =>
@@ -92,7 +93,8 @@ export function BuscadorColaborador({ fecha, seleccionadoId, nombreInicial, onSe
         .selectListado({ q: consulta || undefined, fecha: fecha || undefined })
         .then((res) => {
           if (id !== reqId.current) return;
-          setOpciones(res.data ?? []);
+          // Por primer nombre, como el resto del sistema.
+          setOpciones(sortByFirstName(res.data ?? []));
           setError(null);
         })
         .catch((err) => {
