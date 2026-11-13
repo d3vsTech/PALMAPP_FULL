@@ -271,18 +271,6 @@ export default function DesprendibleFilaCard({
                   </div>
                 )}
 
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
-                    Método de liquidación
-                  </p>
-                  <p className="text-xs text-muted-foreground leading-relaxed">{detalle.metodo_liquidacion.texto}</p>
-                  {detalle.metodo_liquidacion.normas.length > 0 && (
-                    <p className="text-xs text-muted-foreground mt-1.5">
-                      <span className="font-medium text-foreground">Normas:</span> {detalle.metodo_liquidacion.normas.join(' · ')}
-                    </p>
-                  )}
-                </div>
-
                 {detalle.advertencias.length > 0 && (
                   <div className="space-y-1.5">
                     {detalle.advertencias.map((a, i) => (
