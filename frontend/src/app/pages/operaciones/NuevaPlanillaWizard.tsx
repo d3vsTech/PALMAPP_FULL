@@ -14,6 +14,8 @@ import type { ColaboradorEnVacaciones } from '../../../api/operaciones';
 import { marcarVacaciones } from './planilla/vacacionesPlanilla';
 import { marcarNovedades } from './planilla/novedadesPlanilla';
 import { marcarVinculacion } from './planilla/vinculacionPlanilla';
+import { aPersonaDelWizard } from './planilla/personasWizard';
+import OperariosFaltantes from './planilla/OperariosFaltantes';
 import { NotaColaboradoresExcluidos } from './planilla/NotaColaboradoresExcluidos';
 import { SelectActividadLabor } from '../../components/operaciones/SelectActividadLabor';
 import {
@@ -432,41 +434,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         setLaboresOtrosOpciones(opcionesPalma);
 
         // 1. Colaboradores propios (empleado_id en payloads).
-        const empleadosLista = (parametricas.colaboradores ?? []).map((c: any) => {
-          let nombres   = c.primer_nombre   ?? c.nombres   ?? c.nombre   ?? '';
-          let apellidos = c.primer_apellido ?? c.apellidos ?? c.apellido ?? '';
-          const nombreCompletoApi = c.nombre_completo ?? c.full_name ?? c.name ?? '';
-
-          // Si no llegan separados pero sí llega el completo, partirlo en 2
-          // mitades para que el badge muestre algo (en vez de quedar vacío y
-          // verse como un bloque verde).
-          if ((!nombres && !apellidos) && nombreCompletoApi) {
-            const partes = String(nombreCompletoApi).trim().split(/\s+/);
-            const mid = Math.ceil(partes.length / 2);
-            nombres   = partes.slice(0, mid).join(' ');
-            apellidos = partes.slice(mid).join(' ');
-          }
-          if (!nombres && !apellidos) {
-            nombres = `Colaborador`;
-            apellidos = String(c.id);
-          }
-          const nombreCompleto = nombreCompletoApi || `${nombres} ${apellidos}`.trim();
-          return {
-            id: String(c.id),
-            nombres,
-            apellidos,
-            nombre_completo: nombreCompleto,
-            // La UI pinta un badge cuando `modalidad_pago === 'FIJO'`
-            // para explicar por qué el jornal cerrará en $0 (§3.2).
-            modalidad_pago: c.modalidad_pago as ('FIJO' | 'PRODUCCION' | string | undefined),
-            // §1.1 — Ventanas de contrato. Un catálogo cacheado antes del
-            // cambio del 2026-09-23 llega sin el campo: `[]` significa "sin
-            // contratos registrados" y el filtro deja pasar a la persona.
-            vinculacion: Array.isArray(c.vinculacion) ? c.vinculacion : [],
-            fechaRetiro: c.fecha_retiro ?? null,
-            _raw: c,
-          };
-        });
+        const empleadosLista = (parametricas.colaboradores ?? []).map(aPersonaDelWizard);
 
         // 2. Operarios de terceros (operario_id en payloads). Vienen del bundle
         // como `parametricas.operarios` (§7 de API_OPERACIONES.md). El id se
@@ -561,12 +529,34 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
     [colaboradoresMarcados, fecha],
   );
   /**
+   * Agrega al selector los colaboradores que el catálogo anclado a la fecha
+   * trae de más (API_OPERACIONES §1.1, 2026-11-05): quien se retiró después
+   * de ese día estaba en la finca y tiene que poder registrarse, pero el
+   * catálogo de la carga inicial solo alcanza los últimos 45 días.
+   *
+   * Agrega, nunca reemplaza: la lista en pantalla ya puede estar siendo usada
+   * por tarjetas a medio llenar.
+   */
+  const agregarColaboradoresDeLaFecha = (
+    delCatalogo: import('../../../api/operaciones').ColaboradorWizardItem[],
+  ) => {
+    if (delCatalogo.length === 0) return;
+    setColaboradores((actuales) => {
+      const conocidos = new Set(actuales.map((c) => c.id));
+      const nuevos = delCatalogo
+        .filter((c) => !conocidos.has(String(c.id)))
+        .map(aPersonaDelWizard);
+      return nuevos.length === 0 ? actuales : sortByFirstName([...actuales, ...nuevos]);
+    });
+  };
+
+  /**
    * PR-L8 — Modo creación: cada fecha nueva necesita su propia lista de
    * vacaciones. Sin `?fecha=` el backend solo devuelve las de los últimos 45
    * días y las futuras, y una planilla vieja se quedaría sin la información.
    *
-   * Solo toma `en_vacaciones` del bundle: recargar el resto pisaría los
-   * catálogos y el trabajo que el usuario ya lleve hecho.
+   * De los catálogos solo toma los colaboradores que falten (2026-11-05, ver
+   * abajo); recargar el resto pisaría el trabajo que el usuario lleve hecho.
    */
   useEffect(() => {
     if (isEditMode || !fecha) return;
@@ -577,6 +567,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
         if (reqId !== vacacionesReqRef.current) return;
         setEnVacaciones(bundle.data.en_vacaciones ?? []);
         setNovedadesVigentes(bundle.data.novedades_vigentes ?? []);
+        agregarColaboradoresDeLaFecha(bundle.data.parametricas?.colaboradores ?? []);
       })
       .catch(() => {
         // Un fallo aquí no puede tumbar el wizard: sin la lista simplemente
@@ -3807,24 +3798,9 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                     </p>
                   </div>
                 )}
-                {(coberturaFaltantes?.operarios_faltantes.length ?? 0) > 0 && (
-                  <div className="rounded-lg border border-border bg-muted/30 p-3">
-                    <p className="text-xs font-semibold uppercase text-muted-foreground mb-1.5">
-                      Operarios ({coberturaFaltantes!.operarios_faltantes.length})
-                    </p>
-                    <ul className="text-sm space-y-0.5 max-h-40 overflow-y-auto">
-                      {coberturaFaltantes!.operarios_faltantes.map((o) => (
-                        <li key={`op-${o.id}`}>
-                          {o.nombre_completo}
-                          <span className="text-xs text-muted-foreground ml-1">
-                            · CC {o.cedula}
-                            {o.tercero_nombre ? ` · ${o.tercero_nombre}` : ''}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+                <OperariosFaltantes
+                  operarios={coberturaFaltantes?.operarios_faltantes ?? []}
+                />
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>

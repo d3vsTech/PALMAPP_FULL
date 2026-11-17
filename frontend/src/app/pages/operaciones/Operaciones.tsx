@@ -27,6 +27,7 @@ import { Plus, Eye, Loader2, Trash2, Pencil, Check,
   AlertCircle, Upload, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { AprobarRangoDialog } from './importar/AprobarRangoDialog';
+import OperariosFaltantes from './planilla/OperariosFaltantes';
 import { RevertirEstadoDialog } from '../../components/common/RevertirEstadoDialog';
 import { reversionApi } from '../../../api/reversionEstados';
 import StatusBadge from '../../components/common/StatusBadge';
@@ -679,24 +680,9 @@ export default function Operaciones() {
                     </ul>
                   </div>
                 )}
-                {(coberturaFaltantes?.operarios_faltantes.length ?? 0) > 0 && (
-                  <div className="rounded-lg border border-border bg-muted/30 p-3">
-                    <p className="text-xs font-semibold uppercase text-muted-foreground mb-1.5">
-                      Operarios ({coberturaFaltantes!.operarios_faltantes.length})
-                    </p>
-                    <ul className="text-sm space-y-0.5 max-h-40 overflow-y-auto">
-                      {coberturaFaltantes!.operarios_faltantes.map((o) => (
-                        <li key={`op-${o.id}`}>
-                          {o.nombre_completo}
-                          <span className="text-xs text-muted-foreground ml-1">
-                            · CC {o.cedula}
-                            {o.tercero_nombre ? ` · ${o.tercero_nombre}` : ''}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+                <OperariosFaltantes
+                  operarios={coberturaFaltantes?.operarios_faltantes ?? []}
+                />
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>

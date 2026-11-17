@@ -571,6 +571,17 @@ export interface TerceroLaborOverride {
 }
 
 /**
+ * 2026-11-03 — Lo que un tercero cobra por una sublabor concreta. Solo monto:
+ * el modo de pago sigue saliendo del pacto por labor o del catalogo. Se
+ * configura en Configuracion, Terceros (API_TERCEROS §6.3).
+ */
+export interface TerceroActividadOverride {
+  tercero_id: number;
+  labor_actividad_id: number;
+  precio: string | number;
+}
+
+/**
  * PR-L8 — Vacaciones vigentes con disfrute, para marcar en el selector de
  * personas quién no debería aparecer en la planilla de ese día.
  * El backend trae las que terminan hace 45 días o menos, más las futuras.
@@ -673,15 +684,25 @@ export interface WizardInitBundle {
      */
     tercero_labor_overrides: TerceroLaborOverride[];
     /**
+     * 2026-11-03 (§1.1) — Pactos activos de `tercero_labor_actividad_precios`:
+     * lo que un tercero cobra por una **sublabor** concreta. Es el equivalente,
+     * del lado del contratista, de `actividades_por_labor[].precio`. Solo
+     * monto: nunca cambia el `tipo_pago`. Un pacto en `0` es "sin pacto".
+     * Ausente en backends anteriores al cambio.
+     */
+    tercero_actividad_overrides?: TerceroActividadOverride[];
+    /**
      * §19 API_PARAMETRICAS — actividades predefinidas (sublabores) indexadas
      * por `labor_id`. Solo aplica a las labores fijas SANIDAD y OTROS más las
      * custom de PALMA (`es_sistema=false`, `tipo=null`). Alimenta el select
      * "Trabajo realizado" en las tabs SANIDAD y OTROS del wizard.
      *
-     * `precio` es el precio propio de la sublabor (`null` = hereda
-     * `labor.precio_palma`). Solo aplica a colaboradores propios: los
-     * operarios de tercero usan siempre `tercero_labor_precios` — ver el
-     * algoritmo de resolución de §4.3 LABORES_JORNALES.
+     * `precio` es el precio propio de la sublabor (`null` o `0` = hereda
+     * `labor.precio_palma`). Es del tenant, así que solo aplica a
+     * colaboradores propios: para un operario manda lo pactado con su
+     * contratista (`tercero_actividad_overrides`, y si no hay pacto por
+     * sublabor, `tercero_labor_overrides`). Las dos cascadas nunca se
+     * cruzan — ver §1.1 API_OPERACIONES y §4.3 LABORES_JORNALES.
      */
     actividades_por_labor?: Record<string, Array<{
       id: number;
@@ -697,8 +718,10 @@ export interface WizardInitBundle {
  * (labor, persona, actividad) — dos cascadas distintas según quién hace el
  * jornal (§4.3 LABORES_JORNALES / §1.1 API_OPERACIONES):
  *
- *  - **Operario de tercero:** manda lo pactado con el contratista. La sublabor
- *    NO participa. `tercero_labor_precios` ?? `labor.precio_palma`.
+ *  - **Operario de tercero:** manda lo pactado con el contratista, por
+ *    sublabor si la pactó y si no por labor. La sublabor del TENANT
+ *    (`actividad.precio`) no participa: `tercero_actividad_precios` ??
+ *    `tercero_labor_precios` ?? `labor.precio_palma` (2026-11-03).
  *  - **Colaborador propio:** la sublabor overridea el monto; el modo siempre
  *    viene de la labor. `actividad.precio` ?? `labor.precio_palma`.
  *
@@ -713,17 +736,26 @@ export function resolverPrecioPersonaLabor(
   persona: { tipo: 'colaborador'; id: number } | { tipo: 'operario'; id: number; tercero_id: number },
   overrides: TerceroLaborOverride[],
   /** Actividad del select "Trabajo Realizado", si el usuario eligió una. */
-  actividad?: { precio?: string | number | null } | null,
+  actividad?: { id?: number; precio?: string | number | null } | null,
+  /** Pactos del tercero por sublabor (`tercero_actividad_overrides`). */
+  actividadOverrides: TerceroActividadOverride[] = [],
 ): { tipo_pago: 'POR_PALMA' | 'JORNAL_FIJO'; precio_palma: string | number | null } {
   if (persona.tipo === 'operario') {
     const ov = overrides.find(
       (o) => o.tercero_id === persona.tercero_id && o.labor_id === labor.id,
     );
-    if (!ov) return { tipo_pago: labor.tipo_pago, precio_palma: labor.precio_palma };
-    return {
-      tipo_pago: (ov.tipo_pago ?? labor.tipo_pago) as 'POR_PALMA' | 'JORNAL_FIJO',
-      precio_palma: ov.precio_palma ?? labor.precio_palma,
-    };
+    // El modo de pago sale solo del pacto por labor: la sublabor nunca
+    // convierte un POR_PALMA en JORNAL_FIJO ni al revés.
+    const tipoPago = (ov?.tipo_pago ?? labor.tipo_pago) as 'POR_PALMA' | 'JORNAL_FIJO';
+    const precioLabor = ov?.precio_palma ?? labor.precio_palma;
+    const pacto = actividad?.id == null
+      ? undefined
+      : actividadOverrides.find(
+        (p) => p.tercero_id === persona.tercero_id && p.labor_actividad_id === actividad.id,
+      );
+    // Mismo criterio que abajo: 0 es "sin pacto", no una tarifa de cero.
+    const precioPactado = Number(pacto?.precio) > 0 ? Number(pacto!.precio) : null;
+    return { tipo_pago: tipoPago, precio_palma: precioPactado ?? precioLabor };
   }
   // Colaborador propio — la sublabor solo overridea el monto.
   // OJO (§19 API_PARAMETRICAS): `precio` en 0 cuenta como SIN precio propio y
