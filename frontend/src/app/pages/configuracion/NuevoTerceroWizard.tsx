@@ -626,13 +626,16 @@ export function Paso3({
           <div className="rounded-xl border border-primary/30 bg-primary/5 p-5 space-y-4">
             <p className="text-sm font-semibold text-primary">Datos del operario</p>
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Nombres <span className="text-destructive">*</span></Label>
-                <Input value={nuevo.nombres ?? ''} onChange={e => setNuevo(p => ({ ...p, nombres: e.target.value }))} placeholder="Nombres" />
-              </div>
+              {/* Apellidos antes que nombres, el mismo orden del formulario
+                  de colaborador nuevo: quien llena los dos seguidos no tiene
+                  que cambiar de habito al pasar de una pantalla a la otra. */}
               <div className="space-y-2">
                 <Label>Apellidos <span className="text-destructive">*</span></Label>
-                <Input value={nuevo.apellidos ?? ''} onChange={e => setNuevo(p => ({ ...p, apellidos: e.target.value }))} placeholder="Apellidos" />
+                <Input value={nuevo.apellidos ?? ''} onChange={e => setNuevo(p => ({ ...p, apellidos: e.target.value }))} placeholder="Ej: Rodriguez Garcia" />
+              </div>
+              <div className="space-y-2">
+                <Label>Nombres <span className="text-destructive">*</span></Label>
+                <Input value={nuevo.nombres ?? ''} onChange={e => setNuevo(p => ({ ...p, nombres: e.target.value }))} placeholder="Ej: Juan Carlos" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="nuevoterce-cedula">Cédula</Label>
