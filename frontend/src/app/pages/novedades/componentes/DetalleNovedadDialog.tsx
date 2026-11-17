@@ -29,12 +29,21 @@ import {
   type AusenciaDetalle, type InitNovedades, type NovedadFila, type PermisosNovedades,
   type TerminacionData,
 } from '../../../../api/novedades';
+import { vacacionesApi } from '../../../../api/vacaciones';
+import { liquidacionFinalApi } from '../../../../api/liquidacionFinal';
 import type { ApiError } from '../../../../api/client';
 import { EditarNovedadForm } from './EditarNovedadForm';
 import {
   ESTADO_BADGE, ESTADO_LABEL, ORIGEN_LABEL, etiquetaDias,
   formatFecha, formatPorcentaje, iniciales,
 } from '../tipos';
+
+/** De qué documento sale el número que se pinta en el encabezado. */
+function tituloNumero(fuente: NovedadFila['fuente']): string {
+  if (fuente === 'VACACION') return 'Número del comprobante de la vacación';
+  if (fuente === 'TERMINACION') return 'Número de la liquidación final que cerró el retiro';
+  return 'Consecutivo de la novedad, el mismo que lleva el acta';
+}
 
 interface Props {
   fila: NovedadFila | null;
@@ -98,6 +107,19 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
   const [bajandoActa, setBajandoActa] = useState(false);
   /** El input de archivo vive oculto: el botón visible es el que se dispara. */
   const archivoRef = useRef<HTMLInputElement>(null);
+  /**
+   * El número por el que pregunta quien tiene el papel en la mano. Cada
+   * fuente numera con el documento que le corresponde: la ausencia con su
+   * acta (`NOV-2026-012`, §4.7, 2026-11-16), la vacación con su comprobante
+   * de liquidación (`VAC-9`) y la terminación con su liquidación final, que
+   * solo existe si el retiro ya se liquidó.
+   *
+   * Ninguno llega en el listado: el de la ausencia vive en su comprobante, el
+   * de la vacación en Liquidaciones y el de la terminación en su detalle. Si
+   * el backend es viejo, la petición falla o el usuario no tiene permiso de
+   * liquidaciones, el renglón no se pinta y nada más.
+   */
+  const [numeroNovedad, setNumeroNovedad] = useState<string | null>(null);
 
   const esAusencia = fila?.fuente === 'AUSENCIA';
   /*
@@ -113,22 +135,51 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
   useEffect(() => {
     setDetalle(null);
     setTerminacion(null);
+    setNumeroNovedad(null);
     setAccion(null);
     setMotivoRechazo('');
     if (!fila) return;
 
+    let vivo = true;
+
+    // El consecutivo va aparte y en paralelo: es un adorno del encabezado y
+    // no puede demorar ni tumbar el detalle, que es lo que se vino a ver.
+    // Va ANTES del guard de abajo: la vacación no pide detalle, pero sí tiene
+    // número.
+    const pedirNumero = fila.fuente === 'AUSENCIA'
+      ? novedadesApi.ausencias.comprobante(fila.id).then((res) => res.data.numero)
+      : fila.fuente === 'VACACION'
+        ? vacacionesApi.ver(fila.id).then((res) => res.data.numero_comprobante)
+        // Una terminación de origen FICHA no tiene detalle del que sacarlo,
+        // pero la fila sí trae el id de su liquidación final.
+        : fila.fuente === 'TERMINACION' && fila.liquidacion_id
+          ? liquidacionFinalApi.ver(fila.liquidacion_id).then((d) => d.numero_comprobante)
+          : null;
+    pedirNumero
+      ?.then((numero) => { if (vivo) setNumeroNovedad(numero ?? null); })
+      .catch(() => { if (vivo) setNumeroNovedad(null); });
+
     // Una terminación de origen FICHA no tiene detalle (§6.2): el tenant no
-    // lleva contratos y el retiro vive solo en la ficha del colaborador.
+    // lleva contratos y el retiro vive solo en la ficha del colaborador. Una
+    // vacación se ve con lo que trae la fila.
     const pide = fila.fuente === 'AUSENCIA'
       || (fila.fuente === 'TERMINACION' && !!fila.enlaces.detalle);
-    if (!pide) return;
+    if (!pide) return () => { vivo = false; };
 
-    let vivo = true;
     setCargando(true);
     const peticion = fila.fuente === 'AUSENCIA'
       // En una terminación `id` es el id del CONTRATO, no del colaborador.
       ? novedadesApi.ausencias.ver(fila.id).then((res) => { if (vivo) setDetalle(res.data); })
-      : novedadesApi.terminaciones.ver(fila.id).then((res) => { if (vivo) setTerminacion(res.data); });
+      : novedadesApi.terminaciones.ver(fila.id).then((res) => {
+        if (!vivo) return;
+        setTerminacion(res.data);
+        // El contrato terminado no lleva consecutivo propio: el documento
+        // que numera el retiro es su liquidación final, y solo existe si ya
+        // se liquidó. Viene en el mismo detalle, sin petición aparte; no se
+        // pisa con null, que el número puede haber llegado por `fila`.
+        const numeroLiquidacion = res.data.liquidacion?.numero_comprobante;
+        if (numeroLiquidacion) setNumeroNovedad(numeroLiquidacion);
+      });
 
     peticion
       .catch((err) => {
@@ -304,6 +355,11 @@ export function DetalleNovedadDialog({ fila, permisos, init, onCerrar, onCambio 
                 <div className="min-w-0">
                   <DialogTitle className="text-base font-semibold">{fila.tipo.nombre}</DialogTitle>
                   <DialogDescription className="mt-0.5 text-xs">
+                    {numeroNovedad && (
+                      <span className="mr-1.5 font-medium text-foreground" title={tituloNumero(fila.fuente)}>
+                        {numeroNovedad} ·
+                      </span>
+                    )}
                     {fila.fuente === 'TERMINACION'
                       ? 'Terminación de contrato'
                       : `Registrada desde ${ORIGEN_LABEL[fila.origen] ?? fila.origen}`}

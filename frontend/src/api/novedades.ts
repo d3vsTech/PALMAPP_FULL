@@ -326,7 +326,13 @@ export interface AusenciaDetalle {
  */
 export interface ComprobanteNovedad {
   id: number;
-  /** `NOV-{id}`. */
+  /**
+   * Consecutivo formal `NOV-AAAA-NNN`, por empresa y por año de registro
+   * (el año en que se creó la novedad, no el de `fecha_inicio`). Lo reciben
+   * todas las novedades, de cualquier origen, al crearse; un número emitido
+   * no se reutiliza. Antes era `NOV-{id}` (2026-11-16). Para enlazar o
+   * consultar se sigue usando `id`.
+   */
   numero: string;
   titulo: string;
   estado: EstadoAusencia;
