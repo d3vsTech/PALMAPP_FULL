@@ -34,7 +34,7 @@ export default function OperariosFaltantes({
   if (operarios.length === 0) return null;
   return (
     <div className="rounded-lg border border-border bg-muted/30 p-3">
-      <p className="text-xs font-semibold uppercase text-muted-foreground mb-1.5">
+      <p className="mb-1.5 text-[13px] font-medium text-muted-foreground">
         Operarios ({operarios.length})
       </p>
       <div className="max-h-40 overflow-y-auto space-y-2">

@@ -1,20 +1,32 @@
+<!DOCTYPE html>
+<html lang="es-CO">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="color-scheme" content="light dark" />
+    <!-- `viewport-fit=cover` deja que el contenido llegue hasta los bordes del
+         celular; `env(safe-area-inset-*)` en theme.css lo aparta del notch. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+    <title>PalmApp</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="PalmApp" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="theme-color" content="#0F3D2E" />
+    <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
+  </head>
 
-  <!DOCTYPE html>
-  <html lang="en">
-    <head>
-      <meta charset="UTF-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <title>PalmAPP-Full</title>
-      <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
-    </head>
-
-    <body>
-      <div id="root"></div>
-      <!-- SDK Checkout v2 de ePayco (Market §10 API_MARKET.md). Se carga una
-           sola vez y `window.ePayco.checkout` queda disponible globalmente
-           para el flujo de pago iniciado desde Checkout.tsx. -->
-      <script src="https://checkout.epayco.co/checkout-v2.js"></script>
-      <script type="module" src="/src/main.tsx"></script>
-    </body>
-  </html>
-  
+  <body>
+    <div id="root"></div>
+    <!-- SDK Checkout v2 de ePayco (Market §10 API_MARKET.md). Se carga una
+         sola vez y `window.ePayco.checkout` queda disponible globalmente
+         para el flujo de pago iniciado desde Checkout.tsx. -->
+    <script src="https://checkout.epayco.co/checkout-v2.js"></script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

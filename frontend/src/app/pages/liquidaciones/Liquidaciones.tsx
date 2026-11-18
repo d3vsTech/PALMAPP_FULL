@@ -136,7 +136,7 @@ function LiquidacionesContent() {
       <Tabs value={activeTab} onValueChange={cambiarTab} className="space-y-6">
         <Card className="border-border">
           <CardContent className="p-3">
-            <TabsList className="h-auto w-full justify-start gap-2 overflow-x-auto bg-transparent p-0 sm:grid sm:grid-cols-5 sm:overflow-visible">
+            <TabsList className="grid h-auto w-full grid-cols-2 gap-2 bg-transparent p-0 sm:grid-cols-3 lg:grid-cols-5">
               <TabsTrigger
                 value="cesantias"
                 className="flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md h-12 py-0 transition duration-200 hover:bg-muted"

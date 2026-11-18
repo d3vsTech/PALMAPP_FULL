@@ -153,10 +153,10 @@ export interface HoraExtra {
 }
 
 export const ETAPAS = [
-  { numero: 1, nombre: 'Info. General' },
-  { numero: 2, nombre: 'Labores de Palma' },
-  { numero: 3, nombre: 'Labores de Finca' },
-  { numero: 4, nombre: 'Horas Extras' },
+  { numero: 1, nombre: 'Información general' },
+  { numero: 2, nombre: 'Labores de palma' },
+  { numero: 3, nombre: 'Labores de finca' },
+  { numero: 4, nombre: 'Horas extras' },
   { numero: 5, nombre: 'Finalización' },
 ];
 

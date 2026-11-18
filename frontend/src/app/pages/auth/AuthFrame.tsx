@@ -23,7 +23,7 @@ export default function AuthFrame({
   rotulo,
 }: AuthFrameProps) {
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-dvh bg-background">
       <aside className="relative hidden w-[42%] max-w-[560px] flex-col justify-between overflow-hidden bg-sidebar p-10 text-sidebar-foreground lg:m-2.5 lg:flex lg:rounded-[20px]">
         {FOTO_LOGIN ? (
           <>

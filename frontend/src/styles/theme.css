@@ -576,6 +576,14 @@ tbody tr { transition: background-color 150ms ease; }
 
 /* ---------- Vista de app: pantallas de menos de 768 px ---------- */
 html, body { overscroll-behavior-y: none; }
+
+/* Un panel que se guarda fuera de pantalla, como el resumen de la planilla,
+   queda en `position: fixed` a la derecha del borde. Un elemento fijo no lo
+   recorta el `overflow` de ningun padre: se suma al area desplazable de la
+   ventana y aparece una barra horizontal. Entonces la pagina entera se corre
+   y parece que todo estuviera roto. `clip` lo corta sin volver al documento
+   un contenedor de desplazamiento, asi que no toca el scroll vertical. */
+html { overflow-x: clip; }
 button, a, [role="button"] { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 
 @media screen and (max-width: 767.98px) {

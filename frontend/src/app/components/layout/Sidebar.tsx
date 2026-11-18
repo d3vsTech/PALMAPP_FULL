@@ -68,6 +68,23 @@ export const TITULOS_SECCION: Record<SeccionNav, string> = {
   herramientas: 'Herramientas',
 };
 
+/**
+ * El menu tiene trece entradas en tres grupos. En un portatil de 768 px, con
+ * la barra del navegador encima, quedan menos de 700 px utiles y la ultima
+ * entrada caia fuera: habia que desplazar para ver Configuracion.
+ *
+ * Debajo de 800 px de alto se aprietan los espacios y entra completo. Encima
+ * de ese umbral no cambia nada, para no perder el aire del diseno.
+ */
+const CORTO = {
+  cabecera: '[@media(max-height:800px)]:h-12',
+  lista: '[@media(max-height:800px)]:pt-1 [@media(max-height:800px)]:pb-2',
+  grupo: '[@media(max-height:800px)]:mb-2',
+  titulo: '[@media(max-height:800px)]:mb-1',
+  enlace: '[@media(max-height:800px)]:py-1.5',
+  pie: '[@media(max-height:800px)]:p-2',
+};
+
 export function esRutaActiva(pathname: string, href: string): boolean {
   return pathname === href || (href !== '/' && pathname.startsWith(href));
 }
@@ -107,18 +124,18 @@ export default function Sidebar() {
   // en cada render y remontaba el menú entero.
   const contenido = (compacto: boolean) => (
     <div className="flex h-full min-h-0 min-w-0 flex-col bg-sidebar text-sidebar-foreground">
-      <div className={cn('flex h-16 shrink-0 items-center gap-2.5', compacto ? 'justify-center px-2' : 'px-5')}>
+      <div className={cn('flex h-16 shrink-0 items-center gap-2.5', CORTO.cabecera, compacto ? 'justify-center px-2' : 'px-5')}>
         <PalmappLogo variant="isotipo" tono="blanco" className="h-8 w-auto" alt="" />
         {!compacto && <PalmappLogo variant="wordmark" tono="blanco" className="h-[18px] w-auto" />}
       </div>
 
-      <nav className={cn('min-h-0 flex-1 overflow-y-auto custom-scrollbar pb-4 pt-2', compacto ? 'px-2.5' : 'px-3')}>
+      <nav className={cn('min-h-0 flex-1 overflow-y-auto custom-scrollbar pb-4 pt-2', CORTO.lista, compacto ? 'px-2.5' : 'px-3')}>
         {secciones.map((seccion) => (
-          <div key={seccion.clave} className="mb-5">
+          <div key={seccion.clave} className={cn('mb-5', CORTO.grupo)}>
             {compacto ? (
               <div className="mx-auto mb-2 h-px w-6 bg-sidebar-border" />
             ) : (
-              <p className="mb-1.5 px-3 text-xs font-medium text-sidebar-foreground/45">
+              <p className={cn('mb-1.5 px-3 text-xs font-medium text-sidebar-foreground/45', CORTO.titulo)}>
                 {TITULOS_SECCION[seccion.clave]}
               </p>
             )}
@@ -136,6 +153,7 @@ export default function Sidebar() {
                     aria-label={compacto ? item.label : undefined}
                     className={cn(
                       'relative flex items-center gap-3 rounded-[10px] py-2.5 text-[14px] font-medium transition-colors duration-150',
+                      CORTO.enlace,
                       compacto ? 'justify-center px-0' : 'px-3',
                       activo
                         ? 'bg-sidebar-accent font-semibold text-sidebar-accent-foreground [&>svg]:text-sidebar-primary'
@@ -154,7 +172,7 @@ export default function Sidebar() {
 
       {/* `logo_url` llega absoluto desde el login, select-tenant y me. Si es
           null la finca no cargó logo y se muestran las iniciales. */}
-      <div className={cn('shrink-0', compacto ? 'p-2.5' : 'p-3')}>
+      <div className={cn('shrink-0', CORTO.pie, compacto ? 'p-2.5' : 'p-3')}>
         <div
           title={compacto ? finca?.nombre : undefined}
           className={cn(

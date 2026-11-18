@@ -12,7 +12,7 @@ export default function SinAcceso() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+    <div className="min-h-dvh bg-background flex items-center justify-center p-4">
       <div className="max-w-md w-full text-center space-y-6">
         <div className="flex h-24 w-24 items-center justify-center rounded-full bg-destructive/10 mx-auto">
           <ShieldAlert className="h-12 w-12 text-destructive" />

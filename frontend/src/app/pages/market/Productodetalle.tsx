@@ -200,7 +200,7 @@ export default function ProductoDetalle() {
 
       <div className="grid gap-8 lg:grid-cols-3">
         {/* Columna izquierda */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="min-w-0 space-y-6 lg:col-span-2">
           {/* Galería estilo Mercado Libre: miniaturas verticales a la izquierda
               + imagen principal grande a la derecha. Hover en miniatura cambia
               la imagen principal automáticamente (sin necesidad de clic).

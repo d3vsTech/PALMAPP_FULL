@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router';
 import { sortByFirstName } from '../../utils/personas';
 import { mostrarAdvertenciasBulk, mensajeSinContratoVigente } from '../../utils/advertenciasOperaciones';
 import { Button } from '../../components/ui/button';
+import { cn } from '../../components/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
@@ -625,6 +626,11 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   const [trabajosAuxiliares, setTrabajosAuxiliares] = useState<TrabajoAuxiliar[]>([]);
   const [auxiliarEnEdicion, setAuxiliarEnEdicion] = useState<TrabajoAuxiliar | null>(null);
   const [horasExtras, setHorasExtras] = useState<HoraExtra[]>([]);
+  /**
+   * El resumen es una columna fija en escritorio. En celular no cabe al
+   * lado, asi que se guarda y se abre como cajon desde un boton flotante.
+   */
+  const [resumenAbierto, setResumenAbierto] = useState(false);
   const [horaExtraEnEdicion, setHoraExtraEnEdicion] = useState<HoraExtra | null>(null);
 
   // Alerta de planilla duplicada (popup grande)
@@ -2659,6 +2665,13 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
   const puedeAvanzarEtapa1 = fecha && elaboradoPor;
 
+  // Lo que muestra el acceso al resumen sin abrirlo. Solo labores: horas
+  // extras y novedades se cuentan aparte y el rotulo dice "labores".
+  const totalLabores = [
+    trabajosCosecha, trabajosPlateo, trabajosPoda, trabajosFertilizacion,
+    trabajosSanidad, trabajosAuxiliares, trabajosOtros,
+  ].reduce((total, lista) => total + lista.length, 0);
+
   return (
     <div className="relative space-y-6">
       {/* Overlay de carga durante el guardado */}
@@ -2680,19 +2693,35 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           ? 'Ver planilla del día'
           : isEditMode
             ? 'Editar planilla del día'
-            : 'Crear nueva planilla'}
+            : 'Nueva planilla'}
         description={modoLectura
           ? `Detalle de la planilla${estadoPlanilla ? ` · estado: ${estadoPlanilla}` : ''}`
-          : 'Arma la planilla paso a paso.'}
+          : 'Registra la jornada paso a paso: datos generales, labores, horas extras y novedades.'}
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Columna izquierda: Wizard (2/3) */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="min-w-0 space-y-6 lg:col-span-2">
+
+          {/* Abre el resumen en celular. En escritorio el panel ya se ve. */}
+          <button
+            type="button"
+            onClick={() => setResumenAbierto(true)}
+            className="flex min-h-11 w-full items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted lg:hidden"
+          >
+            <span className="flex items-center gap-2">
+              <ClipboardList className="h-4 w-4 text-muted-foreground" strokeWidth={2} />
+              Ver resumen
+            </span>
+            <Badge variant="secondary" className="gap-1.5 font-normal">
+              <span className="h-1.5 w-1.5 rounded-full bg-current opacity-60" />
+              {totalLabores} {totalLabores === 1 ? 'labor' : 'labores'}
+            </Badge>
+          </button>
 
           {/* Stepper horizontal */}
           <Card className="gap-0">
-            <CardContent className="p-6">
+            <CardContent className="px-4 py-4 sm:px-6 md:p-6">
               <div className="flex items-center justify-between">
                 {ETAPAS.map((etapa, index) => {
                   const estaCompleta = etapaActual > etapa.numero;
@@ -2703,15 +2732,15 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                   return (
                     <div key={etapa.numero} className="flex items-center" style={{ flex: index < ETAPAS.length - 1 ? 1 : 'none' }}>
                       {/* Círculo de etapa */}
-                      <button aria-label="Confirmar"
+                      <button aria-label={`Paso ${etapa.numero}: ${etapa.nombre}`}
                         onClick={() => irAEtapa(etapa.numero)}
-                        className={`flex flex-col items-center gap-2 ${
+                        className={`flex shrink-0 flex-col items-center gap-2 ${
                           navegable ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
                         }`}
                         disabled={!navegable}
                       >
                         <div
-                          className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition ${
+                          className={`flex h-9 w-9 items-center justify-center rounded-full border-2 transition md:h-10 md:w-10 ${
                             estaCompleta
                               ? 'border-primary bg-primary text-primary-foreground'
                               : estaActiva
@@ -2725,7 +2754,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                             <span className="font-bold">{etapa.numero}</span>
                           )}
                         </div>
-                        <div className="text-center">
+                        <div className="hidden text-center md:block">
                           <div
                             className={`text-sm font-semibold whitespace-nowrap ${
                               estaActiva || estaCompleta ? 'text-foreground' : 'text-muted-foreground'
@@ -2738,7 +2767,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
                       {/* Línea conectora */}
                       {index < ETAPAS.length - 1 && (
-                        <div className="flex-1 h-0.5 mx-3 bg-border relative min-w-[20px]">
+                        <div className="relative mx-2 h-0.5 min-w-[12px] flex-1 bg-border sm:mx-3 md:-mt-6">
                           <div
                             className={`absolute inset-0 bg-primary transition ${
                               estaCompleta ? 'w-full' : 'w-0'
@@ -2750,6 +2779,11 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                   );
                 })}
               </div>
+              {/* Reemplaza a los rotulos escondidos: sin esto el circulo
+                  activo no dice de que paso se trata. */}
+              <p className="mt-3 text-center text-[13px] font-semibold text-foreground md:hidden">
+                Paso {etapaActual} de {ETAPAS.length}: {ETAPAS.find((e) => e.numero === etapaActual)?.nombre}
+              </p>
             </CardContent>
           </Card>
 
@@ -2806,7 +2840,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
               <Card className="gap-0">
                 <CardHeader>
                   <div>
-                    <CardTitle>Labores de Palma</CardTitle>
+                    <CardTitle>Labores de palma</CardTitle>
                     <p className="text-sm text-muted-foreground">
                       Cosecha, plateo, poda, fertilización, sanidad y otros
                     </p>
@@ -2815,7 +2849,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                 <CardContent className="space-y-4 pt-6">
                   <NotaColaboradoresExcluidos excluidos={colaboradoresExcluidos} fecha={fecha} />
                   <Tabs defaultValue="cosecha" className="space-y-4">
-                    <TabsList className="w-full justify-start gap-1 overflow-x-auto sm:grid sm:grid-cols-6 sm:overflow-visible">
+                    <TabsList className="grid h-auto w-full grid-cols-3 [&>button]:whitespace-normal [&>button]:py-1.5 [&>button]:text-xs sm:grid-cols-6 sm:[&>button]:whitespace-nowrap sm:[&>button]:text-sm">
                       <TabsTrigger value="cosecha">Cosecha</TabsTrigger>
                       <TabsTrigger value="plateo">Plateo</TabsTrigger>
                       <TabsTrigger value="poda">Poda</TabsTrigger>
@@ -3018,7 +3052,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           </fieldset>
 
           {/* Botones de navegación */}
-          <div className="flex items-center justify-between pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-4">
             <Button
               variant="outline"
               onClick={etapaAnterior}
@@ -3048,7 +3082,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                   ) : (
                     <>
                       <Save className="h-4 w-4" />
-                      Guardar cambios
+                      Guardar<span className="hidden sm:inline">&nbsp;cambios</span>
                     </>
                   )}
                 </Button>
@@ -3094,17 +3128,42 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
           </div>
         </div>
 
-        {/* Columna derecha: Panel de resumen (1/3) - sticky */}
-        <div className="lg:col-span-1">
-          <div className="sticky top-4">
+        {resumenAbierto && (
+          <div
+            className="fixed inset-0 z-40 bg-foreground/20 lg:hidden"
+            onClick={() => setResumenAbierto(false)}
+            aria-hidden="true"
+          />
+        )}
+
+        {/* Panel unico de resumen: columna en escritorio, cajon en celular */}
+        <div
+          className={cn(
+            'fixed inset-y-0 right-0 z-50 w-[min(24rem,92vw)] transform transition-transform duration-300',
+            'lg:static lg:z-auto lg:col-span-1 lg:w-auto lg:translate-x-0',
+            resumenAbierto ? 'translate-x-0' : 'translate-x-full',
+          )}
+        >
+          <div className="h-full overflow-y-auto bg-background p-4 shadow-sm lg:sticky lg:top-4 lg:h-auto lg:overflow-visible lg:bg-transparent lg:p-0 lg:shadow-none">
             <Card className="gap-0">
-              <CardHeader className="border-b border-border px-5 py-3">
-                <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-                  <FileText className="h-4 w-4 text-primary" strokeWidth={2} />
-                  Resumen
-                </CardTitle>
+              <CardHeader className="border-b border-border">
+                <div className="flex items-center justify-between gap-3">
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-muted-foreground" strokeWidth={2} />
+                    Resumen de la planilla
+                  </CardTitle>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setResumenAbierto(false)}
+                    className="h-8 w-8 lg:hidden"
+                    title="Cerrar resumen"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
               </CardHeader>
-              <CardContent className="space-y-5 p-5">
+              <CardContent className="space-y-6">
                 {/* Progreso general */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between text-sm">
@@ -3121,10 +3180,10 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
                 <div className="h-px bg-border" />
 
-                {/* RESUMEN DETALLADO */}
+                {/* Datos generales */}
                 <div className="space-y-2">
-                  <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Resumen Detallado
+                  <h4 className="text-[13px] font-medium text-muted-foreground">
+                    Datos generales
                   </h4>
 
                   {!fecha && !elaboradoPor ? (
@@ -3166,7 +3225,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                       )}
                       {inicioLabores && (
                         <div className="flex items-center justify-between">
-                          <span className="text-sm">Inicio Labores</span>
+                          <span className="text-sm">Inicio de labores</span>
                           <span className="font-semibold text-sm">{inicioLabores}</span>
                         </div>
                       )}
@@ -3178,8 +3237,8 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
                 {/* Contadores de labores */}
                 <div className="space-y-3">
-                  <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Labores Registradas
+                  <h4 className="text-[13px] font-medium text-muted-foreground">
+                    Labores registradas
                   </h4>
 
                   {/* Cosecha */}
@@ -3420,7 +3479,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                   {trabajosAuxiliares.length > 0 && (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">Labores de Finca</span>
+                        <span className="text-sm font-medium">Labores de finca</span>
                         <Badge variant="secondary" className="before:hidden">
                           {trabajosAuxiliares.length}
                         </Badge>
@@ -3515,8 +3574,8 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                     <div className="h-px bg-border" />
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          Horas Extras
+                        <h4 className="text-[13px] font-medium text-muted-foreground">
+                          Horas extras
                         </h4>
                         <Badge variant="warning" className="before:hidden">
                           {horasExtras.length}
@@ -3558,7 +3617,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                     <div className="h-px bg-border" />
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        <h4 className="text-[13px] font-medium text-muted-foreground">
                           Novedades
                         </h4>
                         <Badge variant="destructive" className="before:hidden">
@@ -3612,7 +3671,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                   <>
                     <div className="h-px bg-border" />
                     <div className="space-y-2">
-                      <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      <h4 className="text-[13px] font-medium text-muted-foreground">
                         Novedades del día
                       </h4>
                       <div className="rounded-md bg-muted/30 p-2 space-y-1 text-xs">
@@ -3747,7 +3806,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                 </p>
                 {(coberturaFaltantes?.colaboradores_faltantes.length ?? 0) > 0 && (
                   <div className="rounded-lg border border-border bg-muted/30 p-3">
-                    <p className="text-xs font-semibold uppercase text-muted-foreground mb-1.5">
+                    <p className="mb-1.5 text-[13px] font-medium text-muted-foreground">
                       Colaboradores ({coberturaFaltantes!.colaboradores_faltantes.length})
                     </p>
                     <ul className="text-sm space-y-0.5 max-h-40 overflow-y-auto">
@@ -3768,7 +3827,7 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                     novedad el día se queda sin respaldo en nómina. */}
                 {(coberturaFaltantes?.con_novedad_pendiente?.length ?? 0) > 0 && (
                   <div className="rounded-xl border border-warning/30 bg-warning-soft p-3">
-                    <p className="mb-1.5 text-xs font-semibold uppercase text-warning">
+                    <p className="mb-1.5 text-[13px] font-medium text-warning">
                       Con novedad sin aprobar ({coberturaFaltantes!.con_novedad_pendiente!.length})
                     </p>
                     <ul className="text-sm space-y-0.5 max-h-40 overflow-y-auto">

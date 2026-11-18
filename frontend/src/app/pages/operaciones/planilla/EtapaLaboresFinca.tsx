@@ -57,7 +57,7 @@ export function EtapaLaboresFinca({
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle>Labores de Finca</CardTitle>
+            <CardTitle>Labores de finca</CardTitle>
             <p className="text-sm text-muted-foreground">
               Reparaciones, mantenimiento y trabajos complementarios
             </p>
@@ -197,8 +197,8 @@ export function EtapaLaboresFinca({
           return (
             <Card key={trabajo.id} className="border-border hover:border-primary/30 transition-colors">
               <CardContent className="p-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="min-w-0 flex-1 basis-full md:basis-0">
                     <p className="text-xs text-muted-foreground mb-1">Colaborador</p>
                     <p className="font-semibold text-sm">
                       {personaTexto}
@@ -220,15 +220,15 @@ export function EtapaLaboresFinca({
                       ) : null}
                     </p>
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="min-w-0 flex-1 basis-full md:basis-0">
                     <p className="text-xs text-muted-foreground mb-1">Labor</p>
                     <p className="text-sm font-medium">{labelLabor || 'Sin labor'}</p>
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="min-w-0 flex-1 basis-full md:basis-0">
                     <p className="text-xs text-muted-foreground mb-1">Lugar</p>
                     <p className="text-sm">{trabajo.lugar || '—'}</p>
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="ml-auto flex shrink-0 items-center gap-1 md:ml-0">
                     <Button
                       variant="ghost"
                       size="sm"

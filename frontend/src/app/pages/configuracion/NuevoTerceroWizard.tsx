@@ -981,15 +981,15 @@ export default function NuevoTerceroWizard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-6">
+        <div className="min-w-0 space-y-6 lg:col-span-2">
           {/* Stepper */}
           <Card className="border-border">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 {STEPS.map((s, i) => (
                   <React.Fragment key={s.num}>
-                    <div className="flex flex-col items-center gap-2">
-                      <div className={`h-12 w-12 rounded-full border-2 flex items-center justify-center font-bold text-sm transition ${
+                    <div className="flex shrink-0 flex-col items-center gap-2">
+                      <div className={`flex h-9 w-9 items-center justify-center rounded-full border-2 text-sm font-bold transition md:h-12 md:w-12 ${
                         paso > s.num
                           ? 'bg-primary border-primary text-primary-foreground'
                           : paso === s.num
@@ -998,18 +998,22 @@ export default function NuevoTerceroWizard() {
                       }`}>
                         {paso > s.num ? <Check className="h-5 w-5" /> : s.num}
                       </div>
-                      <span className={`text-xs font-semibold whitespace-nowrap ${paso === s.num ? 'text-primary' : 'text-muted-foreground'}`}>
+                      <span className={`hidden text-xs font-semibold whitespace-nowrap md:inline ${paso === s.num ? 'text-primary' : 'text-muted-foreground'}`}>
                         {s.label}
                       </span>
                     </div>
                     {i < STEPS.length - 1 && (
-                      <div className="flex-1 mx-3 h-0.5 bg-border overflow-hidden rounded-full">
+                      <div className="mx-2 h-0.5 flex-1 overflow-hidden rounded-full bg-border sm:mx-3">
                         <div className={`h-full bg-primary transition-[width] duration-500 ${paso > s.num ? 'w-full' : 'w-0'}`} />
                       </div>
                     )}
                   </React.Fragment>
                 ))}
               </div>
+              {/* Reemplaza a los rotulos, escondidos en celular. */}
+              <p className="mt-3 text-center text-[13px] font-semibold text-foreground md:hidden">
+                Paso {paso} de {STEPS.length}: {STEPS.find((x) => x.num === paso)?.label}
+              </p>
             </CardContent>
           </Card>
 

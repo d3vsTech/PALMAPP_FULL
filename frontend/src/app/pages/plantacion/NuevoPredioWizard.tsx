@@ -1596,8 +1596,6 @@ export default function NuevoPredioWizard() {
           style={{
             position: 'fixed',
             top: 0, left: 0, right: 0, bottom: 0,
-            width: '100vw',
-            height: '100vh',
             zIndex: 99999,
             backgroundColor: 'rgba(0, 0, 0, 0.35)',
             backdropFilter: 'blur(2px)',
@@ -1629,7 +1627,7 @@ export default function NuevoPredioWizard() {
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* ── Columna izquierda: wizard ──────────────────────────── */}
-        <div className="lg:col-span-2 space-y-8">
+        <div className="min-w-0 space-y-8 lg:col-span-2">
 
           {/* Stepper horizontal — exacto al diseño del .zip */}
           <Card className="border-border">
@@ -1643,13 +1641,13 @@ export default function NuevoPredioWizard() {
                       {/* Círculo de etapa */}
                       <button aria-label="Confirmar"
                         onClick={() => (editId || completa || activa) && setEtapa(e.numero)}
-                        className={`flex flex-col items-center gap-2 ${
+                        className={`flex shrink-0 flex-col items-center gap-2 ${
                           activa || completa || editId ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
                         }`}
                         disabled={!editId && !activa && !completa}
                       >
                         <div
-                          className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition ${
+                          className={`flex h-9 w-9 items-center justify-center rounded-full border-2 transition md:h-12 md:w-12 ${
                             completa
                               ? 'bg-primary border-primary text-white'
                               : activa
@@ -1663,7 +1661,7 @@ export default function NuevoPredioWizard() {
                             <span className="font-bold">{e.numero}</span>
                           )}
                         </div>
-                        <div className="text-center">
+                        <div className="hidden text-center md:block">
                           <div
                             className={`text-sm font-semibold whitespace-nowrap ${
                               activa || completa ? 'text-foreground' : 'text-muted-foreground'
@@ -1676,7 +1674,7 @@ export default function NuevoPredioWizard() {
 
                       {/* Línea conectora */}
                       {idx < ETAPAS.length - 1 && (
-                        <div className="flex-1 h-0.5 bg-border relative mx-4">
+                        <div className="relative mx-2 h-0.5 flex-1 bg-border sm:mx-4">
                           <div
                             className={`absolute inset-0 bg-primary transition ${
                               completa ? 'w-full' : 'w-0'
@@ -1688,6 +1686,10 @@ export default function NuevoPredioWizard() {
                   );
                 })}
               </div>
+              {/* Reemplaza a los rotulos, escondidos en celular. */}
+              <p className="mt-3 text-center text-[13px] font-semibold text-foreground md:hidden">
+                Paso {etapa} de {ETAPAS.length}: {ETAPAS.find((x) => x.numero === etapa)?.nombre}
+              </p>
             </CardContent>
           </Card>
 

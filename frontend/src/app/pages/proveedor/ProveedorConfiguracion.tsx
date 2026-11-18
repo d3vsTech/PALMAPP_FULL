@@ -380,7 +380,7 @@ export default function ProveedorConfiguracion() {
       {/* Layout principal: 2 columnas */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Columna izquierda: Wizard (2/3) */}
-        <div className="lg:col-span-2 space-y-8">
+        <div className="min-w-0 space-y-8 lg:col-span-2">
           {/* Stepper horizontal */}
           <Card className="border-border">
             <CardContent className="p-6">

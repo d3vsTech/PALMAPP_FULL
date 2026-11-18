@@ -65,7 +65,7 @@ export function ColaboradorChip({ col }: { col: ColaboradorWizard }) {
         </span>
       )}
       {col.terceroNombre && (
-        <span className="ml-1.5 text-[9px] font-semibold uppercase tracking-wide bg-orange-200/70 text-orange-900 rounded px-1 py-[1px]">
+        <span className="ml-1.5 rounded bg-info-soft px-1 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-info">
           {col.terceroNombre}
         </span>
       )}

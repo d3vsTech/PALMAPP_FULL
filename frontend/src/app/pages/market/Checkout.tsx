@@ -41,6 +41,13 @@ const METODOS_PAGO: Array<{ id: MetodoPago; nombre: string; descripcion: string 
   },
 ];
 
+/** Los tres pasos del pago. Nombrados aqui para poder escribir cual va en celular. */
+const ETAPAS_CHECKOUT = [
+  { numero: 1, nombre: 'Dirección', icon: MapPin },
+  { numero: 2, nombre: 'Método de Pago', icon: CreditCard },
+  { numero: 3, nombre: 'Confirmación', icon: CheckCircle },
+];
+
 const DOC_TYPES: Array<{ id: BillingInfo['doc_type']; label: string }> = [
   { id: 'CC', label: 'Cédula de ciudadanía' },
   { id: 'CE', label: 'Cédula de extranjería' },
@@ -302,11 +309,7 @@ export default function Checkout() {
       <Card className="border-border">
         <CardContent className="p-6">
           <div className="flex items-center justify-between">
-            {[
-              { numero: 1, nombre: 'Dirección', icon: MapPin },
-              { numero: 2, nombre: 'Método de Pago', icon: CreditCard },
-              { numero: 3, nombre: 'Confirmación', icon: CheckCircle },
-            ].map((etapa, index) => {
+            {ETAPAS_CHECKOUT.map((etapa, index) => {
               const Icon = etapa.icon;
               const estaCompleta = paso > etapa.numero;
               const estaActiva = paso === etapa.numero;
@@ -317,9 +320,9 @@ export default function Checkout() {
                   className="flex items-center"
                   style={{ flex: index < 2 ? 1 : 'none' }}
                 >
-                  <div className="flex flex-col items-center gap-2">
+                  <div className="flex shrink-0 flex-col items-center gap-2">
                     <div
-                      className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition ${
+                      className={`flex h-9 w-9 items-center justify-center rounded-full border-2 transition md:h-12 md:w-12 ${
                         estaCompleta
                           ? 'bg-primary border-primary text-white'
                           : estaActiva
@@ -330,7 +333,7 @@ export default function Checkout() {
                       {estaCompleta ? <CheckCircle className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
                     </div>
                     <div
-                      className={`text-sm font-semibold whitespace-nowrap ${
+                      className={`hidden text-sm font-semibold whitespace-nowrap md:block ${
                         estaActiva || estaCompleta ? 'text-foreground' : 'text-muted-foreground'
                       }`}
                     >
@@ -339,7 +342,7 @@ export default function Checkout() {
                   </div>
 
                   {index < 2 && (
-                    <div className="flex-1 h-0.5 mx-3 bg-border relative min-w-[20px]">
+                    <div className="relative mx-2 h-0.5 min-w-[12px] flex-1 bg-border sm:mx-3">
                       <div
                         className={`absolute inset-0 bg-primary transition ${
                           estaCompleta ? 'w-full' : 'w-0'
@@ -351,6 +354,10 @@ export default function Checkout() {
               );
             })}
           </div>
+          {/* Reemplaza a los rotulos, escondidos en celular. */}
+          <p className="mt-3 text-center text-[13px] font-semibold text-foreground md:hidden">
+            Paso {paso} de {ETAPAS_CHECKOUT.length}: {ETAPAS_CHECKOUT.find((x) => x.numero === paso)?.nombre}
+          </p>
         </CardContent>
       </Card>
 

@@ -260,9 +260,9 @@ export function TabOtros({
                         return (
                           <Card key={trabajo.id} className="border-border hover:border-primary/30 transition-colors">
                             <CardContent className="p-4">
-                              <div className="flex items-center justify-between gap-4">
+                              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 md:gap-4">
                                 {/* Colaboradores */}
-                                <div className="flex-1 min-w-0">
+                                <div className="order-1 min-w-0 flex-1 md:order-none">
                                   <p className="text-xs text-muted-foreground mb-1">Colaboradores</p>
                                   {trabajo.colaboradores?.length > 0 ? (
                                     <div className="flex flex-wrap gap-1">
@@ -279,19 +279,21 @@ export function TabOtros({
                                 </div>
 
                                 {/* Lote/Sublote */}
-                                <div className="w-44 shrink-0">
+                                {/* Corta el renglon: abajo van el lote y la cifra. */}
+                                <div aria-hidden className="order-3 w-full md:hidden" />
+                                <div className="order-4 min-w-0 flex-1 md:order-none md:w-44 md:flex-none md:shrink-0">
                                   <h4 className="font-semibold text-sm truncate">{trabajo.nombre || 'Sin nombre'}</h4>
                                   <p className="text-xs text-muted-foreground truncate">{lote?.nombre || 'Sin lote'} - {sublote?.nombre || 'Sin sublote'}</p>
                                 </div>
 
                                 {/* Labor realizada */}
-                                <div className="w-40 shrink-0 text-right">
+                                <div className="order-7 w-full shrink-0 md:order-none md:w-40 md:text-right">
                                   <p className="text-xs text-muted-foreground">Labor</p>
                                   <p className="font-semibold text-sm truncate">{trabajo.laborRealizada || 'Sin descripción'}</p>
                                 </div>
 
                                 {/* Botón eliminar */}
-                                <div className="flex items-center gap-1 shrink-0">
+                                <div className="order-2 ml-auto flex shrink-0 items-center gap-1 md:order-none md:ml-0">
                                   <Button
                                     variant="ghost"
                                     size="sm"

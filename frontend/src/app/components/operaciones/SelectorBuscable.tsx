@@ -63,10 +63,17 @@ export function SelectorBuscable({
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-        <Command>
+      {/* Todos los desplegables abren hacia abajo (ver popover.tsx), asi que
+          cerca del pie de la ventana la lista quedaba cortada y sin poder
+          bajar. `available-height` es el alto que queda hasta el borde: el
+          panel no lo pasa y la lista se desplaza dentro. */}
+      <PopoverContent
+        className="flex max-h-[var(--radix-popover-content-available-height)] w-[--radix-popover-trigger-width] flex-col p-0"
+        align="start"
+      >
+        <Command className="min-h-0">
           <CommandInput placeholder={marcadorBusqueda} />
-          <CommandList>
+          <CommandList className="min-h-0">
             <CommandEmpty>{sinResultados}</CommandEmpty>
             <CommandGroup>
               {opciones.map((o) => (

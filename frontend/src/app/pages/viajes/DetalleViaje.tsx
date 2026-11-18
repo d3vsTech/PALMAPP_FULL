@@ -1170,23 +1170,23 @@ export default function DetalleViaje() {
                         onClick={() => irAEtapa(etapa.numero)}
                         /* Sin "Siguiente" en el pie, el círculo del stepper es
                            la única forma de llegar a la etapa de Cosecha. */
-                        className={`flex flex-col items-center gap-2 cursor-pointer ${estaActiva || estaCompleta ? '' : 'opacity-50'}`}
+                        className={`flex shrink-0 cursor-pointer flex-col items-center gap-2 ${estaActiva || estaCompleta ? '' : 'opacity-50'}`}
                       >
-                        <div className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition ${
+                        <div className={`flex h-9 w-9 items-center justify-center rounded-full border-2 transition md:h-12 md:w-12 ${
                           estaCompleta ? 'bg-primary border-primary text-white'
                           : estaActiva ? 'bg-primary/10 border-primary text-primary'
                           : 'bg-muted border-border text-muted-foreground'
                         }`}>
                           {estaCompleta ? <Check className="h-5 w-5" /> : <span className="font-bold">{etapa.numero}</span>}
                         </div>
-                        <div className="text-center">
+                        <div className="hidden text-center md:block">
                           <div className={`text-sm font-semibold whitespace-nowrap ${estaActiva || estaCompleta ? 'text-foreground' : 'text-muted-foreground'}`}>
                             {etapa.nombre}
                           </div>
                         </div>
                       </button>
                       {index < etapasDisponibles.length - 1 && (
-                        <div className="flex-1 h-0.5 bg-border relative mx-4">
+                        <div className="relative mx-2 h-0.5 flex-1 bg-border sm:mx-4">
                           <div className={`absolute inset-0 bg-primary transition-[width] ${estaCompleta ? 'w-full' : 'w-0'}`} />
                         </div>
                       )}
@@ -1194,6 +1194,10 @@ export default function DetalleViaje() {
                   );
                 })}
               </div>
+              {/* Reemplaza a los rotulos, escondidos en celular. */}
+              <p className="mt-3 text-center text-[13px] font-semibold text-foreground md:hidden">
+                Paso {etapaActual} de {etapasDisponibles.length}: {etapasDisponibles.find((x) => x.numero === etapaActual)?.nombre}
+              </p>
             </CardContent>
           </Card>
           )}

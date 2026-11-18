@@ -122,7 +122,10 @@ function LaboresDePalma({ grupos }: { grupos: GrupoLaborPalma[] }) {
         </p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[680px] text-sm">
+          {/* La celda de la labor abarca varias filas: como tarjetas, las
+              filas siguientes perderian el nombre y correrian los titulos
+              una columna. Se queda como tabla con desplazamiento. */}
+          <table data-tabla="ancha" className="w-full min-w-[680px] text-sm">
             <thead className={CABECERA}>
               <tr>
                 <th className="px-5 py-2.5 text-left font-semibold">Labor</th>

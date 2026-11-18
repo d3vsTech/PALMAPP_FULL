@@ -257,7 +257,7 @@ export default function ProveedorDetalle() {
 
       {/* Tabs */}
       <Tabs value={tabActual} onValueChange={setTabActual}>
-        <TabsList className="w-full justify-start gap-1 overflow-x-auto sm:grid sm:grid-cols-3 sm:overflow-visible">
+        <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
           <TabsTrigger value="productos">
             Productos ({proveedorData.productos.length})
           </TabsTrigger>

@@ -257,8 +257,8 @@ export function TabFertilizacion({
                         return (
                           <Card key={trabajo.id} className="border-border hover:border-primary/30 transition-colors">
                             <CardContent className="p-4">
-                              <div className="flex items-center justify-between gap-4">
-                                <div className="flex-1 min-w-0">
+                              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 md:gap-4">
+                                <div className="order-1 min-w-0 flex-1 md:order-none">
                                   <p className="text-xs text-muted-foreground mb-1">Colaboradores</p>
                                   {trabajo.colaboradores?.length > 0 ? (
                                     <div className="flex flex-wrap gap-1">
@@ -273,20 +273,22 @@ export function TabFertilizacion({
                                     <p className="text-xs text-muted-foreground">Sin colaboradores</p>
                                   )}
                                 </div>
-                                <div className="w-36 shrink-0">
+                                {/* Corta el renglon: abajo van el lote y la cifra. */}
+                                <div aria-hidden className="order-3 w-full md:hidden" />
+                                <div className="order-4 min-w-0 flex-1 md:order-none md:w-36 md:flex-none md:shrink-0">
                                   <h4 className="font-semibold text-sm truncate">{lote?.nombre || 'Lote no especificado'}</h4>
                                   <p className="text-xs text-muted-foreground truncate">{sublote?.nombre || 'Sublote no especificado'}</p>
                                 </div>
-                                <div className="w-20 shrink-0 text-right">
+                                <div className="order-5 w-20 shrink-0 text-right max-md:empty:hidden md:order-none md:w-20">
                                   <p className="text-xs text-muted-foreground">Palmas</p>
                                   <p className="font-bold text-lg">{trabajo.palmas}</p>
                                 </div>
-                                <div className="w-28 shrink-0 text-right">
+                                <div className="order-7 w-full shrink-0 md:order-none md:w-28 md:text-right">
                                   <p className="text-xs text-muted-foreground">Fertilizante</p>
                                   <p className="font-semibold text-xs truncate">{fertTipo || 'No especificado'}</p>
                                   <p className="text-xs text-muted-foreground">{trabajo.cantidadGramos}g</p>
                                 </div>
-                                <div className="flex items-center gap-1 shrink-0">
+                                <div className="order-2 ml-auto flex shrink-0 items-center gap-1 md:order-none md:ml-0">
                                   <Button
                                     variant="ghost"
                                     size="sm"

@@ -67,7 +67,7 @@ export function EtapaHorasExtras({
                 <Clock className="h-5 w-5" strokeWidth={2} />
               </span>
               <div>
-                <CardTitle>Horas Extras</CardTitle>
+                <CardTitle>Horas extras</CardTitle>
                 <p className="text-sm text-muted-foreground">
                   Registra las horas extras de los colaboradores
                 </p>
@@ -191,9 +191,9 @@ export function EtapaHorasExtras({
         return (
           <Card key={hora.id} className="border-border hover:border-primary/30 transition-colors">
             <CardContent className="p-4">
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center justify-between gap-4">
                 {/* Icon + Colaborador */}
-                <div className="flex items-center gap-3">
+                <div className="order-first flex min-w-0 flex-1 basis-auto items-center gap-3 md:order-none md:flex-none">
                   <div className="h-10 w-10 rounded-lg bg-warning/10 flex items-center justify-center shrink-0">
                     <Clock className="h-5 w-5 text-warning" />
                   </div>
@@ -206,19 +206,19 @@ export function EtapaHorasExtras({
                 </div>
 
                 {/* Horas */}
-                <div className="text-center shrink-0">
+                <div className="flex w-full shrink-0 items-baseline justify-between md:block md:w-auto md:text-center">
                   <p className="text-xs text-muted-foreground">Horas</p>
                   <p className="font-bold text-lg">{hora.numeroHoras}</p>
                 </div>
 
                 {/* Observación */}
-                <div className="flex-1 min-w-0">
+                <div className="min-w-0 flex-1 basis-full md:basis-0">
                   <p className="text-xs text-muted-foreground">Observación</p>
                   <p className="text-sm truncate">{hora.observacion || 'Sin observación'}</p>
                 </div>
 
                 {/* Botón eliminar */}
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="order-first ml-auto flex shrink-0 items-center gap-1 md:order-none md:ml-0">
                   <Button
                     variant="ghost"
                     size="sm"

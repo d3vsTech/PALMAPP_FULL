@@ -933,8 +933,6 @@ export default function NuevoColaboradorWizard() {
           style={{
             position: 'fixed',
             top: 0, left: 0, right: 0, bottom: 0,
-            width: '100vw',
-            height: '100vh',
             zIndex: 99999,
           }}
         >
@@ -970,7 +968,7 @@ export default function NuevoColaboradorWizard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Wizard */}
-        <div className="lg:col-span-2 space-y-8">
+        <div className="min-w-0 space-y-8 lg:col-span-2">
           {/* Stepper horizontal */}
           <Card className="border-border">
             <CardContent className="p-6">
@@ -984,13 +982,13 @@ export default function NuevoColaboradorWizard() {
                       {/* Círculo de etapa */}
                       <button aria-label="Confirmar"
                         onClick={() => irAEtapa(etapa.numero)}
-                        className={`flex flex-col items-center gap-2 ${
+                        className={`flex shrink-0 flex-col items-center gap-2 ${
                           estaActiva || estaCompleta || isEditMode ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
                         }`}
                         disabled={!isEditMode && !estaActiva && !estaCompleta}
                       >
                         <div
-                          className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition ${
+                          className={`flex h-9 w-9 items-center justify-center rounded-full border-2 transition md:h-12 md:w-12 ${
                             estaCompleta
                               ? 'bg-primary border-primary text-white'
                               : estaActiva
@@ -1000,7 +998,7 @@ export default function NuevoColaboradorWizard() {
                         >
                           {estaCompleta ? <Check className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
                         </div>
-                        <div className="text-center">
+                        <div className="hidden text-center md:block">
                           <div
                             className={`text-xs font-semibold whitespace-nowrap ${
                               estaActiva || estaCompleta ? 'text-foreground' : 'text-muted-foreground'
@@ -1013,7 +1011,7 @@ export default function NuevoColaboradorWizard() {
 
                       {/* Línea conectora */}
                       {index < ETAPAS.length - 1 && (
-                        <div className="flex-1 h-0.5 bg-border relative mx-4">
+                        <div className="relative mx-2 h-0.5 flex-1 bg-border sm:mx-4">
                           <div
                             className={`absolute inset-0 bg-primary transition ${
                               estaCompleta ? 'w-full' : 'w-0'
@@ -1025,6 +1023,10 @@ export default function NuevoColaboradorWizard() {
                   );
                 })}
               </div>
+              {/* Reemplaza a los rotulos, escondidos en celular. */}
+              <p className="mt-3 text-center text-[13px] font-semibold text-foreground md:hidden">
+                Paso {etapaActual} de {ETAPAS.length}: {ETAPAS.find((x) => x.numero === etapaActual)?.nombre}
+              </p>
             </CardContent>
           </Card>
 

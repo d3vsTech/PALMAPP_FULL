@@ -48,7 +48,7 @@ export function EtapaInfoGeneral({
             <FileText className="h-5 w-5" strokeWidth={2} />
           </span>
           <div>
-            <CardTitle>Información General</CardTitle>
+            <CardTitle>Información general</CardTitle>
             <p className="text-sm text-muted-foreground">
               Ingresa los datos básicos de la planilla
             </p>
@@ -116,7 +116,7 @@ export function EtapaInfoGeneral({
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="inicioLabores">Inicio de Labores</Label>
+            <Label htmlFor="inicioLabores">Inicio de labores</Label>
             <Input
               id="inicioLabores"
               type="time"

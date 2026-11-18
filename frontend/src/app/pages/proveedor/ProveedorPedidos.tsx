@@ -368,7 +368,7 @@ export default function ProveedorPedidos() {
 
       {/* Tabs (server-side) */}
       <Tabs value={tab} onValueChange={(v: any) => { setTab(v); setPage(1); }}>
-        <TabsList>
+        <TabsList className="grid h-auto w-full grid-cols-2 sm:w-fit sm:grid-cols-4">
           <TabsTrigger value="todos">Todos</TabsTrigger>
           <TabsTrigger value="por_confirmar">
             Por Confirmar

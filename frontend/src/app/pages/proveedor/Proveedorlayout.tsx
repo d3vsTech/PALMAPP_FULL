@@ -4,8 +4,9 @@ import {
   BarChart3,
   ChevronDown,
   LayoutDashboard,
+  LayoutGrid,
   LogOut,
-  Menu,
+  Moon,
   Package,
   Settings,
   ShoppingCart,
@@ -13,7 +14,11 @@ import {
   User,
   X,
 } from 'lucide-react';
+import { Sun } from 'lucide-react';
 import { useCerrarConEscape } from '../../hooks/useCerrarConEscape';
+import { useTheme } from '../../contexts/ThemeContext';
+import AvisoSinSenal from '../../components/layout/AvisoSinSenal';
+import InicioBarraMovil from '../../components/layout/InicioBarraMovil';
 import { PalmappLogo } from '../../components/common/PalmappLogo';
 import { cn } from '../../components/lib/utils';
 import { proveedorAuthApi, proveedorAuthStorage } from '../../../api/proveedorAuth';
@@ -27,6 +32,8 @@ const navegacion = [
 ];
 
 export default function ProveedorLayout() {
+  const { theme, toggleTheme } = useTheme();
+  const oscuro = theme === 'dark';
   const navigate = useNavigate();
   const location = useLocation();
   const [menuAbierto, setMenuAbierto] = useState(false);
@@ -165,7 +172,7 @@ export default function ProveedorLayout() {
   );
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-frame">
+    <div data-barra-volver className="group/shell flex h-dvh overflow-hidden bg-frame">
       <aside className="hidden w-64 shrink-0 flex-col lg:flex">{contenido}</aside>
 
       {menuAbierto && (
@@ -202,14 +209,8 @@ export default function ProveedorLayout() {
           >
             <div className="flex h-14 items-center justify-between gap-2 px-2 md:h-16 md:px-6 lg:px-8">
               <div className="flex min-w-0 items-center gap-1 md:gap-3">
-                <button
-                  type="button"
-                  onClick={() => setMenuAbierto(true)}
-                  aria-label="Abrir menú"
-                  className="flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors active:bg-muted lg:hidden"
-                >
-                  <Menu className="h-5 w-5" strokeWidth={2} />
-                </button>
+                {/* El menú completo se abre con "Más", en la barra de abajo. */}
+                <InicioBarraMovil titulo={moduloActual?.nombre} nivelRaiz={2} />
                 <span className="hidden truncate text-sm text-muted-foreground md:block">
                   Proveedores
                   {moduloActual && (
@@ -222,7 +223,18 @@ export default function ProveedorLayout() {
               </div>
 
               {/* El cierre de sesión vive en el pie del menú, no aquí. */}
-              <div className="relative shrink-0" ref={dropdownRef}>
+              <div className="flex shrink-0 items-center gap-1 md:gap-1.5">
+              <button
+                type="button"
+                onClick={toggleTheme}
+                aria-label={oscuro ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+                className="hidden h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:flex"
+              >
+                {oscuro
+                  ? <Sun className="h-[18px] w-[18px]" strokeWidth={2} />
+                  : <Moon className="h-[18px] w-[18px]" strokeWidth={2} />}
+              </button>
+              <div className="relative" ref={dropdownRef}>
                 <button
                   type="button"
                   onClick={() => setDropdownOpen(!dropdownOpen)}
@@ -256,20 +268,82 @@ export default function ProveedorLayout() {
                       <User className="h-4 w-4 text-muted-foreground" strokeWidth={2} />
                       Mi perfil
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => { toggleTheme(); setDropdownOpen(false); }}
+                      className="flex min-h-11 w-full items-center gap-2.5 px-4 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted md:hidden"
+                    >
+                      {oscuro
+                        ? <Sun className="h-4 w-4 text-muted-foreground" strokeWidth={2} />
+                        : <Moon className="h-4 w-4 text-muted-foreground" strokeWidth={2} />}
+                      {oscuro ? 'Modo claro' : 'Modo oscuro'}
+                    </button>
                   </div>
                 )}
+              </div>
               </div>
             </div>
           </header>
 
+          <AvisoSinSenal />
+
           <div
             key={location.pathname}
-            className="pagina-entra mx-auto w-full max-w-[1440px] px-5 pb-10 pt-3 md:px-8"
+            className="pagina-entra mx-auto w-full max-w-[1440px] px-5 pb-[calc(8.5rem+env(safe-area-inset-bottom))] pt-3 md:px-8 md:pb-28 lg:pb-10"
           >
             <Outlet />
           </div>
         </main>
       </div>
+
+      {/* Barra inferior en celular: las cuatro secciones frecuentes y "Más". */}
+      <nav
+        aria-label="Navegación principal"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden"
+      >
+        <div className="mx-auto grid max-w-md grid-cols-5 px-2">
+          {navegacion.slice(0, 4).map((item) => {
+            const Icon = item.icon;
+            const activo = esRutaActiva(item.href);
+            return (
+              <Link
+                key={item.href}
+                to={item.href}
+                aria-current={activo ? 'page' : undefined}
+                className={cn(
+                  'flex flex-col items-center gap-1 py-2 text-[11px] font-medium',
+                  activo ? 'text-primary' : 'text-muted-foreground',
+                )}
+              >
+                <span
+                  className={cn(
+                    'flex h-7 w-12 items-center justify-center rounded-full',
+                    activo && 'bg-accent/30 dark:bg-accent/20',
+                  )}
+                >
+                  <Icon className="h-[18px] w-[18px]" strokeWidth={activo ? 2.3 : 2} />
+                </span>
+                {item.href === '/proveedor/dashboard' ? 'Inicio' : item.nombre}
+              </Link>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => setMenuAbierto(true)}
+            className={cn(
+              'flex flex-col items-center gap-1 py-2 text-[11px] font-medium',
+              !moduloActual || moduloActual.href === '/proveedor/configuracion'
+                ? 'text-primary'
+                : 'text-muted-foreground',
+            )}
+          >
+            <span className="flex h-7 w-12 items-center justify-center rounded-full">
+              <LayoutGrid className="h-[18px] w-[18px]" strokeWidth={2} />
+            </span>
+            Más
+          </button>
+        </div>
+      </nav>
     </div>
   );
 }

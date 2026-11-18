@@ -738,7 +738,7 @@ export default function ConteoCosecha() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Columna izquierda: Wizard (2/3) */}
-        <div className="lg:col-span-2 space-y-8">
+        <div className="min-w-0 space-y-8 lg:col-span-2">
           {/* Stepper horizontal */}
           <Card className="border-border">
             <CardContent className="p-6">
@@ -750,17 +750,17 @@ export default function ConteoCosecha() {
                     <React.Fragment key={etapa.numero}>
                       <button aria-label="Confirmar"
                         onClick={() => irAEtapa(etapa.numero)}
-                        className={`flex flex-col items-center gap-2 ${estaActiva || estaCompleta ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
+                        className={`flex shrink-0 flex-col items-center gap-2 ${estaActiva || estaCompleta ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
                         disabled={!estaActiva && !estaCompleta}
                       >
-                        <div className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition ${
+                        <div className={`flex h-9 w-9 items-center justify-center rounded-full border-2 transition md:h-12 md:w-12 ${
                           estaCompleta ? 'bg-primary border-primary text-white'
                           : estaActiva ? 'bg-primary/10 border-primary text-primary'
                           : 'bg-muted border-border text-muted-foreground'
                         }`}>
                           {estaCompleta ? <Check className="h-5 w-5" /> : <span className="font-bold">{etapa.numero}</span>}
                         </div>
-                        <div className="text-center">
+                        <div className="hidden text-center md:block">
                           <div className={`text-sm font-semibold whitespace-nowrap ${
                             estaActiva || estaCompleta ? 'text-foreground' : 'text-muted-foreground'
                           }`}>
@@ -769,7 +769,7 @@ export default function ConteoCosecha() {
                         </div>
                       </button>
                       {index < ETAPAS.length - 1 && (
-                        <div className="flex-1 h-0.5 bg-border relative mx-4">
+                        <div className="relative mx-2 h-0.5 flex-1 bg-border sm:mx-4">
                           <div className={`absolute inset-0 bg-primary transition-[width] ${estaCompleta ? 'w-full' : 'w-0'}`} />
                         </div>
                       )}
@@ -777,6 +777,10 @@ export default function ConteoCosecha() {
                   );
                 })}
               </div>
+              {/* Reemplaza a los rotulos, escondidos en celular. */}
+              <p className="mt-3 text-center text-[13px] font-semibold text-foreground md:hidden">
+                Paso {etapaActual} de {ETAPAS.length}: {ETAPAS.find((x) => x.numero === etapaActual)?.nombre}
+              </p>
             </CardContent>
           </Card>
 

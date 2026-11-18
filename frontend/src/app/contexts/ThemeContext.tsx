@@ -1,3 +1,10 @@
+/**
+ * Tema claro u oscuro de la app.
+ *
+ * Los dos juegos de tokens viven en `theme.css`: la clase `dark` en el `html`
+ * es la que cambia de uno al otro. La preferencia se recuerda por navegador,
+ * y la primera visita toma la del sistema operativo.
+ */
 import { createContext, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
 
 type Theme = 'dark' | 'light';
@@ -8,33 +15,47 @@ interface ThemeContextType {
   toggleTheme: () => void;
 }
 
+const CLAVE = 'theme';
+
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+/** Lo que eligió el usuario; si nunca eligió, lo que pida el sistema. */
+function temaInicial(): Theme {
+  try {
+    const guardado = localStorage.getItem(CLAVE);
+    if (guardado === 'dark' || guardado === 'light') return guardado;
+  } catch {
+    /* sin almacenamiento: se decide por el sistema */
+  }
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  // Forzar tema claro por ahora
-  const [theme, setTheme] = useState<Theme>('light');
+  const [theme, setTheme] = useState<Theme>(temaInicial);
 
   useEffect(() => {
-    const root = window.document.documentElement;
-    root.classList.remove('light', 'dark');
-    root.classList.add('light'); // Siempre claro
-    localStorage.setItem('theme', 'light');
+    const raiz = window.document.documentElement;
+    raiz.classList.remove('light', 'dark');
+    raiz.classList.add(theme);
+    // La barra de estado del celular se pinta del color del marco.
+    raiz.style.colorScheme = theme;
+    try {
+      localStorage.setItem(CLAVE, theme);
+    } catch {
+      /* sin almacenamiento: el tema dura lo que dure la pestaña */
+    }
   }, [theme]);
 
-  const toggleTheme = () => {
-    // Deshabilitado por ahora - siempre modo claro
-    // setTheme(prev => prev === 'dark' ? 'light' : 'dark');
-  };
-
-  // Se arma una vez por cambio de tema, no en cada render del proveedor.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const valor = useMemo(() => ({ theme, setTheme, toggleTheme }), [theme]);
-
-  return (
-    <ThemeContext.Provider value={valor}>
-      {children}
-    </ThemeContext.Provider>
+  const valor = useMemo<ThemeContextType>(
+    () => ({
+      theme,
+      setTheme,
+      toggleTheme: () => setTheme((previo) => (previo === 'dark' ? 'light' : 'dark')),
+    }),
+    [theme],
   );
+
+  return <ThemeContext.Provider value={valor}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme() {
