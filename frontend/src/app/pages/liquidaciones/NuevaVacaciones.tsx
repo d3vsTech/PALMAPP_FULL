@@ -46,6 +46,7 @@ import {
   type MetodoPagoVacacion,
   type ModoPagoVacacion,
   type VacacionItem,
+  normalizarBloqueante,
 } from '../../../api/vacaciones';
 import { BLOQUEANTE_LABEL } from '../../../api/liquidaciones';
 import type { ApiError } from '../../../api/client';
@@ -479,10 +480,10 @@ export default function NuevaVacaciones() {
 
       {detalle.bloqueantes_base.length > 0 && (
         <div className="space-y-1 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-          {detalle.bloqueantes_base.map((code) => (
-            <p key={code} className="flex gap-2">
+          {detalle.bloqueantes_base.map(normalizarBloqueante).map((b, i) => (
+            <p key={`${b.code}-${i}`} className="flex gap-2">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              {BLOQUEANTE_LABEL[code] ?? code}
+              <span>{b.mensaje ?? BLOQUEANTE_LABEL[b.code] ?? b.code}</span>
             </p>
           ))}
         </div>

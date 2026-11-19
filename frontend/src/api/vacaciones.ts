@@ -241,7 +241,12 @@ export interface DetalleColaboradorVacaciones {
   base: BaseVacaciones;
   valor_dia: number;
   dias_dinero_max: number;
-  bloqueantes_base: string[];
+  /**
+   * El backend manda a veces el codigo suelto y a veces el bloqueante
+   * entero, con su mensaje y sus cifras. `normalizarBloqueante` deja los
+   * dos casos en la misma forma; pintar el crudo revienta la pantalla.
+   */
+  bloqueantes_base: Array<string | BloqueanteVacaciones>;
   parametros: {
     sabado_habil: boolean;
     anticipadas_habilitadas: boolean;
@@ -351,6 +356,11 @@ export interface BloqueanteVacaciones {
   /** Solo la cobertura incompleta se puede forzar con motivo. */
   forzable?: boolean;
   [k: string]: unknown;
+}
+
+/** Un bloqueante que llega como codigo suelto o como objeto, en la misma forma. */
+export function normalizarBloqueante(bruto: string | BloqueanteVacaciones): BloqueanteVacaciones {
+  return typeof bruto === 'string' ? { code: bruto } : bruto;
 }
 
 /** Una nómina CERRADA que ya pagó un tramo del disfrute (PR-L15). */
