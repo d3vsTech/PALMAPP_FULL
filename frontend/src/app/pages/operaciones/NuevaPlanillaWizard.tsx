@@ -2013,15 +2013,22 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   };
 
   const guardarPlateo = () => {
-    if (plateoEnEdicion) {
-      const existe = trabajosPlateo.some(t => t.id === plateoEnEdicion.id);
-      if (existe) {
-        setTrabajosPlateo(trabajosPlateo.map(t => t.id === plateoEnEdicion.id ? plateoEnEdicion : t));
-      } else {
-        setTrabajosPlateo([plateoEnEdicion, ...trabajosPlateo]);
-      }
-      setPlateoEnEdicion(null);
+    if (!plateoEnEdicion) return;
+    // §3.2 — Sin palmas el jornal se envía sin `cantidad_palmas` y el
+    // backend lo rechaza al cerrar la planilla. Se avisa acá, que es donde
+    // el usuario puede corregirlo.
+    if (!plateoEnEdicion.numeroPalmas || plateoEnEdicion.numeroPalmas <= 0) {
+      toast.error('Indica el número de palmas: se paga por palma');
+      return;
     }
+
+    const existe = trabajosPlateo.some(t => t.id === plateoEnEdicion.id);
+    if (existe) {
+      setTrabajosPlateo(trabajosPlateo.map(t => t.id === plateoEnEdicion.id ? plateoEnEdicion : t));
+    } else {
+      setTrabajosPlateo([plateoEnEdicion, ...trabajosPlateo]);
+    }
+    setPlateoEnEdicion(null);
   };
 
   const cancelarPlateo = () => {
@@ -2039,15 +2046,22 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   };
 
   const guardarPoda = () => {
-    if (podaEnEdicion) {
-      const existe = trabajosPoda.some(t => t.id === podaEnEdicion.id);
-      if (existe) {
-        setTrabajosPoda(trabajosPoda.map(t => t.id === podaEnEdicion.id ? podaEnEdicion : t));
-      } else {
-        setTrabajosPoda([podaEnEdicion, ...trabajosPoda]);
-      }
-      setPodaEnEdicion(null);
+    if (!podaEnEdicion) return;
+    // §3.2 — Sin palmas el jornal se envía sin `cantidad_palmas` y el
+    // backend lo rechaza al cerrar la planilla. Se avisa acá, que es donde
+    // el usuario puede corregirlo.
+    if (!podaEnEdicion.numeroPalmas || podaEnEdicion.numeroPalmas <= 0) {
+      toast.error('Indica el número de palmas: se paga por palma');
+      return;
     }
+
+    const existe = trabajosPoda.some(t => t.id === podaEnEdicion.id);
+    if (existe) {
+      setTrabajosPoda(trabajosPoda.map(t => t.id === podaEnEdicion.id ? podaEnEdicion : t));
+    } else {
+      setTrabajosPoda([podaEnEdicion, ...trabajosPoda]);
+    }
+    setPodaEnEdicion(null);
   };
 
   const cancelarPoda = () => {
@@ -2068,15 +2082,19 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   };
 
   const guardarFertilizacion = () => {
-    if (fertilizacionEnEdicion) {
-      const existe = trabajosFertilizacion.some(t => t.id === fertilizacionEnEdicion.id);
-      if (existe) {
-        setTrabajosFertilizacion(trabajosFertilizacion.map(t => t.id === fertilizacionEnEdicion.id ? fertilizacionEnEdicion : t));
-      } else {
-        setTrabajosFertilizacion([fertilizacionEnEdicion, ...trabajosFertilizacion]);
-      }
-      setFertilizacionEnEdicion(null);
+    if (!fertilizacionEnEdicion) return;
+    // Mismo caso que plateo y poda: sin palmas el backend rechaza el jornal.
+    if (!fertilizacionEnEdicion.palmas || fertilizacionEnEdicion.palmas <= 0) {
+      toast.error('Indica el número de palmas: se paga por palma');
+      return;
     }
+    const existe = trabajosFertilizacion.some(t => t.id === fertilizacionEnEdicion.id);
+    if (existe) {
+      setTrabajosFertilizacion(trabajosFertilizacion.map(t => t.id === fertilizacionEnEdicion.id ? fertilizacionEnEdicion : t));
+    } else {
+      setTrabajosFertilizacion([fertilizacionEnEdicion, ...trabajosFertilizacion]);
+    }
+    setFertilizacionEnEdicion(null);
   };
 
   const cancelarFertilizacion = () => {
