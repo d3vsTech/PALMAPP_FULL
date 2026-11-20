@@ -42,6 +42,15 @@ import { FaltasInjustificadas } from '../../components/nomina/FaltasInjustificad
 import { avisarCierreAutomatico } from '../../utils/cierreAutomaticoNomina';
 import { DiasVacaciones } from '../../components/nomina/DiasVacaciones';
 import { BloqueosLiquidacion } from '../../components/nomina/BloqueosLiquidacion';
+import { InterrumpirVacacionDialog } from '../../components/vacaciones/InterrumpirVacacionDialog';
+import {
+  agruparPrestamos,
+  conceptoParaPrestamo,
+  etiquetaPeriodoCuota,
+  filasPorDefecto,
+  observacionCuota,
+  observacionSaldo,
+} from '../../components/nomina/prestamosLiquidacion';
 import {
   nominaApi,
   PreviewLiquidacion,
@@ -51,6 +60,7 @@ import {
   NominaErrorCodes,
   PrestamoCuotaPendiente,
   PrestamoVigentePreview,
+  type VacacionTrabajadaEnNomina,
   type ValidacionCosechaDetalleColaborador,
 } from '../../../api/nomina';
 import type { ApiError } from '../../../api/client';
@@ -139,6 +149,56 @@ function nombreConceptoUI(
   return c.nombre ?? '';
 }
 
+/**
+ * Bonificaciones y deducciones manuales que dejó la liquidación anterior.
+ *
+ * Re-liquidar borra los conceptos previos y reescribe con lo que llegue
+ * (§5.3): sin esto, reabrir y guardar borraría el adelanto que alguien ya
+ * había registrado. Las filas de préstamo se omiten porque el preview ya las
+ * propone con su propio default y mandarlas dos veces responde 422.
+ */
+async function filasManualesPrevias(
+  nominaEmpleadoId: number,
+  catalogo: NominaConcepto[],
+): Promise<{ bonificaciones: BonificacionLocal[]; deducciones: DeduccionLocal[] }> {
+  try {
+    const res = await nominaApi.desprendible(nominaEmpleadoId);
+    const liq = res.data.liquidacion;
+    const conceptoPrestamo = conceptoParaPrestamo(catalogo);
+
+    const bonificaciones = (liq.bonificaciones ?? [])
+      .map((b) => ({ nombre: b.observacion || b.nombre, valor: Number(b.valor) || 0 }))
+      .filter((b) => b.nombre.trim() && b.valor > 0);
+
+    const deducciones = (liq.deducciones ?? [])
+      .filter((d) => {
+        if (!d.es_manual) return false;
+        if (d.prestamo_cuota_id != null || d.prestamo_id != null || d.saldar) return false;
+        // Un backend anterior a 2026-11-19 no manda esas tres llaves, así que
+        // una cuota de préstamo y un adelanto suelto se ven igual. Ante la
+        // duda se omite la del concepto de préstamos: perderla cuesta un clic;
+        // duplicarla le cobra dos veces al colaborador.
+        const sinDato = d.prestamo_cuota_id === undefined && d.prestamo_id === undefined;
+        return !(sinDato && conceptoPrestamo && d.codigo === conceptoPrestamo.codigo);
+      })
+      .map((d) => {
+        const concepto = catalogo.find((c) => c.codigo === d.codigo);
+        return {
+          concepto_id: concepto ? concepto.id : '',
+          valor: Number(d.valor) || 0,
+          observacion: d.observacion ?? '',
+        } as DeduccionLocal;
+      })
+      .filter((d) => d.concepto_id !== '' && d.valor > 0);
+
+    return { bonificaciones, deducciones };
+  } catch {
+    // Sin desprendible (fila PENDIENTE, backend viejo) no hay nada que
+    // reconstruir y el editor abre solo con lo que trae el preview.
+    return { bonificaciones: [], deducciones: [] };
+  }
+}
+
 export default function LiquidarColaborador() {
   const { nominaId, colaboradorId } = useParams();
   const navigate = useNavigate();
@@ -164,6 +224,12 @@ export default function LiquidarColaborador() {
   const [deducciones, setDeducciones] = useState<DeduccionLocal[]>([]);
 
   const [enviando, setEnviando] = useState(false);
+  /**
+   * PR-V2 — La vacación que la advertencia propone interrumpir. Es acá donde
+   * se descubre el regreso anticipado: la planilla tiene jornal en días que
+   * el módulo de Liquidaciones ya pagó como vacaciones.
+   */
+  const [vacacionAInterrumpir, setVacacionAInterrumpir] = useState<VacacionTrabajadaEnNomina | null>(null);
 
   // Carga inicial: preview siempre, resumen solo si VARIABLE, conceptos según tipo
   useEffect(() => {
@@ -181,7 +247,14 @@ export default function LiquidarColaborador() {
         try {
           sessionStorage.setItem(
             `nomina_preview_neto_${nominaEmpleadoId}`,
-            JSON.stringify({ total: Number(prev.data.total_neto_propuesto ?? 0), at: Date.now() }),
+            JSON.stringify({
+              total: Number(
+                prev.data.total_neto_propuesto_con_prestamos
+                  ?? prev.data.total_neto_propuesto
+                  ?? 0,
+              ),
+              at: Date.now(),
+            }),
           );
         } catch { /* sessionStorage puede estar deshabilitado */ }
 
@@ -215,7 +288,24 @@ export default function LiquidarColaborador() {
             });
             conceptosRes = { data: listRes.data ?? [] } as any;
           }
-          setConceptos(conceptosRes.data ?? []);
+          const catalogo = conceptosRes.data ?? [];
+          setConceptos(catalogo);
+
+          // 2026-11-19 — El editor abre con la cuota del período y las
+          // atrasadas ya aplicadas; el liquidador quita las que no van. Sin
+          // concepto en el catálogo no se propone nada: el backend exige
+          // `concepto_id` en cada deducción voluntaria.
+          const porDefecto = filasPorDefecto(
+            prev.data.prestamos_pendientes ?? [],
+            prev.data.prestamos_vigentes ?? [],
+            conceptoParaPrestamo(catalogo),
+          );
+          const previas = esReliquidacion
+            ? await filasManualesPrevias(nominaEmpleadoId, catalogo)
+            : { bonificaciones: [], deducciones: [] };
+
+          setBonificaciones(previas.bonificaciones);
+          setDeducciones([...previas.deducciones, ...porDefecto]);
 
           if (aplicaA === 'VARIABLE') {
             const res = await nominaApi.resumenTrabajo(nominaEmpleadoId);
@@ -233,7 +323,8 @@ export default function LiquidarColaborador() {
       })
       .catch((err: ApiError) => toast.error(err.message ?? 'Error al cargar liquidación'))
       .finally(() => setCargando(false));
-  }, [nominaEmpleadoId]);
+    // `esReliquidacion` decide si se reconstruyen las filas manuales previas.
+  }, [nominaEmpleadoId, esReliquidacion]);
 
   // Detalle de cosechas de esta persona desde el bundle de Validar Cosecha
   // (§4.1). Silencioso: si el bundle falla (permiso, backend viejo) o la
@@ -328,9 +419,7 @@ export default function LiquidarColaborador() {
    * dejar al liquidador atascado. Devuelve `null` si no se pudo resolver.
    */
   const resolverConceptoPrestamo = async (): Promise<NominaConcepto | null> => {
-    const existente = conceptos.find(
-      (c) => c.subtipo === 'PRESTAMO' || c.codigo === 'DCTO_ADELANTO',
-    ) ?? conceptos[0];
+    const existente = conceptoParaPrestamo(conceptos);
     if (existente) return existente;
 
     try {
@@ -358,36 +447,34 @@ export default function LiquidarColaborador() {
   };
 
   /**
-   * Aplica una cuota de préstamo pendiente como una nueva fila de deducciones
-   * voluntarias. Pre-selecciona el concepto de subtipo PRESTAMO
-   * (`DCTO_ADELANTO` sembrado por default) si existe en el catálogo del tenant.
-   * El backend valida `prestamo_cuota_id` al confirmar (doc §5.3).
+   * Vuelve a aplicar una cuota que el liquidador había quitado. El backend
+   * valida `prestamo_cuota_id` al confirmar (doc §5.3) y exige el `monto`
+   * exacto, así que el valor viaja como lo manda el preview.
    */
   const aplicarCuotaPrestamo = async (cuota: PrestamoCuotaPendiente) => {
-    if (deducciones.some((d) => d.prestamo_cuota_id === cuota.prestamo_cuota_id)) {
-      toast.info('Esta cuota ya fue agregada a las deducciones');
-      return;
-    }
-    // Saldar y pagar una cuota del mismo préstamo se contradicen: el saldo ya
-    // incluye esa cuota y el backend rechazaría el valor.
-    if (deducciones.some((d) => d.saldar && d.prestamo_id === cuota.prestamo_id)) {
-      toast.error('Ese préstamo ya se está saldando completo en esta liquidación');
-      return;
-    }
+    if (deducciones.some((d) => d.prestamo_cuota_id === cuota.prestamo_cuota_id)) return;
     const conceptoPrestamo = await resolverConceptoPrestamo();
     if (!conceptoPrestamo) return;
 
     setDeducciones((prev) => [
-      ...prev,
+      // Aplicar la cuota y saldar el préstamo se contradicen: el saldo ya la
+      // incluye y mandar las dos cosas responde 422. Manda el último clic.
+      ...prev.filter((d) => !(d.saldar && d.prestamo_id === cuota.prestamo_id)),
       {
         concepto_id: conceptoPrestamo.id,
         valor: cuota.monto,
-        observacion: `Cuota ${cuota.numero_cuota}/${cuota.total_cuotas} - ${cuota.concepto}`,
+        observacion: observacionCuota(cuota),
         prestamo_cuota_id: cuota.prestamo_cuota_id,
       },
     ]);
-    toast.success(`Cuota ${cuota.numero_cuota}/${cuota.total_cuotas} agregada`);
   };
+
+  /**
+   * Saca la cuota del descuento. Queda PENDIENTE y vuelve a proponerse en la
+   * siguiente liquidación; nunca se envía con valor 0, que es un 422.
+   */
+  const quitarCuotaPrestamo = (prestamoCuotaId: number) =>
+    setDeducciones((prev) => prev.filter((d) => d.prestamo_cuota_id !== prestamoCuotaId));
 
   /**
    * Descuenta todo el saldo del préstamo en un solo renglón (API_PRESTAMOS
@@ -396,34 +483,51 @@ export default function LiquidarColaborador() {
    * cuadra.
    */
   const saldarPrestamo = async (p: PrestamoVigentePreview) => {
-    if (deducciones.some((d) => d.saldar && d.prestamo_id === p.prestamo_id)) {
-      toast.info('Ese préstamo ya se está saldando en esta liquidación');
-      return;
-    }
-    const cuotaDelMismo = deducciones.find(
-      (d) => d.prestamo_cuota_id != null
-        && (preview?.prestamos_pendientes ?? []).some(
-          (c) => c.prestamo_cuota_id === d.prestamo_cuota_id && c.prestamo_id === p.prestamo_id,
-        ),
-    );
-    if (cuotaDelMismo) {
-      toast.error('Quite primero la cuota de ese préstamo: el saldo ya la incluye');
-      return;
-    }
+    if (deducciones.some((d) => d.saldar && d.prestamo_id === p.prestamo_id)) return;
     const concepto = await resolverConceptoPrestamo();
     if (!concepto) return;
 
+    const cuotasDelPrestamo = new Set(
+      (preview?.prestamos_pendientes ?? [])
+        .filter((c) => c.prestamo_id === p.prestamo_id)
+        .map((c) => c.prestamo_cuota_id),
+    );
+
     setDeducciones((prev) => [
-      ...prev,
+      // El saldo cubre todas las cuotas del préstamo: las individuales salen.
+      ...prev.filter(
+        (d) => d.prestamo_cuota_id == null || !cuotasDelPrestamo.has(d.prestamo_cuota_id),
+      ),
       {
         concepto_id: concepto.id,
         valor: p.saldo_pendiente,
-        observacion: `Saldo del préstamo - ${p.concepto}`,
+        observacion: observacionSaldo(p),
         prestamo_id: p.prestamo_id,
         saldar: true,
       },
     ]);
-    toast.success(`Saldo de "${p.concepto}" agregado a las deducciones`);
+  };
+
+  /** Deshace el saldo: sus cuotas vuelven al default que trae el preview. */
+  const quitarSaldoPrestamo = (p: PrestamoVigentePreview) => {
+    const concepto = conceptoParaPrestamo(conceptos);
+    const cuotas = (preview?.prestamos_pendientes ?? [])
+      .filter((c) => c.prestamo_id === p.prestamo_id);
+
+    setDeducciones((prev) => {
+      const sinSaldo = prev.filter((d) => !(d.saldar && d.prestamo_id === p.prestamo_id));
+      if (!concepto) return sinSaldo;
+      const yaEstan = new Set(sinSaldo.map((d) => d.prestamo_cuota_id));
+      const vuelven = cuotas
+        .filter((c) => c.aplicar_por_defecto !== false && !yaEstan.has(c.prestamo_cuota_id))
+        .map((c) => ({
+          concepto_id: concepto.id,
+          valor: c.monto,
+          observacion: observacionCuota(c),
+          prestamo_cuota_id: c.prestamo_cuota_id,
+        }));
+      return [...sinSaldo, ...vuelven];
+    });
   };
 
   /** Préstamos que ya se saldan en esta liquidación. */
@@ -433,7 +537,7 @@ export default function LiquidarColaborador() {
       .map((d) => d.prestamo_id as number),
   );
 
-  /** IDs de cuotas ya agregadas — para deshabilitar el botón "Aplicar". */
+  /** Cuotas que esta liquidación descuenta — las demás quedan PENDIENTE. */
   const cuotasAplicadas = new Set(
     deducciones
       .filter((d) => d.prestamo_cuota_id != null)
@@ -461,6 +565,31 @@ export default function LiquidarColaborador() {
     } catch {
       // Si falla, el toast del 409 ya dijo lo que pasa; no hay nada más que
       // mostrar y la pantalla sigue usable con los datos que ya tenía.
+    }
+  };
+
+  /**
+   * Recarga el preview y vuelve a sembrar las filas de préstamo con los
+   * valores vigentes. Es la salida del 422 por valor o cuota desactualizada:
+   * las filas manuales se conservan, porque lo que cambió fue el préstamo.
+   */
+  const recargarPrestamos = async () => {
+    if (!nominaEmpleadoId) return;
+    try {
+      const prev = await nominaApi.preview(nominaEmpleadoId);
+      setPreview(prev.data);
+      const porDefecto = filasPorDefecto(
+        prev.data.prestamos_pendientes ?? [],
+        prev.data.prestamos_vigentes ?? [],
+        conceptoParaPrestamo(conceptos),
+      );
+      setDeducciones((actuales) => [
+        ...actuales.filter((d) => d.prestamo_cuota_id == null && !d.saldar),
+        ...porDefecto,
+      ]);
+    } catch {
+      // El toast del 422 ya dijo qué pasó; la pantalla sigue usable con lo
+      // que tenía y el liquidador puede recargarla.
     }
   };
 
@@ -567,7 +696,11 @@ export default function LiquidarColaborador() {
     } catch (err) {
       const e = err as ApiError;
       if (e.code === NominaErrorCodes.PRESTAMO_CUOTA_NO_PENDIENTE) {
-        toast.error('Una de las cuotas de préstamo ya fue aplicada en otra nómina');
+        toast.error('Una de las cuotas de préstamo ya fue aplicada en otra nómina', {
+          duration: 9000,
+          description: 'Se recargaron los descuentos del préstamo: revise y vuelva a guardar.',
+        });
+        void recargarPrestamos();
       } else if (e.code === NominaErrorCodes.PRESTAMO_CUOTA_EMPLEADO_MISMATCH
         || e.code === NominaErrorCodes.PRESTAMO_EMPLEADO_MISMATCH) {
         toast.error('El préstamo no pertenece a este colaborador');
@@ -581,8 +714,10 @@ export default function LiquidarColaborador() {
         // preview trae los valores nuevos.
         toast.error('El valor del préstamo cambió', {
           duration: 9000,
-          description: e.message ?? 'Quite la fila y vuelva a agregarla con el valor actualizado.',
+          description: e.message
+            ?? 'Se recargaron los descuentos del préstamo: revise y vuelva a guardar.',
         });
+        void recargarPrestamos();
       } else if (e.code === NominaErrorCodes.NOVEDADES_PENDIENTES_EN_PERIODO) {
         // PR-N8 — El preview ya lo anticipa en `bloqueos[]`, así que llegar
         // aquí significa que la novedad se registró mientras esta pantalla
@@ -1067,7 +1202,24 @@ export default function LiquidarColaborador() {
               desactualizado, recargo desactualizado, descanso perdido).
               Se rederivan en cada re-liquidación así que no se congelan. */}
           <BloqueosLiquidacion bloqueos={preview.bloqueos} />
-          <AdvertenciasBanner items={preview.advertencias} size="sm" />
+          <AdvertenciasBanner
+            items={preview.advertencias}
+            size="sm"
+            onInterrumpirVacacion={setVacacionAInterrumpir}
+          />
+
+          {/* Interrumpir acorta la vacación y devuelve a PENDIENTE esta fila:
+              hay que volver a liquidarla con los días ya como trabajados. */}
+          <InterrumpirVacacionDialog
+            vacacionId={vacacionAInterrumpir?.vacacion_id ?? null}
+            comprobante={vacacionAInterrumpir?.numero_comprobante}
+            fechaSugerida={vacacionAInterrumpir?.fecha_reintegro_sugerida}
+            onClose={() => setVacacionAInterrumpir(null)}
+            onInterrumpida={() => {
+              toast.success('Vacación interrumpida: vuelva a calcular la liquidación');
+              void refrescarBloqueos();
+            }}
+          />
 
           {/* ── DEVENGADO ─────────────────────────────────────────────── */}
           <div>
@@ -1339,80 +1491,112 @@ export default function LiquidarColaborador() {
                     </span>
                   </div>
                 ))}
-                {/* Cuotas de préstamos (aplicables como deducciones) */}
-                {(preview.prestamos_pendientes ?? []).map((cuota) => {
-                  const yaAplicada = cuotasAplicadas.has(cuota.prestamo_cuota_id);
+                {/* Un bloque por préstamo: arriba el saldo completo y
+                    abajo las cuotas que se descuentan en este período, las
+                    atrasadas primero. El preview las manda por separado
+                    porque son decisiones distintas, pero en pantalla una
+                    deuda es una sola fila con lo suyo adentro. Las cuotas
+                    entran ya aplicadas y el botón las quita o las vuelve a
+                    poner; quitar una la deja PENDIENTE para la siguiente
+                    liquidación, no la perdona. */}
+                {agruparPrestamos(
+                  preview.prestamos_pendientes ?? [],
+                  preview.prestamos_vigentes ?? [],
+                ).map((grupo) => {
+                  const yaSaldado = prestamosSaldados.has(grupo.prestamo_id);
+                  const p = grupo.vigente;
                   return (
                     <div
-                      key={`cuota-${cuota.prestamo_cuota_id}`}
+                      key={`prestamo-${grupo.prestamo_id}`}
                       className="border-b border-destructive/10"
                     >
-                      <div className="flex justify-between items-center px-4 py-3">
-                        <div>
-                          <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                            {cuota.concepto}
-                          </p>
-                          <p className="text-[10px] text-muted-foreground mt-0.5">
-                            Cuota {cuota.numero_cuota}/{cuota.total_cuotas} · Saldo restante ${cuota.saldo_restante_prestamo.toLocaleString('es-CO')}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className={`font-semibold ${yaAplicada ? 'text-destructive' : 'text-muted-foreground'}`}>
-                            ${cuota.monto.toLocaleString('es-CO')}
-                          </span>
-                          <Button
-                            size="sm"
-                            variant={yaAplicada ? 'outline' : 'default'}
-                            onClick={() => aplicarCuotaPrestamo(cuota)}
-                            disabled={yaAplicada}
-                            className={yaAplicada ? 'text-success border-success/50 h-7' : 'bg-primary hover:bg-primary/90 h-7'}
-                          >
-                            {yaAplicada ? 'Aplicada' : 'Aplicar'}
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                {/* Préstamos vigentes: lo que `prestamos_pendientes` no
-                    permite. Ahí solo está la cuota de ESTE período; aquí está
-                    el saldo completo, para cuando el colaborador se retira o
-                    pide que se lo descuenten todo de una vez. También sale el
-                    préstamo que no tiene cuota en el período. */}
-                {(preview.prestamos_vigentes ?? []).map((p) => {
-                  const yaSaldado = prestamosSaldados.has(p.prestamo_id);
-                  const cuotaEnElPeriodo = (preview.prestamos_pendientes ?? [])
-                    .some((c) => c.prestamo_id === p.prestamo_id);
-                  return (
-                    <div key={`vigente-${p.prestamo_id}`} className="border-b border-destructive/10 px-4 py-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                            {p.concepto}
-                          </p>
-                          <p className="mt-0.5 text-[10px] text-muted-foreground">
-                            {p.cuotas_pagadas}/{p.num_cuotas} cuotas pagadas
-                            {!cuotaEnElPeriodo && ' · sin cuota en este período'}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="text-right">
-                            <p className="text-[10px] text-muted-foreground">Saldo</p>
-                            <p className="font-semibold text-destructive">
-                              ${p.saldo_pendiente.toLocaleString('es-CO')}
-                            </p>
+                      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+                        <span
+                          className="text-xs uppercase tracking-wide text-muted-foreground"
+                          title={p
+                            ? `${p.cuotas_pagadas}/${p.num_cuotas} cuotas pagadas`
+                              + `${(p.cuotas_atrasadas ?? 0) > 0 ? ` · ${p.cuotas_atrasadas} atrasada(s)` : ''}`
+                              + `${grupo.cuotas.length === 0 ? ' · sin cuota en este período' : ''}`
+                            : undefined}
+                        >
+                          {grupo.concepto}
+                        </span>
+                        {p && (
+                          <div className="flex items-center gap-3">
+                            <div className="text-right">
+                              <p className="text-[10px] text-muted-foreground">Saldo</p>
+                              <p className={`font-semibold ${yaSaldado ? 'text-destructive' : 'text-muted-foreground'}`}>
+                                ${p.saldo_pendiente.toLocaleString('es-CO')}
+                              </p>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => (yaSaldado ? quitarSaldoPrestamo(p) : saldarPrestamo(p))}
+                              disabled={!yaSaldado && p.saldo_pendiente <= 0}
+                              title={yaSaldado
+                                ? 'Las cuotas del préstamo vuelven a su estado inicial.'
+                                : 'Descuenta todas las cuotas pendientes en esta liquidación.'}
+                              className="h-7"
+                            >
+                              {yaSaldado ? 'Quitar' : 'Saldar todo'}
+                            </Button>
                           </div>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => saldarPrestamo(p)}
-                            disabled={yaSaldado || p.saldo_pendiente <= 0}
-                            className={yaSaldado ? 'h-7 border-success/50 text-success' : 'h-7'}
-                          >
-                            {yaSaldado ? 'Se salda' : 'Saldar todo'}
-                          </Button>
-                        </div>
+                        )}
                       </div>
+
+                      {/* Saldando el préstamo las cuotas sobran: el saldo ya
+                          las incluye. */}
+                      {!yaSaldado && grupo.cuotas.length > 0 && (
+                        <div className="divide-y divide-destructive/10 border-t border-destructive/10 bg-background/40">
+                          {grupo.cuotas.map((cuota) => {
+                            const aplicada = cuotasAplicadas.has(cuota.prestamo_cuota_id);
+                            const periodo = etiquetaPeriodoCuota(cuota.anio, cuota.mes, cuota.quincena);
+                            return (
+                              <div
+                                key={`cuota-${cuota.prestamo_cuota_id}`}
+                                className="flex flex-wrap items-center justify-between gap-2 py-2 pl-7 pr-4"
+                              >
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <span
+                                    className="text-[11px] text-muted-foreground"
+                                    title={periodo || undefined}
+                                  >
+                                    Cuota {cuota.numero_cuota}/{cuota.total_cuotas}
+                                  </span>
+                                  {cuota.atrasada && (
+                                    <Badge
+                                      variant="outline"
+                                      className="h-4 border-amber-500/50 px-1.5 text-[9px] font-semibold uppercase text-amber-700"
+                                      title={periodo ? `De la ${periodo}, sin descontar.` : 'Sin descontar.'}
+                                    >
+                                      Atrasada
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <span className={`text-sm font-semibold ${aplicada ? 'text-destructive' : 'text-muted-foreground line-through'}`}>
+                                    ${cuota.monto.toLocaleString('es-CO')}
+                                  </span>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => (aplicada
+                                      ? quitarCuotaPrestamo(cuota.prestamo_cuota_id)
+                                      : aplicarCuotaPrestamo(cuota))}
+                                    title={aplicada
+                                      ? 'La cuota queda pendiente y vuelve a aparecer en la siguiente liquidación.'
+                                      : 'Se descuenta en esta liquidación.'}
+                                    className="h-7"
+                                  >
+                                    {aplicada ? 'Quitar' : 'Aplicar'}
+                                  </Button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1431,9 +1615,15 @@ export default function LiquidarColaborador() {
                 {conceptos
                   .filter(esConceptoParaAdelantos)
                   .map((concepto) => {
+                  // Las filas de préstamo se pintan arriba, con su propio
+                  // toggle. Listarlas también acá era el mismo descuento dos
+                  // veces en pantalla, con un valor editable que el backend
+                  // rechaza si se toca.
                   const filas = deducciones
                     .map((d, idx) => ({ d, idx }))
-                    .filter(({ d }) => d.concepto_id === concepto.id);
+                    .filter(({ d }) => d.concepto_id === concepto.id
+                      && d.prestamo_cuota_id == null
+                      && !d.saldar);
                   const totalConcepto = filas.reduce((s, { d }) => s + (Number(d.valor) || 0), 0);
                   return (
                     <div key={concepto.id} className="border-b border-destructive/10 last:border-0">
@@ -1472,7 +1662,6 @@ export default function LiquidarColaborador() {
                                   onChange={(e) => actualizarDeduccion(idx, 'valor', Number(e.target.value))}
                                   placeholder="Valor"
                                   className="h-8 text-sm"
-                                  disabled={!!d.prestamo_cuota_id || !!d.saldar}
                                 />
                               </div>
                               <div className="col-span-7">

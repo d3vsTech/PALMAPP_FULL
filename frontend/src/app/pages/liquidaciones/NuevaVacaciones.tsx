@@ -32,7 +32,9 @@ import {
 } from '../../components/ui/alert-dialog';
 import {
   ArrowLeft, Plane, Info, AlertCircle, AlertTriangle, Check, Loader2, CalendarDays, DollarSign,
+  Pencil,
 } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'sonner';
 import {
   vacacionesApi,
@@ -111,11 +113,37 @@ export default function NuevaVacaciones() {
   const [forzarDialog, setForzarDialog] = useState<string | null>(null);
   const [motivoForzado, setMotivoForzado] = useState('');
 
+  /*
+   * v1.13 — Base mensual manual del art. 192. El "modo manual" es estado de
+   * esta pantalla, no un parámetro de la API: manual = el preview viaja con
+   * `ajuste[base_mensual]`. Exige el permiso `liquidaciones.ajustar_base`.
+   */
+  const [modoBaseManual, setModoBaseManual] = useState(false);
+  const [baseManual, setBaseManual] = useState('');
+  const [motivoAjuste, setMotivoAjuste] = useState('');
+
   const calRef = useRef(0);
   const prevRef = useRef(0);
 
   const nDisfrute = Number(diasDisfrute) || 0;
   const nDinero = Number(diasDinero) || 0;
+
+  const { hasPermiso } = useAuth();
+  const puedeAjustarBase = hasPermiso('liquidaciones.ajustar_base');
+  const nBaseManual = Number(baseManual) || 0;
+
+  /**
+   * v1.13 — El ajuste viaja solo si el bloque está abierto, hay base y es
+   * distinta de la que calcula el sistema. El motivo es opcional para ver el
+   * recálculo y obligatorio para confirmar (422 `AJUSTE_SIN_MOTIVO`).
+   */
+  const baseSistema = Number(
+    preview?.base?.base_mensual_sistema ?? preview?.base?.base_mensual ?? 0,
+  );
+  const ajusteActivo = puedeAjustarBase
+    && modoBaseManual
+    && nBaseManual > 0
+    && nBaseManual !== baseSistema;
 
   // ── 0. Solicitud a aprobar (PR-N4) ─────────────────────────────────────────
   useEffect(() => {
@@ -199,13 +227,21 @@ export default function NuevaVacaciones() {
     const reqId = ++prevRef.current;
     setCalculandoPreview(true);
     return vacacionesApi
-      .preview(empleadoId, {
-        solicitud_id: solicitudId || undefined,
-        fecha_inicio: nDisfrute > 0 ? fechaInicio || undefined : undefined,
-        dias_disfrute: nDisfrute,
-        dias_dinero: nDinero || undefined,
-        modo_pago: modoPago,
-      })
+      .preview(
+        empleadoId,
+        {
+          solicitud_id: solicitudId || undefined,
+          fecha_inicio: nDisfrute > 0 ? fechaInicio || undefined : undefined,
+          dias_disfrute: nDisfrute,
+          dias_dinero: nDinero || undefined,
+          modo_pago: modoPago,
+        },
+        // Una base igual a la del sistema no es un ajuste: así abrir el bloque
+        // sin cambiar nada no deja la liquidación como MANUAL.
+        ajusteActivo
+          ? { base_mensual: nBaseManual, motivo: motivoAjuste.trim() || undefined }
+          : undefined,
+      )
       .then((res) => {
         if (reqId !== prevRef.current) return;
         setPreview(res.data);
@@ -215,10 +251,20 @@ export default function NuevaVacaciones() {
         if (reqId !== prevRef.current) return;
         setPreview(null);
         const e = err as ApiError;
+        // v1.13 — Sin `liquidaciones.ajustar_base` la petición con ajuste
+        // responde 403 antes de validar: se vuelve a la base del sistema.
+        if (e.status === 403 && modoBaseManual) {
+          setModoBaseManual(false);
+          setBaseManual('');
+          setMotivoAjuste('');
+          toast.error(e.message ?? 'No tiene permiso para ajustar la base');
+          return;
+        }
         setErrorPreview(mensajeError(e));
       })
       .finally(() => { if (reqId === prevRef.current) setCalculandoPreview(false); });
-  }, [empleadoId, solicitudId, fechaInicio, nDisfrute, nDinero, modoPago]);
+  }, [empleadoId, solicitudId, fechaInicio, nDisfrute, nDinero, modoPago,
+    ajusteActivo, nBaseManual, motivoAjuste, modoBaseManual]);
 
   useEffect(() => {
     if (nDisfrute > 0 && !fechaInicio) { setPreview(null); return; }
@@ -245,6 +291,10 @@ export default function NuevaVacaciones() {
         modo_pago: modoPago,
         observacion: observacion.trim() || undefined,
         calculo_hash: preview.calculo_hash,
+        // El ajuste no entra al hash: el mismo preview firma con y sin él.
+        ajuste: ajusteActivo
+          ? { base_mensual: nBaseManual, motivo: motivoAjuste.trim() }
+          : undefined,
         forzar: forzar || undefined,
         motivo_forzado: forzar ? motivoForzado.trim() : undefined,
       });
@@ -322,6 +372,24 @@ export default function NuevaVacaciones() {
   // El consumo es FIFO: se liquida contra el período completo más viejo con
   // saldo, que es el que el backend va a imputar.
   const periodoALiquidar = detalle.causacion.periodos.find((p) => p.saldo > 0) ?? null;
+  /*
+   * El preview es la fuente cuando existe: ya recalculó con la base manual.
+   * Sin él (todavía no hay días) se pinta lo que trajo el colaborador.
+   */
+  const baseVigente = preview?.base ?? detalle.base;
+  const baseMensual = baseVigente.base_mensual;
+  const valorDiaVigente = baseVigente.valor_dia ?? detalle.valor_dia;
+  const mesesBase = baseVigente.meses_base;
+  const etiquetaBase = baseVigente.metodo_base === 'MANUAL'
+    ? 'Base manual'
+    : baseVigente.metodo_base === 'PROMEDIO'
+      ? 'Salario promedio'
+      : 'Último salario';
+  const subtextoBase = baseVigente.metodo_base === 'MANUAL'
+    ? `Sistema: ${fmtCOP(baseSistema)}`
+    : baseVigente.metodo_base === 'PROMEDIO'
+      ? `Promedio de ${mesesBase} meses · nóminas cerradas al ${baseVigente.cobertura_nominas_pct} %`
+      : 'Salario contractual vigente';
   const auxilio = detalle.base.componentes.excluido_192.auxilio;
 
   // §1.2 — El preview trae sus propios `bloqueantes[]`. Solo la cobertura
@@ -350,7 +418,10 @@ export default function NuevaVacaciones() {
     !excedeSaldo && !excedeDinero && !faltaAcuerdo &&
     bloqueantesDuros.length === 0 &&
     (nDisfrute === 0 || !!fechaInicio) &&
-    (modoPago === 'NOMINA' || tipoPago === 'pendiente' || !!fechaPago);
+    (modoPago === 'NOMINA' || tipoPago === 'pendiente' || !!fechaPago) &&
+    // v1.13 — Con base manual el motivo es obligatorio para confirmar: sin él
+    // el backend responde 422 `AJUSTE_SIN_MOTIVO`.
+    (!ajusteActivo || motivoAjuste.trim().length > 0);
 
   return (
     <div className="space-y-6">
@@ -442,15 +513,24 @@ export default function NuevaVacaciones() {
           </div>
         </div>
 
+        {/* La base manda sobre todo lo demás, así que se pinta con el nombre
+            que le corresponde: un PRODUCCION no tiene "salario básico" sino el
+            promedio del año, y con ajuste es una base capturada a mano. */}
         <div className="grid grid-cols-1 divide-border sm:grid-cols-3 sm:divide-x">
           <div className="px-5 py-3">
-            <p className="text-xs text-muted-foreground">Salario básico</p>
-            <p className="text-sm font-semibold text-foreground">{fmtCOP(detalle.base.salario_basico)}</p>
+            <p className="text-xs text-muted-foreground">{etiquetaBase}</p>
+            <p className="text-sm font-semibold text-foreground">{fmtCOP(baseMensual)}</p>
+            {subtextoBase && (
+              <p className="text-xs text-muted-foreground">{subtextoBase}</p>
+            )}
           </div>
           <div className="px-5 py-3">
-            {/* El auxilio no entra en la base del art. 192. Se muestra porque
-                el usuario lo espera en la ficha, no porque se liquide. */}
-            <p className="text-xs text-muted-foreground">Auxilio de transporte</p>
+            {/* El auxilio no entra en la base del art. 192, y lo que llega es
+                la SUMA de la ventana de 12 meses: al lado de una base mensual
+                parecía un auxilio de un millón al mes. */}
+            <p className="text-xs text-muted-foreground">
+              Auxilio excluido en la ventana{mesesBase ? ` (Σ ${mesesBase} meses)` : ''}
+            </p>
             <p className="text-sm font-semibold text-foreground">
               {auxilio > 0
                 ? <>{fmtCOP(auxilio)} <span className="font-normal text-muted-foreground">(no entra en la base)</span></>
@@ -459,11 +539,71 @@ export default function NuevaVacaciones() {
           </div>
           <div className="px-5 py-3">
             <p className="text-xs text-muted-foreground">
-              Valor día (base / {detalle.base.dias_mes})
+              Valor día (base / {baseVigente.dias_mes})
             </p>
-            <p className="text-sm font-bold text-primary">{fmtCOP(detalle.valor_dia)}</p>
+            <p className="text-sm font-bold text-primary">{fmtCOP(valorDiaVigente)}</p>
           </div>
         </div>
+
+        {/* v1.13 — Reemplaza la base del art. 192 cuando el año anterior se
+            pagó fuera del sistema y el promedio sale corto. Solo con permiso:
+            es administrativo y se asigna aparte. */}
+        {puedeAjustarBase && (
+          <div className="border-t border-border px-5 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">
+                Reemplaza la base del art. 192 que calcula el sistema. Queda registrada
+                con su motivo en el comprobante.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => {
+                  const abriendo = !modoBaseManual;
+                  setModoBaseManual(abriendo);
+                  setBaseManual(abriendo && baseSistema > 0 ? String(baseSistema) : '');
+                  setMotivoAjuste('');
+                }}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                {modoBaseManual ? 'Usar base del sistema' : 'Ajustar base'}
+              </Button>
+            </div>
+
+            {modoBaseManual && (
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="base-manual">Base mensual</Label>
+                  <Input
+                    id="base-manual"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={baseManual}
+                    onChange={(e) => setBaseManual(e.target.value)}
+                    placeholder={baseSistema > 0 ? String(baseSistema) : ''}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="motivo-ajuste">Motivo del ajuste</Label>
+                  <Input
+                    id="motivo-ajuste"
+                    value={motivoAjuste}
+                    onChange={(e) => setMotivoAjuste(e.target.value)}
+                    maxLength={500}
+                    placeholder="Por ejemplo: nóminas de 2025 en el sistema anterior"
+                  />
+                  {ajusteActivo && !motivoAjuste.trim() && (
+                    <p className="text-xs text-destructive">
+                      Indique el motivo del ajuste de la base.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </Card>
 
       {/* ── Bloqueos ─────────────────────────────────────────────────────── */}

@@ -81,6 +81,12 @@ export default function VacacionesHistorico() {
   const [filtroEstado, setFiltroEstado] = useState('todos');
   const [filtroOrigen, setFiltroOrigen] = useState('todos');
   const [filtroModoPago, setFiltroModoPago] = useState('todos');
+  /**
+   * v1.14 — Las acortadas por un regreso anticipado y las que dejaron dinero
+   * por recuperar. Son dos preguntas distintas, así que van en un solo
+   * selector con tres opciones y no en dos checkboxes.
+   */
+  const [filtroInterrupcion, setFiltroInterrupcion] = useState('todos');
 
   const [aPagar, setAPagar] = useState<VacacionItem | null>(null);
   const [aAnular, setAAnular] = useState<{ fila: VacacionItem; modo: ModoAnulacion } | null>(null);
@@ -98,6 +104,8 @@ export default function VacacionesHistorico() {
         estado: filtroEstado !== 'todos' ? (filtroEstado as EstadoVacacion) : undefined,
         origen: filtroOrigen !== 'todos' ? (filtroOrigen as OrigenVacacion) : undefined,
         modo_pago: filtroModoPago !== 'todos' ? (filtroModoPago as ModoPagoVacacion) : undefined,
+        interrumpida: filtroInterrupcion === 'interrumpidas' ? 1 : undefined,
+        reintegro_pendiente: filtroInterrupcion === 'reintegro' ? 1 : undefined,
         page: pagina,
         per_page: 25,
       })
@@ -120,7 +128,8 @@ export default function VacacionesHistorico() {
     const t = setTimeout(cargar, filtroNombre ? 350 : 0);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtroNombre, filtroDesde, filtroHasta, filtroEstado, filtroOrigen, filtroModoPago, pagina]);
+  }, [filtroNombre, filtroDesde, filtroHasta, filtroEstado, filtroOrigen, filtroModoPago,
+    filtroInterrupcion, pagina]);
 
   // Cualquier filtro nuevo vuelve a la primera página.
   useEffect(() => {
@@ -129,7 +138,8 @@ export default function VacacionesHistorico() {
 
   const hayFiltros =
     filtroNombre || filtroDesde || filtroHasta ||
-    filtroEstado !== 'todos' || filtroOrigen !== 'todos' || filtroModoPago !== 'todos';
+    filtroEstado !== 'todos' || filtroOrigen !== 'todos' || filtroModoPago !== 'todos'
+    || filtroInterrupcion !== 'todos';
 
   const limpiar = () => {
     setFiltroNombre('');
@@ -138,6 +148,7 @@ export default function VacacionesHistorico() {
     setFiltroEstado('todos');
     setFiltroOrigen('todos');
     setFiltroModoPago('todos');
+    setFiltroInterrupcion('todos');
   };
 
   const descargarComprobante = async (v: VacacionItem) => {
@@ -218,10 +229,33 @@ export default function VacacionesHistorico() {
           </SelectContent>
         </Select>
 
+        <Select value={filtroInterrupcion} onValueChange={setFiltroInterrupcion}>
+          <SelectTrigger className="h-9 w-[12rem]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Interrumpidas o no</SelectItem>
+            <SelectItem value="interrumpidas">Interrumpidas</SelectItem>
+            <SelectItem value="reintegro">Con reintegro pendiente</SelectItem>
+          </SelectContent>
+        </Select>
+
         {hayFiltros && (
           <Button variant="ghost" size="sm" onClick={limpiar}>Limpiar filtros</Button>
         )}
       </div>
+
+      {/* v1.14 — Lo pagado de más no se recupera solo: hay que descontarlo en
+          la nómina del reintegro o condonarlo. */}
+      {(meta?.totales.reintegros_pendientes ?? 0) > 0 && (
+        <button
+          type="button"
+          onClick={() => { setFiltroInterrupcion('reintegro'); setPagina(1); }}
+          className="w-full rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left text-sm text-amber-800 dark:border-amber-800/30 dark:bg-amber-950/20 dark:text-amber-400"
+        >
+          {meta!.totales.reintegros_pendientes} vacación(es) interrumpida(s) con{' '}
+          {fmtCOP(meta!.totales.reintegros_pendientes_valor ?? 0)} por reintegrar.
+          {' '}Descuéntelo en la nómina del reintegro o condónelo.
+        </button>
+      )}
 
       {/* Tabla */}
       <Card className="glass-subtle border-border">
@@ -277,6 +311,14 @@ export default function VacacionesHistorico() {
                           <span className="text-sm text-foreground">{h.numero_comprobante}</span>
                           {h.origen !== 'SISTEMA' && (
                             <span className="text-xs text-muted-foreground">{ORIGEN_LABEL[h.origen]}</span>
+                          )}
+                          {h.interrumpida && (
+                            <span className="text-xs text-amber-700">
+                              Interrumpida
+                              {h.interrupcion?.reintegro?.estado === 'PENDIENTE'
+                                ? ' · reintegro pendiente'
+                                : ''}
+                            </span>
                           )}
                         </div>
                       </td>

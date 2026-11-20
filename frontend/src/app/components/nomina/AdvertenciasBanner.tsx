@@ -1,9 +1,12 @@
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react';
+import { Button } from '../ui/button';
 import {
   severidadAdvertencia,
   tituloAdvertencia,
   type SeveridadAdvertencia,
 } from '../../utils/advertenciasNomina';
+import type { VacacionTrabajadaEnNomina } from '../../../api/nomina';
+import { formatFecha } from '../../utils/fecha';
 
 /**
  * Advertencias no bloqueantes de nómina (§5.1 y §6.1). Se usa en:
@@ -33,6 +36,13 @@ export interface AdvertenciaItem {
   mensaje?: string;
   code?: string;
   message?: string;
+  /**
+   * PR-V2 — `VACACIONES_CON_TRABAJO_REGISTRADO` trae la vacación y el primer
+   * día trabajado, para ofrecer interrumpirla ahí mismo (CST art. 188).
+   */
+  vacaciones?: VacacionTrabajadaEnNomina[];
+  fecha_reintegro_sugerida?: string | null;
+  interrumpible?: boolean;
 }
 
 const codigoDe = (a: AdvertenciaItem) => a.codigo ?? a.code ?? '';
@@ -42,6 +52,12 @@ interface Props {
   items?: AdvertenciaItem[];
   /** `sm` para dentro del preview, `md` para el header del detalle. */
   size?: 'sm' | 'md';
+  /**
+   * PR-V2 — Con esto, la advertencia de trabajo en días de vacaciones ofrece
+   * el botón que abre el modal de interrupción. Sin esto solo muestra el
+   * texto, que es lo que hace el detalle de la nómina.
+   */
+  onInterrumpirVacacion?: (v: VacacionTrabajadaEnNomina) => void;
 }
 
 const ESTILO: Record<SeveridadAdvertencia, { caja: string; texto: string; icono: string }> = {
@@ -57,7 +73,7 @@ const ESTILO: Record<SeveridadAdvertencia, { caja: string; texto: string; icono:
   },
 };
 
-export function AdvertenciasBanner({ items, size = 'md' }: Props) {
+export function AdvertenciasBanner({ items, size = 'md', onInterrumpirVacacion }: Props) {
   if (!items || items.length === 0) return null;
 
   const criticas = items.filter((a) => severidadAdvertencia(codigoDe(a)) === 'critica');
@@ -65,8 +81,50 @@ export function AdvertenciasBanner({ items, size = 'md' }: Props) {
 
   return (
     <div className="space-y-3">
-      <Bloque items={criticas} severidad="critica" size={size} />
-      <Bloque items={informativas} severidad="informativa" size={size} />
+      <Bloque
+        items={criticas}
+        severidad="critica"
+        size={size}
+        onInterrumpirVacacion={onInterrumpirVacacion}
+      />
+      <Bloque
+        items={informativas}
+        severidad="informativa"
+        size={size}
+        onInterrumpirVacacion={onInterrumpirVacacion}
+      />
+    </div>
+  );
+}
+
+/** Las acciones que la advertencia ofrece, hoy solo la interrupción. */
+function AccionesVacacion({
+  item,
+  onInterrumpir,
+}: {
+  item: AdvertenciaItem;
+  onInterrumpir: (v: VacacionTrabajadaEnNomina) => void;
+}) {
+  const vacaciones = item.vacaciones ?? [];
+  const interrumpibles = vacaciones.filter((v) => v.interrumpible);
+  if (interrumpibles.length === 0) return null;
+
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-2">
+      {interrumpibles.map((v) => (
+        <Button
+          key={v.vacacion_id}
+          size="sm"
+          variant="outline"
+          className="h-7"
+          onClick={() => onInterrumpir(v)}
+          title={v.fecha_reintegro_sugerida
+            ? `La planilla dice que volvió el ${formatFecha(v.fecha_reintegro_sugerida)}`
+            : undefined}
+        >
+          Interrumpir {v.numero_comprobante}
+        </Button>
+      ))}
     </div>
   );
 }
@@ -75,10 +133,12 @@ function Bloque({
   items,
   severidad,
   size,
+  onInterrumpirVacacion,
 }: {
   items: AdvertenciaItem[];
   severidad: SeveridadAdvertencia;
   size: 'sm' | 'md';
+  onInterrumpirVacacion?: (v: VacacionTrabajadaEnNomina) => void;
 }) {
   if (items.length === 0) return null;
 
@@ -103,6 +163,9 @@ function Bloque({
                 <p className={titulo ? 'opacity-90' : undefined}>
                   {mensaje || (titulo ? '' : codigo)}
                 </p>
+                {onInterrumpirVacacion && (a.vacaciones?.length ?? 0) > 0 && (
+                  <AccionesVacacion item={a} onInterrumpir={onInterrumpirVacacion} />
+                )}
               </div>
             );
           })}

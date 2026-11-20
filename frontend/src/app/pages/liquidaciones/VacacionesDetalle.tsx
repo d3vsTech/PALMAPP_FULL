@@ -12,7 +12,7 @@ import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import {
   ArrowLeft, User, CalendarDays, Banknote, Printer, Download, Loader2,
-  AlertTriangle, Ban, RotateCcw, ShieldCheck, Info,
+  AlertTriangle, Ban, RotateCcw, ShieldCheck, Info, Scissors,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -33,6 +33,11 @@ import {
 import { imprimirPdf } from '../../lib/pdf/imprimirPdf';
 import PagoVacacionDialog from './vacaciones/PagoVacacionDialog';
 import AnularVacacionDialog, { type ModoAnulacion } from './vacaciones/AnularVacacionDialog';
+import {
+  InterrumpirVacacionDialog,
+  montoDeducciones,
+} from '../../components/vacaciones/InterrumpirVacacionDialog';
+import { MarcarReintegroDialog } from '../../components/vacaciones/MarcarReintegroDialog';
 
 export default function VacacionesDetalle() {
   const { id } = useParams<{ id: string }>();
@@ -45,6 +50,9 @@ export default function VacacionesDetalle() {
   const [pagoAbierto, setPagoAbierto] = useState(false);
   /** `null` = ningún diálogo de anulación abierto. */
   const [modoAnular, setModoAnular] = useState<ModoAnulacion | null>(null);
+  /** CST art. 188: el colaborador volvió antes y el disfrute se acorta. */
+  const [interrumpirAbierto, setInterrumpirAbierto] = useState(false);
+  const [reintegroAbierto, setReintegroAbierto] = useState(false);
   const reqIdRef = useRef(0);
 
   const cargar = () => {
@@ -148,6 +156,20 @@ export default function VacacionesDetalle() {
     (a) => a.code === 'VACACIONES_PAGO_EN_NOMINA_PENDIENTE',
   ) ?? false;
 
+  /*
+   * v1.14 (§10.16) - Se interrumpe una vacación del sistema con disfrute,
+   * APROBADA o PAGADA, y una sola vez. Sin disfrute (solo dinero), histórica,
+   * pendiente o cancelada, no hay nada que acortar.
+   */
+  const interrupcion = item.interrupcion ?? null;
+  const fueInterrumpida = Boolean(item.interrumpida);
+  const sePuedeInterrumpir = !esHistorico
+    && !fueInterrumpida
+    && item.fecha_inicio != null
+    && (estado === 'APROBADA' || estado === 'PAGADA');
+  const reintegro = interrupcion?.reintegro ?? null;
+  const reintegroPendiente = reintegro?.estado === 'PENDIENTE';
+
   return (
     <div className="space-y-6">
       <div className="print:hidden">
@@ -169,6 +191,11 @@ export default function VacacionesDetalle() {
             {!esHistorico && estado !== 'PENDIENTE' && (
               <Badge variant="outline" className={MODO_PAGO_BADGE[item.modo_pago ?? 'DIRECTO']}>
                 {MODO_PAGO_LABEL[item.modo_pago ?? 'DIRECTO']}
+              </Badge>
+            )}
+            {fueInterrumpida && interrupcion && (
+              <Badge variant="outline" className="border-amber-500/40 text-amber-700">
+                Interrumpida el {formatFecha(interrupcion.fecha_reintegro)}
               </Badge>
             )}
           </div>
@@ -211,6 +238,16 @@ export default function VacacionesDetalle() {
               Anular pago
             </Button>
           )}
+          {sePuedeInterrumpir && (
+            <Button
+              variant="outline"
+              onClick={() => setInterrumpirAbierto(true)}
+              className="gap-2"
+            >
+              <Scissors className="h-4 w-4" />
+              Interrumpir disfrute
+            </Button>
+          )}
           {estado !== 'CANCELADA' && !(porNomina && pagadoEnNomina > 0) && (
             <Button
               variant="outline"
@@ -232,6 +269,49 @@ export default function VacacionesDetalle() {
             Liquidación anulada. Los días volvieron al saldo del colaborador.
             {typeof comprobante.anulacion?.motivo === 'string' && ` Motivo: ${comprobante.anulacion.motivo}`}
           </p>
+        </div>
+      )}
+
+      {/* ── Interrupción del disfrute (CST art. 188) ─────────────────────── */}
+      {fueInterrumpida && interrupcion && (
+        <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm dark:border-amber-800/30 dark:bg-amber-950/20">
+          <p className="flex gap-2 font-medium text-amber-900 dark:text-amber-300">
+            <Scissors className="mt-0.5 h-4 w-4 shrink-0" />
+            El disfrute terminó antes: volvió a trabajar el{' '}
+            {formatFecha(interrupcion.fecha_reintegro)}
+          </p>
+          <p className="text-amber-800 dark:text-amber-400">
+            Vuelven {fmtDias(interrupcion.dias_devueltos)} día(s) hábil(es) al saldo
+            {interrupcion.fechas_devueltas
+              && ` (${formatFecha(interrupcion.fechas_devueltas.desde)} a ${formatFecha(interrupcion.fechas_devueltas.hasta)})`}
+            . Antes terminaba el{' '}
+            {interrupcion.original.fecha_fin ? formatFecha(interrupcion.original.fecha_fin) : '—'}
+            {' '}con {interrupcion.original.dias_habiles} día(s) hábil(es) y{' '}
+            {fmtCOP(interrupcion.original.valor_total)}.
+          </p>
+          {interrupcion.motivo && (
+            <p className="text-amber-800 dark:text-amber-400">Motivo: {interrupcion.motivo}</p>
+          )}
+          {/* El dinero pagado de más no se recupera solo: se descuenta en la
+              nómina del reintegro (con autorización escrita) o se condona. */}
+          {reintegro && reintegro.estado !== 'NO_APLICA' && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-background/60 px-3 py-2">
+              <p className="text-amber-900 dark:text-amber-300">
+                {reintegroPendiente
+                  ? `Reintegro pendiente: ${fmtCOP(reintegro.neto)} pagados por días no disfrutados `
+                    + `(bruto ${fmtCOP(reintegro.bruto)}, aportes devueltos `
+                    + `${fmtCOP(montoDeducciones(reintegro.deducciones))}).`
+                  : reintegro.estado === 'CONDONADO'
+                    ? `Reintegro condonado${reintegro.motivo ? `: ${reintegro.motivo}` : ''}.`
+                    : 'Reintegro descontado en nómina.'}
+              </p>
+              {reintegroPendiente && (
+                <Button size="sm" variant="outline" onClick={() => setReintegroAbierto(true)}>
+                  Marcar reintegro
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -604,6 +684,20 @@ export default function VacacionesDetalle() {
         modo={modoAnular ?? 'pago'}
         onCerrar={() => setModoAnular(null)}
         onAnulada={() => cargar()}
+      />
+
+      <InterrumpirVacacionDialog
+        vacacionId={interrumpirAbierto ? item.id : null}
+        comprobante={item.numero_comprobante}
+        onClose={() => setInterrumpirAbierto(false)}
+        onInterrumpida={() => cargar()}
+      />
+
+      <MarcarReintegroDialog
+        vacacionId={reintegroAbierto ? item.id : null}
+        neto={reintegro?.neto}
+        onClose={() => setReintegroAbierto(false)}
+        onMarcado={() => cargar()}
       />
     </div>
   );

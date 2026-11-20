@@ -42,6 +42,7 @@ import {
   BreadcrumbSeparator,
 } from '../../components/ui/breadcrumb';
 import { Badge } from '../../components/ui/badge';
+import { Textarea } from '../../components/ui/textarea';
 import {
   ArrowLeft, Calculator, Lock, DollarSign, TrendingUp, TrendingDown,
   FileText, Eye, Loader2, Trash2, Download, Users, Building2, Check,
@@ -56,7 +57,9 @@ import {
   NominaErrorCodes, NominaTerceroActaDetalle, MetodoPagoTercero,
   DetalleLaboresOperario,
   type BloqueoCierre,
+  type VacacionTrabajadaEnNomina,
 } from '../../../api/nomina';
+import { InterrumpirVacacionDialog } from '../../components/vacaciones/InterrumpirVacacionDialog';
 import { mensajeDeError } from '../../../api/errores';
 // `operacionesApi` y `PlanillaDetalle` se removieron tras el refactor a
 // endpoints dedicados de nómina (§7.4). El listado de terceros ya no
@@ -249,6 +252,15 @@ export default function NominaDetalle() {
 
   const [empleadoAQuitar, setEmpleadoAQuitar] = useState<NominaEmpleado | null>(null);
   const [confirmarCerrar, setConfirmarCerrar] = useState(false);
+  /**
+   * PR-V2 — El 409 `NOMINA_CON_VACACION_TRABAJADA`: hay jornal en días de
+   * una vacación del sistema. Se guarda el cuerpo para pintar a quién afecta
+   * y ofrecer interrumpir, corregir la planilla o cerrar forzando.
+   */
+  const [vacacionTrabajada, setVacacionTrabajada] = useState<BloqueoCierre | null>(null);
+  const [motivoForzado, setMotivoForzado] = useState('');
+  const [vacacionAInterrumpir, setVacacionAInterrumpir] = useState<VacacionTrabajadaEnNomina | null>(null);
+
   /*
    * §6.1 — Liquidar la última fila PENDIENTE cierra la nómina sola y ya no
    * se puede reabrir. El aviso va aquí, que es donde se sabe cuántos quedan,
@@ -273,6 +285,12 @@ export default function NominaDetalle() {
    * usuario pulsa "Cerrar" y recibe un 409 sin saber qué le falta.
    */
   const [bloqueosCierre, setBloqueosCierre] = useState<BloqueoCierre[]>([]);
+  /**
+   * PR-V2 — Solo `NOMINA_CON_VACACION_TRABAJADA` se puede saltar con motivo;
+   * los demás hay que resolverlos antes.
+   */
+  const bloqueosForzablesCierre = bloqueosCierre.filter((b) => b.forzable);
+  const bloqueosDurosCierre = bloqueosCierre.filter((b) => !b.forzable);
   const [descansosHuerfanosPreCierre, setDescansosHuerfanosPreCierre] = useState<
     Array<{ fecha: string; tipo: 'DOMINICAL' | 'FESTIVO'; nombre: string }>
   >([]);
@@ -671,12 +689,28 @@ export default function NominaDetalle() {
     }
   };
 
-  const cerrarNomina = async () => {
+  const cerrarNomina = async (forzar = false) => {
     if (!nominaId) return;
+    if (forzar && motivoForzado.trim().length < 5) {
+      toast.error('Escriba el motivo para cerrar de todas formas');
+      return;
+    }
     setAccionando(true);
     try {
-      const res = await nominaApi.cerrar(nominaId);
+      const res = await nominaApi.cerrar(
+        nominaId,
+        forzar ? { forzar: true, motivo_forzado: motivoForzado.trim() } : undefined,
+      );
       toast.success(res.message ?? 'Nómina cerrada');
+      // PR-V2 — Lo forzado queda en la auditoría; decirlo también acá.
+      if (res.forzado) {
+        toast.warning('Se cerró forzando un bloqueo', {
+          duration: 10000,
+          description: res.forzado.motivo,
+        });
+      }
+      setVacacionTrabajada(null);
+      setMotivoForzado('');
       // §4.4 — advertencia post-cierre si había cosechas con gajos sin
       // despachar. Cierre irreversible: aviso importante.
       if (res.advertencia?.code === 'COSECHA_GAJOS_SIN_DESPACHAR') {
@@ -722,6 +756,23 @@ export default function NominaDetalle() {
           duration: 12000,
           description: e.message
             ?? 'Apruebe o rechace las novedades en Novedades y vuelva a liquidar a esos colaboradores.',
+        });
+      } else if (e.code === NominaErrorCodes.NOMINA_CON_VACACION_TRABAJADA) {
+        /*
+         * PR-V2 — Hay jornal o cosecha en días de una vacación del sistema:
+         * o el colaborador volvió antes y hay que interrumpirla (CST art.
+         * 188), o la planilla está mal. Hay que resolverlo **antes** de
+         * cerrar: después, los días devueltos quedan en una nómina inmutable
+         * y la interrupción ya no es posible.
+         */
+        const cuerpo = e as unknown as Pick<BloqueoCierre, 'colaboradores' | 'forzable'>;
+        setConfirmarCerrar(false);
+        setMotivoForzado('');
+        setVacacionTrabajada({
+          code: NominaErrorCodes.NOMINA_CON_VACACION_TRABAJADA,
+          message: e.message ?? 'Hay trabajo registrado en días de vacaciones',
+          colaboradores: cuerpo.colaboradores,
+          forzable: cuerpo.forzable ?? true,
         });
       } else if (e.code === NominaErrorCodes.VACACIONES_DESACTUALIZADAS_EN_NOMINA) {
         // PR-L15 — Alguna fila liquidó un tramo que ya no coincide con la
@@ -2122,24 +2173,111 @@ export default function NominaDetalle() {
             );
           })()}
           {/* §3.6 — Lo que el backend va a rechazar. Con la lista vacía el
-              cierre manual pasa; con algo aquí, el 409 ya está anunciado. */}
-          <BloqueosCierre bloqueos={bloqueosCierre} />
+              cierre manual pasa; con algo aquí, el 409 ya está anunciado.
+              PR-V2: el de la vacación trabajada sí se puede forzar. */}
+          <BloqueosCierre bloqueos={bloqueosCierre} onInterrumpir={setVacacionAInterrumpir} />
+          {/* El motivo del forzado queda en la auditoría, así que se pide
+              aquí y no después. */}
+          {bloqueosDurosCierre.length === 0 && bloqueosForzablesCierre.length > 0 && (
+            <div className="my-2 space-y-1.5">
+              <Label htmlFor="motivo-forzar-cierre">
+                Motivo para cerrar de todas formas
+              </Label>
+              <Textarea
+                id="motivo-forzar-cierre"
+                value={motivoForzado}
+                onChange={(e) => setMotivoForzado(e.target.value)}
+                maxLength={500}
+                rows={2}
+                placeholder="Por ejemplo: el 19 vino a recoger herramienta; las vacaciones sí terminaron el 22"
+              />
+              <p className="text-xs text-muted-foreground">
+                Después de cerrar, esa vacación ya no se podrá interrumpir.
+              </p>
+            </div>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={accionando}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              onClick={cerrarNomina}
-              disabled={accionando || bloqueosCierre.length > 0}
-              className={alertaGajosPreCierre ? 'bg-orange-600 hover:bg-orange-700' : undefined}
+              onClick={() => cerrarNomina(bloqueosForzablesCierre.length > 0)}
+              disabled={accionando || bloqueosDurosCierre.length > 0}
+              className={alertaGajosPreCierre || bloqueosForzablesCierre.length > 0
+                ? 'bg-orange-600 hover:bg-orange-700'
+                : undefined}
             >
               {accionando
                 ? 'Cerrando...'
-                : alertaGajosPreCierre
+                : alertaGajosPreCierre || bloqueosForzablesCierre.length > 0
                   ? 'Cerrar de todas formas'
                   : 'Cerrar nómina'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* PR-V2 — El cierre encontró trabajo en días de vacaciones. El
+          checklist no lo había anticipado (la planilla cambió después), así
+          que el 409 trae a quién afecta y qué hacer con cada vacación. */}
+      <AlertDialog
+        open={vacacionTrabajada != null}
+        onOpenChange={(abierto) => { if (!abierto) setVacacionTrabajada(null); }}
+      >
+        <AlertDialogContent className="max-h-[85vh] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hay trabajo en días de vacaciones</AlertDialogTitle>
+            <AlertDialogDescription>
+              Si el colaborador se reintegró antes, interrumpa la vacación y vuelva a
+              liquidarlo. Si la planilla está mal, corríjala. Después de cerrar ya no se
+              podrá interrumpir.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {vacacionTrabajada && (
+            <BloqueosCierre
+              bloqueos={[vacacionTrabajada]}
+              onInterrumpir={setVacacionAInterrumpir}
+            />
+          )}
+          <div className="space-y-1.5">
+            <Label htmlFor="motivo-forzar-409">Motivo para cerrar de todas formas</Label>
+            <Textarea
+              id="motivo-forzar-409"
+              value={motivoForzado}
+              onChange={(e) => setMotivoForzado(e.target.value)}
+              maxLength={500}
+              rows={2}
+              placeholder="Por qué se cierra con días de vacación trabajados"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={accionando}>Volver</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => cerrarNomina(true)}
+              disabled={accionando || motivoForzado.trim().length < 5}
+              className="bg-orange-600 hover:bg-orange-700"
+            >
+              {accionando ? 'Cerrando...' : 'Cerrar de todas formas'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* El modal de la interrupción es el mismo del detalle de la vacación. */}
+      <InterrumpirVacacionDialog
+        vacacionId={vacacionAInterrumpir?.vacacion_id ?? null}
+        comprobante={vacacionAInterrumpir?.numero_comprobante}
+        fechaSugerida={vacacionAInterrumpir?.fecha_reintegro_sugerida}
+        onClose={() => setVacacionAInterrumpir(null)}
+        onInterrumpida={() => {
+          // D10: la fila del colaborador volvió a PENDIENTE y hay que
+          // re-liquidarla; al hacerlo, la nómina cierra sola.
+          setVacacionTrabajada(null);
+          toast.info('Vuelva a liquidar a ese colaborador', {
+            duration: 9000,
+            description: 'Su fila volvió a pendiente con los días devueltos.',
+          });
+          cargar();
+        }}
+      />
 
       {/* Confirmar eliminar nómina */}
       <AlertDialog open={confirmarEliminar} onOpenChange={setConfirmarEliminar}>
