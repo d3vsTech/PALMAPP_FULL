@@ -455,6 +455,35 @@ export default function NuevaVacaciones() {
   const valorNeto = preview?.resultado.valor_neto ?? preview?.resultado.valor_total ?? 0;
   const tasas = preview?.seguridad_social?.tasas ?? null;
 
+  /**
+   * Fuerza el recálculo con la base capturada. El preview ya sale solo al
+   * teclear, pero sin botón no había nada que oprimir ni nada que dijera
+   * qué falta. La base no se guarda aparte: viaja con el confirmar.
+   */
+  const aplicarBaseManual = () => {
+    if (nBaseManual <= 0) {
+      toast.error('Indique la base mensual');
+      return;
+    }
+    if (nBaseManual === baseSistema) {
+      toast.error('Esa es la base que ya calcula el sistema');
+      return;
+    }
+    if (!motivoAjuste.trim()) {
+      toast.error('Indique el motivo del ajuste');
+      return;
+    }
+    if (totalPedido <= 0) {
+      toast.error('Capture los días a liquidar para ver el recálculo');
+      return;
+    }
+    if (nDisfrute > 0 && !fechaInicio) {
+      toast.error('Indique la fecha de inicio del disfrute');
+      return;
+    }
+    void cargarPreview();
+  };
+
   const puedeConfirmar =
     !bloqueado && !!preview && !calculandoPreview && totalPedido > 0 &&
     !excedeSaldo && !excedeDinero && !faltaAcuerdo &&
@@ -654,18 +683,34 @@ export default function NuevaVacaciones() {
               </div>
             )}
 
-            {ajusteLevantaBloqueo && !ajusteAplicado && (
-              <p className="mt-3 text-xs text-emerald-700 dark:text-emerald-400">
-                Con esta base ya no aplica el bloqueo por falta de nóminas cerradas.
-              </p>
+            {modoBaseManual && (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0 space-y-1">
+                  {ajusteLevantaBloqueo && !ajusteAplicado && (
+                    <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                      Con esta base ya no aplica el bloqueo por falta de nóminas cerradas.
+                    </p>
+                  )}
+                  {ajusteActivo && <EstadoAjuste
+                    calculando={calculandoPreview}
+                    aplicado={ajusteAplicado}
+                    sinDias={totalPedido <= 0}
+                    conError={!!errorPreview}
+                  />}
+                </div>
+                <Button
+                  size="sm"
+                  className="gap-2"
+                  disabled={calculandoPreview}
+                  onClick={aplicarBaseManual}
+                >
+                  {calculandoPreview
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <Check className="h-3.5 w-3.5" />}
+                  Aplicar base
+                </Button>
+              </div>
             )}
-
-            {ajusteActivo && <EstadoAjuste
-              calculando={calculandoPreview}
-              aplicado={ajusteAplicado}
-              sinDias={totalPedido <= 0}
-              conError={!!errorPreview}
-            />}
           </div>
         )}
       </Card>
@@ -1343,7 +1388,7 @@ function EstadoAjuste({ calculando, aplicado, sinDias, conError }: {
 }) {
   if (calculando) {
     return (
-      <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <Loader2 className="h-3.5 w-3.5 animate-spin" />
         Recalculando con la base manual
       </p>
@@ -1351,7 +1396,7 @@ function EstadoAjuste({ calculando, aplicado, sinDias, conError }: {
   }
   if (aplicado) {
     return (
-      <p className="mt-3 flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400">
+      <p className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400">
         <Check className="h-3.5 w-3.5" />
         El cálculo de abajo ya usa esta base. Confirme para guardarla con su motivo.
       </p>
@@ -1359,7 +1404,7 @@ function EstadoAjuste({ calculando, aplicado, sinDias, conError }: {
   }
   if (sinDias) {
     return (
-      <p className="mt-3 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+      <p className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
         <AlertTriangle className="h-3.5 w-3.5" />
         Capture los días a liquidar: el recálculo sale con ellos.
       </p>
@@ -1367,7 +1412,7 @@ function EstadoAjuste({ calculando, aplicado, sinDias, conError }: {
   }
   if (conError) return null;
   return (
-    <p className="mt-3 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+    <p className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
       <AlertTriangle className="h-3.5 w-3.5" />
       El cálculo todavía no trae la base manual. Revise el motivo y los días.
     </p>
