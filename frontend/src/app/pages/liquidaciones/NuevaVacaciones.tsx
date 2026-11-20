@@ -58,6 +58,20 @@ import { fmtCOP, fmtDias, getIniciales } from './vacaciones/comunes';
 /** Solo la cobertura incompleta se puede forzar, y con motivo. */
 const FORZABLE = VacacionesErrorCodes.LIQUIDACION_COBERTURA_INCOMPLETA;
 
+/**
+ * Los bloqueantes de base que una base manual deja sin efecto (§10.4). Son
+ * justamente los que el ajuste viene a resolver, así que mientras el ajuste
+ * esté activo no pueden seguir congelando el formulario.
+ */
+const RESUELVE_AJUSTE = new Set<string>([
+  'SIN_DEVENGADO',
+  VacacionesErrorCodes.LIQUIDACION_COBERTURA_INCOMPLETA,
+]);
+
+/** El campo de dinero guarda dígitos y se pinta con punto de miles. */
+const soloDigitos = (v: string) => v.replace(/[^0-9]/g, '');
+const conMiles = (v: string) => (v ? Number(v).toLocaleString('es-CO') : '');
+
 export default function NuevaVacaciones() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -138,7 +152,10 @@ export default function NuevaVacaciones() {
    * recálculo y obligatorio para confirmar (422 `AJUSTE_SIN_MOTIVO`).
    */
   const baseSistema = Number(
-    preview?.base?.base_mensual_sistema ?? preview?.base?.base_mensual ?? 0,
+    preview?.base?.base_mensual_sistema
+    ?? detalle?.base?.base_mensual_sistema
+    ?? detalle?.base?.base_mensual
+    ?? 0,
   );
   const ajusteActivo = puedeAjustarBase
     && modoBaseManual
@@ -367,7 +384,18 @@ export default function NuevaVacaciones() {
   const excedeSaldo = totalPedido > maxDisfrute;
   const excedeDinero = nDinero > maxDinero;
   const faltaAcuerdo = nDinero > 0 && !acuerdoEscrito;
-  const bloqueado = !detalle.elegible || detalle.bloqueantes_base.length > 0;
+  /*
+   * Con base manual el motor deja de responder SIN_DEVENGADO y cobertura
+   * incompleta. Dejarlos bloqueando aquí cerraba el formulario antes de que
+   * el usuario pudiera capturar los días, y sin días no hay preview que
+   * recalcular.
+   */
+  const bloqueantesBase = detalle.bloqueantes_base.map(normalizarBloqueante);
+  const bloqueantesBaseVigentes = ajusteActivo
+    ? bloqueantesBase.filter((b) => !RESUELVE_AJUSTE.has(b.code))
+    : bloqueantesBase;
+  const ajusteLevantaBloqueo = bloqueantesBase.length > bloqueantesBaseVigentes.length;
+  const bloqueado = !detalle.elegible || bloqueantesBaseVigentes.length > 0;
 
   // El consumo es FIFO: se liquida contra el período completo más viejo con
   // saldo, que es el que el backend va a imputar.
@@ -377,19 +405,33 @@ export default function NuevaVacaciones() {
    * Sin él (todavía no hay días) se pinta lo que trajo el colaborador.
    */
   const baseVigente = preview?.base ?? detalle.base;
-  const baseMensual = baseVigente.base_mensual;
-  const valorDiaVigente = baseVigente.valor_dia ?? detalle.valor_dia;
   const mesesBase = baseVigente.meses_base;
-  const etiquetaBase = baseVigente.metodo_base === 'MANUAL'
+
+  /*
+   * Lo único que confirma el ajuste es el preview de vuelta con
+   * `metodo_base: 'MANUAL'`. Mientras no llegue, la ficha pinta la base
+   * capturada: dejar el salario del sistema ahí contradecía el campo de
+   * abajo y nadie sabía qué base iba a usar el comprobante.
+   */
+  const ajusteAplicado = ajusteActivo && baseVigente.metodo_base === 'MANUAL';
+  const ajustePendiente = ajusteActivo && !ajusteAplicado;
+
+  const baseMensual = ajustePendiente ? nBaseManual : baseVigente.base_mensual;
+  const valorDiaVigente = ajustePendiente
+    ? nBaseManual / baseVigente.dias_mes
+    : (baseVigente.valor_dia ?? detalle.valor_dia);
+  const etiquetaBase = ajusteActivo || baseVigente.metodo_base === 'MANUAL'
     ? 'Base manual'
     : baseVigente.metodo_base === 'PROMEDIO'
       ? 'Salario promedio'
       : 'Último salario';
-  const subtextoBase = baseVigente.metodo_base === 'MANUAL'
-    ? `Sistema: ${fmtCOP(baseSistema)}`
-    : baseVigente.metodo_base === 'PROMEDIO'
-      ? `Promedio de ${mesesBase} meses · nóminas cerradas al ${baseVigente.cobertura_nominas_pct} %`
-      : 'Salario contractual vigente';
+  const subtextoBase = ajustePendiente
+    ? `Sin recalcular · sistema ${fmtCOP(baseSistema)}`
+    : ajusteAplicado || baseVigente.metodo_base === 'MANUAL'
+      ? `Reemplaza la del sistema: ${fmtCOP(baseSistema)}`
+      : baseVigente.metodo_base === 'PROMEDIO'
+        ? `Promedio de ${mesesBase} meses · nóminas cerradas al ${baseVigente.cobertura_nominas_pct} %`
+        : 'Salario contractual vigente';
   const auxilio = detalle.base.componentes.excluido_192.auxilio;
 
   // §1.2 — El preview trae sus propios `bloqueantes[]`. Solo la cobertura
@@ -562,7 +604,7 @@ export default function NuevaVacaciones() {
                 onClick={() => {
                   const abriendo = !modoBaseManual;
                   setModoBaseManual(abriendo);
-                  setBaseManual(abriendo && baseSistema > 0 ? String(baseSistema) : '');
+                  setBaseManual(abriendo && baseSistema > 0 ? String(Math.round(baseSistema)) : '');
                   setMotivoAjuste('');
                 }}
               >
@@ -575,15 +617,24 @@ export default function NuevaVacaciones() {
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label htmlFor="base-manual">Base mensual</Label>
-                  <Input
-                    id="base-manual"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={baseManual}
-                    onChange={(e) => setBaseManual(e.target.value)}
-                    placeholder={baseSistema > 0 ? String(baseSistema) : ''}
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">$</span>
+                    <Input
+                      id="base-manual"
+                      type="text"
+                      inputMode="numeric"
+                      className="pl-7"
+                      value={conMiles(baseManual)}
+                      onChange={(e) => setBaseManual(soloDigitos(e.target.value))}
+                      placeholder={baseSistema > 0 ? conMiles(String(Math.round(baseSistema))) : '0'}
+                    />
+                  </div>
+                  {nBaseManual > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Valor día {fmtCOP(nBaseManual / baseVigente.dias_mes)}
+                      {' · '}base del sistema {fmtCOP(baseSistema)}
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="motivo-ajuste">Motivo del ajuste</Label>
@@ -602,6 +653,19 @@ export default function NuevaVacaciones() {
                 </div>
               </div>
             )}
+
+            {ajusteLevantaBloqueo && !ajusteAplicado && (
+              <p className="mt-3 text-xs text-emerald-700 dark:text-emerald-400">
+                Con esta base ya no aplica el bloqueo por falta de nóminas cerradas.
+              </p>
+            )}
+
+            {ajusteActivo && <EstadoAjuste
+              calculando={calculandoPreview}
+              aplicado={ajusteAplicado}
+              sinDias={totalPedido <= 0}
+              conError={!!errorPreview}
+            />}
           </div>
         )}
       </Card>
@@ -618,9 +682,9 @@ export default function NuevaVacaciones() {
         </div>
       )}
 
-      {detalle.bloqueantes_base.length > 0 && (
+      {bloqueantesBaseVigentes.length > 0 && (
         <div className="space-y-1 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-          {detalle.bloqueantes_base.map(normalizarBloqueante).map((b, i) => (
+          {bloqueantesBaseVigentes.map((b, i) => (
             <p key={`${b.code}-${i}`} className="flex gap-2">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               <span>{b.mensaje ?? BLOQUEANTE_LABEL[b.code] ?? b.code}</span>
@@ -1267,6 +1331,49 @@ export default function NuevaVacaciones() {
  * algunos tramos no tener todavía una fila del colaborador. Eso último es lo
  * que importa mostrar, porque esos días solo se podrán pagar a mano.
  */
+/**
+ * En qué va el ajuste de base. Sin esto no había señal de que el backend
+ * hubiera recalculado, ni de qué faltaba para poder confirmar.
+ */
+function EstadoAjuste({ calculando, aplicado, sinDias, conError }: {
+  calculando: boolean;
+  aplicado: boolean;
+  sinDias: boolean;
+  conError: boolean;
+}) {
+  if (calculando) {
+    return (
+      <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        Recalculando con la base manual
+      </p>
+    );
+  }
+  if (aplicado) {
+    return (
+      <p className="mt-3 flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400">
+        <Check className="h-3.5 w-3.5" />
+        El cálculo de abajo ya usa esta base. Confirme para guardarla con su motivo.
+      </p>
+    );
+  }
+  if (sinDias) {
+    return (
+      <p className="mt-3 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+        <AlertTriangle className="h-3.5 w-3.5" />
+        Capture los días a liquidar: el recálculo sale con ellos.
+      </p>
+    );
+  }
+  if (conError) return null;
+  return (
+    <p className="mt-3 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+      <AlertTriangle className="h-3.5 w-3.5" />
+      El cálculo todavía no trae la base manual. Revise el motivo y los días.
+    </p>
+  );
+}
+
 function PlanDePago({ preview }: { preview: ComprobanteVacaciones | null }) {
   const plan = preview?.nomina?.plan_pago ?? [];
   const sinNomina = preview?.nomina?.sin_nomina ?? null;
