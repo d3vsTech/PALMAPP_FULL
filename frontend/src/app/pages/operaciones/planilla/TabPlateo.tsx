@@ -47,8 +47,6 @@ interface Props {
   guardarPlateo: () => void;
   editarPlateo: (id: string) => void;
   eliminarPlateo: (id: string) => void;
-  tieneOverrideOperario: (cid: string, laborId: number | undefined) => boolean;
-  palmaTipoToId: Map<string, number>;
   setFormRef: (key: string) => (el: HTMLDivElement | null) => void;
 }
 
@@ -64,8 +62,6 @@ export function TabPlateo({
   guardarPlateo,
   editarPlateo,
   eliminarPlateo,
-  tieneOverrideOperario,
-  palmaTipoToId,
   setFormRef,
 }: Props) {
   return (
@@ -96,10 +92,9 @@ export function TabPlateo({
                                   <div className="flex flex-wrap gap-2 mt-2">
                                     {plateoEnEdicion.colaboradores.map((colId) => {
                                       const col = colaboradores.find(c => c.id === colId);
-                                      const conOverride = tieneOverrideOperario(colId, palmaTipoToId.get('PLATEO'));
                                       return col ? (
                                         <Badge key={colId} variant="secondary" className="pl-2.5 pr-1 py-1 gap-1">
-                                          <span>{col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}{conOverride ? <span className="ml-1 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-700 border border-emerald-200 font-medium align-middle" title="Este operario tiene precio personalizado para Plateo">$</span> : null}</span>
+                                          <span>{col.nombres} {col.apellidos}{col.terceroNombre ? <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200 font-medium align-middle">Tercero · {col.terceroNombre}</span> : null}</span>
                                           <button
                                             type="button"
                                             onClick={() => setPlateoEnEdicion({ ...plateoEnEdicion, colaboradores: plateoEnEdicion.colaboradores.filter(id => id !== colId) })}

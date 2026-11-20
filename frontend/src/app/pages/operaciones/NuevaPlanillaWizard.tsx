@@ -288,41 +288,6 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
   const [palmaTipoToId, setPalmaTipoToId] = useState<Map<string, number>>(new Map());
   /** Snapshot de las labores fijas de PALMA para conocer su `tipo_pago`. */
   const [palmaFijasInfo, setPalmaFijasInfo] = useState<Map<string, { id: number; tipo_pago: 'POR_PALMA' | 'JORNAL_FIJO' }>>(new Map());
-  /**
-   * Overrides activos de precio/modo por tercero+labor (ver §1.1 de
-   * API_OPERACIONES.md). Vienen del bundle. Se usan en
-   * `resolverPrecioPersonaLabor` y `overrideForTerceroLabor` para preview
-   * cuando la persona elegida en un jornal es un operario de tercero.
-   */
-  const [terceroLaborOverrides, setTerceroLaborOverrides] = useState<
-    import('../../../api/operaciones').TerceroLaborOverride[]
-  >([]);
-
-  /**
-   * Lookup `(tercero_id:labor_id) → override`. Sirve para preview en O(1)
-   * en cualquier punto del wizard que quiera mostrar el precio efectivo
-   * antes de enviar al backend (el backend igualmente recalcula).
-   */
-  const overrideForTerceroLabor = useMemo(() => {
-    const map = new Map<string, import('../../../api/operaciones').TerceroLaborOverride>();
-    for (const o of terceroLaborOverrides) {
-      map.set(`${o.tercero_id}:${o.labor_id}`, o);
-    }
-    return map;
-  }, [terceroLaborOverrides]);
-
-  /**
-   * Indica si el id local del wizard corresponde a un operario con override
-   * configurado para la `labor_id` dada. Útil para mostrar un indicador
-   * "precio personalizado" junto al chip del operario en los selects.
-   */
-  const tieneOverrideOperario = (cid: string, laborId: number | undefined): boolean => {
-    if (!laborId || !cid.startsWith('O_')) return false;
-    const op = colaboradores.find((c) => c.id === cid);
-    const terceroId = (op?._raw as { tercero_id?: number } | undefined)?.tercero_id;
-    if (!terceroId) return false;
-    return overrideForTerceroLabor.has(`${terceroId}:${laborId}`);
-  };
   const [motivosMap, setMotivosMap] = useState<Map<string, number>>(new Map());
   const [tiposHoraExtraMap, setTiposHoraExtraMap] = useState<Map<string, number>>(new Map());
   const [insumosLista, setInsumosLista] = useState<string[]>([]);
@@ -458,12 +423,6 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
 
         // Orden alfabetico por primer nombre para toda la lista mezclada.
         setColaboradores(sortByFirstName([...empleadosLista, ...operariosLista]));
-
-        // Overrides de precio/modo por tercero — los usaremos en
-        // `resolverPrecioPersonaLabor(labor, persona, overrides)` para mostrar
-        // el preview correcto cuando se elige un operario en un jornal.
-        const overrides = (parametricas as any).tercero_labor_overrides ?? [];
-        setTerceroLaborOverrides(overrides);
 
         setLotesData((parametricas.lotes ?? []).map((l: any) => ({ id: String(l.id), nombre: l.nombre })));
 
@@ -2891,8 +2850,6 @@ export default function NuevaPlanillaWizard({ modoLectura = false }: NuevaPlanil
                         guardarPlateo={guardarPlateo}
                         editarPlateo={editarPlateo}
                         eliminarPlateo={eliminarPlateo}
-                        tieneOverrideOperario={tieneOverrideOperario}
-                        palmaTipoToId={palmaTipoToId}
                         setFormRef={setFormRef}
                       />
                     </TabsContent>
