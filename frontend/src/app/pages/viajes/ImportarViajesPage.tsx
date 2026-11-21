@@ -221,7 +221,10 @@ export default function ImportarViajesPage() {
       </PasoCard>
 
       {analisis && resumen && (
-        <>
+        /* Este div es el que sostiene la barra pegada de abajo. Sin él la
+           barra se cuelga del contenedor de toda la página y aparece desde
+           el paso 1, antes de que haya archivo que revisar. */
+        <div className="space-y-6">
           <PasoCard
             n={4}
             titulo="Revisa lo que se va a cargar"
@@ -250,7 +253,9 @@ export default function ImportarViajesPage() {
             <PanelViajes viajes={analisis.viajes} filas={analisis.filas} />
           </PasoCard>
 
-          <div className="flex flex-wrap items-center justify-end gap-3">
+          {/* Pegada abajo: con decenas de viajes el botón quedaba al final
+              de una pantalla larguísima y tocaba bajar a buscarlo. */}
+          <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center justify-end gap-3 border-t border-border bg-background/95 px-1 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
             {conError > 0 && (
               <p className="text-sm text-destructive">
                 Corrija {conError === 1 ? 'la fila' : `las ${conError} filas`} con error. Basta
@@ -268,7 +273,7 @@ export default function ImportarViajesPage() {
                 : `Importar ${resumen.viajes.nuevos} viaje(s)`}
             </Button>
           </div>
-        </>
+        </div>
       )}
 
       <AlertDialog

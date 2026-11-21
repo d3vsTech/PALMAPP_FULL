@@ -15,8 +15,10 @@ import {
 } from '../../components/ui/alert-dialog';
 import {
   ArrowLeft, ArrowRight, Check, Truck, Leaf, Plus, Trash2, AlertTriangle,
+  Pencil, RotateCcw, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import type { ApiError } from '../../../api/client';
 import {
   viajesApi, strField, ViajesErrorCodes as ErrorCodes,
   type Viaje, type ViajeDetalle, type OperacionDisponible, type CosechaLibre,
@@ -48,6 +50,14 @@ interface CosechaConteo {
   pesoKg: number;
   cuadrillaCount: number;
   aprobado: boolean;
+  /** §5.5.1 — Admite lápiz y papelera. Sin el campo, se deduce del aprobado. */
+  editable: boolean;
+  /** Gajos de esa cosecha que ya van en otros camiones. */
+  gajosEnOtrosViajes: number;
+  /** Techo del input. `null` = sin techo: la cosecha va completa aquí. */
+  maximoGajos: number | null;
+  /** §5.6.1 — Aprobado y todavía se puede devolver a pendiente. */
+  desaprobable: boolean;
 }
 
 /** Cosecha en edición */
@@ -101,6 +111,20 @@ export default function ConteoCosecha() {
 
   // Cosecha en edición
   const [cosechaEnEdicion, setCosechaEnEdicion] = useState<CosechaEnEdicion | null>(null);
+
+  /**
+   * Corrección de los gajos de una cosecha ya enlazada, sobre la misma
+   * tarjeta. No reusa el formulario de agregar: ahí se elige planilla y
+   * cuadrilla, y acá eso ya está decidido. Lo único que cambia es el número.
+   */
+  const [editandoGajos, setEditandoGajos] = useState<{ detalleId: number; valor: string } | null>(null);
+
+  /**
+   * Gajos que el viaje declara sin tener cosechas enlazadas. Es el caso del
+   * cargue de histórico "solo cabecera" (§15 de API_VIAJES): el camión llegó
+   * con su total y las cosechas se le montan después, aquí.
+   */
+  const gajosDeclarados = viaje?.cantidad_gajos_total ?? 0;
 
   // Auto-scroll al form al abrirlo
   const formCosechaRef = useRef<HTMLDivElement>(null);
@@ -292,6 +316,12 @@ export default function ConteoCosecha() {
       pesoKg: d.cosecha?.peso_confirmado ? parseFloat(String(d.cosecha.peso_confirmado)) : 0,
       cuadrillaCount: Math.max(countBackend, countLocal),
       aprobado: d.reconteo_aprobado,
+      // Un backend anterior a 2026-11-21 no manda estas cuatro llaves. Sin
+      // ellas se cae a lo de siempre: editable mientras no esté aprobado.
+      editable: d.reconteo_editable ?? !d.reconteo_aprobado,
+      gajosEnOtrosViajes: d.gajos_en_otros_viajes ?? 0,
+      maximoGajos: d.maximo_gajos_permitido ?? null,
+      desaprobable: d.reconteo_desaprobable ?? false,
     };
   };
 
@@ -608,6 +638,69 @@ export default function ConteoCosecha() {
         toast.error(e?.message ?? 'La fecha del viaje es anterior a la de la cosecha. Corrige la fecha del viaje.', { duration: 8000 });
       } else {
         toast.error(e?.message ?? 'Error al guardar la cosecha');
+      }
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  /** Guarda el número corregido. §5.5: el backend arbitra el techo. */
+  const guardarGajosDetalle = async (c: CosechaConteo) => {
+    if (!viaje || !c.detalleId || !editandoGajos) return;
+    const valor = Number(editandoGajos.valor);
+    if (!Number.isInteger(valor) || valor < 0) {
+      toast.error('Escribe un número entero de gajos');
+      return;
+    }
+    if (valor === c.gajosEnViaje) {
+      setEditandoGajos(null);
+      return;
+    }
+    setProcesando(true);
+    try {
+      const res = await viajesApi.hidratarReconteo(viaje.id, c.detalleId, {
+        gajos_en_viaje: valor,
+      });
+      if (res.advertencia) {
+        toast.warning(res.advertencia, { duration: 6000 });
+      } else {
+        toast.success('Gajos actualizados');
+      }
+      setEditandoGajos(null);
+      await cargar();
+    } catch (err) {
+      // El 422 de gajos trae el máximo y los otros camiones en el mensaje:
+      // se reenvía tal cual y la tarjeta se queda abierta para corregir.
+      const e = err as ApiError;
+      if (e?.code === ErrorCodes.GAJOS_INSUFICIENTES) {
+        toast.error(e?.message ?? 'Los gajos superan lo que queda de esa cosecha', { duration: 8000 });
+      } else if (e?.code === ErrorCodes.DETALLE_APROBADO || e?.code === ErrorCodes.VIAJE_NO_EDITABLE
+        || e?.code === ErrorCodes.DETALLE_NOT_FOUND) {
+        toast.error(e?.message ?? 'La cosecha ya no se puede editar');
+        setEditandoGajos(null);
+        await cargar();
+      } else {
+        toast.error(e?.message ?? 'Error al guardar los gajos');
+      }
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  /** §5.6.1 — Devuelve a pendiente un detalle aprobado por error. */
+  const desaprobarDetalle = async (c: CosechaConteo) => {
+    if (!viaje || !c.detalleId) return;
+    setProcesando(true);
+    try {
+      await viajesApi.desaprobarReconteo(viaje.id, c.detalleId);
+      toast.success('Reconteo devuelto a pendiente');
+      await cargar();
+    } catch (err) {
+      const e = err as ApiError;
+      toast.error(e?.message ?? 'No se pudo devolver el reconteo a pendiente');
+      if (e?.code === ErrorCodes.DETALLE_NO_APROBADO
+        || e?.code === ErrorCodes.VIAJE_ESTADO_INVALIDO) {
+        await cargar();
       }
     } finally {
       setProcesando(false);
@@ -1204,6 +1297,7 @@ export default function ConteoCosecha() {
                   const tituloCosecha = fechaCosecha
                     ? `Cosecha del ${formatearFechaViaje(fechaCosecha)}`
                     : cosecha.loteName;
+                  const enEdicionGajos = editandoGajos?.detalleId === cosecha.detalleId;
                   return (
                   <Card key={cosecha.id} className="border-border hover:border-primary/30 transition-colors">
                     <CardContent className="p-4">
@@ -1255,10 +1349,51 @@ export default function ConteoCosecha() {
                           <p className="font-bold text-lg">{cosecha.gajos}</p>
                         </div>
 
-                        {/* Gajos en Viaje */}
+                        {/* Gajos en Viaje. Con el lápiz se corrige aquí
+                            mismo: antes tocaba borrar la cosecha y volverla
+                            a agregar para cambiar un número. */}
                         <div className="text-center shrink-0">
                           <p className="text-xs text-muted-foreground">En Viaje</p>
-                          <p className="font-bold text-lg text-primary">{cosecha.gajosEnViaje}</p>
+                          {enEdicionGajos ? (
+                            <div className="flex items-center gap-1">
+                              <Input
+                                type="number" min={0}
+                                max={cosecha.maximoGajos ?? undefined}
+                                autoFocus
+                                className="h-8 w-24 text-center font-bold"
+                                value={editandoGajos?.valor ?? ''}
+                                onChange={(e) => setEditandoGajos({
+                                  detalleId: cosecha.detalleId!, valor: e.target.value,
+                                })}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') void guardarGajosDetalle(cosecha);
+                                  if (e.key === 'Escape') setEditandoGajos(null);
+                                }}
+                              />
+                              <Button
+                                variant="ghost" size="icon" className="h-8 w-8 text-success"
+                                disabled={procesando}
+                                onClick={() => void guardarGajosDetalle(cosecha)}
+                                title="Guardar"
+                              >
+                                <Check className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost" size="icon" className="h-8 w-8"
+                                onClick={() => setEditandoGajos(null)}
+                                title="Cancelar"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <p className="font-bold text-lg text-primary">{cosecha.gajosEnViaje}</p>
+                          )}
+                          {cosecha.gajosEnOtrosViajes > 0 && !enEdicionGajos && (
+                            <p className="text-xs text-muted-foreground">
+                              {cosecha.gajosEnOtrosViajes} en otros camiones
+                            </p>
+                          )}
                         </div>
 
                         {/* Peso */}
@@ -1269,16 +1404,44 @@ export default function ConteoCosecha() {
                           </div>
                         )}
 
-                        {/* Botón eliminar */}
-                        <Button
-                          variant="ghost" size="sm"
-                          onClick={() => eliminarCosecha(cosecha)}
-                          disabled={procesando}
-                          className="text-destructive hover:text-destructive shrink-0"
-                          title="Eliminar"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {/* Editar los gajos, quitar la cosecha, o devolver
+                            el reconteo a pendiente si se aprobó por error. */}
+                        {cosecha.editable && !enEdicionGajos && (
+                          <Button
+                            variant="ghost" size="sm"
+                            onClick={() => setEditandoGajos({
+                              detalleId: cosecha.detalleId!,
+                              valor: String(cosecha.gajosEnViaje),
+                            })}
+                            disabled={procesando}
+                            className="shrink-0"
+                            title="Editar los gajos de esta cosecha"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {cosecha.desaprobable && (
+                          <Button
+                            variant="ghost" size="sm"
+                            onClick={() => void desaprobarDetalle(cosecha)}
+                            disabled={procesando}
+                            className="shrink-0"
+                            title="El reconteo está aprobado: devuélvelo a pendiente para corregirlo"
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {cosecha.editable && (
+                          <Button
+                            variant="ghost" size="sm"
+                            onClick={() => eliminarCosecha(cosecha)}
+                            disabled={procesando}
+                            className="text-destructive hover:text-destructive shrink-0"
+                            title="Eliminar"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
                         </div>
                       </div>
                     </CardContent>
@@ -1289,8 +1452,21 @@ export default function ConteoCosecha() {
                 {cosechas.length === 0 && !cosechaEnEdicion && (
                   <div className="text-center py-12 text-muted-foreground">
                     <Leaf className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                    <p>No hay cosechas registradas</p>
-                    <p className="text-sm">Haz clic en "Agregar Cosecha" para crear una</p>
+                    {gajosDeclarados > 0 ? (
+                      <>
+                        <p>Este viaje trae {gajosDeclarados.toLocaleString('es-CO')} gajos y ninguna cosecha</p>
+                        <p className="mx-auto mt-2 max-w-md text-sm">
+                          Entró por el cargue de histórico solo con la cabecera: la fecha, el
+                          camión y la planta. Agrégale las cosechas que llevó y el total se
+                          recalcula con ellas.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p>No hay cosechas registradas</p>
+                        <p className="text-sm">Haz clic en "Agregar Cosecha" para crear una</p>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -1386,6 +1562,14 @@ export default function ConteoCosecha() {
                     <span className="text-sm">Registradas</span>
                     <span className="font-semibold text-sm">{cosechas.length}</span>
                   </div>
+                  {cosechas.length === 0 && gajosDeclarados > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Gajos declarados</span>
+                      <span className="font-semibold text-sm text-primary">
+                        {gajosDeclarados.toLocaleString('es-CO')}
+                      </span>
+                    </div>
+                  )}
                   {cosechas.length > 0 && (
                     <>
                       <div className="flex items-center justify-between">

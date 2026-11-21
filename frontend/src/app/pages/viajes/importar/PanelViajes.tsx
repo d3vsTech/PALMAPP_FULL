@@ -7,8 +7,12 @@
  * toneladas o unos gajos mal digitados se delatan ahí y en ningún otro lado:
  * un promedio de 625 en vez de 62,5 no rompe nada, solo paga mal.
  */
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '../../../components/ui/badge';
-import { CalendarDays, Factory, Scale, Truck } from 'lucide-react';
+import { Button } from '../../../components/ui/button';
+import {
+  AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, Factory, Scale, Truck,
+} from 'lucide-react';
 import { IncidenciasFila } from '../../liquidaciones/historico/comunes';
 import {
   ADVERTENCIA_VIAJE_LABEL,
@@ -183,6 +187,59 @@ function filasDe(
   );
 }
 
+/** Cuántos viajes caben en una pantalla sin volverla un rollo. */
+const POR_PAGINA = 10;
+
+/**
+ * Los controles de página. Van arriba y abajo de la lista: con diez tarjetas
+ * de por medio, tener que subir para cambiar de página es el mismo problema
+ * que se está resolviendo.
+ */
+function Paginador({
+  pagina,
+  paginas,
+  desde,
+  hasta,
+  total,
+  onPagina,
+}: {
+  pagina: number;
+  paginas: number;
+  desde: number;
+  hasta: number;
+  total: number;
+  onPagina: (p: number) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+      <span>
+        Viajes <span className="font-semibold text-foreground">{desde}</span> a{' '}
+        <span className="font-semibold text-foreground">{hasta}</span> de{' '}
+        <span className="font-semibold text-foreground">{total}</span>
+      </span>
+      <div className="flex items-center gap-2">
+        <span className="tabular-nums">Página {pagina} de {paginas}</span>
+        <Button
+          size="sm" variant="outline" className="gap-1"
+          disabled={pagina <= 1}
+          onClick={() => onPagina(pagina - 1)}
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Anteriores
+        </Button>
+        <Button
+          size="sm" variant="outline" className="gap-1"
+          disabled={pagina >= paginas}
+          onClick={() => onPagina(pagina + 1)}
+        >
+          Siguientes
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function PanelViajes({
   viajes,
   filas,
@@ -190,13 +247,78 @@ export function PanelViajes({
   viajes: ViajeDelCargue[];
   filas: FilaViajeCargue[];
 }) {
+  const [pagina, setPagina] = useState(1);
+  const tope = useRef<HTMLDivElement>(null);
+
+  // Un archivo nuevo empieza en la primera página, no en la que quedó.
+  useEffect(() => { setPagina(1); }, [viajes]);
+
+  const paginas = Math.max(1, Math.ceil(viajes.length / POR_PAGINA));
+  const actual = Math.min(pagina, paginas);
+  const inicio = (actual - 1) * POR_PAGINA;
+  const enPantalla = viajes.slice(inicio, inicio + POR_PAGINA);
+
+  /*
+   * Un solo viaje con error bloquea el archivo entero, y con la lista
+   * paginada puede quedar en una página que nadie abrió. Este atajo lleva
+   * directo al primero.
+   */
+  const conError = useMemo(
+    () => viajes.reduce((n, v) => n + (v.estado === 'ERROR' ? 1 : 0), 0),
+    [viajes],
+  );
+  const paginaDelPrimerError = useMemo(() => {
+    const i = viajes.findIndex((v) => v.estado === 'ERROR');
+    return i < 0 ? null : Math.floor(i / POR_PAGINA) + 1;
+  }, [viajes]);
+
+  const irA = (p: number) => {
+    setPagina(p);
+    tope.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   if (viajes.length === 0) return null;
 
+  const paginador = (
+    <Paginador
+      pagina={actual}
+      paginas={paginas}
+      desde={inicio + 1}
+      hasta={inicio + enPantalla.length}
+      total={viajes.length}
+      onPagina={irA}
+    />
+  );
+
   return (
-    <div className="space-y-3">
-      {viajes.map((viaje, i) => (
-        <TarjetaViaje key={viaje.remision} viaje={viaje} filas={filasDe(viaje, i, filas)} />
+    <div className="space-y-3" ref={tope}>
+      {conError > 0 && paginaDelPrimerError !== null && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
+          <p className="flex items-center gap-2 text-sm text-destructive">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            {conError === 1 ? 'Un viaje tiene' : `${conError} viajes tienen`} error.
+          </p>
+          <Button
+            size="sm" variant="outline"
+            onClick={() => irA(paginaDelPrimerError)}
+            disabled={actual === paginaDelPrimerError}
+          >
+            Ir al primero
+          </Button>
+        </div>
+      )}
+
+      {paginas > 1 && paginador}
+
+      {enPantalla.map((viaje, i) => (
+        <TarjetaViaje
+          key={viaje.remision}
+          viaje={viaje}
+          filas={filasDe(viaje, inicio + i, filas)}
+        />
       ))}
+
+      {paginas > 1 && paginador}
     </div>
   );
 }
