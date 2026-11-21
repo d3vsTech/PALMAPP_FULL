@@ -1002,6 +1002,25 @@ export const viajesApi = {
     ),
 
   /**
+   * POST /viajes/{id}/devolver-a-creado — EN_VALIDACION a CREADO (seccion 5.11)
+   *
+   * La vuelta atras liviana: no deshace ningun calculo porque pasar a
+   * validacion no calcula nada. Conserva las cosechas con sus gajos, el peso,
+   * los datos de extractora y los documentos; solo devuelve los reconteos a
+   * pendiente y limpia `validacion_at`. Permiso `viajes.editar`, sin guarda
+   * de nomina y sin `verificar` previo. El `motivo` es opcional (max. 500).
+   */
+  devolverACreado: (id: number, motivo?: string) =>
+    post<{
+      message: string;
+      data: Viaje;
+      efectos: { detalles_reiniciados: number };
+    }>(
+      `/viajes/${id}/devolver-a-creado`,
+      motivo?.trim() ? { motivo: motivo.trim() } : undefined,
+    ),
+
+  /**
    * PATCH /viajes/{id}/validar — Hidrata datos del formulario de extractora.
    *
    * - Solo permitido en estado EN_VALIDACION.

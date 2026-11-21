@@ -13,7 +13,7 @@ import {
   ArrowLeft, ArrowRight, Check, Truck, Leaf, Trash2, Edit, X,
   CheckCircle, Clock, FileText, Sparkles, Image as ImageIcon, Upload, Loader2,
   AlertTriangle, Download, Settings, Calendar, MapPin, User, Package, Weight, Save,
-  RotateCcw,
+  RotateCcw, Undo2,
 } from 'lucide-react';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -121,6 +121,10 @@ export default function DetalleViaje() {
   const { hasPermiso } = useAuth();
   /** §5.10 — La única vuelta atrás de la máquina de estados del viaje. */
   const [reabrirAbierto, setReabrirAbierto] = useState(false);
+  /* 5.11 — EN_VALIDACION a CREADO, para corregir antes de finalizar. */
+  const [devolverAbierto, setDevolverAbierto] = useState(false);
+  const [motivoDevolver, setMotivoDevolver] = useState('');
+  const [devolviendo, setDevolviendo] = useState(false);
   const [descargandoRemision, setDescargandoRemision] = useState(false);
   const [generandoEnlace, setGenerandoEnlace] = useState(false);
   const [datosViaje, setDatosViaje] = useState({
@@ -695,6 +699,69 @@ export default function DetalleViaje() {
    * boton sin efecto: el clic prendia el estado y nada lo leia. Se arma
    * aqui y las dos vistas lo pintan.
    */
+  /** 5.11 — No deshace cálculos, así que no hay `verificar` ni guardas. */
+  const devolverAConteo = async () => {
+    setDevolviendo(true);
+    try {
+      const res = await viajesApi.devolverACreado(Number(id), motivoDevolver);
+      toast.success(res.message ?? 'Viaje devuelto a conteo');
+      setDevolverAbierto(false);
+      setMotivoDevolver('');
+      navigate(`/viajes/${id}/conteo`);
+    } catch (err) {
+      const e = err as { message?: string };
+      toast.error(e?.message ?? 'No se pudo devolver el viaje a conteo');
+      setDevolverAbierto(false);
+      await cargar();
+    } finally {
+      setDevolviendo(false);
+    }
+  };
+
+  const dialogoDevolver = (
+    <AlertDialog
+      open={devolverAbierto}
+      onOpenChange={(abierto) => { if (!abierto) setDevolverAbierto(false); }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader className="text-left">
+          <AlertDialogTitle>Devolver el viaje a conteo</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-2 text-left">
+              <p>
+                El viaje vuelve al conteo de cosechas. Las cosechas y sus gajos se
+                conservan, pero habrá que aprobar el conteo otra vez.
+              </p>
+              <p>
+                Los datos de la extractora y los soportes cargados no se pierden.
+                Mientras esté en conteo no se pueden subir soportes nuevos.
+              </p>
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="space-y-1.5">
+          <Label htmlFor="motivo-devolver-detalle">Motivo (opcional)</Label>
+          <Input
+            id="motivo-devolver-detalle"
+            value={motivoDevolver}
+            onChange={(e) => setMotivoDevolver(e.target.value)}
+            maxLength={500}
+            placeholder="Por ejemplo: faltó enlazar la cosecha del 14"
+          />
+        </div>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={devolviendo}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={devolviendo}
+            onClick={(e) => { e.preventDefault(); void devolverAConteo(); }}
+          >
+            {devolviendo ? 'Devolviendo...' : 'Devolver a conteo'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+
   const dialogoReabrir = (
     <RevertirEstadoDialog
       abierto={reabrirAbierto}
@@ -1082,6 +1149,19 @@ export default function DetalleViaje() {
                     Soporte de Extractora
                   </Button>
                 )}
+                {/* Vuelta al conteo antes de finalizar: faltó una cosecha,
+                    sobra otra, o hay que corregir la cabecera, que solo se
+                    edita en CREADO. */}
+                {estadoActual === 'En Validación' && hasPermiso('viajes.editar') && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setDevolverAbierto(true)}
+                    className="w-full gap-2"
+                  >
+                    <Undo2 className="h-4 w-4" />
+                    Devolver a Conteo
+                  </Button>
+                )}
               </CardContent>
             </Card>
 
@@ -1133,6 +1213,7 @@ export default function DetalleViaje() {
         </div>
 
         {dialogoReabrir}
+      {dialogoDevolver}
       </div>
     );
   }
@@ -1719,6 +1800,7 @@ export default function DetalleViaje() {
       </AlertDialog>
 
       {dialogoReabrir}
+      {dialogoDevolver}
     </div>
   );
 }

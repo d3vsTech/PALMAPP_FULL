@@ -15,8 +15,9 @@ import {
 } from '../../components/ui/alert-dialog';
 import {
   Plus, MapPin, Eye, FileUp, Search, Calculator, Edit, Trash2,
-  AlertTriangle, Info, Download, RotateCcw,
+  AlertTriangle, Info, Download, RotateCcw, Undo2,
 } from 'lucide-react';
+import { Textarea } from '../../components/ui/textarea';
 import PageHeader from '../../components/common/PageHeader';
 import StatStrip from '../../components/common/StatStrip';
 import EmptyState from '../../components/common/EmptyState';
@@ -150,6 +151,10 @@ export default function Viajes() {
    * los dos sitios donde se ve un viaje finalizado: aquí y en el resumen.
    */
   const [viajeAReabrir, setViajeAReabrir] = useState<{ id: string; remision: string } | null>(null);
+  /* 5.11 — El viaje que vuelve de EN_VALIDACION a CREADO, con su motivo. */
+  const [viajeADevolver, setViajeADevolver] = useState<{ id: string; remision: string } | null>(null);
+  const [motivoDevolver, setMotivoDevolver] = useState('');
+  const [devolviendo, setDevolviendo] = useState(false);
   const navigate = useNavigate();
 
   // Filtros de la tabla. Persisten mientras dure la sesión: entrar al detalle
@@ -273,6 +278,27 @@ export default function Viajes() {
     `${JSON.stringify(filtrosAplicados)}|${rangoPeriodo.desde}|${rangoPeriodo.hasta}`,
     () => setPagina(1),
   );
+
+  /** 5.11 — EN_VALIDACION a CREADO. Sin guarda: no deshace ningún cálculo. */
+  const devolverViajeAConteo = async () => {
+    if (!viajeADevolver) return;
+    setDevolviendo(true);
+    try {
+      const res = await viajesApi.devolverACreado(Number(viajeADevolver.id), motivoDevolver);
+      toast.success(res.message ?? 'Viaje devuelto a conteo');
+      setViajeADevolver(null);
+      void cargarViajes();
+      void cargarIndicadores();
+    } catch (err) {
+      const e = err as { message?: string };
+      toast.error(e?.message ?? 'No se pudo devolver el viaje a conteo');
+      // Si alguien más lo movió, la lista refrescada muestra el estado real.
+      setViajeADevolver(null);
+      void cargarViajes();
+    } finally {
+      setDevolviendo(false);
+    }
+  };
 
   const cargarViajes = useCallback(async () => {
     setLoadingList(true);
@@ -415,6 +441,57 @@ export default function Viajes() {
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={confirmarEliminar} className="bg-destructive hover:bg-destructive/90">
               Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ─── Diálogo Devolver a conteo ──────────────────────────────────── */}
+      <AlertDialog
+        open={viajeADevolver !== null}
+        onOpenChange={(open) => { if (!open) setViajeADevolver(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader className="text-left">
+            <AlertDialogTitle>
+              Devolver a conteo el viaje {viajeADevolver?.remision}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-left">
+                <p>
+                  El viaje vuelve al conteo de cosechas. Las cosechas y sus gajos se
+                  conservan, pero habrá que aprobar el conteo otra vez.
+                </p>
+                <p>
+                  Los datos de la extractora y los soportes cargados no se pierden.
+                  Mientras esté en conteo no se pueden subir soportes nuevos.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-1.5">
+            <Label htmlFor="motivo-devolver">Motivo (opcional)</Label>
+            <Textarea
+              id="motivo-devolver"
+              value={motivoDevolver}
+              onChange={(e) => setMotivoDevolver(e.target.value)}
+              maxLength={500}
+              rows={2}
+              placeholder="Por ejemplo: faltó enlazar la cosecha del 14"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={devolviendo}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={devolviendo}
+              onClick={(e) => {
+                // El AlertDialogAction cierra el diálogo al hacer click; se
+                // frena para que no se cierre antes de que responda el POST.
+                e.preventDefault();
+                void devolverViajeAConteo();
+              }}
+            >
+              {devolviendo ? 'Devolviendo...' : 'Devolver a conteo'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -761,16 +838,35 @@ export default function Viajes() {
                               /* En Validación: el único paso útil es cargar la
                                  remisión de la extractora. Al abrir el detalle
                                  se sube el PDF. */
-                              <Button
-                                variant="ghost" size="icon" asChild
-                                className="text-muted-foreground"
-                                aria-label="Cargar remisión de la extractora"
-                                title="Cargar remisión extractora"
-                              >
-                                <Link to={`/viajes/${viaje.id}?vista=gestion`}>
-                                  <FileUp className="h-4 w-4" strokeWidth={2} />
-                                </Link>
-                              </Button>
+                              <>
+                                <Button
+                                  variant="ghost" size="icon" asChild
+                                  className="text-muted-foreground"
+                                  aria-label="Cargar remisión de la extractora"
+                                  title="Cargar remisión extractora"
+                                >
+                                  <Link to={`/viajes/${viaje.id}?vista=gestion`}>
+                                    <FileUp className="h-4 w-4" strokeWidth={2} />
+                                  </Link>
+                                </Button>
+                                {/* Pasó a validación antes de tiempo: vuelve al
+                                    conteo sin tener que finalizarlo mal y
+                                    reabrirlo. */}
+                                {hasPermiso('viajes.editar') && (
+                                  <Button
+                                    variant="ghost" size="icon"
+                                    className="text-muted-foreground hover:text-warning"
+                                    aria-label="Devolver el viaje a conteo"
+                                    title="Devolver a conteo"
+                                    onClick={() => {
+                                      setMotivoDevolver('');
+                                      setViajeADevolver({ id: viaje.id, remision: viaje.remisionId });
+                                    }}
+                                  >
+                                    <Undo2 className="h-4 w-4" strokeWidth={2} />
+                                  </Button>
+                                )}
+                              </>
                             ) : (
                               /* Finalizado: solo lectura. No hay eliminar
                                  porque ya está cerrado y liquidado en nómina.
