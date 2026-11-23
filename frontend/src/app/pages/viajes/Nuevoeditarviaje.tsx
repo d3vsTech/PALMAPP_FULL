@@ -11,7 +11,7 @@ import {
 } from '../../components/ui/select';
 import PageHeader from '../../components/common/PageHeader';
 import {
-  Truck, User, MapPin, Calendar, Save, X, Hash, FileText,
+  Truck, Save, X,
 } from 'lucide-react';
 import {
   viajesApi,
@@ -379,7 +379,7 @@ export default function NuevoEditarViaje() {
                 </span>
                 <div>
                   <CardTitle>Información del viaje</CardTitle>
-                  <CardDescription>Datos básicos del despacho</CardDescription>
+                  <CardDescription>Datos básicos del viaje. Los campos con * son obligatorios.</CardDescription>
                 </div>
               </div>
             </CardHeader>
@@ -390,10 +390,7 @@ export default function NuevoEditarViaje() {
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {/* Fecha */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="fecha" className="flex items-center gap-2 text-sm">
-                    <Calendar className="h-3.5 w-3.5" />
-                    Fecha del Viaje
-                  </Label>
+                  <Label htmlFor="fecha">Fecha del viaje <span className="text-destructive">*</span></Label>
                   <Input
                     id="fecha"
                     type="date"
@@ -409,10 +406,7 @@ export default function NuevoEditarViaje() {
                     Al elegir uno, "Número de Remisión" se auto-rellena
                     con el `numero_actual` del rango. */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="prefijo" className="flex items-center gap-2 text-sm">
-                    <Hash className="h-3.5 w-3.5" />
-                    Prefijo
-                  </Label>
+                  <Label htmlFor="prefijo">Prefijo</Label>
                   <Select
                     value={formData.prefijo}
                     onValueChange={(v) => {
@@ -445,7 +439,7 @@ export default function NuevoEditarViaje() {
                       {/* El campo arranca vacío y el rango es opcional (§18).
                           El marcador decía "Automático", y eso se leía como si
                           ya hubiera una opción escogida. */}
-                      <SelectValue placeholder="Seleccionar rango..." />
+                      <SelectValue placeholder="Seleccionar rango" />
                     </SelectTrigger>
                     <SelectContent>
                       {/* El rango es opcional (§18): esta opción permite
@@ -493,10 +487,7 @@ export default function NuevoEditarViaje() {
                     el payload, así que el usuario escribía un número que se
                     descartaba en silencio. */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="numeroRemision" className="flex items-center gap-2 text-sm">
-                    <FileText className="h-3.5 w-3.5" />
-                    Número de Remisión
-                  </Label>
+                  <Label htmlFor="numeroRemision">Número de remisión</Label>
                   <Input
                     id="numeroRemision"
                     placeholder={`REM-${(formData.fecha || '').slice(0, 4) || 'AAAA'}-NNN`}
@@ -516,10 +507,7 @@ export default function NuevoEditarViaje() {
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {/* Transportador (empresa) */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="transportador" className="flex items-center gap-2 text-sm">
-                    <Truck className="h-3.5 w-3.5" />
-                    Transportador
-                  </Label>
+                  <Label htmlFor="transportador">Transportador <span className="text-destructive">*</span></Label>
                   <Select
                     value={formData.transportadorId}
                     onValueChange={handleTransportadorChange}
@@ -528,7 +516,7 @@ export default function NuevoEditarViaje() {
                       id="transportador"
                       className={errors.transportadorId ? 'border-destructive' : ''}
                     >
-                      <SelectValue placeholder="Seleccionar transportador..." />
+                      <SelectValue placeholder="Seleccionar transportador" />
                     </SelectTrigger>
                     <SelectContent>
                       {transportadores.map((t) => (
@@ -545,10 +533,7 @@ export default function NuevoEditarViaje() {
 
                 {/* Conductor (auto) */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="conductor" className="flex items-center gap-2 text-sm">
-                    <User className="h-3.5 w-3.5" />
-                    Conductor
-                  </Label>
+                  <Label htmlFor="conductor">Conductor <span className="text-destructive">*</span></Label>
                   <Input
                     id="conductor"
                     placeholder="Selecciona un transportador primero"
@@ -561,10 +546,7 @@ export default function NuevoEditarViaje() {
 
                 {/* Placa (auto) */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="placaVehiculo" className="flex items-center gap-2 text-sm">
-                    <Truck className="h-3.5 w-3.5" />
-                    Placa del Vehículo
-                  </Label>
+                  <Label htmlFor="placaVehiculo">Placa del vehículo <span className="text-destructive">*</span></Label>
                   <Input
                     id="placaVehiculo"
                     placeholder="Selecciona un transportador primero"
@@ -579,10 +561,7 @@ export default function NuevoEditarViaje() {
 
                 {/* Extractora */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="extractora" className="flex items-center gap-2 text-sm">
-                    <MapPin className="h-3.5 w-3.5" />
-                    Extractora Destino
-                  </Label>
+                  <Label htmlFor="extractora">Extractora destino <span className="text-destructive">*</span></Label>
                   <Select
                     value={formData.extractoraId}
                     onValueChange={(v) => handleInputChange('extractoraId', v)}
@@ -591,7 +570,7 @@ export default function NuevoEditarViaje() {
                       id="extractora"
                       className={errors.extractoraId ? 'border-destructive' : ''}
                     >
-                      <SelectValue placeholder="Seleccionar extractora..." />
+                      <SelectValue placeholder="Seleccionar extractora" />
                     </SelectTrigger>
                     <SelectContent>
                       {extractoras.map((ext) => (
@@ -608,10 +587,7 @@ export default function NuevoEditarViaje() {
 
                 {/* Hora de Salida */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="horaSalida" className="flex items-center gap-2 text-sm">
-                    <Calendar className="h-3.5 w-3.5" />
-                    Hora de Salida
-                  </Label>
+                  <Label htmlFor="horaSalida">Hora de salida</Label>
                   <Input
                     id="horaSalida"
                     type="time"

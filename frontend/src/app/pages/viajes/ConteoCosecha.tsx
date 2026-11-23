@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Button } from '../../components/ui/button';
 import PageHeader from '../../components/common/PageHeader';
@@ -823,7 +823,7 @@ export default function ConteoCosecha() {
     <div className="space-y-6">
       <PageHeader
         backTo="/viajes"
-        eyebrow="Viajes"
+        eyebrow={placa ? `Viaje · ${placa}` : 'Viajes'}
         title="Conteo de cosecha"
         description="Registra las cosechas que llevó el viaje."
       />
@@ -835,25 +835,31 @@ export default function ConteoCosecha() {
           {/* Stepper horizontal */}
           <Card className="border-border">
             <CardContent className="p-6">
-              <div className="flex items-center justify-between">
+              <ol className="flex items-center">
                 {ETAPAS.map((etapa, index) => {
                   const estaCompleta = etapaActual > etapa.numero;
                   const estaActiva = etapaActual === etapa.numero;
                   return (
-                    <React.Fragment key={etapa.numero}>
-                      <button aria-label="Confirmar"
+                    <li
+                      key={etapa.numero}
+                      className={`flex items-center ${index < ETAPAS.length - 1 ? 'flex-1' : ''}`}
+                    >
+                      <button
+                        type="button"
+                        aria-label={`Ir al paso ${etapa.numero}: ${etapa.nombre}`}
+                        aria-current={estaActiva ? 'step' : undefined}
                         onClick={() => irAEtapa(etapa.numero)}
                         className={`flex shrink-0 flex-col items-center gap-2 ${estaActiva || estaCompleta ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
                         disabled={!estaActiva && !estaCompleta}
                       >
-                        <div className={`flex h-9 w-9 items-center justify-center rounded-full border-2 transition md:h-12 md:w-12 ${
+                        <div className={`flex h-9 w-9 items-center justify-center rounded-full border-2 transition sm:h-12 sm:w-12 ${
                           estaCompleta ? 'bg-primary border-primary text-white'
                           : estaActiva ? 'bg-primary/10 border-primary text-primary'
                           : 'bg-muted border-border text-muted-foreground'
                         }`}>
                           {estaCompleta ? <Check className="h-5 w-5" /> : <span className="font-bold">{etapa.numero}</span>}
                         </div>
-                        <div className="hidden text-center md:block">
+                        <div className={`text-center ${estaActiva ? '' : 'hidden sm:block'}`}>
                           <div className={`text-sm font-semibold whitespace-nowrap ${
                             estaActiva || estaCompleta ? 'text-foreground' : 'text-muted-foreground'
                           }`}>
@@ -866,14 +872,10 @@ export default function ConteoCosecha() {
                           <div className={`absolute inset-0 bg-primary transition-[width] ${estaCompleta ? 'w-full' : 'w-0'}`} />
                         </div>
                       )}
-                    </React.Fragment>
+                    </li>
                   );
                 })}
-              </div>
-              {/* Reemplaza a los rotulos, escondidos en celular. */}
-              <p className="mt-3 text-center text-[13px] font-semibold text-foreground md:hidden">
-                Paso {etapaActual} de {ETAPAS.length}: {ETAPAS.find((x) => x.numero === etapaActual)?.nombre}
-              </p>
+              </ol>
             </CardContent>
           </Card>
 
@@ -888,7 +890,7 @@ export default function ConteoCosecha() {
                       <Truck className="h-6 w-6 text-primary" />
                     </div>
                     <div>
-                      <CardTitle>Información del Viaje</CardTitle>
+                      <CardTitle>Información del viaje</CardTitle>
                       <p className="text-sm text-muted-foreground">Datos del viaje registrado</p>
                     </div>
                   </div>
@@ -896,11 +898,11 @@ export default function ConteoCosecha() {
                 <CardContent className="space-y-4">
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="conteocose-fecha-del-viaje">Fecha del Viaje</Label>
+                      <Label htmlFor="conteocose-fecha-del-viaje">Fecha del viaje</Label>
                       <Input id="conteocose-fecha-del-viaje" value={fechaFmt} disabled />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="conteocose-placa-del-vehiculo">Placa del Vehículo</Label>
+                      <Label htmlFor="conteocose-placa-del-vehiculo">Placa del vehículo</Label>
                       <Input id="conteocose-placa-del-vehiculo" value={placa} disabled />
                     </div>
                     <div className="space-y-2">
@@ -912,11 +914,11 @@ export default function ConteoCosecha() {
                       <Input id="conteocose-transportador" value={transporte} disabled />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="conteocose-extractora-destino">Extractora Destino</Label>
+                      <Label htmlFor="conteocose-extractora-destino">Extractora de destino</Label>
                       <Input id="conteocose-extractora-destino" value={extractora} disabled />
                     </div>
                     <div className="space-y-2">
-                      <Label>Hora de Salida</Label>
+                      <Label>Hora de salida</Label>
                       {/* Opcional desde el 2026-09-28: sin hora se muestra "—"
                           en vez de un campo vacío que parece un dato perdido. */}
                       <Input value={horaSalida || '—'} disabled />
@@ -1028,7 +1030,7 @@ export default function ConteoCosecha() {
 
                         {/* Cuadrilla Reconteo (= cosecha del backend) */}
                         <div className="space-y-2 md:col-span-2">
-                          <Label htmlFor="conteocose-cuadrilla-reconteo">Cuadrilla Reconteo</Label>
+                          <Label htmlFor="conteocose-cuadrilla-reconteo">Cuadrilla de reconteo</Label>
                           <Select
                             value={cosechaEnEdicion.cuadrillaReconteo}
                             onValueChange={handleCuadrillaChange}
@@ -1181,7 +1183,7 @@ export default function ConteoCosecha() {
 
                         {/* Gajos Reportados */}
                         <div className="space-y-2">
-                          <Label htmlFor="conteocose-gajos-reportados">Gajos Reportados</Label>
+                          <Label htmlFor="conteocose-gajos-reportados">Gajos reportados</Label>
                           <Input id="conteocose-gajos-reportados" type="number" step="0.001" value={cosechaEnEdicion.gajos || ''} disabled />
                         </div>
 
@@ -1192,7 +1194,7 @@ export default function ConteoCosecha() {
                             eso pasa el response incluye una `advertencia` pero
                             no bloquea la operación). */}
                         <div className="space-y-2">
-                          <Label htmlFor="conteocose-gajos-en-viaje">Gajos en Viaje</Label>
+                          <Label htmlFor="conteocose-gajos-en-viaje">Gajos en el viaje</Label>
                           <Input id="conteocose-gajos-en-viaje"
                             type="number" step="0.001"
                             placeholder="0"
@@ -1221,7 +1223,7 @@ export default function ConteoCosecha() {
                             no sobre `gajos_reportados`, para reflejar los
                             splits ya asignados a otros viajes. */}
                         <div className="space-y-2">
-                          <Label htmlFor="conteocose-gajos-pendientes-por-enviar">Gajos Pendientes por Enviar</Label>
+                          <Label htmlFor="conteocose-gajos-pendientes-por-enviar">Gajos pendientes por enviar</Label>
                           <Input id="conteocose-gajos-pendientes-por-enviar"
                             type="number" step="0.001"
                             value={Math.max(cosechaEnEdicion.gajosDisponibles - cosechaEnEdicion.gajosEnViaje, 0)}
@@ -1526,10 +1528,10 @@ export default function ConteoCosecha() {
 
                 <div className="h-px bg-border" />
 
-                {/* Información del Viaje */}
+                {/* Información del viaje */}
                 <div className="space-y-2">
                   <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
-                    Información del Viaje
+                    Información del viaje
                   </h4>
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">

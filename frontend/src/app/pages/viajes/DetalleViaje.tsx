@@ -584,10 +584,10 @@ export default function DetalleViaje() {
     { estado: 'Finalizado',    label: 'Soporte Extractora', icon: CheckCircle, fecha: tieneSoporte ? (fechaSoporte ?? fechaFinalizado) : null,              completado: tieneSoporte },
   ];
 
-  const badgeClass =
-    estadoActual === 'Creado'        ? 'bg-muted text-muted-foreground border-muted' :
-    estadoActual === 'En Validación' ? 'bg-primary/10 text-primary dark:text-primary border-blue-500/30' :
-    'bg-success/10 text-success border-success/30';
+  /** Creado en gris, en validación en azul, finalizado en verde. */
+  const tonoEstado = estadoActual === 'Creado' ? 'secondary' as const
+    : estadoActual === 'En Validación' ? 'info' as const
+    : 'success' as const;
 
   // ── Filas y totales de cosecha para el resumen y el PDF ────────────────────
   // `gajos_en_viaje` es el split de la cosecha en ESTE viaje (§5.5). Cuando
@@ -790,11 +790,11 @@ export default function DetalleViaje() {
       <div className="space-y-6">
         <PageHeader
           backTo="/viajes"
-          eyebrow="Viajes"
+          eyebrow={remisionId || 'Viajes'}
           title={
             <span className="flex flex-wrap items-center gap-2">
               {modoGestion ? 'Editar viaje' : 'Detalle del viaje'}
-              <Badge variant="outline" className={badgeClass}>{estadoActual}</Badge>
+              <Badge variant={tonoEstado}>{estadoActual}</Badge>
               {/*
                 * §15 — un viaje que entró por archivo. Importa decirlo aquí
                 * porque su `finalizado_at` es la hora del cargue, no la del
@@ -807,7 +807,6 @@ export default function DetalleViaje() {
               )}
             </span>
           }
-          description={remisionId}
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -1223,14 +1222,13 @@ export default function DetalleViaje() {
     <div className="space-y-6">
       <PageHeader
         backTo="/viajes"
-        eyebrow="Viajes"
+        eyebrow={remisionId || 'Viajes'}
         title={
           <span className="flex flex-wrap items-center gap-2">
-            Carga de la remisión
-            <Badge variant="outline" className={badgeClass}>{estadoActual}</Badge>
+            Cargar remisión
+            <Badge variant={tonoEstado}>{estadoActual}</Badge>
           </span>
         }
-        description={remisionId}
       />
 
       {/* Una sola columna a ancho completo: la carga de la remisión no
@@ -1294,7 +1292,7 @@ export default function DetalleViaje() {
                       <Truck className="h-6 w-6 text-primary" />
                     </div>
                     <div>
-                      <CardTitle>Información del Viaje</CardTitle>
+                      <CardTitle>Información del viaje</CardTitle>
                       <p className="text-sm text-muted-foreground">Datos del viaje registrado</p>
                     </div>
                   </div>
@@ -1431,7 +1429,7 @@ export default function DetalleViaje() {
                         <ImageIcon className="h-6 w-6 text-primary" />
                       </div>
                       <div>
-                        <CardTitle>Formulario de Extractora</CardTitle>
+                        <CardTitle>Formulario de la extractora</CardTitle>
                         <p className="text-sm text-muted-foreground">
                           {estadoActual === 'Finalizado'
                             ? 'Documento validado de la extractora'
@@ -1624,7 +1622,7 @@ export default function DetalleViaje() {
                           <FileText className="h-6 w-6 text-success" />
                         </div>
                         <div>
-                          <CardTitle>Datos de la Extractora</CardTitle>
+                          <CardTitle>Datos de la extractora</CardTitle>
                           <p className="text-sm text-muted-foreground">
                             {procesandoIA ? 'Transcribiendo formulario… esto toma 5-15 segundos' : 'Verifica y edita los datos extraídos'}
                           </p>

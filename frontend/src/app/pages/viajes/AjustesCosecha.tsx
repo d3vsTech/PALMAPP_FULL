@@ -19,7 +19,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '../../components/ui/dialog';
 import {
-  ArrowLeft, TriangleAlert, Ghost, ArrowLeftRight, PauseCircle,
+  ArrowLeft, Ghost, ArrowLeftRight, PauseCircle,
   Truck, ChevronDown, Loader2, Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -272,10 +272,9 @@ export default function AjustesCosecha() {
 
       {/* Modal de ajuste */}
       <Dialog open={!!cosechaSeleccionada} onOpenChange={(open) => { if (!open) cerrarDialog(); }}>
-        <DialogContent className="sm:max-w-none w-[calc(100vw-2rem)] sm:w-[680px] max-w-[680px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-primary text-xl">
-              <TriangleAlert className="h-5 w-5 text-orange-500 shrink-0" />
+            <DialogTitle>
               {opcion === 'CLAVIJO' && 'Marcar como clavija'}
               {opcion === 'REASIGNADO' && 'Reasignar a otro viaje'}
               {opcion === 'MANTENIDO' && 'Mantener pendientes'}
@@ -287,7 +286,7 @@ export default function AjustesCosecha() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-5 mt-2">
+          <div className="space-y-5">
             {/* Campo extra: Viaje destino (reasignar) */}
             {opcion === 'REASIGNADO' && (
               <div className="space-y-2">

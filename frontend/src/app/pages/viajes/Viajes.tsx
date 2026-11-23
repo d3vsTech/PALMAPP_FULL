@@ -14,7 +14,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
 import {
-  Plus, Eye, FileUp, Search, Calculator, Edit, Trash2,
+  Plus, Eye, FileUp, Upload, Search, Calculator, Edit, Trash2,
   AlertTriangle, Info, Download, RotateCcw, Undo2,
 } from 'lucide-react';
 import { Textarea } from '../../components/ui/textarea';
@@ -564,8 +564,8 @@ export default function Viajes() {
                 visible siempre, como el resto del módulo, y el backend es el
                 que decide con el permiso `viajes.importar`. */}
             <Button variant="outline" onClick={() => navigate('/viajes/importar')}>
-              <FileUp className="h-4 w-4" strokeWidth={2} />
-              Importar histórico
+              <Upload className="h-4 w-4" strokeWidth={2} />
+              Importar viajes
             </Button>
             <Button onClick={() => navigate('/viajes/nuevo')}>
               <Plus className="h-4 w-4" strokeWidth={2} />
@@ -579,7 +579,7 @@ export default function Viajes() {
       {/* El período manda sobre los indicadores y sobre la lista de abajo:
           las dos leen el mismo rango de fechas. */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <h2>Indicadores del período</h2>
+        <h2>Indicadores</h2>
         <div className="flex flex-wrap items-center gap-2 lg:justify-end">
           <SelectorPeriodo
             valor={periodoKPI}
@@ -622,18 +622,15 @@ export default function Viajes() {
       <StatStrip
         loading={loadingKPI && !indicadoresApi}
         items={[
-          { label: 'Total de viajes', value: num(totalViajes), note: 'despachos en el período' },
-          { label: 'En validación', value: num(viajesEnValidacion), note: 'esperan la remisión de la planta' },
-          { label: 'Finalizados', value: num(viajesFinalizados), note: 'ya cerrados' },
-          { label: 'Kilogramos', value: num(pesoTotal), unit: 'kg', note: 'peso de báscula' },
+          { label: 'Total viajes', value: num(totalViajes), note: 'despachos en el período' },
+          { label: 'En validación', value: num(viajesEnValidacion), note: 'pendientes' },
+          { label: 'Finalizados', value: num(viajesFinalizados), note: `${num(gajosTotal)} gajos estimados` },
+          { label: 'Kilogramos', value: num(pesoTotal), unit: 'kg', note: 'peso registrado' },
         ]}
       />
 
       <div className="space-y-4">
-        <div className="space-y-1">
-          <h2>Viajes registrados</h2>
-          <p className="text-[15px] text-muted-foreground">Despachos de fruto hacia las extractoras.</p>
-        </div>
+        <h2>Viajes registrados</h2>
 
         {/* Filtros. Van siempre: si se escondieran al quedar la tabla
             vacía, el filtro que dejó cero resultados no se podría
@@ -648,18 +645,18 @@ export default function Viajes() {
             </div>
           </div>
           <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-muted-foreground">Estado</label>
+            <label className="text-[13px] font-medium text-muted-foreground" htmlFor="viajes-estado">Estado</label>
             <Select
               value={filtros.estado || '__todos__'}
               onValueChange={(v) => handleFiltroChange('estado', v === '__todos__' ? '' : v)}
             >
-              <SelectTrigger className="h-9 w-full">
-                <SelectValue placeholder="Todos" />
+              <SelectTrigger id="viajes-estado" className="h-9 w-full">
+                <SelectValue placeholder="Todos los estados" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__todos__">Todos</SelectItem>
+                <SelectItem value="__todos__">Todos los estados</SelectItem>
                 <SelectItem value="Creado">Creado</SelectItem>
-                <SelectItem value="En Validación">En Validación</SelectItem>
+                <SelectItem value="En Validación">En validación</SelectItem>
                 <SelectItem value="Finalizado">Finalizado</SelectItem>
               </SelectContent>
             </Select>
