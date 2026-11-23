@@ -9,7 +9,7 @@ const Card = React.forwardRef<HTMLDivElement, React.ComponentProps<"div">>(
         ref={ref}
         data-slot="card"
         className={cn(
-          "bg-card/60 backdrop-blur-xl text-card-foreground flex flex-col gap-6 rounded-xl border border-border/50 shadow-sm transition duration-300 hover:shadow-xl hover:border-border/80 hover:bg-card/70 group relative overflow-hidden",
+          "bg-card text-card-foreground flex flex-col gap-6 rounded-xl border border-border relative overflow-hidden",
           className,
         )}
         {...props}
@@ -26,7 +26,7 @@ const CardHeader = React.forwardRef<HTMLDivElement, React.ComponentProps<"div">>
         ref={ref}
         data-slot="card-header"
         className={cn(
-          "@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-1.5 px-6 pt-6 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6",
+          "@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-1 px-6 pt-5 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-5",
           className,
         )}
         {...props}
@@ -101,7 +101,7 @@ const CardFooter = React.forwardRef<HTMLDivElement, React.ComponentProps<"div">>
       <div
         ref={ref}
         data-slot="card-footer"
-        className={cn("flex items-center px-6 pb-6 [.border-t]:pt-6", className)}
+        className={cn("flex items-center px-6 pb-6 [.border-t]:pt-5", className)}
         {...props}
       />
     );

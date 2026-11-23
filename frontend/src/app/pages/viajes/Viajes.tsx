@@ -14,12 +14,13 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
 import {
-  Plus, MapPin, Eye, FileUp, Search, Calculator, Edit, Trash2,
+  Plus, Eye, FileUp, Search, Calculator, Edit, Trash2,
   AlertTriangle, Info, Download, RotateCcw, Undo2,
 } from 'lucide-react';
 import { Textarea } from '../../components/ui/textarea';
 import PageHeader from '../../components/common/PageHeader';
 import StatStrip from '../../components/common/StatStrip';
+import SelectorPeriodo, { type OpcionPeriodo } from '../../components/common/SelectorPeriodo';
 import EmptyState from '../../components/common/EmptyState';
 import TableSkeleton from '../../components/common/TableSkeleton';
 import { num } from '../../lib/formato';
@@ -142,6 +143,18 @@ const VARIANTE_ESTADO: Record<EstadoViaje, 'secondary' | 'info' | 'success'> = {
 function getEstadoBadge(estado: EstadoViaje) {
   return <Badge variant={VARIANTE_ESTADO[estado]}>{estado}</Badge>;
 }
+
+/** Los períodos que acepta el filtro de viajes. */
+type PeriodoViajes = 'semanal' | 'quincenal' | 'mensual' | 'anual' | 'personalizado';
+
+/** Períodos del filtro, con la forma del diseño. */
+const PERIODOS: OpcionPeriodo<PeriodoViajes>[] = [
+  { valor: 'semanal', etiqueta: 'Semana' },
+  { valor: 'quincenal', etiqueta: 'Quincena' },
+  { valor: 'mensual', etiqueta: 'Mes' },
+  { valor: 'anual', etiqueta: 'Año' },
+  { valor: 'personalizado', etiqueta: 'Fechas' },
+];
 
 // ─── componente ───────────────────────────────────────────────────────────────
 export default function Viajes() {
@@ -568,18 +581,11 @@ export default function Viajes() {
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <h2>Indicadores del período</h2>
         <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-          <Label className="text-sm font-medium">Período:</Label>
-          <Select value={periodoKPI}
-            onValueChange={(v) => setPeriodoKPI(v as typeof periodoKPI)}>
-            <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="semanal">Semanal</SelectItem>
-              <SelectItem value="quincenal">Quincenal</SelectItem>
-              <SelectItem value="mensual">Mensual</SelectItem>
-              <SelectItem value="anual">Anual</SelectItem>
-              <SelectItem value="personalizado">Personalizado</SelectItem>
-            </SelectContent>
-          </Select>
+          <SelectorPeriodo
+            valor={periodoKPI}
+            opciones={PERIODOS}
+            onChange={setPeriodoKPI}
+          />
           {(periodoKPI === 'mensual' || periodoKPI === 'quincenal') && (
             <SelectorMes valor={mesKPI} onChange={setMesKPI} />
           )}
@@ -597,12 +603,13 @@ export default function Viajes() {
             </Select>
           )}
           {periodoKPI === 'personalizado' && (
-            <>
-              <Input type="date" aria-label="Fecha de inicio" className="w-40"
+            <div className="flex items-center gap-1.5">
+              <Input type="date" aria-label="Fecha de inicio" className="h-9 w-[138px]"
                 value={fechaInicioKPI} onChange={e => setFechaInicioKPI(e.target.value)} />
-              <Input type="date" aria-label="Fecha de fin" className="w-40"
+              <span className="text-xs text-muted-foreground">a</span>
+              <Input type="date" aria-label="Fecha de fin" className="h-9 w-[138px]"
                 value={fechaFinKPI} onChange={e => setFechaFinKPI(e.target.value)} />
-            </>
+            </div>
           )}
           <Button variant="ghost" size="sm" onClick={reiniciarVista}
             title="Vuelve al mes en curso y borra los filtros de la tabla">
@@ -719,19 +726,18 @@ export default function Viajes() {
             />
           </Card>
         ) : (
-          <Card className="gap-0">
+          <Card className="gap-0 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-muted/60 text-[13px] text-muted-foreground">
                   <tr>
                     <th className="px-5 py-2.5 text-left font-semibold">Remisión</th>
-                    <th className="px-4 py-2.5 text-left font-semibold">Fecha</th>
                     <th className="px-4 py-2.5 text-left font-semibold">Estado</th>
-                    <th className="px-4 py-2.5 text-left font-semibold">Vehículo y conductor</th>
-                    <th className="px-4 py-2.5 text-left font-semibold">Extractora</th>
-                    <th className="px-4 py-2.5 text-right font-semibold">Gajos</th>
+                    <th className="hidden px-4 py-2.5 text-left font-semibold md:table-cell">Vehículo y conductor</th>
+                    <th className="hidden px-4 py-2.5 text-left font-semibold lg:table-cell">Extractora</th>
+                    <th className="hidden px-4 py-2.5 text-right font-semibold sm:table-cell">Gajos</th>
                     <th className="px-4 py-2.5 text-right font-semibold">Peso (kg)</th>
-                    <th className="px-5 py-2.5 text-right font-semibold">Acciones</th>
+                    <th className="px-2 py-2.5"><span className="sr-only">Acciones</span></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -740,7 +746,12 @@ export default function Viajes() {
                     return (
                       <tr key={viaje.id} className="transition-colors hover:bg-muted/40">
                         <td className="px-5 py-3">
-                          <span className="font-semibold text-foreground">{viaje.remisionId}</span>
+                          <Link
+                            to={`/viajes/${viaje.id}`}
+                            className="font-semibold text-foreground hover:text-primary"
+                          >
+                            {viaje.remisionId}
+                          </Link>
                           {viaje.importado && (
                             <span
                               className="ml-2 rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground"
@@ -749,36 +760,31 @@ export default function Viajes() {
                               Importado
                             </span>
                           )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="block font-medium text-foreground">
-                            {d ? d.toLocaleDateString('es-CO', { month: 'short', day: 'numeric' }) : '—'}
+                          {/* La fecha va debajo de la remisión. Como columna
+                              aparte no cabía en celular y empujaba la tabla
+                              fuera de la pantalla. */}
+                          <span className="block text-xs text-muted-foreground">
+                            {d ? d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
                           </span>
-                          <span className="text-xs text-muted-foreground">{d ? d.getFullYear() : ''}</span>
                         </td>
                         <td className="px-4 py-3">{getEstadoBadge(viaje.estado)}</td>
-                        <td className="px-4 py-3">
+                        <td className="hidden px-4 py-3 md:table-cell">
                           <span className="block font-medium text-foreground">{viaje.placaVehiculo}</span>
                           <span className="text-xs text-muted-foreground">{viaje.conductor}</span>
                         </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-1.5">
-                            <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" strokeWidth={2} />
-                            <span className="text-foreground">{viaje.extractora}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-right tabular-nums text-foreground">
+                        <td className="hidden px-4 py-3 text-muted-foreground lg:table-cell">{viaje.extractora}</td>
+                        <td className="hidden px-4 py-3 text-right tabular-nums text-foreground sm:table-cell">
                           {num(viaje.gajosEstimados)}
                         </td>
                         <td className="px-4 py-3 text-right">
                           {viaje.peso ? (
                             <span className="font-semibold tabular-nums text-foreground">{num(viaje.peso)}</span>
                           ) : (
-                            <span className="text-muted-foreground">—</span>
+                            <span className="text-muted-foreground">Pendiente</span>
                           )}
                         </td>
-                        <td className="px-5 py-3">
-                          <div className="flex items-center justify-end gap-1">
+                        <td className="px-2 py-3">
+                          <div className="flex items-center justify-end gap-0.5">
                             {viaje.estado === 'Creado' ? (
                               <>
                                 {/* La remisión se imprime ANTES de salir: es el

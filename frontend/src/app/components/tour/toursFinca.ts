@@ -202,7 +202,7 @@ export const TOURS_FINCA: { ruta: RegExp; tour: Tour }[] = [
     },
     {
       donde: [seccion('Diagnóstico de tu finca'), seccion('Hallazgos de tu finca')],
-      titulo: 'Diagnóstico de tu finca',
+      titulo: 'Hallazgos de tu finca',
       texto: 'Este es un análisis de tu finca hecho con inteligencia artificial: revisa tu información y te avisa lo que necesita atención. Toca una tarjeta para ir directo a resolverlo.',
       lado: 'bottom',
     },

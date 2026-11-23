@@ -19,7 +19,7 @@ import { Card, CardContent } from '../ui/card';
 import { Button } from '../ui/button';
 import {
   Sparkles, RefreshCw, Loader2, AlertTriangle, Info,
-  CheckCircle2, Clock,
+  CheckCircle2, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -28,7 +28,6 @@ import {
   type Insight, type Prioridad, type Severidad,
 } from '../../../api/insights';
 import { CardAlerta } from './CardAlerta';
-import { FilaDeslizable } from '../common/FilaDeslizable';
 import { primeraFrase, sinJerga } from '../../lib/texto';
 
 /** Lo que puede mostrar el bloque. Cada una es una lista distinta del informe. */
@@ -36,6 +35,28 @@ type Vista = 'alertas' | 'recomendaciones';
 
 /** Orden de severidad para ordenar. */
 const SEV_ORDER: Record<Severidad, number> = { CRITICA: 0, ALTA: 1, MEDIA: 2, BAJA: 3 };
+
+/** Tarjetas que se ven de entrada: una fila completa en pantalla grande. */
+const TOPE_TARJETAS = 3;
+
+/**
+ * Antigüedad en palabras: "hace 20 min", "hace 3 h", "ayer". Pasada una
+ * semana el día y el mes dicen más que la cuenta de días.
+ */
+function haceCuanto(fecha: Date): string {
+  const minutos = Math.round((Date.now() - fecha.getTime()) / 60_000);
+  if (minutos < 2) return 'recién';
+  if (minutos < 60) return `hace ${minutos} min`;
+
+  const horas = Math.round(minutos / 60);
+  if (horas < 24) return `hace ${horas} h`;
+
+  const dias = Math.round(horas / 24);
+  if (dias === 1) return 'ayer';
+  if (dias < 7) return `hace ${dias} días`;
+
+  return fecha.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' });
+}
 
 export function SeccionInsightsIA() {
   const [insight, setInsight] = useState<Insight | null>(null);
@@ -47,6 +68,13 @@ export function SeccionInsightsIA() {
   const [vista, setVista] = useState<Vista>('alertas');
   const [severidad, setSeveridad] = useState<Severidad | 'TODAS'>('TODAS');
   const [prioridad, setPrioridad] = useState<Prioridad | 'TODAS'>('TODAS');
+  const [mostrarTodas, setMostrarTodas] = useState(false);
+
+  // Al cambiar de lista o de filtro la selección empieza otra vez: dejar
+  // abierto lo anterior muestra de golpe tarjetas que nadie pidió.
+  useEffect(() => {
+    setMostrarTodas(false);
+  }, [vista, severidad, prioridad]);
 
   /** Dispara POST /insights + polling. Se llama al montar si no hay reciente,
    *  o cuando el usuario pulsa "Regenerar". */
@@ -155,9 +183,9 @@ export function SeccionInsightsIA() {
     .map((sev) => ({ sev, cuantas: activas.filter((a) => a.severidad === sev).length }))
     .filter((x) => x.cuantas > 0);
 
-  // Las mas graves primero: son las que se ven sin deslizar. Van todas —
-  // la fila se desliza y el filtro por severidad ya acota cuando hace falta;
-  // esconder la última de siete solo obligaba a preguntar cuál faltaba.
+  // Las mas graves primero: el diseño muestra tres y las demás quedan
+  // detrás del botón de ver más, así que las primeras tienen que ser las
+  // que de verdad importan.
   const alertasFiltradas = [...activas]
     .filter((a) => severidad === 'TODAS' || a.severidad === severidad)
     .sort((a, b) => SEV_ORDER[a.severidad] - SEV_ORDER[b.severidad]);
@@ -174,6 +202,17 @@ export function SeccionInsightsIA() {
   const recomendacionesFiltradas = recomendaciones.filter(
     (r) => prioridad === 'TODAS' || r.prioridad === prioridad,
   );
+
+  /**
+   * El diseño pone tres tarjetas, una fila completa en pantalla grande. El
+   * backend manda las que haya, así que el resto espera detrás del botón.
+   */
+  const lista = vista === 'alertas' ? alertasFiltradas : recomendacionesFiltradas;
+  const sobran = Math.max(0, lista.length - TOPE_TARJETAS);
+  const alertasVisibles = mostrarTodas ? alertasFiltradas : alertasFiltradas.slice(0, TOPE_TARJETAS);
+  const recomendacionesVisibles = mostrarTodas
+    ? recomendacionesFiltradas
+    : recomendacionesFiltradas.slice(0, TOPE_TARJETAS);
 
   /**
    * El análisis no encontró nada de qué hablar: ni alertas, ni
@@ -200,47 +239,75 @@ export function SeccionInsightsIA() {
     (insight?.alertas?.length ?? 0) === 0 &&
     (insight?.recomendaciones?.length ?? 0) === 0;
 
+  const generandoInforme = estadoUi === 'generando';
+  const esperandoTurno = retryAfter != null && retryAfter > 0;
+
+  /**
+   * Antigüedad del informe y su fecha exacta para el título emergente. Lo que
+   * importa de un análisis es qué tan fresco está, no el día y la hora: ocupa
+   * menos y se entiende de una.
+   */
+  const fechaInforme = insight?.procesado_at
+    ? {
+      relativa: haceCuanto(new Date(insight.procesado_at)),
+      completa: new Date(insight.procesado_at).toLocaleString('es-CO'),
+    }
+    : null;
+
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-1.5 md:flex-row md:items-start md:justify-between">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
         <div className="flex items-start gap-2.5">
-          <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent/30 text-primary">
+          <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent/30 text-primary dark:bg-accent/20 dark:text-accent">
             <Sparkles className="h-4 w-4" strokeWidth={2} />
           </span>
           <div>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <h2 className="text-base">Diagnóstico de tu finca</h2>
-              <span className="inline-flex items-center rounded-full bg-accent/30 px-2.5 py-0.5 text-xs font-semibold text-primary">
+              <h2 className="text-base">Hallazgos de tu finca</h2>
+              <span className="inline-flex items-center rounded-full bg-accent/30 px-2.5 py-0.5 text-xs font-semibold text-primary dark:bg-accent/20 dark:text-accent">
                 Análisis con IA
               </span>
             </div>
             <p className="text-[13px] text-muted-foreground">
-              La inteligencia artificial de PalmApp revisa la información de tu finca y te avisa lo que necesita atención.
+              La inteligencia artificial de PalmApp analiza la información de tu finca y te avisa lo que necesita atención.
             </p>
           </div>
         </div>
-        {insight?.procesado_at && (
-          <div className="flex shrink-0 flex-col items-start gap-1 pl-[38px] md:items-end md:pl-0">
-            <span className="text-[13px] text-muted-foreground">{resumenVista}</span>
-            <span className="flex items-center gap-2">
-            <span className="flex items-center gap-1 text-[13px] text-muted-foreground">
-              <Clock className="h-3.5 w-3.5" />
-              {new Date(insight.procesado_at).toLocaleString('es-CO')}
-            </span>
+        {/* Una sola línea: qué hay por revisar y qué tan viejo es el informe,
+            con el botón al frente. La fecha exacta queda en el título
+            emergente. En celular el botón se queda en su símbolo. */}
+        {fechaInforme && (
+          <div className="flex items-center justify-between gap-3 pl-[38px] md:shrink-0 md:justify-end md:pl-0">
+            <p
+              className="truncate text-[13px] text-muted-foreground"
+              title={`Último análisis: ${fechaInforme.completa}`}
+            >
+              {resumenVista}
+              <span aria-hidden> · </span>
+              {fechaInforme.relativa}
+            </p>
             <Button
               variant="outline"
               size="sm"
               onClick={generar}
-              disabled={estadoUi === 'generando' || (retryAfter != null && retryAfter > 0)}
-              className="gap-1.5"
+              disabled={generandoInforme || esperandoTurno}
+              className="shrink-0 gap-1.5"
+              aria-label="Regenerar el análisis"
+              title="Regenerar el análisis"
             >
-              {estadoUi === 'generando'
-                ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Generando...</>
-                : retryAfter && retryAfter > 0
-                  ? `Espera ${retryAfter}s`
-                  : <><RefreshCw className="h-3.5 w-3.5" />Regenerar</>}
+              {generandoInforme
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                : <RefreshCw className="h-3.5 w-3.5" />}
+              {/* La cuenta regresiva se muestra siempre: sin ella el botón
+                  parece apagado sin motivo. */}
+              <span className={esperandoTurno ? undefined : 'hidden sm:inline'}>
+                {generandoInforme
+                  ? 'Generando...'
+                  : esperandoTurno
+                    ? `${retryAfter}s`
+                    : 'Regenerar'}
+              </span>
             </Button>
-            </span>
           </div>
         )}
       </div>
@@ -321,12 +388,15 @@ export function SeccionInsightsIA() {
 
       {estadoUi === 'listo' && insight && !sinHallazgos && (
         <>
-          <div className="flex flex-wrap items-center gap-2">
+          {/* En celular los dos grupos de filtro se amontonaban al doblar de
+              línea. Cada uno va en su propia fila y solo se juntan cuando hay
+              ancho de sobra. */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
           {vistas.length > 1 && (
             <div
               role="group"
               aria-label="Qué mostrar"
-              className="flex w-fit rounded-lg border border-border bg-card p-0.5"
+              className="flex w-fit rounded-lg border border-border bg-card p-0.5 shadow-xs"
             >
               {vistas.map(({ clave, etiqueta, cuantos }) => (
                 <button
@@ -347,7 +417,7 @@ export function SeccionInsightsIA() {
           )}
 
           {vista === 'recomendaciones' && porPrioridad.length > 1 && (
-            <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtrar por prioridad">
+            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filtrar por prioridad">
               {([{ p: 'TODAS' as const, cuantas: recomendaciones.length }, ...porPrioridad]).map(({ p, cuantas }) => (
                 <button
                   key={p}
@@ -368,7 +438,7 @@ export function SeccionInsightsIA() {
           )}
 
           {vista === 'alertas' && porSeveridad.length > 1 && (
-            <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtrar por gravedad">
+            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filtrar por gravedad">
               {([{ sev: 'TODAS' as const, cuantas: activas.length }, ...porSeveridad]).map(({ sev, cuantas }) => (
                 <button
                   key={sev}
@@ -401,23 +471,21 @@ export function SeccionInsightsIA() {
                 </CardContent>
               </Card>
             ) : (
-              <FilaDeslizable etiqueta="Hallazgos de tu finca">
-                {alertasFiltradas.map((a) => (
-                  <div
-                    key={a.id}
-                    className="w-[290px] shrink-0 snap-start md:w-[calc((100%-2rem)/3)]"
-                  >
+              <div className="grid gap-3 md:gap-4 xl:grid-cols-3" role="list" aria-label="Hallazgos de tu finca">
+                {alertasVisibles.map((a) => (
+                  <div key={a.id} role="listitem">
                     <CardAlerta alerta={a} />
                   </div>
                 ))}
-              </FilaDeslizable>
+              </div>
             )
           ) : (
-            <FilaDeslizable etiqueta="Sugerencias para tu finca">
-              {recomendacionesFiltradas.map((r) => (
+            <div className="grid gap-3 md:gap-4 xl:grid-cols-3" role="list" aria-label="Sugerencias para tu finca">
+              {recomendacionesVisibles.map((r) => (
                 <div
                   key={r.id}
-                  className="flex w-[290px] shrink-0 snap-start flex-col rounded-xl border border-border bg-card p-4 md:w-[calc((100%-2rem)/3)]"
+                  role="listitem"
+                  className="flex flex-col rounded-xl border border-border bg-card p-4"
                 >
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${PRIORIDAD_LABEL[r.prioridad].badgeClass}`}>
@@ -486,7 +554,23 @@ export function SeccionInsightsIA() {
                   </div>
                 </div>
               ))}
-            </FilaDeslizable>
+            </div>
+          )}
+
+          {/* El diseño deja tres tarjetas a la vista. El backend manda las
+              que haya, así que las demás esperan aquí. */}
+          {sobran > 0 && (
+            <div className="flex justify-center">
+              <Button
+                variant="outline"
+                onClick={() => setMostrarTodas((v) => !v)}
+                aria-expanded={mostrarTodas}
+              >
+                {mostrarTodas
+                  ? <><ChevronUp className="h-4 w-4" strokeWidth={2} />Ver menos</>
+                  : <><ChevronDown className="h-4 w-4" strokeWidth={2} />Ver {sobran} más</>}
+              </Button>
+            </div>
           )}
         </>
       )}

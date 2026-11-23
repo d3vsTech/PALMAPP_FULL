@@ -46,7 +46,9 @@ export default function BottomNav() {
     <nav
       aria-label="Navegación principal"
       className={cn(
-        'fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden',
+        // Verde del menu lateral: sobre el fondo claro se reconoce de
+        // inmediato como la navegacion y no como una tarjeta mas.
+        'fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-sidebar pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_16px_rgb(15_33_22/0.18)] lg:hidden',
         // En un formulario estorba: ahí abajo van los botones de guardar.
         esPantallaFormulario(location.pathname) && 'max-md:hidden',
       )}
@@ -62,13 +64,13 @@ export default function BottomNav() {
               aria-current={activo ? 'page' : undefined}
               className={cn(
                 'flex flex-col items-center gap-1 py-2 text-[11px] font-medium',
-                activo ? 'text-primary' : 'text-muted-foreground',
+                activo ? 'text-white' : 'text-sidebar-foreground',
               )}
             >
               <span
                 className={cn(
                   'flex h-7 w-12 items-center justify-center rounded-full transition-colors',
-                  activo && 'bg-accent/30 dark:bg-accent/20',
+                  activo && 'bg-sidebar-primary text-sidebar',
                 )}
               >
                 <Icon className="h-[18px] w-[18px]" strokeWidth={activo ? 2.3 : 2} />
@@ -82,10 +84,10 @@ export default function BottomNav() {
           onClick={abrirMenuMovil}
           className={cn(
             'flex flex-col items-center gap-1 py-2 text-[11px] font-medium',
-            enOtro ? 'text-primary' : 'text-muted-foreground',
+            enOtro ? 'text-white' : 'text-sidebar-foreground',
           )}
         >
-          <span className={cn('flex h-7 w-12 items-center justify-center rounded-full', enOtro && 'bg-accent/30 dark:bg-accent/20')}>
+          <span className={cn('flex h-7 w-12 items-center justify-center rounded-full', enOtro && 'bg-sidebar-primary text-sidebar')}>
             <LayoutGrid className="h-[18px] w-[18px]" strokeWidth={2} />
           </span>
           Más

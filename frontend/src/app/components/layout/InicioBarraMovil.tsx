@@ -66,7 +66,9 @@ export default function InicioBarraMovil({ titulo, nivelRaiz = 1 }: InicioBarraM
         <span
           ref={ref}
           className={cn(
-            'truncate text-[17px] font-semibold text-foreground transition-opacity duration-150 md:hidden',
+            // En celulares angostos el título baja a una segunda línea en vez
+            // de cortarse con puntos suspensivos.
+            'line-clamp-2 min-w-0 text-[17px] font-semibold leading-tight text-foreground transition-opacity duration-150 md:hidden',
             !puedeVolver && !pasoTitulo && 'opacity-0',
           )}
         >

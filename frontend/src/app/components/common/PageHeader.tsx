@@ -23,8 +23,8 @@ export default function PageHeader({ title, description, eyebrow, actions, backT
   }, [backTo]);
 
   return (
-    <header className={cn('mb-2 flex flex-col gap-4 md:flex-row md:items-end md:justify-between', className)}>
-      <div className="flex min-w-0 items-start gap-3">
+    <header className={cn('mb-2 flex flex-col gap-4 md:flex-row md:flex-wrap md:items-end md:justify-between', className)}>
+      <div className="flex min-w-0 items-start gap-3 md:min-w-[18rem] md:flex-1">
         {backTo && (
           <Link
             to={backTo}

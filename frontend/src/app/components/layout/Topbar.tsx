@@ -95,8 +95,11 @@ export default function Topbar() {
           <InicioBarraMovil titulo={modulo?.label} />
           {modulo && (
             <span className="hidden truncate text-sm text-muted-foreground md:block">
-              {TITULOS_SECCION[modulo.seccion]}
-              <span className="mx-1 text-muted-foreground/50">/</span>
+              {/* En tableta solo cabe el nombre del módulo junto al buscador. */}
+              <span className="hidden lg:inline">
+                {TITULOS_SECCION[modulo.seccion]}
+                <span className="mx-1 text-muted-foreground/50">/</span>
+              </span>
               <span className="font-semibold text-foreground">{modulo.label}</span>
             </span>
           )}
@@ -146,14 +149,14 @@ export default function Topbar() {
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-frame text-[12px] font-bold text-accent">
                 {iniciales}
               </span>
-              <span className="hidden flex-col items-start leading-tight md:flex">
+              <span className="hidden flex-col items-start leading-tight lg:flex">
                 <span className="text-[13px] font-semibold text-foreground">{user?.nombre}</span>
                 <span className="text-[11px] text-muted-foreground">
                   {user?.rol ? (ROLES[user.rol] ?? user.rol) : ''}
                 </span>
               </span>
               <ChevronDown
-                className={cn('hidden h-4 w-4 text-muted-foreground transition-transform md:block', dropdownOpen && 'rotate-180')}
+                className={cn('hidden h-4 w-4 text-muted-foreground transition-transform lg:block', dropdownOpen && 'rotate-180')}
                 strokeWidth={2}
               />
             </button>
