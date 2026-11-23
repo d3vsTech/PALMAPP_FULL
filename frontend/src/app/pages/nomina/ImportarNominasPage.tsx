@@ -180,13 +180,14 @@ export default function ImportarNominasPage() {
             <PanelPeriodos nominas={analisis.nominas} filas={analisis.filas} />
           </PasoCard>
 
-          <div className="flex flex-wrap items-center justify-end gap-3">
-            {conError > 0 && (
-              <p className="text-sm text-destructive">
-                Corrige las {conError} fila{conError === 1 ? '' : 's'} con error. Si una falla, no
-                entra ninguna nómina.
-              </p>
-            )}
+          {conError > 0 && (
+            <p className="text-sm text-destructive">
+              Corrige las {conError} fila{conError === 1 ? '' : 's'} con error. Si una falla, no
+              entra ninguna nómina.
+            </p>
+          )}
+
+          <div className="barra-acciones flex flex-wrap items-center justify-end gap-3">
             <Button
               onClick={() => void cargue.importar()}
               disabled={!puedeImportar}

@@ -819,7 +819,7 @@ export default function LiquidarColaborador() {
           Muestra los jornales agrupados por categoría (Cosecha, Poda, Plateo,
           Sanidad, etc.) con subtotales y total general del período. */}
       {empleado.salario_tipo === 'VARIABLE' && resumen && (
-        <Card className="border-border">
+        <Card className="overflow-hidden border-border">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-xl">
               <CalendarIcon className="h-6 w-6 text-primary" />

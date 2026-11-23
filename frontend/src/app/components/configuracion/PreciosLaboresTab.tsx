@@ -829,7 +829,7 @@ export function PreciosLaboresTab() {
               independiente del tipo_pago de la labor. Si la labor está en
               JORNAL_FIJO se SUMA un acordeón aparte (más abajo). */}
           <AccordionItem value="cosecha" className="border-0">
-            <Card className="border-border">
+            <Card className="overflow-hidden border-border">
               <CardHeader className="border-b bg-gradient-to-r from-green-50/50 to-green-50/10 dark:from-green-950/20 dark:to-green-950/5">
                 <AccordionTrigger className="hover:no-underline py-0">
                   <div className="text-left">
@@ -909,7 +909,7 @@ export function PreciosLaboresTab() {
 
           {/* "Escala de Abonada" siempre visible (mismo criterio que Cosecha). */}
           <AccordionItem value="abonada" className="border-0">
-            <Card className="border-border">
+            <Card className="overflow-hidden border-border">
               <CardHeader className="border-b bg-gradient-to-r from-emerald-50/50 to-emerald-50/10 dark:from-emerald-950/20 dark:to-emerald-950/5">
                 <AccordionTrigger className="hover:no-underline py-0">
                   <div className="text-left">
@@ -1331,7 +1331,7 @@ export function PreciosLaboresTab() {
               escribió en "Operaciones → Trabajos / Labores". */}
           {[...laboresPalmaCustom].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es', { sensitivity: 'base' })).map((labor) => (
             <AccordionItem key={`custom-${labor.id}`} value={`palma-custom-${labor.id}`} className="border-0">
-              <Card className="border-border">
+              <Card className="overflow-hidden border-border">
                 <CardHeader className="border-b bg-gradient-to-r from-amber-50/50 to-amber-50/10 dark:from-amber-950/20 dark:to-amber-950/5">
                   <AccordionTrigger className="hover:no-underline py-0">
                     <div className="text-left">
@@ -1397,7 +1397,7 @@ export function PreciosLaboresTab() {
             </p>
           </div>
         ) : (
-          <Card className="border-border">
+          <Card className="overflow-hidden border-border">
             <CardContent className="p-6">
               <div className="rounded-lg border border-border overflow-x-auto">
                 <table className="w-full min-w-[720px] table-fixed">

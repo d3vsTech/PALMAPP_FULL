@@ -1325,7 +1325,7 @@ export default function NuevaVacaciones() {
       )}
 
       {/* ── Acciones ─────────────────────────────────────────────────────── */}
-      <div className="flex justify-between">
+      <div className="barra-acciones flex justify-between">
         <Button variant="outline" asChild className="gap-2">
           <Link to="/liquidaciones?tab=vacaciones"><ArrowLeft className="h-4 w-4" />Cancelar</Link>
         </Button>

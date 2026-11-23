@@ -170,7 +170,7 @@ export function SeguridadSocialTab() {
   const renderSeccion = (seccion: SeccionConfig) => {
     const lista = items[seccion.key] ?? [];
     return (
-      <Card key={seccion.key} className="border-border">
+      <Card key={seccion.key} className="overflow-hidden border-border">
         <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
           <CardTitle>{seccion.titulo}</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">{seccion.descripcion}</p>

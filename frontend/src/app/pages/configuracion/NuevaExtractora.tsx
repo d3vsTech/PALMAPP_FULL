@@ -318,7 +318,7 @@ export default function NuevaExtractora() {
       </Card>
 
       {/* El botón va al pie del formulario, como en el resto de la app. */}
-      <div className="flex justify-end">
+      <div className="barra-acciones flex justify-end">
         <Button
           onClick={handleSave}
           disabled={saving || loading}

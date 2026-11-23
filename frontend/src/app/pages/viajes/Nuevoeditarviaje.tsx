@@ -633,7 +633,7 @@ export default function NuevoEditarViaje() {
         </div>
 
         {/* Botones de acción */}
-        <div className="flex justify-end gap-3 mt-6">
+        <div className="barra-acciones flex justify-end gap-3 mt-6">
           <Button
             type="button"
             variant="outline"

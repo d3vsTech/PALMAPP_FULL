@@ -219,7 +219,7 @@ export default function LiquidacionFinalTab() {
       </div>
 
       {/* Tabla */}
-      <Card className="glass-subtle border-border">
+      <Card className="overflow-hidden glass-subtle border-border">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full">

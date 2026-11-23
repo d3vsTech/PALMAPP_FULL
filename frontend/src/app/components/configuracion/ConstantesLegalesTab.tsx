@@ -189,7 +189,7 @@ export function ConstantesLegalesTab() {
     <TabLoadingGate loading={loading} message="Cargando constantes legales…">
     <div className="space-y-6">
       {/* ── General: lo que pesa en todas las liquidaciones ──────────────── */}
-      <Card className="border-border">
+      <Card className="overflow-hidden border-border">
         <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
           <CardTitle>General</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">
@@ -323,7 +323,7 @@ export function ConstantesLegalesTab() {
       </Card>
 
       {/* ── Cesantías ──────────────────────────────────────────────────────── */}
-      <Card className="border-border">
+      <Card className="overflow-hidden border-border">
         <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
           <CardTitle>Cesantías</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">Fecha de consignación y reglas de conteo de días</p>
@@ -375,7 +375,7 @@ export function ConstantesLegalesTab() {
       </Card>
 
       {/* ── Intereses de cesantías ─────────────────────────────────────────── */}
-      <Card className="border-border">
+      <Card className="overflow-hidden border-border">
         <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
           <CardTitle>Intereses de Cesantías</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">Tasa anual y fecha límite de pago</p>
@@ -411,7 +411,7 @@ export function ConstantesLegalesTab() {
       </Card>
 
       {/* ── Prima de servicios ──────────────────────────────────────────────── */}
-      <Card className="border-border">
+      <Card className="overflow-hidden border-border">
         <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
           <CardTitle>Prima de Servicios</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">Fechas límite por semestre y regla de días</p>
@@ -453,7 +453,7 @@ export function ConstantesLegalesTab() {
       </Card>
 
       {/* ── Vacaciones ──────────────────────────────────────────────────────── */}
-      <Card className="border-border">
+      <Card className="overflow-hidden border-border">
         <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
           <CardTitle>Vacaciones</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">Días anuales y reglas de conteo</p>
@@ -500,7 +500,7 @@ export function ConstantesLegalesTab() {
       </Card>
 
       {/* ── Liquidación final de contrato ──────────────────────── */}
-      <Card className="border-border">
+      <Card className="overflow-hidden border-border">
         <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
           <CardTitle>Liquidación Final</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">Qué se descuenta cuando alguien se retira</p>

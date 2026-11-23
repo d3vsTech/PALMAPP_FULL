@@ -279,7 +279,7 @@ export function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange
   };
 
   return (
-    <Card className="border-border">
+    <Card className="overflow-hidden border-border">
       <CardHeader className="border-b">
         <div className="flex items-center gap-3">
           <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -294,7 +294,7 @@ export function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange
       <CardContent className="p-6">
         <Accordion type="multiple" defaultValue={['cosecha']} className="space-y-3">
           <AccordionItem value="cosecha" className="border-0">
-            <Card className="border-border">
+            <Card className="overflow-hidden border-border">
               <CardHeader className="border-b bg-gradient-to-r from-green-50/50 to-green-50/10 dark:from-green-950/20 py-3 px-4">
                 <AccordionTrigger className="hover:no-underline py-0">
                   <div className="text-left">
@@ -340,7 +340,7 @@ export function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange
           </AccordionItem>
 
           <AccordionItem value="abonada" className="border-0">
-            <Card className="border-border">
+            <Card className="overflow-hidden border-border">
               <CardHeader className="border-b bg-gradient-to-r from-emerald-50/50 to-emerald-50/10 dark:from-emerald-950/20 py-3 px-4">
                 <AccordionTrigger className="hover:no-underline py-0">
                   <div className="text-left">
@@ -392,7 +392,7 @@ export function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange
 
             return (
               <AccordionItem key={labor.laborId} value={`palma-${labor.laborId}`} className="border-0">
-                <Card className="border-border">
+                <Card className="overflow-hidden border-border">
                   <CardHeader className="border-b bg-muted/40">
                     <AccordionTrigger className="hover:no-underline py-0">
                       <div className="text-left">
@@ -499,7 +499,7 @@ export function Paso2({ precios, onChange }: { precios: PreciosLabores; onChange
               no tiene ninguna, este bloque no se renderiza. */}
           {precios.finca.length > 0 && (
             <AccordionItem value="finca" className="border-0">
-              <Card className="border-border">
+              <Card className="overflow-hidden border-border">
                 <CardHeader className="border-b bg-gradient-to-r from-cyan-50/50 to-cyan-50/10 dark:from-cyan-950/20 py-3 px-4">
                   <AccordionTrigger className="hover:no-underline py-0">
                     <div className="text-left">
@@ -1030,7 +1030,7 @@ export default function NuevoTerceroWizard() {
           )}
 
           {/* Navegación */}
-          <div className="flex items-center justify-between pt-2">
+          <div className="barra-acciones flex items-center justify-between pt-2">
             <Button variant="outline" className="gap-2"
               onClick={() => paso === 1 ? navigate('/configuracion') : setPaso(p => p - 1)}
               disabled={guardando}>

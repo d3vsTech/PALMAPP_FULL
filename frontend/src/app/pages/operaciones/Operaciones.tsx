@@ -326,7 +326,7 @@ export default function Operaciones() {
     <div className="space-y-6">
       <PageHeader
         title="Operaciones"
-        description="Planillas del día: jornales, cosecha y labores de la finca."
+        description="Labores diarias, planillas de cosecha y jornales."
         actions={
           <>
             {hasPermiso('operaciones.aprobar') && (
@@ -353,7 +353,7 @@ export default function Operaciones() {
       {/* El período manda sobre los indicadores y sobre la lista de abajo:
           las dos leen el mismo rango de fechas. */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <h2>Indicadores del período</h2>
+        <h2>Indicadores</h2>
         <div className="flex flex-wrap items-center gap-2 lg:justify-end">
           <SelectorPeriodo
             valor={periodoKPI}
@@ -397,30 +397,28 @@ export default function Operaciones() {
         loading={cargandoIndicadores && !indicadores}
         items={[
           {
-            label: 'Planillas en borrador',
-            value: num(indicadores?.planillas_borrador ?? 0),
-            note: 'sin aprobar',
-          },
-          {
-            label: 'Planillas aprobadas',
-            value: num(indicadores?.planillas_aprobadas ?? 0),
-            note: 'cuentan como día operado',
-          },
-          {
-            label: 'Total de planillas',
+            label: 'Total',
             value: num(indicadores?.total_planillas ?? 0),
-            note: 'en el rango elegido',
+            note: 'planillas en el período',
+          },
+          {
+            label: 'En borrador',
+            value: num(indicadores?.planillas_borrador ?? 0),
+            note: 'planillas pendientes',
+          },
+          {
+            label: 'Aprobadas',
+            value: num(indicadores?.planillas_aprobadas ?? 0),
+            note: 'planillas completadas',
           },
         ]}
       />
 
       <div className="space-y-4">
         <div className="space-y-1">
-          <h2>Planillas del período</h2>
+          <h2>Planillas recientes</h2>
           <p className="text-[15px] text-muted-foreground">
-            {metaLista && desdeLista && hastaLista
-              ? `${num(metaLista.total)} ${metaLista.total === 1 ? 'planilla' : 'planillas'} entre ${formatearFecha(desdeLista)} y ${formatearFecha(hastaLista)}`
-              : 'Registro de operaciones diarias por fecha.'}
+            Registro de operaciones diarias por fecha.
           </p>
         </div>
 

@@ -325,7 +325,7 @@ export default function Verplanilla() {
 
   if (cargando) {
     return (
-      <div className="mx-auto max-w-4xl">
+      <div className="mx-auto max-w-5xl">
         <Card className="gap-0">
           <div className="flex items-center justify-center gap-2 py-20 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Cargando la planilla…
@@ -337,7 +337,7 @@ export default function Verplanilla() {
 
   if (error || !planilla) {
     return (
-      <div className="mx-auto max-w-4xl">
+      <div className="mx-auto max-w-5xl">
         <Card className="gap-0">
           <EmptyState
             title="No se pudo abrir la planilla"
@@ -375,7 +375,7 @@ export default function Verplanilla() {
   const hayHorasExtra = datos.horasExtra.length > 0;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6">
 
       <PageHeader
         backTo="/operaciones"
@@ -384,7 +384,7 @@ export default function Verplanilla() {
           <span className="flex flex-wrap items-center gap-2">
             Planilla del día
             {aprobada ? (
-              <Badge variant="outline" className="border-success/30 bg-success-soft text-success">
+              <Badge variant="success">
                 <CheckCircle className="h-3.5 w-3.5" strokeWidth={2} />
                 Aprobada
               </Badge>

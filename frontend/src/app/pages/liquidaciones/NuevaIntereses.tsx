@@ -249,7 +249,7 @@ export default function NuevaIntereses() {
         </CardContent>
       </Card>
 
-      <div className="flex justify-end gap-3">
+      <div className="barra-acciones flex justify-end gap-3">
         <Button variant="outline" size="lg" onClick={() => navigate('/liquidaciones?tab=intereses')} disabled={guardando}>
           Cancelar
         </Button>

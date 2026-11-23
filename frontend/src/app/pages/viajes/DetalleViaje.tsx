@@ -956,7 +956,7 @@ export default function DetalleViaje() {
                 viaje en CREADO: ahí las cosechas todavía se están contando
                 y los totales no significan nada. */}
             {!modoGestion && estadoActual !== 'Creado' && (
-            <Card className="border-border">
+            <Card className="overflow-hidden border-border">
               <CardHeader className="border-b border-border pb-4">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Leaf className="h-4 w-4 text-primary" />
@@ -1424,7 +1424,7 @@ export default function DetalleViaje() {
             {etapaActual === 3 && (
               <div className="space-y-6">
                 {/* Carga de imagen */}
-                <Card className="border-border">
+                <Card className="overflow-hidden border-border">
                   <CardHeader>
                     <div className="flex items-center gap-3">
                       <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">

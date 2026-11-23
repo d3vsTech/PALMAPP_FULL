@@ -568,7 +568,7 @@ export default function NuevaLiquidacionWizard() {
       </Card>
 
       {/* Botones de navegación */}
-      <div className="flex items-center justify-between">
+      <div className="barra-acciones flex items-center justify-between">
         <Button
           variant="outline"
           onClick={handleAtras}

@@ -549,7 +549,7 @@ export default function Nomina() {
             </CardContent>
           </Card>
         ) : nominasFiltradas.length > 0 ? (
-          <Card className="border-border">
+          <Card className="overflow-hidden border-border">
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <table className="w-full">

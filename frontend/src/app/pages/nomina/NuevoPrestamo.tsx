@@ -240,7 +240,7 @@ export default function NuevoPrestamo() {
       </div>
 
       <Card className="border-border/50">
-        <CardHeader className="border-b bg-muted/20 py-4">
+        <CardHeader className="rounded-t-xl border-b bg-muted/20 py-4">
           <CardTitle className="text-base">Información del Préstamo</CardTitle>
         </CardHeader>
         <CardContent className="p-6 space-y-6">
@@ -542,7 +542,7 @@ export default function NuevoPrestamo() {
           </div>
 
           {/* Acciones */}
-          <div className="flex justify-between items-center pt-2 border-t">
+          <div className="barra-acciones flex justify-between items-center pt-2 border-t">
             <Button
               variant="outline"
               onClick={() => navigate('/nomina/prestamos')}

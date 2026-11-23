@@ -60,7 +60,7 @@ export function ExtractorasTab() {
       {ConfirmDeleteDialog}
 
       <TabLoadingGate loading={loading} message="Cargando extractoras…">
-      <Card className="border-border">
+      <Card className="overflow-hidden border-border">
         <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
           <div className="flex items-center justify-between">
             <div>

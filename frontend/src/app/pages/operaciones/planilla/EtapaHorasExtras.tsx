@@ -49,31 +49,32 @@ export function EtapaHorasExtras({
   eliminarHoraExtra,
   setFormRef,
 }: Props) {  return (
-    <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button onClick={agregarHoraExtra} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Agregar Hora Extra
-        </Button>
-      </div>
+    <Card>
+      <CardHeader>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft">
+              <Clock className="h-4 w-4 text-primary" strokeWidth={2} />
+            </div>
+            <div>
+              <CardTitle>Horas extras</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Registra las horas extras de los colaboradores
+              </p>
+            </div>
+          </div>
+          <Button onClick={agregarHoraExtra} className="gap-2 self-end sm:self-auto">
+            <Plus className="h-4 w-4" />
+            Agregar hora extra
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
 
       {/* Formulario de edición */}
       {horaExtraEnEdicion && (
         <div ref={setFormRef('horaExtra')} className="scroll-mt-24">
-        <Card className="gap-4 border-primary/40">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-soft text-primary">
-                <Clock className="h-5 w-5" strokeWidth={2} />
-              </span>
-              <div>
-                <CardTitle>Horas extras</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Registra las horas extras de los colaboradores
-                </p>
-              </div>
-            </div>
-          </CardHeader>
+        <Card className="border-primary/40 bg-muted/40">
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               {/* Colaborador (siempre primero) */}
@@ -189,7 +190,7 @@ export function EtapaHorasExtras({
         const colaborador = colaboradores.find(c => c.id === hora.colaboradorId);
 
         return (
-          <Card key={hora.id} className="border-border hover:border-primary/30 transition-colors">
+          <Card key={hora.id}>
             <CardContent className="p-4">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 {/* Icon + Colaborador */}
@@ -208,7 +209,7 @@ export function EtapaHorasExtras({
                 {/* Horas */}
                 <div className="flex w-full shrink-0 items-baseline justify-between md:block md:w-auto md:text-center">
                   <p className="text-xs text-muted-foreground">Horas</p>
-                  <p className="font-bold text-lg">{hora.numeroHoras}</p>
+                  <p className="text-lg font-bold tabular-nums">{hora.numeroHoras}</p>
                 </div>
 
                 {/* Observación */}
@@ -244,13 +245,14 @@ export function EtapaHorasExtras({
       })}
 
       {horasExtras.length === 0 && !horaExtraEnEdicion && (
-        <div className="text-center py-12 text-muted-foreground">
-          <Clock className="h-12 w-12 mx-auto mb-3 opacity-20" />
+        <div className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
+          <Clock className="h-12 w-12 opacity-20" />
           <p>No hay horas extras registradas</p>
-          <p className="text-sm">Haz clic en "Agregar Hora Extra" para crear una</p>
+          <p className="text-sm">Haz clic en "Agregar hora extra" para crear una</p>
         </div>
       )}
 
-    </div>
+      </CardContent>
+    </Card>
   );
 }

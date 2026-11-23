@@ -9,7 +9,7 @@ const Card = React.forwardRef<HTMLDivElement, React.ComponentProps<"div">>(
         ref={ref}
         data-slot="card"
         className={cn(
-          "bg-card text-card-foreground flex flex-col gap-6 rounded-xl border border-border relative overflow-hidden",
+          "bg-card text-card-foreground flex flex-col gap-6 rounded-xl border border-border relative",
           className,
         )}
         {...props}
@@ -42,7 +42,7 @@ const CardTitle = React.forwardRef<HTMLHeadingElement, React.ComponentProps<"h4"
       <h4
         ref={ref}
         data-slot="card-title"
-        className={cn("leading-none", className)}
+        className={cn("leading-snug", className)}
         {...props}
       />
     );
@@ -56,7 +56,7 @@ const CardDescription = React.forwardRef<HTMLParagraphElement, React.ComponentPr
       <p
         ref={ref}
         data-slot="card-description"
-        className={cn("text-muted-foreground", className)}
+        className={cn("text-sm text-muted-foreground", className)}
         {...props}
       />
     );

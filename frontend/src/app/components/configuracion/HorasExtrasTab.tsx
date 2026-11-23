@@ -227,7 +227,7 @@ export function HorasExtrasTab() {
     <TabLoadingGate loading={loading} message="Cargando horas extra…">
     <div className="space-y-6">
       {/* Jornada Laboral Semanal */}
-      <Card className="border-border">
+      <Card className="overflow-hidden border-border">
         <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
           <CardTitle>Jornada Laboral Semanal</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">Número de horas ordinarias por semana</p>
@@ -254,7 +254,7 @@ export function HorasExtrasTab() {
       </Card>
 
       {/* Tipos de Horas Extras — solo lectura (catálogo legal colombiano). */}
-      <Card className="border-border">
+      <Card className="overflow-hidden border-border">
         <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
           <div>
             <CardTitle>Tipos de Horas Extras</CardTitle>

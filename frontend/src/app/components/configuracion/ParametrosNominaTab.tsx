@@ -105,7 +105,7 @@ export function ParametrosNominaTab() {
 
   return (
     <TabLoadingGate loading={loading} message="Cargando parámetros de nómina…">
-    <Card className="border-border">
+    <Card className="overflow-hidden border-border">
       <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
         <CardTitle>Parámetros de Nómina</CardTitle>
         <p className="text-sm text-muted-foreground mt-1">

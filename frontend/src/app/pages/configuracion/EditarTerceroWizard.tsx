@@ -712,7 +712,7 @@ export default function EditarTerceroWizard() {
           )}
 
           {/* Navegación */}
-          <div className="flex items-center justify-between pt-2">
+          <div className="barra-acciones flex items-center justify-between pt-2">
             <Button variant="outline" className="gap-2"
               onClick={() => paso === 1 ? navigate('/configuracion') : setPaso(p => p - 1)}
               disabled={guardando}>

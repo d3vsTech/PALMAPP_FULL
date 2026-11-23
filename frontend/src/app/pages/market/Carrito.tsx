@@ -157,7 +157,7 @@ export default function Carrito() {
             const subtotal = toNumber(item.subtotal);
             const isUpdating = actualizando === item.id;
             return (
-              <Card key={item.id} className="border-border">
+              <Card key={item.id} className="overflow-hidden border-border">
                 <CardContent className="p-6">
                   <div className="flex gap-6">
                     <div className="w-24 h-24 bg-muted rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">

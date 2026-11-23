@@ -174,7 +174,7 @@ export default function VacacionesTab() {
           </p>
         )}
 
-        <Card className="glass-subtle border-border">
+        <Card className="overflow-hidden glass-subtle border-border">
           <CardContent className="p-0">
             {cargando ? (
               <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">

@@ -289,7 +289,7 @@ export default function NuevaPrima() {
         </CardContent>
       </Card>
 
-      <div className="flex justify-end gap-3">
+      <div className="barra-acciones flex justify-end gap-3">
         <Button variant="outline" size="lg" onClick={() => navigate('/liquidaciones?tab=prima')} disabled={guardando}>
           Cancelar
         </Button>

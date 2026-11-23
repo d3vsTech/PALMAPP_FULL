@@ -373,7 +373,7 @@ export function PromediosTab() {
 
   return (
     <TabLoadingGate loading={loading} message="Cargando promedios…">
-    <Card className="bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-sm border-border/50">
+    <Card className="overflow-hidden bg-gradient-to-br from-card/60 to-card/40 backdrop-blur-sm border-border/50">
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>

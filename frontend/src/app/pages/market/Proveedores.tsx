@@ -129,7 +129,7 @@ export default function Proveedores() {
   const categorias = ['todos', ...new Set(proveedoresData.map((p) => p.categoria))];
 
   // Filtrar proveedores
-  let proveedoresFiltrados = proveedoresData.filter((proveedor) => {
+  const proveedoresFiltrados = proveedoresData.filter((proveedor) => {
     const coincideBusqueda =
       proveedor.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
       proveedor.descripcion.toLowerCase().includes(busqueda.toLowerCase()) ||

@@ -376,7 +376,7 @@ export default function TabPeriodosLiquidacion({ tipo }: { tipo: TipoTab }) {
             </CardContent>
           </Card>
         ) : periodosFiltrados.length > 0 ? (
-          <Card className="border-border">
+          <Card className="overflow-hidden border-border">
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <table className="w-full">

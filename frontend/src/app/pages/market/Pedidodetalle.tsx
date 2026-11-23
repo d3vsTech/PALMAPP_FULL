@@ -228,7 +228,7 @@ export default function PedidoDetalle() {
           )}
 
           {/* Productos */}
-          <Card className="border-border">
+          <Card className="overflow-hidden border-border">
             <CardContent className="p-6">
               <h2 className="text-xl font-bold text-foreground mb-4">Productos</h2>
 

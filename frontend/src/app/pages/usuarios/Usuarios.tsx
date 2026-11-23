@@ -190,7 +190,7 @@ export default function Usuarios() {
             <Loader2 className="w-5 h-5 animate-spin" /> Cargando usuarios...
           </div>
         ) : usuariosFiltrados.length > 0 ? (
-          <Card className="border-border">
+          <Card className="overflow-hidden border-border">
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <table className="w-full">

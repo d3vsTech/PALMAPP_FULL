@@ -337,7 +337,7 @@ export default function AbonosPrestamo() {
       </div>
 
       {/* Tabla de pagos */}
-      <Card className="border-border">
+      <Card className="overflow-hidden border-border">
         <CardHeader className="pb-0">
           <CardTitle className="text-base">Historial de pagos</CardTitle>
         </CardHeader>

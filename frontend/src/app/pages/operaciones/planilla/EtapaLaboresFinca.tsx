@@ -53,9 +53,9 @@ export function EtapaLaboresFinca({
   );
 
   return (
-    <Card className="gap-4">
+    <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle>Labores de finca</CardTitle>
             <p className="text-sm text-muted-foreground">
@@ -64,11 +64,11 @@ export function EtapaLaboresFinca({
           </div>
           <Button
             onClick={agregarAuxiliar}
-            className="gap-2"
+            className="gap-2 self-end sm:self-auto"
             disabled={auxiliarEnEdicion !== null}
           >
             <Plus className="h-4 w-4" />
-            Agregar Labor
+            Agregar labor
           </Button>
         </div>
       </CardHeader>
@@ -76,8 +76,8 @@ export function EtapaLaboresFinca({
         {/* Formulario de edición */}
         {auxiliarEnEdicion && (
           <div ref={setFormRef('auxiliar')} className="scroll-mt-24">
-          <Card className="border-border border-2 border-primary/50">
-            <CardContent className="pt-6 space-y-4">
+          <Card className="border-primary/40 bg-muted/40">
+            <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Colaboradores</Label>
@@ -195,7 +195,7 @@ export function EtapaLaboresFinca({
             ? `${personaSel.nombres} ${personaSel.apellidos}`.trim()
             : trabajo.nombre || 'Sin colaborador';
           return (
-            <Card key={trabajo.id} className="border-border hover:border-primary/30 transition-colors">
+            <Card key={trabajo.id}>
               <CardContent className="p-4">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div className="min-w-0 flex-1 basis-full md:basis-0">
@@ -254,9 +254,9 @@ export function EtapaLaboresFinca({
         })}
 
         {trabajosAuxiliares.length === 0 && !auxiliarEnEdicion && (
-          <div className="text-center py-12 text-muted-foreground">
+          <div className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
             <p>No hay registros de labores de finca</p>
-            <p className="text-sm">Haz clic en "Agregar Labor" para crear uno</p>
+            <p className="text-sm">Haz clic en "Agregar labor" para crear uno</p>
           </div>
         )}
       </CardContent>

@@ -113,16 +113,16 @@ export function EtapaFinalizacion({
   const hayFilas = ausentes.length > 0 || previas.length > 0;
 
   return (
-    <Card className="gap-4">
+    <Card className="overflow-hidden">
       <CardHeader>
         <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-soft text-primary">
-            <ClipboardList className="h-5 w-5" strokeWidth={2} />
-          </span>
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft">
+            <ClipboardList className="h-4 w-4 text-primary" strokeWidth={2} />
+          </div>
           <div>
             <CardTitle>Finalización</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Observaciones y ausentes
+              Observaciones y novedades
             </p>
           </div>
         </div>
@@ -140,7 +140,12 @@ export function EtapaFinalizacion({
         </div>
 
         <div className="space-y-4">
-          <Label>Novedades</Label>
+          <div>
+            <h3>Novedades del día</h3>
+            <p className="text-sm text-muted-foreground">
+              Incapacidades, permisos, licencias o ausencias de los colaboradores
+            </p>
+          </div>
           {!modoLectura && (
             <>
               <div className="grid gap-4 md:grid-cols-2">
@@ -187,7 +192,7 @@ export function EtapaFinalizacion({
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="motivoAusente">Motivo</Label>
+                  <Label htmlFor="motivoAusente">Novedad</Label>
                   <Select
                     value={motivoAusenteSeleccionado}
                     onValueChange={(value) => {
@@ -198,7 +203,7 @@ export function EtapaFinalizacion({
                     }}
                   >
                     <SelectTrigger id="motivoAusente">
-                      <SelectValue placeholder="Seleccionar motivo" />
+                      <SelectValue placeholder="Seleccionar novedad" />
                     </SelectTrigger>
                     <SelectContent>
                       {motivosLista.map((motivo) => (

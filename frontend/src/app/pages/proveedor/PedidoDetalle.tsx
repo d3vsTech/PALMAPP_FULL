@@ -366,7 +366,7 @@ export default function PedidoDetalleProveedor() {
               )}
 
               {/* Productos */}
-              <Card>
+              <Card className="overflow-hidden">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Package className="h-5 w-5" />

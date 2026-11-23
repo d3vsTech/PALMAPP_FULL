@@ -1756,7 +1756,7 @@ export default function NominaDetalle() {
             </p>
           </div>
 
-          <Card className="border-border">
+          <Card className="overflow-hidden border-border">
             <CardContent className="p-0">
               {empleadosMostrar.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">

@@ -359,7 +359,7 @@ export default function CargaHistoricoVacaciones() {
           ) : (
             <>
               {/* Períodos de causación */}
-              <Card className="border-border">
+              <Card className="overflow-hidden border-border">
                 <div className="border-b border-border bg-muted/20 px-5 py-3">
                   <p className="text-sm font-semibold">
                     Períodos de {detalle.empleado.nombre_completo}

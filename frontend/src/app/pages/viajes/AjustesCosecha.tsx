@@ -195,7 +195,7 @@ export default function AjustesCosecha() {
           </CardContent>
         </Card>
       ) : (
-        <Card className="border-border">
+        <Card className="overflow-hidden border-border">
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

@@ -605,7 +605,7 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
 
       {/* ── PASO 2: Seleccionar colaboradores ── */}
       {paso === 2 && (
-        <Card className="border-border">
+        <Card className="overflow-hidden border-border">
           <CardContent className="p-6 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-3">
@@ -821,7 +821,7 @@ export default function PeriodoLiquidacionDetalle({ tipo }: { tipo: TipoPeriodoD
       )}
 
       {/* Navegación */}
-      <div className="flex justify-between">
+      <div className="barra-acciones flex justify-between">
         <Button variant="outline" onClick={paso === 1 ? () => navigate(txt.rutaTab) : retroceder} disabled={avanzando || confirmando} className="gap-2">
           <ArrowLeft className="h-4 w-4" />
           {paso === 1 ? 'Cancelar' : 'Anterior'}

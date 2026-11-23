@@ -1314,7 +1314,7 @@ export default function NuevaNominaWizard() {
         })}
       </div>
 
-      <Card className="border-border">
+      <Card className="overflow-hidden border-border">
         <CardContent className="p-8">
           {/* Paso 1: Información del período */}
           {pasoActual === 1 && (
@@ -1510,7 +1510,7 @@ export default function NuevaNominaWizard() {
                       ({colaboradoresAgregados.length})
                     </span>
                   </p>
-                  <Card className="border-border">
+                  <Card className="overflow-hidden border-border">
                     <CardContent className="p-0">
                       <div className="overflow-x-auto">
                         <table className="w-full">
@@ -1648,7 +1648,7 @@ export default function NuevaNominaWizard() {
                     Nómina
                   </Badge>
                 </div>
-                <Card className="border-border">
+                <Card className="overflow-hidden border-border">
                   <CardContent className="p-0">
                     {cargandoEmpleados ? (
                       <div className="flex items-center justify-center py-12 gap-2 text-muted-foreground">
@@ -1863,7 +1863,7 @@ export default function NuevaNominaWizard() {
                   )}
                 </div>
 
-                <Card className="border-border">
+                <Card className="overflow-hidden border-border">
                   <CardContent className="p-0">
                     {grupos.length === 0 ? (
                       <div className="text-center py-8 text-sm text-muted-foreground">
@@ -2922,7 +2922,7 @@ export default function NuevaNominaWizard() {
       </Card>
 
       {/* Botones de navegación */}
-      <div className="flex items-center justify-between">
+      <div className="barra-acciones flex items-center justify-between">
         <Button
           variant="outline"
           onClick={handleAtras}

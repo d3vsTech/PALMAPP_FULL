@@ -246,8 +246,6 @@ export default function NuevoPredioWizard() {
     }
   }, [mostrandoFormPalmas]);
 
-  // ── Panel resumen: en edición usa API; en creación usa estado local ────────
-  const [resumen, setResumen] = useState<any>(null);
 
   // ── Departamentos: hidratación instantánea desde sessionStorage ───────────
   // El catálogo real llega luego por wizard-init.
@@ -327,14 +325,6 @@ export default function NuevoPredioWizard() {
       if (raw) setSemillasCatalogo(JSON.parse(raw));
     } catch { /* ignorar */ }
   }, []);
-
-  // ── §1.6 Refrescar panel (solo edición) ────────────────────────────────────
-  const refrescarResumen = async (predioId: string | number) => {
-    try {
-      const r = await prediosApi.resumen(Number(predioId));
-      setResumen(r.data);
-    } catch { /* silent */ }
-  };
 
   // ── Polling tolerante de batch (§4.7) con barra de progreso suavizada ─────
   // Backend reporta `progress` típicamente binario (0 ó 100, porque la cola
@@ -497,10 +487,6 @@ export default function NuevoPredioWizard() {
         });
         setLineas(todasLineas);
 
-        // 6) Panel resumen (solo edición)
-        if (editId) {
-          refrescarResumen(editId).catch(() => { /* silent */ });
-        }
       })
       .catch(err => {
         if (cancelled) return;
@@ -567,7 +553,6 @@ export default function NuevoPredioWizard() {
         setLotes(prev => [...prev, { ...lote, id: String(realId) }]);
         setShowFormLote(false);
         toast.success('Lote creado');
-        await refrescarResumen(editId);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Error al crear el lote');
       }
@@ -586,7 +571,6 @@ export default function NuevoPredioWizard() {
         if (datos.semillasIds && datos.semillasIds.length > 0) body.semillas_ids = datos.semillasIds;
         await lotesApi.editar(Number(id), body);
         toast.success('Lote actualizado');
-        await refrescarResumen(editId);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Error al actualizar lote');
         return;
@@ -600,7 +584,6 @@ export default function NuevoPredioWizard() {
       try {
         await lotesApi.eliminar(Number(id));
         toast.success('Lote eliminado');
-        await refrescarResumen(editId);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Error al eliminar lote');
         return;
@@ -623,7 +606,6 @@ export default function NuevoPredioWizard() {
         setSublotes(prev => [...prev, { id: String(realId), nombre, loteId, cantidadPalmas: 0 }]);
         setShowFormSublote(null);
         toast.success('Sublote creado');
-        await refrescarResumen(editId);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Error al crear el sublote');
       }
@@ -638,7 +620,6 @@ export default function NuevoPredioWizard() {
       try {
         await sublotesApi.editar(Number(id), { nombre });
         toast.success('Sublote actualizado');
-        await refrescarResumen(editId);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Error al actualizar sublote');
         return;
@@ -652,7 +633,6 @@ export default function NuevoPredioWizard() {
       try {
         await sublotesApi.eliminar(Number(id));
         toast.success('Sublote eliminado');
-        await refrescarResumen(editId);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Error al eliminar sublote');
         return;
@@ -684,7 +664,6 @@ export default function NuevoPredioWizard() {
             setSublotes(prev => prev.map(s =>
               s.id === pendienteEliminar.subloteId ? { ...s, cantidadPalmas: Math.max(0, s.cantidadPalmas - 1) } : s
             ));
-            if (editId) refrescarResumen(editId);
             toast.success('Palma eliminada');
           } catch (e) {
             toast.error(e instanceof Error ? e.message : 'Error al eliminar palma');
@@ -793,7 +772,6 @@ export default function NuevoPredioWizard() {
           } else {
             toast.success(res.message ?? 'Línea creada');
           }
-          await refrescarResumen(editId);
         } catch (err) {
           toast.error(err instanceof Error ? err.message : 'Error');
         }
@@ -807,7 +785,6 @@ export default function NuevoPredioWizard() {
         // §5.5 DELETE /lineas/{id}
         await lineasApi.eliminar(Number(id));
         toast.success('Línea eliminada');
-        await refrescarResumen(editId);
       } catch (err) { toast.error(err instanceof Error ? err.message : 'Error'); return; }
     }
     setLineas(prev => prev.filter(ln => ln.id !== id));
@@ -953,7 +930,6 @@ export default function NuevoPredioWizard() {
         toast.success(`${aCrear.toLocaleString('es-CO')} palmas creadas`);
       }
 
-      if (editId) await refrescarResumen(editId);
       if (lineaId) {
         setWizardPag(prev => { const n = { ...prev }; delete n[`linea_${lineaId}`]; return n; });
         // Refrescar palmas de la línea afectada para que se vean inmediatamente
@@ -1094,7 +1070,6 @@ export default function NuevoPredioWizard() {
             sublotesPendientes.forEach(({ sub }) => { delete n[sub.id]; });
             return n;
           });
-          await refrescarResumen(editId);
         }
 
         if (fallosBatch === 0) {
@@ -1104,7 +1079,6 @@ export default function NuevoPredioWizard() {
         }
         // Refresco final para reflejar todo lo persistido y dejar al usuario
         // en la misma etapa del wizard.
-        await refrescarResumen(editId);
 
         // Si vino del botón "Finalizar" y todo salió bien, salimos al listado.
         if (redirigir && fallosBatch === 0) {
@@ -1251,189 +1225,6 @@ export default function NuevoPredioWizard() {
   // que cualquier cambio del wizard (crear/editar/eliminar/agregar palmas)
   // se refleje al instante sin esperar al cache del backend.
   const PanelResumen = () => {
-    if (false as boolean) {
-      // Dead code (era la rama que leía del backend resumen). Se conserva
-      // para no romper el cierre del componente; el render real está abajo.
-      const pr: any = resumen?.predio ?? {};
-      const tg: any = resumen?.totales_generales ?? {};
-      const ls: any[] = resumen?.lotes ?? [];
-      return (
-        <div className="space-y-6">
-          {/* Progreso */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Progreso</span>
-              <span className="font-semibold">{etapa} de {ETAPAS.length}</span>
-            </div>
-            <div className="h-2 bg-muted rounded-full overflow-hidden">
-              <div className="h-full bg-primary transition duration-300"
-                style={{ width: `${(etapa / ETAPAS.length) * 100}%` }} />
-            </div>
-          </div>
-
-          <div className="h-px bg-border" />
-
-          {/* Predio */}
-          <div className="space-y-2">
-            <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Predio</h4>
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="text-sm">Nombre</span>
-                <span className="font-semibold text-sm">{pr.nombre}</span>
-              </div>
-              {pr.ubicacion && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm shrink-0">Ubicación</span>
-                  <span className="font-semibold text-sm ml-2 text-right break-words">{pr.ubicacion}</span>
-                </div>
-              )}
-              <div className="flex items-center justify-between">
-                <span className="text-sm">Hectáreas</span>
-                <span className="font-semibold text-sm">{Number(pr.hectareas_totales ?? 0).toFixed(1)} ha</span>
-              </div>
-              <div className="flex items-center justify-between pt-1 border-t border-border/50">
-                <span className="text-xs text-muted-foreground">Disponibles</span>
-                <span className="font-semibold text-xs text-accent">{Number(pr.hectareas_disponibles ?? 0).toFixed(2)} ha</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="h-px bg-border" />
-
-          {/* Resumen detallado */}
-          <div className="space-y-3">
-            <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Resumen Detallado</h4>
-            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
-              {ls.map((l: any) => (
-                <div key={l.id} className="border border-border rounded-lg p-3 space-y-2 bg-card">
-                  <div className="flex items-center justify-between pb-2 border-b border-border/50">
-                    <span className="font-semibold text-sm">{l.nombre}</span>
-                    <span className="text-xs text-muted-foreground">{Number(l.hectareas_sembradas ?? 0).toFixed(1)} ha</span>
-                  </div>
-                  {(l.sublotes ?? []).length > 0 ? (
-                    <div className="space-y-1">
-                      {(l.sublotes ?? []).map((s: any) => {
-                        // Palmas: backend a veces devuelve s.totales.palmas en 0.
-                        // Fallback: cantidad_palmas del propio sublote o el sublote local.
-                        const palmasSublote =
-                          s.totales?.palmas ??
-                          s.cantidad_palmas ??
-                          sublotes.find(loc => loc.id === String(s.id))?.cantidadPalmas ??
-                          0;
-                        const linCount = s.totales?.lineas ?? lineas.filter(ln => ln.subloteId === String(s.id)).length;
-                        return (
-                          <div key={s.id} className="flex items-center justify-between py-1 text-xs">
-                            <span className="text-left">{s.nombre}</span>
-                            <div className="flex items-center gap-3 text-xs">
-                              {linCount > 0 && (
-                                <span className="text-muted-foreground">{linCount} líneas</span>
-                              )}
-                              <span className="text-success font-semibold">{Number(palmasSublote).toLocaleString('es-CO')} palmas</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground italic">Sin sublotes</p>
-                  )}
-                  {(() => {
-                    // Totales del lote: prioriza backend, sino suma localmente
-                    const subCount   = l.totales?.sublotes ?? (l.sublotes ?? []).length;
-                    const lineCount  = l.totales?.lineas ?? (l.sublotes ?? []).reduce(
-                      (acc: number, s: any) => acc + (s.totales?.lineas ?? lineas.filter(ln => ln.subloteId === String(s.id)).length),
-                      0,
-                    );
-                    const palmasLote = l.totales?.palmas ?? l.cantidad_palmas ?? (l.sublotes ?? []).reduce(
-                      (acc: number, s: any) => acc + Number(
-                        s.totales?.palmas ??
-                        s.cantidad_palmas ??
-                        sublotes.find(loc => loc.id === String(s.id))?.cantidadPalmas ??
-                        0,
-                      ),
-                      0,
-                    );
-                    return (
-                      <div className="flex items-center justify-between pt-2 border-t border-border/50 text-xs">
-                        <span className="font-medium">Totales del lote</span>
-                        <div className="flex items-center gap-3">
-                          <span className="text-muted-foreground">{subCount} sublotes</span>
-                          {lineCount > 0 && (
-                            <span className="text-muted-foreground">{lineCount} líneas</span>
-                          )}
-                          <span className="text-success font-semibold">{Number(palmasLote).toLocaleString('es-CO')} palmas</span>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              ))}
-
-              {ls.length > 0 && (() => {
-                // Totales generales: prioriza backend, sino calcula desde los lotes.
-                const lotesTotal    = tg.lotes    ?? ls.length;
-                const sublotesTotal = tg.sublotes ?? ls.reduce(
-                  (acc: number, l: any) => acc + (l.totales?.sublotes ?? (l.sublotes ?? []).length),
-                  0,
-                );
-                const lineasTotal   = tg.lineas   ?? ls.reduce(
-                  (acc: number, l: any) => acc + (l.sublotes ?? []).reduce(
-                    (a2: number, s: any) => a2 + (s.totales?.lineas ?? lineas.filter(ln => ln.subloteId === String(s.id)).length),
-                    0,
-                  ),
-                  0,
-                );
-                const palmasTotal   = tg.palmas ?? ls.reduce(
-                  (acc: number, l: any) => acc + (l.totales?.palmas ?? l.cantidad_palmas ?? (l.sublotes ?? []).reduce(
-                    (a2: number, s: any) => a2 + Number(
-                      s.totales?.palmas ??
-                      s.cantidad_palmas ??
-                      sublotes.find(loc => loc.id === String(s.id))?.cantidadPalmas ??
-                      0,
-                    ),
-                    0,
-                  )),
-                  0,
-                );
-                return (
-                  <div className="border-2 border-primary/30 rounded-lg p-3 bg-primary/5 space-y-2">
-                    <h5 className="font-semibold text-sm flex items-center gap-2">
-                      <Check className="h-4 w-4 text-primary" /> Totales Generales
-                    </h5>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                      <div className="flex items-center justify-between p-2 rounded bg-background/50">
-                        <span className="text-muted-foreground">Lotes</span>
-                        <span className="font-bold">{lotesTotal}</span>
-                      </div>
-                      <div className="flex items-center justify-between p-2 rounded bg-background/50">
-                        <span className="text-muted-foreground">Sublotes</span>
-                        <span className="font-bold">{sublotesTotal}</span>
-                      </div>
-                      <div className="flex items-center justify-between p-2 rounded bg-background/50">
-                        <span className="text-muted-foreground">Líneas</span>
-                        <span className="font-bold">{lineasTotal}</span>
-                      </div>
-                      <div className="flex items-center justify-between p-2 rounded bg-success/10">
-                        <span className="text-muted-foreground">Palmas</span>
-                        <span className="font-bold text-success">{Number(palmasTotal).toLocaleString('es-CO')}</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {ls.length === 0 && (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Grid3x3 className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">Aún no hay lotes registrados</p>
-                  <p className="text-xs">Agrega tu primer lote en el paso actual</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      );
-    }
 
     // Modo creación: estado local
     const totalPalmasCreacion = sublotes.reduce((sum, s) => {
@@ -1617,10 +1408,16 @@ export default function NuevoPredioWizard() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/plantacion')} className="rounded-xl">
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Volver"
+              onClick={() => navigate('/plantacion')}
+              className="rounded-xl group-data-[barra-volver]/shell:max-md:hidden"
+            >
               <ArrowLeft className="h-5 w-5" />
             </Button>
-            <h1 className="text-3xl sm:text-4xl font-bold text-foreground">{editId ? 'Editar Plantación' : 'Crear Nueva Plantación'}</h1>
+            <h1>{editId ? 'Editar Plantación' : 'Crear Nueva Plantación'}</h1>
           </div>
           <p className="text-muted-foreground ml-14">Configura tu plantación paso a paso</p>
         </div>
@@ -1631,7 +1428,7 @@ export default function NuevoPredioWizard() {
 
           {/* Stepper horizontal — exacto al diseño del .zip */}
           <Card className="border-border">
-            <CardContent className="p-6">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
                 {ETAPAS.map((e, idx) => {
                   const completa = etapa > e.numero;
@@ -1639,7 +1436,8 @@ export default function NuevoPredioWizard() {
                   return (
                     <React.Fragment key={e.numero}>
                       {/* Círculo de etapa */}
-                      <button aria-label="Confirmar"
+                      <button
+                        aria-label={`Ir al paso ${e.numero}: ${e.nombre}`}
                         onClick={() => (editId || completa || activa) && setEtapa(e.numero)}
                         className={`flex shrink-0 flex-col items-center gap-2 ${
                           activa || completa || editId ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
@@ -1647,7 +1445,7 @@ export default function NuevoPredioWizard() {
                         disabled={!editId && !activa && !completa}
                       >
                         <div
-                          className={`flex h-9 w-9 items-center justify-center rounded-full border-2 transition md:h-12 md:w-12 ${
+                          className={`flex h-9 w-9 items-center justify-center rounded-full border-2 transition sm:h-12 sm:w-12 ${
                             completa
                               ? 'bg-primary border-primary text-white'
                               : activa
@@ -1661,7 +1459,7 @@ export default function NuevoPredioWizard() {
                             <span className="font-bold">{e.numero}</span>
                           )}
                         </div>
-                        <div className="hidden text-center md:block">
+                        <div className={`text-center ${activa ? '' : 'hidden sm:block'}`}>
                           <div
                             className={`text-sm font-semibold whitespace-nowrap ${
                               activa || completa ? 'text-foreground' : 'text-muted-foreground'
@@ -1686,10 +1484,6 @@ export default function NuevoPredioWizard() {
                   );
                 })}
               </div>
-              {/* Reemplaza a los rotulos, escondidos en celular. */}
-              <p className="mt-3 text-center text-[13px] font-semibold text-foreground md:hidden">
-                Paso {etapa} de {ETAPAS.length}: {ETAPAS.find((x) => x.numero === etapa)?.nombre}
-              </p>
             </CardContent>
           </Card>
 
@@ -2515,7 +2309,7 @@ export default function NuevoPredioWizard() {
           )}
 
           {/* ── Navegación ─────────────────────────────────────────── */}
-          <div className="flex items-center justify-between">
+          <div className="barra-acciones flex items-center justify-between">
             <Button variant="outline" onClick={() => setEtapa(e => Math.max(1, e - 1))}
               disabled={etapa === 1} className="gap-2">
               <ArrowLeft className="h-4 w-4" /> Anterior
@@ -2550,8 +2344,7 @@ export default function NuevoPredioWizard() {
               ) : (
                 // En modo creación: el botón final crea la plantación.
                 !editId && (
-                  <Button onClick={() => guardarTodo(false)} disabled={guardando}
-                    className="gap-2 bg-success hover:bg-success/90">
+                  <Button onClick={() => guardarTodo(false)} disabled={guardando} className="gap-2">
                     {guardando
                       ? <><Loader2 className="h-4 w-4 animate-spin" />Guardando...</>
                       : <><Save className="h-4 w-4" />Guardar Plantación</>}

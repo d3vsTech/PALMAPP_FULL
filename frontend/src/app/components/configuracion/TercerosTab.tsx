@@ -339,7 +339,7 @@ export function TercerosTab() {
     <>
       {ConfirmDeleteDialog}
       <TabLoadingGate loading={loading} message="Cargando terceros…">
-      <Card className="border-border">
+      <Card className="overflow-hidden border-border">
         <CardHeader className="border-b">
           <div className="flex items-center justify-between">
             <div>

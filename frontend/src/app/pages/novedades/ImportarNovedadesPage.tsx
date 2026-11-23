@@ -356,7 +356,7 @@ export default function ImportarNovedadesPage() {
                 El archivo está listo: se van a crear {resumen.validas} novedades.
               </p>
             )}
-            <div className="flex flex-wrap justify-end gap-3">
+            <div className="barra-acciones flex flex-wrap justify-end gap-3">
               <Button variant="outline" onClick={() => navigate('/novedades')} disabled={cargando}>
                 Cancelar
               </Button>

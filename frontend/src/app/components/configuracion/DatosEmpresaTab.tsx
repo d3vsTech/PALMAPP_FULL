@@ -375,7 +375,7 @@ export function DatosEmpresaTab() {
     <TabLoadingGate loading={loading} message="Cargando datos de empresa…">
     <div className="space-y-6">
       {/* Logo de la finca */}
-      <Card className="border-border">
+      <Card className="overflow-hidden border-border">
         <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
           <CardTitle>Logo de la Finca / Empresa</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">
@@ -448,7 +448,7 @@ export function DatosEmpresaTab() {
       </Card>
 
       {/* Información Legal */}
-      <Card className="border-border">
+      <Card className="overflow-hidden border-border">
         <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
           <CardTitle>Información Legal</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">Datos de identificación y tipo de persona</p>
@@ -591,7 +591,7 @@ export function DatosEmpresaTab() {
       </Card>
 
       {/* Datos de contacto */}
-      <Card className="border-border">
+      <Card className="overflow-hidden border-border">
         <CardHeader className="border-b bg-gradient-to-r from-muted/30 to-muted/10">
           <CardTitle>Datos de contacto</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">Dirección, teléfonos y correos electrónicos</p>

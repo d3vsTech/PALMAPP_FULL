@@ -71,15 +71,15 @@ export function TabCosecha({
                       <div className="flex justify-end">
                         <Button onClick={agregarCosecha} className="gap-2" disabled={cosechaEnEdicion !== null}>
                           <Plus className="h-4 w-4" />
-                          Agregar Cosecha
+                          Agregar cosecha
                         </Button>
                       </div>
 
                       {/* Formulario de edición */}
                       {cosechaEnEdicion && (
                         <div ref={setFormRef('cosecha')} className="scroll-mt-24">
-                        <Card className="border-border border-2 border-primary/50">
-                          <CardContent className="pt-6 space-y-4">
+                        <Card className="border-primary/40 bg-muted/40">
+                          <CardContent className="space-y-4">
                             <div className="grid gap-4 md:grid-cols-2">
                               <div className="space-y-2 md:col-span-2">
                                 <Label>Colaboradores</Label>
@@ -168,7 +168,7 @@ export function TabCosecha({
                                 </Select>
                               </div>
                               <div className="space-y-2">
-                                <Label htmlFor="tabcosecha-gajos-recogidos">Gajos Recogidos</Label>
+                                <Label htmlFor="tabcosecha-gajos-recogidos">Gajos recogidos</Label>
                                 <Input id="tabcosecha-gajos-recogidos"
                                   type="number" step="0.001"
                                   placeholder="0"
@@ -209,7 +209,7 @@ export function TabCosecha({
                         const lote = lotesData.find(l => l.id === trabajo.lote);
                         const sublote = sublotes.find(s => s.id === trabajo.sublote);
                         return (
-                          <Card key={trabajo.id} className="border-border hover:border-primary/30 transition-colors">
+                          <Card key={trabajo.id}>
                             <CardContent className="p-4">
                               <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 md:gap-4">
                                 {/* Colaboradores */}
@@ -240,7 +240,7 @@ export function TabCosecha({
                                 {/* Gajos */}
                                 <div className="order-5 w-20 shrink-0 text-right max-md:empty:hidden md:order-none md:w-20">
                                   <p className="text-xs text-muted-foreground">Gajos</p>
-                                  <p className="font-bold text-lg">{trabajo.gajosRecogidos}</p>
+                                  <p className="text-lg font-bold tabular-nums">{trabajo.gajosRecogidos}</p>
                                 </div>
 
                                 {/* Kilos. La columna se reserva siempre: si una fila la
@@ -249,7 +249,7 @@ export function TabCosecha({
                                   {trabajo.kilos > 0 && (
                                     <>
                                       <p className="text-xs text-muted-foreground">Kilos</p>
-                                      <p className="font-semibold">{trabajo.kilos}</p>
+                                      <p className="font-semibold tabular-nums">{trabajo.kilos}</p>
                                     </>
                                   )}
                                 </div>
@@ -281,9 +281,9 @@ export function TabCosecha({
                       })}
 
                       {trabajosCosecha.length === 0 && !cosechaEnEdicion && (
-                        <div className="text-center py-12 text-muted-foreground">
+                        <div className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
                           <p>No hay registros de cosecha</p>
-                          <p className="text-sm">Haz clic en "Agregar Cosecha" para crear uno</p>
+                          <p className="text-sm">Haz clic en "Agregar cosecha" para crear uno</p>
                         </div>
                       )}
     </>

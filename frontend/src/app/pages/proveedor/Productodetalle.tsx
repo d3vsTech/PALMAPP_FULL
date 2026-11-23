@@ -273,7 +273,7 @@ export default function ProductoDetalle() {
 
           {/* Galería */}
           {galeria.length > 0 && (
-            <Card>
+            <Card className="overflow-hidden">
               <CardHeader>
                 <CardTitle>Galería de Imágenes</CardTitle>
               </CardHeader>
@@ -302,7 +302,7 @@ export default function ProductoDetalle() {
         {/* Sidebar */}
         <div className="space-y-6">
           {/* Imagen principal */}
-          <Card>
+          <Card className="overflow-hidden">
             <CardHeader>
               <CardTitle>Imagen del Producto</CardTitle>
             </CardHeader>

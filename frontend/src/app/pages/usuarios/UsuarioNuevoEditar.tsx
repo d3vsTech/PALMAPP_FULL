@@ -179,7 +179,7 @@ export default function UsuarioNuevoEditar() {
           </CardContent>
         </Card>
 
-        <div className="flex justify-end gap-3 mt-6">
+        <div className="barra-acciones flex justify-end gap-3 mt-6">
           <Button type="button" variant="outline" onClick={() => navigate('/usuarios')} className="gap-2">
             <X className="h-4 w-4" /> Cancelar
           </Button>

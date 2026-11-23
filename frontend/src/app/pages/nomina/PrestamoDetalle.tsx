@@ -578,7 +578,7 @@ Descarga el PDF: ${res.data.url}`;
       />
 
       {/* Calendario de cuotas */}
-      <Card className="border-border">
+      <Card className="overflow-hidden border-border">
         <CardHeader>
           <CardTitle>Calendario de cuotas</CardTitle>
           <p className="text-sm text-muted-foreground">

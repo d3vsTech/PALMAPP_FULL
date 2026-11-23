@@ -491,7 +491,7 @@ export default function Market() {
                 <Card
                   key={producto.id}
                   id={`prod-${producto.id}`}
-                  className="glass-subtle border-border hover:shadow-lg transition duration-300 cursor-pointer scroll-mt-24"
+                  className="overflow-hidden glass-subtle border-border hover:shadow-lg transition duration-300 cursor-pointer scroll-mt-24"
                   onClick={() => verProducto(producto.id)}
                 >
                   <CardContent className="p-6">

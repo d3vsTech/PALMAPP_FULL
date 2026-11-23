@@ -71,15 +71,15 @@ export function TabFertilizacion({
                       <div className="flex justify-end">
                         <Button onClick={agregarFertilizacion} className="gap-2" disabled={fertilizacionEnEdicion !== null}>
                           <Plus className="h-4 w-4" />
-                          Agregar Fertilización
+                          Agregar fertilización
                         </Button>
                       </div>
 
                       {/* Formulario de edición */}
                       {fertilizacionEnEdicion && (
                         <div ref={setFormRef('fertilizacion')} className="scroll-mt-24">
-                        <Card className="border-border border-2 border-primary/50">
-                          <CardContent className="pt-6 space-y-4">
+                        <Card className="border-primary/40 bg-muted/40">
+                          <CardContent className="space-y-4">
                             <div className="grid gap-4 md:grid-cols-2">
                               <div className="space-y-2 md:col-span-2">
                                 <Label>Colaboradores</Label>
@@ -180,7 +180,7 @@ export function TabFertilizacion({
                                 </Select>
                               </div>
                               <div className="space-y-2">
-                                <Label htmlFor="tabfertili-numero-de-palmas">Número de Palmas</Label>
+                                <Label htmlFor="tabfertili-numero-de-palmas">Número de palmas</Label>
                                 <Input id="tabfertili-numero-de-palmas"
                                   type="number" step="0.001"
                                   placeholder="0"
@@ -189,7 +189,7 @@ export function TabFertilizacion({
                                 />
                               </div>
                               <div className="space-y-2">
-                                <Label>Tipo de Fertilizante</Label>
+                                <Label>Tipo de fertilizante</Label>
                                 <Select
                                   value={fertilizacionEnEdicion.tipoFertilizante}
                                   onValueChange={(value) => setFertilizacionEnEdicion({ ...fertilizacionEnEdicion, tipoFertilizante: value, otroFertilizante: value !== 'Otro' ? '' : fertilizacionEnEdicion.otroFertilizante })}
@@ -255,7 +255,7 @@ export function TabFertilizacion({
                         const sublote = sublotes.find(s => s.id === trabajo.sublote);
                         const fertTipo = trabajo.tipoFertilizante === 'Otro' ? trabajo.otroFertilizante : trabajo.tipoFertilizante;
                         return (
-                          <Card key={trabajo.id} className="border-border hover:border-primary/30 transition-colors">
+                          <Card key={trabajo.id}>
                             <CardContent className="p-4">
                               <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 md:gap-4">
                                 <div className="order-1 min-w-0 flex-1 md:order-none">
@@ -281,7 +281,7 @@ export function TabFertilizacion({
                                 </div>
                                 <div className="order-5 w-20 shrink-0 text-right max-md:empty:hidden md:order-none md:w-20">
                                   <p className="text-xs text-muted-foreground">Palmas</p>
-                                  <p className="font-bold text-lg">{trabajo.palmas}</p>
+                                  <p className="text-lg font-bold tabular-nums">{trabajo.palmas}</p>
                                 </div>
                                 <div className="order-7 w-full shrink-0 md:order-none md:w-28 md:text-right">
                                   <p className="text-xs text-muted-foreground">Fertilizante</p>
@@ -314,9 +314,9 @@ export function TabFertilizacion({
                       })}
 
                       {trabajosFertilizacion.length === 0 && !fertilizacionEnEdicion && (
-                        <div className="text-center py-12 text-muted-foreground">
+                        <div className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
                           <p>No hay registros de fertilización</p>
-                          <p className="text-sm">Haz clic en "Agregar Fertilización" para crear uno</p>
+                          <p className="text-sm">Haz clic en "Agregar fertilización" para crear uno</p>
                         </div>
                       )}
     </>

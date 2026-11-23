@@ -225,7 +225,7 @@ export default function NuevaNovedadPage() {
         />
       )}
 
-      <div className="flex flex-wrap justify-between gap-3">
+      <div className="barra-acciones flex flex-wrap justify-between gap-3">
         <Button variant="outline" onClick={retroceder} disabled={guardando} className="gap-2">
           <ArrowLeft className="h-4 w-4" />{paso === 1 ? 'Cancelar' : 'Anterior'}
         </Button>

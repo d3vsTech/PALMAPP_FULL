@@ -162,7 +162,7 @@ export default function ColaboradorDetail() {
       />
 
       {/* Card principal */}
-      <Card className="gap-4">
+      <Card className="overflow-hidden gap-4">
         <CardContent className="p-6">
           <div className="flex items-start gap-6">
             {colaborador.avatar_url ? (

@@ -316,7 +316,8 @@ export default function UsuarioPermisos() {
   const togglePermiso = (permisoId: string) => {
     setActivos(prev => {
       const n = new Set(prev);
-      n.has(permisoId) ? n.delete(permisoId) : n.add(permisoId);
+      if (n.has(permisoId)) n.delete(permisoId);
+      else n.add(permisoId);
       return n;
     });
   };
@@ -327,7 +328,8 @@ export default function UsuarioPermisos() {
     const todosActivos = ids.every(pid => activos.has(pid));
     setActivos(prev => {
       const n = new Set(prev);
-      todosActivos ? ids.forEach(pid => n.delete(pid)) : ids.forEach(pid => n.add(pid));
+      if (todosActivos) ids.forEach(pid => n.delete(pid));
+      else ids.forEach(pid => n.add(pid));
       return n;
     });
   };
@@ -514,7 +516,7 @@ export default function UsuarioPermisos() {
       </div>
 
       {/* Botones de acción */}
-      <div className="flex justify-end gap-3 pt-6 border-t">
+      <div className="barra-acciones flex justify-end gap-3 pt-6 border-t">
         <Button variant="outline" onClick={() => navigate(`/usuarios/${id}`)}>
           Cancelar
         </Button>

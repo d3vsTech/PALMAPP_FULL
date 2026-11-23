@@ -16,7 +16,7 @@ import { Checkbox } from '../../components/ui/checkbox';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
-import { AlertCircle, ArrowLeft, Save, Sprout, Loader2 } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Palmtree, Save, Sprout, Loader2 } from 'lucide-react';
 import { lotesApi, prediosApi } from '../../../api/plantacion';
 import IlustracionPalma from '../../components/common/IlustracionPalma';
 import { toast } from 'sonner';
@@ -128,7 +128,7 @@ export default function CrearEditarLote() {
         </Button>
         <div className="flex items-center gap-4">
           <div className="flex h-16 w-16 items-center justify-center rounded-xl border border-success/30 bg-success-soft shadow-sm">
-            <Sprout className="h-8 w-8 text-success" strokeWidth={2} />
+            <Palmtree className="h-8 w-8 text-success" strokeWidth={2} />
           </div>
           <div>
             <h1>
@@ -144,13 +144,13 @@ export default function CrearEditarLote() {
       </div>
 
       <Card className="gap-4 border-border shadow-sm">
-        <CardHeader className="border-b bg-muted/60 pb-6">
+        <CardHeader className="rounded-t-xl border-b bg-muted/60 pb-6">
           <CardTitle className="text-2xl">Información del lote</CardTitle>
           <CardDescription>
             Los campos marcados con <span className="text-destructive font-semibold">*</span> son obligatorios
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-8">
+        <CardContent className="p-6">
           <div className="space-y-8">
 
             {/* Predio */}

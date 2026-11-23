@@ -387,7 +387,7 @@ export default function EditarProducto() {
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Imagen del producto */}
-            <Card>
+            <Card className="overflow-hidden">
               <CardHeader>
                 <CardTitle>Imagen del Producto</CardTitle>
                 <p className="text-sm text-muted-foreground">Opcional</p>
@@ -456,7 +456,7 @@ export default function EditarProducto() {
         {/* Acciones al pie del formulario. Antes vivían en una card lateral,
             a media altura: quien llenaba el formulario hacia abajo terminaba
             con el botón fuera de vista. */}
-        <div className="flex flex-wrap justify-end gap-3">
+        <div className="barra-acciones flex flex-wrap justify-end gap-3">
           <Button
             type="button"
             variant="outline"

@@ -776,7 +776,7 @@ export default function NuevaLiquidacionFinal() {
               </div>
             )}
 
-            <div className="flex flex-wrap justify-end gap-3 border-t border-border pt-4">
+            <div className="barra-acciones flex flex-wrap justify-end gap-3 border-t border-border pt-4">
               {esSimulacion ? (
                 <Button onClick={() => void descargarSimulacion()} disabled={descargando} className="gap-2">
                   {descargando ? (

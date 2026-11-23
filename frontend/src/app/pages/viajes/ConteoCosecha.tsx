@@ -1473,7 +1473,7 @@ export default function ConteoCosecha() {
             )}
 
             {/* Botones de navegación */}
-            <div className="flex items-center justify-between pt-4">
+            <div className="barra-acciones flex items-center justify-between pt-4">
               <Button variant="outline" onClick={etapaAnterior} disabled={etapaActual === 1} className="gap-2">
                 <ArrowLeft className="h-4 w-4" />
                 Anterior

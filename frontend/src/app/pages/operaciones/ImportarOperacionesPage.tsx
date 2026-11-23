@@ -239,13 +239,14 @@ export default function ImportarOperacionesPage() {
             <TablaFilasCargue filas={analisis.filas} esCosechas={tipo === 'cosechas'} />
           </PasoCard>
 
-          <div className="flex flex-wrap items-center justify-end gap-3">
-            {conError > 0 && (
-              <p className="text-sm text-destructive">
-                Corrige las {conError} fila{conError === 1 ? '' : 's'} con error. Si una falla, no
-                entra ninguna.
-              </p>
-            )}
+          {conError > 0 && (
+            <p className="text-sm text-destructive">
+              Corrige las {conError} fila{conError === 1 ? '' : 's'} con error. Si una falla, no
+              entra ninguna.
+            </p>
+          )}
+
+          <div className="barra-acciones flex flex-wrap items-center justify-end gap-3">
             <Button
               onClick={() => void cargue.importar(false)}
               disabled={!puedeImportar}

@@ -1032,7 +1032,7 @@ export default function NuevoColaboradorWizard() {
 
           {/* ── ETAPA 1: INFORMACIÓN PERSONAL + CONTACTO ── */}
           {etapaActual === 1 && (
-            <Card className="border-border">
+            <Card className="overflow-hidden border-border">
               <CardHeader>
                 <div className="flex items-center gap-3">
                   <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -1891,7 +1891,7 @@ export default function NuevoColaboradorWizard() {
           )}
 
           {/* Navegación */}
-          <div className="flex justify-between">
+          <div className="barra-acciones flex justify-between">
             <Button variant="outline" onClick={etapaAnterior} disabled={etapaActual === 1} className="gap-2">
               <ArrowLeft className="h-4 w-4" /> Anterior
             </Button>

@@ -203,7 +203,7 @@ export default function Colaboradores() {
             />
           </Card>
         ) : (
-          <Card className="gap-0">
+          <Card className="overflow-hidden gap-0">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-muted/60 text-[13px] text-muted-foreground">
