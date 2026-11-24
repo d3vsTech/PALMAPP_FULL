@@ -169,7 +169,7 @@ export default function AjustesCosecha() {
         backTo={vieneDeNomina ? undefined : '/viajes'}
         eyebrow={vieneDeNomina ? 'Nómina' : 'Viajes'}
         title="Ajustes de cosecha"
-        description="Cosechas con gajos pendientes desde hace 3 viajes o más. Decida qué hacer con ellos."
+        description="Cosechas con gajos pendientes desde hace 3 viajes o más. Decide qué hacer con ellos."
         actions={vieneDeNomina ? (
           <Button variant="outline" onClick={volverAlOrigen}>
             <ArrowLeft className="h-4 w-4" strokeWidth={2} />

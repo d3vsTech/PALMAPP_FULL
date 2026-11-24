@@ -10,9 +10,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
 import PageHeader from '../../components/common/PageHeader';
-import {
-  Save, X,
-} from 'lucide-react';
+import { Save } from 'lucide-react';
 import {
   viajesApi,
   empresasTransportadorasApi,
@@ -607,7 +605,6 @@ export default function NuevoEditarViaje() {
               variant="outline"
               onClick={() => navigate('/viajes')}
             >
-              <X className="h-4 w-4" strokeWidth={2} />
               Cancelar
             </Button>
             <Button type="submit" disabled={guardando}>

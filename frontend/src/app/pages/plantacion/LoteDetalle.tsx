@@ -30,7 +30,6 @@ import { lotesApi, sublotesApi, palmasApi, lineasApi } from '../../../api/planta
 import { toast } from 'sonner';
 import { useRefrescoAlVolver, useVengoDeGuardar, type EstadoNavegacion } from './refresco';
 import PageHeader from '../../components/common/PageHeader';
-import IlustracionPalma from '../../components/common/IlustracionPalma';
 
 const PER_PAGE = 50;
 
@@ -606,7 +605,6 @@ export default function LoteDetalle() {
         {sublotes.length === 0 ? (
           <Card className="border-dashed">
             <CardContent className="flex flex-col items-center justify-center py-12">
-              <IlustracionPalma variante="palma" className="mb-3" />
               <p className="mb-1 font-semibold">Todavía no hay sublotes</p>
               <p className="mb-4 max-w-md text-center text-sm text-muted-foreground">
                 Crea el primer sublote para organizar las líneas y palmas de este lote.

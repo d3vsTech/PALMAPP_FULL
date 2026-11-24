@@ -80,7 +80,7 @@ function SelectorEstadoFinal({
           onClick={() => onCambiar(op.valor)}
           className={`rounded-lg border p-3 text-left transition-colors ${
             estado === op.valor
-              ? 'border-primary bg-primary/5'
+              ? 'border-primary bg-primary-soft'
               : 'border-border hover:border-primary/40'
           }`}
         >

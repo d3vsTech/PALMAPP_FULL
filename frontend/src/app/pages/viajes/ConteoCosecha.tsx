@@ -924,22 +924,9 @@ export default function ConteoCosecha() {
                     donde el usuario decide si arrastra pendientes viejos o
                     los resuelve como clavija. */}
                 {ajustesPendientes > 0 && (
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '12px',
-                      borderRadius: '8px',
-                      border: '1px solid #fde68a',
-                      backgroundColor: '#fffbeb',
-                      padding: '10px 16px',
-                      fontSize: '14px',
-                      color: '#92400e',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <AlertTriangle style={{ width: '16px', height: '16px', flexShrink: 0, color: '#f59e0b' }} />
+                  <div className="flex flex-col gap-2 rounded-lg border border-warning/30 bg-warning-soft px-4 py-3 text-sm text-foreground sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2} />
                       <span>
                         {ajustesPendientes}{' '}
                         {ajustesPendientes === 1
@@ -949,26 +936,21 @@ export default function ConteoCosecha() {
                       </span>
                     </div>
                     <button
+                      type="button"
                       onClick={() => navigate('/viajes/ajustes-cosecha')}
-                      style={{
-                        flexShrink: 0,
-                        fontWeight: 500,
-                        color: '#b45309',
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        whiteSpace: 'nowrap',
-                      }}
+                      className="flex shrink-0 items-center gap-1 self-start pl-6 font-semibold text-warning hover:underline sm:self-auto sm:pl-0"
                     >
-                      Revisar →
+                      Revisar
+                      <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} />
                     </button>
                   </div>
                 )}
 
-                <div className="flex justify-end">
-                  <Button onClick={agregarCosecha}  disabled={!!cosechaEnEdicion}>
-                    <Plus className="h-4 w-4" />
-                    Agregar Cosecha
+                <div className="flex items-center justify-between gap-3">
+                  <h2>Cosechas del viaje</h2>
+                  <Button onClick={agregarCosecha} disabled={!!cosechaEnEdicion}>
+                    <Plus className="h-4 w-4" strokeWidth={2} />
+                    Agregar cosecha
                   </Button>
                 </div>
 
@@ -977,7 +959,7 @@ export default function ConteoCosecha() {
                   <div ref={formCosechaRef} className="scroll-mt-24">
                   <Card>
                     <CardHeader>
-                      <CardTitle>Cosecha</CardTitle>
+                      <CardTitle>Nueva cosecha</CardTitle>
                       <CardDescription>Elige la planilla y la cuadrilla; el resto se llena solo.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">
@@ -1098,7 +1080,7 @@ export default function ConteoCosecha() {
                                     ? (col.nombre_completo || `${col.nombres} ${col.apellidos}`.trim() || `Colaborador ${empId}`)
                                     : `Colaborador ${empId}`;
                                   return (
-                                    <Badge key={empId} variant="outline" className="text-xs">
+                                    <Badge key={empId} variant="secondary">
                                       {label}
                                     </Badge>
                                   );
@@ -1109,10 +1091,7 @@ export default function ConteoCosecha() {
                                   if (mm.tipo === 'OP') {
                                     const sufijo = mm.terceroNombre ? ` · ${mm.terceroNombre}` : '';
                                     return (
-                                      <Badge
-                                        key={`OP-${mm.id}`}
-                                        className="text-xs bg-warning-soft text-warning border-warning/20"
-                                      >
+                                      <Badge key={`OP-${mm.id}`} variant="warning">
                                         {mm.nombre}{sufijo}
                                       </Badge>
                                     );
@@ -1125,7 +1104,7 @@ export default function ConteoCosecha() {
                                         : `Colaborador ${mm.id}`;
                                     })();
                                   return (
-                                    <Badge key={`EMP-${mm.id}`} variant="outline" className="text-xs">
+                                    <Badge key={`EMP-${mm.id}`} variant="secondary">
                                       {nombre}
                                     </Badge>
                                   );
@@ -1133,7 +1112,7 @@ export default function ConteoCosecha() {
                               }
                               if (cosechaEnEdicion.cuadrillaCount > 0) {
                                 return (
-                                  <Badge variant="outline" className="text-xs">
+                                  <Badge variant="secondary">
                                     {cosechaEnEdicion.cuadrillaCount} colaborador{cosechaEnEdicion.cuadrillaCount !== 1 ? 'es' : ''}
                                   </Badge>
                                 );
@@ -1230,17 +1209,16 @@ export default function ConteoCosecha() {
                           />
                         </div>
                       </div>
-                      <div className="flex justify-end gap-2 pt-4">
+                      <div className="flex justify-end gap-2">
                         <Button variant="outline" onClick={cancelarCosecha} disabled={procesando}>
                           Cancelar
                         </Button>
                         <Button
                           onClick={guardarCosecha}
                           disabled={procesando || !cosechaEnEdicion.gajosEnViaje || cosechaEnEdicion.gajosEnViaje <= 0}
-                          
                         >
-                          <Check className="h-4 w-4" />
-                          {procesando ? 'Guardando...' : 'Guardar'}
+                          <Check className="h-4 w-4" strokeWidth={2} />
+                          {procesando ? 'Guardando…' : 'Guardar cosecha'}
                         </Button>
                       </div>
                     </CardContent>
@@ -1255,7 +1233,7 @@ export default function ConteoCosecha() {
                 <Card className="gap-0 overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
-                      <thead className="bg-muted/60 text-[13px] text-muted-foreground">
+                      <thead className="bg-muted/60 text-[13px] font-medium text-muted-foreground">
                         <tr>
                           <th className="px-5 py-2.5 text-left font-semibold">Cosecha</th>
                           <th className="px-4 py-2.5 text-left font-semibold">Lote</th>

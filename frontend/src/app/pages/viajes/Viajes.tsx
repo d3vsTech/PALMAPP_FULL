@@ -15,7 +15,7 @@ import {
 } from '../../components/ui/alert-dialog';
 import {
   Plus, Eye, FileUp, Upload, Search, Calculator, Edit, Trash2,
-  AlertTriangle, Info, Download, RotateCcw, Undo2,
+  Download, RotateCcw, Undo2,
 } from 'lucide-react';
 import { Textarea } from '../../components/ui/textarea';
 import PageHeader from '../../components/common/PageHeader';
@@ -219,7 +219,6 @@ export default function Viajes() {
   };
 
   const [viajeAEliminar, setViajeAEliminar] = useState<{ id: string; remision: string } | null>(null);
-  const [viajeAValidar, setViajeAValidar]   = useState<{ id: string; remision: string } | null>(null);
   const [loadingKPI,  setLoadingKPI]  = useState(true);
 
   const handleFiltroChange = (key: keyof typeof filtros, value: string) =>
@@ -384,27 +383,6 @@ export default function Viajes() {
     }
   };
 
-  // ── Pasar a "En Validación" — el conteo es OPCIONAL.
-  //     Usa POST /viajes/{id}/saltar-validacion (modelo nuevo de 3 estados).
-  //     Aplica para fincas que pagan por jornal y no llevan control de cosechas.
-  const abrirDialogoValidar = (viaje: ViajeUI, event: React.MouseEvent) => {
-    event.stopPropagation();
-    setViajeAValidar({ id: viaje.id, remision: viaje.remisionId });
-  };
-
-  const confirmarValidar = async () => {
-    if (!viajeAValidar) return;
-    const id = viajeAValidar.id;
-    setViajeAValidar(null);
-    try {
-      await viajesApi.saltarValidacion(Number(id));
-      toast.success('Viaje actualizado a "En Validación" exitosamente');
-      cargarViajes();
-    } catch (e: any) {
-      toast.error(e?.message ?? 'Error al cambiar el estado del viaje');
-    }
-  };
-
   // ── filtros ────────────────────────────────────────────────────────────────
   // Los filtros los resuelve `GET /viajes`: la tabla pinta la página que
   // llegó, sin volver a filtrar sobre un recorte.
@@ -442,7 +420,7 @@ export default function Viajes() {
   const gajosTotal         = indicadoresApi?.gajos_totales ?? viajesPorPeriodo.reduce((s, v) => s + v.gajosEstimados, 0);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* ─── Diálogo Eliminar viaje ─────────────────────────────────────── */}
       <AlertDialog open={!!viajeAEliminar} onOpenChange={open => !open && setViajeAEliminar(null)}>
         <AlertDialogContent>
@@ -513,50 +491,6 @@ export default function Viajes() {
       </AlertDialog>
 
       {/* ─── Diálogo Pasar a En Validación ──────────────────────────────── */}
-      <AlertDialog open={!!viajeAValidar} onOpenChange={open => !open && setViajeAValidar(null)}>
-        <AlertDialogContent className="max-w-xl">
-          {/* `text-left` override del `text-center` que trae por default
-              AlertDialogHeader (shadcn). Aquí necesitamos alinear a la izquierda
-              porque el callout tiene contenido en formato bloque + icono. */}
-          <AlertDialogHeader className="text-left">
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-warning" />
-              Pasar a En Validación
-            </AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground text-left">
-                  ¿Confirmas que deseas cambiar el estado del viaje{' '}
-                  <strong>{viajeAValidar?.remision}</strong> a{' '}
-                  <span className="font-semibold text-foreground">En Validación</span>?
-                </p>
-                {/* Advertencia: cuando se salta el reconteo, el sistema toma los
-                    gajos/peso reportados por el colaborador como definitivos. Eso
-                    impacta el cálculo de nómina, así que el usuario debe verlo
-                    claramente antes de confirmar. */}
-                <div className="rounded-lg border border-warning/20 bg-warning-soft p-4 flex gap-3 text-left">
-                  <Info className="h-4 w-4 text-warning flex-shrink-0 mt-0.5" />
-                  <div className="space-y-1">
-                    <p className="text-sm font-semibold text-warning">
-                      Importante: datos que tomará el sistema
-                    </p>
-                    <p className="text-xs text-warning leading-relaxed">
-                      Si no ingresas la información de la extractora durante la validación, el sistema tomará como definitivos los <span className="font-semibold">gajos y kilogramos reportados por el colaborador</span>. Estos valores serán los usados para calcular la nómina.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="sm:justify-end">
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmarValidar}>
-              Confirmar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
       <PageHeader
         title="Viajes"
         description="Despachos de fruto hacia la extractora."
@@ -580,6 +514,7 @@ export default function Viajes() {
 
       {/* El período manda sobre los indicadores y sobre la lista de abajo:
           las dos leen el mismo rango de fechas. */}
+      <section className="space-y-3">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <h2>Indicadores</h2>
         <div className="flex flex-wrap items-center gap-2 lg:justify-end">
@@ -630,8 +565,9 @@ export default function Viajes() {
           { label: 'Kilogramos', value: num(pesoTotal), unit: 'kg', note: 'peso registrado' },
         ]}
       />
+      </section>
 
-      <div className="space-y-4">
+      <section className="space-y-3">
         <h2>Viajes registrados</h2>
 
         {/* Filtros. Van siempre: si se escondieran al quedar la tabla
@@ -727,8 +663,8 @@ export default function Viajes() {
                 ? 'Ningún viaje coincide con los filtros'
                 : `No hay viajes ${etiquetaPeriodo}`}
               description={hayFiltros
-                ? 'Borre los filtros o cambie el período de arriba.'
-                : 'Cambie el período de arriba o registre un despacho.'}
+                ? 'Borra los filtros o cambia el período de arriba.'
+                : 'Cambia el período de arriba o registra un despacho.'}
               action={hayFiltros
                 ? { label: 'Limpiar filtros', onClick: limpiarFiltros }
                 : { label: 'Nuevo viaje', onClick: () => navigate('/viajes/nuevo') }}
@@ -939,7 +875,7 @@ export default function Viajes() {
             </div>
           </Card>
         )}
-      </div>
+      </section>
 
       <RevertirEstadoDialog
         abierto={viajeAReabrir !== null}

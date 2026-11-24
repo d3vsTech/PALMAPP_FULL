@@ -18,7 +18,6 @@ import {
 } from '../../components/ui/select';
 import { AlertCircle, ArrowLeft, Palmtree, Save, Sprout, Loader2 } from 'lucide-react';
 import { lotesApi, prediosApi } from '../../../api/plantacion';
-import IlustracionPalma from '../../components/common/IlustracionPalma';
 import { toast } from 'sonner';
 
 /** Lo mínimo que la pantalla necesita de cada predio del listado. */
@@ -233,7 +232,6 @@ export default function CrearEditarLote() {
 
               {semillasList.length === 0 ? (
                 <div className="rounded-xl border-2 border-dashed bg-muted/10 p-8 text-center">
-                  <IlustracionPalma variante="palma" className="mx-auto mb-3" />
                   <p className="mb-2 text-base font-semibold text-muted-foreground">No hay semillas en el catálogo</p>
                   <p className="mb-4 text-sm text-muted-foreground">
                     Primero hay que crearlas en Configuración, en Maestros.

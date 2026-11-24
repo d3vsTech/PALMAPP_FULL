@@ -40,9 +40,9 @@ const ESTADO_API_TO_UI: Record<EstadoViajeApi, EstadoViaje> = {
 };
 
 const ETAPAS = [
-  { numero: 1, nombre: 'Info. Viaje' },
+  { numero: 1, nombre: 'Viaje' },
   { numero: 2, nombre: 'Cosecha' },
-  { numero: 3, nombre: 'Soporte Extractora' },
+  { numero: 3, nombre: 'Soporte de extractora' },
 ];
 
 interface DatosExtractora {
@@ -1235,7 +1235,7 @@ export default function DetalleViaje() {
             {etapaActual === 2 && (
               <Card>
                 <CardHeader>
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="space-y-1">
                       <CardTitle>Cosecha</CardTitle>
                       <p className="text-sm text-muted-foreground">
@@ -1260,8 +1260,7 @@ export default function DetalleViaje() {
                     </div>
                   ) : (
                     detalles.map((d) => (
-                      <Card key={d.id}>
-                        <CardContent className="pt-6">
+                      <div key={d.id} className="space-y-4 rounded-lg border border-border p-4">
                           <div className="grid gap-4 md:grid-cols-2">
                             <div className="space-y-2">
                               <Label htmlFor="detallevia-lote">Lote</Label>
@@ -1300,8 +1299,7 @@ export default function DetalleViaje() {
                               />
                             </div>
                           </div>
-                        </CardContent>
-                      </Card>
+                      </div>
                     ))
                   )}
                 </CardContent>
@@ -1312,10 +1310,10 @@ export default function DetalleViaje() {
             {etapaActual === 3 && (
               <div className="space-y-6">
                 {/* Carga de imagen */}
-                <Card className="overflow-hidden">
+                <Card>
                   <CardHeader>
-                    <div className="space-y-1">
-                      <div>
+                    <div className="flex items-center gap-3">
+                      <div className="space-y-1">
                         <CardTitle>Formulario de la extractora</CardTitle>
                         <p className="text-sm text-muted-foreground">
                           {estadoActual === 'Finalizado'
@@ -1342,37 +1340,50 @@ export default function DetalleViaje() {
 
                         {imagenPreview && (
                           <div className="space-y-3">
-                            <div className="relative border-2 border-border rounded-lg overflow-hidden bg-muted/20">
+                            <div className="relative overflow-hidden rounded-lg border border-border bg-muted/60">
                               <img src={imagenPreview} alt="Preview del formulario" className="w-full h-auto max-h-[400px] object-contain" />
-                              <Button variant="ghost" size="sm"
+                              <Button
+                                variant="outline" size="icon"
                                 onClick={() => { setImagenFormulario(null); setImagenPreview(null); }}
-                                className="absolute top-2 right-2 bg-background/80 hover:bg-background text-destructive hover:text-destructive">
-                                <X className="h-4 w-4" />
+                                className="absolute right-2 top-2 bg-card text-muted-foreground hover:text-destructive"
+                                aria-label="Quitar imagen"
+                              >
+                                <X className="h-4 w-4" strokeWidth={2} />
                               </Button>
                             </div>
-                            <Button onClick={transcribirConIA} disabled={procesandoIA}
-                              className="w-full" size="lg">
+                            <Button onClick={transcribirConIA} disabled={procesandoIA} className="w-full sm:w-auto">
                               {procesandoIA ? (
-                                <><Loader2 className="h-5 w-5 animate-spin" />Procesando con IA...</>
+                                <>
+                                  <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />
+                                  Procesando con IA…
+                                </>
                               ) : (
-                                <><Sparkles className="h-5 w-5" />Transcribir con IA</>
+                                <>
+                                  <Sparkles className="h-4 w-4" strokeWidth={2} />
+                                  Transcribir con IA
+                                </>
                               )}
                             </Button>
                           </div>
                         )}
 
                         {!imagenPreview && (
-                          <div className="space-y-1 rounded-lg border-2 border-dashed border-border bg-muted/20 py-12 text-center">
-                            <h3 className="text-base font-semibold text-foreground">Carga una imagen del formulario</h3>
-                            <p className="text-sm text-muted-foreground">La IA extrae los datos sola.</p>
+                          <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-4 py-10 text-center">
+                            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-soft text-primary">
+                              <Upload className="h-6 w-6" strokeWidth={2} />
+                            </span>
+                            <div className="space-y-1">
+                              <p className="font-semibold text-foreground">Carga una imagen del formulario</p>
+                              <p className="text-sm text-muted-foreground">La IA extraerá automáticamente los datos.</p>
+                            </div>
                           </div>
                         )}
                       </>
                     )}
                     {estadoActual === 'Finalizado' && (
                       <div className="space-y-4">
-                        <div className="flex items-center gap-2 p-4 bg-success/10 border border-success/20 rounded-lg">
-                          <CheckCircle className="h-6 w-6 text-success" />
+                        <div className="flex items-center gap-3 rounded-lg bg-success-soft p-4">
+                          <CheckCircle className="h-5 w-5 shrink-0 text-success" strokeWidth={2} />
                           <div className="flex-1">
                             <p className="text-sm font-medium text-success">Formulario validado exitosamente</p>
                             <p className="text-xs text-muted-foreground">Datos extraídos y verificados</p>
@@ -1480,8 +1491,8 @@ export default function DetalleViaje() {
                   </div>
                 )}
                 {estadoOCR === 'FALLIDO' && (
-                  <div className="flex items-start gap-3 p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
-                    <X className="h-5 w-5 text-destructive mt-0.5" />
+                  <div className="flex items-start gap-3 rounded-lg border border-destructive/20 bg-destructive-soft p-4">
+                    <X className="mt-0.5 h-5 w-5 shrink-0 text-destructive" strokeWidth={2} />
                     <div className="flex-1 text-sm">
                       <p className="font-medium text-destructive">No pudimos procesar el documento</p>
                       <p className="text-destructive/80">
@@ -1491,8 +1502,8 @@ export default function DetalleViaje() {
                   </div>
                 )}
                 {estadoOCR === 'COMPLETADO' && confianzaOCR != null && (
-                  <div className="flex items-center gap-2 p-3 bg-success/10 border border-success/30 rounded-lg text-sm">
-                    <CheckCircle className="h-4 w-4 text-success" />
+                  <div className="flex items-center gap-2 rounded-lg border border-success/20 bg-success-soft p-3 text-sm">
+                    <CheckCircle className="h-4 w-4 shrink-0 text-success" strokeWidth={2} />
                     <span className="text-success">
                       Datos extraídos con confianza {(confianzaOCR * 100).toFixed(0)}%. Revisa y guarda.
                     </span>

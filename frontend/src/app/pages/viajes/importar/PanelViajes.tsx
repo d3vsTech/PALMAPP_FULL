@@ -28,20 +28,20 @@ import { TablaFilasViaje } from './TablaFilasViaje';
 function EstadoViaje({ viaje }: { viaje: ViajeDelCargue }) {
   if (viaje.estado === 'ERROR') {
     return (
-      <Badge variant="outline" className="border-destructive/30 bg-destructive/10 text-destructive">
+      <Badge variant="destructive">
         Con error
       </Badge>
     );
   }
   if (viaje.omitido) {
     return (
-      <Badge variant="outline" className="border-border text-muted-foreground">
+      <Badge variant="secondary">
         Ya estaba cargado
       </Badge>
     );
   }
   return (
-    <Badge variant="outline" className="border-success/30 bg-success/10 text-success">
+    <Badge variant="success">
       {viaje.estado_final === 'CREADO' ? 'Quedará en reconteo' : 'Quedará finalizado'}
     </Badge>
   );
@@ -84,7 +84,7 @@ function PromedioPrevisto({ calculo }: { calculo: CalculoViajeCargue | null }) {
   if (previstos.length === 0) return null;
 
   return (
-    <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
+    <div className="rounded-lg border border-primary/20 bg-primary-soft px-3 py-2">
       <p className="text-[13px] font-medium text-muted-foreground">
         Promedio kg/gajo que va a sembrar
       </p>
@@ -293,7 +293,7 @@ export function PanelViajes({
   return (
     <div className="space-y-3" ref={tope}>
       {conError > 0 && paginaDelPrimerError !== null && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/20 bg-destructive-soft px-3 py-2">
           <p className="flex items-center gap-2 text-sm text-destructive">
             <AlertTriangle className="h-4 w-4 shrink-0" />
             {conError === 1 ? 'Un viaje tiene' : `${conError} viajes tienen`} error.
