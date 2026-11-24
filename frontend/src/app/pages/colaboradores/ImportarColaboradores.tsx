@@ -419,7 +419,7 @@ function Paso({ n, titulo, descripcion, accion }: {
   return (
     <div className="flex items-start justify-between gap-4">
       <div className="flex items-center gap-3">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
           {n}
         </div>
         <div>
@@ -468,7 +468,7 @@ function VistaIntro({
           <div className="mt-4 overflow-auto rounded-lg border border-border">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-border bg-primary/5">
+                <tr className="border-b border-border bg-primary-soft">
                   {COLUMNAS_PLANTILLA.map((col) => (
                     <th key={col} className="whitespace-nowrap px-4 py-2.5 text-left font-semibold text-foreground">
                       {col}
@@ -509,14 +509,14 @@ function VistaIntro({
             onDragOver={(e) => { e.preventDefault(); setArrastrando(true); }}
             onDragLeave={() => setArrastrando(false)}
             {...comoBoton(onSeleccionarArchivo)}
-            className={`mt-4 flex cursor-pointer flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed p-12 transition-colors ${
+            className={`mt-4 flex cursor-pointer flex-col items-center justify-center gap-4 rounded-xl border border-dashed p-12 transition-colors ${
               arrastrando
-                ? 'border-primary bg-primary/5'
+                ? 'border-primary bg-primary-soft'
                 : 'border-border hover:border-primary/50 hover:bg-muted/30'
             }`}
           >
             <div className={`flex h-16 w-16 items-center justify-center rounded-2xl transition-colors ${
-              arrastrando ? 'bg-primary/10' : 'bg-muted'
+              arrastrando ? 'bg-primary-soft' : 'bg-muted'
             }`}>
               <Upload className={`h-8 w-8 transition-colors ${
                 arrastrando ? 'text-primary' : 'text-muted-foreground'
@@ -573,7 +573,7 @@ function VistaPreview({
     return (
       <>
         <div className="overflow-auto p-6">
-          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 flex gap-3">
+          <div className="rounded-lg border border-destructive/30 bg-destructive-soft p-4 flex gap-3">
             <XCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
             <div>
               <p className="text-sm font-semibold text-destructive">No se pudo leer el archivo</p>
@@ -603,11 +603,11 @@ function VistaPreview({
       {/* Encabezado de info */}
       <div className="shrink-0 px-6 py-3 border-b border-border flex items-center justify-between flex-wrap gap-3 bg-background">
         <div className="flex items-center gap-2 flex-wrap">
-          <Badge className="bg-primary/10 text-primary border-primary/20">
+          <Badge className="bg-primary-soft text-primary border-primary/20">
             {total} {total === 1 ? 'fila detectada' : 'filas detectadas'}
           </Badge>
           {docsRepetidos.size > 0 && (
-            <Badge className="bg-warning/10 text-warning border-warning/20">
+            <Badge className="bg-warning-soft text-warning border-warning/20">
               {docsRepetidos.size} documento(s) repetido(s)
             </Badge>
           )}
@@ -660,7 +660,7 @@ function VistaPreview({
               const dup = !!f.documento && docsRepetidos.has(f.documento.trim());
               return (
                 <tr key={`${f.fila}-${i}`}
-                    className={`border-b border-border last:border-0 ${dup ? 'bg-warning/5' : i % 2 === 0 ? 'bg-background' : 'bg-muted/10'}`}>
+                    className={`border-b border-border last:border-0 ${dup ? 'bg-warning-soft' : i % 2 === 0 ? 'bg-background' : 'bg-muted/10'}`}>
                   <Td className="font-mono text-muted-foreground">{f.fila}</Td>
                   <Td>{[f.primer_nombre, f.segundo_nombre].filter(Boolean).join(' ') || '—'}</Td>
                   <Td>{[f.primer_apellido, f.segundo_apellido].filter(Boolean).join(' ') || '—'}</Td>
@@ -781,7 +781,7 @@ function VistaResultado({
         </div>
 
         {estado.error_fatal && (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 flex gap-3">
+          <div className="rounded-lg border border-destructive/30 bg-destructive-soft p-4 flex gap-3">
             <XCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
             <div>
               <p className="text-sm font-semibold text-destructive">Error fatal</p>
@@ -874,8 +874,8 @@ function Stat({
 }) {
   const tones: Record<typeof tone, string> = {
     default: 'border-border',
-    success: 'border-success/30 bg-success/5',
-    error:   'border-destructive/30 bg-destructive/5',
+    success: 'border-success/30 bg-success-soft',
+    error:   'border-destructive/30 bg-destructive-soft',
   };
   const valueColor = tone === 'success' ? 'text-success'
                    : tone === 'error'   ? 'text-destructive' : 'text-foreground';

@@ -196,7 +196,7 @@ export default function Colaboradores() {
               title="No se encontraron colaboradores"
               description={searchTerm
                 ? 'Ningún colaborador coincide con la búsqueda.'
-                : 'Registre el primer colaborador para empezar.'}
+                : 'Comienza agregando tu primer colaborador.'}
               action={searchTerm
                 ? { label: 'Limpiar búsqueda', onClick: () => setSearchTerm('') }
                 : { label: 'Nuevo colaborador', onClick: () => navigate('/colaboradores/nuevo') }}
@@ -212,7 +212,7 @@ export default function Colaboradores() {
                     <th className="hidden px-4 py-2.5 text-left font-semibold sm:table-cell">Cédula</th>
                     <th className="hidden px-4 py-2.5 text-left font-semibold md:table-cell">Cargo</th>
                     <th className="hidden px-4 py-2.5 text-left font-semibold md:table-cell">Estado</th>
-                    <th className="px-5 py-2.5 text-right font-semibold">
+                    <th className="px-4 py-2.5 text-right font-semibold">
                       <span className="sr-only">Acciones</span>
                     </th>
                   </tr>
@@ -244,15 +244,15 @@ export default function Colaboradores() {
                           </div>
                         </div>
                       </td>
-                      <td className="hidden px-4 py-3 tabular-nums text-foreground sm:table-cell">{c.documento}</td>
-                      <td className="hidden px-4 py-3 text-foreground md:table-cell">{c.cargo}</td>
+                      <td className="hidden px-4 py-3 tabular-nums text-muted-foreground sm:table-cell">{c.documento}</td>
+                      <td className="hidden px-4 py-3 md:table-cell">{c.cargo}</td>
                       <td className="hidden px-4 py-3 md:table-cell">
                         <Badge variant={c.estado ? 'success' : 'secondary'}>
                           {c.estado ? 'Activo' : 'Inactivo'}
                         </Badge>
                       </td>
-                      <td className="px-5 py-3">
-                        <div className="flex items-center justify-end gap-1">
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-0.5">
                           <Button
                             variant="ghost" size="icon"
                             className="text-muted-foreground"

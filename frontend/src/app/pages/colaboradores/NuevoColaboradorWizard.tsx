@@ -995,10 +995,10 @@ export default function NuevoColaboradorWizard() {
                         <div
                           className={`flex h-9 w-9 items-center justify-center rounded-full border-2 text-sm font-semibold transition-colors ${
                             estaCompleta
-                              ? 'bg-primary border-primary text-white'
+                              ? 'border-primary bg-primary text-primary-foreground'
                               : estaActiva
-                              ? 'bg-primary/10 border-primary text-primary'
-                              : 'bg-muted border-border text-muted-foreground'
+                              ? 'border-primary bg-primary-soft text-primary'
+                              : 'border-border bg-card text-muted-foreground'
                           }`}
                         >
                           {estaCompleta ? <Check className="h-5 w-5" strokeWidth={2.5} /> : etapa.numero}
@@ -1033,17 +1033,10 @@ export default function NuevoColaboradorWizard() {
 
           {/* ── ETAPA 1: INFORMACIÓN PERSONAL + CONTACTO ── */}
           {etapaActual === 1 && (
-            <Card className="overflow-hidden">
+            <Card>
               <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft">
-                    <Users className="h-4 w-4 text-primary" strokeWidth={2} />
-                  </div>
-                  <div>
-                    <CardTitle>Información personal</CardTitle>
-                    <CardDescription>Datos básicos y contacto del colaborador.</CardDescription>
-                  </div>
-                </div>
+                <CardTitle>Información personal</CardTitle>
+                <CardDescription>Datos básicos y contacto del colaborador.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Foto del colaborador */}
@@ -1066,7 +1059,7 @@ export default function NuevoColaboradorWizard() {
                         </button>
                       </div>
                     ) : (
-                      <div className="w-24 h-24 rounded-full bg-muted flex items-center justify-center border-2 border-dashed border-border">
+                      <div className="w-24 h-24 rounded-full bg-muted flex items-center justify-center border border-dashed border-border">
                         {subiendoAvatar
                           ? <Loader2 className="h-8 w-8 text-muted-foreground animate-spin" />
                           : <Upload className="h-8 w-8 text-muted-foreground" />}
@@ -1204,15 +1197,8 @@ export default function NuevoColaboradorWizard() {
           {etapaActual === 2 && (
             <Card>
               <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft">
-                    <IdCard className="h-4 w-4 text-primary" strokeWidth={2} />
-                  </div>
-                  <div>
-                    <CardTitle>Identificación</CardTitle>
-                    <CardDescription>Documentos de identidad.</CardDescription>
-                  </div>
-                </div>
+                <CardTitle>Identificación</CardTitle>
+                <CardDescription>Documentos de identidad.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-2">
@@ -1256,15 +1242,8 @@ export default function NuevoColaboradorWizard() {
           {etapaActual === 3 && (
             <Card>
               <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft">
-                    <Briefcase className="h-4 w-4 text-primary" strokeWidth={2} />
-                  </div>
-                  <div>
-                    <CardTitle>Contratación</CardTitle>
-                    <CardDescription>Cargo y compensación.</CardDescription>
-                  </div>
-                </div>
+                <CardTitle>Contratación</CardTitle>
+                <CardDescription>Cargo y compensación.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-2">
@@ -1470,13 +1449,13 @@ export default function NuevoColaboradorWizard() {
                   </div>
 
                   {formData.fechaFinalizacion && (
-                    <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 space-y-4">
+                    <div className="space-y-4 rounded-lg border border-destructive/20 bg-destructive-soft p-4">
                       {/* Desaparece al elegir el motivo: dejarlo fijo hacía
                           que el bloque siguiera pareciendo un error ya
                           resuelto. */}
                       {!formData.motivoFinalizacion && (
                         <div className="flex items-start gap-2">
-                          <div className="h-5 w-5 rounded-full bg-destructive/15 flex items-center justify-center shrink-0 mt-0.5">
+                          <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-destructive-soft">
                             <span className="text-destructive text-xs font-bold">!</span>
                           </div>
                           <p className="text-xs text-destructive font-medium">
@@ -1574,7 +1553,7 @@ export default function NuevoColaboradorWizard() {
                             <button
                               type="button"
                               onClick={() => document.getElementById('upload-soporte-finalizacion')?.click()}
-                              className="w-full flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors px-4 py-5 cursor-pointer"
+                              className="flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border px-4 py-5 transition-colors hover:border-primary hover:bg-primary-soft"
                             >
                               <Upload className="h-6 w-6 text-muted-foreground" />
                               <div className="text-center">
@@ -1598,15 +1577,8 @@ export default function NuevoColaboradorWizard() {
           {etapaActual === 4 && (
             <Card>
               <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft">
-                    <Shield className="h-4 w-4 text-primary" strokeWidth={2} />
-                  </div>
-                  <div>
-                    <CardTitle>Seguridad social</CardTitle>
-                    <CardDescription>EPS, ARL y fondo de pensión.</CardDescription>
-                  </div>
-                </div>
+                <CardTitle>Seguridad social</CardTitle>
+                <CardDescription>EPS, ARL y fondo de pensión.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-2">
@@ -1665,15 +1637,8 @@ export default function NuevoColaboradorWizard() {
           {etapaActual === 5 && (
             <Card>
               <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft">
-                    <Package className="h-4 w-4 text-primary" strokeWidth={2} />
-                  </div>
-                  <div>
-                    <CardTitle>Dotación</CardTitle>
-                    <CardDescription>Tallas de ropa y calzado.</CardDescription>
-                  </div>
-                </div>
+                <CardTitle>Dotación</CardTitle>
+                <CardDescription>Tallas de ropa y calzado.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-2">
@@ -1711,15 +1676,8 @@ export default function NuevoColaboradorWizard() {
           {etapaActual === 6 && (
             <Card>
               <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft">
-                    <Building2 className="h-4 w-4 text-primary" strokeWidth={2} />
-                  </div>
-                  <div>
-                    <CardTitle>Información bancaria</CardTitle>
-                    <CardDescription>Datos para pagos de nómina.</CardDescription>
-                  </div>
-                </div>
+                <CardTitle>Información bancaria</CardTitle>
+                <CardDescription>Datos para pagos de nómina.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-2">
@@ -1749,15 +1707,8 @@ export default function NuevoColaboradorWizard() {
           {etapaActual === 7 && isEditMode && (
             <Card>
               <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft">
-                    <FileText className="h-4 w-4 text-primary" strokeWidth={2} />
-                  </div>
-                  <div>
-                    <CardTitle>Repositorio de documentos</CardTitle>
-                    <CardDescription>Gestiona los documentos del colaborador por categorías.</CardDescription>
-                  </div>
-                </div>
+                <CardTitle>Repositorio de documentos</CardTitle>
+                <CardDescription>Gestiona los documentos del colaborador por categorías.</CardDescription>
               </CardHeader>
               <CardContent>
                 {loadingDocs || !categoriasDocs ? (
@@ -2002,7 +1953,7 @@ export default function NuevoColaboradorWizard() {
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmarEliminarDocumento}
-              className="bg-destructive text-white hover:bg-destructive/90"
+              className="bg-destructive hover:bg-destructive/90"
             >
               Eliminar
             </AlertDialogAction>
